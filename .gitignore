@@ -27,6 +27,10 @@ supabase/.temp/
 # ML models cache (large ONNX files fetched at setup)
 ml/models/
 
+# WER reference transcripts: real recordings' content, corrected by hand.
+# Kept out of the repo like any other recording content.
+ml/test/wer/refs/
+
 # Backup copies of config
 *.bak
 local.properties*

@@ -102,8 +102,13 @@ with one org — a deployment choice, not a fork.
 - **One runtime for every agent** — user assistant and pipeline summarizer are
   the same code with different toolsets, run as a person (asker or call owner).
 - All harness contact behind one interface file.
-- **Agents are configuration**: prompt + model + tool list stored as data →
-  skills editable without deploys (system < org < user; most specific wins).
+- **Agents are configuration**: prompt + model + tool list + optional
+  per-skill tool-call ceiling (`max_tool_calls`, nullable → runtime default
+  when unset) stored as data → skills editable without deploys (system <
+  org < user; most specific wins). [Ceiling ruled 2026-08-12 — the field
+  briefly outran the document; a heavy research skill and a two-call recap
+  deserve different budgets, and the ceiling is part of what an admin
+  configures.]
 - One tool wrapper: scopes every call to the caller, records everything into
   `agent_runs` (replayable). Domain tools only — never shell/filesystem.
 - **Assistant scope** [user ruling]: answers ANY question over ALL data the
@@ -129,6 +134,15 @@ with one org — a deployment choice, not a fork.
   source is `pi-ai`'s `builtinModels()`** (Phase-0: 39 providers / 335
   OpenRouter models generated) — we FILTER (tool-capable, no Claude, per-org
   admin allow-list, reasoning-mandatory flag) rather than build.
+- **[AMENDED 2026-08-12, steward] Unattended runs resolve a model by
+  ladder** — "no default model" is a rule about a person choosing, and the
+  pipeline summarizer runs for an owner who may never have opened settings:
+  owner's preferred model → org summarizer default (v1 stand-in: first
+  entry of the admin allow-list, documented as deliberate) → operator env
+  fallback → and when nothing resolves, the summary is **skipped with a
+  visible, retryable flag**. A missing model may cost a summary, never a
+  call — the transcript is the record (invariant 1), and the summarize step
+  re-queues once a model exists.
 
 ## M6 — Speech: API-first behind ml/, diarization local, Persian-focused
 
@@ -172,11 +186,32 @@ with one org — a deployment choice, not a fork.
   starts while N+1 records.
 - DAG per part: `upload → transcode → vad → transcribe → diarize` ; per call:
   `→ link-speakers → summarize → ready` (summary spans all parts).
-- Status column IS the position; one step per queue message; every step
-  idempotent (checks its artifact, not a done flag); retries with backoff →
-  dead-letter; a failed call is visibly failed and resumable. (Echo app
-  lessons: race-safe claiming, orphan requeue on worker start,
-  missing-part skip-with-gap rather than whole-call failure.)
+- Status column IS the position; every step idempotent (checks its artifact,
+  not a done flag); retries with backoff → dead-letter; a failed call is
+  visibly failed and resumable. (Echo app lessons: race-safe claiming, orphan
+  requeue on worker start, missing-part skip-with-gap rather than whole-call
+  failure.)
+- **[AMENDED 2026-08-12, steward + Backend 2]** Queue transport ≠ status
+  ladder: ml/'s `/process` performs transcode/vad/transcribe/diarize in ONE
+  approved call, so the per-part rungs ride ONE queue message
+  (`process_part`) that walks the status ladder — the per-part statuses stay
+  as the progress positions, but "one step per queue message" holds only for
+  the per-call steps (`link_speakers`, `summarize`). Retry re-pays STT only
+  in the narrow crash window between a successful ml/ response and the DB
+  write — judged acceptable against splitting ml/'s facade into four
+  stateful endpoints (invariant 6). The three unused per-part queues from
+  db/0017 are dropped in db/0019 rather than left as a pipeline-shaped lie
+  (0021 retires the last; the suite asserts the exact inventory AND that no
+  retired name returns).
+- **Enqueue contract (security-relevant, promoted from db/0021's record):**
+  every job payload carries `{callId, ownerId, partId}` where **`ownerId`
+  must be written by the enqueuer while a genuine caller is present** — it
+  is how M3's "pipeline jobs run as the call's owner, never as a service
+  account" survives contact with a queue. The worker resolves identity FROM
+  the payload, re-reads the call as that owner, and fails closed if it isn't
+  visible; there is no privileged lookup for a job to fall back on. This
+  contract lives in JSON, not in the schema — which is exactly why it is
+  recorded here.
 - The DAG invokes the agent as an ordinary function call, as the call's owner.
 
 ## M8 — Data & retrieval
@@ -216,6 +251,16 @@ no-content logs; OpenTelemetry/error-tracking seams; scheduled `pg_dump` +
 storage sync with a rehearsed restore drill. Spec-excluded items (SSO,
 compliance suite, rate limiting, device revocation) stay excluded **with
 designed seams** (M14).
+
+**Storage access model [promoted from the ops checklist, 2026-08-12]:**
+`storage.objects` carries RLS enabled with **zero policies — deliberately,
+permanently**. With no policy, nothing reaches an object except the service
+key, which is the whole model: core/ mints short-lived signed URLs
+server-side and no client ever talks to storage under its own authority. A
+policy added here to "make uploads work" would silently swap signed-URL
+access for client-side access — a different security model wearing the same
+clothes. If an upload seems to need a policy, the missing piece is a signer,
+not a policy.
 
 ## M11 — Access, deletion, retention [user rulings]
 
@@ -286,6 +331,27 @@ path. The connectors catalogue (chat/CRM/documents/calendar/storage) ships as
 preview; named connectors are later built ON the gateway. MCP is the likely
 transport for agent-side connectors when they arrive.
 
+**[AMENDED 2026-08-12, steward]** Two rulings from the build:
+
+- **Assistant access is per-key opt-in.** A key reaching
+  `POST /v1/assistant/ask` spends model tokens without bound, and v1 ships
+  no rate limiter (M10/M14 seam — a real limiter is a design decision, not
+  a patch). So `api_key.allow_assistant` (default **false**, db/0022): a
+  leaked or runaway key can pull transcripts, not drain a model budget,
+  unless an admin deliberately granted it answers. Fits M5's
+  admin-as-cost-lever; the enthusiastic-but-authorized integration stays
+  the admin's accepted risk until the M14 limiter exists. **A key's
+  capabilities are immutable once issued** (ratified from the build):
+  granted at mint, no PATCH — changing capability means revoke + reissue,
+  so the audit reads "one credential ended, a different one began" rather
+  than a key whose meaning depends on when you looked.
+- **Webhook bodies carry identifiers and status ONLY** — `{event, call_id,
+  org_id, occurred_at, status}`; never a title, never text, never a speaker
+  name. The consumer comes back through the gateway to read content, under
+  the wall and in the audit trail. This is an **invariant** (the outbound
+  twin of "content never in logs"), not a convention — a "just include the
+  title, it's convenient" change is a security regression, not polish.
+
 ## M18 — Name: Echo (اکو) [user decision]
 
 One brand family with the Android recorder — which is referred to as **Echo Mobile** everywhere (docs, conversation, UI copy) so that plain **Echo** always means this platform. Steward flag on record: global
@@ -310,7 +376,10 @@ M11/M15/M17. The ones that constrain other packages, by name:
 - **db/D9** — composite FKs make cross-org references structurally impossible.
 - **db/D11** — assistant sessions are private to their owner, admins included;
   the admin audit surface is `agent_run`, never conversation text.
-- **db/D12** — one pgmq queue per DAG step; only `echo_app` may drive them.
+- **db/D12** — pgmq queues created where pgmq exists; only `echo_app` may
+  drive them. [AMENDED with M7 2026-08-12: one queue per part
+  (`echo_process_part`) + one per per-call step; db/0019 drops the three
+  per-part step queues 0017 created.]
 
 Open questions ruled (steward): **Q2** as built — only an admin restores a
 soft-deleted call; deletion feels like deletion to its owner. **Q3** as built —
@@ -340,7 +409,32 @@ one assertion that something is positively detected on real data, and a
 warning path when a component silently finds nothing. Second finding, same
 family (sherpa-onnx CJS-under-ESM: a broken diarizer reported healthy):
 **a health check must resolve the specific callable it guards** — probing a
-module's presence is not a health check.
+module's presence is not a health check. Third, the fixture-independence
+rule (CLAUDE.md rule 9): a test cannot fail when its fixture is derived from
+the same belief as the implementation — at least one fixture per feature
+must come from reality. Fourth, the altitude-of-fakes rule (CLAUDE.md rule
+11, from the M15 401-bounce): when faking a COMPOSITION of access rules,
+fake the rules, never the composition's output — the identity path is
+tested against real RLS across {active, pending, suspended-org, unknown}. Running tally of structural choices that caught bugs
+no test was looking for: composite FKs (db/D9); `UNIQUE (call_id, seq)` —
+which surfaced the cross-part numbering collision on every >30-min call; and
+`transcript_segment_words_is_array` — which turned double-JSON-encoding from
+a silent corruption (every queue payload stored as a quoted string) into a
+one-line diagnosis. Constraints are the tests you didn't know to write.
+
+Runtime-boot corollary (worker E2E finding, strengthened by the api boot
+smoke): core/ runs on `node --experimental-strip-types`, which strips
+annotations but performs NO transforms — vitest transpiles fully, so **a
+passing vitest suite is not evidence the process starts** (TS parameter
+properties loaded 39-tests-green and refused to boot; api/main.ts did not
+EXIST under 219 green tests, then silently exited 0 via a Windows-false
+entrypoint guard — compare entrypoints with `pathToFileURL`, never string
+equality). The milestone bar is therefore **starts under the production
+runtime AND answers one request**, not "it loads". Diagnostics convention,
+same finding: log Postgres's STRUCTURED error fields
+(code/constraint/table/column), never message OR detail — both quote row
+values, which can be transcript content (invariant 7); redact `detail` at
+the logger level too, so it cannot arrive by another route.
 
 ## M20 — The timing ladder: word → line → part, never nothing [steward ruling, 2026-08-12]
 
@@ -351,13 +445,18 @@ the schema cannot represent an untimed segment), so the degradation ladder is:
 
 1. word timestamps (Soniox lane) → click a word;
 2. segment timing only → click a line;
-3. prose-only fallback (`provenance.stt.timestamps: "none"`) → ONE
-   part-spanning segment; a click seeks to the part start.
+3. prose-only fallback (`provenance.stt.timestamps: "none"`) → ONE segment
+   anchored to the **speech span** it came from (first speech → last speech
+   within the part, which VAD knows even when the STT lane carries no
+   timing); a click seeks to where the speech begins. Usually tighter than
+   the part itself — a boundary-aligned stamp is the unusual case, not the
+   rule. [WORDING CORRECTED 2026-08-12 to match the implemented contract;
+   flagged by the frontend, verified against core/'s mapping code.]
 
 Nothing is ever unclickable-because-untimed, and nothing silently seeks to 0.
 Division of labour, deliberately: **ml/ stays productless** (invariant 6) —
 its timings are 0-based within the audio it was handed; **core/'s worker**
-anchors them (adds `part.offset_ms`) and synthesizes the part-spanning
+anchors them (adds `part.offset_ms`) and synthesizes the anchored-span
 segment on a timing-less result. core/ refuses to store a segment with
 `end_ms <= start_ms` for a non-empty part — the "timing quietly became zero"
 class dies at the boundary, not in the UI. A 200 from ml/ is not
@@ -365,6 +464,40 @@ automatically full fidelity: `degraded` + `timestamps:"none"` ride provenance
 into storage; the UI's per-row `end_ms > start_ms` gate implements the ladder
 unchanged, and the call-level «رونوشت با دقت کاهش‌یافته» chip stays a quality
 signal, separate from seek mechanics.
+
+Call-level summary field (contract, 2026-08-12): `transcript_timing:
+"full" | "mixed" | "none" | null` — snake_case like every Call field;
+**null when no transcript exists at all** (failed, deleted) because
+`"none"` claims a prose-only transcript that is real — absent ≠ "none".
+Always derived (per-part flags are the stored truth), and structurally
+unusable as a gate: the per-row words are the only seek authority.
+
+## M21 — The forfeit hierarchy: what the system may lose [steward, 2026-08-12]
+
+Two packages arrived at the same sentence from opposite ends — "a missing
+model may cost a summary, never a call" (M5) and "a moved contract may cost
+fidelity, never a recording" (ml/ vocabulary drift) — which is what earns a
+principle a number:
+
+- **The system decides what it may lose, and the answer is never the user's
+  data.** A missing model costs a summary; a moved contract costs fidelity;
+  an unrecognised error costs a retry; a failed part costs a gap. In every
+  case the derived artifact is forfeit and the record survives — the
+  transcript is the record (invariant 1) and everything else is rebuildable.
+- **Whatever is forfeited is said out loud** (rule 7): degrade-and-flag,
+  `vad_found_no_speech`, `summary_skipped_reason`, `DEAD LETTER UNRECORDED`
+  — one shape everywhere. Silent degradation is the failure; visible
+  degradation is the design.
+- **The boundary of the rule: degrade what the system INFERRED; fail on
+  what the system was TOLD.** A model choice, a timing lane, a vocabulary
+  version are inferences — losing one costs fidelity. A shipped system
+  skill is a declaration: its absence can only mean broken configuration,
+  and proceeding would launder a defect into a plausible artifact — a
+  summary generated on the wrong prompt is worse than none *because it
+  looks correct*. This is the asymmetry behind the loud-floor corollary,
+  stated so the next person doesn't "fix" the inconsistency in either
+  direction.
+- Underneath all of it: **the user's recording is never what gets spent.**
 
 ---
 
