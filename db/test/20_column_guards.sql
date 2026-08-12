@@ -201,6 +201,30 @@ select t.ok(
     where slug = 'recap' and user_id = '02000000-0000-4000-8000-000000000002') = 2,
   'archiving frees the slug so it can be written again, and keeps the retired definition');
 
+-- The per-skill tool-call ceiling (0025). NULL inherits the runtime default;
+-- zero would be a second, worse way to say "no tools" — an empty tools array
+-- already says it — so the constraint refuses it.
+select t.ok(
+  (select max_tool_calls from echo.skill
+    where slug = 'recap' and archived_at is null
+      and user_id = '02000000-0000-4000-8000-000000000002') is null,
+  'a skill carries no ceiling of its own until someone sets one');
+
+update echo.skill set max_tool_calls = 12
+ where slug = 'recap' and archived_at is null
+   and user_id = '02000000-0000-4000-8000-000000000002';
+select t.ok(
+  (select max_tool_calls from echo.skill
+    where slug = 'recap' and archived_at is null
+      and user_id = '02000000-0000-4000-8000-000000000002') = 12,
+  'and carries it once an admin or its author does');
+
+select t.denied(
+  $$update echo.skill set max_tool_calls = 0
+     where slug = 'recap' and archived_at is null
+       and user_id = '02000000-0000-4000-8000-000000000002'$$,
+  'a ceiling of zero is refused — "no tools" is an empty tools array, not a budget of none');
+
 -- --- an agent run is advanced, never rewritten (invariant 5) ---------------
 select t.denied(
   $$update echo.agent_run set model = 'something/else'

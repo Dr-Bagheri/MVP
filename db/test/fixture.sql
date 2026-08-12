@@ -142,3 +142,13 @@ insert into echo.api_key (id, org_id, actor_id, name, token_sha256, token_prefix
   ('23000000-0000-4000-8000-000000000003', '0a000000-0000-4000-8000-00000000000a',
    '04000000-0000-4000-8000-000000000004', 'pending-owner', 'sha-pending', 'ech_pend',
    '01000000-0000-4000-8000-000000000001', null, null);
+
+-- The three above are written without naming allow_assistant, exactly as a
+-- pre-0022 key was — so they also stand in for "existing keys after the
+-- migration". This fourth one is the only key anywhere that was deliberately
+-- granted the assistant.
+insert into echo.api_key (id, org_id, actor_id, name, token_sha256, token_prefix,
+                          created_by, allow_assistant) values
+  ('24000000-0000-4000-8000-000000000004', '0a000000-0000-4000-8000-00000000000a',
+   '02000000-0000-4000-8000-000000000002', 'assistant-enabled', 'sha-assistant',
+   'ech_asst', '01000000-0000-4000-8000-000000000001', true);

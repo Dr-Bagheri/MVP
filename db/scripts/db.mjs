@@ -37,6 +37,13 @@ const PORT = process.env.ECHO_DB_PORT ?? '55432'
 const LOCAL_URL = `postgres://postgres:postgres@127.0.0.1:${PORT}/echo`
 
 const FORCE_LOCAL = process.argv.includes('--local')
+// `test` used to drop and rebuild the schema every run. That was fine while
+// this project was mine alone; now core/ and the worker share it, and dropping
+// echo cascade would take their work with it. Default is therefore to clear
+// only the suite's OWN fixture — identified by two org ids nobody else uses —
+// and leave everything else standing. --fresh restores the old behaviour when
+// you actually want to prove the migrations apply from zero.
+const FRESH = process.argv.includes('--fresh')
 
 // The DB connection string is a secret (it carries the password), so it lives
 // in the same encrypted store as every other credential on this machine and
@@ -235,6 +242,31 @@ const FIXTURE_AUTH_IDS = [
   '09000000-0000-4000-8000-000000000009',
 ]
 
+// The two orgs the fixture invents. Nothing else in any database uses them,
+// which is what makes a targeted cleanup safe on a shared project.
+const FIXTURE_ORGS = [
+  '0a000000-0000-4000-8000-00000000000a',
+  '0b000000-0000-4000-8000-00000000000b',
+]
+
+// Children first: every one of these is reachable from org_id, so the order is
+// about foreign keys, not about visibility.
+const FIXTURE_TABLES = [
+  'agent_message', 'agent_session', 'summary', 'agent_run',
+  'transcript_segment', 'call_speaker', 'call_part', 'person', 'call',
+  'api_key', 'webhook_delivery', 'webhook', 'admin_action', 'skill',
+  'app_user', 'org',
+]
+
+async function clearFixture(db) {
+  await db.query('drop schema if exists t cascade')
+  for (const table of FIXTURE_TABLES) {
+    const column = table === 'org' ? 'id' : 'org_id'
+    await db.query(`delete from echo.${table} where ${column} = any($1::uuid[])`, [FIXTURE_ORGS])
+  }
+  await db.query('delete from auth.users where id = any($1::uuid[])', [FIXTURE_AUTH_IDS])
+}
+
 async function reset() {
   if (!IS_LOCAL && process.env.ECHO_ALLOW_REMOTE_RESET !== '1') {
     throw new Error(
@@ -288,8 +320,30 @@ async function reset() {
 // fixture is identical for every file and the files cannot affect each other.
 
 async function test() {
-  console.log(`target: ${URL_SOURCE}${IS_LOCAL ? '' : '  [remote]'}\n`)
-  await reset()
+  console.log(
+    `target: ${URL_SOURCE}${IS_LOCAL ? '' : '  [remote]'}` +
+      `  ·  ${FRESH ? 'FRESH (drops and rebuilds everything)' : 'fixture-only cleanup'}\n`,
+  )
+
+  if (FRESH) {
+    await reset()
+  } else {
+    const pre = await connect()
+    try {
+      const { rows } = await pre.query(`select to_regclass('echo.app_user') is not null as ready`)
+      if (!rows[0].ready) {
+        console.log('schema not present yet — doing a full build')
+        await pre.end()
+        await reset()
+      } else {
+        await clearFixture(pre)
+        await pre.end()
+      }
+    } catch (err) {
+      await pre.end().catch(() => {})
+      throw err
+    }
+  }
 
   // Supabase Auth stands behind app_user in production. Locally there is no
   // auth schema, so install the shim; remotely there already is one, and we
@@ -355,6 +409,12 @@ async function test() {
       }
     }
   } finally {
+    // Leave the project as we found it. The tests themselves roll back, but
+    // the fixture and helpers are committed so every file can see them — and
+    // on a shared project that residue is somebody else's confusing data.
+    await clearFixture(db).catch((err) =>
+      console.error(`  warning: could not clear the fixture — ${err.message}`),
+    )
     await db.end()
   }
 

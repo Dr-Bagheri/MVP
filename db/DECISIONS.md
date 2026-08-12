@@ -103,14 +103,51 @@ conversations. Conflating the two would have quietly turned every private
 question into an admin surface. If the steward wants admin visibility here, it
 is one policy, but it should be a ruling rather than a side effect.
 
-**D12 — pgmq queues are created where pgmq exists, and skipped where it does
-not.** The queues (`echo_transcode`, `echo_vad`, `echo_transcribe`,
-`echo_diarize`, `echo_link_speakers`, `echo_summarize` — one per DAG step, M7)
-ship in `0017`, but pgmq is a property of the server: Supabase has it, a stock
-Postgres does not. The migration creates them when it can and emits a notice
-when it cannot, so the schema and the security suite stay runnable against any
-Postgres, as instructed. Only `echo_app` gets grants on the queue schema — the
-agent is invoked *by* the DAG and has no business driving it.
+**D12 — Queues follow consumers, not the status ladder.** *(Revised by `0019`
+under the M7 amendment of 2026-08-12.)*
+
+`0017` created one queue per DAG step, mirroring the status ladder. That was
+wrong: ml/'s `/process` performs transcode → vad → transcribe → diarize in one
+approved call, so the worker walks a part through all four rungs from a single
+message, and `echo_vad` / `echo_transcribe` / `echo_diarize` had no consumer at
+all. `0019` drops them for one `echo_process_part`. A queue nothing reads is
+worse than a missing one — it looks like a component, and the first person
+debugging a stuck pipeline loses an afternoon proving it is empty on purpose.
+
+What did **not** change is `echo.part_status`: every rung stays, because the
+statuses are the progress positions the UI shows and the artifacts each step
+checks itself against (M7). Only the transport collapsed. "One step per queue
+message" now describes the per-call steps — `echo_link_speakers`,
+`echo_summarize` — which genuinely are separate messages.
+
+`0019` refuses to drop a queue that holds messages: those queues should be
+empty because nothing ever wrote to them, and if that assumption is wrong the
+messages are real work rather than something a migration may discard quietly.
+`echo_transcode` outlived `0019` on purpose — the worker consumed it as a
+stopgap, and a migration does not pull a queue out from under a running
+consumer. Backend 2 confirmed the switch and `0021` retired it, so the per-part
+plane is now exactly one queue. `0021` also records the message shape, because
+one field of it is load-bearing for the security model rather than for
+convenience: `{ callId, ownerId, partId }`, where `ownerId` is how M3's
+"pipeline jobs run as the call's owner, never as a service account" survives
+contact with a queue — the worker resolves identity from the payload, re-reads
+the call as that owner, and fails closed if it is not visible. There is no
+privileged lookup that would let a job proceed under an identity that does not
+own the work, which is why the enqueuer must write the real owner while a
+genuine caller is present.
+
+pgmq itself is a property of the server (Supabase has it, a stock Postgres does
+not), so both migrations create-or-notice rather than failing, keeping the
+schema and the security suite runnable against any Postgres. Only `echo_app`
+holds grants on the queue schema: the agent is invoked *by* the DAG and has no
+business driving it — `90_queues.sql` asserts it cannot so much as enumerate
+the queues.
+
+One consequence to leave alone (Backend 2's finding): `echo_app` cannot call
+`pgmq.purge_queue`, because it TRUNCATEs and TRUNCATE needs ownership. That is
+not a broken permission. Draining with `read` + `delete` works and is what a
+worker does anyway, so the correct response to hitting it is to drain, not to
+grant the queue tables' ownership away to fix a convenience method.
 
 **D13 — Vendor acceptance is an operator role, not a product feature.**
 *(Implements the M15 amendment.)* A fourth role, `echo_vendor`, holds **no
@@ -155,6 +192,111 @@ is retired. No role holds DELETE on `echo.skill`, because past `agent_run` rows
 name the skill that produced them and those runs must stay replayable
 (invariant 5). This is the same shape as archiving a call: the product has no
 destructive delete for a user-authored artifact.
+
+`enabled` and `archived_at` are different acts. Backend 1's wording, which is
+the one to quote: *disabled means not offered right now and falls through to
+the layer beneath; archived means retired, frees the slug, and must not
+resolve — but `getSkill(id)` filters neither, because `agent_run.skill_id` has
+to stay explainable and invariant 5 is about what happened, not what's
+currently offered.*
+
+**D18 — A skill may carry its own tool-call ceiling.** *(`0025`, M4
+amendment.)* `skill.max_tool_calls integer`, nullable, `> 0` enforced. Part of
+what an admin configures, on the same logic as the model allow-list: a heavy
+research skill and a two-call recap deserve different budgets, and the admin is
+the cost lever. NULL means "inherit the runtime default" rather than
+"unlimited" — a skill that says nothing should inherit a ceiling, not escape
+one. Zero is refused, because "no tools" is already expressible as an empty
+`tools` array and a second, worse spelling of it would eventually be written by
+accident.
+
+Worth recording how this arrived: `core/`'s `Skill` type carried
+`maxToolCalls` before any ruling existed, and the column was declined until the
+steward confirmed it. Adding schema to match a type that outran its decision is
+how tables grow columns nobody owns.
+
+**D15 — Word-timing coverage is recorded per part, and the data may only
+demote it.** *(`0020`, from core/'s request via the steward.)*
+`call_part.has_word_timestamps` lets the calls list stop running a correlated
+sub-query over `transcript_segment.words` per row. Two constraints make it
+safe:
+
+*Per part only, and never mirrored onto `echo.call`.* A stored call-level flag
+is the shape that tempts a consumer into using it as a per-row gate — the
+frontend shipped exactly that bug, stripping click-a-word from perfectly-timed
+rows because one *other* part of the call had degraded. Call level is a
+derived summary (core/'s `transcript_timing: "full" | "mixed" | "none" | null`)
+and belongs in a response, not a column. `35_word_timings.sql` asserts the
+column's *absence*, so a future migration adding it fails the suite instead of
+the product.
+
+*One-way maintenance.* The column denormalizes the transcript, and the
+transcript is the source of truth (invariant 1), so the two can disagree — and
+a summary that quietly disagrees with what it summarizes is worse than none.
+A trigger lets the data **demote** the flag (blanking a line's words clears its
+part) but never promote it: asserting coverage stays the worker's job, done
+once per part, so bulk inserts pay nothing. The agent, which holds UPDATE on
+`(text, words)` and nothing on `call_part`, can therefore cost a part its
+coverage through a correction but can never claim coverage it does not have.
+
+The consequence, stated so nobody later files it as a bug (steward-ratified as
+intended): **a correction that restores words does not re-promote the part.**
+Only re-transcription does, because only the process that writes the whole part
+knows whether *every* line in it is timed — one restored line does not. The
+failure direction is the safe one: the UI degrades to line-level seeking on a
+part that might have deserved better, rather than promising word seeking it
+cannot honour. Asserted in `35_word_timings.sql`.
+
+**D16 — A gateway key does not reach the assistant unless someone opened it.**
+*(`0022`, M17 amendment.)* `api_key.allow_assistant boolean not null default
+false`. A key borrows a member's authority (D6), and that member can talk to
+the assistant — so until now a leaked key was unbounded model spend. The ruling
+is scope, not throttle: per-key, admin-granted, off by default.
+
+Default `false` rather than nullable-unknown, because "nobody decided" and "no"
+must behave identically here; a three-state flag is eventually read as "not
+configured, so allow".
+
+The part that makes it enforceable rather than merely recorded: the flag is
+returned by `echo.resolve_api_key()`, not looked up afterwards. At gateway auth
+time there is no identity — that is what the function exists for — so `core/`
+*cannot* read `echo.api_key` to find it: those policies require an active
+admin, and the caller at that moment is nobody. A flag core/ couldn't reach
+would have been decoration.
+
+**D17 — A skipped summary is not a failed call, and its excuse expires
+automatically.** *(`0023`, M5 amendment.)* `call.summary_skipped_reason text`
+records why the summarize step completed without writing one — the ladder's
+terminal rung, visible and retryable. It previously landed in
+`failure_reason` on a `ready` row, which is a lie in the unusual direction:
+not "this worked" about something broken, but "this failed" about something
+that finished.
+
+Clearing it lives in the `0008` pointer trigger rather than in worker
+discipline, for D15's reason: the trigger already fires at exactly the moment
+the claim stops being true, and the data clearing its own stale claim beats a
+process remembering to. The reason clears whenever **any** version arrives, not
+only when the pointer advances — a late-arriving older version still means a
+summary exists, so the excuse is still false. A check constraint
+(`current_summary_id is null or summary_skipped_reason is null`) makes the
+trigger's job provable rather than merely intended; the pair is the pattern,
+not either half.
+
+The companion guard — `failure_reason is null or status = 'failed'` — was held
+back until Backend 2 confirmed their write had moved, then landed as `0024`.
+Holding it was the same call as leaving `echo_transcode` standing: a constraint
+that is right does not become right *early* at the cost of breaking a running
+consumer.
+
+`0024` carries one thing their confirmation implied but did not mention.
+M7 says a failed call is visibly failed **and resumable** — and resuming moves
+status away from `failed`, so a reason left behind would have made the
+constraint reject the recovery path itself, turning a retry into an error. The
+trigger therefore clears `failure_reason` when a call leaves `failed`, by the
+same principle as the skip reason: the data drops its own stale claim rather
+than the worker remembering to. Keeping a history of past failures is an audit
+question — `agent_run` and the admin action log are where history lives, not a
+column on the live row.
 
 ---
 

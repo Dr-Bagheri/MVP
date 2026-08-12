@@ -92,6 +92,38 @@ select t.ok(
   not exists (select 1 from echo.resolve_api_key('sha-nonexistent')),
   'an unknown token resolves to nobody');
 
+-- --- the assistant is per-key opt-in (M17 amendment) ----------------------
+-- The flag has to come back from the resolution itself: at gateway auth time
+-- there is no identity, so core/ cannot read echo.api_key to find it.
+select t.ok(
+  (select allow_assistant from echo.resolve_api_key('sha-live')) = false,
+  'a key resolves with the assistant closed unless someone opened it');
+select t.ok(
+  (select allow_assistant from echo.resolve_api_key('sha-assistant')) = true,
+  'and open when an admin granted it');
+
+-- Negative-space guard: every key written the pre-0022 way — no mention of the
+-- column at all — is closed. Nothing about adding the feature promoted an
+-- existing key, and no future backfill may either.
+select t.ok(
+  (select count(*) from echo.api_key
+    where allow_assistant and id <> '24000000-0000-4000-8000-000000000004') = 0,
+  'no key acquired assistant access it was not explicitly granted');
+
+-- Granting it is an admin act, like every other change to a gateway key.
+select set_config('echo.actor_id', '02000000-0000-4000-8000-000000000002', true);
+select t.writes_nothing(
+  $$update echo.api_key set allow_assistant = true
+     where id = '21000000-0000-4000-8000-000000000001'$$,
+  'a member cannot open the assistant on a key, or see one to try');
+
+select set_config('echo.actor_id', '01000000-0000-4000-8000-000000000001', true);
+update echo.api_key set allow_assistant = true
+ where id = '21000000-0000-4000-8000-000000000001';
+select t.ok(
+  (select allow_assistant from echo.resolve_api_key('sha-live')) = true,
+  'an admin opens it, and the resolution reflects it immediately');
+
 -- --- registration always produces a pending account (M15) -----------------
 reset role;
 insert into auth.users (id, email)
