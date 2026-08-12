@@ -76,9 +76,65 @@ export function AssistantPane({
     };
     setMessages((prev) => [...prev, userMessage, draft]);
 
-    for await (const chunk of api.ask(question, { page, callIds: contextIds })) {
+    // Reduce core/'s SSE vocabulary into message state. `done` must arrive —
+    // a stream that ends without it is a TRANSPORT failure, never success.
+    let sawDone = false;
+    try {
+      for await (const event of api.ask(question, { page, callIds: contextIds })) {
+        setMessages((prev) =>
+          prev.map((m) => {
+            if (m.id !== draft.id) return m;
+            switch (event.type) {
+              case "text_delta":
+                return { ...m, content: m.content + event.delta };
+              case "tool_call": {
+                const existing = m.tool_calls.findIndex((c) => c.id === event.id);
+                const call = {
+                  id: event.id,
+                  name: event.name,
+                  label: event.label,
+                  state: event.state,
+                  ms: event.ms,
+                };
+                const tool_calls =
+                  existing >= 0
+                    ? m.tool_calls.map((c, i) => (i === existing ? call : c))
+                    : [...m.tool_calls, call];
+                return { ...m, tool_calls };
+              }
+              case "proposal":
+                return {
+                  ...m,
+                  proposal: {
+                    id: event.id,
+                    kind: event.kind,
+                    summary: event.summary,
+                    payload: event.payload,
+                  },
+                };
+              case "done":
+                return {
+                  ...m,
+                  streaming: false,
+                  failed: event.failed,
+                  error: event.error,
+                };
+            }
+          }),
+        );
+        if (event.type === "done") sawDone = true;
+      }
+    } catch {
+      sawDone = false;
+    }
+
+    if (!sawDone) {
       setMessages((prev) =>
-        prev.map((m) => (m.id === draft.id ? { ...m, ...chunk } : m)),
+        prev.map((m) =>
+          m.id === draft.id
+            ? { ...m, streaming: false, failed: true, error: t("streamLost") }
+            : m,
+        ),
       );
     }
     setBusy(false);
@@ -161,27 +217,38 @@ export function AssistantPane({
               <ul className="mt-2 space-y-1">
                 {message.tool_calls.map((call) => (
                   <li key={call.id} className="flex items-center gap-2 text-xs text-fg-muted">
+                    {/* denied/blocked are REFUSALS, not errors — they get the
+                        neutral "stopped" mark, only `error` reads as a fault */}
                     <span
                       className={`h-1.5 w-1.5 rounded-full ${
-                        call.state === "running"
+                        call.state === "started"
                           ? "animate-pulse bg-info"
-                          : call.state === "done"
+                          : call.state === "ok"
                             ? "bg-success"
-                            : "bg-danger"
+                            : call.state === "error"
+                              ? "bg-danger"
+                              : "bg-fg-muted"
                       }`}
                       aria-hidden
                     />
                     <span className="ltr font-medium">{call.name}</span>
-                    <span className="truncate">{call.result_summary ?? call.args_summary}</span>
+                    <span className="truncate">{call.label}</span>
+                    {call.state === "denied" || call.state === "blocked" ? (
+                      <span className="shrink-0">{t(call.state)}</span>
+                    ) : null}
                   </li>
                 ))}
               </ul>
             ) : null}
 
+            {message.failed ? (
+              <p className="mt-2 text-xs text-danger">{message.error ?? t("runFailed")}</p>
+            ) : null}
+
             {message.proposal ? (
               <div className="mt-2 rounded-md border border-warning/40 bg-warning/10 p-3">
                 <p className="text-xs font-semibold text-warning">{t("proposal")}</p>
-                <p className="mt-1 text-sm text-fg">{message.proposal.description}</p>
+                <p className="mt-1 text-sm text-fg">{message.proposal.summary}</p>
                 <div className="mt-2 flex gap-2">
                   <button className="btn-primary h-9 min-h-0 px-3 text-xs">{t("approve")}</button>
                   <button className="btn-secondary h-9 min-h-0 px-3 text-xs">{t("reject")}</button>

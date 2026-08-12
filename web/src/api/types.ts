@@ -79,6 +79,13 @@ export interface Call {
   parts: CallPart[];
   /** pointer to the current summary version */
   current_summary_version: number | null;
+  /**
+   * M6: false when the transcript came from the FALLBACK ASR lane, which
+   * emits no word-level timestamps. The view degrades click-a-word to
+   * click-a-line and shows a provenance flag; the call is re-transcribed
+   * later and the flag clears.
+   */
+  word_timestamps: boolean;
 }
 
 // ---- transcript (SPEC: "This is the record") --------------------------------
@@ -170,23 +177,45 @@ export interface ModelInfo {
   suggested: boolean;
 }
 
-export type ToolCallState = "running" | "done" | "error";
+/**
+ * Backend-specified states. "denied" and "blocked" are DIFFERENT and both are
+ * normal outcomes, not errors: denied = the tool's own scope check refused
+ * (e.g. not your call); blocked = central policy vetoed before execution
+ * (undeclared tool, admin-only, budget). Only "error" is a fault.
+ */
+export type ToolCallState = "started" | "ok" | "denied" | "blocked" | "error";
 
 export interface AgentToolCall {
   id: string;
   name: string;
-  args_summary: string;
+  /** human-facing label from core/ (no transcript content) */
+  label: string;
   state: ToolCallState;
-  result_summary?: string;
+  ms?: number;
 }
 
-/** A write the agent inferred: proposed, never applied silently (SPEC). */
+/** A write the agent inferred: proposed, never applied silently (SPEC/M4). */
 export interface AgentProposal {
   id: string;
   kind: "correct_transcript" | "edit_speakers" | "replace_summary";
-  description: string;
-  target_call_id: string;
+  summary: string;
+  payload: unknown;
 }
+
+/**
+ * The SSE vocabulary core/ emits, verbatim. The assistant reduces these into
+ * message state, so swapping the mock generator for the real EventSource
+ * changes transport only — not a line of rendering.
+ *
+ * `done` is ALWAYS last, including on failure (provider failures surface
+ * in-band). A stream that ends without `done` is a TRANSPORT failure and must
+ * not be read as success.
+ */
+export type AgentEvent =
+  | { type: "text_delta"; delta: string }
+  | { type: "tool_call"; id: string; name: string; label: string; state: ToolCallState; ms?: number }
+  | { type: "proposal"; id: string; kind: AgentProposal["kind"]; summary: string; payload: unknown }
+  | { type: "done"; runId: string; failed: boolean; error?: string };
 
 export interface AgentMessage {
   id: string;
@@ -197,6 +226,9 @@ export interface AgentMessage {
   /** provenance for every derived artifact */
   model_id?: string;
   streaming?: boolean;
+  /** run ended with failed:true, or the stream died without `done` */
+  failed?: boolean;
+  error?: string;
 }
 
 export interface AgentRun {

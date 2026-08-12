@@ -168,6 +168,7 @@ export const CALLS: Call[] = [
     deleted_at: null,
     parts: CALL_1_PARTS,
     current_summary_version: 2,
+    word_timestamps: true,
   },
   {
     id: "c-2",
@@ -192,6 +193,7 @@ export const CALLS: Call[] = [
       },
     ],
     current_summary_version: null,
+    word_timestamps: true,
   },
   {
     id: "c-3",
@@ -205,17 +207,34 @@ export const CALLS: Call[] = [
     created_at: iso(5 * day),
     archived: true,
     deleted_at: null,
+    /**
+     * A genuinely HALF-SEEKABLE call (M20): its two parts went down
+     * different lanes. Part 0 has segment timing but no words (click-a-line);
+     * part 1 is the prose-only fallback, which arrives as ONE segment
+     * anchored to the speech span inside that part (click-a-span) — coarse
+     * but true timing, never zeroed.
+     */
     parts: [
       {
         id: "p-4",
         index: 0,
-        duration_seconds: 2100,
+        duration_seconds: 1800,
         starts_at_seconds: 0,
         audio_url: "/mock-audio/part-4",
         status: "ready",
       },
+      {
+        id: "p-4b",
+        index: 1,
+        duration_seconds: 300,
+        starts_at_seconds: 1800,
+        audio_url: "/mock-audio/part-4b",
+        status: "ready",
+      },
     ],
     current_summary_version: 1,
+    /** derived: false because not EVERY part has word timings */
+    word_timestamps: false,
   },
   {
     id: "c-4",
@@ -240,6 +259,7 @@ export const CALLS: Call[] = [
       },
     ],
     current_summary_version: null,
+    word_timestamps: true,
   },
   {
     id: "c-5",
@@ -255,10 +275,31 @@ export const CALLS: Call[] = [
     deleted_at: iso(4 * day),
     parts: [],
     current_summary_version: null,
+    word_timestamps: true,
   },
 ];
 
 export const SPEAKERS: Record<string, Speaker[]> = {
+  "c-3": [
+    {
+      id: "s3-1",
+      call_id: "c-3",
+      label: "گویندهٔ ۱",
+      person_id: null,
+      person_name: null,
+      sample_start_ms: 8_000,
+      talk_seconds: 640,
+    },
+    {
+      id: "s3-2",
+      call_id: "c-3",
+      label: "گویندهٔ ۲",
+      person_id: null,
+      person_name: null,
+      sample_start_ms: 27_000,
+      talk_seconds: 520,
+    },
+  ],
   "c-1": [
     {
       id: "s-1",
@@ -296,7 +337,22 @@ export const DIRECTORY: DirectoryPerson[] = [
   { id: "d-3", org_id: ORG.id, name: "امیر رضایی", linked_calls: 9 },
 ];
 
-export const TRANSCRIPT: Record<string, TranscriptRow[]> = {
+/**
+ * Word-level timing for the primary-lane fixtures: the real STT returns these
+ * per word; here they're distributed across the row's span so click-a-word
+ * seeks somewhere honest.
+ */
+function wordsFor(text: string, startMs: number, endMs: number) {
+  const tokens = text.split(/\s+/).filter(Boolean);
+  const step = (endMs - startMs) / Math.max(1, tokens.length);
+  return tokens.map((token, i) => ({
+    text: token,
+    start_ms: Math.round(startMs + i * step),
+    end_ms: Math.round(startMs + (i + 1) * step),
+  }));
+}
+
+const RAW_TRANSCRIPT: Record<string, TranscriptRow[]> = {
   "c-1": [
     {
       id: "t-1",
@@ -377,7 +433,66 @@ export const TRANSCRIPT: Record<string, TranscriptRow[]> = {
       edited_by: null,
     },
   ],
+  // c-3 came off the FALLBACK lane (word_timestamps: false) — rows carry no
+  // word timing at all, which is exactly what the degraded view must handle.
+  "c-3": [
+    {
+      id: "t3-1",
+      call_id: "c-3",
+      part_index: 0,
+      start_ms: 8_000,
+      end_ms: 26_000,
+      speaker_id: "s3-1",
+      channel: null,
+      text: "برای سه‌ماههٔ آینده، اولویت اول یکپارچه‌سازی گزارش‌ها است و بقیه بعد از آن می‌آید.",
+      words: [],
+      edited: false,
+      edited_by: null,
+    },
+    {
+      id: "t3-2",
+      call_id: "c-3",
+      part_index: 0,
+      start_ms: 27_000,
+      end_ms: 44_000,
+      speaker_id: "s3-2",
+      channel: null,
+      text: "پس تیم من روی همان تمرکز می‌کند و تا جلسهٔ بعد یک برآورد زمانی می‌آورد.",
+      words: [],
+      edited: false,
+      edited_by: null,
+    },
+    // part 1: prose-only fallback. ml/ anchors timing-less text to the span
+    // of AUDIO IT CAME FROM — first speech to last speech — so the segment
+    // sits INSET from the part boundaries (part is 30:00–35:00; speech runs
+    // 30:02–34:54). That makes the middle rung click-a-SPAN, not
+    // click-a-part: coarse, but pointing at real speech rather than at
+    // leading silence.
+    {
+      id: "t3-3",
+      call_id: "c-3",
+      part_index: 1,
+      start_ms: 1_802_400,
+      end_ms: 2_094_000,
+      speaker_id: "s3-1",
+      channel: null,
+      text: "در بخش پایانی جلسه، تیم دربارهٔ ترتیب انتشار و ریسک‌های زمان‌بندی صحبت کرد و قرار شد برآورد نهایی هفتهٔ آینده بازبینی شود.",
+      words: [],
+      edited: false,
+      edited_by: null,
+    },
+  ],
 };
+
+/** Primary-lane calls get word timing; fallback-lane calls keep rows bare. */
+export const TRANSCRIPT: Record<string, TranscriptRow[]> = Object.fromEntries(
+  Object.entries(RAW_TRANSCRIPT).map(([callId, rows]) => [
+    callId,
+    CALLS.find((c) => c.id === callId)?.word_timestamps
+      ? rows.map((row) => ({ ...row, words: wordsFor(row.text, row.start_ms, row.end_ms) }))
+      : rows,
+  ]),
+);
 
 export const SUMMARIES: Record<string, SummaryVersion[]> = {
   "c-1": [

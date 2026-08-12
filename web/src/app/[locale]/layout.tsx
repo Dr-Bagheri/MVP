@@ -18,10 +18,21 @@ const vazirmatn = localFont({
   display: "swap",
 });
 
-export const metadata: Metadata = {
-  title: "Echo — اکو",
-  description: "Business conversations, searchable and reliable",
-};
+/**
+ * Locale-aware title. The Persian name «اکو» is the product's name in fa —
+ * it is not decoration bolted onto the English build, so the EN title is just
+ * "Echo" (M18 brand family).
+ */
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  return locale === "fa"
+    ? { title: "اکو", description: "گفت‌وگوهای کاری، قابل جست‌وجو و قابل اتکا" }
+    : { title: "Echo", description: "Business conversations, searchable and reliable" };
+}
 
 export function generateStaticParams() {
   return routing.locales.map((locale) => ({ locale }));

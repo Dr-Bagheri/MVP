@@ -92,7 +92,10 @@
     "speakers": "Speakers",
     "linkSpeaker": "Link to a person",
     "renameSpeaker": "Rename speaker",
-    "seekHint": "Click any line to seek the audio there.",
+    "seekHint": "Click any word to seek the audio there.",
+    "seekHintLine": "Click any line to seek the audio there.",
+    "degraded": "Reduced-accuracy transcript",
+    "degradedHint": "This transcript came from the fallback lane and has no word-level timing; the flag clears after the automatic re-transcription.",
     "askAboutThis": "Ask the assistant about this call",
     "processing": "This call is still processing — {status}",
     "noSummaryYet": "The summary is written when processing finishes."
@@ -126,7 +129,11 @@
     "proposal": "The assistant proposes this change:",
     "approve": "Approve and apply",
     "reject": "Reject",
-    "running": "Running…"
+    "running": "Running…",
+    "denied": "(out of your reach)",
+    "blocked": "(not permitted)",
+    "runFailed": "This run did not finish.",
+    "streamLost": "Connection dropped; the answer is incomplete."
   },
   "skills": {
     "title": "Skills",

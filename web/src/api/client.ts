@@ -20,9 +20,7 @@ import {
   USERS,
 } from "./mock-data";
 import type {
-  AgentMessage,
-  AgentProposal,
-  AgentToolCall,
+  AgentEvent,
   Call,
   CallScope,
   DirectoryPerson,
@@ -213,69 +211,85 @@ export const api = {
     return wait(AGENT_RUNS);
   },
   /**
-   * Streams an answer the way the real SSE endpoint will: tool calls appear
-   * as they run, text arrives in chunks, and an inferred write comes back as
-   * a PROPOSAL rather than an applied change (SPEC).
+   * Emits the EXACT SSE vocabulary core/ will send (backend-specified):
+   * text_delta · tool_call (started → one terminal state per id) · proposal ·
+   * done (always last, including on failure). The assistant reduces these,
+   * so swapping this generator for a real EventSource is transport-only.
+   *
+   * The scripted run also exercises a `denied` tool outcome, because denied
+   * and blocked are normal refusals the UI must render as such — not errors.
    */
   async *ask(
     question: string,
     ctx: { page: string; callIds: string[] },
-  ): AsyncGenerator<Partial<AgentMessage> & { done?: boolean }> {
+  ): AsyncGenerator<AgentEvent> {
     const wantsWrite = /اصلاح|تصحیح|عوض کن|تغییر بده/.test(question);
-    const tools: AgentToolCall[] = [
-      {
-        id: "tc-1",
-        name: "search_transcripts",
-        args_summary: `«${question.slice(0, 24)}»`,
-        state: "running",
-      },
-    ];
-    yield { tool_calls: [...tools] };
-    await wait(null, 420);
 
-    tools[0] = { ...tools[0]!, state: "done", result_summary: "۳ بازه پیدا شد" };
+    yield {
+      type: "tool_call",
+      id: "tc-1",
+      name: "search_transcripts",
+      label: `جست‌وجو: «${question.slice(0, 20)}»`,
+      state: "started",
+    };
+    await wait(null, 420);
+    yield {
+      type: "tool_call",
+      id: "tc-1",
+      name: "search_transcripts",
+      label: "۳ بازه پیدا شد",
+      state: "ok",
+      ms: 412,
+    };
+
     if (ctx.callIds.length > 0) {
-      tools.push({
+      yield {
+        type: "tool_call",
         id: "tc-2",
         name: "read_window",
-        args_summary: ctx.callIds.join("، "),
-        state: "running",
-      });
+        label: "خواندن بازهٔ تماس",
+        state: "started",
+      };
+      await wait(null, 380);
+      yield {
+        type: "tool_call",
+        id: "tc-2",
+        name: "read_window",
+        label: "۲ بازه خوانده شد",
+        state: "ok",
+        ms: 377,
+      };
+    } else {
+      // a call outside the caller's reach: the tool's own scope check refuses
+      yield {
+        type: "tool_call",
+        id: "tc-3",
+        name: "read_window",
+        label: "خارج از دسترسی شما",
+        state: "denied",
+        ms: 8,
+      };
     }
-    yield { tool_calls: [...tools] };
-    await wait(null, 380);
-
-    if (tools[1]) tools[1] = { ...tools[1], state: "done", result_summary: "۲ بازه خوانده شد" };
-    yield { tool_calls: [...tools] };
 
     const answer = wantsWrite
       ? "پیشنهاد اصلاح آماده است؛ پیش از اعمال، تأیید شما لازم است."
       : `بر پایهٔ چیزی که در ${ctx.callIds.length > 0 ? "تماس‌های انتخاب‌شده" : "این صفحه"} پیدا شد: مهم‌ترین نکته، توافق بر کاهش زمان پاسخ‌گویی بحرانی به دو ساعت در ازای قرارداد دوساله بود. تأیید نهایی به بررسی مدیر طرف مقابل موکول شد.`;
 
-    let sent = "";
-    for (const chunk of answer.match(/.{1,28}/g) ?? []) {
-      sent += chunk;
-      yield { content: sent, streaming: true, tool_calls: [...tools] };
+    for (const delta of answer.match(/.{1,28}/g) ?? []) {
+      yield { type: "text_delta", delta };
       await wait(null, 60);
     }
 
-    const proposal: AgentProposal | null = wantsWrite
-      ? {
-          id: "pr-1",
-          kind: "correct_transcript",
-          description:
-            "اصلاح خط ۰۰:۴۱ — «زمان پاسخ‌گویی بحرانی» به‌جای «زمان پاسخ‌گوی بحرانی»",
-          target_call_id: ctx.callIds[0] ?? "c-1",
-        }
-      : null;
+    if (wantsWrite) {
+      yield {
+        type: "proposal",
+        id: "pr-1",
+        kind: "correct_transcript",
+        summary: "اصلاح خط ۰۰:۴۱ — «زمان پاسخ‌گویی بحرانی» به‌جای «زمان پاسخ‌گوی بحرانی»",
+        payload: { call_id: ctx.callIds[0] ?? "c-1", row_id: "t-3" },
+      };
+    }
 
-    yield {
-      content: sent,
-      streaming: false,
-      tool_calls: [...tools],
-      proposal,
-      model_id: me.model_id ?? "google/gemini-3.1-pro",
-      done: true,
-    };
+    yield { type: "done", runId: `run-${Date.now()}`, failed: false };
   },
 };

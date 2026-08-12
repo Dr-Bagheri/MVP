@@ -61,7 +61,13 @@
 
   body {
     @apply bg-bg text-fg antialiased;
-    font-feature-settings: "ss01";
+    /*
+     * NOTE: do NOT enable Vazirmatn's "ss01" here. That stylistic set swaps
+     * Latin digit glyphs for Persian ones at the FONT level, which silently
+     * overrides locale — the English UI rendered «۱۱ Aug ۲۰۲۶» / «۴۹ min».
+     * Digit shaping belongs to lib/format.ts, where it follows the active
+     * locale and can be tested.
+     */
   }
 
   /* Focus is never removed — only restyled (accessibility rule #1). */

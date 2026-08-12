@@ -6,7 +6,7 @@ import { api } from "@/api/client";
 import type { Call, Speaker, SummaryVersion, TranscriptRow } from "@/api/types";
 import { AppShell } from "@/components/AppShell";
 import { Card, Chip, PageHeader, StatusChip } from "@/components/ui";
-import { formatClock, digits } from "@/lib/format";
+import { formatClock, formatDate, digits } from "@/lib/format";
 
 /**
  * Read view (SPEC "The core loop" #3): player beside the transcript, summary
@@ -21,6 +21,7 @@ export default function CallDetailPage({
   const { id } = use(params);
   const t = useTranslations("call");
   const tStatus = useTranslations("status");
+  const tCalls = useTranslations("calls");
   const locale = useLocale();
 
   const [call, setCall] = useState<Call | null>(null);
@@ -72,7 +73,11 @@ export default function CallDetailPage({
     <AppShell page={call.title} presetCallId={call.id}>
       <PageHeader
         title={call.title}
-        subtitle={`${digits(call.parts.length, locale)} × ${t("transcript")}`}
+        subtitle={
+          call.parts.length > 1
+            ? `${formatDate(call.created_at, locale)} · ${tCalls("parts", { count: digits(call.parts.length, locale) })}`
+            : formatDate(call.created_at, locale)
+        }
         actions={<StatusChip status={call.status} label={tStatus(call.status)} />}
       />
 
@@ -127,17 +132,29 @@ export default function CallDetailPage({
                 {formatClock(playheadMs / 1000, locale)} / {formatClock(call.duration_seconds, locale)}
               </span>
               <span className="flex-1" />
-              <span className="text-xs text-fg-muted">{t("seekHint")}</span>
+              <span className="text-xs text-fg-muted">
+                {call.word_timestamps ? t("seekHint") : t("seekHintLine")}
+              </span>
             </div>
+            {/* M6: fallback-lane provenance — subtle, explained, self-clearing */}
+            {!call.word_timestamps ? (
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <Chip tone="warning">{t("degraded")}</Chip>
+                <span className="text-xs text-fg-muted">{t("degradedHint")}</span>
+              </div>
+            ) : null}
           </div>
           <ul className="divide-y divide-border">
             {rows.map((row) => (
               <li
                 key={row.id}
-                className={`flex cursor-pointer gap-3 px-4 py-3 transition-colors ${
-                  activeRowId === row.id ? "bg-accent-soft" : "hover:bg-surface-2"
-                }`}
+                className={`flex gap-3 px-4 py-3 transition-colors ${
+                  activeRowId === row.id ? "bg-accent-soft" : ""
+                } ${rowSeekable(row) ? "cursor-pointer hover:bg-surface-2" : "cursor-default"}`}
                 onClick={() => {
+                  // Backend ruling: with no usable timing, do NOT silently
+                  // seek to 0 — offer no seek at all.
+                  if (!rowSeekable(row)) return;
                   setPlayheadMs(row.start_ms);
                   setPlaying(true);
                 }}
@@ -157,7 +174,27 @@ export default function CallDetailPage({
                       <span className="chip bg-surface-2 text-fg-muted">{t("edited")}</span>
                     ) : null}
                   </div>
-                  <p className="text-sm leading-7 text-fg">{row.text}</p>
+                  {/* click-a-word when the lane gave word timing; otherwise
+                      the whole line stays the seek target (M6) */}
+                  {call.word_timestamps && row.words.length > 0 ? (
+                    <p className="text-sm leading-7 text-fg">
+                      {row.words.map((word, i) => (
+                        <span
+                          key={`${row.id}-${i}`}
+                          className="cursor-pointer rounded px-0.5 hover:bg-accent/20"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPlayheadMs(word.start_ms);
+                            setPlaying(true);
+                          }}
+                        >
+                          {word.text}{" "}
+                        </span>
+                      ))}
+                    </p>
+                  ) : (
+                    <p className="text-sm leading-7 text-fg">{row.text}</p>
+                  )}
                 </div>
               </li>
             ))}
@@ -192,4 +229,17 @@ export default function CallDetailPage({
       </div>
     </AppShell>
   );
+}
+
+/**
+ * The degradation ladder (M20): word → line → span, never "nothing". A
+ * prose-only transcription arrives as ONE segment anchored to the speech it
+ * came from (first speech → last speech in that part), so this gate passes
+ * it and the click seeks into real audio — coarse but true. It only ever
+ * refuses a zero-length row, which core/ rejects at its boundary
+ * (InvalidTimingError); a click that silently jumps to 0 was a visible
+ * quality gap in the predecessor product.
+ */
+function rowSeekable(row: TranscriptRow): boolean {
+  return row.end_ms > row.start_ms;
 }

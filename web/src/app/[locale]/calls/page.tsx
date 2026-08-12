@@ -13,6 +13,7 @@ export default function CallsPage() {
   const t = useTranslations("calls");
   const tStatus = useTranslations("status");
   const tAdmin = useTranslations("admin");
+  const tCommon = useTranslations("common");
   const locale = useLocale();
   const [calls, setCalls] = useState<Call[] | null>(null);
   const [me, setMe] = useState<User | null>(null);
@@ -93,7 +94,7 @@ export default function CallsPage() {
                     </div>
                   </td>
                   <td className="px-4 py-3 text-sm text-fg-muted">
-                    {call.owner_id === me?.id ? "شما" : call.owner_name}
+                    {call.owner_id === me?.id ? tCommon("you") : call.owner_name}
                   </td>
                   <td className="px-4 py-3 text-sm text-fg-muted">
                     {formatDate(call.created_at, locale)}
