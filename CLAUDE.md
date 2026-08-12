@@ -1,4 +1,4 @@
-# MVP — session guide
+# Echo Platform (repo: MVP) — session guide
 
 The commercial rebuild: calls/meetings → transcripts → versioned summaries →
 an org-scoped AI agent, built to be **sold** — completeness and correctness

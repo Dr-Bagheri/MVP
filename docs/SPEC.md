@@ -1,4 +1,4 @@
-# MVP — Product Specification (source of truth for WHAT we build)
+# Echo (اکو) — Product Specification (source of truth for WHAT we build)
 
 > Cleaned and structured from the founding spec (2026-08-10). ARCHITECTURE.md
 > holds the HOW. Where this document and ARCHITECTURE.md conflict, this one
@@ -65,12 +65,16 @@ Work splits in two:
 ### Calls
 List with status, date, length, owner, scope; filterable by archive state.
 Scope switchable between private and org, effective immediately. Archiving
-hides a call; deleting removes it.
+hides a call; deleting removes it. **Admins may delete any recording,
+including members' private ones; members delete only their own** (human
+actions, always logged — the agent can never delete).
 
 ### Capture
 Browser recording with a live input-level meter. Drag-in file upload with
-progress and server-side transcoding to the pipeline format. Size and duration
-limits checked **before** upload.
+progress and server-side transcoding to the pipeline format (any audio format
+accepted). Size and duration limits checked **before** upload. **Sessions
+longer than 30 minutes auto-split into 30-minute parts** — separate audio
+files under ONE call with ONE title and a continuous timeline.
 
 ### Transcript
 Timestamped turns with speaker labels. Click a line → seek audio; auto-scroll
@@ -105,17 +109,15 @@ saves. Most specific wins. Catalogue entries like: Call recap, Action items,
 Objection finder, Pricing mentions, Talk ratio, Pre-call brief. Invocable as
 `/skill-name`.
 
-### Usage
-Tokens and cost over a date range, broken down by model, by agent, by person.
-Admin-only, scoped to the organization.
-
 ### Settings & admin
 Profile: display name, avatar, interface language. Admins: members list, role
 assignment, organization-level settings.
 
-### Connectors
+### Connectors & API gateway
 A catalogue screen for future integrations (chat, CRM, documents, calendar,
-storage). **Stage 1: preview only, nothing wired.**
+storage) — preview in v1. **Wired in v1: the public API gateway** — per-org
+API keys and webhooks so any platform can push audio in and pull results out,
+under the same permission wall.
 
 ## What the agent may and may not change
 
