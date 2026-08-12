@@ -181,8 +181,13 @@ designed seams** (M14).
 - **Admins may delete ANY recording — including members' private ones.**
   Members delete only their own. Human, plain-code paths, always logged.
 - The **agent deletes nothing, ever** (role grant — M3).
-- Steward default pending user veto: deletion = soft-delete with a 30-day
-  purge window (visible to admins) — a sold product needs an undo story.
+- **[Ratified round 3]** Deletion = soft-delete with a **30-day purge
+  window** (visible to admins), then hard purge of audio, transcript, and
+  derived data together.
+- **Speaker directory privacy [user ruling]**: voices from private calls do
+  NOT enter the org's shared speaker directory automatically — they join only
+  when the **owner links** the voice (or records/uploads with linking). The
+  directory is built from deliberate acts, never from passive capture.
 
 ## M12 — Deployment profiles
 
@@ -207,13 +212,15 @@ previews in v1; **the gateway ships in v1** — M17) · SSO · compliance suite 
 rate limiting · device revocation · agent long-term memory · billing wiring
 (M15 leaves the states, not the payments).
 
-## M15 — Monetization [user ruling]
+## M15 — Monetization & access [user rulings, revised round 3]
 
 One subscription = the whole package; no feature gating inside a paid plan.
-**Self-serve = 1-day trial only** (anyone can sign up, full product, one day);
-beyond that, accounts/orgs are **admin-provisioned**. Schema carries
-`org.status` (trial/active/expired) + trial timestamps from day one; payment
-processing itself is a later seam. **No usage view in the product** — internal
+**No trial of any kind.** Access model: a person can **register themselves**
+— username + password, or **one-click Google (Gmail) sign-up** (OAuth) — but
+the account sits in a **pending state until an admin accepts it**. Nothing is
+visible or usable before acceptance. Schema: `user.status`
+(pending/active/disabled) + `org.status` (active/suspended); payment
+processing is a later seam. **No usage view in the product** — internal
 metering only, for our own cost visibility.
 
 ## M16 — (folded into M7: the 30-minute part model)
@@ -246,16 +253,10 @@ only if Western registration ever matters.
 6. ml/ is productless: no DB, no identity, no product credentials.
 7. Secrets never in the repo; content never in logs.
 
-## §OPEN — for the next review round
+## §OPEN — none remaining
 
-1. **Soft-delete window** (M11): accept the 30-day purge default, or true
-   immediate deletion?
-2. **Trial abuse posture**: 1-day self-serve trial with no rate limiting
-   (excluded by spec) — accept minimal signup friction (email verification +
-   one-trial-per-email) as the only guard?
-3. **Speaker directory privacy**: do voices from PRIVATE calls join the org's
-   shared speaker directory automatically, or only when the owner links them?
-4. **Phase 0 spike approval**: 1 day proving Pi-with-our-wall, Soniox Persian
-   word-timestamps, and Node diarization quality (decides the ml/ language)
-   before full build dispatch.
-5. **Anything you want changed in this draft** — next pass folds it in.
+All round-3 rulings folded (soft-delete ratified; trial removed in favor of
+register-then-admin-accepts with Google OAuth; speaker directory is
+owner-linked only; **Phase 0 spike APPROVED and dispatched**). The draft is
+complete — awaiting the user's **LOCK** (or further change requests) before
+build packages go to the sessions.

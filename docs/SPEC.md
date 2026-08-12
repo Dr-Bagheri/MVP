@@ -109,9 +109,15 @@ saves. Most specific wins. Catalogue entries like: Call recap, Action items,
 Objection finder, Pricing mentions, Talk ratio, Pre-call brief. Invocable as
 `/skill-name`.
 
+### Sign-up & access
+Anyone can create an account — username + password, or one-click Google
+sign-up — but the account is **pending until an admin accepts it**; nothing is
+accessible before acceptance. No trials.
+
 ### Settings & admin
-Profile: display name, avatar, interface language. Admins: members list, role
-assignment, organization-level settings.
+Profile: display name, avatar, interface language. Admins: members list
+(including pending-approval queue), role assignment, organization-level
+settings.
 
 ### Connectors & API gateway
 A catalogue screen for future integrations (chat, CRM, documents, calendar,
