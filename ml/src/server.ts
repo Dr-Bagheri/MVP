@@ -85,7 +85,7 @@ export async function buildServer() {
       const log = jobLogger(jobRef);
       const started = Date.now();
       const result = await runJob({ input, workDir: ws.dir, jobRef, options, log });
-      log.info({ ms: Date.now() - started, words: result.words.length, degraded: result.degraded }, "job done");
+      log.info({ ms: Date.now() - started, word_count: result.words.length, degraded: result.degraded }, "job done");
 
       // Parse on the way out: the contract cannot drift under us unnoticed.
       return ProcessResponseSchema.parse(result);

@@ -65,7 +65,7 @@ export async function transcribe(input: SttInput, log: JobLog, pinned: string | 
     try {
       const result = await lane.transcribe(input);
       attempts.push({ lane: lane.name, ok: true, ms: Date.now() - started, error_type: null });
-      log.info({ step: "stt", lane: lane.name, ms: Date.now() - started, words: result.words.length }, "stt ok");
+      log.info({ step: "stt", lane: lane.name, ms: Date.now() - started, word_count: result.words.length }, "stt ok");
       return { result, lane: lane.name, attempts };
     } catch (e) {
       last = e;
