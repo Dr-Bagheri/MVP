@@ -3,7 +3,7 @@
 import { use, useEffect, useMemo, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
-import type { Call, Speaker, SummaryVersion, TranscriptRow } from "@/api/types";
+import type { Call, CallStatus, Speaker, SummaryVersion, TranscriptSegment } from "@/api/types";
 import { AppShell } from "@/components/AppShell";
 import { Card, Chip, PageHeader, StatusChip } from "@/components/ui";
 import { formatClock, formatDate, digits } from "@/lib/format";
@@ -13,6 +13,34 @@ import { formatClock, formatDate, digits } from "@/lib/format";
  * above, clicking a line seeks the audio. Parts share ONE continuous
  * timeline, so a line's position is its absolute ms.
  */
+
+/**
+ * Pipeline positions at which transcription itself has FINISHED, and so
+ * `transcript_timing` is worth showing.
+ *
+ * The value counts TRANSCRIBED parts only — an untranscribed part isn't
+ * counted as untimed, it isn't counted at all — so mid-flight it reports what
+ * the transcript looks like so far. That is the honest thing to send, but it
+ * has a sharp edge: the worker asserts a part's word-timing flag ONCE, AFTER
+ * writing that part's segments, so between those two moments the part counts
+ * transcribed-but-not-timed and the call reads **"none"** for an instant.
+ * "none" is the strongest degraded claim there is, and flashing it on a
+ * perfectly healthy call is a visible lie. Declining to make the claim until
+ * transcription ends costs no new copy — it is a suppression, not a string.
+ *
+ * NOT simply `status === "ready"`: `linking` is link-speakers ACROSS parts,
+ * so a call that has reached it necessarily has every part transcribed, and
+ * summarization runs later still. Neither can change a transcript's timing,
+ * so a mixed call sitting in either already has a settled, true claim to
+ * make. Gating on `ready` alone would withhold correct information for two
+ * whole pipeline stages.
+ *
+ * Named for the PIPELINE STAGE, not for permanence: an agent correction that
+ * blanks a line's words demotes the flag even after `ready`. That is a true
+ * change of fact rather than a retraction, so it needs no gate — but it does
+ * mean this value must never be cached as though it were immutable.
+ */
+const TRANSCRIPTION_COMPLETE: readonly CallStatus[] = ["linking", "summarizing", "ready"];
 export default function CallDetailPage({
   params,
 }: {
@@ -25,7 +53,7 @@ export default function CallDetailPage({
   const locale = useLocale();
 
   const [call, setCall] = useState<Call | null>(null);
-  const [rows, setRows] = useState<TranscriptRow[]>([]);
+  const [rows, setRows] = useState<TranscriptSegment[]>([]);
   const [speakers, setSpeakers] = useState<Speaker[]>([]);
   const [versions, setVersions] = useState<SummaryVersion[]>([]);
   const [shownVersion, setShownVersion] = useState<number | null>(null);
@@ -133,11 +161,19 @@ export default function CallDetailPage({
               </span>
               <span className="flex-1" />
               <span className="text-xs text-fg-muted">
-                {call.word_timestamps ? t("seekHint") : t("seekHintLine")}
+                {call.transcript_timing === "full" ? t("seekHint") : t("seekHintLine")}
               </span>
             </div>
-            {/* M6: fallback-lane provenance — subtle, explained, self-clearing */}
-            {!call.word_timestamps ? (
+            {/* M6: fallback-lane provenance — subtle, explained, self-clearing.
+                "mixed" and "none" deliberately share one string for now:
+                distinguishing them ("part of this call" vs "this call") is
+                new copy, which is design work frozen pending the verdict.
+                The enum already carries the distinction, so it is a string
+                swap when the freeze lifts — not a rework.
+                null = no transcript at all, so there is nothing to caveat.
+                Suppressed until transcription ends — see TRANSCRIPTION_COMPLETE. */}
+            {TRANSCRIPTION_COMPLETE.includes(call.status) &&
+            (call.transcript_timing === "mixed" || call.transcript_timing === "none") ? (
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <Chip tone="warning">{t("degraded")}</Chip>
                 <span className="text-xs text-fg-muted">{t("degradedHint")}</span>
@@ -174,9 +210,13 @@ export default function CallDetailPage({
                       <span className="chip bg-surface-2 text-fg-muted">{t("edited")}</span>
                     ) : null}
                   </div>
-                  {/* click-a-word when the lane gave word timing; otherwise
-                      the whole line stays the seek target (M6) */}
-                  {call.word_timestamps && row.words.length > 0 ? (
+                  {/* M20's top rung, decided PER ROW. `call.word_timestamps`
+                      is an all-parts AND — one degraded part turns it false —
+                      so AND-ing it here stripped click-a-word from rows that
+                      carry perfectly good word timing. The row's own words are
+                      the only correct authority; the call flag explains
+                      provenance above, and explaining is all it may do. */}
+                  {row.words.length > 0 ? (
                     <p className="text-sm leading-7 text-fg">
                       {row.words.map((word, i) => (
                         <span
@@ -188,7 +228,7 @@ export default function CallDetailPage({
                             setPlaying(true);
                           }}
                         >
-                          {word.text}{" "}
+                          {word.w}{" "}
                         </span>
                       ))}
                     </p>
@@ -240,6 +280,6 @@ export default function CallDetailPage({
  * (InvalidTimingError); a click that silently jumps to 0 was a visible
  * quality gap in the predecessor product.
  */
-function rowSeekable(row: TranscriptRow): boolean {
+function rowSeekable(row: TranscriptSegment): boolean {
   return row.end_ms > row.start_ms;
 }

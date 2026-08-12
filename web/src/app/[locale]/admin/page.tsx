@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
-import type { Call, ModelInfo, Org, User } from "@/api/types";
+import type { AdminModelRow, Call, Org, User } from "@/api/types";
 import { AppShell } from "@/components/AppShell";
 import { Card, Chip, EmptyState, Field, PageHeader } from "@/components/ui";
 import { digits, formatDate, purgeDaysLeft } from "@/lib/format";
@@ -14,13 +14,19 @@ export default function AdminPage() {
   const locale = useLocale();
 
   const [members, setMembers] = useState<User[]>([]);
-  const [models, setModels] = useState<ModelInfo[]>([]);
+  /*
+   * Allow-list rows are a Phase-A view-model, NOT core/'s `/v1/models` shape:
+   * core/ publishes no admin model-management endpoint yet, so this section is
+   * mock-fed and known-stale (recorded in BFF.md). Kept on its own type so the
+   * wire type never inherits fields core/ doesn't send.
+   */
+  const [models, setModels] = useState<AdminModelRow[]>([]);
   const [org, setOrg] = useState<Org | null>(null);
   const [deleted, setDeleted] = useState<Call[]>([]);
 
   async function refresh() {
     setMembers(await api.members());
-    setModels(await api.models());
+    setModels(await api.adminModels());
     setOrg(await api.org());
     setDeleted((await api.listCalls({ includeArchived: true })).filter((c) => c.deleted_at));
   }
@@ -159,7 +165,7 @@ export default function AdminPage() {
                     disabled={!model.tool_capable}
                     onChange={async (e) => {
                       await api.setModelAllowed(model.id, e.target.checked);
-                      setModels(await api.models());
+                      setModels(await api.adminModels());
                     }}
                   />
                   <label htmlFor={`m-${model.id}`} className="flex-1 text-sm text-fg">

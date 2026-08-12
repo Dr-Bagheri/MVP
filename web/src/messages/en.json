@@ -57,14 +57,12 @@
     "newCall": "New recording"
   },
   "status": {
-    "uploading": "Uploading",
-    "transcoding": "Preparing audio",
-    "transcribing": "Transcribing",
-    "diarizing": "Separating speakers",
+    "recording": "Recording",
+    "processing": "Processing",
+    "linking": "Matching speakers",
     "summarizing": "Summarizing",
     "ready": "Ready",
-    "failed": "Failed",
-    "queued": "Queued"
+    "failed": "Failed"
   },
   "capture": {
     "title": "Record or upload",

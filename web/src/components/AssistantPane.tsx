@@ -35,13 +35,18 @@ export function AssistantPane({
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    void api.models().then((all) => {
-      // only allowed + tool-capable models are selectable (SPEC/M5)
-      const selectable = all.filter((m) => m.allowed && m.tool_capable);
-      setModels(selectable);
-      void api.me().then((me) => {
-        setModelId(me.model_id ?? selectable.find((m) => m.suggested)?.id ?? selectable[0]?.id ?? "");
-      });
+    void api.models().then((res) => {
+      // core/ has already applied the org allow-list; nothing filters on tool
+      // support, so this must not pretend to either
+      setModels(res.models);
+      /*
+       * `preferred_model: null` means "has not chosen", and M5 imposes no
+       * default — so we do NOT fall back to a suggested-or-first model here.
+       * Picking one on the user's behalf destroys the very information the
+       * null carries, and it does it invisibly: they would never know a
+       * choice had been made for them.
+       */
+      setModelId(res.preferred_model ?? "");
     });
     void api.listCalls().then(setCalls);
   }, []);
@@ -275,8 +280,7 @@ export function AssistantPane({
           >
             {models.map((model) => (
               <option key={model.id} value={model.id}>
-                {model.label}
-                {model.suggested ? " ★" : ""}
+                {model.name}
               </option>
             ))}
           </select>
@@ -298,7 +302,12 @@ export function AssistantPane({
             {t("send")}
           </button>
         </div>
-        <p className="mt-1.5 text-[11px] text-fg-muted">{t("toolCapableOnly")}</p>
+        {/* "Only tool-capable models are listed" REMOVED — it was false.
+            Nothing filters on tool support: the catalogue carries no such
+            field and core/ reports `tool_capability_filtered: false` rather
+            than ship a heuristic that would look like enforcement. The string
+            stays in the message files for whenever the fact has a real
+            source; it must not be rendered until then. */}
       </div>
     </aside>
   );

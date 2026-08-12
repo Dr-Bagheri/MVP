@@ -57,14 +57,12 @@
     "newCall": "ضبط تازه"
   },
   "status": {
-    "uploading": "در حال بارگذاری",
-    "transcoding": "آماده‌سازی صدا",
-    "transcribing": "در حال رونویسی",
-    "diarizing": "تفکیک گویندگان",
+    "recording": "در حال ضبط",
+    "processing": "در حال پردازش",
+    "linking": "تطبیق گویندگان",
     "summarizing": "در حال خلاصه‌سازی",
     "ready": "آماده",
-    "failed": "ناموفق",
-    "queued": "در صف"
+    "failed": "ناموفق"
   },
   "capture": {
     "title": "ضبط یا بارگذاری",

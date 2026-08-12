@@ -9,6 +9,41 @@ import { AppShell } from "@/components/AppShell";
 import { Card, Chip, EmptyState, PageHeader } from "@/components/ui";
 import { formatClock, digits } from "@/lib/format";
 
+/**
+ * Renders core/'s `<mark>` highlights WITHOUT innerHTML.
+ *
+ * Splitting on the tag pair is a whitelist BY CONSTRUCTION: only `<mark>`
+ * can ever become an element, and every other piece is handed to React as a
+ * string child, so anything else tag-shaped stays literal text and is
+ * escaped. That matters because the snippet derives from transcript text,
+ * which is untrusted input — the server's guarantee about what it emits is
+ * not a reason to render it as HTML.
+ *
+ * Marks may be absent entirely: matching is Persian-folded server-side, but
+ * folding deletes ZWNJ, so highlighting runs against the RAW text and a hit
+ * that matched only via the fold comes back correct but unmarked. This has
+ * to look right with zero marks, and it does — the whole snippet is then one
+ * unmarked chunk. Never re-fold here to recover them: a second normalisation
+ * rule would drift from the index it is meant to mirror.
+ */
+function Snippet({ text }: { text: string }) {
+  // odd indices are the captured group — i.e. the marked runs
+  const pieces = text.split(/<mark>([\s\S]*?)<\/mark>/g);
+  return (
+    <p className="text-sm leading-7 text-fg-muted">
+      {pieces.map((piece, i) =>
+        i % 2 === 1 ? (
+          <mark key={i} className="rounded bg-accent/20 px-0.5 text-fg">
+            {piece}
+          </mark>
+        ) : (
+          piece
+        ),
+      )}
+    </p>
+  );
+}
+
 export default function SearchPage() {
   const t = useTranslations("search");
   const locale = useLocale();
@@ -67,8 +102,8 @@ export default function SearchPage() {
                   >
                     {hit.call_title}
                   </Link>
-                  <Chip tone={hit.source === "summary" ? "accent" : "neutral"}>
-                    {hit.source === "summary" ? t("inSummary") : t("inTranscript")}
+                  <Chip tone={hit.kind === "summary" ? "accent" : "neutral"}>
+                    {hit.kind === "summary" ? t("inSummary") : t("inTranscript")}
                   </Chip>
                   {hit.start_ms !== null ? (
                     <span className="text-xs text-fg-muted ltr">
@@ -76,7 +111,7 @@ export default function SearchPage() {
                     </span>
                   ) : null}
                 </div>
-                <p className="text-sm leading-7 text-fg-muted">{hit.snippet}</p>
+                <Snippet text={hit.snippet} />
               </Card>
             ))}
           </div>

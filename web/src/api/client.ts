@@ -24,14 +24,15 @@ import type {
   Call,
   CallScope,
   DirectoryPerson,
-  ModelInfo,
+  AdminModelRow,
+  ModelsResponse,
   Org,
   Role,
   SearchHit,
   Skill,
   Speaker,
   SummaryVersion,
-  TranscriptRow,
+  TranscriptSegment,
   User,
   UserStatus,
 } from "./types";
@@ -43,10 +44,10 @@ const wait = <T,>(value: T, ms = LATENCY): Promise<T> =>
 // mutable session copies so Phase-A interactions persist while the tab lives
 let calls: Call[] = structuredClone(CALLS);
 let users: User[] = structuredClone(USERS);
-let models: ModelInfo[] = structuredClone(MODELS);
+let models: AdminModelRow[] = structuredClone(MODELS);
 let me: User = structuredClone(ME);
 let org: Org = structuredClone(ORG);
-const transcripts: Record<string, TranscriptRow[]> = structuredClone(TRANSCRIPT);
+const transcripts: Record<string, TranscriptSegment[]> = structuredClone(TRANSCRIPT);
 const speakers: Record<string, Speaker[]> = structuredClone(SPEAKERS);
 const summaries: Record<string, SummaryVersion[]> = structuredClone(SUMMARIES);
 
@@ -99,7 +100,7 @@ export const api = {
   },
 
   // ---- transcript & speakers --------------------------------------------------
-  async getTranscript(callId: string): Promise<TranscriptRow[]> {
+  async getTranscript(callId: string): Promise<TranscriptSegment[]> {
     return wait(transcripts[callId] ?? []);
   },
   async correctLine(callId: string, rowId: string, text: string) {
@@ -141,16 +142,27 @@ export const api = {
     const q = query.trim();
     if (!q) return wait([]);
     const hits: SearchHit[] = [];
+    /*
+     * The server highlights the RAW text while MATCHING folded, so a hit can
+     * legitimately come back with no <mark> at all. Mirroring that here keeps
+     * the unmarked path reachable — a mock that always marks would leave the
+     * "looks right with zero marks" claim untested (rule 9). Every third hit
+     * is returned unmarked to stand in for a fold-only match.
+     */
+    const mark = (text: string, marked: boolean) =>
+      marked ? text.split(q).join(`<mark>${q}</mark>`) : text;
+
     for (const call of calls) {
       if (call.deleted_at) continue;
-      for (const row of transcripts[call.id] ?? []) {
-        if (row.text.includes(q)) {
+      for (const segment of transcripts[call.id] ?? []) {
+        if (segment.text.includes(q)) {
           hits.push({
             call_id: call.id,
             call_title: call.title,
-            source: "transcript",
-            start_ms: row.start_ms,
-            snippet: row.text,
+            kind: "transcript",
+            start_ms: segment.start_ms,
+            end_ms: segment.end_ms,
+            snippet: mark(segment.text, hits.length % 3 !== 2),
           });
         }
       }
@@ -159,9 +171,11 @@ export const api = {
           hits.push({
             call_id: call.id,
             call_title: call.title,
-            source: "summary",
+            kind: "summary",
+            // a summary is about the whole call — no honest timestamp exists
             start_ms: null,
-            snippet: version.content.slice(0, 180),
+            end_ms: null,
+            snippet: mark(version.content.slice(0, 180), hits.length % 3 !== 2),
           });
         }
       }
@@ -170,7 +184,29 @@ export const api = {
   },
 
   // ---- models & skills ---------------------------------------------------------
-  async models(): Promise<ModelInfo[]> {
+  /**
+   * The picker's view — core/'s real `/v1/models` shape. The allow-list
+   * intersection happens server-side, so this maps rather than filters, and
+   * `tool_capability_filtered` is false because nothing filters on tool
+   * support: the catalogue carries no such field and core/ refused to ship a
+   * heuristic that would look like enforcement.
+   */
+  async models(): Promise<ModelsResponse> {
+    const allowed = models.filter((m) => m.allowed);
+    return wait({
+      models: allowed.map((m) => ({
+        id: m.id,
+        name: m.label,
+        reasoning: m.suggested,
+        selected: m.id === me.model_id,
+      })),
+      preferred_model: me.model_id,
+      curated: models.some((m) => !m.allowed),
+      tool_capability_filtered: false,
+    });
+  },
+  /** Phase-A only: the admin allow-list has no core/ endpoint yet. */
+  async adminModels(): Promise<AdminModelRow[]> {
     return wait(models);
   },
   async setModelAllowed(id: string, allowed: boolean) {

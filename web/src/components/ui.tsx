@@ -69,18 +69,22 @@ export function Chip({
 }
 
 const STATUS_TONE: Record<CallStatus, Tone> = {
-  queued: "neutral",
-  uploading: "info",
-  transcoding: "info",
-  transcribing: "info",
-  diarizing: "info",
+  recording: "info",
+  processing: "info",
+  linking: "info",
   summarizing: "info",
   ready: "success",
   failed: "danger",
 };
 
-export function StatusChip({ status, label }: { status: CallStatus; label: string }) {
-  return <Chip tone={STATUS_TONE[status]}>{label}</Chip>;
+/**
+ * `status` is `string` on the wire so that a later migration adding a value
+ * cannot crash a client — so this must not treat the union as exhaustive. An
+ * unknown status falls back to a neutral chip; the bare lookup rendered an
+ * unstyled one, which is a silent break rather than a graceful degrade.
+ */
+export function StatusChip({ status, label }: { status: string; label: string }) {
+  return <Chip tone={STATUS_TONE[status as CallStatus] ?? "neutral"}>{label}</Chip>;
 }
 
 export function ScopeChip({ scope, label }: { scope: CallScope; label: string }) {

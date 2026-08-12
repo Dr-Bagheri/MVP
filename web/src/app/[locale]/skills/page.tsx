@@ -51,7 +51,10 @@ export default function SkillsPage() {
                       /{skill.slug}
                     </p>
                     <div className="mt-3 flex flex-wrap items-center gap-1.5">
-                      {skill.tools.map((tool) => (
+                      {/* core/'s list response may omit `tools` — see the
+                          Skill type. Absent means "not told", which renders as
+                          nothing rather than crashing on `.map`. */}
+                      {(skill.tools ?? []).map((tool) => (
                         <span key={tool} className="chip bg-surface-2 text-fg-muted ltr">
                           {tool}
                         </span>

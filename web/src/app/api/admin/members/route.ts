@@ -1,32 +1,14 @@
 import { coreFetch, errorResponse } from "@/server/core";
-import type { Role, User, UserStatus } from "@/api/types";
-
-/** Members + the pending-approval queue (M15). Admin-only in core/. */
-export async function GET() {
-  try {
-    return Response.json(await coreFetch<User[]>("/v1/admin/members"));
-  } catch (error) {
-    return errorResponse(error);
-  }
-}
+import type { User } from "@/api/types";
 
 /**
- * Accept / reject / disable, and role assignment. Accepting is what turns a
- * pending account into a usable one — nothing is visible before it (M15).
+ * Members, **pending first** — core/ sorts them that way deliberately, so do
+ * not re-sort alphabetically here. Burying the approval queue is how someone
+ * waits a week to be let in (M15).
  */
-export async function PATCH(request: Request) {
-  const body = (await request.json()) as {
-    userId: string;
-    status?: UserStatus;
-    role?: Role;
-  };
+export async function GET() {
   try {
-    return Response.json(
-      await coreFetch<User[]>(`/v1/admin/members/${body.userId}`, {
-        method: "PATCH",
-        body: { status: body.status, role: body.role },
-      }),
-    );
+    return Response.json(await coreFetch<{ members: User[] }>("/v1/admin/members"));
   } catch (error) {
     return errorResponse(error);
   }
