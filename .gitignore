@@ -1,0 +1,34 @@
+# Secrets — never in the repo
+.env
+.env.*
+*.token
+*.secret
+secrets/
+*.jks
+*.keystore
+keystore.properties
+
+# Local-only documents
+*.docx
+docs/*.pdf
+
+# Node / TypeScript
+node_modules/
+dist/
+.next/
+*.tsbuildinfo
+
+# Supabase CLI state
+supabase/.temp/
+
+# ML models cache (large ONNX files fetched at setup)
+ml/models/
+
+# Backup copies of config
+*.bak
+local.properties*
+
+# OS / editor noise
+Thumbs.db
+.DS_Store
+.idea/
