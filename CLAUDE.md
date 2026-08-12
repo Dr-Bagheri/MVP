@@ -4,13 +4,17 @@ The commercial rebuild: calls/meetings → transcripts → versioned summaries �
 an org-scoped AI agent, built to be **sold** — completeness and correctness
 over speed. TypeScript everywhere. Persian-first UI.
 
+**Naming convention (user-set, use everywhere):** plain **Echo** always means
+THIS platform; the Android recorder app (Desktop/Neurai-Echo repo) is always
+called **Echo Mobile** — in conversation, docs, commits, and UI copy.
+
 ## Sources of truth
 
 1. **[docs/SPEC.md](docs/SPEC.md)** — WHAT the product does. Product behavior
    conflicts resolve here.
-2. **[ARCHITECTURE.md](ARCHITECTURE.md)** — HOW it's built; decisions numbered
-   M1…; currently **DRAFT — decisions are NOT locked until the user's review
-   rounds finish**. Do not build against draft sections marked §OPEN.
+2. **[ARCHITECTURE.md](ARCHITECTURE.md)** — HOW it's built; decisions M1–M18,
+   **LOCKED (user, 2026-08-12)** — binding on every session. Deviations go to
+   the steward first and are amended in the document BEFORE code.
 
 ## Rules for every session
 
@@ -45,6 +49,19 @@ session that touches GitHub. Repo: **github.com/Dr-Bagheri/MVP — PRIVATE**.
 
 ## Status
 
-- 2026-08-10: Folder created; private repo requested; SPEC.md captured from
-  the founding spec; ARCHITECTURE.md DRAFT 1 written (M1–M14 + §OPEN).
-  In review with the user — multiple rounds expected before build dispatch.
+- 2026-08-10: Folder created; private repo live (Dr-Bagheri/MVP); SPEC.md
+  captured; ARCHITECTURE.md through DRAFT 2 + rounds 2-3 folded (M1–M18,
+  §OPEN empty).
+- 2026-08-10 (build start, user-directed): **parallel build begins on
+  ruling-stable parts before formal lock** — web/ dispatched (scaffold +
+  design system + screens on typed mocks); backend session on the Phase-0
+  spike (its findings settle the one open ruling: ml/ language, M1/M9).
+  Remaining backend packages (schema+RLS, core/api, core/worker, ml/,
+  gateway) split across sessions as they free up; user opens additional
+  sessions in this folder when more parallelism is wanted — this file
+  onboards them, steward assigns packages.
+- 2026-08-12: **ARCHITECTURE LOCKED by the user** (v1.0, M1–M18) after three
+  review rounds + the measured Phase-0 spike. Build tracks running: web/
+  (Front-end), core/ (Backend), ml/ (Backend 2), schema+RLS (Backend 3).
+  Dev Supabase live (aqgpxnyuxukwgphrxslw; keys in DPAPI store under
+  echo_platform_*). Soniox funded; quality numbers land post-lock.

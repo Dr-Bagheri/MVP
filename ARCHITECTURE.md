@@ -1,9 +1,10 @@
-# Echo Platform — Architecture (DRAFT 2 — in review)
+# Echo Platform — Architecture (v1.0 — LOCKED 2026-08-12)
 
 > **Echo (اکو)** — the conversation-intelligence platform: calls and meetings
 > become a searchable organizational memory with an agent that answers, built
 > to be sold. Product behavior: [docs/SPEC.md](docs/SPEC.md). Decisions are
-> numbered **M1…**; DRAFT until the user says locked. Repo:
+> numbered **M1…** and are **LOCKED (user, 2026-08-12)** — binding on every
+> session; deviations go to the steward and are amended here BEFORE code. Repo:
 > github.com/Dr-Bagheri/MVP (private). Brand family: the existing
 > [Neurai Echo](https://github.com/Dr-Bagheri/Neurai-Echo) Android recorder
 > shares the name; future path unifies it as Echo's mobile capture client.
@@ -35,10 +36,16 @@ flowchart LR
 - **core/** — identity, permissions, agent + tools, pipeline. One codebase,
   two processes (`api`, `worker`). Fastify. TypeScript, no exceptions.
 - **ml/** — speech facade: audio in → words + speakers out. Stateless,
-  productless, own upstream keys only. TypeScript by default; **Python
-  permitted inside ml/ only** if Phase-0 measurement shows the Node speech
-  tooling (diarization/VAD quality) measurably weaker — contract is
-  language-neutral either way.
+  productless, own upstream keys only. **[RULED by Phase-0 measurement]:
+  TypeScript CONFIRMED** — sherpa-onnx-node installed prebuilt on Windows
+  (no Python/node-gyp), OfflineSpeakerDiarization + Vad in one dep, clean
+  clustering on synthetic ground truth (auto-cluster found 2/2 speakers,
+  179/180 alternations on an 11-min file), RTF 0.41 on CPU (≈12 min per
+  30-min part — heaviest CPU stage, gets its own worker concurrency budget).
+  The Python hatch stays documented but UNUSED; if a measured gap appears on
+  real Persian recordings, the fix is likely a different ONNX model, not a
+  different language (same models either way). Confirmation gate: re-run the
+  spike's diarize harness on the first real recording.
 - **Supabase** — Postgres, Auth, Storage, pgmq. Cloud or self-hosted; same
   schema, same code, one env file of difference (M12).
 - **Three planes, one rule**: control (identity/permissions/admin), work
@@ -72,9 +79,20 @@ with one org — a deployment choice, not a fork.
 ## M4 — The agent: Pi harness, our authority
 
 - **pi.dev**: `@earendil-works/pi-agent-core` (loop, dispatch, state) +
-  `@earendil-works/pi-ai` (unified providers, model discovery) — v0.84.x, MIT,
-  verified. Pi ships **no permission system by design; the scope wall is ours**,
-  written as an extension around it — the one part never bought.
+  `@earendil-works/pi-ai` (unified providers, model discovery) — v0.84.x, MIT.
+  **[Phase-0 verified live]**: embeds cleanly; ships no permission *system*
+  but first-class mount points — `beforeToolCall`/`afterToolCall` in
+  AgentLoopConfig where `{block:true, reason}` vetoes a call before execution
+  — so the wall is our central policy at Pi's hook + our identity-carrying
+  tool wrapper (belt and suspenders; measured: hostile prompt → 2/4 calls
+  denied, identical denial shapes, foreign content never entered the
+  transcript). Mid-session model swap works (`prepareNextTurn`). Build notes
+  (Phase-0 friction, binding on core/): ESM-only; **LLM errors are IN-BAND**
+  (`stopReason:"error"` on a normal-looking empty answer) — the runtime MUST
+  surface message_end errors explicitly or failures look silent; reasoning-
+  mandatory models (gemini-3.x) need `reasoning:"low"` passed — the catalogue
+  carries a per-model flag; use `builtinModels()`, never hand-rolled
+  createProvider.
 - **One runtime for every agent** — user assistant and pipeline summarizer are
   the same code with different toolsets, run as a person (asker or call owner).
 - All harness contact behind one interface file.
@@ -101,8 +119,10 @@ with one org — a deployment choice, not a fork.
 - **Claude is excluded from the catalogue** (user directive).
 - **Admins curate**: per-org allow-list controls which models members see
   (also the cost lever, since usage has no product UI — M15).
-- Providers via `pi-ai` with **OpenRouter** for breadth/catalogue; direct
-  provider lanes addable behind the same interface.
+- Providers via `pi-ai` with **OpenRouter** for breadth; **the catalogue
+  source is `pi-ai`'s `builtinModels()`** (Phase-0: 39 providers / 335
+  OpenRouter models generated) — we FILTER (tool-capable, no Claude, per-org
+  admin allow-list, reasoning-mandatory flag) rather than build.
 
 ## M6 — Speech: API-first behind ml/, diarization local, Persian-focused
 
@@ -111,7 +131,18 @@ with one org — a deployment choice, not a fork.
   self-hosted model later behind the same contract. Provider choice settles by
   bake-off on real Persian recordings (both predecessors' discipline).
 - **Word-level timestamps required** (click-a-word seeks; words align to
-  speakers). (Echo app: proportional estimates were a visible quality gap.)
+  speakers). (Echo Mobile: proportional estimates were a visible quality gap.)
+- **[Steward ruling, Phase-0 finding]** The OpenRouter ASR fallback lane
+  structurally cannot produce word timestamps (verified). Policy when the
+  primary lane is down: **degrade-and-flag, never lose the call** — the
+  fallback returns line-level timings, the result carries
+  `word_timestamps: false` provenance end-to-end (worker stores it, UI
+  degrades click-a-word to click-a-line and shows the flag), and the call is
+  queued for automatic re-transcription when the primary lane recovers.
+  Silent degradation and total failure are both forbidden.
+- **Soniox diarizes natively** (async, per-token speakers, up to 15) — local
+  diarization (sherpa-onnx or the Python hatch) is the fallback for lanes
+  without it, plus the independence hedge, behind ml/'s Diarizer interface.
 - **Languages**: Persian primary; incidental English inside Persian calls
   handled by the STT. UI in fa + en; **summaries always Persian** [user ruling].
 - Diarization local in ml/ (ONNX on CPU; whole-file clustering, tunable
@@ -237,7 +268,7 @@ transport for agent-side connectors when they arrive.
 
 ## M18 — Name: Echo (اکو) [user decision]
 
-One brand family with the Android recorder. Steward flag on record: global
+One brand family with the Android recorder — which is referred to as **Echo Mobile** everywhere (docs, conversation, UI copy) so that plain **Echo** always means this platform. Steward flag on record: global
 trademark adjacency (Amazon Echo) — irrelevant to the current market, revisit
 only if Western registration ever matters.
 
@@ -253,10 +284,12 @@ only if Western registration ever matters.
 6. ml/ is productless: no DB, no identity, no product credentials.
 7. Secrets never in the repo; content never in logs.
 
-## §OPEN — none remaining
+## Lock record
 
-All round-3 rulings folded (soft-delete ratified; trial removed in favor of
-register-then-admin-accepts with Google OAuth; speaker directory is
-owner-linked only; **Phase 0 spike APPROVED and dispatched**). The draft is
-complete — awaiting the user's **LOCK** (or further change requests) before
-build packages go to the sessions.
+**LOCKED by the user, 2026-08-12**, after three review rounds and a measured
+Phase-0 spike (Pi adopted with hook-based veto; ml/ ruled TypeScript by
+benchmark; Soniox contract verified live). One measurement completes
+post-lock without affecting any decision: Soniox Persian quality numbers on
+the user's consented clip (lane validation inside the M6 design, not an
+architecture variable). From here: amendments only via the steward, marked
+and logged.

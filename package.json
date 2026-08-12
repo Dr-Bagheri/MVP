@@ -1,0 +1,17 @@
+{
+  "name": "echo",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Echo (اکو) — conversation intelligence platform. Monorepo root.",
+  "type": "module",
+  "packageManager": "pnpm@9.12.3",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "db:up": "pnpm --filter @echo/db up",
+    "db:migrate": "pnpm --filter @echo/db migrate",
+    "db:test": "pnpm --filter @echo/db test",
+    "db:reset": "pnpm --filter @echo/db reset"
+  }
+}

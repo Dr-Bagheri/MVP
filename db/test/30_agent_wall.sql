@@ -1,0 +1,131 @@
+-- The agent's authority, which is only ever borrowed.
+--
+-- Everything here runs as echo_agent with a real person's identity attached —
+-- the same shape as a tool call inside a run. What the agent may do is the
+-- intersection of that person's rows (RLS) and the agent's columns (grants).
+-- No prompt is involved in any of it, which is the point: prompts are never
+-- the wall.
+
+reset role;
+set local role echo_agent;
+select set_config('echo.actor_id', '02000000-0000-4000-8000-000000000002', true);
+
+-- --- it reads exactly what its caller reads --------------------------------
+select t.ok((select count(*) from echo.call) = 2,
+  'the agent sees the two calls bob can open, and no more');
+select t.ok(not exists (select 1 from echo.call where id = 'c3000000-0000-4000-8000-000000000003'),
+  'running for bob, the agent cannot see carol''s private call');
+
+-- --- it deletes nothing, ever (M11) ----------------------------------------
+select t.denied($$delete from echo.call$$,
+  'the agent holds no DELETE on calls');
+select t.denied($$delete from echo.transcript_segment$$,
+  'nor on transcripts');
+select t.denied($$delete from echo.summary$$,
+  'nor on summaries');
+select t.denied($$delete from echo.call_speaker$$,
+  'nor on speakers');
+select t.denied($$delete from echo.person$$,
+  'nor on the speaker directory');
+select t.denied($$delete from echo.call_part$$,
+  'nor on audio parts');
+select t.denied($$delete from echo.agent_run$$,
+  'nor on its own audit trail');
+
+-- Belt and braces: ask the catalogue, not just the statements. A future
+-- migration that grants in bulk has to survive this line.
+reset role;
+select t.ok(
+  not exists (
+    select 1
+    from information_schema.role_table_grants
+    where grantee = 'echo_agent' and privilege_type = 'DELETE'
+  ),
+  'echo_agent holds no DELETE grant on any table in the database');
+set local role echo_agent;
+select set_config('echo.actor_id', '02000000-0000-4000-8000-000000000002', true);
+
+-- --- it cannot touch a call row at all -------------------------------------
+-- This is what makes "replace a summary" unable to become "change the scope
+-- of this call" or "delete it softly".
+select t.denied(
+  $$update echo.call set title = 'x' where id = 'c1000000-0000-4000-8000-000000000001'$$,
+  'the agent cannot modify a call, not even its owner''s');
+select t.denied(
+  $$update echo.call set deleted_at = now() where id = 'c1000000-0000-4000-8000-000000000001'$$,
+  'so it cannot soft-delete either — the no-delete rule has no back door');
+select t.denied(
+  $$insert into echo.call (org_id, owner_id, title)
+    values ('0a000000-0000-4000-8000-00000000000a',
+            '02000000-0000-4000-8000-000000000002', 'ساخته‌شده توسط ایجنت')$$,
+  'and it cannot create one');
+
+-- --- the three things it may write -----------------------------------------
+update echo.transcript_segment set text = 'سلام، قیمت کتاب پنج میلیون تومان است'
+ where id = 'a1000000-0000-4000-8000-000000000001';
+select t.ok(
+  (select edited_by = '02000000-0000-4000-8000-000000000002'
+     from echo.transcript_segment where id = 'a1000000-0000-4000-8000-000000000001'),
+  'tool 1: correct a transcript line on its caller''s own call');
+
+update echo.call_speaker set label = 'رضا'
+ where id = 'e1000000-0000-4000-8000-000000000001';
+select t.ok(
+  (select label from echo.call_speaker where id = 'e1000000-0000-4000-8000-000000000001') = 'رضا',
+  'tool 2: rename a voice in the roster');
+
+insert into echo.summary (call_id, org_id, body, model, created_by)
+values ('c1000000-0000-4000-8000-000000000001', '0a000000-0000-4000-8000-00000000000a',
+        'خلاصه‌ای که ایجنت نوشت', 'test/model', '02000000-0000-4000-8000-000000000002');
+select t.ok(
+  (select count(*) from echo.summary where call_id = 'c1000000-0000-4000-8000-000000000001') = 1,
+  'tool 3: write a new summary version');
+
+-- --- and nothing beyond those columns --------------------------------------
+select t.denied(
+  $$update echo.transcript_segment set confidence = 1
+     where id = 'a1000000-0000-4000-8000-000000000001'$$,
+  'the agent has no grant on a segment''s confidence');
+select t.denied(
+  $$update echo.transcript_segment set provenance = '{"faked":true}'
+     where id = 'a1000000-0000-4000-8000-000000000001'$$,
+  'nor on its provenance — it cannot dress its own output up as the STT''s');
+select t.denied(
+  $$update echo.summary set body = 'x' where id = 'b2000000-0000-4000-8000-000000000002'$$,
+  'nor any grant to edit a summary in place');
+select t.denied(
+  $$select email from echo.app_user limit 1$$,
+  'the agent cannot read anyone''s email address');
+select t.denied($$select * from echo.api_key$$,
+  'nor the gateway''s API keys');
+select t.denied($$select * from echo.admin_action$$,
+  'nor the admin audit log');
+
+-- --- writes follow the caller, not the reader ------------------------------
+-- carol can READ the org-scoped call. That must not make it writable: "an
+-- admin who can read every call still cannot rewrite one they don't own"
+-- applies to every reader, admin or not.
+select set_config('echo.actor_id', '03000000-0000-4000-8000-000000000003', true);
+select t.ok(exists (select 1 from echo.transcript_segment
+                    where call_id = 'c2000000-0000-4000-8000-000000000002'),
+  'running for carol, the agent can read the org-scoped call');
+select t.writes_nothing(
+  $$update echo.transcript_segment set text = 'دستکاری'
+     where call_id = 'c2000000-0000-4000-8000-000000000002'$$,
+  'but cannot correct a line on a call carol does not own');
+select t.writes_nothing(
+  $$insert into echo.summary (call_id, org_id, body, model, created_by)
+    values ('c2000000-0000-4000-8000-000000000002','0a000000-0000-4000-8000-00000000000a',
+            'خلاصه غیرمجاز','test/model','03000000-0000-4000-8000-000000000003')$$,
+  'and cannot add a summary version to it');
+
+-- --- an admin's agent is still not a writer --------------------------------
+select set_config('echo.actor_id', '01000000-0000-4000-8000-000000000001', true);
+select t.ok((select count(*) from echo.call) = 5,
+  'running for the admin, the agent reads the whole org');
+select t.writes_nothing(
+  $$update echo.transcript_segment set text = 'دستکاری مدیر'
+     where call_id = 'c1000000-0000-4000-8000-000000000001'$$,
+  'and still cannot rewrite a line on a call the admin does not own (SPEC)');
+
+reset role;

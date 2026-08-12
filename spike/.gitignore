@@ -1,0 +1,10 @@
+# Spike artifacts — large binaries and generated audio, never published.
+# (Root .gitignore covers node_modules/ and ml/models/, not these.)
+models/
+tts_parts/
+out/
+*.wav
+*.tar.bz2
+concat_list.txt
+concat_long.txt
+fixtures/

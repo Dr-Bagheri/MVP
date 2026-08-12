@@ -5,6 +5,7 @@
   "description": "Phase 0 validation spike — throwaway; findings > polish",
   "dependencies": {
     "@earendil-works/pi-agent-core": "^0.84.1",
-    "@earendil-works/pi-ai": "^0.84.1"
+    "@earendil-works/pi-ai": "^0.84.1",
+    "sherpa-onnx-node": "^1.13.5"
   }
 }

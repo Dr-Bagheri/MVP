@@ -1,0 +1,115 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/**
+ * Echo design tokens.
+ *
+ * Direction from the mandated ui-ux-pro-max query (product type: B2B SaaS /
+ * enterprise dashboard): style "Soft UI Evolution" — subtle depth, clearer
+ * contrast than flat, WCAG AA+; palette "professional navy + blue CTA".
+ * Both light and dark ship (the style supports both fully); dark is a
+ * DESIGNED scheme, not an inversion — surfaces step navy, and the accent is
+ * brightened so it keeps ≥4.5:1 on the dark background.
+ *
+ * Typography deviates from the skill's Plus Jakarta Sans on purpose:
+ * Vazirmatn is mandated (M9) because the product is Persian-first and Jakarta
+ * has no Persian coverage. Vazirmatn carries Latin too, so one family serves
+ * both scripts.
+ */
+@layer base {
+  :root {
+    --bg: 248 250 252;
+    --surface: 255 255 255;
+    --surface-2: 241 245 249;
+    --border: 226 232 240;
+    --fg: 2 6 23;
+    --fg-muted: 71 85 105;
+    --primary: 15 23 42;
+    --on-primary: 255 255 255;
+    --accent: 3 105 161;
+    --accent-soft: 224 242 254;
+    --success: 21 128 61;
+    --warning: 180 83 9;
+    --danger: 220 38 38;
+    --info: 2 132 199;
+  }
+
+  [data-theme="dark"] {
+    --bg: 2 6 23;
+    --surface: 15 23 42;
+    --surface-2: 30 41 59;
+    --border: 51 65 85;
+    --fg: 241 245 249;
+    --fg-muted: 148 163 184;
+    --primary: 226 232 240;
+    --on-primary: 15 23 42;
+    --accent: 56 189 248;
+    --accent-soft: 12 74 110;
+    --success: 74 222 128;
+    --warning: 251 191 36;
+    --danger: 248 113 113;
+    --info: 56 189 248;
+  }
+
+  html {
+    color-scheme: light;
+  }
+  html[data-theme="dark"] {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-bg text-fg antialiased;
+    font-feature-settings: "ss01";
+  }
+
+  /* Focus is never removed — only restyled (accessibility rule #1). */
+  :focus-visible {
+    @apply outline-none ring-2 ring-accent ring-offset-2;
+    ring-offset-color: rgb(var(--bg));
+  }
+
+  /* Latin fragments inside Persian text keep their own direction. */
+  .ltr {
+    direction: ltr;
+    unicode-bidi: isolate;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-lg border border-border bg-surface shadow-card;
+  }
+
+  .btn {
+    @apply inline-flex min-h-[44px] items-center justify-center gap-2 rounded-md px-4
+           text-sm font-medium transition-colors disabled:pointer-events-none
+           disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply btn bg-accent text-white hover:brightness-110;
+  }
+  .btn-secondary {
+    @apply btn border border-border bg-surface text-fg hover:bg-surface-2;
+  }
+  .btn-ghost {
+    @apply btn text-fg-muted hover:bg-surface-2 hover:text-fg;
+  }
+  .btn-danger {
+    @apply btn bg-danger text-white hover:brightness-110;
+  }
+
+  .input {
+    @apply min-h-[44px] w-full rounded-md border border-border bg-surface px-3
+           text-sm text-fg placeholder:text-fg-muted focus:border-accent;
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium;
+  }
+
+  .table-head {
+    @apply text-start text-xs font-semibold uppercase tracking-wide text-fg-muted;
+  }
+}

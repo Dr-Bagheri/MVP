@@ -1,0 +1,10 @@
+# Echo workspace (M9). One repo, four packages:
+#   db/    — hand-written SQL migrations, RLS policies, role grants, SQL tests
+#   core/  — one codebase, two processes (api, worker)
+#   ml/    — speech facade: audio in → words + speakers out. Productless.
+#   web/   — Next.js App Router (UI + BFF)
+packages:
+  - "db"
+  - "core"
+  - "ml"
+  - "web"
