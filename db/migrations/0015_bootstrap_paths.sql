@@ -111,6 +111,85 @@ revoke all on function echo.resolve_api_key(text) from public;
 grant execute on function echo.resolve_api_key(text) to echo_app;
 
 -- ---------------------------------------------------------------------------
+-- Vendor acceptance (M15 amendment, steward ruling).
+--
+-- Two kinds of pending account, two different acceptors:
+--   joining an EXISTING org → that org's admin accepts, through the product,
+--                             as an ordinary UPDATE under RLS.
+--   a NEW org (the org-of-one founder included) → nobody in that org can
+--                             accept them, because they are the only member.
+--                             We accept, because acceptance is the commercial
+--                             gate and there is no trial.
+--
+-- So this is an operator path, not a product path. It runs as echo_vendor,
+-- which holds no table privileges whatsoever — only EXECUTE on these two
+-- functions. core/ is echo_app and is not a member of echo_vendor, so no
+-- request, however wrong, can reach it. For v1 this is a documented psql
+-- procedure (db/README.md); an internal surface can come later.
+-- ---------------------------------------------------------------------------
+
+create function echo.vendor_pending_orgs()
+  returns table (org_id uuid, org_name text, founder uuid, founder_email citext,
+                 registered_at timestamptz)
+  language sql
+  stable
+  security definer
+  set search_path = ''
+as $$
+  select o.id, o.name, u.id, u.email, u.created_at
+  from echo.org o
+  join echo.app_user u on u.org_id = o.id
+  where u.status = 'pending'
+    and u.role = 'admin'
+    -- Only a brand-new org: if it has other members, its own admin accepts.
+    and (select count(*) from echo.app_user m where m.org_id = o.id) = 1
+  order by u.created_at;
+$$;
+
+create function echo.vendor_accept_org(p_org uuid) returns echo.app_user
+  language plpgsql
+  security definer
+  set search_path = ''
+as $$
+declare
+  v_row echo.app_user;
+  v_members integer;
+begin
+  select count(*) into v_members from echo.app_user u where u.org_id = p_org;
+  if v_members <> 1 then
+    raise exception
+      'org % has % members; only a brand-new org is accepted by the vendor — an existing org''s admin accepts its own joiners',
+      p_org, v_members
+      using errcode = 'insufficient_privilege';
+  end if;
+
+  update echo.app_user u
+     set status = 'active'
+   where u.org_id = p_org
+     and u.status = 'pending'
+     and u.role = 'admin'
+  returning * into v_row;
+
+  if v_row.id is null then
+    raise exception 'no pending founding admin in org %', p_org
+      using errcode = 'no_data_found';
+  end if;
+
+  -- accepted_by stays NULL: that, with accepted_at set, is the record that
+  -- the vendor accepted this account rather than an org admin.
+  return v_row;
+end;
+$$;
+
+revoke all on function echo.vendor_pending_orgs()    from public;
+revoke all on function echo.vendor_accept_org(uuid)  from public;
+grant execute on function echo.vendor_pending_orgs()   to echo_vendor;
+grant execute on function echo.vendor_accept_org(uuid) to echo_vendor;
+
+comment on function echo.vendor_accept_org(uuid) is
+  'Operator path (M15 amendment): the vendor accepts a brand-new org. Not reachable from core/ — echo_app has no EXECUTE.';
+
+-- ---------------------------------------------------------------------------
 -- The one system skill v1 ships with (M4: agents are configuration).
 -- Editable through the product without a deploy; core/ owns refining the
 -- wording, this migration only guarantees the row exists.

@@ -53,7 +53,9 @@ select t.denied(
   $$update echo.app_user set role = 'admin'
      where id = '02000000-0000-4000-8000-000000000002'$$,
   'a member cannot make themselves an admin');
-select t.denied(
+-- Filtered rather than refused: a member cannot even address another
+-- member's row, so the trigger never gets a chance to object.
+select t.writes_nothing(
   $$update echo.app_user set status = 'active'
      where id = '04000000-0000-4000-8000-000000000004'$$,
   'a member cannot accept a pending colleague');
@@ -64,6 +66,15 @@ select t.ok(
   (select display_name from echo.app_user where id = '02000000-0000-4000-8000-000000000002')
     = 'باب ب.',
   'a member may still edit their own profile');
+
+-- ...but only an accepted one. "Nothing is usable before acceptance" (M15)
+-- covers writing to your own row too; reading it, so the UI can say "awaiting
+-- approval", is the one thing a pending account may do.
+select set_config('echo.actor_id', '04000000-0000-4000-8000-000000000004', true);
+select t.writes_nothing(
+  $$update echo.app_user set display_name = 'دن ب.'
+     where id = '04000000-0000-4000-8000-000000000004'$$,
+  'a pending account cannot edit even its own profile');
 
 -- --- acceptance is an admin decision about someone else --------------------
 select set_config('echo.actor_id', '01000000-0000-4000-8000-000000000001', true);
@@ -88,6 +99,16 @@ select t.denied(
      where id = 'b2000000-0000-4000-8000-000000000002'$$,
   'a summary version is written once and never edited (invariant 4)');
 
+-- That one is refused by the grant, before RLS or a trigger is consulted.
+-- Prove the trigger underneath it independently, with both out of the way.
+reset role;
+select t.denied(
+  $$update echo.summary set body = 'بازنویسی'
+     where id = 'b2000000-0000-4000-8000-000000000002'$$,
+  'and the immutability trigger refuses it even for a caller holding every privilege');
+set local role echo_app;
+select set_config('echo.actor_id', '02000000-0000-4000-8000-000000000002', true);
+
 insert into echo.summary (call_id, org_id, body, model, created_by)
 values ('c2000000-0000-4000-8000-000000000002', '0a000000-0000-4000-8000-00000000000a',
         'خلاصه نسخه دو', 'test/model', '02000000-0000-4000-8000-000000000002');
@@ -106,27 +127,79 @@ select t.ok(
   (select s.body from echo.call c join echo.summary s on s.id = c.current_summary_id
     where c.id = 'c2000000-0000-4000-8000-000000000002') = 'خلاصه نسخه دو',
   'and the pointer column on the call agrees with the view');
+-- As the owner this would simply match no rows — c4 is soft-deleted and
+-- therefore invisible to bob, which is its own guarantee. Drop RLS out of the
+-- picture so the pointer guard itself is what answers.
+reset role;
 select t.denied(
   $$update echo.call set current_summary_id = 'b2000000-0000-4000-8000-000000000002'
      where id = 'c4000000-0000-4000-8000-000000000004'$$,
   'the pointer cannot be aimed by hand at another call''s summary');
+set local role echo_app;
+select set_config('echo.actor_id', '02000000-0000-4000-8000-000000000002', true);
+
+select t.writes_nothing(
+  $$update echo.call set title = 'x'
+     where id = 'c4000000-0000-4000-8000-000000000004'$$,
+  'and a soft-deleted call is not editable by its owner either — it is gone for them');
+
+-- Which version is presented is part of the record, so re-pointing it is a
+-- rewrite — and Q4 as ratified binds a human admin exactly as it binds the
+-- agent: reads everything, rewrites nothing.
+select set_config('echo.actor_id', '01000000-0000-4000-8000-000000000001', true);
+select t.denied(
+  $$update echo.call set current_summary_id = 'b2000000-0000-4000-8000-000000000002'
+     where id = 'c2000000-0000-4000-8000-000000000002'$$,
+  'an admin cannot re-point another member''s summary back to an older version');
+select set_config('echo.actor_id', '02000000-0000-4000-8000-000000000002', true);
 
 -- --- a corrected line keeps its identity and its place ---------------------
+-- On c2, not c1: the admin soft-deleted c1 earlier in this file, and a
+-- deleted call is not writable by anyone, so a line on it would be filtered
+-- out before the correction rules were reached.
 select t.denied(
   $$update echo.transcript_segment set start_ms = 999
-     where id = 'a1000000-0000-4000-8000-000000000001'$$,
+     where id = 'a3000000-0000-4000-8000-000000000003'$$,
   'a correction cannot move a line on the timeline');
 select t.denied(
   $$update echo.transcript_segment set seq = 7
-     where id = 'a1000000-0000-4000-8000-000000000001'$$,
+     where id = 'a3000000-0000-4000-8000-000000000003'$$,
   'a correction cannot renumber a line');
 
-update echo.transcript_segment set text = 'سلام، قیمت کتاب پنج میلیون تومان است'
- where id = 'a1000000-0000-4000-8000-000000000001';
+update echo.transcript_segment set text = 'گزارش هفتگی تیم فروش — اصلاح‌شده'
+ where id = 'a3000000-0000-4000-8000-000000000003';
 select t.ok(
   (select edited_at is not null and edited_by = '02000000-0000-4000-8000-000000000002'
-     from echo.transcript_segment where id = 'a1000000-0000-4000-8000-000000000001'),
+     from echo.transcript_segment where id = 'a3000000-0000-4000-8000-000000000003'),
   'a corrected line is marked as edited, by whoever actually edited it');
+
+-- --- removing a skill means archiving it, because nothing here deletes -----
+insert into echo.skill (level, org_id, user_id, slug, name, prompt, created_by)
+values ('user', '0a000000-0000-4000-8000-00000000000a',
+        '02000000-0000-4000-8000-000000000002', 'recap', 'جمع‌بندی',
+        'یک جمع‌بندی کوتاه بنویس', '02000000-0000-4000-8000-000000000002');
+
+select t.denied(
+  $$insert into echo.skill (level, org_id, user_id, slug, name, prompt, created_by)
+    values ('user', '0a000000-0000-4000-8000-00000000000a',
+            '02000000-0000-4000-8000-000000000002', 'recap', 'دیگری',
+            'x', '02000000-0000-4000-8000-000000000002')$$,
+  'a user cannot hold two live skills on the same slug');
+
+select t.denied($$delete from echo.skill where slug = 'recap'$$,
+  'and cannot delete one — past agent runs must stay replayable (invariant 5)');
+
+update echo.skill set archived_at = now()
+ where level = 'user' and user_id = '02000000-0000-4000-8000-000000000002' and slug = 'recap';
+
+insert into echo.skill (level, org_id, user_id, slug, name, prompt, created_by)
+values ('user', '0a000000-0000-4000-8000-00000000000a',
+        '02000000-0000-4000-8000-000000000002', 'recap', 'جمع‌بندی تازه',
+        'این بار بهتر', '02000000-0000-4000-8000-000000000002');
+select t.ok(
+  (select count(*) from echo.skill
+    where slug = 'recap' and user_id = '02000000-0000-4000-8000-000000000002') = 2,
+  'archiving frees the slug so it can be written again, and keeps the retired definition');
 
 -- --- an agent run is advanced, never rewritten (invariant 5) ---------------
 select t.denied(

@@ -56,3 +56,16 @@ select t.ok(
 select t.ok(
   (select count(*) from echo.call where id = 'c5000000-0000-4000-8000-000000000005') = 1,
   'while the call still inside its window is untouched');
+
+-- The purge above ran with an assistant message pointing at one of the runs it
+-- deleted. Before 0018 that combination stopped the purge dead on a foreign
+-- key, and the call would have outlived its window — so the fact that we got
+-- here at all is the assertion.
+select t.ok(
+  (select count(*) from echo.agent_message
+    where id = '53000000-0000-4000-8000-000000000003') = 1,
+  'a conversation about a purged call survives the purge');
+select t.ok(
+  (select agent_run_id from echo.agent_message
+    where id = '53000000-0000-4000-8000-000000000003') is null,
+  'but its link to the purged run is cut, not dangling');

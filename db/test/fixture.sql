@@ -115,6 +115,21 @@ insert into echo.agent_run (id, org_id, actor_id, call_id, kind, status, model, 
    '02000000-0000-4000-8000-000000000002', 'c4000000-0000-4000-8000-000000000004',
    'summarizer', 'ok', 'test/model', now());
 
+-- The combination that broke the purge job: someone asked the assistant about
+-- a call, so a message points at a run that points at that call — and the call
+-- later expires. Without ON DELETE SET NULL (0018) the purge dies on a foreign
+-- key and the call outlives its window. The fixture carries it so the suite
+-- cannot go green on that again.
+insert into echo.agent_session (id, org_id, actor_id, title) values
+  ('52000000-0000-4000-8000-000000000002', '0a000000-0000-4000-8000-00000000000a',
+   '02000000-0000-4000-8000-000000000002', 'پرسش درباره تماس حذف‌شده');
+
+insert into echo.agent_message
+  (id, session_id, org_id, seq, role, content, agent_run_id) values
+  ('53000000-0000-4000-8000-000000000003', '52000000-0000-4000-8000-000000000002',
+   '0a000000-0000-4000-8000-00000000000a', 0, 'assistant', 'پاسخ درباره آن تماس',
+   '14000000-0000-4000-8000-000000000004');
+
 -- Gateway keys: one live, one revoked, one acting as the pending user.
 insert into echo.api_key (id, org_id, actor_id, name, token_sha256, token_prefix,
                           created_by, revoked_at, revoked_by) values

@@ -8,7 +8,7 @@ to work.
 ## Running it
 
 ```bash
-pnpm --filter @echo/db up        # local Postgres 15 in Docker, port 55432
+pnpm --filter @echo/db up        # local Postgres 17 in Docker, port 55432
 pnpm --filter @echo/db migrate   # apply pending migrations
 pnpm --filter @echo/db test      # reset, migrate, run the RLS/grant suite
 ```
@@ -16,6 +16,26 @@ pnpm --filter @echo/db test      # reset, migrate, run the RLS/grant suite
 `test` is the gate. It resets the database, applies every migration from
 scratch, and runs each file in `test/` in its own transaction against a fixed
 fixture of two orgs and five people.
+
+### Which database it talks to
+
+In order: `DATABASE_URL` from the environment; then the `echo_platform_db_url`
+secret in the local DPAPI store; then the local container. `--local` forces the
+container. The connection string carries the database password, so it lives in
+the encrypted store like every other credential — never in the repo, never in
+an env file, never in a log line.
+
+Two safeguards, because `reset` is destructive and the remote target is a real
+Supabase project:
+
+- **`reset` refuses to run against a non-local database** unless
+  `ECHO_ALLOW_REMOTE_RESET=1` is set.
+- **It never drops the `auth` schema remotely.** Locally that schema is our own
+  shim; on Supabase it *is* Supabase Auth, and dropping it would take
+  authentication with it. Remotely, only the fixture's own `auth.users` rows
+  are removed, by id.
+
+The local container is initialised with Postgres 17 to match the dev project.
 
 ## The permission stack, and which file holds which layer
 
@@ -66,6 +86,46 @@ caller that already executes arbitrary SQL from setting it — at that point the
 game is over regardless. What the GUC buys is that every query, from every
 process, resolves identity through one function, and RLS applies uniformly.
 
+### Percent-encode the password in the connection string
+
+Read this before debugging a connection. Supabase generates database passwords
+containing characters that are legal in a password but not in a URI — `/`, `?`,
+`#`. Pasted in raw, a `/` silently terminates the URI's authority section, and
+the driver ends up trying to resolve the **username** as a hostname:
+
+```
+getaddrinfo ENOTFOUND postgres
+```
+
+which reads exactly like a DNS or firewall problem and is neither. Encode the
+password with `encodeURIComponent`, splitting on the **last** `@` so a password
+containing `@` also survives — `normalizeDbUrl()` in `scripts/db.mjs` is a
+working implementation to copy. Cost me a round of misdiagnosis; it should cost
+core/ nothing.
+
+## Accepting a new org (operator procedure)
+
+M15 as amended: a person joining an **existing** org is accepted by that org's
+admin, in the product. A person who registers a **new** org — including the
+org-of-one founder — has nobody in their org to accept them, so **we** accept
+them; acceptance is the commercial gate, and there is no trial.
+
+That is an operator path, not a product path. `echo_vendor` holds no table
+privileges at all — only EXECUTE on two functions — and `core/` connects as
+`echo_app`, which has no EXECUTE on either. No request can reach it.
+
+```sql
+-- as echo_vendor
+select * from echo.vendor_pending_orgs();      -- who is waiting
+select echo.vendor_accept_org('<org-uuid>');   -- accept the founder
+```
+
+`vendor_accept_org` refuses an org that already has more than one member — that
+org has an admin of its own. In the accepted row, `accepted_at` set with
+`accepted_by` NULL is the record that the vendor accepted it rather than an org
+admin. An internal surface can replace the psql step later; the rule lives in
+the database either way.
+
 ## Persian text
 
 Two layers, on purpose:
@@ -85,7 +145,9 @@ search breaks.
 
 ## Facts the suite asserts
 
-Not a summary of intentions — these run:
+Not a summary of intentions — these run. Last verified green against the dev
+project (Supabase, Postgres 17.6): **8 files, 143 checks**, 16 tables, every
+table with RLS enabled and forced.
 
 - an org sees none of another org's calls, transcripts, members or search hits
 - a member sees their own calls and org-scoped ones; an admin reads everything
@@ -99,7 +161,16 @@ Not a summary of intentions — these run:
 - the agent cannot touch a `call` row at all, cannot read anyone's email, and
   cannot rewrite a line on a call its caller does not own — even when its
   caller is an admin who can read it
-- a summary version is never edited; replacing one adds a version
+- a summary version is never edited; replacing one adds a version, and the
+  pointer on the call moves by trigger — no caller holds a grant on `echo.call`
+- an assistant session is invisible to the org's admin, while the `agent_run`
+  audit trail stays visible to them
+- a purge succeeds even when an assistant conversation referenced one of the
+  runs being purged — the conversation survives with its link cut
+- a pending account can read its own row and nothing else, and cannot write
+  even that
+- removing a skill means archiving it: the slug frees up, the retired
+  definition stays attached to the runs that used it
 - `echo_purge` cannot delete a call still inside its window
 - the speaker directory can only be joined by the call's **owner** (M11) —
   not by an admin who can merely read the call

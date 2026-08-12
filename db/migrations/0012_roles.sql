@@ -11,6 +11,11 @@
 --   echo_purge  — the 30-day hard purge, and nothing else. The only role in
 --                 the system with DELETE, and its policies let it delete only
 --                 rows whose purge window has already expired.
+--   echo_vendor — us. Accepting a brand-new org is a commercial decision that
+--                 belongs to no org's admin (M15 amendment), so it is an
+--                 operator path, not a product path: this role holds no table
+--                 privileges at all, only EXECUTE on the two functions in
+--                 0015. core/ is not a member of it and cannot call them.
 --
 -- Created NOLOGIN and passwordless on purpose. Passwords are secrets and
 -- never appear in a migration (invariant 7); the operator grants LOGIN and a
@@ -24,7 +29,7 @@ do $$
 declare
   r text;
 begin
-  foreach r in array array['echo_app', 'echo_agent', 'echo_purge'] loop
+  foreach r in array array['echo_app', 'echo_agent', 'echo_purge', 'echo_vendor'] loop
     if not exists (select 1 from pg_roles where rolname = r) then
       execute format(
         'create role %I nologin nosuperuser nocreatedb nocreaterole noinherit nobypassrls',

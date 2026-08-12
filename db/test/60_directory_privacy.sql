@@ -16,7 +16,11 @@ select set_config('echo.actor_id', '01000000-0000-4000-8000-000000000001', true)
 select t.ok(
   exists (select 1 from echo.call_speaker where id = 'e1000000-0000-4000-8000-000000000001'),
   'the admin can see the voices in a member''s private call');
-select t.denied(
+-- Note the asymmetry: readable, but not addressable for writing. The row is
+-- filtered out of the UPDATE entirely, so this is refused by RLS before the
+-- ownership trigger is ever consulted. Both layers are tested — the trigger
+-- on its own at the end of this file.
+select t.writes_nothing(
   $$update echo.call_speaker set person_id = 'f1000000-0000-4000-8000-000000000001'
      where id = 'e1000000-0000-4000-8000-000000000001'$$,
   'but cannot link one into the org directory — only the owner may (M11)');
@@ -26,7 +30,7 @@ select set_config('echo.actor_id', '03000000-0000-4000-8000-000000000003', true)
 select t.ok(
   exists (select 1 from echo.call_speaker where id = 'e2000000-0000-4000-8000-000000000002'),
   'carol can see the voices in the org-scoped call');
-select t.denied(
+select t.writes_nothing(
   $$update echo.call_speaker set person_id = 'f1000000-0000-4000-8000-000000000001'
      where id = 'e2000000-0000-4000-8000-000000000002'$$,
   'org scope shares the recording, not the right to name its voices');
@@ -64,7 +68,7 @@ select t.ok(
   'the agent running as the owner may link — it borrows exactly that authority');
 
 select set_config('echo.actor_id', '01000000-0000-4000-8000-000000000001', true);
-select t.denied(
+select t.writes_nothing(
   $$update echo.call_speaker set person_id = null
      where id = 'e1000000-0000-4000-8000-000000000001'$$,
   'the agent running as the admin cannot unlink a voice on a call the admin does not own');
@@ -78,4 +82,32 @@ select t.writes_nothing(
      where id = 'e1000000-0000-4000-8000-000000000001'$$,
   'and org B cannot reach into org A''s roster at all');
 
+-- --- the ownership trigger, on its own -------------------------------------
+-- Above, RLS refused these writes before the trigger was reached, so the
+-- trigger's own rule is untested by them. Here we drop RLS out of the picture
+-- (the migration role bypasses it) and leave only the trigger standing, so a
+-- future loosening of the policy cannot quietly remove the M11 guarantee.
+reset role;
+-- Clear the link first, as its owner: the guard only fires on an actual
+-- change, so re-setting person_id to the value it already holds would prove
+-- nothing.
+select set_config('echo.actor_id', '02000000-0000-4000-8000-000000000002', true);
+update echo.call_speaker set person_id = null
+ where id = 'e1000000-0000-4000-8000-000000000001';
+
+select set_config('echo.actor_id', '01000000-0000-4000-8000-000000000001', true);
+select t.denied(
+  $$update echo.call_speaker set person_id = 'f1000000-0000-4000-8000-000000000001'
+     where id = 'e1000000-0000-4000-8000-000000000001'$$,
+  'with RLS out of the way, the trigger alone still refuses a non-owner the link');
+
+select set_config('echo.actor_id', '02000000-0000-4000-8000-000000000002', true);
+update echo.call_speaker set person_id = 'f1000000-0000-4000-8000-000000000001'
+ where id = 'e1000000-0000-4000-8000-000000000001';
+select t.ok(
+  (select linked_by from echo.call_speaker where id = 'e1000000-0000-4000-8000-000000000001')
+    = '02000000-0000-4000-8000-000000000002',
+  'and lets the owner through, so the guard is discriminating rather than merely strict');
+
+select set_config('echo.actor_id', '', true);
 reset role;

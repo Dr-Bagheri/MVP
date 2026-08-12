@@ -15,7 +15,10 @@ revoke all on schema echo from public;
 revoke all on all tables    in schema echo from public;
 revoke all on all functions in schema echo from public;
 
-grant usage on schema echo to echo_app, echo_agent, echo_purge;
+-- echo_vendor gets USAGE and nothing else: no table privileges at all. Its
+-- only capability is EXECUTE on the two acceptance functions, granted in 0015
+-- after they exist — which is why the blanket grant below cannot reach them.
+grant usage on schema echo to echo_app, echo_agent, echo_purge, echo_vendor;
 
 -- The helpers every policy calls, plus the trigger functions.
 grant execute on all functions in schema echo to echo_app, echo_agent, echo_purge;
@@ -46,9 +49,14 @@ $$;
 grant select, insert, update on
   echo.org, echo.app_user, echo.call, echo.call_part, echo.person,
   echo.call_speaker, echo.transcript_segment, echo.skill, echo.agent_run,
-  echo.summary, echo.api_key, echo.webhook, echo.webhook_delivery,
-  echo.admin_action
+  echo.api_key, echo.webhook, echo.webhook_delivery
 to echo_app;
+
+-- Append-only, so no UPDATE for anyone — not even core/. A summary version is
+-- written once (invariant 4) and an audit line is not editable (M10). Both
+-- also have triggers refusing UPDATE; this is the layer that means the
+-- statement is rejected before a policy or a trigger has to have an opinion.
+grant select, insert on echo.summary, echo.admin_action to echo_app;
 
 grant select on echo.call_current_summary to echo_app;
 

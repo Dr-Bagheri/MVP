@@ -18,10 +18,15 @@ select t.ok(
     where grantee = 'echo_app' and privilege_type = 'DELETE' and table_schema = 'echo'
   ),
   'core/''s own role holds no DELETE on any product table — only echo_purge does');
+-- Scoped to the application roles: the schema owner also appears as a grantee
+-- of everything on a managed platform, and a superuser was never inside this
+-- wall to begin with — core/ simply never connects as one.
 select t.ok(
-  (select count(distinct grantee) from information_schema.role_table_grants
-    where table_schema = 'echo' and privilege_type = 'DELETE') = 1,
-  'exactly one role in the database can delete a product row');
+  (select coalesce(array_agg(distinct grantee::text order by grantee::text), '{}')
+     from information_schema.role_table_grants
+    where table_schema = 'echo' and privilege_type = 'DELETE'
+      and grantee::text like 'echo\_%') = array['echo_purge'],
+  'echo_purge is the only application role that can delete a product row');
 
 -- Every product table has RLS on and forced. A table added later without it
 -- would be a silent hole, so the suite counts them rather than trusting review.
@@ -97,11 +102,13 @@ select t.ok(
   (select status from echo.register_account(
      '09000000-0000-4000-8000-000000000009', 'frank@example.com', 'فرانک')) = 'pending',
   'self-registration lands in pending — the function cannot produce an active user');
+-- Read it as the new account: echo_app with no identity attached can see
+-- nothing, not even the row it just created (invariant 2).
+select set_config('echo.actor_id', '09000000-0000-4000-8000-000000000009', true);
 select t.ok(
   (select role from echo.app_user where id = '09000000-0000-4000-8000-000000000009') = 'admin',
   'registering without naming an org creates an org-of-one whose founder is its admin (M2)');
 
-select set_config('echo.actor_id', '09000000-0000-4000-8000-000000000009', true);
 select t.ok((select count(*) from echo.call) = 0,
   'and that brand-new account can still see nothing until someone accepts it');
 

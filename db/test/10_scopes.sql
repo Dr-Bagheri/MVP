@@ -55,6 +55,8 @@ select t.ok((select count(*) from echo.transcript_segment) = 0,
   'a pending user sees no transcripts');
 select t.ok((select count(*) from echo.person) = 0,
   'a pending user does not get the org speaker directory');
+select t.ok((select count(*) from echo.skill) = 0,
+  'nor the skill catalogue — not even the system skills shipped with the product');
 select t.ok((select count(*) from echo.app_user) = 1,
   'a pending user can read exactly one row — their own, so the UI can say "awaiting approval"');
 

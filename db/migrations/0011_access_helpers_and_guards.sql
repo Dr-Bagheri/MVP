@@ -141,7 +141,24 @@ create function echo.tg_app_user_guard() returns trigger
 as $$
 declare
   actor uuid := echo.actor_id();
+  -- Is this an application connection, or the operator?
+  --
+  -- The authority rules below govern the product's roles. The database owner
+  -- is outside them by definition — it can do anything regardless of what a
+  -- trigger says — and that is the seam the vendor-acceptance path in 0015
+  -- runs through: accepting a brand-new org is a commercial decision that
+  -- belongs to no org's admin (M15 amendment), so it must not be reachable
+  -- from core/. core/ is echo_app; it never gets here with this false.
+  --
+  -- Deliberately the effective role itself, not pg_has_role(): membership is
+  -- transitive and grantable, so a role_has_membership test would call the
+  -- operator "an app connection" the moment anyone granted echo_app to the
+  -- owner — which is exactly what a test harness does to be able to SET ROLE.
+  -- core/ connects AS these roles; inside a SECURITY DEFINER function
+  -- current_user is the function's owner, which is the seam we want.
+  from_app boolean := current_user::text in ('echo_app', 'echo_agent');
 begin
+  -- Integrity, not authority: true on every path, operator included.
   if new.id is distinct from old.id or new.org_id is distinct from old.org_id then
     raise exception 'a user cannot change identity or org'
       using errcode = 'check_violation';
@@ -153,20 +170,27 @@ begin
   end if;
 
   if new.role is distinct from old.role or new.status is distinct from old.status then
-    if not echo.actor_is_admin() then
-      raise exception 'only an admin may change a role or a membership status'
-        using errcode = 'insufficient_privilege';
+    if from_app then
+      if not echo.actor_is_admin() then
+        raise exception 'only an admin may change a role or a membership status'
+          using errcode = 'insufficient_privilege';
+      end if;
+      -- The one thing an admin may not do: change their own. Acceptance and
+      -- promotion are decisions about someone else, always.
+      if actor = old.id then
+        raise exception 'an admin may not change their own role or status'
+          using errcode = 'insufficient_privilege';
+      end if;
     end if;
-    -- The one thing an admin may not do: change their own. Acceptance and
-    -- promotion are decisions about someone else, always.
-    if actor = old.id then
-      raise exception 'an admin may not change their own role or status'
-        using errcode = 'insufficient_privilege';
-    end if;
-    -- Acceptance records itself (M15).
+    -- Acceptance records itself (M15). accepted_by is the admin who accepted;
+    -- NULL with accepted_at set means the vendor did, which is the only way a
+    -- founding admin of a brand-new org can become active.
     if old.status = 'pending' and new.status = 'active' then
       new.accepted_at := now();
-      new.accepted_by := actor;
+      -- On the operator path accepted_by is NULL by construction, not by
+      -- luck: whatever identity happens to be set on the connection, a vendor
+      -- acceptance must not be recorded as some org admin's decision.
+      new.accepted_by := case when from_app then actor else null end;
     end if;
   end if;
 

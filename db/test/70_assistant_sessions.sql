@@ -18,9 +18,14 @@ insert into echo.agent_message (session_id, org_id, seq, role, content)
 values ('51000000-0000-4000-8000-000000000001', '0a000000-0000-4000-8000-00000000000a',
         0, 'user', 'خلاصه جلسه دیروز چه بود؟');
 
-select t.ok((select count(*) from echo.agent_session) = 1,
+-- Counted by id rather than in total: the fixture already gives bob a second
+-- session (the one the purge test needs).
+select t.ok(
+  exists (select 1 from echo.agent_session where id = '51000000-0000-4000-8000-000000000001'),
   'bob has his session');
-select t.ok((select count(*) from echo.agent_message) = 1,
+select t.ok(
+  (select count(*) from echo.agent_message
+    where session_id = '51000000-0000-4000-8000-000000000001') = 1,
   'and its messages');
 
 -- --- the admin cannot read it ----------------------------------------------
@@ -47,7 +52,9 @@ select t.ok((select count(*) from echo.agent_message) = 0,
 reset role;
 set local role echo_agent;
 select set_config('echo.actor_id', '02000000-0000-4000-8000-000000000002', true);
-select t.ok((select count(*) from echo.agent_message) = 1,
+select t.ok(
+  (select count(*) from echo.agent_message
+    where session_id = '51000000-0000-4000-8000-000000000001') = 1,
   'running for bob, the agent can read bob''s conversation');
 select t.denied(
   $$insert into echo.agent_message (session_id, org_id, seq, role, content)
