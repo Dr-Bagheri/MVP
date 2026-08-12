@@ -32,6 +32,23 @@ called **Echo Mobile** — in conversation, docs, commits, and UI copy.
    only. RLS/grant changes ship with their SQL tests.
 6. The transcript is the source of truth; derived artifacts are rebuildable
    and carry provenance.
+7. **Model integrations need positive-detection tests** (M19, from ml/'s
+   Silero finding): a model wired up wrong usually fails *silently* and passes
+   negative tests. Every integration of a model — VAD, STT, diarization, LLM
+   lanes — ships at least one assertion that something is positively detected
+   on real data, plus a logged warning when a component silently finds nothing.
+   Corollary (sherpa-onnx finding): a health check must resolve the specific
+   callable it guards — probing a module's presence is not a health check.
+   Live-lane standard (steward ruling): live tests (real network, real spend)
+   are opt-in, NOT in the default suite. The bar is **prove-at-acceptance** —
+   run it once for real at package acceptance and record the result — plus
+   re-run at release gates (steward-driven). "Runnable but never run" is
+   theatre and does not count.
+8. **The timing ladder (M20)**: transcript timing degrades word → line →
+   part-spanning segment, never to "nothing". ml/ emits 0-based timings;
+   core/'s worker anchors to `part.offset_ms` and synthesizes the
+   part-spanning segment on `timestamps:"none"`; core/ refuses
+   `end_ms <= start_ms` on non-empty parts.
 
 ## Workflow
 
@@ -65,3 +82,29 @@ session that touches GitHub. Repo: **github.com/Dr-Bagheri/MVP — PRIVATE**.
   (Front-end), core/ (Backend), ml/ (Backend 2), schema+RLS (Backend 3).
   Dev Supabase live (aqgpxnyuxukwgphrxslw; keys in DPAPI store under
   echo_platform_*). Soniox funded; quality numbers land post-lock.
+- 2026-08-12 (later): **web/ Phase A serving** — full screen set captured,
+  awaiting the user's visual-direction verdict. **db/ schema green on the dev
+  project** (17 migrations, 135 checks) and line-reviewed; **M19 added**
+  (db/D1–D13 ratified, Q2/Q3/Q4 ruled as built, model-testing rule). Two
+  review findings returned to Backend 3 before core/ may depend on the schema:
+  purge-vs-assistant-message FK (`agent_message.agent_run_id` must be
+  `on delete set null`) and the current-summary pointer joining the
+  owner-only column list. **core/**: runtime + permission core approved;
+  api layer in progress. **ml/**: Silero VAD live (RTF 0.14, −15% STT cost);
+  Persian WER measurement pending a real clip.
+- 2026-08-12 (evening): **ml/ COMPLETE** — 87 tests, Persian acceptance passed
+  on a real device recording (RTF 0.16, ZWNJ correct, VAD-trimmed transcript
+  unchanged), diarization verified both directions (2 voices found / no voice
+  invented). Honest gaps recorded in ml/README.md (crosstalk untested; RTF
+  numbers size nothing under contention — measure on the deployment box).
+  **M20 ruled** (timing ladder). core/ at 69 tests (rule-7 pass: an
+  empty-but-well-formed model response now FAILS the run; live OpenRouter
+  lane executed once, green); /v1 + SSE in progress. Package assignment:
+  **core/worker → Backend 2** (owns `core/src/worker/**` only; shared core/
+  files are read-only to them — changes go through Backend 1;
+  transcript-mapping.ts handed over as theirs; **postgres AgentRunStore is
+  Backend 1's** — worker consumes, never forks). web/ EN-locale fixes
+  verified by steward re-shoot (ss01 font feature was silently swapping
+  digit glyphs — removed, digits follow locale from lib/format.ts; title
+  locale-aware). Diarization multi-speaker sub-gate: open, awaits a real
+  2-voice Persian clip (3-minute job when it arrives).

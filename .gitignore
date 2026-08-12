@@ -1,6 +1,9 @@
 # Secrets — never in the repo
 .env
 .env.*
+# ...except the templates, which carry names and defaults but never values.
+!.env.example
+!*/.env.example
 *.token
 *.secret
 secrets/

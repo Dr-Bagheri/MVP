@@ -40,8 +40,14 @@ flowchart LR
   TypeScript CONFIRMED** — sherpa-onnx-node installed prebuilt on Windows
   (no Python/node-gyp), OfflineSpeakerDiarization + Vad in one dep, clean
   clustering on synthetic ground truth (auto-cluster found 2/2 speakers,
-  179/180 alternations on an 11-min file), RTF 0.41 on CPU (≈12 min per
-  30-min part — heaviest CPU stage, gets its own worker concurrency budget).
+  179/180 alternations on an 11-min file) and confirmed on real Persian
+  audio (1-speaker clip → exactly 1 speaker found, no invented voices; the
+  multi-speaker gate closes on the first real 2-voice recording).
+  **RTF caveat (honest correction)**: the measured 0.41× was an idle-machine
+  best case — under build-load contention the same file measured ~2× — so
+  pipeline sizing happens on target hardware under representative
+  concurrency, not from spike numbers. What survives: diarization is the
+  heaviest CPU stage and gets its own worker concurrency budget.
   The Python hatch stays documented but UNUSED; if a measured gap appears on
   real Persian recordings, the fix is likely a different ONNX model, not a
   different language (same models either way). Confirmation gate: re-run the
@@ -126,20 +132,26 @@ with one org — a deployment choice, not a fork.
 
 ## M6 — Speech: API-first behind ml/, diarization local, Persian-focused
 
-- Transcription: **Soniox** primary candidate (word-level timestamps, strong
-  Persian, streaming exists though v1 doesn't use it) + OpenRouter ASR lanes;
-  self-hosted model later behind the same contract. Provider choice settles by
-  bake-off on real Persian recordings (both predecessors' discipline).
+- Transcription: **Soniox PRIMARY — ratified by measurement on the user's
+  real clip (2026-08-12)**: 0.12× realtime, every token timestamped and
+  monotonic, correct ZWNJ and colloquial register, natural fa/en
+  code-switching; proper nouns are the known weak spot. **Integration
+  requirement**: Soniox returns SUB-WORD tokens — ml/'s adapter MUST assemble
+  words via the leading-space convention (new word per space-prefixed token,
+  start from first token, end from last, speaker survives assembly) or the UI
+  receives unclickable fragments. OpenRouter ASR lane: fallback only —
+  measured on the same clip: near-identical text quality but **zero
+  timestamps and zero speakers** (structurally, via chat completions), and
+  ~10× the token cost.
 - **Word-level timestamps required** (click-a-word seeks; words align to
   speakers). (Echo Mobile: proportional estimates were a visible quality gap.)
-- **[Steward ruling, Phase-0 finding]** The OpenRouter ASR fallback lane
-  structurally cannot produce word timestamps (verified). Policy when the
-  primary lane is down: **degrade-and-flag, never lose the call** — the
-  fallback returns line-level timings, the result carries
-  `word_timestamps: false` provenance end-to-end (worker stores it, UI
-  degrades click-a-word to click-a-line and shows the flag), and the call is
-  queued for automatic re-transcription when the primary lane recovers.
-  Silent degradation and total failure are both forbidden.
+- **[Steward ruling, refined by head-to-head measurement]** The fallback
+  lane produces NO timings at all. Policy when the primary is down:
+  **degrade-and-flag, never lose the call** — the result carries
+  `timestamps: "none"` provenance end-to-end; the UI shows the transcript
+  with seek DISABLED and the degraded flag visible; the call queues for
+  automatic re-transcription when the primary recovers. Silent degradation
+  and total failure both forbidden.
 - **Soniox diarizes natively** (async, per-token speakers, up to 15) — local
   diarization (sherpa-onnx or the Python hatch) is the fallback for lanes
   without it, plus the independence hedge, behind ml/'s Diarizer interface.
@@ -253,6 +265,14 @@ visible or usable before acceptance. Schema: `user.status`
 (pending/active/disabled) + `org.status` (active/suspended); payment
 processing is a later seam. **No usage view in the product** — internal
 metering only, for our own cost visibility.
+**[Amendment, schema round]**: acceptance is two-tier — members joining an
+EXISTING org are accepted by that org's admin; a self-registered NEW org
+(including org-of-one individuals) is accepted by **the vendor** — acceptance
+is the commercial gate. v1 ships a minimal vendor acceptance procedure (not a
+console). Ratified with it: the current-summary pointer moves only via a
+SECURITY DEFINER trigger (the agent holds zero grants on echo.call), and
+**assistant conversations are private even from admins** — the admin audit
+surface is agent_run (what the agent did), never colleagues' conversation text.
 
 ## M16 — (folded into M7: the 30-minute part model)
 
@@ -271,6 +291,80 @@ transport for agent-side connectors when they arrive.
 One brand family with the Android recorder — which is referred to as **Echo Mobile** everywhere (docs, conversation, UI copy) so that plain **Echo** always means this platform. Steward flag on record: global
 trademark adjacency (Amazon Echo) — irrelevant to the current market, revisit
 only if Western registration ever matters.
+
+## M19 — Database decisions ratified [steward, 2026-08-12, post-lock amendment]
+
+`db/` shipped with its own numbered decisions (db/DECISIONS.md D1–D13); after
+line-review of the SQL and a green 135-check suite against the dev project,
+the steward **ratifies all thirteen** as the binding refinement of M2/M3/M8/
+M11/M15/M17. The ones that constrain other packages, by name:
+
+- **db/D2** — identity arrives as `SET LOCAL echo.actor_id` set by core/'s
+  connection factory; setting that GUC IS authenticating.
+- **db/D3** — `echo_app`/`echo_agent` hold no DELETE anywhere; `echo_purge` is
+  the only deleting role and only past the 30-day window; `summary` and
+  `admin_action` carry **no UPDATE grant for any role**.
+- **db/D8** — exactly two SECURITY DEFINER doors reachable from core/
+  (`register_account`, `resolve_api_key`); the vendor-acceptance pair is
+  operator-only (`echo_vendor`, db/D13) and core/ cannot execute it.
+- **db/D9** — composite FKs make cross-org references structurally impossible.
+- **db/D11** — assistant sessions are private to their owner, admins included;
+  the admin audit surface is `agent_run`, never conversation text.
+- **db/D12** — one pgmq queue per DAG step; only `echo_app` may drive them.
+
+Open questions ruled (steward): **Q2** as built — only an admin restores a
+soft-deleted call; deletion feels like deletion to its owner. **Q3** as built —
+any active member may rename directory entries; linking stays owner-only
+(that is the privacy-bearing act, M11). **Q4** ratified — the "reads
+everything, rewrites nothing" rule applies to human admins exactly as to the
+agent. All three are cheap one-policy reversals if product experience argues
+otherwise; user may override.
+
+Post-review additions, same authority (0018): **db/D14** — a skill is
+archived, never deleted (`archived_at`; live slugs unique via partial index
+so a retired slug can be re-created; no role holds DELETE on `echo.skill`
+because `agent_run` provenance must stay replayable). **Q5 ruled (v1)** — an
+assistant conversation is the asker's own record: it survives the purge of a
+call it discussed, with the run link cut (`on delete set null`). The
+compliance-grade alternative (purging messages whose run pointed at the
+purged call, in-transaction before the FK nulls) is expressible in the schema
+and deferred with the rest of the compliance suite (SPEC: not v1). User may
+override. Ratified with 0018: the D13 `current_user` seam now also governs
+`tg_call_guard`'s ownership rules — a definer-path pointer move (no product
+identity) is the operator seam, not a rewrite.
+
+Model-integration testing rule (from ml/'s Silero finding, binding on every
+package that wires a model): **a model wired up wrong usually fails silently
+and passes negative tests** — every model integration must include at least
+one assertion that something is positively detected on real data, and a
+warning path when a component silently finds nothing. Second finding, same
+family (sherpa-onnx CJS-under-ESM: a broken diarizer reported healthy):
+**a health check must resolve the specific callable it guards** — probing a
+module's presence is not a health check.
+
+## M20 — The timing ladder: word → line → part, never nothing [steward ruling, 2026-08-12]
+
+Refines M6/M7; settles the frontend's degradation flag and the seek-to-zero
+concern in one rule. Part-level timing always exists **structurally**
+(`call_part.offset_ms` and `transcript_segment.start_ms/end_ms` are NOT NULL —
+the schema cannot represent an untimed segment), so the degradation ladder is:
+
+1. word timestamps (Soniox lane) → click a word;
+2. segment timing only → click a line;
+3. prose-only fallback (`provenance.stt.timestamps: "none"`) → ONE
+   part-spanning segment; a click seeks to the part start.
+
+Nothing is ever unclickable-because-untimed, and nothing silently seeks to 0.
+Division of labour, deliberately: **ml/ stays productless** (invariant 6) —
+its timings are 0-based within the audio it was handed; **core/'s worker**
+anchors them (adds `part.offset_ms`) and synthesizes the part-spanning
+segment on a timing-less result. core/ refuses to store a segment with
+`end_ms <= start_ms` for a non-empty part — the "timing quietly became zero"
+class dies at the boundary, not in the UI. A 200 from ml/ is not
+automatically full fidelity: `degraded` + `timestamps:"none"` ride provenance
+into storage; the UI's per-row `end_ms > start_ms` gate implements the ladder
+unchanged, and the call-level «رونوشت با دقت کاهش‌یافته» chip stays a quality
+signal, separate from seek mechanics.
 
 ---
 
