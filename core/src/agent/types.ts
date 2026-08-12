@@ -30,6 +30,12 @@ export interface Skill {
   model: string | null;
   tools: string[];
   enabled: boolean;
+  /**
+   * Per-skill tool-call ceiling (steward ruling): the summarizer can carry
+   * its own. NULL/absent = the runtime default. Tune from agent_run.steps,
+   * not from vibes.
+   */
+  maxToolCalls?: number | null;
 }
 
 /** One recorded tool interaction — an element of echo.agent_run.steps. */

@@ -39,8 +39,17 @@ export interface DomainTool<TDeps, TArgs = Record<string, unknown>> {
 export interface WrapOptions<TDeps> {
   identity: Identity;
   deps: TDeps;
-  /** Called for every attempt — allowed, denied or errored. */
+  /**
+   * Called once per attempt when it RESOLVES — allowed, denied or errored.
+   * This is the audit record: one step per completed attempt.
+   */
   onStep(step: Omit<AgentStep, "seq">): void | Promise<void>;
+  /**
+   * Called when execution BEGINS, for the SSE `tool_call` started event.
+   * Deliberately separate from onStep so the audit trail keeps exactly one
+   * row per attempt while the UI can render a tool as it runs.
+   */
+  onStart?: ((info: { id: string; tool: string; label: string }) => void) | undefined;
 }
 
 const MAX_RESULT_CHARS = 24_000;
@@ -51,7 +60,7 @@ const MAX_RESULT_CHARS = 24_000;
  */
 export function wrapTools<TDeps>(
   tools: DomainTool<TDeps, never>[],
-  { identity, deps, onStep }: WrapOptions<TDeps>,
+  { identity, deps, onStep, onStart }: WrapOptions<TDeps>,
 ): unknown[] {
   if (!identity.isActive) {
     // M15: a pending or disabled person gets no tools at all. Not an empty
@@ -64,9 +73,10 @@ export function wrapTools<TDeps>(
     label: tool.label,
     description: tool.description,
     parameters: tool.parameters,
-    execute: async (_toolCallId: string, args: unknown, signal?: AbortSignal) => {
+    execute: async (toolCallId: string, args: unknown, signal?: AbortSignal) => {
       const startedAt = new Date().toISOString();
       const t0 = Date.now();
+      onStart?.({ id: toolCallId, tool: tool.name, label: tool.label });
       try {
         const result = await tool.run({ identity, deps, signal }, args as never);
         const text = serialize(result);

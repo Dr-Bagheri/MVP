@@ -97,6 +97,30 @@ describe("tool wrapper (wall layer 1)", () => {
     expect(steps[0]?.outcome).toBe("error");
   });
 
+  it("emits a started event before execution, and one audit step after", async () => {
+    const { steps, onStep } = collect();
+    const started: { id: string; tool: string; label: string }[] = [];
+    const tool = (wrapTools([readCall as never], {
+      identity: ACTIVE, deps: {}, onStep, onStart: (i) => started.push(i),
+    }) as never[])[0]!;
+
+    await call(tool, { call_id: "c1" });
+    expect(started).toEqual([{ id: "tc-1", tool: "read_call", label: "Read call" }]);
+    // the audit keeps exactly one row per attempt — the start is UI-only
+    expect(steps).toHaveLength(1);
+    expect(steps[0]?.outcome).toBe("ok");
+  });
+
+  it("emits started even for an attempt that is denied", async () => {
+    const { onStep } = collect();
+    const started: unknown[] = [];
+    const tool = (wrapTools([readCall as never], {
+      identity: ACTIVE, deps: {}, onStep, onStart: (i) => started.push(i),
+    }) as never[])[0]!;
+    await call(tool, { call_id: "c2" });
+    expect(started).toHaveLength(1);   // UI shows it running, then refused
+  });
+
   it("passes identity to the tool, not credentials", async () => {
     const seen: unknown[] = [];
     const probe: DomainTool<{ secret: string }, Record<string, never>> = {

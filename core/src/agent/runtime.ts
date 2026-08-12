@@ -17,7 +17,7 @@
  *  5. Content enters the prompt quoted, never as instructions (M4 injection
  *     posture); the caller supplies already-quoted material.
  */
-import { createPolicy, DEFAULT_MAX_TOOL_CALLS } from "./policy.ts";
+import { createPolicy, DEFAULT_MAX_TOOL_CALLS, filterDeclaredTools } from "./policy.ts";
 import { runPi, type PiModelRef } from "./pi.ts";
 import { modelForRun } from "./skills.ts";
 import { wrapTools, type DomainTool } from "./tools.ts";
@@ -38,9 +38,13 @@ export interface RunRequest<TDeps> {
   deps: TDeps;
   callId?: string | null | undefined;
   adminOnlyTools?: ReadonlySet<string> | undefined;
+  /** Overrides the skill's pin and the default (rarely needed). */
   maxToolCalls?: number | undefined;
+  maxBlockedAttempts?: number | undefined;
   signal?: AbortSignal | undefined;
   onText?: ((delta: string) => void) | undefined;
+  /** SSE `tool_call` lifecycle: started (here) and terminal (via steps). */
+  onToolStart?: ((info: { id: string; tool: string; label: string }) => void) | undefined;
   apiKey?: string | undefined;
 }
 
@@ -75,7 +79,9 @@ export function createAgentRuntime({ runs }: AgentRuntimeOptions) {
         request: {
           systemPrompt,
           input,
-          tools: request.tools.map((t) => t.name),
+          // what the model was actually offered (post skill-filter), so a
+          // replay reconstructs the same surface
+          tools: filterDeclaredTools(request.tools, skill?.tools).map((t) => t.name),
           skill: skill ? { id: skill.id, slug: skill.slug, level: skill.level } : null,
         },
       });
@@ -89,13 +95,21 @@ export function createAgentRuntime({ runs }: AgentRuntimeOptions) {
       };
 
       try {
-        // (2) both wall layers, always — wrapper first, central veto second
-        const tools = wrapTools(request.tools, { identity, deps: request.deps, onStep });
+        // (2) both wall layers, always — wrapper first, central veto second.
+        // The pre-filter is token economy only: the model isn't offered tools
+        // the skill didn't declare, but the veto below still enforces it, so
+        // nothing depends on this filter having run.
+        const offered = filterDeclaredTools(request.tools, skill?.tools);
+        const tools = wrapTools(offered, {
+          identity, deps: request.deps, onStep, onStart: request.onToolStart,
+        });
         const beforeToolCall = createPolicy({
           identity,
           allowedTools: skill?.tools,
           adminOnlyTools: request.adminOnlyTools,
-          maxToolCalls: request.maxToolCalls ?? DEFAULT_MAX_TOOL_CALLS,
+          // precedence: explicit request > per-skill pin > default
+          maxToolCalls: request.maxToolCalls ?? skill?.maxToolCalls ?? DEFAULT_MAX_TOOL_CALLS,
+          maxBlockedAttempts: request.maxBlockedAttempts,
           onStep,
         });
 
@@ -121,6 +135,25 @@ export function createAgentRuntime({ runs }: AgentRuntimeOptions) {
           return {
             runId, text: result.text, model: result.model, steps,
             failed: true, error: result.error,
+          };
+        }
+
+        // (5) An empty answer is a FAILURE, not a success (CLAUDE.md rule 7).
+        // A provider can return a well-formed, stopReason-normal response
+        // with no content — and a silently-empty summary or assistant reply
+        // is exactly the failure that passes every negative assertion. The
+        // run must fail loudly rather than store nothing and look fine.
+        if (result.text.trim() === "") {
+          const empty = "model returned an empty response";
+          await runs.finish(runId, {
+            status: "failed",
+            tokensIn: result.tokensIn,
+            tokensOut: result.tokensOut,
+            error: empty,
+          });
+          return {
+            runId, text: "", model: result.model, steps,
+            failed: true, error: empty,
           };
         }
 
