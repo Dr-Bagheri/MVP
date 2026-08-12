@@ -4,7 +4,19 @@
  * Hand-rolled rather than pulled in as a dependency because the surface we
  * need is small and the failure modes are the ones worth owning explicitly:
  * algorithm confusion, unsigned tokens, expiry, and timing-safe comparison.
- * If we ever need RS256/JWKS this file is the single place that changes.
+ *
+ * ── DEPLOYMENT REQUIREMENT (steward nit, and it will bite silently) ─────────
+ *
+ * This verifies HS256 against the project's shared JWT secret. Supabase is
+ * migrating projects toward asymmetric signing keys (JWKS / ES256), and a
+ * project switched to those issues tokens this file cannot verify — the
+ * symptom is **every user 401ing at once**, with no code change to blame and
+ * nothing wrong in the logs beyond "invalid signature".
+ *
+ * So: this product requires the legacy HS256 (shared secret) mode until a
+ * JWKS path is built here. That's the single place it would go — fetch the
+ * project's JWKS, select by `kid`, verify ES256 — and the header check below
+ * is where the algorithm branch belongs.
  */
 import { createHmac, timingSafeEqual } from "node:crypto";
 
@@ -20,6 +32,17 @@ export interface VerifiedClaims {
 export interface VerifierOptions {
   secret: string;
   issuer?: string | undefined;
+  /**
+   * Expected `aud`. Supabase issues `"authenticated"` for a signed-in user
+   * and `"anon"` for the anonymous key — so pinning this is what stops an
+   * anon-key token being accepted as a person.
+   *
+   * Implemented because the surrounding comment promised audience pinning and
+   * only issuer was checked (steward nit): a doc-comment that describes a
+   * control nobody wrote is worse than silence, because a reviewer reads it
+   * and moves on.
+   */
+  audience?: string | undefined;
   /** Tolerance for clock skew, seconds. */
   leewaySeconds?: number;
 }
@@ -31,7 +54,7 @@ function base64UrlDecode(part: string): Buffer {
   return Buffer.from(padded + "=".repeat((4 - (padded.length % 4)) % 4), "base64");
 }
 
-export function createVerifier({ secret, issuer, leewaySeconds = 30 }: VerifierOptions) {
+export function createVerifier({ secret, issuer, audience, leewaySeconds = 30 }: VerifierOptions) {
   if (!secret) throw new Error("jwt secret is required");
   const key = Buffer.from(secret, "utf8");
 
@@ -72,6 +95,14 @@ export function createVerifier({ secret, issuer, leewaySeconds = 30 }: VerifierO
       throw new InvalidTokenError("token not yet valid");
     }
     if (issuer && claims.iss !== issuer) throw new InvalidTokenError("bad issuer");
+    if (audience) {
+      // `aud` may be a string or an array — a token carrying an array that
+      // merely CONTAINS our audience is valid, and treating the array case as
+      // a mismatch would reject legitimate tokens.
+      const claimed = claims.aud;
+      const matches = Array.isArray(claimed) ? claimed.includes(audience) : claimed === audience;
+      if (!matches) throw new InvalidTokenError("bad audience");
+    }
     if (typeof claims.sub !== "string" || !claims.sub) {
       throw new InvalidTokenError("no subject");
     }

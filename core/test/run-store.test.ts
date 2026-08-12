@@ -14,19 +14,22 @@ const RUN = "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa";
 const IDENTITY: Identity = { userId: ALICE, orgId: "org-a", role: "member", isActive: true };
 
 function fakeDb(rowsFor: (sql: string) => unknown[] = () => []) {
-  const log: { sql: string; params?: unknown[] | undefined }[] = [];
-  const make = (): SqlClient => ({
+  // The POOL is logged, not just the SQL: `set local role echo_agent` issued
+  // on the app pool is the silent-escalation shape, and only the pool tells
+  // the two apart.
+  const log: { sql: string; params?: unknown[] | undefined; pool: string }[] = [];
+  const make = (pool: string): SqlClient => ({
     async begin<T>(fn: (tx: SqlTx) => Promise<T>): Promise<T> {
       const tx = (async () => []) as unknown as SqlTx;
       (tx as unknown as { unsafe: SqlTx["unsafe"] }).unsafe = (async (sql: string, params?: unknown[]) => {
-        log.push({ sql, params });
+        log.push({ sql, params, pool });
         return rowsFor(sql) as never[];
       }) as SqlTx["unsafe"];
       return fn(tx);
     },
     async end() {},
   });
-  return { log, db: createDb({ app: make(), agent: make() }) };
+  return { log, db: createDb({ app: make("app"), agent: make("agent") }) };
 }
 
 const step = (seq: number, outcome: "ok" | "denied") => ({
@@ -46,11 +49,17 @@ describe("agent run store — identity on every write", () => {
     });
 
     expect(id).toBe(RUN);
-    // SET LOCAL precedes the insert, in the same transaction
-    expect(log[0]!.sql).toBe(`set local echo.actor_id = '${ALICE}'`);
-    expect(log[1]!.sql).toContain("insert into echo.agent_run");
+    // The run is the AGENT's audit trail, so it is written on echo_agent —
+    // which holds UPDATE on only (status, steps, tokens_in, tokens_out,
+    // error, finished_at). On echo_app, `request` and `created_at` would stay
+    // rewritable and this module's append-only property would rest on nothing
+    // but its own choice of SQL.
+    expect(log[0]!.sql).toBe("set local role echo_agent");
+    expect(log[0]!.pool).toBe("agent");
+    expect(log[1]!.params).toEqual([ALICE]);
+    expect(log[2]!.sql).toContain("insert into echo.agent_run");
     // the request is stored as jsonb for replay
-    expect(String(log[1]!.params?.[6])).toContain("read_call");
+    expect(String(log[2]!.params?.[6])).toContain("read_call");
   });
 
   it("fails loudly when RLS returns no row rather than inventing an id", async () => {
@@ -71,8 +80,17 @@ describe("agent run store — identity on every write", () => {
 
     const appends = log.filter((l) => l.sql.includes("update echo.agent_run"));
     expect(appends).toHaveLength(2);
-    // jsonb || jsonb — atomic append, not read-modify-write
-    expect(appends[0]!.sql).toContain("steps = steps || $2::jsonb");
+    // jsonb || jsonb — atomic append, not read-modify-write.
+    //
+    // `::text::jsonb`, NOT `::jsonb`: with the latter postgres.js encodes the
+    // already-encoded string a SECOND time, every element lands as a jsonb
+    // string, and `jsonb_array_elements(steps)->>'tool'` returns null — the
+    // audit trail present but unqueryable. A string match on purpose, so a
+    // future "simplification" of the cast fails here rather than in
+    // production. The behavioural proof is test/e2e/jsonb-queryable.ts,
+    // which asks a real database the question the trail exists to answer.
+    expect(appends[0]!.sql).toContain("steps = steps || $2::text::jsonb");
+    expect(appends[0]!.sql).not.toMatch(/\$2::jsonb/);
     // each append carries exactly one step, wrapped as an array
     expect(JSON.parse(String(appends[0]!.params?.[1]))).toEqual([step(0, "ok")]);
     expect(JSON.parse(String(appends[1]!.params?.[1]))[0].outcome).toBe("denied");
@@ -84,18 +102,18 @@ describe("agent run store — identity on every write", () => {
     const { db, log } = fakeDb(() => []);
     const store = createAgentRunStore({ db, identity: IDENTITY });
 
-    await store.finish(RUN, { status: "failed", tokensIn: 10, tokensOut: 0, error: "provider down" });
+    await store.finish(RUN, { status: "error", tokensIn: 10, tokensOut: 0, error: "provider down" });
 
     const update = log.find((l) => l.sql.includes("finished_at = now()"))!;
-    expect(update.params).toEqual([RUN, "failed", 10, 0, "provider down"]);
+    expect(update.params).toEqual([RUN, "error", 10, 0, "provider down"]);
   });
 
   it("normalises absent tokens to null rather than undefined", async () => {
     const { db, log } = fakeDb(() => []);
     const store = createAgentRunStore({ db, identity: IDENTITY });
-    await store.finish(RUN, { status: "succeeded" });
+    await store.finish(RUN, { status: "ok" });
     const update = log.find((l) => l.sql.includes("finished_at = now()"))!;
-    expect(update.params).toEqual([RUN, "succeeded", null, null, null]);
+    expect(update.params).toEqual([RUN, "ok", null, null, null]);
   });
 });
 
@@ -103,7 +121,7 @@ describe("agent run read side (replay surface)", () => {
   it("maps a row into the record shape", async () => {
     const { db } = fakeDb((sql) => (sql.includes("select id, org_id") ? [{
       id: RUN, org_id: "org-a", actor_id: ALICE, call_id: null, skill_id: null,
-      kind: "summarizer", status: "succeeded", model: "m",
+      kind: "summarizer", status: "ok", model: "m",
       request: { input: "q" }, steps: [step(0, "ok")],
       tokens_in: 10, tokens_out: 5, error: null,
     }] : []));

@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { createCallsRepo, MAX_PAGE } from "../src/api/calls.ts";
+import { createCallsRepo, MAX_PAGE, timingFromCounts } from "../src/api/calls.ts";
 import { NotFoundError, ValidationError } from "../src/api/errors.ts";
 import { createDb, type SqlClient, type SqlTx } from "../src/db/identity.ts";
 import type { Identity } from "../src/agent/types.ts";
@@ -17,7 +17,7 @@ const IDENTITY: Identity = { userId: ALICE, orgId: "org-a", role: "member", isAc
 const row = (over: Record<string, unknown> = {}) => ({
   id: CALL, title: "جلسه بودجه", scope: "private", status: "ready",
   language: "fa", started_at: "2026-08-12T09:00:00.000Z",
-  duration_ms: 1_800_000, owner_id: ALICE, word_timestamps: true, ...over,
+  duration_ms: 1_800_000, owner_id: ALICE, transcribed_part_count: 2, timed_part_count: 2, ...over,
 });
 
 function fakeDb(rowsFor: (sql: string, params?: unknown[]) => unknown[]) {
@@ -36,27 +36,45 @@ function fakeDb(rowsFor: (sql: string, params?: unknown[]) => unknown[]) {
   return { log, db: createDb({ app: make(), agent: make() }) };
 }
 
+/** Product statements only — `set local role` and set_config are plumbing. */
+const queries = (log: { sql: string; params?: unknown[] | undefined }[]) =>
+  log.filter((l) => {
+    const sql = l.sql.trim().toLowerCase();
+    return !sql.startsWith("set local") && !sql.includes("set_config('echo.actor_id'");
+  });
+
 describe("list", () => {
   it("clamps the page size and defaults sensibly", async () => {
     const { db, log } = fakeDb((sql) => (sql.includes("select") && !sql.startsWith("set") ? [row()] : []));
     const repo = createCallsRepo(db);
 
     await repo.list(IDENTITY);
-    expect(log[1]!.params?.[0]).toBe(25);
+    expect(queries(log)[0]!.params?.[0]).toBe(25);
 
     await repo.list(IDENTITY, { limit: 5_000 });
-    expect(log[3]!.params?.[0]).toBe(MAX_PAGE);
+    expect(queries(log)[1]!.params?.[0]).toBe(MAX_PAGE);
 
     await repo.list(IDENTITY, { limit: 0 });
-    expect(log[5]!.params?.[0]).toBe(1);
+    expect(queries(log)[2]!.params?.[0]).toBe(1);
   });
 
   it("excludes soft-deleted calls and orders newest first", async () => {
     const { db, log } = fakeDb(() => [row()]);
     await createCallsRepo(db).list(IDENTITY);
-    const query = log[1]!.sql;
+    const query = queries(log)[0]!.sql;
     expect(query).toContain("c.deleted_at is null");
     expect(query).toContain("order by c.started_at desc");
+  });
+
+  it("reads timing from db/0020's stored flag, not from segment words", async () => {
+    // The derived `exists (… s.words <> '[]')` predicate is ANY-segment;
+    // the stored flag is ALL-segments and demotes on correction. Keeping the
+    // old one alongside would be two rules that disagree after an edit.
+    const { db, log } = fakeDb(() => [row()]);
+    await createCallsRepo(db).list(IDENTITY);
+    const query = queries(log)[0]!.sql;
+    expect(query).toContain("p.has_word_timestamps");
+    expect(query).not.toContain("s.words <> ");
   });
 
   it("rejects a malformed cursor rather than passing it to SQL", async () => {
@@ -66,13 +84,15 @@ describe("list", () => {
     expect(log).toHaveLength(0);
   });
 
-  it("maps rows to the client shape, including the derived flag", async () => {
-    const { db } = fakeDb(() => [row({ word_timestamps: false })]);
+  it("maps rows to the client shape, including the derived provenance", async () => {
+    const { db } = fakeDb(() => [row({ transcribed_part_count: 2, timed_part_count: 1 })]);
     const [call] = await createCallsRepo(db).list(IDENTITY);
+    // wire shape is snake_case throughout — matches the client contract and
+    // the DB columns; a half-and-half object is worse than either convention
     expect(call).toEqual({
       id: CALL, title: "جلسه بودجه", scope: "private", status: "ready",
-      language: "fa", startedAt: "2026-08-12T09:00:00.000Z",
-      durationMs: 1_800_000, ownerId: ALICE, wordTimestamps: false,
+      language: "fa", started_at: "2026-08-12T09:00:00.000Z",
+      duration_ms: 1_800_000, owner_id: ALICE, transcript_timing: "mixed",
     });
   });
 });
@@ -134,5 +154,48 @@ describe("delete is soft (M11)", () => {
     const { db } = fakeDb(() => []);
     await expect(createCallsRepo(db).softDelete(IDENTITY, CALL))
       .rejects.toBeInstanceOf(NotFoundError);
+  });
+});
+
+describe("transcript_timing is provenance, not a gate (steward-ratified)", () => {
+  it("distinguishes full, mixed and none — information a boolean could not carry", () => {
+    expect(timingFromCounts(3, 3)).toBe("full");
+    expect(timingFromCounts(3, 1)).toBe("mixed");   // the case that bit the UI
+    expect(timingFromCounts(3, 0)).toBe("none");
+  });
+
+  it("is NULL when nothing is transcribed — absent is not 'none'", () => {
+    // a failed or not-yet-processed call has no transcript at all; "none"
+    // would claim a real prose-only transcript exists. The old boolean
+    // forced that lie (failed calls carried `true`).
+    expect(timingFromCounts(0, 0)).toBeNull();
+  });
+
+  it("reports what is transcribed SO FAR while parts are still landing", () => {
+    // 2 of 3 parts transcribed, both word-timed → "full" for what exists,
+    // and it self-corrects to "mixed" if a later part degrades
+    expect(timingFromCounts(2, 2)).toBe("full");
+  });
+
+  it("does not count an untranscribed part as an UNTIMED part", () => {
+    // The frontend built a fixture on the opposite assumption: part 0 done
+    // and timed, part 1 not started, expecting "mixed". A not-yet-transcribed
+    // part is not evidence of missing word timing — it is no evidence at all,
+    // so this call is "full" for what exists.
+    expect(timingFromCounts(1, 1)).toBe("full");
+  });
+
+  it("moves full → mixed as a later part degrades, and never back", () => {
+    // the direction that actually happens mid-flight: the chip APPEARS, it
+    // does not retract. "mixed" is monotone once flags have settled.
+    expect(timingFromCounts(1, 1)).toBe("full");
+    expect(timingFromCounts(2, 1)).toBe("mixed");
+    expect(timingFromCounts(3, 2)).toBe("mixed");
+  });
+
+  it("normalises pg bigint counts arriving as strings", () => {
+    // "2" === 2 is false; without Number() every call reports "mixed" in
+    // production while every unit test passes
+    expect(timingFromCounts(Number("2"), Number("2"))).toBe("full");
   });
 });

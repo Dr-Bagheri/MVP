@@ -45,6 +45,42 @@ export interface PartRef {
   offsetMs: number;
   /** Null while unknown (the worker sets it from ml/'s media duration). */
   durationMs?: number | null;
+  /**
+   * First `seq` to assign — normally `seqBaseForPart(part.idx)`.
+   *
+   * `echo.transcript_segment` is UNIQUE (call_id, seq), so seq is unique
+   * across the CALL, not the part: a second part starting again at 0 collides
+   * with the first, on every recording over 30 minutes.
+   */
+  seqStart?: number;
+}
+
+/**
+ * Segments a single part may hold before it would run into the next part's
+ * range. A 30-minute part (M7's ceiling) would need one segment every 18ms to
+ * reach this, which no speech produces.
+ */
+export const SEQ_STRIDE = 100_000;
+
+/**
+ * Deterministic seq range per part: `idx × stride`.
+ *
+ * The obvious alternative — "count what is already stored for this call and
+ * continue from there" — is a read-modify-write across jobs. Two parts of one
+ * call processed at the same time read the same count and collide, which is
+ * the same bug as numbering from zero, only intermittent and therefore worse.
+ *
+ * Deriving the base from the part's own index needs no coordination, no lock,
+ * and no ordering guarantee between workers. It is also idempotent: a retried
+ * part recomputes the identical numbers, so a duplicate insert trips the
+ * unique constraint loudly instead of silently appending a second copy of
+ * somebody's transcript.
+ */
+export function seqBaseForPart(partIdx: number): number {
+  if (!Number.isInteger(partIdx) || partIdx < 0) {
+    throw new InvalidTimingError(`part index must be a non-negative integer, got ${partIdx}`);
+  }
+  return partIdx * SEQ_STRIDE;
 }
 
 export interface MappedSegment {
@@ -132,7 +168,7 @@ export function mapWordsToSegments(result: MlResult, part: PartRef): MappedTrans
     if (!current || current.speaker !== speaker) {
       current = {
         partId: part.id,
-        seq: segments.length,
+        seq: (part.seqStart ?? 0) + segments.length,
         startMs,
         endMs,
         text: word.text.trim(),

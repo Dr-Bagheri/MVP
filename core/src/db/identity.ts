@@ -87,11 +87,32 @@ export function createDb(pools: Pools) {
     options: ScopeOptions = {},
   ): Promise<T> {
     const actor = assertUuid(actorId);
-    const client = options.role === "agent" ? pools.agent : pools.app;
+    const role: DbRole = options.role === "agent" ? "agent" : "app";
+    const client = role === "agent" ? pools.agent : pools.app;
     return client.begin(async (tx) => {
-      // SET LOCAL: scoped to this transaction, cannot outlive it on a
+      // SET LOCAL ROLE, not just the right pool.
+      //
+      // The pool choice alone made the role boundary a CONFIGURATION fact,
+      // and configuration fails quietly. Two live examples: worker/main.ts
+      // defaults `DATABASE_URL_AGENT || DATABASE_URL_APP`, so a missing
+      // variable turns the agent pool into echo_app and every agent limit
+      // (no DELETE anywhere, no grant on echo.call, column-scoped UPDATE)
+      // evaporates; and a dev pointing DATABASE_URL_APP at the owner or a
+      // superuser bypasses RLS entirely, because owners are not subject to
+      // it. In both cases nothing visibly breaks and every test still passes
+      // — which is the whole problem.
+      //
+      // Asserting the role inside the transaction makes the boundary a
+      // PROPERTY OF THE CODE. A connection with more privilege than it should
+      // have is dropped to the intended role; one with less fails loudly
+      // here rather than succeeding at something it should not do.
+      await tx.unsafe(`set local role ${role === "agent" ? "echo_agent" : "echo_app"}`);
+      // set_config takes a bound parameter; `SET` cannot. This removes the
+      // last interpolated value in the data layer — assertUuid still guards
+      // it, but a guard you can delete is weaker than a parameter you cannot.
+      // is_local = true: scoped to this transaction, cannot outlive it on a
       // pooled connection.
-      await tx.unsafe(`set local echo.actor_id = '${actor}'`);
+      await tx.unsafe(`select set_config('echo.actor_id', $1, true)`, [actor]);
       return fn(tx);
     });
   }

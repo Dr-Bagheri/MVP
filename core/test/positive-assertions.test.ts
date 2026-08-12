@@ -67,7 +67,7 @@ describe("positive assertions — the run actually produces something", () => {
     expect(result.failed).toBe(false);
     expect(result.text.length).toBeGreaterThan(10);
     expect(result.text).toContain("بودجه");
-    expect(finished[0]).toMatchObject({ status: "succeeded" });
+    expect(finished[0]).toMatchObject({ status: "ok" });
   });
 
   it("a tool result actually reaches the model and the answer", async () => {
@@ -103,7 +103,7 @@ describe("positive assertions — the run actually produces something", () => {
 
     expect(result.failed).toBe(true);
     expect(result.error).toMatch(/empty response/);
-    expect(finished[0]).toMatchObject({ status: "failed" });
+    expect(finished[0]).toMatchObject({ status: "error" });
   });
 
   it("whitespace-only counts as empty", async () => {

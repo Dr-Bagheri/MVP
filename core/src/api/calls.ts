@@ -14,55 +14,132 @@ import { NotFoundError, ValidationError } from "./errors.ts";
 import { assertUuid, type Db, type SqlTx } from "../db/identity.ts";
 import type { Identity } from "../agent/types.ts";
 
+// The published vocabularies live in vocabulary.ts, which imports nothing so
+// that web/ can consume it without pulling this module's dependencies.
+// Re-exported here because that is where consumers already look.
+export {
+  CALL_STATUSES, PART_STATUSES, TRANSCRIPT_TIMINGS,
+  type CallStatus, type PartStatus, type TranscriptTiming,
+} from "./vocabulary.ts";
+import { iso } from "./vocabulary.ts";
+import type { TranscriptTiming } from "./vocabulary.ts";
+
 export interface CallSummary {
   id: string;
   title: string;
   scope: "private" | "org";
+  /**
+   * One of CALL_STATUSES. Typed as string deliberately: a consumer must
+   * tolerate a value added by a later migration rather than crashing on it.
+   */
   status: string;
   language: string;
-  startedAt: string;
-  durationMs: number | null;
-  ownerId: string;
-  /** Derived per M20: true only when every part has word timing. */
-  wordTimestamps: boolean;
+  started_at: string;
+  duration_ms: number | null;
+  owner_id: string;
+  /**
+   * Provenance summary, NOT a gate (steward-ratified).
+   *   "full"  — every part has word timing
+   *   "mixed" — some parts do, some fell back to a timing-less lane
+   *   "none"  — no part has word timing (or nothing transcribed yet)
+   *
+   * Deliberately an enum rather than a boolean: a boolean is truthy, and a
+   * truthy call-level value invites `call.flag && row.words.length` as a
+   * per-row gate — which strips click-a-word from fully-timed rows in a
+   * mixed call. The frontend shipped exactly that bug against the boolean.
+   * M20's ladder is per ROW: the row's own words array is the only
+   * authority. This field exists to explain provenance in the UI, and
+   * "mixed" vs "none" is information the boolean could not carry.
+   */
+  transcript_timing: TranscriptTiming | null;
 }
 
 /**
- * M20's derived call-level flag: true only when EVERY part has word timing.
+ * NOTE the `| null` above, and that it is NOT a fourth enum member: null
+ * means "no transcript exists" — nothing has been transcribed yet, or the
+ * call failed. "none" would claim a real prose-only transcript exists, which
+ * is a lie about a failed call. Absent is not the same as present-and-empty.
+ * (The old boolean forced that lie: failed calls carried `true` and nobody
+ * noticed, because a boolean has no way to say "not applicable".)
  *
- * Derived, not stored: there is no `call_part.word_timestamps` column (I
- * assumed one and checked — the truth lives in `transcript_segment.words`,
- * a jsonb array that a degraded part leaves empty). So "this part has word
- * timing" is "it has at least one segment whose words array is non-empty",
- * and the call is seekable when no part fails that.
- *
- * A call with no parts yet is NOT claimed seekable — absence of evidence
- * isn't evidence of word timing.
- *
- * Cost note: this is two correlated sub-queries per row. Fine for a detail
- * fetch, questionable on a long list — I've asked Backend 3 whether the
- * worker should maintain a stored per-part flag instead (it knows the answer
- * at write time). If that lands, this predicate collapses to a cheap scan.
+ * The three members are TRANSCRIPT_TIMINGS in vocabulary.ts; the `| null` is
+ * deliberately NOT in that list, because it is the absence of a value rather
+ * than one of them.
  */
+
+/**
+ * "This part has word timing" — now db/0020's stored flag, written by the
+ * worker once it has written the whole part.
+ *
+ * This REPLACED a segment-derived `exists (… s.words <> '[]')`. The two are
+ * not the same predicate and the difference matters:
+ *
+ *   derived = ANY segment has words        stored = ALL segments have words
+ *
+ * 0020 also ships `tg_segment_words_demote`, which flips the flag false when
+ * an agent correction blanks one line's words. That makes the disagreement
+ * reachable, not theoretical: after such a correction the derived predicate
+ * still reports the part fully timed — it over-claims exactly where the data
+ * got worse. The stored flag is conservative by construction (it may demote,
+ * never promote), and a conservative flag is the right error to make about a
+ * claim the UI shows to users.
+ *
+ * It is also what 0020 was written for: this used to be a correlated
+ * sub-query per row on the list.
+ *
+ * KNOWN WINDOW, and it is deliberate. The worker asserts the flag once
+ * AFTER writing a part's segments, so between "segments landed" and "flag
+ * asserted" a part counts as transcribed-but-not-timed and the call reports
+ * "none" for an instant before settling on "full". A transient "none" is a
+ * strong claim to make wrongly — which is precisely why the frontend
+ * suppresses this field until the pipeline has passed transcription, and is
+ * the real reason that gate is load-bearing rather than cosmetic.
+ */
+const PART_HAS_WORDS = `p.has_word_timestamps`;
+
+const PART_HAS_SEGMENTS = `
+  exists (
+    select 1 from echo.transcript_segment s where s.part_id = p.id
+  )
+`;
+
 const CALL_COLUMNS = `
   c.id, c.title, c.scope, c.status, c.language, c.started_at,
   c.duration_ms, c.owner_id,
-  (exists (select 1 from echo.call_part p where p.call_id = c.id)
-   and not exists (
-     select 1
-       from echo.call_part p
-      where p.call_id = c.id
-        and not exists (
-          select 1 from echo.transcript_segment s
-           where s.part_id = p.id and s.words <> '[]'::jsonb
-        )
-   )) as word_timestamps
+  (select count(*) from echo.call_part p
+    where p.call_id = c.id and ${PART_HAS_SEGMENTS}) as transcribed_part_count,
+  (select count(*) from echo.call_part p
+    where p.call_id = c.id and ${PART_HAS_WORDS}) as timed_part_count
 `;
 
 interface CallRow {
   id: string; title: string; scope: "private" | "org"; status: string;
   language: string; started_at: string; duration_ms: number | null;
-  owner_id: string; word_timestamps: boolean;
+  owner_id: string;
+  transcribed_part_count: number | string;
+  timed_part_count: number | string;
+}
+
+/**
+ * Counts arrive as strings from pg's bigint — `"2" === 2` is false, so
+ * normalise before comparing or every call reports "mixed" in production
+ * while every unit test passes.
+ *
+ * Computed over TRANSCRIBED parts, not all parts: for a call still being
+ * processed this reports what the transcript looks like so far, which is
+ * honest and self-corrects as parts land. Nothing transcribed → null.
+ *
+ * A consequence worth stating, because a consumer guessed wrong about it:
+ * a part that has not been transcribed yet is not counted AT ALL — it is not
+ * an untimed part. So a half-done call whose finished parts are all timed
+ * reports "full", not "mixed". Mid-flight the value moves full → mixed (a
+ * later part degrades) or none → mixed, never mixed → full: "mixed" is
+ * monotone and never retracts once the flags have settled.
+ */
+export function timingFromCounts(transcribed: number, timed: number): TranscriptTiming | null {
+  if (transcribed === 0) return null;   // absent, not "none"
+  if (timed === 0) return "none";
+  return timed === transcribed ? "full" : "mixed";
 }
 
 const toSummary = (row: CallRow): CallSummary => ({
@@ -71,10 +148,17 @@ const toSummary = (row: CallRow): CallSummary => ({
   scope: row.scope,
   status: row.status,
   language: row.language,
-  startedAt: row.started_at,
-  durationMs: row.duration_ms,
-  ownerId: row.owner_id,
-  wordTimestamps: Boolean(row.word_timestamps),
+  // Normalised, not passed through. pg hands back a Date; JSON.stringify
+  // happens to render that as ISO, so the wire was right by accident while
+  // the declared type (`string`) was a lie to anything in-process — a
+  // `.slice()` or a `===` against an ISO string would fail on a value that
+  // looks fine in a response body.
+  started_at: iso(row.started_at),
+  duration_ms: row.duration_ms,
+  owner_id: row.owner_id,
+  transcript_timing: timingFromCounts(
+    Number(row.transcribed_part_count), Number(row.timed_part_count),
+  ),
 });
 
 export const MAX_PAGE = 100;

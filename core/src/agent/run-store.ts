@@ -16,21 +16,31 @@
  * one small UPDATE per tool call, which is the right trade for an audit trail
  * that survives a crash.
  */
+import { JSONB_PARAM, toJsonb } from "../db/jsonb.ts";
 import type { Db, SqlTx } from "../db/identity.ts";
 import type { AgentRunRecord, AgentRunStore, AgentStep, Identity } from "./types.ts";
 
 const INSERT_RUN = `
   insert into echo.agent_run
     (org_id, actor_id, call_id, skill_id, kind, model, request, status)
-  values ($1, $2, $3, $4, $5, $6, $7::jsonb, 'running')
+  values ($1, $2, $3, $4, $5, $6, ${JSONB_PARAM(7)}, 'running')
   returning id
 `;
 
-// jsonb || jsonb appends to the array; doing it in SQL keeps the append
-// atomic under concurrent steps rather than read-modify-writing in JS.
+/**
+ * jsonb || jsonb appends to the array; doing it in SQL keeps the append atomic
+ * under concurrent steps rather than read-modify-writing in JS.
+ *
+ * The cast is `::text::jsonb`, not `::jsonb` — see db/jsonb.ts. With plain
+ * `::jsonb` the driver JSON-encodes the already-encoded string, every element
+ * lands as a jsonb STRING rather than an object, and
+ * `jsonb_array_elements(steps)->>'tool'` returns null. The row looks right;
+ * the audit trail is unqueryable. Backend 2 found it running the two-call E2E
+ * against a real database — nothing on this side could have.
+ */
 const APPEND_STEP = `
   update echo.agent_run
-     set steps = steps || $2::jsonb
+     set steps = steps || ${JSONB_PARAM(2)}
    where id = $1
 `;
 
@@ -50,6 +60,22 @@ export interface RunStoreOptions {
 }
 
 /**
+ * The run is the AGENT's audit trail, so it is written on the agent role.
+ *
+ * This is not tidiness. db/0014 grants `echo_agent` UPDATE on exactly
+ * `(status, steps, tokens_in, tokens_out, error, finished_at)` — while
+ * `echo_app` holds unrestricted UPDATE on the same table. Running these
+ * writes as echo_app would leave `request`, `created_at` and `kind`
+ * rewritable, and the append-only property this module is built around would
+ * be enforced by nothing but this file's own choice of SQL.
+ *
+ * On the agent role, "no rewrite is expressible" stops being a claim about my
+ * code and becomes a fact about the connection: the database would reject the
+ * statement even if a future edit here tried to write it.
+ */
+const AGENT_ROLE = { role: "agent" } as const;
+
+/**
  * One store per run context, bound to the identity the run acts as. Binding
  * at construction rather than per-call means a caller cannot accidentally
  * record someone else's run — the identity isn't a parameter to forget.
@@ -65,8 +91,9 @@ export function createAgentRunStore({ db, identity }: RunStoreOptions): AgentRun
           run.skillId,
           run.kind,
           run.model,
-          JSON.stringify(run.request ?? {}),
+          toJsonb(run.request ?? {}),
         ]),
+        AGENT_ROLE,
       );
       const id = rows[0]?.id;
       if (!id) {
@@ -79,7 +106,8 @@ export function createAgentRunStore({ db, identity }: RunStoreOptions): AgentRun
 
     async appendStep(runId: string, step: AgentStep): Promise<void> {
       await db.withIdentity(identity, (tx: SqlTx) =>
-        tx.unsafe(APPEND_STEP, [runId, JSON.stringify([step])]),
+        tx.unsafe(APPEND_STEP, [runId, toJsonb([step])]),
+        AGENT_ROLE,
       );
     },
 
@@ -92,6 +120,7 @@ export function createAgentRunStore({ db, identity }: RunStoreOptions): AgentRun
           outcome.tokensOut ?? null,
           outcome.error ?? null,
         ]),
+        AGENT_ROLE,
       );
     },
   };

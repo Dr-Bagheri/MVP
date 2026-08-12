@@ -127,7 +127,7 @@ export function createAgentRuntime({ runs }: AgentRuntimeOptions) {
         // (4) in-band provider errors are failures, not empty answers
         if (result.error) {
           await runs.finish(runId, {
-            status: "failed",
+            status: "error",
             tokensIn: result.tokensIn,
             tokensOut: result.tokensOut,
             error: result.error,
@@ -146,7 +146,7 @@ export function createAgentRuntime({ runs }: AgentRuntimeOptions) {
         if (result.text.trim() === "") {
           const empty = "model returned an empty response";
           await runs.finish(runId, {
-            status: "failed",
+            status: "error",
             tokensIn: result.tokensIn,
             tokensOut: result.tokensOut,
             error: empty,
@@ -157,16 +157,56 @@ export function createAgentRuntime({ runs }: AgentRuntimeOptions) {
           };
         }
 
+        /**
+         * (6) M21's loud-forfeit clause: a run that was SUPPOSED to have
+         * tools and called none is a degradation, and must say so.
+         *
+         * The case that forced this: a summarizer whose model cannot call
+         * tools writes from the transcript alone — a legitimate,
+         * correct-looking summary, indistinguishable from a first-call
+         * summary written with nothing prior to find. SPEC says the
+         * summarizer reads earlier calls before it writes; when it silently
+         * doesn't, every later call about the same contract loses its
+         * history and the pipeline reports success every time.
+         *
+         * Not a failure — the summary is real and better than none (M21:
+         * degrade what was inferred). But recorded, so "written without
+         * search" is visible rather than deduced from an absence.
+         */
+        const usedNoTools = offered.length > 0 && steps.length === 0;
+        const note = usedNoTools
+          ? `no tool was called although ${offered.length} were available`
+          : null;
+        /**
+         * Recorded on every run; SURFACED only when the skill declares tools
+         * as its substance (steward calibration).
+         *
+         * "No tool called" is signal on a summarizer — SPEC says it reads
+         * earlier calls before it writes, so not searching means the output
+         * is missing something it promised. It is noise on a casual chat
+         * question the model could answer from context, and a marker that
+         * appears on most runs becomes wallpaper: the one time it matters,
+         * nobody looks.
+         *
+         * So `agent_run.error` keeps the uniform record — the audit should
+         * not decide what is interesting — and `degraded` on the result,
+         * which is what a consumer renders, is set only when a skill asked
+         * for tools and got no use out of them.
+         */
+        const skillWantsTools = (skill?.tools?.length ?? 0) > 0;
         await runs.finish(runId, {
-          status: "succeeded",
+          status: "ok",
           tokensIn: result.tokensIn,
           tokensOut: result.tokensOut,
-          error: null,
+          error: note,
         });
-        return { runId, text: result.text, model: result.model, steps, failed: false };
+        return {
+          runId, text: result.text, model: result.model, steps, failed: false,
+          ...(usedNoTools && skillWantsTools ? { degraded: note as string } : {}),
+        };
       } catch (error) {
         const message = error instanceof Error ? error.message : "agent run failed";
-        await runs.finish(runId, { status: "failed", error: message });
+        await runs.finish(runId, { status: "error", error: message });
         return {
           runId, text: "", model: modelId, steps,
           failed: true, error: message,

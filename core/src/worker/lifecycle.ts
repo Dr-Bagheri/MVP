@@ -53,6 +53,8 @@ export interface Lifecycle {
   setPartStatus(identity: Identity, partId: string, status: PartStatus): Promise<void>;
   setCallStatus(identity: Identity, callId: string, status: CallStatus): Promise<void>;
   markPartMissing(identity: Identity, partId: string, reason: string): Promise<void>;
+  /** Why a `ready` call has no summary (db/0023). Cleared by trigger, not by us. */
+  noteSummarySkipped(identity: Identity, callId: string, reason: string): Promise<void>;
   failCall(identity: Identity, callId: string, reason: string): Promise<void>;
   bumpAttempts(identity: Identity, partId: string): Promise<void>;
 }
@@ -108,7 +110,31 @@ export function createLifecycle(db: Db): Lifecycle {
       );
     },
 
-    async failCall(identity, callId, reason) {
+    /**
+     * Why a `ready` call has no summary (db/0023).
+     *
+     * Its own column, not `failure_reason` — that field means the call FAILED,
+     * and a `ready` row carrying one is a lie in the opposite direction from
+     * silence. db/0024 will add `check (failure_reason is null or status =
+     * 'failed')` to make that unrepresentable.
+     *
+     * **Never cleared here.** The 0008 pointer trigger clears it the moment any
+     * summary version lands, because a summary existing at all makes the excuse
+     * false — and a constraint (`current_summary_id is null or
+     * summary_skipped_reason is null`) rejects the contradiction at write time
+     * rather than trusting us not to write it. Same one-way shape as the
+     * word-timing demote: the data may retract the claim, only we may assert it.
+     */
+    async noteSummarySkipped(identity, callId, reason) {
+      await db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe(`update echo.call set summary_skipped_reason = $2 where id = $1`, [
+          callId,
+          reason.slice(0, 500),
+        ]),
+      );
+    },
+
+  async failCall(identity, callId, reason) {
       await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe(`update echo.call set status = 'failed', failure_reason = $2 where id = $1`, [
           callId,

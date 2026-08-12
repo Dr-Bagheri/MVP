@@ -9,6 +9,8 @@ import {
   callHasWordTimestamps,
   InvalidTimingError,
   mapWordsToSegments,
+  seqBaseForPart,
+  SEQ_STRIDE,
   type MlResult,
 } from "../src/worker/transcript-mapping.ts";
 
@@ -160,6 +162,50 @@ describe("the invariant core/ enforces rather than trusts", () => {
   it("refuses a negative part offset", () => {
     expect(() => mapWordsToSegments(wordLane(), { id: "p", offsetMs: -1 }))
       .toThrow(/non-negative/);
+  });
+});
+
+describe("seq ranging across parts (regression: every call over 30 minutes)", () => {
+  // The original bug: seq numbered from 0 per part, but transcript_segment is
+  // UNIQUE (call_id, seq). Every multi-part call collided — i.e. exactly the
+  // recordings M7's part model exists for. The handed-over tests were green
+  // because every fixture had one part.
+  it("gives each part a disjoint range", () => {
+    const words = [
+      { text: "الف", start_ms: 0, end_ms: 100 },
+      { text: "ب", start_ms: 200, end_ms: 300, speaker: "S2" },
+    ];
+    const result: MlResult = { words, provenance: { stt: { timestamps: "word" } } };
+
+    const first = mapWordsToSegments(result, { id: "p0", offsetMs: 0, seqStart: seqBaseForPart(0) });
+    const second = mapWordsToSegments(result, { id: "p1", offsetMs: 1_800_000, seqStart: seqBaseForPart(1) });
+
+    const overlap = first.segments
+      .map((s) => s.seq)
+      .filter((seq) => second.segments.some((o) => o.seq === seq));
+    expect(overlap).toEqual([]);
+    expect(first.segments.map((s) => s.seq)).toEqual([0, 1]);
+    expect(second.segments.map((s) => s.seq)).toEqual([SEQ_STRIDE, SEQ_STRIDE + 1]);
+  });
+
+  it("is deterministic, so a retry recomputes the same numbers", () => {
+    // Idempotence is the point: a re-run collides with itself on the unique
+    // constraint — loudly — instead of appending a second copy of the
+    // transcript. A count-what-is-stored base could not do that.
+    expect(seqBaseForPart(3)).toBe(seqBaseForPart(3));
+    expect(seqBaseForPart(3)).toBe(3 * SEQ_STRIDE);
+  });
+
+  it("needs no coordination between concurrent parts", () => {
+    // Two workers processing part 2 and part 5 of one call at the same moment
+    // derive their ranges from their own index and never consult each other.
+    const bases = [0, 1, 2, 5, 61].map(seqBaseForPart);
+    expect(new Set(bases).size).toBe(bases.length);
+  });
+
+  it("refuses a nonsense part index rather than computing a nonsense base", () => {
+    expect(() => seqBaseForPart(-1)).toThrow(InvalidTimingError);
+    expect(() => seqBaseForPart(1.5)).toThrow(InvalidTimingError);
   });
 });
 

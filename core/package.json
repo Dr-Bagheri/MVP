@@ -4,6 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "description": "Echo core — one codebase, two processes (api, worker). M1.",
+  "exports": {
+    "./vocabulary": "./src/api/vocabulary.ts"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

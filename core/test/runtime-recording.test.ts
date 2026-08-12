@@ -57,7 +57,9 @@ describe("agent runtime — recording and failure surfacing", () => {
     });
     // the request is captured for replay (invariant 5)
     expect((begun[0] as { request: { tools: string[] } }).request.tools).toEqual(["read_call"]);
-    expect(finished[0]).toMatchObject({ status: "succeeded", tokensIn: 10, tokensOut: 5 });
+    // "ok"/"error" are echo.agent_run_status's own labels — the TS union used
+    // to say succeeded/failed and no database ever accepted either
+    expect(finished[0]).toMatchObject({ status: "ok", tokensIn: 10, tokensOut: 5 });
     expect(result.failed).toBe(false);
     expect(result.text).toBe("answer");
   });
@@ -75,7 +77,7 @@ describe("agent runtime — recording and failure surfacing", () => {
 
     expect(result.failed).toBe(true);
     expect(result.error).toContain("Reasoning is mandatory");
-    expect(finished[0]).toMatchObject({ status: "failed" });
+    expect(finished[0]).toMatchObject({ status: "error" });
   });
 
   it("records a failed run when the provider call rejects", async () => {
@@ -89,7 +91,55 @@ describe("agent runtime — recording and failure surfacing", () => {
 
     expect(result.failed).toBe(true);
     expect(result.error).toBe("network down");
-    expect(finished[0]).toMatchObject({ status: "failed", error: "network down" });
+    expect(finished[0]).toMatchObject({ status: "error", error: "network down" });
+  });
+
+  it("records 'no tool called' on every run but SURFACES it only for a tool skill", async () => {
+    // Steward calibration: signal on a summarizer, which SPEC says reads
+    // earlier calls before it writes; noise on a chat question the model can
+    // answer from context. A marker that appears on most runs becomes
+    // wallpaper, and the one time it matters nobody looks.
+    //
+    // So the audit records uniformly — it should not decide what is
+    // interesting — and `degraded`, which is what a consumer renders, is set
+    // only when a skill asked for tools and got no use from them.
+    const withSkill = fakeStore();
+    runPiMock.mockReset();
+    runPiMock.mockResolvedValue({ text: "خلاصه", model: "m", tokensIn: 5, tokensOut: 5 });
+    const summarizer = await createAgentRuntime({ runs: withSkill.store }).run({
+      ...baseRequest,
+      tools: [okTool as never],
+      skill: { id: "s1", level: "system", slug: "summarizer", name: "خلاصه‌ساز",
+               description: "", prompt: "p", model: null, tools: ["read_call"],
+               enabled: true, maxToolCalls: null },
+    });
+    expect(summarizer.degraded).toMatch(/no tool was called/);
+    expect(withSkill.finished[0]).toMatchObject({ status: "ok" });
+    expect((withSkill.finished[0] as { error: string }).error).toMatch(/no tool was called/);
+
+    // Same run without a tool-declaring skill: recorded, not surfaced.
+    const plain = fakeStore();
+    const chat = await createAgentRuntime({ runs: plain.store }).run({
+      ...baseRequest, tools: [okTool as never],
+    });
+    expect(chat.degraded).toBeUndefined();
+    expect((plain.finished[0] as { error: string }).error).toMatch(/no tool was called/);
+  });
+
+  it("does not mark a run degraded when a tool WAS used", async () => {
+    const { store, finished } = fakeStore();
+    runPiMock.mockReset();
+    runPiMock.mockImplementation(async (options: {
+      tools: { execute: (id: string, args: unknown) => Promise<unknown> }[];
+    }) => {
+      await options.tools[0]!.execute("t1", {});
+      return { text: "پاسخ", model: "m", tokensIn: 5, tokensOut: 5 };
+    });
+    const result = await createAgentRuntime({ runs: store }).run({
+      ...baseRequest, tools: [okTool as never],
+    });
+    expect(result.degraded).toBeUndefined();
+    expect((finished[0] as { error: string | null }).error).toBeNull();
   });
 
   it("refuses to run for an inactive actor — nothing recorded, nothing spent", async () => {

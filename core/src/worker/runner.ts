@@ -8,30 +8,81 @@
  * recording is retried or abandoned, and it should not be reasoned about by
  * reading an async loop.
  */
+import { OwnerMismatchError, UnknownActorError } from "../db/actor.ts";
 import { MlRequestError } from "./ml-client.ts";
 import { backoffSeconds, type WorkerConfig } from "./config.ts";
 import type { JobPayload, Queue, QueueMessage, QueueName } from "./queue.ts";
 
 /** A step's own failure, when it is not an ml/ failure. */
 export class StepError extends Error {
-  constructor(
-    readonly errorType: string,
-    message: string,
-    readonly retryable: boolean,
-  ) {
+  // Explicit fields, not constructor parameter properties — see the note in
+  // ml-client.ts: `--experimental-strip-types` cannot transform them, so the
+  // worker process fails to start while every test still passes.
+  readonly errorType: string;
+  readonly retryable: boolean;
+
+  constructor(errorType: string, message: string, retryable: boolean) {
     super(message);
     this.name = "StepError";
+    this.errorType = errorType;
+    this.retryable = retryable;
   }
 }
 
 export type Disposition =
-  | { action: "retry"; delaySec: number; errorType: string; retryable: true }
-  | { action: "dead_letter"; errorType: string; reason: string; exhausted: boolean };
+  | {
+      action: "retry";
+      delaySec: number;
+      errorType: string;
+      retryable: true;
+      pg?: Failure["pg"];
+    }
+  | {
+      action: "dead_letter";
+      errorType: string;
+      reason: string;
+      exhausted: boolean;
+      pg?: Failure["pg"];
+    };
 
 export interface Failure {
   errorType: string;
   retryable: boolean;
   message: string;
+  /**
+   * Postgres's STRUCTURED error fields, when the failure came from the
+   * database. These name the constraint, table and column — they never carry
+   * row values, unlike the message text, which for a unique violation happily
+   * quotes the offending data and would put transcript content in a log
+   * (Invariant 7). This is what makes a database failure diagnosable without
+   * making it a leak.
+   */
+  pg?: { code?: string; constraint?: string; table?: string; column?: string };
+}
+
+interface PgErrorish {
+  code?: string;
+  constraint_name?: string;
+  constraint?: string;
+  table_name?: string;
+  table?: string;
+  column_name?: string;
+  column?: string;
+}
+
+function pgFields(error: unknown): Failure["pg"] {
+  if (!error || typeof error !== "object") return undefined;
+  const e = error as PgErrorish;
+  if (!e.code) return undefined;
+  const constraint = e.constraint_name ?? e.constraint;
+  const table = e.table_name ?? e.table;
+  const column = e.column_name ?? e.column;
+  return {
+    code: e.code,
+    ...(constraint ? { constraint } : {}),
+    ...(table ? { table } : {}),
+    ...(column ? { column } : {}),
+  };
 }
 
 /**
@@ -49,8 +100,33 @@ export function classify(error: unknown): Failure {
   if (error instanceof StepError) {
     return { errorType: error.errorType, retryable: error.retryable, message: error.message };
   }
+
+  // Identity failures are RECOGNISED conditions, not surprises, so they get
+  // named rather than dead-lettering as "unexpected" after five attempts and
+  // half an hour of backoff. The retryability differs because the causes do:
+  //
+  //  - the owner's row does not exist       → nothing will change that on its
+  //                                           own; fail now and say why.
+  //  - the owner cannot see their own call  → could be a pending/disabled
+  //                                           member or a suspended org, which
+  //                                           an admin may reinstate; could
+  //                                           equally be a stale or forged
+  //                                           payload. Retrying costs little
+  //                                           and the attempt count is the
+  //                                           evidence either way.
+  //
+  // (Since core/'s resolveIdentity moved to a LEFT JOIN, an inactive owner
+  // resolves with isActive:false and then fails the fail-closed re-read —
+  // arriving here as OwnerMismatchError rather than UnknownActorError.)
+  if (error instanceof UnknownActorError) {
+    return { errorType: "owner_not_found", retryable: false, message: error.message };
+  }
+  if (error instanceof OwnerMismatchError) {
+    return { errorType: "owner_cannot_see_call", retryable: true, message: error.message };
+  }
   const message = error instanceof Error ? error.message : String(error);
-  return { errorType: "unexpected", retryable: true, message };
+  const pg = pgFields(error);
+  return { errorType: "unexpected", retryable: true, message, ...(pg ? { pg } : {}) };
 }
 
 /**
@@ -69,6 +145,7 @@ export function disposition(error: unknown, attempt: number, config: WorkerConfi
       errorType: failure.errorType,
       reason: failure.message,
       exhausted: false,
+      ...(failure.pg ? { pg: failure.pg } : {}),
     };
   }
 
@@ -78,6 +155,7 @@ export function disposition(error: unknown, attempt: number, config: WorkerConfi
       errorType: failure.errorType,
       reason: `${failure.message} (gave up after ${attempt} attempts)`,
       exhausted: true,
+      ...(failure.pg ? { pg: failure.pg } : {}),
     };
   }
 
@@ -86,7 +164,23 @@ export function disposition(error: unknown, attempt: number, config: WorkerConfi
     delaySec: backoffSeconds(attempt, config),
     errorType: failure.errorType,
     retryable: true,
+    ...(failure.pg ? { pg: failure.pg } : {}),
   };
+}
+
+/**
+ * DEV ONLY, and off unless `WORKER_DEBUG_ERRORS=1`.
+ *
+ * Error message text is deliberately NOT logged in normal operation: a
+ * constraint violation quotes the offending row, which here can be transcript
+ * content (Invariant 7). The structured `pg` fields exist so diagnosis does
+ * not need this. But some failures — a bare `42501` with no table attached —
+ * name nothing at all, and then a developer needs the sentence.
+ */
+function debugMessage(error: unknown): { debug_message?: string } {
+  if (process.env.WORKER_DEBUG_ERRORS !== "1") return {};
+  const message = error instanceof Error ? error.message : String(error);
+  return { debug_message: message.slice(0, 500) };
 }
 
 export interface StepLogger {
@@ -158,7 +252,13 @@ export function createRunner({ queue, handlers, config, sink, log }: RunnerOptio
         await queue.delay(handler.queue, message.msgId, decision.delaySec);
         result.retried++;
         log.warn(
-          { ...base, error_type: decision.errorType, retry_in_sec: decision.delaySec },
+          {
+            ...base,
+            error_type: decision.errorType,
+            retry_in_sec: decision.delaySec,
+            ...(decision.pg ? { pg: decision.pg } : {}),
+            ...debugMessage(error),
+          },
           "step failed; retrying",
         );
         return;

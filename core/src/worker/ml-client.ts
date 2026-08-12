@@ -13,7 +13,38 @@
  * treatments, and a message string is the wrong place to learn which is which.
  */
 
-export type MlTimestamps = "word" | "segment" | "none";
+/**
+ * The closed string sets this worker CONSUMES from ml/ (ml/CONTRACT.md §2).
+ *
+ * Published as values, not just types, because a vocabulary that is not
+ * published gets invented — and this boundary has no catalogue to disagree
+ * with us the way `pg_enum` does. If ml/ renamed `"word"`, every part would
+ * silently become degraded: seek disabled everywhere, `has_word_timestamps`
+ * false, and nothing on either side rejecting anything. The failure is in the
+ * safe direction and completely invisible, which is the worst combination.
+ *
+ * So an unrecognised value is treated conservatively AND said out loud
+ * (`ml_vocabulary_drift`), and `test/e2e/pipeline-live.ts` asserts against a
+ * real ml/ response, where the producer is the contract rather than a schema.
+ */
+export const ML_TIMESTAMP_GRANULARITIES = ["word", "segment", "none"] as const;
+export const ML_DIARIZATION_SOURCES = ["channels", "clustering", "stt", "none"] as const;
+
+export type MlTimestamps = (typeof ML_TIMESTAMP_GRANULARITIES)[number];
+
+/** Values ml/ returned that this worker does not know about. Empty is the norm. */
+export function unknownVocabulary(result: {
+  provenance: { stt: { timestamps: string }; diarization: { source: string } };
+}): string[] {
+  const drift: string[] = [];
+  if (!(ML_TIMESTAMP_GRANULARITIES as readonly string[]).includes(result.provenance.stt.timestamps)) {
+    drift.push(`stt.timestamps=${result.provenance.stt.timestamps}`);
+  }
+  if (!(ML_DIARIZATION_SOURCES as readonly string[]).includes(result.provenance.diarization.source)) {
+    drift.push(`diarization.source=${result.provenance.diarization.source}`);
+  }
+  return drift;
+}
 
 export interface MlProcessOptions {
   languageHints?: string[];
@@ -80,14 +111,21 @@ export interface MlProcessResult {
  * did not — an unreachable service is the definition of a transient fault.
  */
 export class MlRequestError extends Error {
-  constructor(
-    readonly errorType: string,
-    message: string,
-    readonly retryable: boolean,
-    readonly status?: number,
-  ) {
+  // Fields are declared and assigned explicitly rather than as constructor
+  // parameter properties: core/ runs under `node --experimental-strip-types`,
+  // which removes type annotations without transforming anything, and a
+  // parameter property is a TRANSFORM. Vitest transpiles fully, so a test
+  // suite never notices — the process simply refuses to start.
+  readonly errorType: string;
+  readonly retryable: boolean;
+  readonly status: number | undefined;
+
+  constructor(errorType: string, message: string, retryable: boolean, status?: number) {
     super(message);
     this.name = "MlRequestError";
+    this.errorType = errorType;
+    this.retryable = retryable;
+    this.status = status;
   }
 }
 
