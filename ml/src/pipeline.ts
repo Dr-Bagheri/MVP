@@ -65,7 +65,22 @@ export async function runJob(job: Job): Promise<ProcessResponse> {
   }
   if (words.length === 0) warnings.push("no_speech_detected");
 
-  const sorted = [...words].sort((a, b) => a.start_ms - b.start_ms || a.end_ms - b.end_ms);
+  // The VAD found nothing but the STT found words: the audio was fine and the
+  // VAD is wrong. The job still succeeds — we fall back to sending the whole
+  // file — but a silent fallback here means we pay for silence forever without
+  // anyone noticing, so it is said out loud. (A misconfigured Silero model did
+  // exactly this once.)
+  if (outcome.vadFoundNothing && words.length > 0) {
+    warnings.push("vad_found_no_speech");
+  }
+  if (outcome.diarFoundNothing && words.length > 0) {
+    warnings.push("diarization_found_no_speakers");
+  }
+
+  const anchored =
+    lane.result.timestamps === "none" ? anchorTimelessWords(words, segments, durationMs) : words;
+
+  const sorted = [...anchored].sort((a, b) => a.start_ms - b.start_ms || a.end_ms - b.end_ms);
 
   return {
     job_ref: job.jobRef ?? null,
@@ -110,6 +125,9 @@ interface StreamOutcome {
   durationMs: number;
   lane: LaneOutcome;
   vad: { engine: string; threshold: number } | null;
+  vadFoundNothing: boolean;
+  /** A diarizer ran and returned no speakers at all (M19). */
+  diarFoundNothing: boolean;
   diarSource: "channels" | "clustering" | "stt" | "none";
   diarEngine: string | null;
 }
@@ -122,7 +140,7 @@ async function singleStream(job: Job): Promise<StreamOutcome> {
   const pcm = await readWav(full);
   const durationMs = pcm.durationMs;
 
-  const { map, segments, sttFile, vad } = await trimSilence(job, full, pcm.durationMs);
+  const { map, segments, sttFile, vad, vadFoundNothing } = await trimSilence(job, full, pcm.durationMs);
 
   const wantSpeakers = job.options.diarize !== "off";
   const lane = await transcribe(
@@ -139,6 +157,7 @@ async function singleStream(job: Job): Promise<StreamOutcome> {
 
   let diarSource: StreamOutcome["diarSource"] = "none";
   let diarEngine: string | null = null;
+  let diarFoundNothing = false;
 
   if (!wantSpeakers) {
     // "off" is enforced here, not merely requested of the lane. A provider
@@ -151,6 +170,15 @@ async function singleStream(job: Job): Promise<StreamOutcome> {
     const engine = await diarizer();
     if (engine) {
       const segs = await engine.diarize(full, { maxSpeakers: job.options.max_speakers });
+      // M19: a component that silently finds nothing must say so. Zero
+      // speakers on audio with words means every word comes back unlabeled,
+      // which reads downstream as "a transcript with no speakers" rather than
+      // as "the diarizer failed" — indistinguishable at exactly the moment the
+      // difference matters.
+      if (segs.length === 0) {
+        job.log.warn({ step: "diarize", engine: engine.name }, "diarizer found no speakers");
+        diarFoundNothing = true;
+      }
       words = assignSpeakers(words, segs);
       diarSource = "clustering";
       diarEngine = engine.name;
@@ -166,6 +194,8 @@ async function singleStream(job: Job): Promise<StreamOutcome> {
     durationMs,
     lane,
     vad,
+    vadFoundNothing: Boolean(vadFoundNothing),
+    diarFoundNothing,
     diarSource,
     diarEngine,
   };
@@ -182,6 +212,7 @@ async function perChannel(job: Job, channels: number): Promise<StreamOutcome> {
   let durationMs = 0;
   let lane: LaneOutcome | undefined;
   let vad: { engine: string; threshold: number } | null = null;
+  let silentChannels = 0;
 
   for (let ch = 0; ch < channels; ch++) {
     const file = path.join(job.workDir, `ch${ch}.wav`);
@@ -192,6 +223,9 @@ async function perChannel(job: Job, channels: number): Promise<StreamOutcome> {
 
     const trimmed = await trimSilence(job, file, pcm.durationMs);
     vad = trimmed.vad;
+    // A silent channel is ordinary — one participant simply did not speak. The
+    // VAD is only suspect when it found nothing on EVERY channel.
+    if (trimmed.vadFoundNothing) silentChannels++;
     segments.push(...trimmed.segments);
     speechMs += trimmed.map.speechMs;
 
@@ -231,6 +265,10 @@ async function perChannel(job: Job, channels: number): Promise<StreamOutcome> {
     durationMs,
     lane,
     vad,
+    vadFoundNothing: silentChannels === channels,
+    // Channel-derived speakers cannot come up empty: the microphones assigned
+    // them, so there is no detection step here to fail silently.
+    diarFoundNothing: false,
     diarSource: job.options.diarize === "off" ? "none" : "channels",
     diarEngine: null,
   };
@@ -253,6 +291,8 @@ interface Trimmed {
   segments: Segment[];
   sttFile: string;
   vad: { engine: string; threshold: number } | null;
+  /** The VAD ran and found no speech at all — reported, never silently absorbed. */
+  vadFoundNothing?: boolean;
 }
 
 /**
@@ -276,10 +316,18 @@ async function trimSilence(job: Job, file: string, durationMs: number): Promise<
   const vad = { engine: engine.name, threshold: engine.threshold };
 
   if (segments.length === 0) {
-    // Silence all the way through: send the original rather than an empty file
-    // and let the STT return nothing, which is the truthful answer.
+    // Silence all the way through — or a VAD that is wrong. Either way we send
+    // the original file and let the STT answer. The reported span is the whole
+    // file, not an empty list: we did transcribe all of it, and an empty
+    // timeline downstream is indistinguishable from a broken one.
     job.log.info({ step: "vad", segments: 0 }, "no speech detected");
-    return { map: TimelineMap.identity(durationMs), segments: [], sttFile: file, vad };
+    return {
+      map: TimelineMap.identity(durationMs),
+      segments: [{ start_ms: 0, end_ms: durationMs }],
+      sttFile: file,
+      vad,
+      vadFoundNothing: true,
+    };
   }
 
   const map = new TimelineMap(segments);
@@ -300,6 +348,34 @@ async function trimSilence(job: Job, file: string, durationMs: number): Promise<
 }
 
 // ---------------------------------------------------------------- summaries
+
+/**
+ * A lane that returned prose with no timings still must not produce a dead
+ * timeline. Anchor every word to the span of audio it came from — first speech
+ * to last speech, or the whole file when the VAD contributed nothing.
+ *
+ * Never `start_ms === end_ms === 0` for audio that actually has duration:
+ * downstream, `transcript_segment.start_ms/end_ms` are NOT NULL, so zeros would
+ * satisfy the constraint while meaning nothing and the database could never
+ * tell us it had gone wrong. A coarse honest span degrades the UI from
+ * click-a-word to click-a-line; zeros seek to the start of the recording and
+ * look like a bug to the person reading their own call.
+ */
+export function anchorTimelessWords(
+  words: readonly Word[],
+  segments: readonly Segment[],
+  durationMs: number,
+): Word[] {
+  if (words.length === 0) return [];
+
+  const start = segments[0]?.start_ms ?? 0;
+  const end = segments[segments.length - 1]?.end_ms ?? durationMs;
+  // A zero-length span for real audio would reintroduce exactly the problem
+  // this function exists to prevent.
+  const safeEnd = end > start ? end : Math.max(durationMs, start + 1);
+
+  return words.map((w) => ({ ...w, start_ms: start, end_ms: safeEnd }));
+}
 
 function tallySpeakers(words: readonly Word[]): Speaker[] {
   const acc = new Map<string, Speaker>();

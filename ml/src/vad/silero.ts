@@ -16,6 +16,14 @@ import { probsToSegments } from "./types.js";
 const WINDOW = 512; // samples @16k — the window size Silero was trained on
 const FRAME_MS = (WINDOW / 16000) * 1000; // 32ms
 
+// v5 does NOT take a bare 512-sample frame: it expects the last 64 samples of
+// the previous frame prepended, for 576 in total. The ONNX graph declares that
+// dimension as dynamic, so feeding 512 is accepted and returns confident
+// nonsense — near-zero speech probability on obvious speech. Measured on real
+// audio: median probability 0.0003 without the context, 1.0 with it. v4 has no
+// context and takes the frame as-is.
+const CONTEXT: Record<"v4" | "v5", number> = { v5: 64, v4: 0 };
+
 export class SileroVad implements VadEngine {
   readonly name: string;
   readonly threshold: number;
@@ -42,16 +50,27 @@ export class SileroVad implements VadEngine {
     let state = this.zeroState();
     const sr = this.srTensor();
 
+    const ctxLen = CONTEXT[this.layout];
+    let context = new Float32Array(ctxLen);
+    const frame = new Float32Array(ctxLen + WINDOW);
+
     for (let off = 0; off + WINDOW <= pcm.samples.length; off += WINDOW) {
       const chunk = pcm.samples.subarray(off, off + WINDOW);
+      frame.set(context, 0);
+      frame.set(chunk, ctxLen);
+
       const feeds: Record<string, ort.Tensor> = {
-        input: new ort.Tensor("float32", Float32Array.from(chunk), [1, WINDOW]),
+        // Copy: ORT holds the buffer for the duration of the call, and `frame`
+        // is reused on the next iteration.
+        input: new ort.Tensor("float32", Float32Array.from(frame), [1, ctxLen + WINDOW]),
         sr,
         ...state,
       };
       const out = await this.session.run(feeds);
       probs.push(Number((out["output"]!.data as Float32Array)[0]));
       state = this.nextState(out);
+
+      if (ctxLen > 0) context = Float32Array.from(chunk.subarray(WINDOW - ctxLen));
     }
 
     return probsToSegments(probs, this.threshold, {

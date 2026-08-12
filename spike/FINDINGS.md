@@ -128,41 +128,29 @@ Persian recording as the confirmation gate.
 
 ---
 
-## 3. Soniox Persian — **API CONTRACT VERIFIED; transcription blocked on account balance**
+## 3. Soniox / OpenRouter ASR / diarization gate — **CLOSED**
 
-Key retrieved from the DPAPI store (never printed). Live run with
-`soniox.mjs` against a 25 s synthetic clip:
+Ran 2026-08-12 on the user's consented Persian fixture. Full write-up:
+**[FINDINGS-3-soniox.md](FINDINGS-3-soniox.md)**. Headlines:
 
-```
-[soniox] uploaded, file_id=… (1.1s)          ← auth OK, upload OK
-[soniox] job=… status=queued                 ← job creation OK
-FAILED: Organization balance exhausted. Please either add funds
-        manually or enable autopay.
-```
-
-**What this DID settle** (worth having): the key is valid, and the async
-contract in my stub was right on the first try — `POST /v1/files` (multipart)
-→ `POST /v1/transcriptions` `{file_id, model, language_hints, enable_speaker_diarization}`
-→ poll `GET /v1/transcriptions/{id}` → `GET /v1/transcriptions/{id}/transcript`,
-with `DELETE` on both resources. The failure is **billing, not shape**: the
-job reached `queued` and died at execution.
-
-**What it did NOT settle:** Persian accuracy, word-timestamp quality, or the
-head-to-head against an OpenRouter ASR lane — the actual questions. Those
-need (a) funds on the Soniox org, and (b) a Persian clip.
-
-**Remote hygiene:** the uploaded file and the errored job were deleted from
-Soniox's servers (`soniox_cleanup.mjs`, both returned 204). Nothing of ours
-is sitting on their infrastructure.
-
-**On the Persian clip — a consent point, deliberately not decided here.**
-The only real Persian audio on this machine is the user's own encrypted
-meeting recordings (`~/.neurai/recordings/*.neura`). Sending those to a
-third-party API is exactly the class of action the predecessor platform makes
-consent-gated by architecture (D15: online mode **plus** explicit per-meeting
-opt-in), so I did not do it unilaterally. The test clip should be either a
-recording the user explicitly nominates, or a throwaway one recorded for the
-purpose. **Blocked pending: funds + a nominated clip.**
+- **Soniox: adopt as primary.** 86.5 s transcribed in 10.2 s, all 280 tokens
+  timestamped and monotonic, speaker labels present, Persian quality very
+  good (correct ZWNJ, colloquial register kept, code-switched tech terms
+  transliterated as spoken). One proper-noun miss.
+- **Integration note that changes the adapter:** Soniox returns SUB-WORD
+  tokens (280 tokens → 124 words), composed by a leading-space convention.
+  ml/ must assemble words before storing, or M6's click-a-word seek gets 280
+  unclickable fragments.
+- **OpenRouter ASR lane: fallback only.** Comparable text quality, but NO
+  timestamps and no speakers (chat completions can't carry them) and it
+  spends reasoning tokens to transcribe. Parts transcribed this way must be
+  flagged timestamp-less so the UI disables seek (M6 degrade-and-flag).
+- **Diarization gate: plumbing confirmed on real Persian audio** (1 speaker
+  found on a 1-speaker clip, no invented second speaker, sane 95% speech
+  coverage). The multi-speaker gate stays open until a real 2+-voice clip.
+- **RTF correction:** the 0.30–0.41× figures in §2 were measured on an idle
+  machine; the same file now reads 1.97× with the box at 100% CPU. Treat §2's
+  timings as an idle best case and re-measure on target hardware.
 
 ---
 

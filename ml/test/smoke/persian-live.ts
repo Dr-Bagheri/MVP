@@ -24,6 +24,11 @@ if (!process.env.SONIOX_API_KEY && !process.env.OPENROUTER_API_KEY) {
 
 process.env.ML_ALLOW_LOCAL_PATHS = "1";
 process.env.ML_LOG_LEVEL ??= "info";
+// The one sanctioned use of the strict flag (M6): in an ACCEPTANCE run a
+// contract regression should fail loudly rather than degrade quietly. Never
+// set this in a deployment — there it turns a degraded call into a lost one.
+// Override to watch the degraded path deliberately.
+process.env.ML_REQUIRE_WORD_TIMESTAMPS ??= "1";
 
 const app = await buildServer();
 const started = Date.now();
@@ -72,7 +77,15 @@ const checks: Array<[string, boolean]> = [
   ["timestamps inside the media", body.words.every((w) => w.end_ms <= body.media.duration_ms + 1000)],
   ["timestamps ordered", body.words.every((w, i, a) => i === 0 || w.start_ms >= a[i - 1]!.start_ms)],
   ["not degraded", !body.degraded],
-  ["speakers separated", body.speakers.length >= 2],
+  // A single-speaker recording legitimately has one label; only demand
+  // separation when the clip is known to have several voices.
+  ["speakers labelled", body.speakers.length >= (Number(process.env.EXPECT_SPEAKERS ?? 1) || 1)],
+  // Positive VAD validation can only happen on real speech: synthetic tones
+  // are correctly rejected by a trained VAD, so the unit suite can assert what
+  // it must NOT detect but never what it must. A model fed the wrong input
+  // shape returns near-zero on obvious speech and passes every negative test.
+  ["vad found speech", body.speech.segments.length > 0],
+  ["vad trimmed something", body.speech.silence_trimmed_ms > 0],
 ];
 
 console.log("\n─── turns (first 20 speaker changes) ───");

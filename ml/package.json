@@ -22,6 +22,7 @@
     "fastify": "^5.11.3",
     "onnxruntime-node": "^1.27.0",
     "pino": "^9.6.0",
+    "sherpa-onnx-node": "^1.13.5",
     "zod": "^4.1.13"
   },
   "devDependencies": {

@@ -241,8 +241,34 @@ suite("POST /process — two channels", () => {
 });
 
 suite("POST /process — the word-timestamp rule (CONTRACT §3)", () => {
-  it("refuses a lane that cannot produce word timestamps, by default", async () => {
+  // Steward ruling, M6 (locked): degrade-and-flag. A call is never lost
+  // because the only reachable lane cannot carry timings.
+  it("degrades rather than failing, by default", async () => {
     configure(new StubLane("none"));
+    const res = await post({ audio_path: monoWav });
+
+    expect(res.statusCode).toBe(200);
+    const body = ProcessResponseSchema.parse(res.json());
+    expect(body.words.length).toBeGreaterThan(0); // the transcript survives
+    expect(body.degraded).toBe(true);
+    expect(body.warnings).toContain("stt_no_word_timestamps");
+    expect(body.provenance.stt.timestamps).toBe("none");
+  });
+
+  it("degrades VISIBLY — the flag rides in provenance, not just in a log", async () => {
+    // core/worker stores this and the UI disables seeking on such parts. If
+    // the flag ever stops riding through, degradation becomes silent, which is
+    // the one thing M6 forbids.
+    configure(new StubLane("none"));
+    const body = ProcessResponseSchema.parse((await post({ audio_path: monoWav })).json());
+
+    expect(body.provenance.stt.timestamps).not.toBe("word");
+    expect(body.degraded).toBe(true);
+    expect(body.warnings.length).toBeGreaterThan(0);
+  });
+
+  it("refuses instead, when the operator opts into the strict rule", async () => {
+    configure(new StubLane("none"), { ML_REQUIRE_WORD_TIMESTAMPS: "1" });
     const res = await post({ audio_path: monoWav, job_ref: "j" });
 
     expect(res.statusCode).toBe(422);
@@ -253,13 +279,54 @@ suite("POST /process — the word-timestamp rule (CONTRACT §3)", () => {
     });
   });
 
-  it("degrades instead, when the operator turns the rule off", async () => {
-    configure(new StubLane("none"), { ML_REQUIRE_WORD_TIMESTAMPS: "0" });
+  it("anchors timing-less words to the audio they came from, never to 0–0", async () => {
+    // core/worker stores these in NOT NULL start_ms/end_ms columns, so zeros
+    // would satisfy the constraint while meaning nothing and the database
+    // could never report the problem. A coarse honest span degrades the UI to
+    // click-a-line; zeros seek to the start of the recording and read as a bug
+    // to the person listening to their own call.
+    configure(new StubLane("none"));
     const body = ProcessResponseSchema.parse((await post({ audio_path: monoWav })).json());
 
-    expect(body.degraded).toBe(true);
-    expect(body.warnings).toContain("stt_no_word_timestamps");
-    expect(body.provenance.stt.timestamps).toBe("none");
+    expect(body.words.length).toBeGreaterThan(0);
+    for (const w of body.words) {
+      expect(w.end_ms).toBeGreaterThan(w.start_ms);
+      expect(w.end_ms).toBeLessThanOrEqual(body.media.duration_ms);
+    }
+    // Anchored to real speech, not to the head of the file.
+    expect(body.words[0]!.end_ms).toBeGreaterThan(1000);
+  });
+
+  it("says so when a component finds nothing, instead of absorbing it (M19)", async () => {
+    // A silent "found nothing" is the failure mode that cost this package two
+    // bugs. The VAD case is reachable in a unit test because the energy gate
+    // legitimately finds no speech in a synthetic tone-free file.
+    configure(new StubLane("word"), { ML_SILERO_MODEL: "" });
+    const silent = path.join(dir, "silent.wav");
+    await writeWav(silent, silence(4000), 1);
+
+    const body = ProcessResponseSchema.parse((await post({ audio_path: silent })).json());
+
+    expect(body.warnings).toContain("vad_found_no_speech");
+    // The job still succeeded — the whole file went to the STT rather than
+    // the caller losing their recording to a VAD that was simply wrong.
+    expect(body.speech.segments.length).toBeGreaterThan(0);
+  });
+
+  it("always reports a speech span for audio it actually transcribed", async () => {
+    // An empty segment list downstream is indistinguishable from a broken one.
+    configure(new StubLane("none"));
+    const body = ProcessResponseSchema.parse((await post({ audio_path: monoWav })).json());
+
+    expect(body.speech.segments.length).toBeGreaterThan(0);
+    for (const s of body.speech.segments) expect(s.end_ms).toBeGreaterThan(s.start_ms);
+  });
+
+  it("never marks a word-timestamped result as degraded", async () => {
+    configure(new StubLane("word"));
+    const body = ProcessResponseSchema.parse((await post({ audio_path: monoWav })).json());
+    expect(body.degraded).toBe(false);
+    expect(body.warnings).not.toContain("stt_no_word_timestamps");
   });
 });
 

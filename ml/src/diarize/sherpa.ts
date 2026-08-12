@@ -1,17 +1,26 @@
 // Local diarization via sherpa-onnx (M6: diarization stays local, ONNX on CPU,
 // whole-file clustering with a tunable threshold).
 //
-// STATUS: the Backend session's Phase-0 spike is measuring whether
-// sherpa-onnx-node runs diarization end-to-end on Node 22 / Windows. Until
-// that lands, this lane is OPTIONAL BY CONSTRUCTION: `sherpa-onnx-node` is not
-// a dependency of ml/, the import is dynamic, and `available()` answers false
-// when either the package or the model files are missing. If the spike fails,
-// the Python escape hatch (M1/M9) implements this same interface instead and
-// nothing above this file changes.
+// STATUS: Phase-0 spike PASSED (Backend 1) — sherpa-onnx-node ships a prebuilt
+// native binding, so there is no node-gyp, no Python, and no build toolchain
+// on any platform we target. The Python escape hatch of M1/M9 stays documented
+// and unused: sherpa-onnx is a thin binding over the same ONNX models a Python
+// pyannote would run, so switching languages would buy nothing on quality.
+//
+// The import stays dynamic and `available()` still answers false when the
+// models are missing: a diarizer is not needed for two-channel audio, nor on a
+// lane that diarizes for us (Soniox does), so its absence degrades one path
+// rather than failing startup.
 //
 // Models (set both, or the diarizer stays unavailable):
-//   ML_SEGMENTATION_MODEL — pyannote segmentation ONNX
-//   ML_EMBEDDING_MODEL    — speaker embedding ONNX
+//   ML_SEGMENTATION_MODEL — pyannote segmentation ONNX (5.7 MB)
+//   ML_EMBEDDING_MODEL    — speaker embedding ONNX (37.8 MB)
+//
+// CAVEAT carried from the spike, worth keeping in view: its ground truth was
+// clean synthetic TTS — two maximally distinct voices, strict alternation, no
+// overlap. Perfect scores there prove the plumbing and the clustering, NOT
+// real-meeting robustness. Far-field noise, crosstalk and same-gender voices
+// are where diarizers actually fail, and none of that has been measured.
 
 import { access } from "node:fs/promises";
 import { config } from "../config.js";
@@ -38,9 +47,17 @@ export class SherpaDiarizer implements Diarizer {
 
   private async load(): Promise<any> {
     if (this.impl) return this.impl;
-    // Dynamic and untyped on purpose: the package is optional until the spike
-    // says otherwise, and a static import would make ml/ fail to build without it.
-    this.impl = await import(/* @vite-ignore */ "sherpa-onnx-node" as string);
+    // Dynamic and untyped on purpose: the models are optional, and a static
+    // import would tie startup to a native binding one deployment may not need.
+    const mod: any = await import(/* @vite-ignore */ "sherpa-onnx-node" as string);
+    // The package is CommonJS, so under `await import()` its exports land on
+    // `.default` — only `OnlineRecognizer` gets hoisted as a named export by
+    // Node's CJS-detection heuristic, which makes the namespace look usable
+    // right up until you construct something from it.
+    this.impl = mod.default?.OfflineSpeakerDiarization ? mod.default : mod;
+    if (!this.impl?.OfflineSpeakerDiarization) {
+      throw new Error("sherpa-onnx-node exposes no OfflineSpeakerDiarization");
+    }
     return this.impl;
   }
 
@@ -57,13 +74,16 @@ export class SherpaDiarizer implements Diarizer {
 
     try {
       const sd = new sherpa.OfflineSpeakerDiarization({
-        segmentation: { pyannote: { model: cfg.ML_SEGMENTATION_MODEL } },
-        embedding: { model: cfg.ML_EMBEDDING_MODEL },
+        segmentation: { pyannote: { model: cfg.ML_SEGMENTATION_MODEL }, debug: 0 },
+        embedding: { model: cfg.ML_EMBEDDING_MODEL, debug: 0, numThreads: cfg.ML_DIARIZER_THREADS },
         clustering: {
-          // -1 = discover the count; the threshold decides who is who. Fixing
-          // the number of speakers would be a guess we have no right to make.
+          // -1 = discover the count. The spike verified this finds exactly the
+          // right number of speakers without being told — identical output to
+          // pinning the count — and on single-speaker Persian audio it did not
+          // invent a second voice. Fixing the count would be a guess we have
+          // no right to make about someone's recording.
           numClusters: -1,
-          threshold: 0.5,
+          threshold: cfg.ML_DIARIZER_THRESHOLD,
         },
         minDurationOn: 0.3,
         minDurationOff: 0.5,

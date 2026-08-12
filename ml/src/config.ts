@@ -42,7 +42,12 @@ const Schema = z.object({
     .transform((v) => (v && v.trim() ? v : "soniox,openrouter"))
     .transform((v) => v.split(",").map((s) => s.trim()).filter(Boolean)),
 
-  ML_REQUIRE_WORD_TIMESTAMPS: bool(true),
+  // Steward ruling (M6, locked): degrade-and-flag, never fail. A call is never
+  // lost because the only available lane cannot carry timings — the result
+  // comes back with timestamps:"none" in provenance and the product degrades
+  // visibly (UI disables seek, the part queues for re-transcription). Silent
+  // degradation stays forbidden; that is what the provenance block is for.
+  ML_REQUIRE_WORD_TIMESTAMPS: bool(false),
   ML_ALLOW_LOCAL_PATHS: bool(false),
   ML_URL_ALLOWLIST: csv,
 
@@ -61,6 +66,19 @@ const Schema = z.object({
     .transform((v) => (v || "auto") as "auto" | "sherpa" | "off"),
   ML_SEGMENTATION_MODEL: z.string().optional().transform((v) => v || undefined),
   ML_EMBEDDING_MODEL: z.string().optional().transform((v) => v || undefined),
+
+  // Measured in the Phase-0 spike, not guessed: 4 threads beat 8 (0.332 vs
+  // 0.453 RTF — oversubscription), so this is NOT auto-set from core count.
+  // Re-measure on the deployment box; the same file swung 6x under CPU
+  // contention, so these numbers size nothing on their own.
+  ML_DIARIZER_THREADS: int(4),
+  // M6 requires the clustering threshold to be tunable. 0.5 is what the spike
+  // validated, not a universal truth.
+  ML_DIARIZER_THRESHOLD: z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined || v === "" ? 0.5 : Number(v)))
+    .pipe(z.number().positive()),
 
   ML_LOG_LEVEL: z.string().optional().transform((v) => v || "info"),
 
