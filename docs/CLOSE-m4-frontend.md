@@ -322,16 +322,29 @@ it was written for before being trusted.
   Persian-first means the default path is the one that hides the bug.
 - **Palette pairs** — `verify-pairs.mjs`, in `npm test`, exits non-zero.
 - **Encoding sweep** — every tracked text file, at BYTE level, for a UTF-8 BOM
-  and for `â€` (cp1252 having eaten an em-dash, en-dash or curly quote).
-  Written after `.gitignore` — the repo's secrets guard — was found carrying
-  both, minutes before a push. A rule already covered the hazard; what the rule
-  could not do is run. It had been widened three times that afternoon and still
-  missed the file, because the sweep in use was a text grep and **ripgrep skips
-  dotfiles by default** — the corruption sat in an unswept file the whole time
-  and the check could not return it. This walks `git ls-files` and reads bytes,
-  so nothing is skipped for being hidden. Verified red against a staged file
-  carrying both signatures; exclusions are named with reasons and a BOM is never
-  allowed, not even in an allow-listed file.
+  and for the cp1252 mangling of an em-dash, en-dash or curly quote (U+00E2
+  followed by U+20AC). Written after `.gitignore` — the repo's secrets guard —
+  was found carrying both, minutes before a push. A rule already covered the
+  hazard; what the rule could not do is run. It had been widened three times
+  that afternoon and still missed the file, because the sweep in use was a text
+  grep and **ripgrep skips dotfiles by default** — the corruption sat in an
+  unswept file the whole time and the check could not return it. This walks
+  `git ls-files` and reads bytes, so nothing is skipped for being hidden.
+  Verified red against a staged file carrying both signatures.
+
+  **It then failed its own second test, in the opposite direction.** The first
+  version wrote the byte sequence literally — in the needle, in its comments and
+  in its failure output — so it matched itself and could NEVER pass. The
+  publisher caught it running the gate before a push. **A gate that always fails
+  gets waved through, which is worse than no gate, because it still looks like
+  coverage** — the exact mirror of the `.gitignore` check that could only ever
+  pass. Fixed by building the needle from char codes so the tool no longer
+  contains its own trigger, plus an opt-out marker (`sweep-allow-mojibake`) so a
+  file that legitimately *discusses* the sequence declares itself instead of
+  being added to a list — otherwise every future write-up of this incident
+  breaks the build for whoever is documenting the fix. **A BOM is never exempt**,
+  by marker or by list: the marker is a claim about prose, a BOM is a claim about
+  bytes. This document carries the marker for exactly that reason.
 - **Crumb-title provider** — using the hook outside its provider throws and names
   the fix. The previous default silently swallowed writes, which is how a real
   bug hid: the page believed it had published a title, the bar believed none was

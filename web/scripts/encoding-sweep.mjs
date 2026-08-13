@@ -20,10 +20,22 @@
  *
  * **Two failure signatures, both cheap and unambiguous:**
  *  - a UTF-8 BOM (`EF BB BF`) — the `Set-Content -Encoding utf8` fingerprint;
- *  - `â€` (U+00E2 U+20AC) — cp1252 having eaten an em-dash, en-dash or curly
- *    quote. It is the highest-confidence marker because those three are the
- *    punctuation this codebase's prose is full of, and they are exactly what a
- *    reader's eye skips: the Persian gets checked, the dashes do not.
+ *  - U+00E2 followed by U+20AC — cp1252 having eaten an em-dash, en-dash or
+ *    curly quote. It is the highest-confidence marker because those three are
+ *    the punctuation this codebase's prose is full of, and they are exactly
+ *    what a reader's eye skips: the Persian gets checked, the dashes do not.
+ *
+ * **This file never writes that sequence literally, and that is deliberate.**
+ * The first version did — in the needle, in this comment, and in the failure
+ * output — so the sweep matched itself and could NEVER pass. A gate that always
+ * fails gets waved through, which is worse than no gate because it still looks
+ * like coverage: the exact mirror of the `.gitignore` check that could only ever
+ * pass. Found by the publisher running it as a pre-push gate.
+ *
+ * So the needle is built from char codes, and any file that needs to DISCUSS the
+ * sequence declares itself with the opt-out marker below rather than being added
+ * to a list here — otherwise every future write-up of this incident breaks the
+ * build, and the person it breaks for is the one documenting a fix.
  */
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -43,13 +55,34 @@ const repoRoot = execFileSync("git", ["rev-parse", "--show-toplevel"], {
  */
 const ALLOWED = {
   "CLAUDE.md":
-    "documents the corruption signatures themselves — the sweep matching its own rule text",
+    "documents the corruption signatures themselves — the sweep matching its own rule text. " +
+    "A path entry rather than the marker because that file belongs to the steward and is not " +
+    "mine to add a marker line to.",
 };
+
+/**
+ * A file that legitimately discusses the sequence declares itself by containing
+ * this marker. It is the mechanism a path list cannot be: **a future write-up of
+ * this incident can exempt itself without editing this tool**, which is what
+ * stops the gate from breaking for whoever documents the next fix.
+ *
+ * It exempts the MOJIBAKE check only. A BOM is never forgiven — not by the
+ * marker, not by the allow-list, not anywhere — because the marker is a claim
+ * about prose and a BOM is a claim about bytes.
+ *
+ * Built from char codes for the same reason the needle is: written literally, it
+ * would sit in this file as a permanent self-exemption.
+ */
+const OPT_OUT_MARKER = ["sweep", "allow", "mojibake"].join("-");
 
 /** A tracked binary is not prose; arbitrary bytes decode into anything. */
 const BINARY = /\.(png|jpe?g|gif|webp|ico|svgz|ttf|otf|woff2?|eot|pdf|docx|xlsx|zip|gz|mp3|wav|m4a|onnx|wasm)$/i;
 
-const MOJIBAKE = "â€"; // "â€" — cp1252 read of E2 80 xx
+/**
+ * U+00E2 U+20AC, assembled rather than typed — see the header. Writing it as a
+ * literal is what made the first version unable to pass.
+ */
+const MOJIBAKE = String.fromCharCode(0x00e2, 0x20ac);
 
 const files = execFileSync("git", ["ls-files", "-z"], {
   cwd: repoRoot,
@@ -74,14 +107,18 @@ for (const relative of files) {
   if (bytes.includes(0)) continue;
   scanned += 1;
 
+  const text = bytes.toString("utf8");
   const bom = bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf;
-  const mojibake = bytes.toString("utf8").includes(MOJIBAKE);
+  const mojibake = text.includes(MOJIBAKE);
   if (!bom && !mojibake) continue;
-  if (relative in ALLOWED && !bom) continue; // an allowed file may never carry a BOM
+
+  // Both exemptions cover MOJIBAKE only; a BOM always reports.
+  const exempt = relative in ALLOWED || text.includes(OPT_OUT_MARKER);
+  if (exempt && !bom) continue;
 
   findings.push(
-    `${relative}${bom ? "  BOM" : ""}${mojibake ? "  mojibake(â€)" : ""}` +
-      (relative in ALLOWED ? "  [allow-listed for mojibake, but a BOM is never allowed]" : ""),
+    `${relative}${bom ? "  BOM" : ""}${mojibake ? "  mojibake(U+00E2 U+20AC)" : ""}` +
+      (exempt ? "  [exempt for mojibake — but a BOM is never exempt]" : ""),
   );
 }
 
