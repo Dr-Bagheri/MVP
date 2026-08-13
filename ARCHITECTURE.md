@@ -118,6 +118,39 @@ with one org — a deployment choice, not a fork.
   prompts quoted; inferred writes are proposed first (approval card in the UI —
   Echo app's confirm pattern); tool scoping + role grants bound the blast
   radius.
+- **Proposals live and die in their conversation** [ruled 2026-08-13]:
+  there is deliberately NO pending-proposals inbox. A proposal read outside
+  the conversation that produced it loses the sentence that made it
+  approvable, and an inbox becomes a queue people feel obliged to clear —
+  a consent property, not a UX preference. The confirm body is `{run_id}`
+  only; the server re-reads the PROPOSAL from `agent_run.steps` (the
+  agent's own record — a proposal cannot outlive its evidence), and the
+  human's DECISION is recorded in **`echo.proposal_decision`** (db/0029,
+  D20): approve or reject, one decision per proposal ever — the primary
+  key IS the replay refusal — severable links so approvals outlive purged
+  runs, and **no agent read grant: an agent reading the human's answer is
+  how a decision becomes a prompt.** [Corrected again 2026-08-13: the
+  "same transaction" form is NOT expressible — the decision inserts on
+  echo_app, the product write runs on echo_agent, and different roles are
+  different connections. Both constraints are right and jointly forbid
+  atomicity, so **the ordering carries the guarantee: decision FIRST**
+  (the primary key refuses a replay before anything can apply — the harm
+  that reaches a person), then the write. The residual — a decision
+  recorded for a write that then failed — is visible, duplicates nothing,
+  and reconciles; the inverse residual (a doubled summary) reached the
+  user. Schema-level tests may still assert the atomic form within one
+  connection; the product path cannot have it. And the split is
+  PROTECTIVE, not a limitation awaiting a fix (D20): applying the
+  approved write as echo_app would restore atomicity — and would let an
+  approved proposal touch columns the agent can never touch
+  (confidence, provenance). **An approval widens who consented, never
+  what may be written.** The tempting "tidy-up" — move the write onto
+  the connection that already holds the decision — silently widens the
+  blast radius of every approval and passes every test.] A confirmed write executes on the AGENT
+  role — approval widens content, never the grant. [Corrected 2026-08-13:
+  an earlier version of this entry recorded approvals inside
+  agent_run.steps — revoked when it collided with 0011's closed-run
+  invariant; the invariant won.]
 
 ## M5 — Models: all cloud, user-chosen, admin-curated, no Claude
 
@@ -149,7 +182,13 @@ with one org — a deployment choice, not a fork.
 - Transcription: **Soniox PRIMARY — ratified by measurement on the user's
   real clip (2026-08-12)**: 0.12× realtime, every token timestamped and
   monotonic, correct ZWNJ and colloquial register, natural fa/en
-  code-switching; proper nouns are the known weak spot. **Integration
+  code-switching; proper nouns are the known weak spot. **Persian WER:
+  2.1%** [measured 2026-08-13 against the user's human-corrected
+  reference, post-normalization so orthography doesn't count as error]:
+  2 substitutions (both loanword/filler spelling variants), 1 insertion,
+  **0 deletions** — nothing dropped, which is the number that matters;
+  spelling wobble is survivable, missing words are not. (n=1 clip;
+  more references extend it.) **Integration
   requirement**: Soniox returns SUB-WORD tokens — ml/'s adapter MUST assemble
   words via the leading-space convention (new word per space-prefixed token,
   start from first token, end from last, speaker survives assembly) or the UI
@@ -175,6 +214,25 @@ with one org — a deployment choice, not a fork.
   threshold). Two-channel audio → speakers from channels, no diarization.
 - VAD (Silero, ONNX): trims silence before paid STT; utterance boundaries.
 - ffmpeg transcodes **any audio format** [user ruling] to pipeline format.
+- **[AMENDED 2026-08-13, from the user's real 2-voice clip]** The
+  channels-are-speakers rule fires ONLY when the channels actually differ
+  (`channelsAreDistinct()`: L−R energy vs single-channel, 20 dB margin).
+  **Dual-mono — one microphone duplicated into two channels — is what phone
+  memos, screen recorders and most re-encodes produce**, and the unguarded
+  rule transcribed every word twice, invented two speakers who were one
+  person alternating with themselves, and doubled the STT charge on every
+  such file, silently, with all-but-one checks green. The rule was written
+  for telephony (each party its own leg) and was never true of consumer
+  audio. Dual-mono downmixes and diarizes, loudly. Second finding, honest
+  status: **the local sherpa diarizer over-splits real conversational
+  audio** (threshold sweep jumps 5 speakers → 1; no value yields 2) — the
+  multi-speaker gate passes via SONIOX's native diarization, which produced
+  clean turns on the same clip; the local path is the fallback/hedge and is
+  NOT production-quality on conversational audio — recorded so nobody
+  re-derives confidence from the synthetic Phase-0 numbers. Third: M21
+  enforcement — `max_speakers` is a hint that is REPORTED ON when exceeded,
+  never a knife; the fallback normalizer briefly deleted speech to satisfy
+  a config number (the forfeit hierarchy inverted), fixed with regression.
 
 ## M7 — Recording model & pipeline (DAG on pgmq)
 
@@ -310,6 +368,13 @@ visible or usable before acceptance. Schema: `user.status`
 (pending/active/disabled) + `org.status` (active/suspended); payment
 processing is a later seam. **No usage view in the product** — internal
 metering only, for our own cost visibility.
+**[RE-AFFIRMED 2026-08-13, user-delegated steward ruling]**: v1 ships no
+usage surface, even with gateway keys + assistant spend live. The worst
+leak vector is bounded (allow_assistant per-key, default off), and every
+agent run already records tokens_in/tokens_out — so a usage view remains
+derivable at any time without new instrumentation. It joins the M14 seam
+list; building it is a decision for when a customer's bill question
+actually arrives.
 **[Amendment, schema round]**: acceptance is two-tier — members joining an
 EXISTING org are accepted by that org's admin; a self-registered NEW org
 (including org-of-one individuals) is accepted by **the vendor** — acceptance
@@ -351,6 +416,17 @@ transport for agent-side connectors when they arrive.
   the wall and in the audit trail. This is an **invariant** (the outbound
   twin of "content never in logs"), not a convention — a "just include the
   title, it's convenient" change is a security regression, not polish.
+- **A webhook acts as its creator** [ruled 2026-08-13] — deliveries run
+  under the authority of the admin who created the webhook (payload carries
+  the identity from enqueue time; `identityForJob`'s fail-closed re-read
+  applies unchanged). Consequence, stated rather than discovered: **demote
+  or disable that person and their org's deliveries stop** — fail-closed,
+  and deliberately the same posture as D6's keys ("disabling an employee
+  stops their integrations immediately"). The admin UI eventually shows
+  "runs as X" so the dependency is visible. The rejected alternative, for
+  the record: relaxing delivery RLS and enforcing admin-only viewing in
+  route code — declined because it moves an authorization rule out of RLS,
+  against M3's premise.
 
 ## M18 — Name: Echo (اکو) [user decision]
 
@@ -370,10 +446,25 @@ M11/M15/M17. The ones that constrain other packages, by name:
 - **db/D3** — `echo_app`/`echo_agent` hold no DELETE anywhere; `echo_purge` is
   the only deleting role and only past the 30-day window; `summary` and
   `admin_action` carry **no UPDATE grant for any role**.
-- **db/D8** — exactly two SECURITY DEFINER doors reachable from core/
-  (`register_account`, `resolve_api_key`); the vendor-acceptance pair is
-  operator-only (`echo_vendor`, db/D13) and core/ cannot execute it.
-- **db/D9** — composite FKs make cross-org references structurally impossible.
+- **db/D8** — SECURITY DEFINER doors reachable from core/ are ENUMERATED,
+  each with its reason [AMENDED 2026-08-13, was "exactly two"]: the two
+  pre-identity doors (`register_account`, `resolve_api_key`) + the two
+  named deletion operations (`soft_delete_call`, `restore_call`, db/0032)
+  — added because M11's owner soft-delete was structurally impossible as
+  a plain UPDATE (the post-image is invisible to its own actor under Q2's
+  read policy), and a named definer operation preserves Q2 exactly where
+  any policy widening would have overturned it. Direct `deleted_at`
+  writes are refused for ALL application roles including admins — "a
+  path that succeeds for the privileged caller and fails for the
+  ordinary one is exactly how this survived" unfound. The
+  vendor-acceptance pair stays operator-only (`echo_vendor`, db/D13).
+- **db/D9** — composite FKs make cross-org references structurally
+  impossible. [Extended 2026-08-13, from the enqueue-policy near-miss:
+  D9 is also the ESCAPE from RLS policy composition — an EXISTS guard in a
+  policy runs as the caller and silently intersects with the other table's
+  policies; the composite FK needs no policy at all. When a policy wants a
+  fact about another protected table, that is the signal to reach for a
+  constraint, not a subquery.]
 - **db/D11** — assistant sessions are private to their owner, admins included;
   the admin audit surface is `agent_run`, never conversation text.
 - **db/D12** — pgmq queues created where pgmq exists; only `echo_app` may
@@ -421,6 +512,20 @@ which surfaced the cross-part numbering collision on every >30-min call; and
 `transcript_segment_words_is_array` — which turned double-JSON-encoding from
 a silent corruption (every queue payload stored as a quoted string) into a
 one-line diagnosis. Constraints are the tests you didn't know to write.
+Milestone-3 postscript (Backend 1's closing observation, kept because it
+names the split): every defect that milestone produced — zero tools
+offered, silent 500s, an unread preference, an invented column, an omitted
+NOT NULL, a one-sided contract — was a **configuration or contract fault,
+not a logic fault**; a 411-test suite caught none of them, and a one-file
+harness caught six. The suite answers "is the logic right"; the harness
+answers "is the system actually assembled" — different questions, and a
+product's last-mile defects are nearly all the second kind. And a third
+question neither answers (the no-Claude finding: 28 barred models served
+live through a full verified end-to-end run): **"does it obey the rules we
+already have" — running something proves it behaves, not that it should
+behave that way.** Compliance is checked only by reading the rules against
+the output; its mechanized form is the negative-space test, and its
+precondition is the rule living where a session will actually meet it.
 
 Runtime-boot corollary (worker E2E finding, strengthened by the api boot
 smoke): core/ runs on `node --experimental-strip-types`, which strips
@@ -464,6 +569,18 @@ automatically full fidelity: `degraded` + `timestamps:"none"` ride provenance
 into storage; the UI's per-row `end_ms > start_ms` gate implements the ladder
 unchanged, and the call-level «رونوشت با دقت کاهش‌یافته» chip stays a quality
 signal, separate from seek mechanics.
+
+**Segmentation rule [ruled 2026-08-13, from the single-speaker finding]:**
+a transcript segment breaks on **speaker change OR a VAD speech-boundary**
+(`speech.segments` — silence measured from the audio itself, already
+delivered by ml/ and previously discarded), with a word-count backstop for
+a lane that provides neither. Speaker-change-only was a defect, not a
+preference: an 86-second monologue landed as ONE segment (a 30-minute
+dictation would too), which (1) erases M20's middle rung — no lines exist
+to degrade to; (2) makes the search snippet's unit the entire call; and
+(3) breaks ml/'s contract split — "ml/ returns words, not lines; lines are
+the product's to build" — with the product not building them. The VAD
+boundary is a fixture from reality, not an invented threshold (rule 9).
 
 Call-level summary field (contract, 2026-08-12): `transcript_timing:
 "full" | "mixed" | "none" | null` — snake_case like every Call field;

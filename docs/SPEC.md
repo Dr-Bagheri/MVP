@@ -100,7 +100,12 @@ see.
 A dockable pane on every screen. Knows which page you're on; you can mention a
 specific call to add it as context. Sessions persist. Answers stream; tool
 calls are shown as they run. **Each user picks their own model from a live
-catalogue; models that cannot call tools are not selectable.**
+catalogue; models that cannot call tools are not selectable. Anthropic/Claude
+models are excluded from the catalogue entirely** [user directive]: never
+served, never selectable by name, never re-admittable by an admin allow-list.
+(Added 2026-08-13 — this directive previously lived only in the decision log,
+and the filter it described went unimplemented while everyone believed it
+existed; a product rule belongs in the product spec.)
 
 ### Skills
 Three levels: **system** skills shipped with the product (the summarizer is
