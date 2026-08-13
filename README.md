@@ -25,10 +25,25 @@ database, not in a prompt.
 | **Echo — calls** | Every call becomes a titled, summarized object: speaker-labelled transcript, word-level timing where the engine gives it, tap-to-seek. |
 | **Ask your calls** | Grounded Q&A over transcripts with timestamp citations, plus write actions that go through a propose → you confirm → execute loop. |
 | **User management** | Invitations, three roles (owner / admin / member), suspend, and a true-delete that actually removes a person, with a tombstone so the record of the deletion survives. |
-| **Settings** | General · Security · SSO¹ · OAuth Apps (API keys + webhooks) · **Audit Logs** (real: admin actions, agent runs, proposal decisions) · Log Drains · Legal¹ |
+| **API gateway** | Per-member API keys minted show-once, each acting with exactly its owner's authority — never more — plus webhooks with signed delivery and a delivery log. |
 | **Both languages** | Persian default and English, RTL-first, Vazirmatn, Persian digits, Jalali-capable dates — not a translation layer bolted on. |
 
-¹ SSO and Legal Documents render as honest visible-but-inactive entries — named, not faked; their implementation is out of v1 scope.
+### Built vs. designed
+
+The information architecture is complete; some panels behind it are not.
+Rather than hide the unbuilt ones, the app names them and says so on the page
+— a control that looks live and silently does nothing is worse than an honest
+blank. Where this README describes the product, it marks the difference too:
+
+| Surface | State |
+|---|---|
+| Assistant hub · Echo calls & detail · search · Management (Users, Connectors) | **Built** — server-backed |
+| Settings — the section IA, and your own preferences | **Built** |
+| Settings — organisation fields, Management · Models / Server | **Named, not wired** — visible with an on-page notice |
+| Audit Logs, Log Drains | **Backend exists; read surface not wired yet** |
+| SSO, Legal Documents | **Out of v1 scope** — listed so the IA is honest, not implemented |
+
+Everything above the line is what the screenshots show.
 
 ## Screenshots
 
@@ -43,15 +58,21 @@ these are the Persian screens; the English locale is the same UI mirrored.
 |---|---|
 | ![The calls list with the assistant docked beside it: each call shows owner, Jalali date, duration, private/org scope and status — including one still summarizing, one failed, and one soft-deleted with its restore window counted down in days.](docs/screenshots/echo-calls.png) | ![User management: pending sign-ups awaiting approval, then the member table with role and status. The stat tiles show counts with "—" where a trend would go, and say why in a line underneath: until status history accumulates, a percentage would be invented.](docs/screenshots/management-users.png) |
 
-| Settings · General |
+| Management · Connectors |
 |---|
-| ![Settings: Configuration / Connections / Compliance. Entries that are not built yet are visibly labelled rather than hidden or faked, and the org fields carry a plain notice that they are read-only until the save path exists.](docs/screenshots/settings-general.png) |
+| ![The API gateway surface: keys listed by the member who owns them — each acting with that member's authority and dying with their account — showing last use, expiry, revoked and expired states, and whether the key may reach the assistant. Below, webhooks that report that something happened without shipping the content.](docs/screenshots/management-connectors.png) |
 
-Two things worth noticing, because they are deliberate: **nothing is faked**.
-A tile with no honest trend to show prints `—` and explains itself; a settings
-entry that isn't built says so instead of pretending. And **the assistant
-docks rather than takes over** — selecting an app keeps the app reachable at
-every width, with no dialog to dismiss on arrival.
+Three things worth noticing, because they are deliberate. **Nothing is faked**:
+a tile with no honest trend to show prints `—` and explains itself. **The
+assistant docks rather than takes over** — selecting an app keeps the app
+reachable at every width, with no dialog to dismiss on arrival. And **an API
+key is a member, not a service account**: it can do exactly what its owner can
+do, and disabling the person disables the key in the same instant.
+
+> Captured from the current build. The Echo calls surface is mid-rework — Record
+> and Calls merge into one screen — so that shot will change; sign-in screens are
+> deliberately absent because the flow can't complete end to end yet, and a
+> screenshot of it would promise something that doesn't work.
 
 ## Architecture
 
