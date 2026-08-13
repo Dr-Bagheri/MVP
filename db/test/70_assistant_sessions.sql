@@ -40,8 +40,14 @@ select t.writes_nothing(
   'nor rename one');
 
 -- But the audit trail an admin IS entitled to remains readable.
-select t.ok((select count(*) from echo.agent_run) = 2,
-  'the admin still sees the org''s agent runs — that is the audit surface (M10)');
+-- Asserted as the property rather than as a total: a literal count here breaks
+-- every time the fixture gains a run for an unrelated reason, which has now
+-- happened three times and never once because this rule changed.
+select t.ok(
+  exists (select 1 from echo.agent_run
+           where id = '11000000-0000-4000-8000-000000000001'
+             and actor_id <> '01000000-0000-4000-8000-000000000001'),
+  'the admin still sees a colleague''s agent runs — that is the audit surface (M10)');
 
 -- --- another member cannot either ------------------------------------------
 select set_config('echo.actor_id', '03000000-0000-4000-8000-000000000003', true);

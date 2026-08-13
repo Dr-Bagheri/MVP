@@ -1,5 +1,36 @@
 -- Deletion is soft; the purge is a separate role with a separate window (M11).
 
+-- --- one definition of "cut off", used live and at stamp time --------------
+-- The live read and the purge-time stamp call the same function, so they
+-- cannot drift into disagreeing about the same run. No clock: a message is
+-- only appended after its run has finished, so a message pointing at a
+-- 'running' run means the process died between those two writes.
+select t.ok(not echo.run_is_truncated('ok', now() - interval '40 days'),
+  'a run that finished cleanly is never truncated, however long ago');
+select t.ok(echo.run_is_truncated('error', now()),
+  'a failed run left a partial answer immediately');
+select t.ok(echo.run_is_truncated('running', now() - interval '40 days'),
+  'and so did one still running long after it should have finished');
+
+-- The case the start time exists for: correctness that does not depend on
+-- core/ writing the message after the run resolves. If that order ever
+-- changes, this is what stops a live streaming answer reading as "cut off".
+--
+-- It has to be CONSTRUCTED. Every run in any real database is minutes or
+-- months old, so a status-only rule and this one agree on all of them — the
+-- distinguishing case is a run under an hour old, which exists for about an
+-- hour and never when anyone is looking. Verified against live data alone, the
+-- two rules look equivalent and this function looks like churn.
+select t.ok(not echo.run_is_truncated('running', now()),
+  'a run that began moments ago is in flight — whatever order its message was written in');
+
+-- And only one rule exists, so nobody can call a shorter form that is correct
+-- in testing and wrong for exactly that window.
+select t.ok(
+  (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'echo' and p.proname = 'run_is_truncated') = 1,
+  'there is exactly one definition of "was this answer cut off"');
+
 -- --- the application cannot physically delete anything ---------------------
 reset role;
 set local role echo_app;
@@ -69,3 +100,32 @@ select t.ok(
   (select agent_run_id from echo.agent_message
     where id = '53000000-0000-4000-8000-000000000003') is null,
   'but its link to the purged run is cut, not dangling');
+
+-- Whether that turn was cut off mid-stream has to survive the run it was
+-- derived from. The api reads coalesce(m.truncated, r.status = 'error'): NULL
+-- while the run lives, materialized the moment it is deleted. Without this a
+-- truncated answer would read as complete once its call was purged.
+select t.ok(
+  (select truncated from echo.agent_message
+    where id = '53000000-0000-4000-8000-000000000003') is not null,
+  'and the truncation marker was materialized before the run went, not lost with it');
+select t.ok(
+  (select truncated from echo.agent_message
+    where id = '53000000-0000-4000-8000-000000000003') = false,
+  'recording what the run actually said — that one finished ok, so the answer is complete');
+
+-- The case the marker exists for: a run that died mid-stream. Without the
+-- stamp this message would read as a complete answer once its call was purged,
+-- and someone could act on half a summary months later.
+select t.ok(
+  (select truncated from echo.agent_message
+    where id = '54000000-0000-4000-8000-000000000004') = true,
+  'and a turn that WAS cut off still says so after the run that proved it is gone');
+
+-- The state that is neither a clean finish nor an error: a run still 'running'
+-- when its call expired. Its answer is partial too, and the first version of
+-- this stamp called it complete.
+select t.ok(
+  (select truncated from echo.agent_message
+    where id = '55000000-0000-4000-8000-000000000005') = true,
+  'a run that never finished leaves a partial answer as surely as one that failed');

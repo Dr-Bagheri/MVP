@@ -490,6 +490,209 @@ the admin half and the members-cannot-touch-others half, never the plain case.
 **Asserting the privileged path and the refused path can leave the ordinary
 path unproven, and the ordinary path is the product.**
 
+**D22 — An owner is an admin with more, and "admin" is decided in one place.**
+*(`0035`–`0038`, M23.)*
+
+The change that mattered was not adding the label. Every policy in this schema
+asks `actor_is_admin()`; if `'owner'` were a role *beside* `'admin'` rather than
+above it, promoting the founder would have stripped them of the product one
+policy at a time — org settings, gateway keys, reading the org's calls — each
+failure looking like an unrelated permissions bug. So `actor_is_admin()` means
+**admin-or-owner**, and no policy needed rewriting.
+
+Adding the label then invalidated every other `role = 'admin'` in the schema.
+There were four. Three were anticipated (the central helper, and the two vendor
+functions, because founders were on my mind); **the fourth — `dispatchable` in
+`subscribed_webhooks` — was missed and caught by the suite**, where it would
+have reported every owner-registered webhook as undeliverable and emitted
+nothing, quietly. Fixing it was not the lesson: the rule had been written out
+four times, so it could drift in four places. `echo.role_is_admin(role)` is now
+the only place it is decided, and `17_roles.sql` asserts in negative space that
+no function restates it.
+
+That assertion immediately went red on the app_user guard, which used the same
+literal to ask a *different* question — "is the target in the admin tier",
+with `'owner'` handled by an earlier clause. Exempting the guard by name would
+have worked and would have been a lie of omission: an exemption list is where
+the next literal hides. Since neither side can be `'owner'` by the time control
+reaches that line, the two tests are identical there, so the literal simply
+went. **A rule that is hard to state without exceptions is usually two rules;
+this one was one rule stated twice.**
+
+Other decisions, each stated because it could reasonably have gone the other
+way:
+
+- **Backfill = the org's earliest-created admin**, not "earliest *accepted*
+  admin". Acceptance gates access, not identity: a founder still waiting on
+  vendor acceptance is nonetheless the org's root, and the accepted-only rule
+  would leave such an org ownerless. Ties break on id, so a replay is
+  deterministic.
+- **At most one owner per org** as a partial unique index. "Exactly one" is not
+  a table constraint — an org exists for an instant before its founder row
+  does — so the structural half is at-most-one and `register_account` maintains
+  the other half.
+- **Nobody becomes owner by an UPDATE.** Transfer is an explicit action and is
+  unbuilt in v1; until it exists, the label cannot be handed over by a column
+  write, which is the same posture as deletion (D21). Attempting it is refused
+  even above the wall, because the unique index does not care who is asking.
+- **An admin may not mint an admin.** M23 gives the owner the admin tier, and
+  an admin who could create a peer would create someone they then cannot
+  manage — which is not "managing members".
+- **Nobody changes their own role or status**, generalised rather than
+  excepted: the rule that used to say "an admin may not change their own" now
+  says it of everyone, including the owner.
+
+**D23 — Identity fields: a handle is the org's, a Latin name is optional.**
+*(`0039`, `0042`.)* `username` is unique **per org, never globally**: global
+uniqueness would make "that handle is taken" an existence oracle over every
+other customer's organization, turning a signup form into a cross-tenant probe
+— and per-org is all a mention needs, since mentions resolve among people you
+can already see. Format `^[a-z][a-z0-9_]{2,31}$`, which is a bidi decision
+rather than a stylistic one: an `@mention` sits inline in running text, and a
+Persian handle inside an LTR-embedded run leaves the *end* of the handle
+genuinely ambiguous. The person's real name is `display_name` and is
+unconstrained. `display_name_en` refuses blank strings so the fallback to the
+Persian name actually fires instead of rendering empty; it is never
+auto-transliterated, because a machine-guessed spelling of someone's name is a
+wrong name. NULL username stays legal — forcing one at insert would mean
+inventing a handle for someone who has not chosen it.
+
+**D24 — Membership history is written by the database and reachable by nobody.**
+*(`0040`, `0041`.)* Trends must never be faked, so `user_status_history` is
+written by the `app_user` guard rather than by the api. Getting that right
+needed one non-obvious step: the guard runs as the caller, so it needs EXECUTE
+on the recorder — but granting that would let the api author any history it
+liked, and making the guard SECURITY DEFINER would have silently disabled the
+whole authorization block, since `from_app` is computed from `current_user`.
+The recorder is granted and refuses any call where `pg_trigger_depth() = 0`.
+**The api can neither author a trend nor omit one.** The write sits after the
+authorization checks, so a refused attempt leaves no line — a history that
+logged attempts would answer "what happened to this account" with things that
+did not.
+
+**D25 — An invitation is the acceptance.** *(`0043`, M24.)* Three arrival
+paths, stated together so the gate stays coherent: **invited → active**
+(someone vouched, by name); **self-signup into an existing org → pending**
+(nobody vouched); **self-signup creating an org → pending until the vendor
+accepts** (D13). Requiring an accept step after an explicit, named invitation
+is a gate with no decision behind it, and a queue of pending people nobody
+remembers inviting is how a real gate gets rubber-stamped. This is M24's own
+"admin vouching = acceptance built in", applied to the door that involves
+strictly more deliberation.
+
+Deliberate deviation from the dispatch: the inviter's role decides **what role
+they may grant**, not whether acceptance is needed — "accepted-or-pending per
+the inviter's role" would mean an admin's invitee waits while an owner's does
+not, a difference the invitee experiences and cannot explain. Only the owner
+may invite an admin, for D22's reason. Nobody invites an owner.
+
+The **address must match** on redemption. The link is delivered out of band, so
+a forwarded one would otherwise let an unintended person join under someone
+else's invitation — a bearer token where a named invitation was meant. Expired,
+revoked, already-used, unknown and wrong-address all refuse **identically**, so
+the endpoint is not a probe for valid tokens.
+
+**D26 — True delete is a tombstone, and the handle is reserved.** *(`0044`,
+`0045`, M24; steward-ratified.)* The row stays and is emptied: `admin_action`,
+`proposal_decision`, `agent_run`, `summary.created_by` and every corrected
+transcript line point at it, and an audit trail with holes where the
+interesting people used to be is worse than none. Email is *replaced* rather
+than cleared (NOT NULL and unique); status goes disabled; owned calls are
+soft-deleted attributed to whoever did the deleting, so M11's window and the
+audio purge apply exactly as they would to any other deletion. Owner-only —
+this is the most irreversible thing in the product.
+
+**The username is kept.** Freeing it would let a newcomer wear a departed
+colleague's handle, and every historical reference to `@sara` would silently
+resolve to someone else — in a product whose purpose is an accurate record of
+who said what, a handle that changes owner is a small forgery machine, and the
+damage lands retroactively on records already written. The objection that
+reserving leaks the handle existed is bounded by D23: per-org uniqueness scopes
+the leak to future members of the organization where that person actually
+worked, who could learn as much from any transcript they appear in. References
+resolve to "a deleted person, formerly @x". Full erasure is a platform-level
+request, outside v1; an explicit owner reclaim operation stays available as a
+future named action, **not** as a default and not until there is demonstrated
+need.
+
+**D27 — An organization's status belongs to the vendor, in both directions.**
+*(`0052`.)* Asked to verify that a vendor-accept path exists for pending orgs,
+I found it present and audited — and found the real one-way door beside it.
+
+Measured before anything was written:
+
+```
+owner suspends their OWN org:  1 row  — ALLOWED
+same owner tries to undo it:   0 rows — LOCKED OUT
+```
+
+`org_admin_update` let any admin write any column of their own org, `status`
+included. Suspending took one UPDATE, and every predicate that would authorise
+the reverse — `actor_is_admin`, `actor_is_active` — requires the org to be
+active, so the reverse was unreachable from inside the product. An admin could
+brick their own organization for everyone, permanently, with the only exit
+being an operator holding raw SQL.
+
+Two rules that were each correct: *admins manage their org*, and *a suspended
+org grants nobody anything*. Together they built a door that opens one way with
+the org itself on the wrong side of it. That is the same shape as the M11
+soft-delete bug (D21) — a write that moves the writer outside their own
+authority — and it is worth naming as a class: **any state transition that
+removes the actor's power to make the reverse transition needs its exit built
+at the same time as its entrance.**
+
+So org status is not an application capability at all — not for an admin, not
+for an owner. `echo.vendor_set_org_status(org, status)` is the named operator
+path, vendor-only, and deliberately **both directions through one door**: an
+operation that could only suspend would rebuild the one-way street it exists to
+remove. `status_changed_at` answers "since when". Members' own statuses are
+untouched, because a suspended org changes what its people can reach, not who
+they are — writing "disabled" across a customer's staff over a late invoice
+would be a lie the status history would then carry forever.
+
+On the question as asked: the vendor-accept path **does** exist
+(`vendor_accept_org`, `vendor_pending_orgs`, `echo_vendor` only) and is audited
+— it writes a `user_status_history` line with `changed_by = NULL`, the
+established vendor convention, alongside `accepted_at` with `accepted_by =
+NULL`. One correction to the framing it was asked in: **the org is never
+pending.** `register_account` creates it *active* with a *pending owner*; it is
+the founder who waits, not the organization.
+
+**D28 — Deletion events get their own metadata-only surface.**
+*(Direction ruled; **build deferred to backlog**. Nothing implements this
+today.)*
+
+`0055` tightened `admin_action`'s insert to admins, which made an older gap
+visible: M11 says human deletions are "always logged", members delete their own
+calls, and **a member's deletion is recorded nowhere**. `soft_delete_call`
+stamps `deleted_by` on the row and writes no audit line; that was already true
+before `0055` and remains true now.
+
+The ruled exit is the one `proposal_decision` established: **a member-visible
+record surface of its own**, rather than widening `admin_action` back to any
+member — which is what let that table keep an honest name in the first place.
+
+It also dissolves a tension I had recorded separately. `call.deleted_by` is the
+only trace a deletion happened, and it lives on the row the purge eventually
+deletes, so after the window there is no record that anyone deleted anything —
+"purge removes the content" and "the trail is append-only" appearing to point
+in opposite directions. They never were about the same thing. **A deletion
+event is metadata — actor, call id, timestamp; codes, never content — so it is
+not what a purge exists to remove.** Its record survives with a severable link,
+exactly as `proposal_decision` outlives the runs and calls it references
+(D26/`0018`'s `ON DELETE SET NULL` family).
+
+And unlike the truncation marker, nothing needs rescuing at purge time: the
+event is written when it happens, so there is no moment where the fact stops
+being readable and has to be materialised first.
+
+**Status is the load-bearing part of this entry.** M11's "always logged" is
+being amended to describe today's honest state — `deleted_by` on the row, event
+record committed-but-unbuilt — rather than continuing to promise something no
+code provides. That is the Drizzle lesson applied before it costs anyone: a
+document asserting a capability the system does not have is worse than a
+document that admits the gap, because only one of them can be believed.
+
 ---
 
 ## Questions the schema could not settle

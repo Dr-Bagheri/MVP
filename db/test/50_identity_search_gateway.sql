@@ -39,6 +39,19 @@ select t.ok(
   ),
   'every table in the echo schema has row level security enabled AND forced');
 
+-- Every application role reaps its own leaked transactions. A harness that
+-- crashes between begin and rollback once held locks on the shared project for
+-- thirty-two minutes and blocked every session's DDL; this is that rule turned
+-- into something that runs.
+select t.ok(
+  not exists (
+    select 1 from pg_roles
+    where rolname in ('echo_app', 'echo_agent', 'echo_purge')
+      and coalesce(array_to_string(rolconfig, ','), '')
+          not like '%idle_in_transaction_session_timeout%'
+  ),
+  'no application role can hold a transaction open indefinitely');
+
 -- --- Persian folding ------------------------------------------------------
 select t.ok(echo.fa_fold('كتاب') = echo.fa_fold('کتاب'),
   'Arabic kaf and Persian kaf fold together');
@@ -138,8 +151,8 @@ select t.ok(
 -- nothing, not even the row it just created (invariant 2).
 select set_config('echo.actor_id', '09000000-0000-4000-8000-000000000009', true);
 select t.ok(
-  (select role from echo.app_user where id = '09000000-0000-4000-8000-000000000009') = 'admin',
-  'registering without naming an org creates an org-of-one whose founder is its admin (M2)');
+  (select role from echo.app_user where id = '09000000-0000-4000-8000-000000000009') = 'owner',
+  'registering without naming an org creates an org-of-one whose founder is its owner (M2/M23)');
 
 select t.ok((select count(*) from echo.call) = 0,
   'and that brand-new account can still see nothing until someone accepts it');

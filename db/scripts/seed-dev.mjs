@@ -29,7 +29,19 @@ import pg from 'pg'
 const DEV_PROJECT_REF = 'aqgpxnyuxukwgphrxslw' // the dev project, and only it
 
 const ORG = '0d000000-0000-4000-8000-00000000000d'
-const ADMIN = '0d000000-0000-4000-8000-000000000001'
+// M23's three roles. The owner and the admin are separate people on purpose:
+// with one account holding both, "only the owner may change an admin" is
+// untestable from the UI, and that is the rule most likely to be got wrong.
+// dev-admin@ keeps its address and becomes the OWNER, which 0036's backfill
+// already did to it on the live project. Its email cannot be renamed to match
+// — the app_user guard makes email immutable, correctly, since the auth
+// provider owns it — and 38 rows of other sessions' work already point at this
+// account, so recreating it is out of the question. The address is historical;
+// the role is the truth.
+const OWNER = '0d000000-0000-4000-8000-000000000001'
+// A plain admin, under its own address, so "only the owner may change an
+// admin" can be exercised at all.
+const ADMIN = '0d000000-0000-4000-8000-000000000005'
 const MEMBER = '0d000000-0000-4000-8000-000000000002'
 // The state nothing else can reach: with no users at all, every token 401s and
 // the pending branch is never exercised end to end. web/ needs a real identity
@@ -102,9 +114,10 @@ try {
   await db.query(
     `insert into auth.users (id, email) values
        ($1,'dev-admin@echo.local'), ($2,'dev-member@echo.local'),
-       ($3,'dev-pending@echo.local'), ($4,'dev-suspended@echo.local')
+       ($3,'dev-pending@echo.local'), ($4,'dev-suspended@echo.local'),
+       ($5,'dev-orgadmin@echo.local')
      on conflict (id) do nothing`,
-    [ADMIN, MEMBER, PENDING, SUSPENDED_MEMBER],
+    [OWNER, MEMBER, PENDING, SUSPENDED_MEMBER, ADMIN],
   )
   await db.query(
     `insert into echo.org (id, name, status) values
@@ -115,13 +128,14 @@ try {
   )
   await db.query(
     `insert into echo.app_user (id, org_id, email, display_name, role, status, accepted_at)
-     values ($1,$4,'dev-admin@echo.local','مدیر توسعه','admin','active', now()),
+     values ($1,$4,'dev-admin@echo.local','مالک توسعه','owner','active', now()),
+            ($7,$4,'dev-orgadmin@echo.local','مدیر توسعه','admin','active', now()),
             ($2,$4,'dev-member@echo.local','عضو توسعه','member','active', now()),
             ($3,$4,'dev-pending@echo.local','در انتظار تأیید','member','pending', null),
             -- active person, suspended org: the whole point of the pair
             ($5,$6,'dev-suspended@echo.local','عضو سازمان تعلیق‌شده','member','active', now())
      on conflict (id) do nothing`,
-    [ADMIN, MEMBER, PENDING, ORG, SUSPENDED_MEMBER, SUSPENDED_ORG],
+    [OWNER, MEMBER, PENDING, ORG, SUSPENDED_MEMBER, SUSPENDED_ORG, ADMIN],
   )
   await db.query('commit')
 

@@ -230,17 +230,17 @@ async function migrate({ quiet = false } = {}) {
   }
 }
 
-// The fixture's synthetic people. Named here because reset has to remove them
-// from auth.users individually on a remote target — where dropping the auth
-// schema would destroy Supabase Auth itself.
-const FIXTURE_AUTH_IDS = [
-  '01000000-0000-4000-8000-000000000001',
-  '02000000-0000-4000-8000-000000000002',
-  '03000000-0000-4000-8000-000000000003',
-  '04000000-0000-4000-8000-000000000004',
-  '05000000-0000-4000-8000-000000000005',
-  '09000000-0000-4000-8000-000000000009',
-]
+// The fixture's synthetic people, identified by their email domain rather than
+// by a list of ids.
+//
+// A list drifts: adding a person to the fixture and forgetting them here
+// leaves an auth.users row behind, and the NEXT run fails on a duplicate key
+// during setup — a confusing failure a long way from its cause. The domain is
+// the fixture's own convention, so it cannot fall out of step with it.
+//
+// @example.com is this suite's alone: the dev seed uses @echo.local and other
+// sessions' fixtures use @example.invalid. Anything matching here is ours.
+const FIXTURE_EMAIL_DOMAIN = '%@example.com'
 
 // The two orgs the fixture invents. Nothing else in any database uses them,
 // which is what makes a targeted cleanup safe on a shared project.
@@ -271,7 +271,7 @@ async function clearFixture(db) {
     const column = table === 'org' ? 'id' : 'org_id'
     await db.query(`delete from echo.${table} where ${column} = any($1::uuid[])`, [FIXTURE_ORGS])
   }
-  await db.query('delete from auth.users where id = any($1::uuid[])', [FIXTURE_AUTH_IDS])
+  await db.query('delete from auth.users where email like $1', [FIXTURE_EMAIL_DOMAIN])
 }
 
 async function reset() {
@@ -295,7 +295,7 @@ async function reset() {
     } else {
       // Supabase's: dropping it would take authentication with it. Remove
       // only the rows the fixture created, and only if they are still there.
-      await db.query('delete from auth.users where id = any($1::uuid[])', [FIXTURE_AUTH_IDS])
+      await db.query('delete from auth.users where email like $1', [FIXTURE_EMAIL_DOMAIN])
     }
 
     // Roles survive a schema drop, so remove them too — a clean slate is the

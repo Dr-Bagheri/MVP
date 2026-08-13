@@ -16,15 +16,23 @@ insert into auth.users (id, email) values
   ('02000000-0000-4000-8000-000000000002', 'bob@example.com'),
   ('03000000-0000-4000-8000-000000000003', 'carol@example.com'),
   ('04000000-0000-4000-8000-000000000004', 'dan@example.com'),
-  ('05000000-0000-4000-8000-000000000005', 'erin@example.com');
+  ('05000000-0000-4000-8000-000000000005', 'erin@example.com'),
+  ('06000000-0000-4000-8000-000000000006', 'dave@example.com');
 
 insert into echo.org (id, name) values
   ('0a000000-0000-4000-8000-00000000000a', 'شرکت الف'),
   ('0b000000-0000-4000-8000-00000000000b', 'شرکت ب');
 
 insert into echo.app_user (id, org_id, email, display_name, role, status, accepted_at) values
+  -- alice is the OWNER (M23). Every existing admin assertion about her still
+  -- holds, because actor_is_admin() means admin-or-owner — which is the whole
+  -- point of that redefinition, and this fixture is what proves it.
   ('01000000-0000-4000-8000-000000000001', '0a000000-0000-4000-8000-00000000000a',
-   'alice@example.com', 'آلیس', 'admin',  'active',  now()),
+   'alice@example.com', 'آلیس', 'owner',  'active',  now()),
+  -- dave is a plain admin, so the admin TIER can be tested: only the owner
+  -- may change him, and he may not mint a peer.
+  ('06000000-0000-4000-8000-000000000006', '0a000000-0000-4000-8000-00000000000a',
+   'dave@example.com',  'دیوید','admin',  'active',  now()),
   ('02000000-0000-4000-8000-000000000002', '0a000000-0000-4000-8000-00000000000a',
    'bob@example.com',   'باب',  'member', 'active',  now()),
   ('03000000-0000-4000-8000-000000000003', '0a000000-0000-4000-8000-00000000000a',
@@ -32,7 +40,7 @@ insert into echo.app_user (id, org_id, email, display_name, role, status, accept
   ('04000000-0000-4000-8000-000000000004', '0a000000-0000-4000-8000-00000000000a',
    'dan@example.com',   'دن',   'member', 'pending', null),
   ('05000000-0000-4000-8000-000000000005', '0b000000-0000-4000-8000-00000000000b',
-   'erin@example.com',  'ارین', 'admin',  'active',  now());
+   'erin@example.com',  'ارین', 'owner',  'active',  now());
 
 insert into echo.call (id, org_id, owner_id, title, scope, status,
                        deleted_at, deleted_by, purge_after) values
@@ -113,7 +121,31 @@ insert into echo.agent_run (id, org_id, actor_id, call_id, kind, status, model, 
    'summarizer', 'ok', 'test/model', now()),
   ('14000000-0000-4000-8000-000000000004', '0a000000-0000-4000-8000-00000000000a',
    '02000000-0000-4000-8000-000000000002', 'c4000000-0000-4000-8000-000000000004',
-   'summarizer', 'ok', 'test/model', now());
+   'summarizer', 'ok', 'test/model', now()),
+  -- A run that died mid-stream, on the call whose purge window has expired.
+  -- Its message is a real partial answer, and the whole point of 0046 is that
+  -- it still says so after this run is purged.
+  ('15000000-0000-4000-8000-000000000005', '0a000000-0000-4000-8000-00000000000a',
+   '02000000-0000-4000-8000-000000000002', 'c4000000-0000-4000-8000-000000000004',
+   'assistant', 'error', 'test/model', now()),
+  ('14000000-0000-4000-8000-00000000000e', '0a000000-0000-4000-8000-00000000000a',
+   '02000000-0000-4000-8000-000000000002', 'c2000000-0000-4000-8000-000000000002',
+   'assistant', 'ok', 'test/model', now());
+
+-- Still 'running' when its call expired: the process died, or the row was
+-- abandoned. Its answer is partial too, and 0046's first version called it
+-- complete.
+--
+-- started_at is given here rather than corrected afterwards, because it is on
+-- the guard's immutable list — a run is advanced, never rewritten. The guard is
+-- right and the fixture has to build the state it wants rather than edit its
+-- way there. Left to default it would read as a run merely in flight, unable to
+-- exercise the state it exists for.
+insert into echo.agent_run
+  (id, org_id, actor_id, call_id, kind, status, model, started_at, finished_at) values
+  ('16000000-0000-4000-8000-000000000006', '0a000000-0000-4000-8000-00000000000a',
+   '02000000-0000-4000-8000-000000000002', 'c4000000-0000-4000-8000-000000000004',
+   'assistant', 'running', 'test/model', now() - interval '40 days', null);
 
 -- Webhooks: one live subscriber, one disabled, one in the other org. Created
 -- by alice, the admin — which is who the dispatcher runs as (M17).
@@ -141,7 +173,13 @@ insert into echo.agent_message
   (id, session_id, org_id, seq, role, content, agent_run_id) values
   ('53000000-0000-4000-8000-000000000003', '52000000-0000-4000-8000-000000000002',
    '0a000000-0000-4000-8000-00000000000a', 0, 'assistant', 'پاسخ درباره آن تماس',
-   '14000000-0000-4000-8000-000000000004');
+   '14000000-0000-4000-8000-000000000004'),
+  ('54000000-0000-4000-8000-000000000004', '52000000-0000-4000-8000-000000000002',
+   '0a000000-0000-4000-8000-00000000000a', 1, 'assistant', 'پاسخ نیمه‌تمام که قطع شد',
+   '15000000-0000-4000-8000-000000000005'),
+  ('55000000-0000-4000-8000-000000000005', '52000000-0000-4000-8000-000000000002',
+   '0a000000-0000-4000-8000-00000000000a', 2, 'assistant', 'پاسخی که هرگز تمام نشد',
+   '16000000-0000-4000-8000-000000000006');
 
 -- Gateway keys: one live, one revoked, one acting as the pending user.
 insert into echo.api_key (id, org_id, actor_id, name, token_sha256, token_prefix,

@@ -1,9 +1,19 @@
 # `db/` — the schema, the wall, and the tests that prove it
 
-Hand-written SQL in numbered migrations (M8). Drizzle, in `core/`, is for
-queries only — a generator cannot emit RLS policies, role grants or column
-privileges, and would silently drop the entire security layer while appearing
-to work.
+Hand-written SQL in numbered migrations (M8/M9, corrected). **There is no ORM
+and no query builder anywhere in this system** — `core/` queries with
+postgres.js, this package's runner with `pg`, and every statement is SQL
+somebody wrote.
+
+That is the security posture, not a preference. A schema generator cannot emit
+RLS policies, role grants or column privileges, so adopting one would drop the
+entire security layer while continuing to look like it worked — and the layer
+it drops is the only one that survives a bug in the layers above.
+
+*(M8/M9 named Drizzle until it was noticed that nothing had ever installed it.
+Corrected rather than adopted: the reason for hand-written SQL is better served
+without a builder in the way. If you are building from this file, do not
+install one.)*
 
 ## Running it
 
@@ -186,10 +196,18 @@ never touches them:
 |---|---|---|
 | org, active | `0d000000-0000-4000-8000-00000000000d` | |
 | org, **suspended** | `0d000000-0000-4000-8000-00000000000e` | |
-| admin, active | `0d000000-0000-4000-8000-000000000001` | admin-only paths: gateway keys, member management |
+| **owner**, active (`dev-admin@echo.local`) | `0d000000-0000-4000-8000-000000000001` | the org root: manages the admin tier, org-level irreversibles |
+| **admin**, active (`dev-orgadmin@echo.local`) | `0d000000-0000-4000-8000-000000000005` | a plain admin — without a second account, "only the owner may change an admin" cannot be exercised |
 | member, active | `0d000000-0000-4000-8000-000000000002` | the non-admin refusal, against real RLS rather than a fake |
 | member, **pending** | `0d000000-0000-4000-8000-000000000003` | authenticates, then refused for being unaccepted (M15) |
 | member, active in the **suspended** org | `0d000000-0000-4000-8000-000000000004` | an active person whose org is suspended |
+
+The owner's address says `dev-admin@` for a reason worth knowing rather than
+fixing: `0036`'s backfill promoted it (it was the dev org's first admin), its
+email cannot be renamed because the app_user guard makes email immutable —
+correctly, since the auth provider owns it — and by then 38 rows of other
+sessions' work already pointed at the account. **The address is historical; the
+role is the truth.**
 
 The last two earn their place by being unreachable otherwise. With no users at
 all, every token 401s and the M15 branch is never exercised end to end — an
@@ -449,7 +467,7 @@ search breaks.
 ## Facts the suite asserts
 
 Not a summary of intentions — these run. Last verified green against the dev
-project (Supabase, Postgres 17.6): **14 files, 222 checks**, 17 tables, every
+project (Supabase, Postgres 17.6): **17 files, 309 checks**, 21 tables, every
 table with RLS enabled and forced.
 
 - an org sees none of another org's calls, transcripts, members or search hits
@@ -460,6 +478,9 @@ table with RLS enabled and forced.
 - a member deletes their own call and an admin deletes any, both through
   `echo.soft_delete_call()`; setting `deleted_at` directly is refused, because
   a write that hides its own result cannot be an UPDATE
+- an org's own owner cannot suspend it — status is the vendor's, in both
+  directions, because suspension was a door that opened one way with the org
+  on the wrong side
 - an admin may delete any recording but cannot retitle or re-scope one they
   do not own
 - nobody changes their own role or status

@@ -77,6 +77,54 @@ select t.denied(
   $$select echo.vendor_accept_org('0a000000-0000-4000-8000-00000000000a')$$,
   'the vendor path refuses an established org — dan is accepted by his own admin, not by us');
 
+-- ===========================================================================
+-- An org's status is the vendor's, in both directions.
+--
+-- Measured before this landed: an owner could suspend their own org with one
+-- UPDATE and then could not undo it, because every predicate authorising the
+-- reverse requires the org to be active. One-way door, org on the wrong side.
+-- ===========================================================================
+reset role;
+set local role echo_app;
+select set_config('echo.actor_id', '0f000000-0000-4000-8000-00000000000f', true);
+
+select t.denied(
+  format($$update echo.org set status = 'suspended' where id = %L$$,
+         (select org_id from echo.app_user where id = '0f000000-0000-4000-8000-00000000000f')),
+  'an owner cannot suspend their own organization — that door only opened one way');
+
+select set_config('echo.actor_id', '01000000-0000-4000-8000-000000000001', true);
+select t.denied(
+  $$update echo.org set status = 'suspended'
+     where id = '0a000000-0000-4000-8000-00000000000a'$$,
+  'nor can an admin of an established org');
+
+select t.denied(
+  $$select echo.vendor_set_org_status('0a000000-0000-4000-8000-00000000000a','suspended')$$,
+  'and the application cannot reach the vendor operation at all');
+
+-- The vendor can, and can undo it — which is the whole point.
+reset role;
+set local role echo_vendor;
+select t.ok(
+  echo.vendor_set_org_status('0b000000-0000-4000-8000-00000000000b', 'suspended'),
+  'the vendor suspends an organization');
+select t.ok(
+  not echo.vendor_set_org_status('0b000000-0000-4000-8000-00000000000b', 'suspended'),
+  'suspending an already-suspended org is false, not an error');
+select t.ok(
+  echo.vendor_set_org_status('0b000000-0000-4000-8000-00000000000b', 'active'),
+  'and reactivates it — suspension is not a one-way street');
+select t.denied(
+  $$select echo.vendor_set_org_status('0c000000-0000-4000-8000-00000000000c','suspended')$$,
+  'an unknown organization is refused');
+
+reset role;
+select t.ok(
+  (select status_changed_at is not null from echo.org
+    where id = '0b000000-0000-4000-8000-00000000000b'),
+  'and the change is stamped, so "since when" has an answer');
+
 -- --- the ordinary path still works for a joiner ----------------------------
 reset role;
 set local role echo_app;
