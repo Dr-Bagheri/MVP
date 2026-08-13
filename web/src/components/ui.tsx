@@ -12,7 +12,8 @@ export function Card({
   children: ReactNode;
   className?: string;
 }) {
-  return <div className={`card p-5 ${className}`}>{children}</div>;
+  // padding lives in `.card` now (density pass) — don't re-apply it here
+  return <div className={`card ${className}`}>{children}</div>;
 }
 
 export function PageHeader({

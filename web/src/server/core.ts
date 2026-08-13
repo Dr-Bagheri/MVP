@@ -14,11 +14,34 @@ const CORE_URL = process.env.CORE_API_URL ?? "http://127.0.0.1:8080";
 /** What core/'s auth layer can refuse with, mapped to HTTP for the client. */
 export type CoreErrorKind =
   | "unauthenticated"
+  | "no_token"
+  | "bad_signature"
+  | "unknown_actor"
+  | "bad_key"
   | "pending"
   | "suspended"
   | "forbidden"
   | "not_found"
   | "upstream";
+
+/**
+ * The 401 kinds core/ declares. Same status and same `error` string as
+ * before — only `kind` is new — so nothing keying off the old shape breaks.
+ *
+ * These are four different facts that used to be one:
+ * - `no_token`       nothing presented.
+ * - `bad_signature`  the token did not verify — **the trust roots differ**.
+ *   This is the one that says "core/ is on the smoke secret while Supabase
+ *   signs with the project key" instead of sending whoever is debugging into
+ *   the auth layer, which is the component least likely to be wrong.
+ * - `unknown_actor`  verified, real person, no `app_user` row — since
+ *   `/v1/signup` exists this means **has not registered yet**, not "the seed
+ *   data is broken".
+ * - `bad_key`        an M17 gateway key that did not resolve. Deliberately
+ *   ONE kind for unknown / revoked / expired / disabled-owner: splitting it
+ *   would make the endpoint an oracle for which keys exist.
+ */
+const DECLARED_401: readonly string[] = ["no_token", "bad_signature", "unknown_actor", "bad_key"];
 
 /**
  * The 403 kinds core/ declares. All three are the same HTTP status and mean
@@ -83,7 +106,10 @@ export async function coreFetch<T>(path: string, init: CoreFetchInit = {}): Prom
   }
 
   if (response.status === 401) {
-    throw new CoreError("unauthenticated", 401, "token rejected");
+    // read the declared kind rather than flattening four facts into one
+    const body = await safeBody(response);
+    const declared = DECLARED_401.includes(body.kind ?? "") ? (body.kind as CoreErrorKind) : null;
+    throw new CoreError(declared ?? "unauthenticated", 401, body.error ?? "token rejected");
   }
   if (response.status === 403) {
     /*

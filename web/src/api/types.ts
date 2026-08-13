@@ -96,22 +96,63 @@ export interface CallPart {
 
 export type TranscriptTiming = "full" | "mixed" | "none";
 
+/**
+ * Mirrors `GET /v1/calls` as it actually serves — verified against the live
+ * api, not against a spec. Where the two disagreed the WIRE won (rule 10:
+ * the producer names the shape), which is why this says `started_at` and
+ * `duration_ms` rather than the `created_at`/`duration_seconds` this file
+ * used to invent.
+ *
+ * Fields below the divider are NOT on the wire yet. They are optional rather
+ * than deleted because the features reading them are shipped and working:
+ * "erase the mocks" removes invented DATA where a wire exists, it does not
+ * delete a feature because its endpoint isn't built. Each is in milestone
+ * 4's named backend package; `?` here is the honest statement that a live
+ * response will not carry them.
+ */
 export interface Call {
   id: string;
-  org_id: string;
   owner_id: string;
-  owner_name: string;
   title: string;
   scope: CallScope;
   status: CallStatus;
-  duration_seconds: number;
-  created_at: string;
-  archived: boolean;
-  /** soft delete (M11): visible to admins with a 30-day purge window */
+  /** language tag; "fa" on the dev rows */
+  language: string;
+  /** wire name — NOT `created_at` */
+  started_at: string;
+  /**
+   * Milliseconds, and **null on live rows today**. Suspected to be declared
+   * and served but never written (the worker maintains per-part durations;
+   * something may need to aggregate the call total) — Backend 1 is checking
+   * with Backend 2 rather than assuming. Treat null as "unknown", never 0.
+   */
+  duration_ms: number | null;
+
+  /** where the call came from; "web" on dev rows */
+  source: string;
+  /**
+   * TIMESTAMPS, not booleans — the wire says *when*, which carries strictly
+   * more than *whether*. These were never missing from the database; the api
+   * shipped a narrower SELECT, so the archive/delete/restore/purge UI was
+   * built against real columns the wire simply wasn't sending.
+   */
+  archived_at: string | null;
+  /** soft delete (M11): visible to admins with a purge window */
   deleted_at: string | null;
-  parts: CallPart[];
-  /** pointer to the current summary version */
-  current_summary_version: number | null;
+  purge_after: string | null;
+  /** pointer to the current summary — an ID, not a version number */
+  current_summary_id: string | null;
+
+  // ---- still not on the wire (milestone-4 backend package) ----
+  /**
+   * Deliberately absent and staying that way: denormalising a display name
+   * onto every call row goes stale the moment someone renames themselves,
+   * with no invalidation path. Resolve `owner_id` against the member list —
+   * same reasoning as the gateway keys' acts-as.
+   */
+  owner_name?: string;
+  org_id?: string;
+  parts?: CallPart[];
   /**
    * M6/M20 provenance for the WHOLE call — "full" = every part came off the
    * primary lane, "mixed" = some part fell back, "none" = none has word
@@ -155,8 +196,13 @@ export interface TranscriptSegment {
   part_id: string | null;
   start_ms: number;
   end_ms: number;
-  /** channel-derived for two-channel audio, diarized otherwise */
-  speaker_id: string;
+  /**
+   * Channel-derived for two-channel audio, diarized otherwise — and **null
+   * on the wire** when neither has attributed the segment yet. Verified on a
+   * live row. A roster lookup must render "unattributed" for null rather
+   * than passing it through and printing `undefined`.
+   */
+  speaker_id: string | null;
   channel: number | null;
   text: string;
   /**
@@ -324,12 +370,50 @@ export interface AgentToolCall {
   ms?: number;
 }
 
-/** A write the agent inferred: proposed, never applied silently (SPEC/M4). */
+/**
+ * A write the agent inferred: proposed, never applied silently (SPEC/M4).
+ *
+ * **Nothing has happened when this arrives.** The tool result the model sees
+ * says `awaiting_confirmation`, so the assistant cannot claim it corrected
+ * anything — and neither may the UI. Wording like "corrected" before a
+ * confirm would be a lie the model itself isn't telling.
+ */
 export interface AgentProposal {
   id: string;
-  kind: "correct_transcript" | "edit_speakers" | "replace_summary";
+  /** closed set of three; an unknown kind renders as data, never a crash */
+  kind: "correct_transcript" | "edit_speaker_roster" | "replace_summary";
+  /** a Persian sentence written for a human — the card's headline */
   summary: string;
-  payload: unknown;
+  payload: AgentProposalPayload;
+}
+
+/**
+ * `before`/`after` are a MATCHED PAIR with identical keys per kind —
+ * `{text}` for `correct_transcript`, `{label}` for `edit_speaker_roster`,
+ * `{version, body}` for `replace_summary`. Same shape on both sides is
+ * deliberate: a difference in shape is one the reader has to reconcile
+ * before they can compare the values.
+ *
+ * **These are DISPLAY values and may be excerpted.** The authoritative
+ * payload stays server-side and is re-read at confirm, so a 600-character
+ * correction shows truncated in the card and applies in full. Never send
+ * `after` back as the thing to write — that would silently truncate the
+ * change to whatever the card had room for.
+ */
+export interface AgentProposalPayload {
+  call_id: string;
+  /**
+   * The CURRENT value. Absent only for a first-ever summary, which has
+   * nothing to replace. A card rendered without it is asking for consent,
+   * not a decision.
+   */
+  before?: unknown;
+  /**
+   * The proposed value. **Never absent** — an absent `after` would mean "no
+   * change proposed", which is not a state a proposal can be in.
+   */
+  after: unknown;
+  [key: string]: unknown;
 }
 
 /**
@@ -344,7 +428,13 @@ export interface AgentProposal {
 export type AgentEvent =
   | { type: "text_delta"; delta: string }
   | { type: "tool_call"; id: string; name: string; label: string; state: ToolCallState; ms?: number }
-  | { type: "proposal"; id: string; kind: AgentProposal["kind"]; summary: string; payload: unknown }
+  | {
+      type: "proposal";
+      id: string;
+      kind: AgentProposal["kind"];
+      summary: string;
+      payload: AgentProposalPayload;
+    }
   | { type: "done"; runId: string; failed: boolean; error?: string };
 
 export interface AgentMessage {
@@ -353,6 +443,13 @@ export interface AgentMessage {
   content: string;
   tool_calls: AgentToolCall[];
   proposal: AgentProposal | null;
+  /**
+   * The `runId` from this message's `done` event. Confirming or rejecting a
+   * proposal REQUIRES it, so the reducer must keep it with the message — it
+   * is the only state the card carries beyond the proposal itself, and the
+   * proposal arrives mid-stream, before the id exists.
+   */
+  run_id?: string;
   /** provenance for every derived artifact */
   model_id?: string;
   streaming?: boolean;
@@ -439,6 +536,16 @@ export interface GatewayKey {
   /** revoked, never deleted — the record of what existed survives */
   revoked_at: string | null;
   created_at: string;
+  /**
+   * db/0022, M17 amendment. Default false, admin-granted, and **fixed at
+   * mint**: there is no PATCH on a key and core/'s repo exposes only
+   * create/list/revoke. An integration deployed with a read-only key must not
+   * silently gain the ability to spend a model budget because someone flipped
+   * a toggle, and the audit should read "one credential ended, a different
+   * one began" rather than leaving a key whose meaning depends on when you
+   * looked. So this is a decision at creation, never a switch in a list.
+   */
+  allow_assistant: boolean;
 }
 
 /**

@@ -23,6 +23,20 @@ export default function AdminPage() {
   const [models, setModels] = useState<AdminModelRow[]>([]);
   const [org, setOrg] = useState<Org | null>(null);
   const [deleted, setDeleted] = useState<Call[]>([]);
+  const [me, setMe] = useState<User | null>(null);
+
+  /*
+   * An AFFORDANCE gate, never the wall — same posture as `Skill.editable` and
+   * the connectors panel. RLS and core/'s requireAdmin remain the authority;
+   * this only decides what to ASK FOR.
+   *
+   * It matters at the swap: this screen had no role check at all, and the nav
+   * links to it unconditionally. That was invisible in Phase A only because
+   * the fixture `me` is an admin — so "admin-only" was a property of the
+   * FIXTURES, not of the app. Against the real engine a member clicking
+   * «مدیریت» would have got a screen whose every request 403s.
+   */
+  const isAdmin = me?.role === "admin";
 
   async function refresh() {
     setMembers(await api.members());
@@ -32,11 +46,35 @@ export default function AdminPage() {
   }
 
   useEffect(() => {
-    void refresh();
+    void api.me().then(setMe);
   }, []);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    void refresh();
+  }, [isAdmin]);
 
   const pending = members.filter((m) => m.status === "pending");
   const active = members.filter((m) => m.status !== "pending");
+
+  /*
+   * Not an empty admin screen. A member who saw empty member/model/deleted
+   * lists would read it as "this org has nothing" — a claim about the ORG
+   * built out of a fact about their own PERMISSIONS. Saying so plainly is
+   * also why nothing is requested above: four requests that will all be
+   * refused teach the user nothing and fill core/'s logs with noise.
+   */
+  if (me !== null && !isAdmin) {
+    return (
+      <AppShell page={t("title")}>
+        <PageHeader title={t("title")} />
+        <Card>
+          <h2 className="h-section">{t("adminOnly")}</h2>
+          <p className="mt-1 text-sm leading-7 text-fg-muted">{t("adminOnlyNote")}</p>
+        </Card>
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell page={t("title")}>

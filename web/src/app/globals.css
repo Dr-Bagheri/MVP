@@ -27,12 +27,29 @@
     --fg-muted: 71 85 105;
     --primary: 15 23 42;
     --on-primary: 255 255 255;
+    --secondary: 51 65 85;
+    --muted: 232 236 241;
     --accent: 3 105 161;
+    /* what may sit ON accent. White is fine on the light accent (5.5:1); in
+       dark the accent is a bright sky and white collapses to 2.14:1, so the
+       pair needs its own token rather than an assumption. */
+    --on-accent: 255 255 255;
     --accent-soft: 224 242 254;
+    /* navy sidebar: its own surface + on-surface pair, so the shell reads as
+       one deliberate block rather than a lighter page edge */
+    --sidebar: 15 23 42;
+    --sidebar-fg: 255 255 255;
     --success: 21 128 61;
     --warning: 180 83 9;
     --danger: 220 38 38;
-    --info: 2 132 199;
+    /*
+     * Darkened from #0284C7, which measured 4.1:1 on white and 3.74:1 on
+     * surface-2 — under AA, and it carries every in-flight StatusChip and the
+     * capture timer, i.e. the states a user stares at while waiting. Now
+     * ~7.4:1 on white and ~6.8:1 on surface-2. Dark's --info was already fine
+     * and is unchanged.
+     */
+    --info: 7 89 133;
   }
 
   [data-theme="dark"] {
@@ -44,8 +61,19 @@
     --fg-muted: 148 163 184;
     --primary: 226 232 240;
     --on-primary: 15 23 42;
+    --secondary: 148 163 184;
+    --muted: 30 41 59;
     --accent: 56 189 248;
+    /* near-black on the bright dark accent: ~11:1, where white was 2.14:1 */
+    --on-accent: 15 23 42;
     --accent-soft: 12 74 110;
+    /* In dark the page is already near-black, so the sidebar steps UP to the
+       surface navy instead of down — matching the page exactly (2 6 23) made
+       the block dissolve into the background, which is the opposite of the
+       presence this pass is for. Light goes darker than the page, dark goes
+       lighter; both keep the shell reading as one deliberate block. */
+    --sidebar: 15 23 42;
+    --sidebar-fg: 241 245 249;
     --success: 74 222 128;
     --warning: 251 191 36;
     --danger: 248 113 113;
@@ -70,10 +98,19 @@
      */
   }
 
-  /* Focus is never removed — only restyled (accessibility rule #1). */
+  /*
+   * Focus is never removed — only restyled (accessibility rule #1).
+   *
+   * `--tw-ring-offset-color`, NOT `ring-offset-color`: the latter is a
+   * Tailwind utility NAME written where a CSS property goes, so the browser
+   * dropped the whole declaration and nothing ever set the offset. It
+   * defaulted to white, which is invisible on a light page and a bright halo
+   * on the near-black dark one — inert since the day it was written, and
+   * unnoticeable in the theme it was written in.
+   */
   :focus-visible {
     @apply outline-none ring-2 ring-accent ring-offset-2;
-    ring-offset-color: rgb(var(--bg));
+    --tw-ring-offset-color: rgb(var(--bg));
   }
 
   /* Latin fragments inside Persian text keep their own direction. */
@@ -81,38 +118,116 @@
     direction: ltr;
     unicode-bidi: isolate;
   }
+
+  /* Motion conveys state, never decoration — and never at the cost of someone
+     who asked for less of it. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
 }
 
 @layer components {
+  /*
+   * Card discipline: the border is always visible so a card never floats
+   * white-on-white, and the shadow is a HOVER affordance rather than ambient
+   * decoration. Padding is one notch tighter than before — this is a working
+   * tool, and dashboard density is the point (verdict item 4).
+   */
   .card {
-    @apply rounded-lg border border-border bg-surface shadow-card;
+    @apply rounded-lg border border-border bg-surface p-4 transition-shadow duration-200
+           hover:shadow-card;
+  }
+
+  /*
+   * ≥44px HIT AREA below md, without inflating the visual.
+   *
+   * Dashboard density and thumb-sized targets pull in opposite directions, and
+   * the usual compromise — grow the control — loses the density the verdict
+   * asked for. This grows only the *tap* area, via a centred pseudo-element,
+   * so a 24px switch stays 24px and still catches a 44px thumb.
+   *
+   * `.btn` used to assert `min-h-[44px]` unconditionally, which made the claim
+   * true for buttons and left every other control (scope toggles, revoke,
+   * the play button) below the line while looking compliant. The claim now
+   * lives here, where anything can wear it.
+   *
+   * ⚠ DOES NOTHING ON REPLACED ELEMENTS. `<select>`, `<input type=checkbox>`
+   * and friends render no `::after`, so the class sits there looking
+   * satisfied while the target stays its visual size — the class present,
+   * the intent readable, and the thing itself unchanged. Verified: computed
+   * `content` is `none` on a `.tap` select.
+   *
+   * Substitutes, both in use in connectors/:
+   *   - select → grow it for real: `h-11 md:h-9`
+   *   - checkbox → put `.tap` on the wrapping `<label>`, which is not
+   *     replaced and is usually already the wide target, just short.
+   */
+  .tap {
+    @apply relative;
+  }
+  .tap::after {
+    content: "";
+    @apply absolute left-1/2 top-1/2 h-11 w-11 -translate-x-1/2 -translate-y-1/2;
+  }
+  @screen md {
+    .tap::after {
+      content: none;
+    }
   }
 
   .btn {
-    @apply inline-flex min-h-[44px] items-center justify-center gap-2 rounded-md px-4
-           text-sm font-medium transition-colors disabled:pointer-events-none
-           disabled:opacity-50;
+    @apply tap inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-2
+           rounded-md px-4 text-sm font-semibold transition-colors duration-150
+           disabled:pointer-events-none disabled:opacity-50;
   }
+  /* Primary action = navy. The accent stays for links and inline emphasis, so
+     "the main thing to press" and "a thing to read" never look alike. */
   .btn-primary {
-    @apply btn bg-accent text-white hover:brightness-110;
+    @apply btn bg-primary text-on-primary hover:bg-secondary active:bg-primary;
   }
   .btn-secondary {
-    @apply btn border border-border bg-surface text-fg hover:bg-surface-2;
+    @apply btn border border-border bg-surface text-fg hover:border-secondary hover:bg-muted
+           active:bg-surface-2;
   }
   .btn-ghost {
-    @apply btn text-fg-muted hover:bg-surface-2 hover:text-fg;
+    @apply btn text-fg-muted hover:bg-muted hover:text-fg active:bg-surface-2;
   }
   .btn-danger {
-    @apply btn bg-danger text-white hover:brightness-110;
+    @apply btn bg-danger text-white hover:brightness-110 active:brightness-95;
   }
 
   .input {
     @apply min-h-[44px] w-full rounded-md border border-border bg-surface px-3
-           text-sm text-fg placeholder:text-fg-muted focus:border-accent;
+           text-sm text-fg transition-colors duration-150 placeholder:text-fg-muted
+           focus:border-accent;
   }
 
   .chip {
     @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium;
+  }
+
+  /* Weight hierarchy carries the headings — Vazirmatn stays for BOTH locales
+     (ruled), so hierarchy comes from weight and size, never a second family. */
+  .h-section {
+    @apply text-sm font-semibold text-fg;
+  }
+  .h-page {
+    @apply text-xl font-bold tracking-tight text-fg;
+  }
+
+  /* Anything clickable says so. */
+  a,
+  button:not(:disabled),
+  select,
+  [role="button"] {
+    @apply cursor-pointer;
   }
 
   .table-head {

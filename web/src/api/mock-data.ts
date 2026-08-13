@@ -1,10 +1,12 @@
-﻿import type {
+import type {
   AdminModelRow,
   AgentRun,
   Call,
   Connector,
   DirectoryPerson,
-  GatewayConfig,
+  GatewayDelivery,
+  GatewayKey,
+  GatewayWebhook,
   Org,
   Skill,
   Speaker,
@@ -162,13 +164,16 @@ export const CALLS: Call[] = [
     owner_name: ME.display_name,
     title: "مذاکرهٔ تمدید قرارداد — شرکت پیشرو",
     scope: "org",
+    language: "fa",
+    source: "web",
     status: "ready",
-    duration_seconds: 2940,
-    created_at: iso(day),
-    archived: false,
+    duration_ms: 2940000,
+    started_at: iso(day),
+    archived_at: null,
     deleted_at: null,
+    purge_after: null,
     parts: CALL_1_PARTS,
-    current_summary_version: 2,
+    current_summary_id: "sum-2",
     transcript_timing: "full",
   },
   {
@@ -178,11 +183,14 @@ export const CALLS: Call[] = [
     owner_name: "امیر رضایی",
     title: "تماس پشتیبانی — مشکل یکپارچه‌سازی",
     scope: "private",
+    language: "fa",
+    source: "web",
     status: "summarizing",
-    duration_seconds: 1320,
-    created_at: iso(3 * 3_600_000),
-    archived: false,
+    duration_ms: 1320000,
+    started_at: iso(3 * 3_600_000),
+    archived_at: null,
     deleted_at: null,
+    purge_after: null,
     parts: [
       {
         id: "p-3",
@@ -193,7 +201,7 @@ export const CALLS: Call[] = [
         status: "diarized",
       },
     ],
-    current_summary_version: null,
+    current_summary_id: null,
     // status "summarizing": the transcript is DONE, only the summary is
     // pending — so timing is known and not null.
     transcript_timing: "full",
@@ -205,11 +213,14 @@ export const CALLS: Call[] = [
     owner_name: ME.display_name,
     title: "جلسهٔ هم‌ترازی محصول",
     scope: "private",
+    language: "fa",
+    source: "web",
     status: "ready",
-    duration_seconds: 2100,
-    created_at: iso(5 * day),
-    archived: true,
+    duration_ms: 2100000,
+    started_at: iso(5 * day),
+    archived_at: iso(9 * day),
     deleted_at: null,
+    purge_after: null,
     /**
      * A genuinely HALF-SEEKABLE call (M20): its two parts went down
      * different lanes. Part 0 is primary — full word timing, click-a-word.
@@ -241,7 +252,7 @@ export const CALLS: Call[] = [
         status: "diarized",
       },
     ],
-    current_summary_version: 1,
+    current_summary_id: "sum-1",
     transcript_timing: "mixed",
   },
   {
@@ -251,11 +262,14 @@ export const CALLS: Call[] = [
     owner_name: "امیر رضایی",
     title: "تماس اکتشافی — مشتری بانکی",
     scope: "private",
+    language: "fa",
+    source: "web",
     status: "failed",
-    duration_seconds: 420,
-    created_at: iso(8 * day),
-    archived: false,
+    duration_ms: 420000,
+    started_at: iso(8 * day),
+    archived_at: null,
     deleted_at: null,
+    purge_after: null,
     parts: [
       {
         id: "p-5",
@@ -266,7 +280,7 @@ export const CALLS: Call[] = [
         status: "failed",
       },
     ],
-    current_summary_version: null,
+    current_summary_id: null,
     // failed before any transcript existed — null, NOT "none". "none" would
     // assert a real prose-only transcript; there is no transcript at all.
     transcript_timing: null,
@@ -278,13 +292,16 @@ export const CALLS: Call[] = [
     owner_name: "امیر رضایی",
     title: "تماس آزمایشی (حذف‌شده)",
     scope: "private",
+    language: "fa",
+    source: "web",
     status: "ready",
-    duration_seconds: 180,
-    created_at: iso(12 * day),
-    archived: false,
+    duration_ms: 180000,
+    started_at: iso(12 * day),
+    archived_at: null,
     deleted_at: iso(4 * day),
+    purge_after: null,
     parts: [],
-    current_summary_version: null,
+    current_summary_id: null,
     transcript_timing: null,
   },
   {
@@ -294,6 +311,8 @@ export const CALLS: Call[] = [
     owner_name: ME.display_name,
     title: "جلسهٔ فروش — در حال پردازش",
     scope: "org",
+    language: "fa",
+    source: "web",
     /**
      * MID-TRANSCRIPTION showing the TRANSIENT "none" — the value the
      * suppression gate exists to hide, and the only fixture that can exercise
@@ -318,10 +337,11 @@ export const CALLS: Call[] = [
      * member of `echo.call_status` at all.
      */
     status: "processing",
-    duration_seconds: 2400,
-    created_at: iso(2 * 3_600_000),
-    archived: false,
+    duration_ms: 2400000,
+    started_at: iso(2 * 3_600_000),
+    archived_at: null,
     deleted_at: null,
+    purge_after: null,
     parts: [
       {
         id: "p-6",
@@ -343,7 +363,7 @@ export const CALLS: Call[] = [
         status: "transcoded",
       },
     ],
-    current_summary_version: null,
+    current_summary_id: null,
     transcript_timing: "none",
   },
 ];
@@ -643,7 +663,7 @@ export const TRANSCRIPT: Record<string, TranscriptSegment[]> = Object.fromEntrie
         seq: index,
         // the server knows part membership; the fixture resolves the same id
         // rather than leaving consumers to infer it from timestamps
-        part_id: CALLS.find((call) => call.id === callId)?.parts[part_index]?.id ?? null,
+        part_id: CALLS.find((call) => call.id === callId)?.parts?.[part_index]?.id ?? null,
         words,
       };
     }),
@@ -796,20 +816,180 @@ export const CONNECTORS: Connector[] = [
   },
 ];
 
-export const GATEWAY: GatewayConfig = {
-  /*
-   * Unmistakably fake ON SIGHT. The earlier value was realistic down to the
-   * `_live_` prefix and the entropy, which costs more than it buys: secret
-   * scanners fire on every push, and anyone grepping the repo for a leaked
-   * key has to stop and prove this one isn't. The screen masks to
-   * `slice(0, 12)`, so a fixture only owes us the right shape-class —
-   * realism is not part of the job. Mock secrets look fake unless a test
-   * asserts on format, and then they get labeled.
-   */
-  api_key: "echo_sk_test_FAKE_PLACEHOLDER_000000",
-  webhook_url: "https://api.example.com/hooks/echo",
-  docs_url: "/connectors/gateway/docs",
-};
+/*
+ * Gateway fixtures (M17). Every secret here is unmistakably fake ON SIGHT: a
+ * realistic-looking key costs more than it buys, because secret scanners fire
+ * on every push and anyone grepping for a leak has to stop and prove this one
+ * isn't. A fixture owes us the right shape-class, not realism.
+ *
+ * The list carries only `token_prefix` — never a full token — because that is
+ * all core/ can return. The token exists exactly once, in the create
+ * response, and there is no reveal endpoint to fall back on.
+ */
+export const GATEWAY_KEYS: GatewayKey[] = [
+  {
+    id: "gk-1",
+    name: "CRM sync",
+    token_prefix: "echo_sk_test",
+    actor_id: ME.id,
+    last_used_at: iso(2 * 3_600_000),
+    expires_at: null,
+    revoked_at: null,
+    created_at: iso(21 * day),
+    allow_assistant: false,
+  },
+  {
+    id: "gk-2",
+    name: "Weekly digest bot",
+    token_prefix: "echo_sk_test",
+    actor_id: "u-2",
+    // never used — a real state, and distinct from "used long ago"
+    last_used_at: null,
+    expires_at: null,
+    revoked_at: null,
+    created_at: iso(4 * day),
+    // the only assistant-capable key: this is the one that spends tokens
+    allow_assistant: true,
+  },
+  {
+    /*
+     * Actor is DISABLED (u-5, رضا احمدی) while the key itself is un-revoked.
+     * This is the row the acts-as design exists for: an admin removing an
+     * employee needs to see which integrations die with them. Without it the
+     * screen's whole reason for being is unreachable, and a branch nobody can
+     * reach is a branch that ships broken (rules 9 and 12).
+     *
+     * Position matters: core/ orders `revoked_at nulls first, created_at
+     * desc`, so an un-revoked key sits above gk-3 regardless of age. The
+     * screen deliberately does not re-sort, so the fixture must arrive in the
+     * order the server would send.
+     */
+    id: "gk-4",
+    name: "Reza's exporter",
+    token_prefix: "echo_sk_test",
+    actor_id: "u-5",
+    last_used_at: iso(30 * day),
+    expires_at: null,
+    revoked_at: null,
+    created_at: iso(50 * day),
+    allow_assistant: false,
+  },
+  {
+    /* expires_at in the PAST — makes the `expired` chip reachable, and it is
+       a different fact from revoked: nobody withdrew this key, it simply ran
+       out. */
+    id: "gk-5",
+    name: "Quarterly audit export",
+    token_prefix: "echo_sk_test",
+    actor_id: ME.id,
+    last_used_at: iso(35 * day),
+    expires_at: iso(7 * day),
+    revoked_at: null,
+    created_at: iso(95 * day),
+    allow_assistant: false,
+  },
+  {
+    id: "gk-3",
+    name: "Old prototype",
+    token_prefix: "echo_sk_test",
+    actor_id: "u-2",
+    last_used_at: iso(40 * day),
+    expires_at: null,
+    // revoked, NOT deleted — the record of what existed survives
+    revoked_at: iso(9 * day),
+    created_at: iso(60 * day),
+    allow_assistant: false,
+  },
+];
+
+export const GATEWAY_WEBHOOKS: GatewayWebhook[] = [
+  {
+    id: "wh-1",
+    url: "https://api.example.com/hooks/echo",
+    events: ["call.transcribed", "call.summarized"],
+    enabled: true,
+    created_at: iso(14 * day),
+  },
+  {
+    id: "wh-2",
+    url: "https://staging.example.com/hooks/echo",
+    events: ["call.failed"],
+    enabled: false,
+    created_at: iso(3 * day),
+  },
+];
+
+export const GATEWAY_DELIVERIES: GatewayDelivery[] = [
+  {
+    id: "dl-1",
+    webhook_id: "wh-1",
+    event: "call.summarized",
+    attempts: 1,
+    response_code: 200,
+    delivered_at: iso(2 * 3_600_000),
+    failed_at: null,
+    next_attempt_at: null,
+    created_at: iso(2 * 3_600_000),
+  },
+  {
+    // failing and still retrying — the state the log exists to make visible
+    id: "dl-2",
+    webhook_id: "wh-1",
+    event: "call.transcribed",
+    attempts: 3,
+    response_code: 503,
+    delivered_at: null,
+    failed_at: iso(30 * 60_000),
+    next_attempt_at: iso(-15 * 60_000),
+    created_at: iso(90 * 60_000),
+  },
+  {
+    /*
+     * NOTHING ANSWERED. `response_code: null` is not "no data" — it means no
+     * HTTP response ever came back at all (DNS failure, connection refused,
+     * timeout, blocked address). It is the most informative thing that column
+     * ever says, and it renders as "no response" rather than an em-dash,
+     * which would read as absence. Still retrying.
+     */
+    id: "dl-3",
+    webhook_id: "wh-2",
+    event: "call.failed",
+    attempts: 2,
+    response_code: null,
+    delivered_at: null,
+    failed_at: iso(20 * 60_000),
+    next_attempt_at: iso(-40 * 60_000),
+    created_at: iso(45 * 60_000),
+  },
+  {
+    /* TERMINAL failure — retries exhausted. `next_attempt_at: null` is what
+       separates "gave up" from "still trying"; without it the UI cannot tell
+       a fourth attempt from a final one. */
+    id: "dl-4",
+    webhook_id: "wh-1",
+    event: "call.created",
+    attempts: 6,
+    response_code: 500,
+    delivered_at: null,
+    failed_at: iso(6 * 3_600_000),
+    next_attempt_at: null,
+    created_at: iso(7 * 3_600_000),
+  },
+  {
+    /* QUEUED — accepted, not yet attempted. All three timestamps null and
+       zero attempts, which is a different state from "failed with no
+       response" even though both show no result. */
+    id: "dl-5",
+    webhook_id: "wh-1",
+    event: "call.summarized",
+    attempts: 0,
+    response_code: null,
+    delivered_at: null,
+    failed_at: null,
+    next_attempt_at: null,
+    created_at: iso(4 * 60_000),
+  },
+];
 
 export const AGENT_RUNS: AgentRun[] = [
   {

@@ -2,8 +2,14 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { useTranslations, useLocale } from "next-intl";
-import { usePathname } from "next/navigation";
-import { Link } from "@/i18n/routing";
+/*
+ * usePathname from `@/i18n/routing`, NOT from next/navigation: next-intl's
+ * version returns the path WITHOUT the locale prefix. next/navigation returns
+ * "/fa/calls", so `startsWith("/calls")` was false for every item and no nav
+ * link has ever rendered as active. Invisible until the navy sidebar gave the
+ * active state something to show.
+ */
+import { Link, usePathname } from "@/i18n/routing";
 import { AssistantPane } from "./AssistantPane";
 
 const NAV = [
@@ -27,13 +33,34 @@ export function AppShell({
   const t = useTranslations("nav");
   const locale = useLocale();
   const pathname = usePathname();
-  const [assistantOpen, setAssistantOpen] = useState(true);
+  /*
+   * Starts CLOSED and opens itself only from md up.
+   *
+   * Making the pane an overlay below md fixed a 40px `main` — and replaced it
+   * with something worse: `assistantOpen` defaulted to true, so the app
+   * loaded onto an opaque full-screen assistant with the product behind it.
+   * Every content control was unreachable until the user found «بستن».
+   * Every measurement improved (main 40px → 375px, still no overflow) while
+   * the thing the measurements stood in for — can a user reach the content —
+   * went from barely to not at all.
+   *
+   * Deliberately narrow: this only stops the pane opening ON TOP of content
+   * by default. It does NOT decide drawer vs sheet vs docked, which is the
+   * mobile-nav proposal's call and is on hold.
+   *
+   * `false` initially rather than a viewport read during render: the server
+   * has no viewport, and guessing open would flash the blocking pane on a
+   * phone before the correction.
+   */
+  const [assistantOpen, setAssistantOpen] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("light");
 
   useEffect(() => {
     const stored = (localStorage.getItem("echo-theme") as "light" | "dark") ?? "light";
     setTheme(stored);
     document.documentElement.dataset.theme = stored;
+    // docked beside the content from md up; below that it would cover it
+    setAssistantOpen(window.matchMedia("(min-width: 768px)").matches);
   }, []);
 
   function toggleTheme() {
@@ -46,12 +73,20 @@ export function AppShell({
   return (
     <div className="flex h-dvh bg-bg">
       {/* sidebar */}
-      <nav className="hidden w-56 shrink-0 flex-col gap-1 border-e border-border bg-surface p-3 md:flex">
-        <Link href="/calls" className="mb-4 flex items-center gap-2 px-2 py-1">
-          <span className="grid h-8 w-8 place-items-center rounded-md bg-accent text-sm font-bold text-white">
+      {/*
+        Navy sidebar — the single highest-presence change in the verdict.
+        It needs no RTL special-casing: `border-e` and the flex order resolve
+        from `dir`, so the block sits right in fa and left in en on its own.
+        Link colour is white/70 rather than a muted grey token because those
+        tokens are tuned for the light page surface and would fail contrast
+        on navy.
+      */}
+      <nav className="hidden w-56 shrink-0 flex-col gap-0.5 border-e border-border bg-sidebar p-3 md:flex">
+        <Link href="/calls" className="mb-5 flex items-center gap-2 px-2 py-1">
+          <span className="grid h-8 w-8 place-items-center rounded-md bg-accent text-sm font-bold text-on-accent">
             E
           </span>
-          <span className="text-lg font-bold text-fg">
+          <span className="text-lg font-bold text-sidebar-fg">
             {locale === "fa" ? "اکو" : "Echo"}
           </span>
         </Link>
@@ -61,10 +96,11 @@ export function AppShell({
             <Link
               key={item.href}
               href={item.href}
-              className={`rounded-md px-3 py-2 text-sm transition-colors ${
+              aria-current={active ? "page" : undefined}
+              className={`rounded-md px-3 py-2 text-sm transition-colors duration-150 ${
                 active
-                  ? "bg-accent-soft font-medium text-accent"
-                  : "text-fg-muted hover:bg-surface-2 hover:text-fg"
+                  ? "bg-white/10 font-semibold text-sidebar-fg"
+                  : "text-sidebar-fg/70 hover:bg-white/5 hover:text-sidebar-fg"
               }`}
             >
               {t(item.key)}
@@ -74,12 +110,12 @@ export function AppShell({
         <div className="flex-1" />
         <Link
           href="/profile"
-          className="rounded-md px-3 py-2 text-sm text-fg-muted hover:bg-surface-2 hover:text-fg"
+          className="rounded-md px-3 py-2 text-sm text-sidebar-fg/70 transition-colors duration-150 hover:bg-white/5 hover:text-sidebar-fg"
         >
           {t("profile")}
         </Link>
         <button
-          className="rounded-md px-3 py-2 text-start text-sm text-fg-muted hover:bg-surface-2 hover:text-fg"
+          className="rounded-md px-3 py-2 text-start text-sm text-sidebar-fg/70 transition-colors duration-150 hover:bg-white/5 hover:text-sidebar-fg"
           onClick={toggleTheme}
         >
           {t("theme")}: {theme === "light" ? "☀" : "☾"}
@@ -90,7 +126,7 @@ export function AppShell({
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center justify-between gap-3 border-b border-border bg-surface px-5 py-3">
           <div className="flex items-center gap-2 md:hidden">
-            <span className="grid h-7 w-7 place-items-center rounded-md bg-accent text-xs font-bold text-white">
+            <span className="grid h-7 w-7 place-items-center rounded-md bg-accent text-xs font-bold text-on-accent">
               E
             </span>
           </div>

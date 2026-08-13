@@ -27,6 +27,31 @@ this side and never contradicted because the fixtures were invented to match.
 Adding a label here does not create a state. If a status needs a label, it
 comes from core/'s enum first.
 
+## Never write source files with PowerShell — and the hazard has TWO modes
+
+The rule is usually written up as an encoding-destruction danger: a PS 5.1
+round-trip through the ANSI/cp1252 default mangles Persian. True, and visible —
+you see mojibake immediately.
+
+**The second mode is invisible and did real damage.** `Set-Content`/`Out-File
+-Encoding utf8` in Windows PowerShell 5.1 emits UTF-8 **with a BOM** (`EF BB
+BF`). Persian survives perfectly. ZWNJ survives. Nothing looks wrong. But a
+strict parser chokes on those three bytes:
+
+- `web/package.json` acquired a BOM this way and **took the dev server down for
+  every session** — webpack could not parse the manifest, so every route 500'd
+  with `Module not found: SyntaxError: … (directory description file)`.
+- `src/api/mock-data.ts` carried the same BOM. TypeScript and esbuild tolerate
+  a leading BOM, so typecheck stayed green and it went unnoticed.
+
+So: "the Persian looks fine" is **not** evidence the file is fine. Check the
+first three bytes.
+
+Use the Write/Edit tools for source files. If a script genuinely must write
+one, use `[System.IO.File]::WriteAllText($path, $text, (New-Object
+System.Text.UTF8Encoding($false)))` — the `$false` is the no-BOM flag and is
+the whole point.
+
 ## Digits
 
 Digit shaping belongs to `lib/format.ts`, where it follows the active locale

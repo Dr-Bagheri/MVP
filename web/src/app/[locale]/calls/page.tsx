@@ -17,6 +17,7 @@ export default function CallsPage() {
   const locale = useLocale();
   const [calls, setCalls] = useState<Call[] | null>(null);
   const [me, setMe] = useState<User | null>(null);
+  const [members, setMembers] = useState<User[]>([]);
   const [showArchived, setShowArchived] = useState(false);
 
   async function load(includeArchived: boolean) {
@@ -25,8 +26,15 @@ export default function CallsPage() {
 
   useEffect(() => {
     void api.me().then(setMe);
+    // the wire sends owner_id only — names come from the member list
+    void api.members().then(setMembers).catch(() => setMembers([]));
     void load(showArchived);
   }, [showArchived]);
+
+  /** id → display name, falling back to the id rather than to `undefined`. */
+  function ownerName(id: string): string {
+    return members.find((m) => m.id === id)?.display_name ?? id;
+  }
 
   return (
     <AppShell page={t("title")}>
@@ -53,7 +61,17 @@ export default function CallsPage() {
         </Card>
       ) : (
         <Card className="!p-0">
-          <table className="w-full">
+          {/*
+            The table scrolls INSIDE the card rather than being clipped by it.
+            Without this, ~198px of every row was unreachable at 375 — and it
+            was invisible to the obvious test: clipping keeps
+            `document.scrollWidth` equal to the viewport, so a page-level
+            overflow check certifies the screen as clean while a third of each
+            row cannot be read. `min-w-max` makes the table keep its width and
+            scroll, instead of crushing its columns to fit.
+          */}
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-max">
             <thead>
               <tr className="border-b border-border">
                 <th className="table-head px-4 py-3">{t("columnTitle")}</th>
@@ -75,12 +93,15 @@ export default function CallsPage() {
                       {call.title}
                     </Link>
                     <div className="mt-1 flex flex-wrap items-center gap-2">
-                      {call.parts.length > 1 ? (
+                      {/* `parts` is not on the wire yet — absent means "not
+                          told", which renders as nothing rather than as "1
+                          part". */}
+                      {(call.parts?.length ?? 0) > 1 ? (
                         <span className="text-xs text-fg-muted">
-                          {t("parts", { count: digits(call.parts.length, locale) })}
+                          {t("parts", { count: digits(call.parts?.length ?? 0, locale) })}
                         </span>
                       ) : null}
-                      {call.archived ? (
+                      {call.archived_at !== null ? (
                         <span className="text-xs text-fg-muted">({t("archive")})</span>
                       ) : null}
                       {call.deleted_at ? (
@@ -94,16 +115,29 @@ export default function CallsPage() {
                     </div>
                   </td>
                   <td className="px-4 py-3 text-sm text-fg-muted">
-                    {call.owner_id === me?.id ? tCommon("you") : call.owner_name}
+                    {/* the wire carries owner_id only; the name is resolved
+                        from the member list where we have it */}
+                    {call.owner_id === me?.id
+                      ? tCommon("you")
+                      : (call.owner_name ?? ownerName(call.owner_id))}
                   </td>
                   <td className="px-4 py-3 text-sm text-fg-muted">
-                    {formatDate(call.created_at, locale)}
+                    {formatDate(call.started_at, locale)}
                   </td>
                   <td className="px-4 py-3 text-sm text-fg-muted">
-                    {formatDuration(call.duration_seconds, locale)}
+                    {/* null duration is UNKNOWN, not zero — live rows carry
+                        null today. Saying «نامعلوم» is the honest render; a
+                        dash would read as "nothing to show". */}
+                    {call.duration_ms === null
+                      ? t("durationUnknown")
+                      : formatDuration(call.duration_ms / 1000, locale)}
                   </td>
                   <td className="px-4 py-3">
                     <button
+                      /* `tap` — this control changes who can see a call, and
+                         it was a 24px target on a phone. The chip keeps its
+                         size; only the hit area grows. */
+                      className="tap"
                       onClick={async () => {
                         await api.setScope(call.id, call.scope === "org" ? "private" : "org");
                         void load(showArchived);
@@ -123,6 +157,7 @@ export default function CallsPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </Card>
       )}
     </AppShell>

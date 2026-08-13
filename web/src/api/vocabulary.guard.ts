@@ -23,6 +23,7 @@
  * guard does not need it and should not acquire it.
  */
 import type {
+  AgentProposal,
   CallStatus,
   GatewayEvent,
   PartStatus,
@@ -31,6 +32,7 @@ import type {
 import {
   CALL_STATUSES,
   PART_STATUSES,
+  PROPOSAL_KINDS,
   TRANSCRIPT_TIMINGS,
   WEBHOOK_EVENTS,
 } from "@echo/core/vocabulary";
@@ -45,6 +47,17 @@ type Exact<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never;
 export const CALL_STATUS_MATCHES: Exact<CallStatus, (typeof CALL_STATUSES)[number]> = true;
 export const PART_STATUS_MATCHES: Exact<PartStatus, (typeof PART_STATUSES)[number]> = true;
 export const GATEWAY_EVENT_MATCHES: Exact<GatewayEvent, (typeof WEBHOOK_EVENTS)[number]> = true;
+
+/**
+ * The last closed vocabulary this codebase held a hand-written copy of. It
+ * said `edit_speakers`; core/ says `edit_speaker_roster` — the fourth
+ * invented vocabulary in a week, and the fourth that nothing could contradict
+ * until it was published as a value.
+ */
+export const PROPOSAL_KIND_MATCHES: Exact<
+  AgentProposal["kind"],
+  (typeof PROPOSAL_KINDS)[number]
+> = true;
 
 /**
  * `transcript_timing` is `TranscriptTiming | null` on the wire — the null is

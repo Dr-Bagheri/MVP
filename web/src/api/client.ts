@@ -9,7 +9,9 @@ import {
   CALLS,
   CONNECTORS,
   DIRECTORY,
-  GATEWAY,
+  GATEWAY_DELIVERIES,
+  GATEWAY_KEYS,
+  GATEWAY_WEBHOOKS,
   ME,
   MODELS,
   ORG,
@@ -24,6 +26,12 @@ import type {
   Call,
   CallScope,
   DirectoryPerson,
+  GatewayDelivery,
+  GatewayEvent,
+  GatewayKey,
+  GatewayKeyCreated,
+  GatewayWebhook,
+  GatewayWebhookCreated,
   AdminModelRow,
   ModelsResponse,
   Org,
@@ -45,6 +53,8 @@ const wait = <T,>(value: T, ms = LATENCY): Promise<T> =>
 let calls: Call[] = structuredClone(CALLS);
 let users: User[] = structuredClone(USERS);
 let models: AdminModelRow[] = structuredClone(MODELS);
+let gatewayKeys: GatewayKey[] = structuredClone(GATEWAY_KEYS);
+let gatewayWebhooks: GatewayWebhook[] = structuredClone(GATEWAY_WEBHOOKS);
 let me: User = structuredClone(ME);
 let org: Org = structuredClone(ORG);
 const transcripts: Record<string, TranscriptSegment[]> = structuredClone(TRANSCRIPT);
@@ -73,7 +83,11 @@ export const api = {
       if (me.role === "admin") return true;
       return c.owner_id === me.id || c.scope === "org";
     });
-    const filtered = opts?.includeArchived ? visible : visible.filter((c) => !c.archived);
+    // `archived_at` is a timestamp, not a flag — "when" carries more than
+    // "whether", and null is the un-archived state
+    const filtered = opts?.includeArchived
+      ? visible
+      : visible.filter((c) => c.archived_at === null);
     return wait(filtered);
   },
   async getCall(id: string): Promise<Call | null> {
@@ -83,11 +97,36 @@ export const api = {
     calls = calls.map((c) => (c.id === id ? { ...c, scope } : c));
     return wait(calls.find((c) => c.id === id)!);
   },
+  /**
+   * Archive/unarchive are LIVE and verified end-to-end against core/
+   * (`archived_at` null → timestamp → null on a real row). This body swaps to
+   * `POST /api/calls/:id/archive` with the rest of the read path.
+   */
   async setArchived(id: string, archived: boolean) {
-    calls = calls.map((c) => (c.id === id ? { ...c, archived } : c));
+    calls = calls.map((c) =>
+      c.id === id ? { ...c, archived_at: archived ? new Date().toISOString() : null } : c,
+    );
     return wait(true);
   },
-  /** Soft delete with a 30-day purge window (M11). Never the agent's path. */
+  /**
+   * Soft delete with a purge window (M11). Never the agent's path.
+   *
+   * **Both work now** — db/0032 + 0033 fixed the row policy that had made a
+   * call invisible to its own owner the instant it was marked deleted. Live
+   * behaviour, verified by core/: owner deletes → 204; deletes again → 204,
+   * **idempotent, so a double-click is harmless**; reads it back → 404;
+   * owner tries to restore → 404 *and it raises*, where before it matched
+   * zero rows and returned success-shaped silence.
+   *
+   * **Restore is ADMIN-ONLY, and that is ruled, not missing** (Q2: deletion
+   * should feel like deletion). An owner must not be shown a restore path.
+   * Whether owners may undo their own deletions is with the steward; if it
+   * flips it is a one-line change on the server, so don't design around
+   * either answer.
+   *
+   * These stay fixture-backed only until the swap lands with the rest of the
+   * write path — no longer because anything is broken.
+   */
   async deleteCall(id: string) {
     calls = calls.map((c) =>
       c.id === id ? { ...c, deleted_at: new Date().toISOString() } : c,
@@ -238,8 +277,118 @@ export const api = {
   async connectors() {
     return wait(CONNECTORS);
   },
-  async gateway() {
-    return wait(GATEWAY);
+  async gatewayKeys(): Promise<GatewayKey[]> {
+    return wait(gatewayKeys);
+  },
+  /**
+   * Mint. The token comes back HERE and nowhere else — mirroring core/, which
+   * stores only a sha256 and a display prefix. The caller must treat this
+   * return value as the one and only chance to show it.
+   */
+  /**
+   * `actorId` is REQUIRED here on purpose. core/ defaults it to the creating
+   * admin, which is a sensible API default and a poor UI one: it turns a
+   * key's authority into an accident. An optional parameter would let that
+   * accident back in through the type system, so the caller must choose.
+   */
+  async createGatewayKey(
+    name: string,
+    allowAssistant: boolean,
+    actorId: string,
+    expiresAt: string | null = null,
+  ): Promise<GatewayKeyCreated> {
+    const created: GatewayKeyCreated = {
+      id: `gk-${gatewayKeys.length + 1}`,
+      name,
+      token_prefix: "echo_sk_test",
+      // the picker's choice, NOT `me.id` — otherwise it is a control that
+      // does nothing and a disabled-actor key can never be minted
+      actor_id: actorId,
+      last_used_at: null,
+      expires_at: expiresAt,
+      revoked_at: null,
+      created_at: new Date().toISOString(),
+      allow_assistant: allowAssistant,
+      token: `echo_sk_test_FAKE_MINTED_${String(gatewayKeys.length + 1).padStart(6, "0")}`,
+    };
+    const { token: _token, ...stored } = created;
+    gatewayKeys = [stored, ...gatewayKeys];
+    return wait(created);
+  },
+  /** Revoke, not delete — the row stays, with a date on it. */
+  async revokeGatewayKey(id: string): Promise<GatewayKey[]> {
+    gatewayKeys = gatewayKeys.map((k) =>
+      k.id === id ? { ...k, revoked_at: new Date().toISOString() } : k,
+    );
+    return wait(gatewayKeys);
+  },
+  async gatewayWebhooks(): Promise<GatewayWebhook[]> {
+    return wait(gatewayWebhooks);
+  },
+  async setWebhookEnabled(id: string, enabled: boolean): Promise<GatewayWebhook[]> {
+    gatewayWebhooks = gatewayWebhooks.map((w) => (w.id === id ? { ...w, enabled } : w));
+    return wait(gatewayWebhooks);
+  },
+  /**
+   * Create. `secret` comes back once — same one-way-door rule as a key token.
+   *
+   * `events` is forwarded verbatim and never client-filtered: core/ 400s an
+   * unknown event BY NAME, and swallowing it here would recreate exactly the
+   * silence that naming it prevents.
+   */
+  async createGatewayWebhook(
+    url: string,
+    events: GatewayEvent[],
+  ): Promise<GatewayWebhookCreated> {
+    const created: GatewayWebhookCreated = {
+      id: `wh-${gatewayWebhooks.length + 1}`,
+      url,
+      events,
+      enabled: true,
+      created_at: new Date().toISOString(),
+      secret: `whsec_test_FAKE_MINTED_${String(gatewayWebhooks.length + 1).padStart(6, "0")}`,
+    };
+    const { secret: _secret, ...stored } = created;
+    gatewayWebhooks = [stored, ...gatewayWebhooks];
+    return wait(created);
+  },
+  /**
+   * `webhookId` is a SERVER filter — the BFF forwards it and core/ pages at
+   * limit 50. Filtering client-side would silently drop a quiet webhook's
+   * deliveries off the end of a busy one's page, so the mock filters here to
+   * mirror where the real filtering happens.
+   */
+  async gatewayDeliveries(webhookId?: string): Promise<GatewayDelivery[]> {
+    const rows = webhookId
+      ? GATEWAY_DELIVERIES.filter((d) => d.webhook_id === webhookId)
+      : GATEWAY_DELIVERIES;
+    return wait(rows);
+  },
+
+  /**
+   * Approve or refuse an inferred write.
+   *
+   * The body carries **only** `run_id` — core/ re-reads the proposal from the
+   * `agent_run.steps` row the agent wrote. Sending the payload back would make
+   * "what was proposed" and "what was approved" two independent claims, and
+   * `after` is a possibly-excerpted DISPLAY value, so writing it would
+   * silently truncate the change to whatever the card had room for.
+   *
+   * Returns "stale" for core/'s 404 — the segment was deleted or the call
+   * changed hands between propose and confirm. That is an outcome, not a
+   * fault, and the caller must not offer a retry for it.
+   */
+  async decideProposal(
+    proposalId: string,
+    runId: string,
+    decision: "confirm" | "reject",
+  ): Promise<"ok" | "stale"> {
+    // Phase A: the mock always succeeds. The stale branch is reachable the
+    // moment this becomes a fetch — it is core/ that decides, not us.
+    void proposalId;
+    void runId;
+    void decision;
+    return wait("ok");
   },
 
   // ---- agent ------------------------------------------------------------------------
@@ -317,12 +466,29 @@ export const api = {
     }
 
     if (wantsWrite) {
+      /*
+       * `before` is the CURRENT value and core/ spends a query fetching it, so
+       * a card can show before/after rather than asking for blind consent. The
+       * fixture carried none, which made that branch unreachable — the card
+       * would have looked finished while never rendering the half that makes
+       * it a decision (rule 9).
+       *
+       * `before`/`after` are a matched pair — same keys on both sides, so
+       * the reader compares values rather than reconciling shapes. Both are
+       * DISPLAY values and may be excerpted; the authoritative payload lives
+       * server-side and is re-read at confirm.
+       */
       yield {
         type: "proposal",
         id: "pr-1",
         kind: "correct_transcript",
         summary: "اصلاح خط ۰۰:۴۱ — «زمان پاسخ‌گویی بحرانی» به‌جای «زمان پاسخ‌گوی بحرانی»",
-        payload: { call_id: ctx.callIds[0] ?? "c-1", row_id: "t-3" },
+        payload: {
+          call_id: ctx.callIds[0] ?? "c-1",
+          row_id: "t-3",
+          before: { text: "زمان پاسخ‌گوی بحرانی باید به دو ساعت کاهش پیدا کند." },
+          after: { text: "زمان پاسخ‌گویی بحرانی باید به دو ساعت کاهش پیدا کند." },
+        },
       };
     }
 

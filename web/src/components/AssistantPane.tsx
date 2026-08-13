@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { AgentMessage, Call, ModelInfo } from "@/api/types";
+import { ProposalCard } from "./ProposalCard";
 
 /**
  * The dockable assistant (SPEC): on every screen, knows the page it's on,
@@ -121,6 +122,9 @@ export function AssistantPane({
                 return {
                   ...m,
                   streaming: false,
+                  // keep the runId: confirming a proposal REQUIRES it, and the
+                  // proposal arrived mid-stream, before this id existed
+                  run_id: event.runId,
                   failed: event.failed,
                   error: event.error,
                 };
@@ -148,7 +152,19 @@ export function AssistantPane({
   if (!open) return null;
 
   return (
-    <aside className="flex h-full w-full shrink-0 flex-col border-border bg-surface md:w-[380px] md:border-s">
+    /*
+     * Below md the pane is an OVERLAY DRAWER, not a flex sibling.
+     *
+     * As a static sibling it took the full 375px of a phone viewport and
+     * squeezed <main> to 40px — a sliver of unreadable content on every
+     * screen. It was silent because nothing overflowed the page: the layout
+     * "worked", it just had no room left for the app. A 40px main is the kind
+     * of breakage that a horizontal-scroll check can't see.
+     *
+     * `fixed inset-0 z-40` lifts it out of the row so main keeps the full
+     * width underneath; from md up it returns to being a docked column.
+     */
+    <aside className="fixed inset-0 z-40 flex h-full w-full flex-col border-border bg-surface md:static md:z-auto md:w-[380px] md:shrink-0 md:border-s">
       <header className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="flex items-center gap-2">
           <span className="text-sm font-semibold text-fg">{t("title")}</span>
@@ -251,14 +267,7 @@ export function AssistantPane({
             ) : null}
 
             {message.proposal ? (
-              <div className="mt-2 rounded-md border border-warning/40 bg-warning/10 p-3">
-                <p className="text-xs font-semibold text-warning">{t("proposal")}</p>
-                <p className="mt-1 text-sm text-fg">{message.proposal.summary}</p>
-                <div className="mt-2 flex gap-2">
-                  <button className="btn-primary h-9 min-h-0 px-3 text-xs">{t("approve")}</button>
-                  <button className="btn-secondary h-9 min-h-0 px-3 text-xs">{t("reject")}</button>
-                </div>
-              </div>
+              <ProposalCard proposal={message.proposal} runId={message.run_id} />
             ) : null}
           </div>
         ))}

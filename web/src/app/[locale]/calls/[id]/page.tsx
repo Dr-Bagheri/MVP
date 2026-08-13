@@ -88,7 +88,14 @@ export default function CallDetailPage({
     [rows, playheadMs],
   );
 
-  const speakerName = (speakerId: string) => {
+  /**
+   * `speaker_id` is null on the wire when nothing has attributed the segment
+   * yet — verified on a live row. That is a real state and gets its own
+   * word: passing null through would have printed `undefined` above the
+   * line, which reads as a bug rather than as "we don't know who spoke".
+   */
+  const speakerName = (speakerId: string | null) => {
+    if (speakerId === null) return t("unattributed");
     const speaker = speakers.find((s) => s.id === speakerId);
     return speaker?.person_name ?? speaker?.label ?? speakerId;
   };
@@ -102,9 +109,9 @@ export default function CallDetailPage({
       <PageHeader
         title={call.title}
         subtitle={
-          call.parts.length > 1
-            ? `${formatDate(call.created_at, locale)} · ${tCalls("parts", { count: digits(call.parts.length, locale) })}`
-            : formatDate(call.created_at, locale)
+          (call.parts?.length ?? 0) > 1
+            ? `${formatDate(call.started_at, locale)} · ${tCalls("parts", { count: digits(call.parts?.length ?? 0, locale) })}`
+            : formatDate(call.started_at, locale)
         }
         actions={<StatusChip status={call.status} label={tStatus(call.status)} />}
       />
@@ -157,26 +164,38 @@ export default function CallDetailPage({
                 {playing ? "⏸" : "▶"}
               </button>
               <span className="text-sm text-fg-muted ltr">
-                {formatClock(playheadMs / 1000, locale)} / {formatClock(call.duration_seconds, locale)}
+                {/* total is null on live rows (unknown, not zero) — showing
+                    «نامعلوم» beats a confident 0:00 that isn't true */}
+                {formatClock(playheadMs / 1000, locale)} /{" "}
+                {call.duration_ms === null
+                  ? tCalls("durationUnknown")
+                  : formatClock(call.duration_ms / 1000, locale)}
               </span>
               <span className="flex-1" />
               <span className="text-xs text-fg-muted">
-                {call.transcript_timing === "full" ? t("seekHint") : t("seekHintLine")}
+                {call.transcript_timing === "full"
+                  ? t("seekHint")
+                  : call.transcript_timing === "mixed"
+                    ? t("seekHintMixed")
+                    : t("seekHintLine")}
               </span>
             </div>
-            {/* M6: fallback-lane provenance — subtle, explained, self-clearing.
-                "mixed" and "none" deliberately share one string for now:
-                distinguishing them ("part of this call" vs "this call") is
-                new copy, which is design work frozen pending the verdict.
-                The enum already carries the distinction, so it is a string
-                swap when the freeze lifts — not a rework.
-                null = no transcript at all, so there is nothing to caveat.
+            {/* M6/M20 provenance — subtle, explained, self-clearing.
+                "mixed" and "none" now say DIFFERENT things: «بخشی» scopes the
+                caveat to one part of an otherwise complete transcript, which
+                is the truth for a mostly-word-timed call and was actively
+                misleading under the shared string. null = no transcript at
+                all, so there is nothing to caveat.
                 Suppressed until transcription ends — see TRANSCRIPTION_COMPLETE. */}
             {TRANSCRIPTION_COMPLETE.includes(call.status) &&
             (call.transcript_timing === "mixed" || call.transcript_timing === "none") ? (
               <div className="mt-3 flex flex-wrap items-center gap-2">
-                <Chip tone="warning">{t("degraded")}</Chip>
-                <span className="text-xs text-fg-muted">{t("degradedHint")}</span>
+                <Chip tone="warning">
+                  {call.transcript_timing === "mixed" ? t("degradedPart") : t("degraded")}
+                </Chip>
+                <span className="text-xs text-fg-muted">
+                  {call.transcript_timing === "mixed" ? t("degradedPartHint") : t("degradedHint")}
+                </span>
               </div>
             ) : null}
           </div>
