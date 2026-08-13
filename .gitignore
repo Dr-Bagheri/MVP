@@ -14,15 +14,20 @@ keystore.properties
 # Local-only documents
 *.docx
 docs/*.pdf
+# ...and the pipeline that builds them: a working tool, not a repo deliverable.
+docs/blueprint-src/
 
 # Node / TypeScript
 node_modules/
 dist/
 .next/
+# the build gate's own output dir — kept separate so it cannot corrupt the
+# shared dev server's .next (see web/scripts/build-gate.mjs)
+.next-gate/
 *.tsbuildinfo
 
 # Supabase CLI state
-supabase/.temp/
+**/supabase/.temp/
 
 # ML models cache (large ONNX files fetched at setup)
 ml/models/
