@@ -2340,3 +2340,22 @@ session that touches GitHub. Repo: **github.com/Dr-Bagheri/MVP — PRIVATE**.
   ls-files, 316 tracked files, no BOM anywhere, no mojibake in any
   text file. Attribution: one question to Documentation (the only
   known .gitignore editor today); no guessing.
+- 2026-08-13 (PUSH #4 LIVE — MILESTONE 4 CLOSED modulo the sweep):
+  six commits, 192 files, private re-verified, exclusions
+  individually verified AGAINST THE REPAIRED GUARD. Publisher's
+  two findings ruled: (1) nested-anchor trap — supabase/.temp/
+  anchored to root, never matched core/supabase/.temp/, the file
+  TRACKED since c791b3e (dev ref + org identifiers); widen +
+  untrack + NO history rewrite RATIFIED (private; a ref is an
+  identifier, deliberately documented in three places);
+  **go-public = a decision point, not an oversight — flagged to
+  the user**; casebook: "a gitignore pattern containing a slash
+  anchors to the ROOT — a guard that works by luck at one depth";
+  publisher auditing remaining slash patterns. (2) Audit Logs +
+  Server NOT photographed — 401 without a session; CORRECT refusal
+  (photographing the error state would libel live surfaces; the
+  README says why they're absent); the re-shoot list's
+  signed-in-browser assumption was the STEWARD'S error, owned.
+  Ten shots shipped, three-level ladder un-flattened in the
+  README. Remaining: the user's sweep line in B1 + the signup
+  (swap phase + final two shots). Task #25 CLOSED, #28 = epilogue.

@@ -8,8 +8,9 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run && node ../design-system/neurai-platform/verify-pairs.mjs && node scripts/build-gate.mjs",
+    "test": "vitest run && node ../design-system/neurai-platform/verify-pairs.mjs && node scripts/encoding-sweep.mjs && node scripts/build-gate.mjs",
     "test:gate": "node scripts/build-gate.mjs",
+    "test:encoding": "node scripts/encoding-sweep.mjs",
     "test:watch": "vitest"
   },
   "dependencies": {

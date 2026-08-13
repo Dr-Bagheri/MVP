@@ -320,7 +320,18 @@ it was written for before being trusted.
   assertion there would compare a type with itself and could never fail.
 - **Message-key coverage** — every referenced key exists in **both** catalogues.
   Persian-first means the default path is the one that hides the bug.
-- **Palette pairs** — `verify-pairs.mjs`, in `pnpm test`, exits non-zero.
+- **Palette pairs** — `verify-pairs.mjs`, in `npm test`, exits non-zero.
+- **Encoding sweep** — every tracked text file, at BYTE level, for a UTF-8 BOM
+  and for `â€` (cp1252 having eaten an em-dash, en-dash or curly quote).
+  Written after `.gitignore` — the repo's secrets guard — was found carrying
+  both, minutes before a push. A rule already covered the hazard; what the rule
+  could not do is run. It had been widened three times that afternoon and still
+  missed the file, because the sweep in use was a text grep and **ripgrep skips
+  dotfiles by default** — the corruption sat in an unswept file the whole time
+  and the check could not return it. This walks `git ls-files` and reads bytes,
+  so nothing is skipped for being hidden. Verified red against a staged file
+  carrying both signatures; exclusions are named with reasons and a BOM is never
+  allowed, not even in an allow-listed file.
 - **Crumb-title provider** — using the hook outside its provider throws and names
   the fix. The previous default silently swallowed writes, which is how a real
   bug hid: the page believed it had published a title, the bar believed none was
