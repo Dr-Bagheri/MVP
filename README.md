@@ -58,16 +58,24 @@ these are the Persian screens; the English locale is the same UI mirrored.
 |---|---|
 | ![The calls list with the assistant docked beside it: each call shows owner, Jalali date, duration, private/org scope and status — including one still summarizing, one failed, and one soft-deleted with its restore window counted down in days.](docs/screenshots/echo-calls.png) | ![User management: pending sign-ups awaiting approval, then the member table with role and status. The stat tiles show counts with "—" where a trend would go, and say why in a line underneath: until status history accumulates, a percentage would be invented.](docs/screenshots/management-users.png) |
 
+| Call detail — the timing ladder | Search |
+|---|---|
+| ![A call whose transcript is partly word-timed: the amber chip says "part of this call has reduced accuracy" — part, not the whole — and the line beneath explains that one part came through the fallback lane and lacks word-level timing while the rest of the transcript is complete. Lines with word timing are seekable per word; the degraded part is seekable per line.](docs/screenshots/call-detail.png) | ![Searching transcripts and summaries, four hits across two calls, each labelled "in transcript" or "in summary" with its timestamp. Matching is Persian-folded, so a hit can be correct without being highlighted — the layout is built to read properly with no marks at all.](docs/screenshots/search.png) |
+
 | Management · Connectors |
 |---|
 | ![The API gateway surface: keys listed by the member who owns them — each acting with that member's authority and dying with their account — showing last use, expiry, revoked and expired states, and whether the key may reach the assistant. Below, webhooks that report that something happened without shipping the content.](docs/screenshots/management-connectors.png) |
 
-Three things worth noticing, because they are deliberate. **Nothing is faked**:
+Four things worth noticing, because they are deliberate. **Nothing is faked**:
 a tile with no honest trend to show prints `—` and explains itself. **The
 assistant docks rather than takes over** — selecting an app keeps the app
-reachable at every width, with no dialog to dismiss on arrival. And **an API
-key is a member, not a service account**: it can do exactly what its owner can
-do, and disabling the person disables the key in the same instant.
+reachable at every width, with no dialog to dismiss on arrival. **An API key
+is a member, not a service account**: it can do exactly what its owner can do,
+and disabling the person disables the key in the same instant. And **a
+degraded transcript says which part degraded** — a call that is 95% word-timed
+warning as though the whole transcript were unreliable was a real bug; the
+chip naming *part* of the call is the fix, and the visible proof of the timing
+ladder.
 
 > Captured from the current build. The Echo calls surface is mid-rework — Record
 > and Calls merge into one screen — so that shot will change; sign-in screens are
