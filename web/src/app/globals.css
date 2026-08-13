@@ -17,74 +17,101 @@
  * has no Persian coverage. Vazirmatn carries Latin too, so one family serves
  * both scripts.
  */
+/*
+ * NeurAI platform tokens (M22) — DARK-FIRST.
+ *
+ * Every value below is generated from `design-system/neurai-platform/
+ * verify-pairs.mjs`, which asserts each foreground/background PAIR and exits
+ * non-zero on a failure. It runs in `pnpm test`. Do not hand-edit a value
+ * here: change it there, re-run, and re-emit — the first run of that file
+ * failed five pairs, including an accent chip at 4.48 against a 4.5 bar, which
+ * is the near-miss that shipped in the previous system.
+ *
+ * `:root` IS the dark theme, and `[data-theme="light"]` overrides it. That
+ * ordering is the ruling made literal: dark is primary, light is derived. It
+ * also means a first paint before any script runs is already correct for the
+ * default, rather than flashing light.
+ *
+ * Two structural notes:
+ *  - `--border` and `--border-strong` are different jobs. A hairline card edge
+ *    is decorative and WCAG asks nothing of it; the edge of an INPUT is a
+ *    control boundary and owes 3:1. The previous system shipped one token at
+ *    1.28:1 doing both.
+ *  - `--accent-soft` is a COMPUTED 12% tint of `--accent` over `--surface`,
+ *    not a hand-picked colour. Hand-picking is what produced the 4.42 chip.
+ */
 @layer base {
   :root {
-    --bg: 248 250 252;
-    --surface: 255 255 255;
-    --surface-2: 241 245 249;
-    --border: 226 232 240;
-    --fg: 2 6 23;
-    --fg-muted: 71 85 105;
-    --primary: 15 23 42;
-    --on-primary: 255 255 255;
-    --secondary: 51 65 85;
-    --muted: 232 236 241;
-    --accent: 3 105 161;
-    /* what may sit ON accent. White is fine on the light accent (5.5:1); in
-       dark the accent is a bright sky and white collapses to 2.14:1, so the
-       pair needs its own token rather than an assumption. */
-    --on-accent: 255 255 255;
-    --accent-soft: 224 242 254;
-    /* navy sidebar: its own surface + on-surface pair, so the shell reads as
-       one deliberate block rather than a lighter page edge */
-    --sidebar: 15 23 42;
-    --sidebar-fg: 255 255 255;
-    --success: 21 128 61;
-    --warning: 180 83 9;
-    --danger: 220 38 38;
+    /* DARK — primary */
+    --bg: 19 0 54;                /* #130036 — the measured brand indigo */
+    --surface: 28 10 69;          /* #1C0A45 */
+    --surface-2: 39 18 88;        /* #271258 */
+    --border: 58 34 112;          /* #3A2270 — hairline, decorative */
+    --border-strong: 122 94 184;  /* #7A5EB8 — control edges, 3.70:1 */
+    --fg: 242 236 255;            /* #F2ECFF — violet-tinted, not neutral */
+    --fg-muted: 182 166 214;      /* #B6A6D6 */
+    /* group LABELS in a menu — recedes toward the surface so a title reads as
+       a label, not a destination. 5.23:1, deliberately below --fg-muted's
+       7.99: the requirement is a relationship, asserted in verify-pairs. */
+    --fg-subtle: 147 130 188;     /* #9382BC */
+    --accent: 162 116 255;        /* #A274FF — the measured brand violet */
     /*
-     * Darkened from #0284C7, which measured 4.1:1 on white and 3.74:1 on
-     * surface-2 — under AA, and it carries every in-flight StatusChip and the
-     * capture timer, i.e. the states a user stares at while waiting. Now
-     * ~7.4:1 on white and ~6.8:1 on surface-2. Dark's --info was already fine
-     * and is unchanged.
+     * DARK on the violet. White measures 3.24:1 and FAILS — the accent is a
+     * bright surface in this theme, not an ink. This token is why the active
+     * rail tile and the send button are legible.
      */
-    --info: 7 89 133;
-  }
-
-  [data-theme="dark"] {
-    --bg: 2 6 23;
-    --surface: 15 23 42;
-    --surface-2: 30 41 59;
-    --border: 51 65 85;
-    --fg: 241 245 249;
-    --fg-muted: 148 163 184;
-    --primary: 226 232 240;
-    --on-primary: 15 23 42;
-    --secondary: 148 163 184;
-    --muted: 30 41 59;
-    --accent: 56 189 248;
-    /* near-black on the bright dark accent: ~11:1, where white was 2.14:1 */
-    --on-accent: 15 23 42;
-    --accent-soft: 12 74 110;
-    /* In dark the page is already near-black, so the sidebar steps UP to the
-       surface navy instead of down — matching the page exactly (2 6 23) made
-       the block dissolve into the background, which is the opposite of the
-       presence this pass is for. Light goes darker than the page, dark goes
-       lighter; both keep the shell reading as one deliberate block. */
-    --sidebar: 15 23 42;
-    --sidebar-fg: 241 245 249;
+    --on-accent: 19 0 54;         /* #130036 */
+    --accent-soft: 44 23 91;      /* computed 12% tint of accent over surface */
     --success: 74 222 128;
     --warning: 251 191 36;
-    --danger: 248 113 113;
-    --info: 56 189 248;
+    --danger: 251 113 133;
+    --info: 125 211 252;
+    /* `.btn-primary` follows the one accent family (M22) */
+    --primary: 162 116 255;
+    --on-primary: 19 0 54;
+    --secondary: 182 166 214;
+    --muted: 39 18 88;
+    /* retained for the Echo shell until its interior re-derives */
+    --sidebar: 28 10 69;
+    --sidebar-fg: 242 236 255;
+  }
+
+  [data-theme="light"] {
+    /* LIGHT — derived FROM the dark, the inverse of the previous system */
+    --bg: 250 248 255;            /* #FAF8FF — violet-tinted white */
+    --surface: 255 255 255;
+    --surface-2: 241 236 251;     /* #F1ECFB */
+    --border: 226 217 245;        /* #E2D9F5 */
+    --border-strong: 142 123 184; /* #8E7BB8 — 3.70:1 */
+    --fg: 22 10 46;               /* #160A2E */
+    --fg-muted: 91 75 122;        /* #5B4B7A */
+    /* recede = move toward the surface, so it goes DARKER here and lighter in
+       dark mode. One semantic, opposite directions — the surface moves too. */
+    --fg-subtle: 120 104 148;     /* #786894 */
+    /*
+     * A DERIVED ink, not the brand violet: #A274FF is 3.24:1 on white. The
+     * brand violet stays for marks and fills; this carries text and CTAs.
+     */
+    --accent: 109 59 245;         /* #6D3BF5 */
+    --on-accent: 255 255 255;     /* white, 5.84:1 — the role flips with theme */
+    --accent-soft: 237 231 254;   /* computed 12% tint */
+    --success: 22 101 52;
+    --warning: 146 64 14;
+    --danger: 190 18 60;
+    --info: 7 89 133;
+    --primary: 109 59 245;
+    --on-primary: 255 255 255;
+    --secondary: 91 75 122;
+    --muted: 241 236 251;
+    --sidebar: 255 255 255;
+    --sidebar-fg: 22 10 46;
   }
 
   html {
-    color-scheme: light;
-  }
-  html[data-theme="dark"] {
     color-scheme: dark;
+  }
+  html[data-theme="light"] {
+    color-scheme: light;
   }
 
   body {
@@ -182,6 +209,36 @@
     }
   }
 
+  /*
+   * The hub mark's idle glow (M22). It does the reference orb's JOB — signalling
+   * a live assistant — without being a second identity competing with the brand
+   * mark. Deliberately slow and low-amplitude: this sits under a greeting, not
+   * in a game.
+   *
+   * `drop-shadow` on the alpha silhouette rather than a box-shadow, because the
+   * mark is a transparent PNG and a box glow would halo its bounding box.
+   */
+  .neurai-glow {
+    animation: neurai-glow 3.6s ease-in-out infinite;
+  }
+  @keyframes neurai-glow {
+    0%,
+    100% {
+      filter: drop-shadow(0 0 18px rgb(var(--accent) / 0.32));
+    }
+    50% {
+      filter: drop-shadow(0 0 34px rgb(var(--accent) / 0.6));
+    }
+  }
+  /* the global reduce-motion block zeroes durations, but an infinite pulse
+     needs stopping outright rather than accelerating */
+  @media (prefers-reduced-motion: reduce) {
+    .neurai-glow {
+      animation: none;
+      filter: drop-shadow(0 0 20px rgb(var(--accent) / 0.4));
+    }
+  }
+
   .btn {
     @apply tap inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-2
            rounded-md px-4 text-sm font-semibold transition-colors duration-150
@@ -207,6 +264,24 @@
     @apply min-h-[44px] w-full rounded-md border border-border bg-surface px-3
            text-sm text-fg transition-colors duration-150 placeholder:text-fg-muted
            focus:border-accent;
+  }
+
+  /*
+   * A `<select>` wearing `.input` gets the browser's native chevron drawn
+   * inside the padding box, so `px-3` left it 12px from the border — reading
+   * as crowded against the edge rather than as part of the control.
+   *
+   * `pe-9` is padding-inline-END, so it follows direction: the chevron sits
+   * right in en and left in fa, and the breathing room moves with it. A
+   * `pr-9` here would look correct in English and push Persian text away from
+   * the wrong side — an RTL bug that only shows in the locale we are less
+   * likely to open.
+   *
+   * Shared rather than per-screen so every select gains it at once; this was
+   * reported on the role dropdowns and is not a property of that screen.
+   */
+  select.input {
+    @apply pe-9;
   }
 
   .chip {

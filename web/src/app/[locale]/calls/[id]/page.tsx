@@ -4,7 +4,8 @@ import { use, useEffect, useMemo, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { Call, CallStatus, Speaker, SummaryVersion, TranscriptSegment } from "@/api/types";
-import { AppShell } from "@/components/AppShell";
+import { EchoAppShell } from "@/components/echo/EchoAppShell";
+import { useCrumbTitle } from "@/components/platform/CrumbTitle";
 import { Card, Chip, PageHeader, StatusChip } from "@/components/ui";
 import { formatClock, formatDate, digits } from "@/lib/format";
 
@@ -41,6 +42,26 @@ import { formatClock, formatDate, digits } from "@/lib/format";
  * mean this value must never be cached as though it were immutable.
  */
 const TRANSCRIPTION_COMPLETE: readonly CallStatus[] = ["linking", "summarizing", "ready"];
+
+/**
+ * The membership test takes a `string`, while the list above keeps its narrow
+ * `CallStatus[]` type. Both halves are deliberate.
+ *
+ * The list stays narrow so a typo in one of those three literals is a compile
+ * error — that is the whole reason to type a constant. The PARAMETER is wide
+ * because `call.status` is `string` on the wire: core/ types it that way on
+ * purpose so a status added by a later migration cannot crash a client, and
+ * that promise only holds if consumers stop insisting the value is one of the
+ * six they know.
+ *
+ * The alternative was `includes(call.status as CallStatus)`, which compiles
+ * and is a lie — it asserts the server can only ever send what this file
+ * already knows about. An unknown status returns false here, which suppresses
+ * the provenance caveat: the safe direction, since a caveat about a pipeline
+ * stage we do not recognise is worse than no caveat.
+ */
+const transcriptionComplete = (status: string): boolean =>
+  (TRANSCRIPTION_COMPLETE as readonly string[]).includes(status);
 export default function CallDetailPage({
   params,
 }: {
@@ -100,12 +121,31 @@ export default function CallDetailPage({
     return speaker?.person_name ?? speaker?.label ?? speakerId;
   };
 
+  /*
+   * The breadcrumb leaf. Three states, not two — FE2's correction to the
+   * shape I proposed, and it fixes a bug I'd have shipped:
+   *
+   *   undefined  not loaded yet   → leaf omitted, trail is briefly shorter
+   *   null       loaded, no title → "Untitled"
+   *   string     the title
+   *
+   * I proposed `string | null` with null meaning "not yet", which collapses
+   * two different nothings into one value — and the collapse costs exactly
+   * the case it was meant to protect: a genuinely untitled call becomes
+   * indistinguishable from one still loading, so it renders as a permanently
+   * missing crumb instead of as an untitled call.
+   *
+   * `call?.title` gives that split for free: undefined while the fetch is in
+   * flight, then whatever the server actually sent.
+   */
+  useCrumbTitle(call?.title);
+
   const summary = versions.find((v) => v.version === shownVersion) ?? null;
 
-  if (!call) return <AppShell page={t("transcript")}>{null}</AppShell>;
+  if (!call) return <EchoAppShell page={t("transcript")}>{null}</EchoAppShell>;
 
   return (
-    <AppShell page={call.title} presetCallId={call.id}>
+    <EchoAppShell page={call.title} presetCallId={call.id}>
       <PageHeader
         title={call.title}
         subtitle={
@@ -187,7 +227,7 @@ export default function CallDetailPage({
                 misleading under the shared string. null = no transcript at
                 all, so there is nothing to caveat.
                 Suppressed until transcription ends — see TRANSCRIPTION_COMPLETE. */}
-            {TRANSCRIPTION_COMPLETE.includes(call.status) &&
+            {transcriptionComplete(call.status) &&
             (call.transcript_timing === "mixed" || call.transcript_timing === "none") ? (
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <Chip tone="warning">
@@ -286,7 +326,7 @@ export default function CallDetailPage({
           </ul>
         </Card>
       </div>
-    </AppShell>
+    </EchoAppShell>
   );
 }
 

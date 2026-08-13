@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { AgentMessage, Call, ModelInfo } from "@/api/types";
 import { ProposalCard } from "./ProposalCard";
@@ -23,6 +23,23 @@ export function AssistantPane({
   onClose: () => void;
 }) {
   const t = useTranslations("assistant");
+  /**
+   * The composer's direction follows the LOCALE, stated explicitly rather
+   * than inherited.
+   *
+   * Inheritance works right up until any ancestor sets `direction` — and this
+   * codebase has a `.ltr` utility applied to Latin fragments (timestamps,
+   * model ids) precisely because they sit inside Persian text. A wrapper
+   * gaining that class would flip the composer's caret and placeholder to LTR
+   * in Persian, and nothing about the markup would look wrong.
+   *
+   * Not `dir="auto"`: that follows the first strong character of what has
+   * been TYPED, so an empty box would sit LTR until the first Persian letter
+   * and then jump. The directive is that entry follows the locale, and a
+   * caret that moves after the first keystroke is its own bug.
+   */
+  const locale = useLocale();
+  const composerDir = locale === "fa" ? "rtl" : "ltr";
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -91,6 +108,15 @@ export function AssistantPane({
           prev.map((m) => {
             if (m.id !== draft.id) return m;
             switch (event.type) {
+              case "session":
+                /*
+                 * Arrives FIRST, and on a `created: true` turn it is the only
+                 * place the new conversation id will ever appear. Ignoring it
+                 * loses the handle to something the server is now persisting —
+                 * silently, because the answer still renders perfectly.
+                 * Held on the message so a resumed turn can continue it.
+                 */
+                return { ...m, session_id: event.id };
               case "text_delta":
                 return { ...m, content: m.content + event.delta };
               case "tool_call": {
@@ -284,7 +310,10 @@ export function AssistantPane({
             value={modelId}
             onChange={(e) => {
               setModelId(e.target.value);
-              void api.updateProfile({ model_id: e.target.value });
+              // its own call, not a field on the profile patch: the model
+              // preference lives on `PUT /v1/models/preferred`, and riding
+              // along in `PATCH /v1/me` would have been dropped in silence
+              void api.setPreferredModel(e.target.value);
             }}
           >
             {models.map((model) => (
@@ -297,6 +326,7 @@ export function AssistantPane({
         <div className="flex gap-2">
           <input
             className="input"
+            dir={composerDir}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {

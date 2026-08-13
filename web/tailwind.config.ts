@@ -15,8 +15,17 @@ const config: Config = {
         surface: "rgb(var(--surface) / <alpha-value>)",
         "surface-2": "rgb(var(--surface-2) / <alpha-value>)",
         border: "rgb(var(--border) / <alpha-value>)",
+        /*
+         * REGISTERED, not just declared in globals.css. A CSS variable with no
+         * entry here produces a class that emits nothing — `text-on-accent`
+         * shipped exactly that way once: markup read as fixed, computed value
+         * unchanged, contrast measurably WORSE than the bug it replaced. If a
+         * token is added to globals.css, it is added here in the same commit.
+         */
+        "border-strong": "rgb(var(--border-strong) / <alpha-value>)",
         fg: "rgb(var(--fg) / <alpha-value>)",
         "fg-muted": "rgb(var(--fg-muted) / <alpha-value>)",
+        "fg-subtle": "rgb(var(--fg-subtle) / <alpha-value>)",
         primary: "rgb(var(--primary) / <alpha-value>)",
         "on-primary": "rgb(var(--on-primary) / <alpha-value>)",
         secondary: "rgb(var(--secondary) / <alpha-value>)",

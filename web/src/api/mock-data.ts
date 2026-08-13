@@ -2,11 +2,13 @@ import type {
   AdminModelRow,
   AgentRun,
   Call,
+  CallPart,
   Connector,
   DirectoryPerson,
   GatewayDelivery,
   GatewayKey,
   GatewayWebhook,
+  Me,
   Org,
   Skill,
   Speaker,
@@ -26,18 +28,51 @@ export const ORG: Org = {
   id: "org-1",
   name: "شرکت داده‌پرداز آریا",
   status: "active",
-  default_call_scope: "private",
+  /*
+   * `default_call_scope` is GONE — it was never a column and never on this
+   * wire. What replaces it is not a rename: `locale`, `allowed_models` and
+   * `created_at` are what the org actually carries, and the fixture said none
+   * of them.
+   *
+   * `allowed_models` is non-empty on purpose. Empty would exercise only the
+   * "org has curated nothing" path, and the curation screen's whole subject is
+   * a list with things in it.
+   */
+  locale: "fa",
+  /*
+   * Ids taken from the MODELS fixture below, and **no `anthropic/*`** — the
+   * catalogue exclusion is a locked directive, and a fixture is exactly where
+   * a barred vendor slips back in unnoticed: nothing type-checks a model id,
+   * and an allow-list is the one place a wrong one looks authoritative.
+   *
+   * `meta/llama-4-scout` is deliberately NOT here, so the fixture has a model
+   * the org has NOT allowed. An allow-list containing everything cannot tell a
+   * working filter from a missing one.
+   */
+  allowed_models: ["google/gemini-3.1-pro", "google/gemini-3.1-flash", "openai/gpt-5.2"],
+  created_at: iso(400 * day),
 };
 
-export const ME: User = {
+/**
+ * `Me`, not `User` — the signed-in person carries preferences that a
+ * members-list row does not. The fixture states all three explicitly rather
+ * than leaning on a default, because `auto` IS a choice here: a fixture that
+ * omitted `calendar` would exercise the "not carried" path on every screen and
+ * never the chosen-value one.
+ */
+export const ME: Me = {
   id: "u-1",
   org_id: ORG.id,
   username: "sara",
+  email: "sara@example.com",
   display_name: "سارا محمدی",
+  display_name_en: "Sara Mohammadi",
   avatar_url: null,
   role: "admin",
   status: "active",
   locale: "fa",
+  calendar: "auto",
+  timezone: "auto",
   model_id: "google/gemini-3.1-pro",
   created_at: iso(60 * day),
 };
@@ -48,7 +83,9 @@ export const USERS: User[] = [
     id: "u-2",
     org_id: ORG.id,
     username: "amir",
+    email: "amir@example.com",
     display_name: "امیر رضایی",
+    display_name_en: "Amir Rezaei",
     avatar_url: null,
     role: "member",
     status: "active",
@@ -60,6 +97,7 @@ export const USERS: User[] = [
     id: "u-3",
     org_id: ORG.id,
     username: "negar",
+    email: "negar@example.com",
     display_name: "نگار کریمی",
     avatar_url: null,
     role: "member",
@@ -72,6 +110,7 @@ export const USERS: User[] = [
     id: "u-4",
     org_id: ORG.id,
     username: "hamid",
+    email: "hamid@example.com",
     display_name: "حمید توکلی",
     avatar_url: null,
     role: "member",
@@ -84,6 +123,7 @@ export const USERS: User[] = [
     id: "u-5",
     org_id: ORG.id,
     username: "reza",
+    email: "reza@example.com",
     display_name: "رضا احمدی",
     avatar_url: null,
     role: "member",
@@ -137,22 +177,45 @@ export const MODELS: AdminModelRow[] = [
   },
 ];
 
-const CALL_1_PARTS = [
+/**
+ * Parts now carry the WIRE's field names, because the type is core/'s
+ * (`@echo/core/wire`) rather than a transcription of it.
+ *
+ * What changed and why it matters: `index`→`idx`, `starts_at_seconds`→
+ * `offset_ms`, `duration_seconds`→`duration_ms` (**a factor of 1000, silent**
+ * — the old fixtures would have rendered a 30-minute part as 1.8 seconds
+ * against the real api), and `audio_url` is gone entirely because no such
+ * field exists: a client never addresses storage directly.
+ *
+ * `has_word_timestamps` is new here and is the per-part fact that the
+ * call-level `transcript_timing` aggregates. The fixtures already asserted
+ * that relationship in prose; now it is data, so a "mixed" call whose parts
+ * all claim word timing is a contradiction something can actually catch.
+ */
+const CALL_1_PARTS: CallPart[] = [
   {
     id: "p-1",
-    index: 0,
-    duration_seconds: 1800,
-    starts_at_seconds: 0,
-    audio_url: "/mock-audio/part-1",
-    status: "diarized" as const,
+    idx: 0,
+    offset_ms: 0,
+    duration_ms: 1_800_000,
+    status: "diarized",
+    has_word_timestamps: true,
+    missing: false,
+    failure_reason: null,
+    audio_format: "webm",
+    byte_size: 28_800_000,
   },
   {
     id: "p-2",
-    index: 1,
-    duration_seconds: 1140,
-    starts_at_seconds: 1800,
-    audio_url: "/mock-audio/part-2",
-    status: "diarized" as const,
+    idx: 1,
+    offset_ms: 1_800_000,
+    duration_ms: 1_140_000,
+    status: "diarized",
+    has_word_timestamps: true,
+    missing: false,
+    failure_reason: null,
+    audio_format: "webm",
+    byte_size: 18_240_000,
   },
 ];
 
@@ -194,11 +257,15 @@ export const CALLS: Call[] = [
     parts: [
       {
         id: "p-3",
-        index: 0,
-        duration_seconds: 1320,
-        starts_at_seconds: 0,
-        audio_url: "/mock-audio/part-3",
+        idx: 0,
+        offset_ms: 0,
+        duration_ms: 1_320_000,
         status: "diarized",
+        has_word_timestamps: true,
+        missing: false,
+        failure_reason: null,
+        audio_format: "webm",
+        byte_size: 21_120_000,
       },
     ],
     current_summary_id: null,
@@ -236,20 +303,31 @@ export const CALLS: Call[] = [
     parts: [
       {
         id: "p-4",
-        index: 0,
-        duration_seconds: 1800,
-        starts_at_seconds: 0,
-        audio_url: "/mock-audio/part-4",
+        idx: 0,
+        offset_ms: 0,
+        duration_ms: 1_800_000,
         status: "diarized",
+        // the primary lane: this part is why the call is "mixed" and not "none"
+        has_word_timestamps: true,
+        missing: false,
+        failure_reason: null,
+        audio_format: "webm",
+        byte_size: 28_800_000,
       },
       {
         id: "p-4b",
-        index: 1,
-        duration_seconds: 300,
-        starts_at_seconds: 1800,
-        audio_url: "/mock-audio/part-4b",
+        idx: 1,
+        offset_ms: 1_800_000,
+        duration_ms: 300_000,
         // prose-only lane still finishes the DAG — degraded ≠ failed (M20)
         status: "diarized",
+        // ...and THIS is why it is not "full". The disagreement between the two
+        // parts is now stated in data rather than only in the prose above.
+        has_word_timestamps: false,
+        missing: false,
+        failure_reason: null,
+        audio_format: "webm",
+        byte_size: 4_800_000,
       },
     ],
     current_summary_id: "sum-1",
@@ -273,11 +351,22 @@ export const CALLS: Call[] = [
     parts: [
       {
         id: "p-5",
-        index: 0,
-        duration_seconds: 420,
-        starts_at_seconds: 0,
-        audio_url: "/mock-audio/part-5",
+        idx: 0,
+        offset_ms: 0,
+        duration_ms: 420_000,
         status: "failed",
+        has_word_timestamps: false,
+        /*
+         * `missing` is false and `failure_reason` is set: the bytes DID
+         * arrive, transcription failed on them. The two say different things —
+         * missing means the recording never reached us, which is a gap nobody
+         * can retry away. Collapsing them would tell someone their audio was
+         * lost when it is sitting on disk.
+         */
+        missing: false,
+        failure_reason: "asr_engine_error",
+        audio_format: "webm",
+        byte_size: 6_720_000,
       },
     ],
     current_summary_id: null,
@@ -345,22 +434,32 @@ export const CALLS: Call[] = [
     parts: [
       {
         id: "p-6",
-        index: 0,
-        duration_seconds: 1800,
-        starts_at_seconds: 0,
-        audio_url: "/mock-audio/part-6",
+        idx: 0,
+        offset_ms: 0,
+        duration_ms: 1_800_000,
         // segments written, not yet diarized — which is exactly the window in
         // which its word-timing flag is unasserted and the call reads "none"
         status: "transcribed",
+        // false because the worker has not asserted it YET, not because this
+        // part is degraded. Same value, two very different futures.
+        has_word_timestamps: false,
+        missing: false,
+        failure_reason: null,
+        audio_format: "webm",
+        byte_size: 28_800_000,
       },
       {
         id: "p-6b",
-        index: 1,
-        duration_seconds: 600,
-        starts_at_seconds: 1800,
-        audio_url: "/mock-audio/part-6b",
+        idx: 1,
+        offset_ms: 1_800_000,
+        duration_ms: 600_000,
         // hasn't reached transcription — contributes NO evidence either way
         status: "transcoded",
+        has_word_timestamps: false,
+        missing: false,
+        failure_reason: null,
+        audio_format: "webm",
+        byte_size: 9_600_000,
       },
     ],
     current_summary_id: null,

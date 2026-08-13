@@ -5,6 +5,8 @@ import { NextIntlClientProvider } from "next-intl";
 import { getMessages, setRequestLocale } from "next-intl/server";
 import { notFound } from "next/navigation";
 import { routing, dirFor } from "@/i18n/routing";
+import { CrumbTitleProvider } from "@/components/platform/CrumbTitle";
+import { themeBootScript } from "@/lib/theme";
 import "../globals.css";
 
 const vazirmatn = localFont({
@@ -53,15 +55,26 @@ export default async function LocaleLayout({
   return (
     <html lang={locale} dir={dirFor(locale)} suppressHydrationWarning>
       <head>
-        {/* theme applied before paint so dark never flashes light */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem('echo-theme')||'light';document.documentElement.dataset.theme=t;}catch(e){}})();`,
-          }}
-        />
+        {/*
+          Theme applied before paint so dark never flashes light. The script is
+          BUILT from the same constants the toggle writes (src/lib/theme.ts) —
+          it used to be a hand-written string with a different key and the
+          opposite default, which meant this script caused the flash it exists
+          to prevent, and a stored preference lost every first paint.
+        */}
+        <script dangerouslySetInnerHTML={{ __html: themeBootScript() }} />
       </head>
       <body className={`${vazirmatn.variable} font-sans`}>
-        <NextIntlClientProvider messages={messages}>{children}</NextIntlClientProvider>
+        <NextIntlClientProvider messages={messages}>
+          {/*
+            The breadcrumb's entity title lives here, ABOVE every page, because
+            a page sets its own title and then renders the shell — so a provider
+            inside the shell is the page's child and can never receive the
+            write. This is the only place that is an ancestor of both the page
+            and the top bar the page renders.
+          */}
+          <CrumbTitleProvider>{children}</CrumbTitleProvider>
+        </NextIntlClientProvider>
       </body>
     </html>
   );

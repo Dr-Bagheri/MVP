@@ -5,36 +5,177 @@
  *
  * Naming follows the schema shape in ARCHITECTURE.md (snake_case fields as
  * they cross the wire; camelCase only where it never leaves the client).
+ *
+ * Shapes core/ publishes are IMPORTED from `@echo/core/wire` rather than
+ * mirrored here — `import type` is fully erased, so no database driver reaches
+ * the browser bundle (FE3 confirmed with a real `next build`, and that is why
+ * `vocabulary`'s runtime arrays are also safe while `wire` must stay
+ * type-only). Consumers keep importing from `@/api/types` and never learn the
+ * difference.
  */
+import type { CalendarPreference, CallPart, CallSummary, OrgRecord } from "@echo/core/wire";
 
 // ---- org & people (M2, M15) -------------------------------------------------
 
 export type OrgStatus = "active" | "suspended";
 
-export interface Org {
-  id: string;
-  name: string;
-  status: OrgStatus;
-  /** default scope applied to new calls */
-  default_call_scope: CallScope;
-}
+/**
+ * **`Org` IS `OrgRecord`** — an alias, not a mirror, for the same reason
+ * `Call` now extends `CallSummary`.
+ *
+ * The hand-written version carried `default_call_scope`, which is not a column
+ * and is not on this wire. It was the fourth invented field of the week, and
+ * the most expensive kind: `updateOrg` sent it faithfully, core/ ignored it in
+ * silence, and the screen reported a saved setting that had never existed.
+ *
+ * The real shape brings `locale`, `allowed_models` and `created_at` — three
+ * fields the product needed and did not know it was already being sent.
+ *
+ * Kept as a NAME rather than replacing every usage: consumers import `Org`
+ * from `@/api/types` exactly as before and get the producer's shape. There are
+ * no local-only fields to add, so this is a plain alias where `Call` needed an
+ * `extends`.
+ */
+export type Org = OrgRecord;
 
-export type Role = "admin" | "member";
+/**
+ * `echo.member_role` — three values since M23. `owner` is the org's root.
+ *
+ * It is **not settable through a general member update**: transfer is its own
+ * action, so a role picker offers member/admin and shows `owner` as a state
+ * rather than an option. A closed set containing it implies it can be
+ * assigned, which is what the transfer ruling denies.
+ */
+export type Role = "member" | "admin" | "owner";
+
+/** Server-side sort keys — deliberately not column names, so the database's
+ *  shape never becomes an API contract. */
+export type MemberSort = "default" | "name" | "created" | "last_seen" | "status";
+
+export interface MemberStats {
+  total: number;
+  active: number;
+  inactive: number;
+  /**
+   * **`history_since: null` means the log was not recording — render "—",
+   * never "0".**
+   *
+   * A zero beside a non-null `history_since` is a true zero: nothing changed
+   * in the window. A zero derived from a log that did not exist is a
+   * fabricated delta reached by honest arithmetic, which is the more
+   * dangerous kind — it is the only number on the tile a person would act on,
+   * and it looks exactly like a measurement.
+   *
+   * Same kinds-of-nothing split as `last_seen_at`, and the API keeps them
+   * distinct precisely so the UI can. Every org is in the null case today.
+   */
+  trend: {
+    window_days: number;
+    activated: number;
+    disabled: number;
+    joined: number;
+    history_since: string | null;
+  } | null;
+}
 /** M15: self-registration lands in `pending` until an admin accepts. */
 export type UserStatus = "pending" | "active" | "disabled";
 
 export interface User {
   id: string;
   org_id: string;
-  username: string;
+  /**
+   * The handle, unique within the org — **`null` until chosen, and clearable
+   * afterwards** (core/'s `MemberRecord.username: string | null`).
+   *
+   * It was `string` here, which is a type declaring that a state the wire
+   * produces cannot exist. The whole point of M24 round 1's null-clears rule
+   * is that "I have no handle" is expressible; a non-nullable mirror makes the
+   * very feature being built unrepresentable in the type describing it.
+   *
+   * Renderers must guard: an `@` followed by nothing is not a handle.
+   */
+  username: string | null;
+  /**
+   * Served by `GET /v1/me` and the members read — `MemberRecord` declares it
+   * non-optional, so this is `string` rather than `string?`. The avatar
+   * menu's identity header needs name AND email, which is why this gap was
+   * the one blocking a shipped requirement rather than a latent one.
+   */
+  email: string;
   display_name: string;
+  /**
+   * A Latin-script name the person chose for themselves. **Optional because
+   * the wire does not carry it yet** (B1 wires it after B3's migration), and
+   * optional afterwards too — plenty of people have exactly one name.
+   *
+   * When absent, the English UI shows `display_name` unchanged. That is the
+   * ruled fallback and it is a kinds-of-nothing call: an absent English name
+   * is *absent*, not *derivable*. Transliterating would invent a spelling
+   * they never chose and render it as confidently as one they did; blanking
+   * would erase them. Showing their one name is simply accurate.
+   *
+   * Resolution lives in `lib/format.ts`'s `personName()` — one rule, one
+   * implementation, because two would drift and each would look right alone.
+   */
+  display_name_en?: string | null;
   avatar_url: string | null;
   role: Role;
   status: UserStatus;
-  locale: "fa" | "en";
+  /**
+   * **Optional here because the MEMBERS list does not carry it.** Preferences
+   * live on core/'s `MeRecord`, not `MemberRecord`, and this one type serves
+   * both reads — so `?` is the honest statement that a member row has no
+   * preference fields, not a claim that the value can be unset. See `Me`
+   * below, which is what `/v1/me` actually returns.
+   *
+   * `string`, not `"fa" | "en"`: core/ validates by SHAPE, so `en-GB` is a
+   * legal stored value. A two-member union here would make a real preference
+   * unrepresentable — the same mistake `username: string` was.
+   *
+   * Distinct from the ROUTING locale, which is fa|en and comes from the URL.
+   */
+  locale?: string;
   /** each user picks their own model (M5) */
   model_id: string | null;
   created_at: string;
+  /** set when an admin accepts them (M15); null while pending */
+  accepted_at?: string | null;
+  /**
+   * Last activity, written by core/'s identity path. **Null is "not seen
+   * yet", never a dash** — a dash reads as "nothing to show" where the truth
+   * is "this person has never signed in", which is a fact worth stating.
+   *
+   * Deliberately does NOT move for gateway-key traffic: a polling
+   * integration must not make its owner look permanently online. So a "last
+   * action" column built on this is about the PERSON, not their machines —
+   * including it would be a lie about someone assembled from a robot's
+   * behaviour.
+   */
+  last_seen_at?: string | null;
+}
+
+/**
+ * What `GET /v1/me` returns: a member row PLUS the things only the person
+ * themselves gets to see — their preferences and their model choice.
+ *
+ * A separate type rather than three more optionals on `User`, because the
+ * difference is real: core/ puts these on `MeRecord`, not `MemberRecord`, so a
+ * members-list row genuinely does not have them. Left optional on `User` alone,
+ * every consumer would write `me.calendar ?? "auto"` — and that `??` silently
+ * covers "this payload never carried it", which is how a preference that failed
+ * to load renders as the default and looks like a choice the person made.
+ *
+ * **None of the three is nullable, and that is load-bearing.** `auto` IS the
+ * reset, so there is no unset state to spell; core/ rejects `null` outright
+ * (`calendar_unknown` / `timezone_unknown`). Typing them `string | null` here
+ * would reintroduce at the client the two-spellings problem B1 removed at the
+ * column — two ways to say "default", which is one too many.
+ */
+export interface Me extends User {
+  locale: string;
+  calendar: CalendarPreference;
+  /** `"auto"` (follow the device, resolved at render) or an IANA zone name. */
+  timezone: string;
 }
 
 // ---- calls (SPEC "Call") ----------------------------------------------------
@@ -82,67 +223,59 @@ export type PartStatus =
   | "diarized"
   | "failed";
 
-/** A ≤30-minute audio file; parts share ONE call and a continuous timeline. */
-export interface CallPart {
-  id: string;
-  index: number;
-  duration_seconds: number;
-  /** offset of this part on the call's continuous timeline */
-  starts_at_seconds: number;
-  audio_url: string;
-  /** `echo.part_status` — NOT `CallStatus`; the two enums are different. */
-  status: PartStatus;
-}
+/**
+ * A ≤30-minute audio file; parts share ONE call and a continuous timeline.
+ *
+ * **Imported, not written.** The hand-written version said `index`,
+ * `duration_seconds`, `starts_at_seconds` and `audio_url` against a wire of
+ * `idx`, `duration_ms`, `offset_ms` and no url at all — four names wrong and
+ * one field invented outright, and it rendered perfectly for weeks because the
+ * fixtures were built from the same transcription. core/'s `wire.ts` lists
+ * this as the third such invention; importing the shape is what stops there
+ * being a fourth.
+ *
+ * `audio_url` is gone rather than renamed: a client never addresses storage
+ * directly (audio is served through the api, which is what keeps the sealed-
+ * object rule enforceable), so there was never a url to have.
+ */
+export type { CalendarPreference, CallPart };
 
 export type TranscriptTiming = "full" | "mixed" | "none";
 
 /**
- * Mirrors `GET /v1/calls` as it actually serves — verified against the live
- * api, not against a spec. Where the two disagreed the WIRE won (rule 10:
- * the producer names the shape), which is why this says `started_at` and
- * `duration_ms` rather than the `created_at`/`duration_seconds` this file
- * used to invent.
+ * `GET /v1/calls`, **inherited from the producer** rather than mirrored.
  *
- * Fields below the divider are NOT on the wire yet. They are optional rather
- * than deleted because the features reading them are shipped and working:
- * "erase the mocks" removes invented DATA where a wire exists, it does not
- * delete a feature because its endpoint isn't built. Each is in milestone
- * 4's named backend package; `?` here is the honest statement that a live
- * response will not carry them.
+ * Every wire field now comes from `CallSummary`. The mirrored copy had already
+ * been corrected once by hand (`created_at`→`started_at`,
+ * `duration_seconds`→`duration_ms`) after a human read the difference in a
+ * message; inheriting means the NEXT rename arrives as a compile error here
+ * instead of a runtime `undefined`. `vocabulary.guard.ts` asserts the two still
+ * agree, and that assertion was verified red before it was trusted.
+ *
+ * Two consequences of taking the wire's word for it, both deliberate:
+ *
+ *  - `status` is `string`, not the `CallStatus` union. core/ types it that way
+ *    on purpose so a value added by a later migration cannot crash a client.
+ *    The union stays for labels and tones, where an unknown value falls back
+ *    to neutral rather than throwing.
+ *  - `source` is nullable. It was `string` here, which is the kind of
+ *    difference that only surfaces as a blank where a word was expected.
+ *
+ * `transcript_timing` is inherited too. Keeping the prose because the trap it
+ * describes is still live: it is `TranscriptTiming | null`, it EXPLAINS
+ * provenance for the whole call, and it must never be used as a per-row gate.
+ * A boolean version of this caught me once — AND-ing it with a row stripped
+ * click-a-word from perfectly word-timed rows in a mixed call. The authority
+ * for whether a row is clickable is that row's own `words` array, nothing else.
+ *
+ * The three optional fields below are NOT on the wire. They are optional
+ * rather than deleted because the features reading them are shipped and
+ * working: "erase the mocks" removes invented DATA where a wire exists, it
+ * does not delete a feature because its endpoint isn't built. They are named
+ * in the guard's `LocalOnly` list, so adding a fourth by accident fails the
+ * build rather than quietly re-opening the invent-your-own-shape door.
  */
-export interface Call {
-  id: string;
-  owner_id: string;
-  title: string;
-  scope: CallScope;
-  status: CallStatus;
-  /** language tag; "fa" on the dev rows */
-  language: string;
-  /** wire name — NOT `created_at` */
-  started_at: string;
-  /**
-   * Milliseconds, and **null on live rows today**. Suspected to be declared
-   * and served but never written (the worker maintains per-part durations;
-   * something may need to aggregate the call total) — Backend 1 is checking
-   * with Backend 2 rather than assuming. Treat null as "unknown", never 0.
-   */
-  duration_ms: number | null;
-
-  /** where the call came from; "web" on dev rows */
-  source: string;
-  /**
-   * TIMESTAMPS, not booleans — the wire says *when*, which carries strictly
-   * more than *whether*. These were never missing from the database; the api
-   * shipped a narrower SELECT, so the archive/delete/restore/purge UI was
-   * built against real columns the wire simply wasn't sending.
-   */
-  archived_at: string | null;
-  /** soft delete (M11): visible to admins with a purge window */
-  deleted_at: string | null;
-  purge_after: string | null;
-  /** pointer to the current summary — an ID, not a version number */
-  current_summary_id: string | null;
-
+export interface Call extends CallSummary {
   // ---- still not on the wire (milestone-4 backend package) ----
   /**
    * Deliberately absent and staying that way: denormalising a display name
@@ -153,22 +286,6 @@ export interface Call {
   owner_name?: string;
   org_id?: string;
   parts?: CallPart[];
-  /**
-   * M6/M20 provenance for the WHOLE call — "full" = every part came off the
-   * primary lane, "mixed" = some part fell back, "none" = none has word
-   * timing. `null` when no transcript exists yet (queued, failed, deleted):
-   * absent is not the same claim as "none", which asserts a transcript that
-   * is genuinely prose-only.
-   *
-   * This replaced a boolean deliberately. The boolean was structurally
-   * temptable as a per-row gate — and it caught me: AND-ing it with a row
-   * stripped click-a-word from perfectly word-timed rows in a mixed call.
-   * An enum has no truthy value to AND against, so that mistake can no
-   * longer be written. It is for EXPLAINING provenance only; the authority
-   * for whether a row can be clicked word-by-word is that row's own `words`
-   * array, and nothing else (see the call detail page).
-   */
-  transcript_timing: TranscriptTiming | null;
 }
 
 // ---- transcript (SPEC: "This is the record") --------------------------------
@@ -435,7 +552,27 @@ export type AgentEvent =
       summary: string;
       payload: AgentProposalPayload;
     }
+  /**
+   * Sent FIRST, before any delta. Additive to the vocabulary, and safe
+   * because the contract is unknown-types-ignorable — an older client that
+   * has never heard of it drops it and still renders the answer.
+   *
+   * `created: false` means the turn joined an existing conversation; `true`
+   * means this event is the only place the new id will ever appear. A client
+   * that ignores it on a `created: true` turn has just lost the handle to a
+   * conversation the server is now persisting.
+   */
+  | { type: "session"; id: string; created: boolean }
   | { type: "done"; runId: string; failed: boolean; error?: string };
+
+/** A persisted conversation. */
+export interface AssistantSession {
+  id: string;
+  title: string | null;
+  created_at: string;
+  updated_at: string;
+  message_count: number;
+}
 
 export interface AgentMessage {
   id: string;
@@ -450,6 +587,20 @@ export interface AgentMessage {
    * proposal arrives mid-stream, before the id exists.
    */
   run_id?: string;
+  /** the conversation this turn belongs to, from the `session` event */
+  session_id?: string;
+  /**
+   * Shape B: the answer was cut off. Derived from the run's status while the
+   * run lives, and **stamped by the database when the run is purged**, so the
+   * fact outlives the evidence for it.
+   *
+   * Optional because it is absent when unreadable — and it must be read as
+   * `=== true`, never truthiness. A falsy check would fold "we don't know"
+   * into "not truncated", but the inverse is the dangerous one: annotating a
+   * COMPLETE answer as cut off tells the reader to distrust something intact,
+   * which is worse than staying silent about a real truncation.
+   */
+  truncated?: boolean;
   /** provenance for every derived artifact */
   model_id?: string;
   streaming?: boolean;
@@ -595,3 +746,55 @@ export interface GatewayConfig {
   webhook_url: string | null;
   docs_url: string;
 }
+
+// ---- audit trail (M25, Settings · COMPLIANCE) -------------------------------
+
+/**
+ * **Not mirrored — imported.** `AuditEntry` and `AuditSource` come straight
+ * from core/'s published `@echo/core/wire`, so there is exactly one spelling
+ * of this shape in the repo and a rename upstream is a compile error here.
+ *
+ * Every other type in this file is a hand-written belief about a wire, which
+ * is how `created_at`/`started_at`, `duration_seconds`/`duration_ms` and an
+ * invented `audio_url` all shipped green. The audit surface is new, so it has
+ * no legacy to migrate and is simply born on the correct side of that line.
+ * `export type` is erased at build time — nothing from core/ enters the
+ * browser bundle, same construction as `vocabulary.guard.ts`.
+ *
+ * The runtime companion — the list of source VALUES, which a filter needs and
+ * a type cannot provide — is `AUDIT_SOURCES` in `@echo/core/vocabulary`.
+ * Imported, not copied, for the same reason: there is no second spelling to
+ * keep true.
+ */
+export type { AuditEntry, AuditSource, AuditPage, AuditCursor } from "@echo/core/wire";
+
+// ---- server health (M25, Management · Server) --------------------------------
+
+/**
+ * Imported for the same reason as the audit shapes, and more urgently.
+ *
+ * This shape's whole point is a THREE-state per metric — `measured` /
+ * `not measured` / `unavailable with a reason` — expressed as a nullable
+ * `measured_at` beside a nullable value. A hand-written copy of exactly that
+ * distinction is the second-hand belief rule 10 exists to prevent, and the
+ * distinction is the one a consumer collapses by reflex: `measured_at: null`
+ * means we did not find out, and a real zero arrives WITH a timestamp.
+ */
+export type { ServerHealth, QueueHealth } from "@echo/core/wire";
+
+/**
+ * The org row as core/ actually serves it — `{id, name, status, locale,
+ * allowed_models, created_at}`.
+ *
+ * **Additive on purpose.** The hand-written `Org` above declares a
+ * `default_call_scope` that is not on this wire, and core's update accepts
+ * `name`, `locale` and `allowed_models` and nothing else. Retiring `Org` is
+ * FE1's migration (it reaches `mock-data.ts` too) and rides with their `Call`
+ * work; this line only lets the org form consume the producer's shape in the
+ * meantime, and removes nothing.
+ *
+ * `status` is read-only by core's own comment, and must never become a
+ * control: org status is vendor-only at the guard (D27) precisely because an
+ * admin could otherwise brick their own organization irreversibly.
+ */
+export type { OrgRecord } from "@echo/core/wire";

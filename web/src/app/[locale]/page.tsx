@@ -1,6 +1,37 @@
-import { redirect } from "@/i18n/routing";
+import { Suspense } from "react";
+import { Hub } from "@/components/platform/Hub";
+import { PlatformShell } from "@/components/platform/PlatformShell";
 
-export default async function Home({ params }: { params: Promise<{ locale: string }> }) {
-  const { locale } = await params;
-  redirect({ href: "/calls", locale });
+/**
+ * NeurAI's first page IS the assistant hub (M22) — this route used to redirect
+ * to /calls, which was correct when Echo was the product and is wrong now that
+ * Echo is an app inside a platform.
+ *
+ * No assistant pane is rendered here, and that is the point rather than an
+ * omission: on the hub the assistant is the page. See `PlatformShell` for why
+ * the shell never places one.
+ */
+export default function HubPage() {
+  return (
+    <PlatformShell>
+      {/*
+        **The Suspense boundary is required, not decorative.**
+
+        `Hub` reads `?c=<sessionId>` through `useSearchParams()` to resume a
+        conversation. Next prerenders this route, and a component reading search
+        params forces a client bailout — without a boundary ABOVE it, the
+        production build fails outright while the dev server renders the page
+        perfectly. It did: `next build` errored on `/[locale]` while the suite,
+        the typechecker and every dev-mode screenshot stayed green.
+
+        The fallback is `null` rather than a skeleton hub: the hub's own idle
+        state is the approved first impression, and a placeholder that
+        approximates it would flash a second, wrong version of the screen the
+        user signed off.
+      */}
+      <Suspense fallback={null}>
+        <Hub />
+      </Suspense>
+    </PlatformShell>
+  );
 }

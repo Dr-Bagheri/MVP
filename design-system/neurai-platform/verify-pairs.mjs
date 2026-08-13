@@ -58,6 +58,7 @@ export const DARK = {
   borderStrong: "#7A5EB8",  // control boundaries — clears 3:1
   fg: "#F2ECFF",
   fgMuted: "#B6A6D6",
+  fgSubtle: "#9382BC",     // group labels — recedes toward the surface
   accent: "#A274FF",        // brand violet, measured, lossless source
   onAccent: "#130036",      // DARK on violet: white is 3.24 and fails
   success: "#4ADE80", warning: "#FBBF24", danger: "#FB7185", info: "#7DD3FC",
@@ -71,6 +72,7 @@ export const LIGHT = {
   borderStrong: "#8E7BB8",
   fg: "#160A2E",
   fgMuted: "#5B4B7A",
+  fgSubtle: "#786894",     // group labels — recedes toward the surface
   accent: "#6D3BF5",        // DERIVED ink — the brand violet is 3.24 on white
   onAccent: "#FFFFFF",
   success: "#166534", warning: "#92400E", danger: "#BE123C", info: "#075985",
@@ -111,6 +113,28 @@ for (const [name, T] of [["DARK (primary)", DARK], ["LIGHT (derived)", LIGHT]]) 
   for (const k of ["success", "warning", "danger", "info"]) check(`${k} on surface`, T[k], T.surface);
   for (const k of ["success", "warning", "danger", "info", "accent"]) {
     check(`${k} on its ${TINT * 100}% chip (composited)`, T[k], over(T[k], T.surface, TINT));
+  }
+  check("fg-subtle on surface", T.fgSubtle, T.surface);
+  /*
+   * The token's PURPOSE, asserted — not just its accessibility.
+   *
+   * `--fg-subtle` labels groups in a menu; it exists to RECEDE so a group title
+   * reads as a label rather than a destination. A user reported the Settings
+   * sidebar as one flat menu precisely because titles and items shared
+   * `--fg-muted`. If someone later "improves" this token's readability until it
+   * matches the items again, the grouping silently dies and every contrast
+   * check still passes — so the requirement is a *relationship*, and it is
+   * checked as one.
+   *
+   * "Lighter in one theme, darker in the other" is one semantic, not two:
+   * recede means move toward the surface, and the surface moves with the theme.
+   */
+  {
+    const label = cr(T.fgSubtle, T.surface);
+    const item = cr(T.fgMuted, T.surface);
+    const recedes = label < item;
+    if (!recedes) failures++;
+    console.log(`  ${recedes ? "PASS" : "FAIL"} ${String(label).padStart(6)} (< ${item})  fg-subtle recedes behind fg-muted`);
   }
   check("border-strong vs surface (controls)", T.borderStrong, T.surface, 3);
   check("accent focus ring vs bg", T.accent, T.bg, 3);

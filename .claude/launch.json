@@ -2,10 +2,10 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "echo-web",
-      "runtimeExecutable": "cmd",
-      "runtimeArgs": ["/c", "npm exec --prefix web -- next dev --port 3100"],
-      "port": 3100
+      "name": "web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "web"],
+      "port": 3000
     }
   ]
 }

@@ -395,6 +395,39 @@ rendered artifact, not the source that should have produced it.** In CSS that me
 values; in layout it means hit-testing. In both cases the cheap check is the one the failure
 mode cannot satisfy.
 
+### 6.2 The artefact that outlives its own retracted claim
+
+Also not a fifth row, and for a precise reason: **this one is not inert.** Every entry in the
+table above does nothing. This one works perfectly — on the basis of a premise that was
+withdrawn.
+
+Two screens once told users the model list was filtered to tool-capable models, and filtered
+on an invented `tool_capable` field. Nothing filters on tool support; the catalogue carries
+no such field. The **sentence** was retracted and removed from both screens. The **control**
+— `disabled={!model.tool_capable}` on the allow-list checkbox — survived it by weeks, and
+was still presenting enforcement that does not exist when the surface was re-homed.
+
+Its author's account of why is the useful part:
+
+> I removed the sentence and left the control, because the sentence was the thing I'd
+> written and the control read as mechanism.
+
+That is the generalisation: **when a claim is retracted, the prose gets retracted and the
+mechanism survives.** The prose is obviously the claim; the mechanism looks like
+implementation, and implementation reads as neutral. So a retraction that greps for the
+words is a retraction that leaves the behaviour.
+
+It shares one property with §6 — the failure is invisible at the place you would look, since
+`disabled={...}` reads as a rule rather than as an assertion — but the fix is different. The
+§6 rows need the *rendered artifact* checked. This one needs the question: **when we withdrew
+that claim, what else was built on it?**
+
+Related discipline, from the same exchange: a first attempt at asserting the `Call` wire
+shape only checked that *some* fields overlapped, so it passed trivially and would have
+passed through any drift. It was deleted rather than kept, with a note that the honest
+assertion is red today and lands with the migration. **A weak green is worse than an absent
+check** — it occupies the slot where a real one would go, and it reports success.
+
 ### 6.1 A related shape with a different mechanism — where attention goes
 
 Recorded separately rather than as a fifth row above, because it is **not** the same bug.

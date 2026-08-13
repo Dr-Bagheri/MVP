@@ -5,7 +5,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
 import { api } from "@/api/client";
 import type { SearchHit } from "@/api/types";
-import { AppShell } from "@/components/AppShell";
+import { EchoAppShell } from "@/components/echo/EchoAppShell";
 import { Card, Chip, EmptyState, PageHeader } from "@/components/ui";
 import { formatClock, digits } from "@/lib/format";
 
@@ -59,7 +59,7 @@ export default function SearchPage() {
   }
 
   return (
-    <AppShell page={t("title")}>
+    <EchoAppShell page={t("title")}>
       <PageHeader title={t("title")} subtitle={t("scopeNote")} />
 
       <Card className="mb-4">
@@ -117,6 +117,6 @@ export default function SearchPage() {
           </div>
         </>
       )}
-    </AppShell>
+    </EchoAppShell>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { cloneElement, isValidElement, useId, type ReactElement, type ReactNode } from "react";
 import type { CallStatus, CallScope } from "@/api/types";
 
 /** Shared primitives — one visual system across every screen. */
@@ -92,6 +92,28 @@ export function ScopeChip({ scope, label }: { scope: CallScope; label: string })
   return <Chip tone={scope === "org" ? "accent" : "neutral"}>{label}</Chip>;
 }
 
+/**
+ * A labelled form control.
+ *
+ * **The hint is a DESCRIPTION, not part of the name.** It used to render inside
+ * the `<label>`, which meant the accessible name of every hinted control was
+ * the label *plus the whole hint* — «نام کاربری۳ تا ۳۲ نویسه: حروف کوچک
+ * لاتین، رقم و زیرخط…» announced on every focus, and again in any list of form
+ * fields. Visually identical, wrong for everyone who does not look at it.
+ *
+ * So the hint moved out of the label and is attached with `aria-describedby`:
+ * name and description are separate things, and assistive tech presents them
+ * differently on purpose — the name identifies the field, the description is
+ * offered after it.
+ *
+ * The control is cloned to carry the `describedby` id. If `children` is not a
+ * single element (a fragment, several controls) the hint still renders and the
+ * association is skipped rather than guessed — a wrong `aria-describedby`
+ * pointing at the wrong control is worse than none.
+ *
+ * Found by FE1 through a failing `getByLabelText` exact match, which is the
+ * only way anyone was going to notice.
+ */
 export function Field({
   label,
   children,
@@ -101,12 +123,31 @@ export function Field({
   children: ReactNode;
   hint?: string;
 }) {
+  const hintId = useId();
+  const describedChild =
+    hint && isValidElement(children)
+      ? cloneElement(children as ReactElement<{ "aria-describedby"?: string }>, {
+          "aria-describedby": [
+            (children.props as { "aria-describedby"?: string })["aria-describedby"],
+            hintId,
+          ]
+            .filter(Boolean)
+            .join(" "),
+        })
+      : children;
+
   return (
-    <label className="block">
-      <span className="mb-1.5 block text-sm font-medium text-fg">{label}</span>
-      {children}
-      {hint ? <span className="mt-1 block text-xs text-fg-muted">{hint}</span> : null}
-    </label>
+    <div className="block">
+      <label className="block">
+        <span className="mb-1.5 block text-sm font-medium text-fg">{label}</span>
+        {describedChild}
+      </label>
+      {hint ? (
+        <p id={hintId} className="mt-1 text-xs text-fg-muted">
+          {hint}
+        </p>
+      ) : null}
+    </div>
   );
 }
 

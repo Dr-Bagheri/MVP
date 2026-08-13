@@ -10,6 +10,7 @@ import { useTranslations, useLocale } from "next-intl";
  * active state something to show.
  */
 import { Link, usePathname } from "@/i18n/routing";
+import { DEFAULT_THEME, readStoredTheme, storeTheme, type Theme } from "@/lib/theme";
 import { AssistantPane } from "./AssistantPane";
 
 const NAV = [
@@ -53,10 +54,21 @@ export function AppShell({
    * phone before the correction.
    */
   const [assistantOpen, setAssistantOpen] = useState(false);
-  const [theme, setTheme] = useState<"light" | "dark">("light");
+  /*
+   * ONE theme store for the document (src/lib/theme.ts). This shell used to
+   * keep its own — key `echo-theme`, default `"light"` — while the platform
+   * shell kept `neurai-theme` / `"dark"`, and the pre-paint script read the
+   * first. Two stores for one `data-theme` attribute meant a stored preference
+   * lost the first paint and won it back on hydration.
+   *
+   * Consequence worth naming: Echo's default is now DARK, because the platform
+   * default is (M22) and Echo's screens render on the platform palette. That is
+   * one constant, in one file, if it is ever ruled the other way.
+   */
+  const [theme, setTheme] = useState<Theme>(DEFAULT_THEME);
 
   useEffect(() => {
-    const stored = (localStorage.getItem("echo-theme") as "light" | "dark") ?? "light";
+    const stored = readStoredTheme();
     setTheme(stored);
     document.documentElement.dataset.theme = stored;
     // docked beside the content from md up; below that it would cover it
@@ -64,10 +76,9 @@ export function AppShell({
   }, []);
 
   function toggleTheme() {
-    const next = theme === "light" ? "dark" : "light";
+    const next: Theme = theme === "light" ? "dark" : "light";
     setTheme(next);
-    document.documentElement.dataset.theme = next;
-    localStorage.setItem("echo-theme", next);
+    storeTheme(next);
   }
 
   return (

@@ -1,0 +1,98 @@
+import { describe, expect, it } from "vitest";
+import * as vocabulary from "@echo/core/vocabulary";
+
+/**
+ * **The guard's coverage list is itself a seam.**
+ *
+ * `vocabulary.guard.ts` asserts each of our unions against core/'s published
+ * arrays — but the list of *which* unions it checks is hand-written, so it
+ * covered every vocabulary except the one that drifted. `Role` stayed
+ * two-valued for days after `owner` landed, and the guard was silent because
+ * nobody had added the line. Present, reads as satisfied, blind in exactly
+ * one place.
+ *
+ * So this asserts the list is COMPLETE: every closed vocabulary core/
+ * publishes is either guarded or explicitly excluded with a reason. A new
+ * vocabulary fails the build until someone decides which — the decision is
+ * forced rather than defaulted to silence.
+ *
+ * A type-level derivation would be tighter, but it can't enumerate a module's
+ * exports at compile time across the package boundary. This can, at runtime,
+ * against the real module — and unlike a type it can *name* what's missing.
+ */
+
+/** Guarded in `vocabulary.guard.ts` — one `Exact<…>` line each. */
+const GUARDED = [
+  "CALL_STATUSES",
+  "PART_STATUSES",
+  "MEMBER_ROLES",
+  "PROPOSAL_KINDS",
+  "TRANSCRIPT_TIMINGS",
+  "USER_STATUSES",
+  "WEBHOOK_EVENTS",
+];
+
+/**
+ * Deliberately NOT guarded, with the reason — an exclusion on the record is a
+ * decision; an omission is an accident that looks like one.
+ */
+const EXCLUDED: Record<string, string> = {
+  /*
+   * Not mirrored, so there is nothing to mirror-check. `types.ts` re-exports
+   * `AuditSource` straight from `@echo/core/wire`, and the audit screen imports
+   * `AUDIT_SOURCES` from this very module — one spelling, no local copy that
+   * could drift.
+   *
+   * An `Exact<…>` line for it would compare the imported type with itself and
+   * pass forever regardless of what either side says: a check that cannot fail
+   * for its own reason, which this codebase treats as worse than none. The
+   * absence of a guard here is the CONSEQUENCE of importing rather than
+   * copying, and that is the stronger position — every guarded entry above
+   * exists because a hand-written union sits opposite it.
+   */
+  AUDIT_SOURCES:
+    "not mirrored: `AuditSource` is imported from `@echo/core/wire` and the " +
+    "values from this module, so no local union exists to drift. An assertion " +
+    "would compare a type with itself and could never fail.",
+  AGENT_RUN_STATUSES:
+    "core-internal: web/ never renders a run's lifecycle state, so mirroring it " +
+    "would be a union we own and never read — dead surface that still has to be " +
+    "kept true.",
+  CALENDAR_PREFERENCES:
+    "not mirrored: `lib/preferences.ts` re-exports core's `CalendarPreference` " +
+    "and validates stored values against `CALENDAR_PREFERENCES` itself, so there " +
+    "is no local union or local member list to drift. Same reasoning as " +
+    "AUDIT_SOURCES — the missing guard is the consequence of importing rather " +
+    "than copying, not an oversight.",
+};
+
+/** A published vocabulary is a frozen array of strings. */
+function publishedVocabularies(): string[] {
+  return Object.entries(vocabulary)
+    .filter(
+      ([, value]) =>
+        Array.isArray(value) && value.length > 0 && value.every((v) => typeof v === "string"),
+    )
+    .map(([name]) => name);
+}
+
+describe("the guard covers every vocabulary core/ publishes", () => {
+  it("can see the vocabulary module at all", () => {
+    // without this, an import that resolved to {} would make the suite pass
+    // by checking nothing — the empty-audit failure, in the coverage check
+    expect(publishedVocabularies().length).toBeGreaterThanOrEqual(GUARDED.length);
+  });
+
+  it("leaves no published vocabulary unguarded and undeclared", () => {
+    const unaccounted = publishedVocabularies().filter(
+      (name) => !GUARDED.includes(name) && !(name in EXCLUDED),
+    );
+    expect(unaccounted).toEqual([]);
+  });
+
+  it("does not claim to guard something core/ no longer publishes", () => {
+    // the mirror failure: a stale entry makes coverage look wider than it is
+    const published = publishedVocabularies();
+    expect(GUARDED.filter((name) => !published.includes(name))).toEqual([]);
+  });
+});

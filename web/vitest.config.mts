@@ -20,6 +20,17 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),
+      /*
+       * tsconfig `paths` covers the TYPE-only guard, which never executes.
+       * The coverage test imports this module as a VALUE — it enumerates the
+       * real exports — so vitest needs its own alias. Without it the file
+       * fails to import and vitest reports "no tests", which is a pass-shaped
+       * silence: a coverage check that never ran looks identical to one with
+       * nothing to report.
+       */
+      "@echo/core/vocabulary": fileURLToPath(
+        new URL("../core/src/api/vocabulary.ts", import.meta.url),
+      ),
     },
   },
 });

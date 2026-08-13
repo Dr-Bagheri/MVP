@@ -1,0 +1,122 @@
+import { render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { AgentEvent } from "@/api/types";
+
+/**
+ * **The session id must be captured from the `session` event and sent back on
+ * the next ask.**
+ *
+ * This is the one behaviour in the hub that fails invisibly. A client that
+ * drops the id starts a brand-new conversation on every message: the answer
+ * still streams, the thread still renders, nothing on screen is wrong — and the
+ * assistant has no memory of the previous turn while appearing to. There is no
+ * visual symptom to notice, which is exactly why it needs a test that inspects
+ * the *argument* rather than the output.
+ *
+ * `created: true` is the only place a new id is ever announced, so this is also
+ * the only moment it can be lost.
+ */
+vi.mock("@/components/platform/PlatformShell", () => ({
+  PlatformShell: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}));
+
+/*
+ * `@/i18n/routing`'s Link reads next-intl's real locale context, which the
+ * setup's `useTranslations` stub does not provide. Stubbed to a plain anchor:
+ * the Echo card's routing is not what this file is about, and leaving it
+ * unmocked fails the suite for a reason unrelated to session continuity.
+ */
+vi.mock("@/i18n/routing", () => ({
+  Link: ({ href, children }: { href: string; children: React.ReactNode }) => (
+    <a href={href}>{children}</a>
+  ),
+  usePathname: () => "/",
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
+}));
+
+/*
+ * The hub reads `?c=` to resume a conversation, so it needs a search-params
+ * source. Empty here: this file is about a LIVE conversation, and a resume
+ * param would silently load a thread instead of starting one.
+ */
+vi.mock("next/navigation", () => ({
+  useSearchParams: () => new URLSearchParams(""),
+}));
+
+/** Every `ask` call's third argument, in order. */
+const askCalls: (string | undefined)[] = [];
+const SESSION_ID = "sess-fixed-1";
+
+async function* scriptedAsk(
+  _q: string,
+  _ctx: { page: string; callIds: string[] },
+  sessionId?: string,
+): AsyncGenerator<AgentEvent> {
+  askCalls.push(sessionId);
+  // mirrors the wire: `session` first, `created` false when continuing
+  yield { type: "session", id: sessionId ?? SESSION_ID, created: sessionId === undefined };
+  yield { type: "text_delta", delta: "پاسخ" };
+  yield { type: "done", runId: "run-1", failed: false };
+}
+
+vi.mock("@/api/client", () => ({
+  api: {
+    me: async () => ({
+      id: "u-1", org_id: "o-1", username: "sara", display_name: "سارا",
+      avatar_url: null, role: "admin", status: "active", locale: "fa",
+      model_id: null, created_at: new Date().toISOString(),
+    }),
+    ask: (...args: Parameters<typeof scriptedAsk>) => scriptedAsk(...args),
+    agentMessages: async () => [],
+  },
+}));
+
+const { Hub } = await import("./Hub");
+
+async function ask(text: string) {
+  const box = screen.getByPlaceholderText(/بپرسید/);
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")!.set!;
+  setter.call(box, text);
+  box.dispatchEvent(new Event("input", { bubbles: true }));
+  const send = document.querySelector("button.bg-accent") as HTMLButtonElement;
+  await waitFor(() => expect(send.disabled).toBe(false));
+  send.click();
+}
+
+describe("Hub — session continuity", () => {
+  beforeEach(() => {
+    askCalls.length = 0;
+  });
+
+  it("starts without a session id, then sends the captured one back", async () => {
+    render(<Hub />);
+
+    await ask("سؤال یک");
+    await waitFor(() => expect(askCalls.length).toBe(1));
+    // first turn: no session exists yet, so none is sent
+    expect(askCalls[0]).toBeUndefined();
+
+    await waitFor(() => expect(screen.getByText("پاسخ")).toBeTruthy());
+
+    await ask("سؤال دو");
+    await waitFor(() => expect(askCalls.length).toBe(2));
+    /*
+     * The assertion that matters. If this is `undefined`, every message opens
+     * a new conversation while the UI looks perfect — the failure with no
+     * visual symptom.
+     */
+    expect(askCalls[1]).toBe(SESSION_ID);
+  });
+
+  it("keeps the same session across a third turn — not just the second", async () => {
+    render(<Hub />);
+    await ask("یک");
+    await waitFor(() => expect(askCalls.length).toBe(1));
+    await ask("دو");
+    await waitFor(() => expect(askCalls.length).toBe(2));
+    await ask("سه");
+    await waitFor(() => expect(askCalls.length).toBe(3));
+    // a ref that is written but never re-read would still pass a two-turn test
+    expect(askCalls.slice(1)).toEqual([SESSION_ID, SESSION_ID]);
+  });
+});

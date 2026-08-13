@@ -22,6 +22,8 @@ export type CoreErrorKind =
   | "suspended"
   | "forbidden"
   | "not_found"
+  | "invalid"
+  | "conflict"
   | "upstream";
 
 /**
@@ -54,6 +56,24 @@ const DECLARED_401: readonly string[] = ["no_token", "bad_signature", "unknown_a
  * - `forbidden` — you are active and this simply isn't yours.
  */
 const DECLARED_403: readonly string[] = ["pending", "suspended", "forbidden"];
+
+/**
+ * The REFUSALS core/ declares on a write — `400 {kind:"invalid"}` and
+ * `409 {kind:"conflict"}` (core/src/api/errors.ts).
+ *
+ * Without these two, both fell through to the catch-all below and reached the
+ * browser labelled `upstream` — the kind this file documents as "core/ is not
+ * answering". A form that keys off `kind` would then offer a RETRY for a
+ * username that is already taken: the one refusal where retrying the same
+ * value is guaranteed to fail again, forever.
+ *
+ * The status alone is not the whole answer, because the two kinds are how a
+ * form decides WHERE the message goes: `conflict` belongs on the username
+ * field specifically, `invalid` belongs wherever the sentence points. So the
+ * kind is read from the body like the 401/403 paths do, with the status as
+ * the fallback for a body that predates it.
+ */
+const DECLARED_4XX: Readonly<Record<number, CoreErrorKind>> = { 400: "invalid", 409: "conflict" };
 
 export class CoreError extends Error {
   constructor(
@@ -135,6 +155,19 @@ export async function coreFetch<T>(path: string, init: CoreFetchInit = {}): Prom
      * screens: one offers a retry, the other must not.
      */
     throw new CoreError("not_found", 404, await safeDetail(response));
+  }
+  const declared4xx = DECLARED_4XX[response.status];
+  if (declared4xx) {
+    /*
+     * The MESSAGE is the payload here, not an afterthought. core/ owns the
+     * username rule and states it in the refusal ("3–32 lowercase…", "already
+     * taken", "retired") precisely so a client does not have to mirror the
+     * regex — and a mirrored rule is one that drifts silently the day the
+     * constraint changes, telling the user their valid name is invalid.
+     */
+    const body = await safeBody(response);
+    const kind = body.kind === "invalid" || body.kind === "conflict" ? body.kind : declared4xx;
+    throw new CoreError(kind, response.status, body.error ?? body.message ?? `HTTP ${response.status}`);
   }
   if (!response.ok) {
     throw new CoreError("upstream", response.status, await safeDetail(response));

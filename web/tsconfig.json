@@ -1,7 +1,11 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["dom", "dom.iterable", "esnext"],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
     "allowJs": false,
     "skipLibCheck": true,
     "strict": true,
@@ -9,6 +13,14 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noEmit": true,
+    /*
+     * core/ runs under `node --experimental-strip-types`, so its imports carry
+     * explicit `.ts` extensions. Consuming `@echo/core/wire` pulls that graph
+     * into this typecheck, and without this flag every one of those imports is
+     * an error in a file we don't own. Safe here precisely because `noEmit` is
+     * on — we type-check core/'s sources, we never compile them.
+     */
+    "allowImportingTsExtensions": true,
     "esModuleInterop": true,
     "module": "esnext",
     "moduleResolution": "bundler",
@@ -16,12 +28,31 @@
     "isolatedModules": true,
     "jsx": "preserve",
     "incremental": true,
-    "plugins": [{ "name": "next" }],
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
     "paths": {
-      "@/*": ["./src/*"],
-      "@echo/core/vocabulary": ["../core/src/api/vocabulary.ts"]
+      "@/*": [
+        "./src/*"
+      ],
+      "@echo/core/vocabulary": [
+        "../core/src/api/vocabulary.ts"
+      ],
+      "@echo/core/wire": [
+        "../core/src/api/wire.ts"
+      ]
     }
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules"]
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    "next-env.d.ts",
+    ".next-gate/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
 }

@@ -63,7 +63,16 @@ async function gotrue(path: string, body: unknown): Promise<TokenSet> {
   };
 
   if (!response.ok) {
-    throw new AuthError(response.status === 400 ? 401 : response.status, data.error_description ?? data.msg ?? "sign-in failed");
+    /*
+     * Status passed through as-is. This used to fold 400 → 401, which is
+     * correct for SIGN-IN (GoTrue 400s a wrong password, and that is an
+     * authentication failure) and wrong for SIGN-UP, where a 400 means the
+     * input was rejected — a malformed or non-deliverable email address is
+     * not a credentials problem. Folding them made a validation error read as
+     * "wrong password", which sends whoever hits it looking for the wrong
+     * thing entirely. The sign-in caller does its own mapping.
+     */
+    throw new AuthError(response.status, data.error_description ?? data.msg ?? "auth request failed");
   }
   if (!data.access_token || !data.refresh_token) {
     throw new AuthError(502, "auth provider returned no token");
@@ -75,9 +84,22 @@ async function gotrue(path: string, body: unknown): Promise<TokenSet> {
   };
 }
 
-/** Email + password. Returns the token set; the CALLER puts it in the cookie. */
-export function signInWithPassword(email: string, password: string): Promise<TokenSet> {
-  return gotrue("/token?grant_type=password", { email, password });
+/**
+ * Email + password. Returns the token set; the CALLER puts it in the cookie.
+ *
+ * GoTrue 400s a wrong password, which IS an authentication failure here — so
+ * this is the one place that fold is correct, and it lives here rather than
+ * in the shared helper where sign-up would inherit it.
+ */
+export async function signInWithPassword(email: string, password: string): Promise<TokenSet> {
+  try {
+    return await gotrue("/token?grant_type=password", { email, password });
+  } catch (error) {
+    if (error instanceof AuthError && error.status === 400) {
+      throw new AuthError(401, error.message);
+    }
+    throw error;
+  }
 }
 
 /**
