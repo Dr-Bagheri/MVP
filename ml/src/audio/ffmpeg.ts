@@ -193,6 +193,51 @@ export async function concatRegions(
   );
 }
 
+/**
+ * Do the two channels actually carry DIFFERENT audio?
+ *
+ * M6 says two-channel recordings take their speakers from the channels — which
+ * is right for telephony and conferencing, where each party has their own leg,
+ * and wrong for the far more common case of a stereo file whose channels are
+ * identical. Phone voice memos, screen recorders and most re-encodes emit
+ * dual-mono: one microphone, duplicated into two channels.
+ *
+ * Measured on a real two-voice Persian recording, treating dual-mono as
+ * per-speaker channels produced: every word transcribed TWICE, two invented
+ * speakers that were the same person alternating with themselves, and double
+ * the STT bill. Nothing failed — it just quietly produced a nonsense
+ * transcript, which is the expensive kind of wrong.
+ *
+ * The test is the standard one: subtract the channels. If what remains is far
+ * below the level of either channel alone, they are the same signal.
+ */
+export async function channelsAreDistinct(file: string): Promise<boolean> {
+  // A mono file has no second channel to differ from. Without this, the
+  // `c0-c1` pan silently treats the missing channel as zero and reports the
+  // file as "distinct" because it is merely 6 dB quieter than itself.
+  if ((await probe(file)).channels < 2) return false;
+
+  // `volumedetect` reports on stderr and exits 0, so read stderr either way.
+  const readMean = async (pan: string): Promise<number> => {
+    const bin = await ffmpeg();
+    const { stderr } = await exec(
+      bin,
+      ["-hide_banner", "-nostdin", "-i", file, "-af", `${pan},volumedetect`, "-f", "null", "-"],
+      { maxBuffer: 8 << 20 },
+    ).catch((e: { stderr?: string }) => ({ stderr: String(e.stderr ?? "") }));
+    const match = /mean_volume:\s*(-?[\d.]+) dB/.exec(String(stderr));
+    return match ? Number(match[1]) : Number.NEGATIVE_INFINITY;
+  };
+
+  const difference = await readMean("pan=mono|c0=0.5*c0-0.5*c1");
+  const single = await readMean("pan=mono|c0=c0");
+
+  if (!Number.isFinite(single)) return false; // silent file: nothing to split
+  // 20 dB is ~10x quieter in amplitude. Real two-party audio sits far below
+  // that gap; dual-mono sits far above it (measured: 40 dB).
+  return single - difference < 20;
+}
+
 /** Test seam: forget resolved binaries so a test can point at a stub. */
 export function resetBinaries(): void {
   ffmpegBin = undefined;

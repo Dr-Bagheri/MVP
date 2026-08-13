@@ -146,7 +146,10 @@ export const HealthSchema = z
     ffmpeg: z.boolean(),
     lanes: z.record(z.string(), z.enum(["configured", "unconfigured"])),
     diarizer: z.string(),
-    vad: z.boolean(),
+    /** The ENGINE, not a boolean — see the /health handler for why. */
+    vad: z.string(),
+    /** True when the energy fallback is running instead of Silero. */
+    vad_degraded: z.boolean(),
   })
   .strict();
 

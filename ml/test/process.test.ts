@@ -124,6 +124,25 @@ suite("GET /health", () => {
       await app.close();
     }
   });
+
+  it("NAMES the vad engine, and says so when the fallback is what is running", async () => {
+    // `vad` was a boolean meaning "vadEngine() resolved" — and it always
+    // resolves, because the energy gate is an unconditional fallback. The
+    // field could not be false under any deployment, so a box with no Silero
+    // model reported a healthy VAD while every job ran the degraded gate.
+    // A field that can only take one value is not a check.
+    //
+    // This test runs with ML_SILERO_MODEL unset, which is exactly that box.
+    configure(new StubLane());
+    const app = await buildServer();
+    try {
+      const body = HealthSchema.parse((await app.inject({ method: "GET", url: "/health" })).json());
+      expect(body.vad).toBe("energy-rms");
+      expect(body.vad_degraded).toBe(true);
+    } finally {
+      await app.close();
+    }
+  });
 });
 
 suite("POST /process — mono", () => {

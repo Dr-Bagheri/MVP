@@ -38,7 +38,11 @@ try {
   await toMono16k(path.resolve(file), wav);
 
   const started = Date.now();
-  const segments = await engine.diarize(wav, { maxSpeakers: 15 });
+  // Deliberately high: this smoke REPORTS the clusterer's true count rather
+  // than capping it. A low ceiling here would hide over-splitting behind a
+  // tidy number — which is exactly how the segment-dropping bug stayed
+  // invisible until a real two-voice recording contradicted it.
+  const segments = await engine.diarize(wav, { maxSpeakers: 64 });
   const elapsed = Date.now() - started;
 
   const total = segments.reduce((a, s) => a + (s.end_ms - s.start_ms), 0);

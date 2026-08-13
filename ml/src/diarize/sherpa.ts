@@ -26,6 +26,7 @@ import { access } from "node:fs/promises";
 import { config } from "../config.js";
 import { MlError } from "../errors.js";
 import { readWav } from "../audio/wav.js";
+import { logger } from "../log.js";
 import type { DiarSegment, Diarizer } from "./types.js";
 
 export class SherpaDiarizer implements Diarizer {
@@ -90,29 +91,68 @@ export class SherpaDiarizer implements Diarizer {
       });
 
       const raw = sd.process(pcm.samples) as Array<{ start: number; end: number; speaker: number }>;
-      return normalize(raw, opts.maxSpeakers);
+      const { segments, speakersFound, exceededMax } = normalize(raw, opts.maxSpeakers);
+
+      if (exceededMax) {
+        // Said out loud rather than trimmed away. Over-splitting is REAL on
+        // conversational audio — measured at 15+ clusters on a genuine
+        // two-voice Persian recording at every threshold from 0.5 to 0.9 — and
+        // the honest response is a visible warning, not a quietly shorter
+        // transcript.
+        logger.warn(
+          { speakers_found: speakersFound, max_speakers: opts.maxSpeakers },
+          "diarizer found more speakers than max_speakers; keeping every segment",
+        );
+      }
+      return segments;
     } catch (e) {
       throw new MlError("diarization_failed", "sherpa-onnx diarization failed", { cause: e });
     }
   }
 }
 
-/** sherpa's seconds + numeric speakers → our ms + S1/S2 labels by first appearance. */
+export interface NormalizedDiarization {
+  segments: DiarSegment[];
+  /** Distinct voices the clusterer actually found, before any ceiling. */
+  speakersFound: number;
+  /** True when that exceeded the caller's `max_speakers` hint. */
+  exceededMax: boolean;
+}
+
+/**
+ * sherpa's seconds + numeric speakers → our ms + S1/S2 labels by first
+ * appearance.
+ *
+ * **Every segment is kept, always.** An earlier version dropped segments whose
+ * speaker fell beyond `max_speakers`, which silently deleted speech to satisfy
+ * a configuration number — a person's words vanishing from the transcript
+ * because the clusterer over-split. That is the forfeit hierarchy inverted
+ * (M21: the system may forfeit a derived artifact, never the user's data), and
+ * it was invisible: the only symptom was a speech total that moved when a
+ * threshold changed.
+ *
+ * `max_speakers` is therefore a HINT that is reported on, not a knife. When the
+ * count exceeds it, the caller is told and decides.
+ */
 export function normalize(
   raw: readonly { start: number; end: number; speaker: number }[],
   maxSpeakers: number,
-): DiarSegment[] {
+): NormalizedDiarization {
   const order = new Map<number, string>();
   const out: DiarSegment[] = [];
 
   for (const s of [...raw].sort((a, b) => a.start - b.start)) {
     let label = order.get(s.speaker);
     if (!label) {
-      if (order.size >= maxSpeakers) continue; // beyond the caller's ceiling
       label = `S${order.size + 1}`;
       order.set(s.speaker, label);
     }
     out.push({ start_ms: Math.round(s.start * 1000), end_ms: Math.round(s.end * 1000), speaker: label });
   }
-  return out;
+
+  return {
+    segments: out,
+    speakersFound: order.size,
+    exceededMax: order.size > maxSpeakers,
+  };
 }

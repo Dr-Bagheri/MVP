@@ -4,7 +4,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { rm } from "node:fs/promises";
 import path from "node:path";
-import { extractChannel, probe, toMono16k, concatRegions, PIPELINE_SAMPLE_RATE } from "../src/audio/ffmpeg.js";
+import { channelsAreDistinct, extractChannel, probe, toMono16k, concatRegions, PIPELINE_SAMPLE_RATE } from "../src/audio/ffmpeg.js";
 import { readWav } from "../src/audio/wav.js";
 import { concat, convert, fixtureDir, ffmpegPresent, interleave, silence, tone, writeWav } from "./helpers.js";
 
@@ -109,6 +109,28 @@ suite("channel extraction — speakers from the microphones", () => {
     // were mixed instead of split, both halves would be loud in both files.
     expect(energy(l.samples, 0, half)).toBeGreaterThan(energy(l.samples, half, l.samples.length) * 10);
     expect(energy(r.samples, half, r.samples.length)).toBeGreaterThan(energy(r.samples, 0, half) * 10);
+  });
+});
+
+suite("dual-mono detection — the difference between two mics and one duplicated", () => {
+  it("says two genuinely different channels ARE distinct", async () => {
+    // Left speaks first, right answers: a real two-party recording.
+    expect(await channelsAreDistinct(stereoWav)).toBe(true);
+  });
+
+  it("says a DUPLICATED channel is not", async () => {
+    // What a phone voice memo actually produces: one microphone, copied into
+    // two channels. Measured on a real recording, treating this as
+    // per-speaker channels transcribed every word TWICE, invented two
+    // speakers who were the same person, and doubled the STT bill — with
+    // nothing failing anywhere.
+    const mono = concat(tone(220, 2000), silence(500), tone(330, 2000));
+    const dualMono = await writeWav(path.join(dir, "dualmono.wav"), interleave(mono, mono), 2);
+    expect(await channelsAreDistinct(dualMono)).toBe(false);
+  });
+
+  it("treats a mono file as not distinct rather than throwing", async () => {
+    expect(await channelsAreDistinct(monoWav)).toBe(false);
   });
 });
 

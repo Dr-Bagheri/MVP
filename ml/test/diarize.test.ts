@@ -51,7 +51,7 @@ describe("assignSpeakers", () => {
 
 describe("sherpa segment normalization", () => {
   it("converts seconds to ms and numbers speakers by first appearance", () => {
-    const out = normalize(
+    const { segments: out } = normalize(
       [
         { start: 2.5, end: 4.0, speaker: 3 },
         { start: 0.0, end: 2.0, speaker: 1 },
@@ -64,9 +64,21 @@ describe("sherpa segment normalization", () => {
     ]);
   });
 
-  it("honours the caller's speaker ceiling", () => {
+  it("KEEPS every segment when the clusterer exceeds max_speakers", () => {
+    // Measured on a real two-voice Persian recording: the clusterer found 15+
+    // at every threshold from 0.5 to 0.9. Dropping the overflow deleted a
+    // person's speech to satisfy a config number — invisible except as a
+    // speech total that moved when the threshold changed (M21 inverted).
     const raw = [0, 1, 2, 3].map((s) => ({ start: s, end: s + 0.5, speaker: s }));
-    const out = normalize(raw, 2);
-    expect(new Set(out.map((s) => s.speaker))).toEqual(new Set(["S1", "S2"]));
+    const { segments, speakersFound, exceededMax } = normalize(raw, 2);
+
+    expect(segments).toHaveLength(4);
+    expect(speakersFound).toBe(4);
+    expect(exceededMax).toBe(true);
+  });
+
+  it("reports no overflow when the count fits", () => {
+    const raw = [0, 1].map((s) => ({ start: s, end: s + 0.5, speaker: s }));
+    expect(normalize(raw, 8)).toMatchObject({ speakersFound: 2, exceededMax: false });
   });
 });

@@ -31,12 +31,22 @@ export async function buildServer() {
 
   app.get("/health", async () => {
     const ffmpeg = await ffmpegAvailable();
-    let vad = false;
+
+    // NAME the engine; never answer a boolean.
+    //
+    // `vad: true` used to mean "vadEngine() resolved", and vadEngine() always
+    // resolves — the energy gate is an unconditional fallback, so the field
+    // could not be false under any deployment. A box with no Silero model
+    // reported a perfectly healthy VAD while every job silently ran the
+    // degraded gate, and the one warning that said so scrolled past at
+    // startup. A check that can only pass is not a check (rule 7: a health
+    // check must resolve the specific callable it guards).
+    let vad: string;
     try {
-      await vadEngine();
-      vad = true;
-    } catch {
-      vad = false;
+      vad = (await vadEngine()).name;
+    } catch (error) {
+      vad = "unavailable";
+      logger.warn({ err: (error as Error).message }, "vad engine failed to load");
     }
 
     return HealthSchema.parse({
@@ -46,6 +56,9 @@ export async function buildServer() {
       lanes: laneStatus(),
       diarizer: await diarizerName(),
       vad,
+      // The fallback is a legitimate configuration, not a failure — so this is
+      // reported rather than refused (M21: what is forfeited is said out loud).
+      vad_degraded: vad === "energy-rms",
     });
   });
 

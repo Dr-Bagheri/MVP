@@ -6,7 +6,7 @@ import path from "node:path";
 import { config } from "./config.js";
 import { MlError } from "./errors.js";
 import type { JobLog } from "./log.js";
-import { concatRegions, extractChannel, ffmpegVersionString, probe, toMono16k } from "./audio/ffmpeg.js";
+import { channelsAreDistinct, concatRegions, extractChannel, ffmpegVersionString, probe, toMono16k } from "./audio/ffmpeg.js";
 import { readWav } from "./audio/wav.js";
 import { assignSpeakers, diarizer } from "./diarize/index.js";
 import type { Options, ProcessResponse, Segment, Speaker, Word } from "./schema.js";
@@ -35,10 +35,21 @@ export async function runJob(job: Job): Promise<ProcessResponse> {
     throw new MlError("media_too_long", "audio exceeds ML_MAX_DURATION_MS");
   }
 
-  // Two channels means two people on two microphones: take the speakers from
-  // the channels and never diarize (M6). "force" overrides for the odd
-  // recording where both voices are on both channels.
-  const useChannels = media.channels >= 2 && job.options.diarize !== "force";
+  // Two channels means two people on two microphones — but ONLY if the
+  // channels actually differ. Dual-mono (one microphone duplicated into two
+  // channels) is what phone voice memos and most re-encodes produce, and
+  // treating it as per-speaker channels transcribes every word twice, invents
+  // two speakers who are the same person, and doubles the STT bill. Measured
+  // on a real two-voice Persian recording; nothing failed, the transcript was
+  // just nonsense.
+  const distinct = media.channels >= 2 ? await channelsAreDistinct(job.input) : false;
+  if (media.channels >= 2 && !distinct) {
+    job.log.info(
+      { channels: media.channels },
+      "channels are identical (dual-mono): downmixing and diarizing instead of splitting",
+    );
+  }
+  const useChannels = distinct && job.options.diarize !== "force";
 
   const outcome = useChannels ? await perChannel(job, media.channels) : await singleStream(job);
 

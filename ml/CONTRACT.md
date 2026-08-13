@@ -29,12 +29,19 @@ response.
   "ffmpeg": true,
   "lanes": { "soniox": "configured", "openrouter": "configured" },
   "diarizer": "sherpa-onnx|python|unavailable",
-  "vad": true
+  "vad": "silero-vad-v5|energy-rms|unavailable",
+  "vad_degraded": false
 }
 ```
 
 `configured` means a key is present — **never** whether it is valid, and never
 any part of the key itself.
+
+`vad` **names the engine and is not a boolean.** It used to be one, and the
+boolean could never be false: the energy gate is an unconditional fallback, so
+a box with no Silero model reported a healthy VAD while every job quietly ran
+the degraded gate. `vad_degraded` is true when the fallback is what is running —
+a legitimate configuration, reported rather than refused.
 
 ---
 

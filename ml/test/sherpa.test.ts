@@ -73,7 +73,7 @@ describe("sherpa output normalization", () => {
   it("keeps a monologue as one speaker", () => {
     // The failure that matters on real single-speaker audio is inventing a
     // second voice; the label mapping must not manufacture one.
-    const out = normalize(
+    const { segments: out } = normalize(
       [
         { start: 0, end: 30, speaker: 0 },
         { start: 31, end: 60, speaker: 0 },
