@@ -102,12 +102,67 @@ export class NotActivatedError extends Error {
 }
 
 export class NotFoundError extends Error {}
-export class ValidationError extends Error {}
-export class ConflictError extends Error {}
+
+/**
+ * A machine-readable refusal, so a Persian UI can say a true sentence.
+ *
+ * My messages are English prose and they were reaching users — «username must
+ * be 3–32 characters…» rendered verbatim in an RTL Persian screen. The two
+ * obvious fixes are both wrong: localizing here puts UI locale at the wrong
+ * altitude (the api would need to know who is reading), and translating my
+ * English on the client means re-implementing my rule in a second place, in a
+ * language nobody checks against the first.
+ *
+ * So a refusal carries a CODE and its PARAMS. The client owns the sentence;
+ * the api owns the rule and the numbers in it. **The params are what keep the
+ * translation true when the rule changes** — if the username minimum moves to
+ * four, `{min: 4}` updates every locale at once and no catalogue goes stale
+ * saying "three".
+ *
+ * The English `message` stays in the payload as the honest fallback for a
+ * code the client has not catalogued yet. A blank screen is worse than a
+ * sentence in the wrong language.
+ *
+ * Codes are `snake_case`, stable, and DISTINCT where the truth differs — a
+ * taken username and a retired one are different facts and both locales must
+ * be able to say which.
+ */
+export interface RefusalCode {
+  code: string;
+  params?: Record<string, string | number> | undefined;
+}
+
+export class ValidationError extends Error {
+  /** Declared as fields, never parameter properties — see NotActivatedError. */
+  readonly code: string | undefined;
+  readonly params: Record<string, string | number> | undefined;
+
+  constructor(message: string, refusal?: RefusalCode) {
+    super(message);
+    this.code = refusal?.code;
+    this.params = refusal?.params;
+  }
+}
+
+export class ConflictError extends Error {
+  readonly code: string | undefined;
+  readonly params: Record<string, string | number> | undefined;
+
+  constructor(message: string, refusal?: RefusalCode) {
+    super(message);
+    this.code = refusal?.code;
+    this.params = refusal?.params;
+  }
+}
 
 export interface ErrorBody {
+  /** English prose. The fallback when a client has not catalogued `code`. */
   error: string;
   kind?: RefusalKind | UnauthenticatedKind | "not_found" | "invalid" | "conflict" | "internal";
+  /** Stable, snake_case, and what a localized client actually keys on. */
+  code?: string;
+  /** The numbers and names inside the sentence — see RefusalCode. */
+  params?: Record<string, string | number>;
 }
 
 export interface MappedError {
@@ -115,6 +170,16 @@ export interface MappedError {
   body: ErrorBody;
   /** True when the cause should be logged at error level (ours, not theirs). */
   ours: boolean;
+  /**
+   * A plain-language cause for the LOG only, never the response body.
+   *
+   * Set where a SQLSTATE has a specific operational meaning that a bare code
+   * would leave someone to look up at 3am. It exists because a database
+   * error that reads as "internal error, code 25P03" is a mystery, and the
+   * same error reading "a handler held a transaction open across a wait" is
+   * a diagnosis.
+   */
+  diagnosis?: string;
 }
 
 /**
@@ -171,7 +236,18 @@ export function mapError(error: unknown): MappedError {
     return { status: 404, body: { error: "not found", kind: "not_found" }, ours: false };
   }
   if (error instanceof ValidationError) {
-    return { status: 400, body: { error: error.message, kind: "invalid" }, ours: false };
+    return {
+      status: 400,
+      body: {
+        error: error.message,
+        kind: "invalid",
+        // Omitted rather than sent as undefined: a client checking
+        // `"code" in body` should learn whether this refusal is catalogued.
+        ...(error.code === undefined ? {} : { code: error.code }),
+        ...(error.params === undefined ? {} : { params: error.params }),
+      },
+      ours: false,
+    };
   }
   if (error instanceof AlreadyDecidedError) {
     // db/0029's primary key did the refusing. A second decision on one
@@ -181,7 +257,16 @@ export function mapError(error: unknown): MappedError {
     return { status: 409, body: { error: error.message, kind: "conflict" }, ours: false };
   }
   if (error instanceof ConflictError) {
-    return { status: 409, body: { error: error.message, kind: "conflict" }, ours: false };
+    return {
+      status: 409,
+      body: {
+        error: error.message,
+        kind: "conflict",
+        ...(error.code === undefined ? {} : { code: error.code }),
+        ...(error.params === undefined ? {} : { params: error.params }),
+      },
+      ours: false,
+    };
   }
   if (error instanceof InvalidTimingError) {
     // pipeline invariant broke — ours, and it must be loud
@@ -211,6 +296,39 @@ export function mapError(error: unknown): MappedError {
    * `ExecWithCheckOptions` is the row-policy path specifically.
    */
   const pg = error as { code?: unknown; routine?: unknown };
+
+  /**
+   * The idle-in-transaction reaper took our connection (db/0053).
+   *
+   * `25P03` is the timeout itself; `57P01` is the same event seen as "the
+   * administrator terminated this backend", which is how it can surface when
+   * the kill lands between statements.
+   *
+   * **This is ours, it is a 500, and it is loud — and that is the whole deal
+   * I made with the steward.** I objected to a role-wide timeout on the
+   * grounds that it would silently abort a live api transaction; their answer
+   * was that the objection is about SILENCE rather than the timeout, and that
+   * closing it was my half of the work. They were right. The reaper only
+   * fires when a connection sits idle BETWEEN statements inside an open
+   * transaction — which for a supervised process means a handler is stuck
+   * across a wait and the write was never going to complete. Without the
+   * timeout that handler blocks other people's DDL and nobody learns anything
+   * for thirty minutes; with it, plus this branch, the stuck handler names
+   * itself in our own logs.
+   *
+   * If a legitimate api transaction ever needs to idle longer than the role's
+   * window, the measurement is what buys a deliberate `ALTER ROLE` with a
+   * stated reason — not a quiet retry here.
+   */
+  if (pg?.code === "25P03" || pg?.code === "57P01") {
+    return {
+      status: 500,
+      body: { error: "internal error", kind: "internal" },
+      ours: true,
+      diagnosis: "idle-in-transaction timeout: a handler held a transaction open across a wait",
+    };
+  }
+
   if (pg?.code === "42501" && pg.routine === "ExecWithCheckOptions") {
     return { status: 404, body: { error: "not found", kind: "not_found" }, ours: false };
   }

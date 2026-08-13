@@ -13,6 +13,11 @@ import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest }
 
 import { assistantAllowed, createApiKeysRepo, type ApiKeysRepo } from "./apikeys.ts";
 import { createAssistant } from "./assistant.ts";
+import { createAuditRepo, type AuditRepo } from "./audit.ts";
+import { createOrgRepo, type OrgRepo } from "./org.ts";
+import { createSessionsRepo, type SessionsRepo } from "./sessions.ts";
+import { createInvitationsRepo, type InvitationsRepo } from "./invitations.ts";
+import { createHealthRepo, type HealthRepo } from "./health.ts";
 import { createAuth, type Auth } from "./auth.ts";
 import { createWebhooksRepo, type WebhooksRepo } from "./webhooks.ts";
 import { createCallsRepo, type CallsRepo } from "./calls.ts";
@@ -26,7 +31,7 @@ import { applyProposal, createWriteTools } from "../agent/write-tools.ts";
 import { createNamedSkillResolver, listResolvedSkills } from "../agent/skill-store.ts";
 import type { DomainTool } from "../agent/tools.ts";
 import type { Db } from "../db/identity.ts";
-import type { Identity, Skill } from "../agent/types.ts";
+import { isAdmin, type Identity, type Skill } from "../agent/types.ts";
 
 export interface ServerOptions<TDeps> {
   db: Db;
@@ -52,6 +57,11 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
   const models: ModelsRepo = createModelsRepo(options.db);
   const members: MembersRepo = createMembersRepo(options.db);
   const keys: ApiKeysRepo = createApiKeysRepo(options.db);
+  const audit: AuditRepo = createAuditRepo(options.db);
+  const org: OrgRepo = createOrgRepo(options.db);
+  const sessions: SessionsRepo = createSessionsRepo(options.db);
+  const invitations: InvitationsRepo = createInvitationsRepo(options.db);
+  const health: HealthRepo = createHealthRepo(options.db);
   const webhooks: WebhooksRepo = createWebhooksRepo(options.db);
   // One resolver for the assistant's `/slug` and the pipeline's summarizer.
   // A caller may still inject its own, but the default is the shared one —
@@ -121,7 +131,14 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       // For a database failure, structured schema identifiers instead: they
       // say WHICH rule broke, and unlike the message they cannot contain a
       // row value (steward-ratified convention).
-      request.log.error({ err: kind, pg: pgErrorFields(error) }, "internal error");
+      request.log.error(
+        { err: kind, pg: pgErrorFields(error) },
+        // The diagnosis when the mapper has one — a SQLSTATE with a specific
+        // operational meaning should not leave a reader to look it up. Still
+        // codes and identifiers only; the diagnosis is our own prose, never
+        // the database's message.
+        mapped.diagnosis ?? "internal error",
+      );
     } else {
       /**
        * Not ours — but one class of "theirs" earns a line anyway.
@@ -175,10 +192,19 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     return reply.send({ calls: await calls.list(identity, { limit, before: query.before }) });
   });
 
+  /**
+   * The call detail, with its parts (M25).
+   *
+   * `get()` runs first and on purpose: it is what turns a call the caller may
+   * not see into a 404. `parts()` filters by the same visibility, so on its
+   * own it cannot tell "no such call" from "a call with no parts" — sequenced
+   * this way, an empty array unambiguously means the latter.
+   */
   app.get("/v1/calls/:id", async (request, reply) => {
     const identity = await auth.requireActive(request);
     const { id } = request.params as { id: string };
-    return reply.send(await calls.get(identity, id));
+    const call = await calls.get(identity, id);
+    return reply.send({ ...call, parts: await calls.parts(identity, id) });
   });
 
   app.patch("/v1/calls/:id", async (request, reply) => {
@@ -239,6 +265,81 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
   app.get("/v1/me", async (request, reply) => {
     const identity = await auth.requireActive(request);
     return reply.send(await members.me(identity));
+  });
+
+  /**
+   * Editing your own profile (M24 round 1): the names you call yourself.
+   *
+   * Separate from `PATCH /v1/admin/members/:id`, which carries role and
+   * status — things done TO a person. One route for both would mean "rename
+   * myself" and "change someone's role" differ only by which fields are
+   * filled in.
+   *
+   * `null` clears an optional field; omitting it leaves the field alone. The
+   * two are distinguished all the way down, or "remove my Latin name" has no
+   * expression.
+   */
+  app.patch("/v1/me", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    /**
+     * Unknown keys are a 400, not a silent ignore (FE1's finding).
+     *
+     * This route read three keys and dropped the rest without a word, so a
+     * client sending `{"timezone":"Asia/Tehran"}` before the field existed got
+     * a cheerful 200 and a setting that never moved. They fixed their half;
+     * the silence was mine, and silence is how the NEXT client repeats it.
+     *
+     * Listed explicitly rather than derived from the patch object, because a
+     * derived list would grow a hole the moment someone adds a field to the
+     * repo and forgets the route — which is exactly the failure this closes.
+     */
+    const ALLOWED = new Set([
+      "display_name", "display_name_en", "username", "calendar", "timezone", "locale",
+    ]);
+    const unknown = Object.keys(body).filter((key) => !ALLOWED.has(key));
+    if (unknown.length > 0) {
+      throw new ValidationError(
+        `unknown field${unknown.length > 1 ? "s" : ""}: ${unknown.sort().join(", ")}`,
+        { code: "unknown_fields", params: { fields: unknown.sort().join(",") } },
+      );
+    }
+    const optionalText = (value: unknown, field: string): string | null | undefined => {
+      if (value === undefined) return undefined;
+      if (value === null) return null;
+      if (typeof value !== "string") throw new ValidationError(`${field} must be a string or null`);
+      return value;
+    };
+    if (body.display_name !== undefined && typeof body.display_name !== "string") {
+      // Not nullable: the column is NOT NULL, so `null` here is a caller
+      // mistake worth naming rather than a clear-the-field instruction.
+      throw new ValidationError("display_name must be a string");
+    }
+    /**
+     * `calendar` and `timezone` are NOT nullable, and `null` is refused
+     * rather than treated as "reset".
+     *
+     * `auto` is a real value meaning "follow the language" / "follow the
+     * device", so there is no unset state to spell — and if `null` were also
+     * accepted, the product would have two ways to say one thing. FE2 made
+     * that argument about their own storage layer and it decided the column
+     * shape; refusing it here is what keeps the two spellings from existing.
+     */
+    const setting = (value: unknown, field: string): string | undefined => {
+      if (value === undefined) return undefined;
+      if (typeof value !== "string") {
+        throw new ValidationError(`${field} must be a string — use "auto" to reset, not null`);
+      }
+      return value;
+    };
+    return reply.send(await members.updateProfile(identity, {
+      display_name: body.display_name as string | undefined,
+      display_name_en: optionalText(body.display_name_en, "display_name_en"),
+      username: optionalText(body.username, "username"),
+      calendar: setting(body.calendar, "calendar"),
+      timezone: setting(body.timezone, "timezone"),
+      locale: setting(body.locale, "locale"),
+    }));
   });
 
   /**
@@ -378,7 +479,7 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
          * strictly weaker claim than the policy, never a wider one.
          */
         editable: s.level === "org"
-          ? identity.role === "admin"
+          ? isAdmin(identity)          // M23: the owner is an admin and more
           : s.level === "user",
       })),
     });
@@ -402,11 +503,189 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     return reply.send(await models.choose(identity, body.model));
   });
 
+  // ---- the organization (M25, Settings · CONFIGURATION · General) ---------
+
+  /**
+   * Read is for any active member — the shell shows the org's name, and
+   * gating that on admin would mean every member's header said nothing.
+   */
+  app.get("/v1/org", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    return reply.send(await org.get(identity));
+  });
+
+  /**
+   * Write is admin-gated (M25). There is deliberately NO `GET /v1/admin/org`:
+   * it would return the same row with the same columns as `GET /v1/org`, and
+   * a second read of one row is a second thing that can disagree with the
+   * first. The admin screen reads the member route and writes this one.
+   */
+  app.patch("/v1/admin/org", async (request, reply) => {
+    const identity = await auth.requireAdmin(request);
+    const body = (request.body ?? {}) as { name?: unknown; locale?: unknown; allowed_models?: unknown };
+    if (body.name !== undefined && typeof body.name !== "string") {
+      throw new ValidationError("name must be a string");
+    }
+    if (body.locale !== undefined && typeof body.locale !== "string") {
+      throw new ValidationError("locale must be a string");
+    }
+    if (body.allowed_models !== undefined && !Array.isArray(body.allowed_models)) {
+      throw new ValidationError("allowed_models must be an array");
+    }
+    return reply.send(await org.update(identity, {
+      name: body.name as string | undefined,
+      locale: body.locale as string | undefined,
+      allowedModels: body.allowed_models as string[] | undefined,
+    }));
+  });
+
+  // ---- audit logs (M25, Settings · COMPLIANCE) ----------------------------
+
+  /**
+   * One time-ordered feed over the trail's three halves — admin actions,
+   * proposal decisions, agent runs.
+   *
+   * Admin-gated rather than left to RLS alone. `admin_action`'s policy would
+   * hand a member an empty list, and on an audit screen "no entries" reads as
+   * *nothing has ever happened in this org* rather than *you may not see
+   * this*. One honest refusal beats a convincing lie — the same reason a
+   * hidden row is a 404 and not an empty 200.
+   */
+  app.get("/v1/admin/audit", async (request, reply) => {
+    const identity = await auth.requireAdmin(request);
+    const query = request.query as {
+      limit?: string; source?: string;
+      cursor_at?: string; cursor_source?: string; cursor_id?: string;
+    };
+    /**
+     * The cursor arrives as its three parts rather than one opaque blob.
+     *
+     * A base64 blob would hide the shape and buy nothing: the client passes
+     * back what we handed it either way, and three named query params are
+     * debuggable from a browser address bar when someone is trying to work
+     * out why a page looks wrong. All three or none — a partial cursor is a
+     * caller mistake worth naming, not something to half-apply.
+     */
+    const parts = [query.cursor_at, query.cursor_source, query.cursor_id];
+    const supplied = parts.filter((part) => part !== undefined).length;
+    if (supplied !== 0 && supplied !== 3) {
+      throw new ValidationError("cursor_at, cursor_source and cursor_id must be given together");
+    }
+    return reply.send(await audit.list(identity, {
+      limit: num(query.limit, "limit"),
+      source: query.source,
+      cursor: supplied === 3
+        ? { at: query.cursor_at!, source: query.cursor_source!, id: query.cursor_id! }
+        : undefined,
+    }));
+  });
+
+  // ---- server management (M25, the Management surface) --------------------
+
+  /**
+   * Queue depths, retry pressure, key counts, storage usage.
+   *
+   * Every metric carries its own `measured_at`, and null there means NOT
+   * MEASURED — never zero. "0 dead letters" is the most dangerous value an
+   * operations screen can show, because it reads as healthy and someone acts
+   * on it. One unreadable source must not blank the others, so the endpoint
+   * always answers 200 with per-metric status rather than failing as a unit.
+   */
+  app.get("/v1/admin/server", async (request, reply) => {
+    const identity = await auth.requireAdmin(request);
+    return reply.send(await health.read(identity));
+  });
+
+  // ---- invitations and true delete (M24, D25) -----------------------------
+
+  app.get("/v1/admin/invitations", async (request, reply) => {
+    const identity = await auth.requireAdmin(request);
+    return reply.send({ invitations: await invitations.list(identity) });
+  });
+
+  /**
+   * Issue one. The response carries the token and it is the ONLY time it
+   * exists outside the issuer's screen — the same show-once contract as an
+   * api key, and the reason the email path being a designed seam is
+   * survivable: an admin can hand the link over out of band.
+   */
+  app.post("/v1/admin/invitations", async (request, reply) => {
+    const identity = await auth.requireAdmin(request);
+    const body = (request.body ?? {}) as { email?: unknown; role?: unknown; ttl_days?: unknown };
+    if (typeof body.email !== "string") throw new ValidationError("email is required");
+    if (body.role !== undefined && typeof body.role !== "string") {
+      throw new ValidationError("role must be a string");
+    }
+    return reply.code(201).send(await invitations.issue(identity, {
+      email: body.email,
+      role: body.role as string | undefined,
+      ttlDays: body.ttl_days === undefined ? undefined : Number(body.ttl_days),
+    }));
+  });
+
+  app.post("/v1/admin/invitations/:id/revoke", async (request, reply) => {
+    const identity = await auth.requireAdmin(request);
+    const { id } = request.params as { id: string };
+    return reply.send(await invitations.revoke(identity, id));
+  });
+
+  /**
+   * Redeem. Authenticated by the Supabase token — NOT by an app_user row,
+   * because redeeming is how that row comes to exist (D25: an invited person
+   * arrives active, so this is the invited counterpart of /v1/signup).
+   *
+   * The email comes from the TOKEN, never the body: a forwarded link plus a
+   * caller-supplied address would let anyone redeem anyone's invitation, and
+   * the address match is the one thing separating a link from a bearer token.
+   */
+  app.post("/v1/invitations/redeem", async (request, reply) => {
+    const claims = auth.verifiedClaims(request);
+    const body = (request.body ?? {}) as { token?: unknown };
+    if (typeof body.token !== "string" || !body.token) {
+      throw new ValidationError("token is required");
+    }
+    const email = typeof claims.email === "string" ? claims.email : "";
+    if (!email) throw new ValidationError("token has no email claim");
+    await invitations.redeem(claims.sub, { token: body.token, email });
+    return reply.code(204).send();
+  });
+
+  /**
+   * True delete (M24). Owner-only: it is one of M23's org-level
+   * irreversibles, and an ADMIN gets the same indistinguishable refusal a
+   * member does.
+   */
+  app.delete("/v1/admin/members/:id", async (request, reply) => {
+    const identity = await auth.requireOwner(request);
+    const { id } = request.params as { id: string };
+    await invitations.tombstone(identity, id);
+    return reply.code(204).send();
+  });
+
   // ---- members and the pending queue (M15) --------------------------------
 
   app.get("/v1/admin/members", async (request, reply) => {
     const identity = await auth.requireAdmin(request);
-    return reply.send({ members: await members.list(identity) });
+    const query = request.query as {
+      search?: string; status?: string; role?: string; sort?: string;
+    };
+    return reply.send({
+      members: await members.list(identity, {
+        search: query.search, status: query.status, role: query.role, sort: query.sort,
+      }),
+    });
+  });
+
+  /**
+   * The UM stat tiles (M24). Static segment, so it cannot be shadowed by a
+   * future `GET /v1/admin/members/:id`.
+   */
+  app.get("/v1/admin/members/stats", async (request, reply) => {
+    const identity = await auth.requireAdmin(request);
+    const query = request.query as { window_days?: string };
+    return reply.send(await members.stats(identity, {
+      windowDays: num(query.window_days, "window_days"),
+    }));
   });
 
   app.post("/v1/admin/members/:id/accept", async (request, reply) => {
@@ -568,10 +847,44 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
 
   // ---- assistant (SSE) ---------------------------------------------------
 
+  // ---- assistant conversations (M4, db/0018 — scheduled by the steward) ---
+
+  /**
+   * The caller's own conversations. `?archived=true` for the other half —
+   * a filter rather than a flag on every row, because the sidebar shows one
+   * set or the other and never both interleaved.
+   */
+  app.get("/v1/assistant/sessions", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const query = request.query as { archived?: string };
+    return reply.send({
+      sessions: await sessions.list(identity, { archived: query.archived === "true" }),
+    });
+  });
+
+  app.get("/v1/assistant/sessions/:id/messages", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id } = request.params as { id: string };
+    return reply.send({ messages: await sessions.messages(identity, id) });
+  });
+
+  app.post("/v1/assistant/sessions/:id/archive", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id } = request.params as { id: string };
+    return reply.send(await sessions.setArchived(identity, id, true));
+  });
+
+  app.post("/v1/assistant/sessions/:id/unarchive", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id } = request.params as { id: string };
+    return reply.send(await sessions.setArchived(identity, id, false));
+  });
+
   app.post("/v1/assistant/ask", async (request, reply) => {
     const identity = await auth.requireActive(request);
     const body = (request.body ?? {}) as {
       question?: unknown; model?: unknown; call_id?: unknown; skill?: unknown;
+      session_id?: unknown;
     };
     if (typeof body.question !== "string" || body.question.trim() === "") {
       throw new ValidationError("question is required");
@@ -619,6 +932,25 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       throw new ValidationError("no model selected — choose one in settings, or pass `model`");
     }
 
+    /**
+     * Resolve the conversation and record the human's turn BEFORE the stream
+     * opens — same reasoning as the model and gateway checks above. A bad
+     * `session_id` must be a 404, not an error event on a half-open SSE
+     * connection that every client has to special-case.
+     *
+     * The user turn is written even though the run may fail. It has to be:
+     * the person did ask, and a thread that drops the question when the
+     * answer fails shows a conversation nobody had.
+     */
+    const conversation = await sessions.resolveForAsk(
+      identity,
+      typeof body.session_id === "string" ? body.session_id : null,
+      body.question,
+    );
+    await sessions.append(identity, {
+      sessionId: conversation.id, role: "user", content: body.question,
+    });
+
     // Headers must go out before the first event or proxies may buffer.
     reply.raw.writeHead(200, {
       "Content-Type": "text/event-stream",
@@ -639,6 +971,49 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       model: chosenModel ?? undefined,
       callId: typeof body.call_id === "string" ? body.call_id : null,
       signal: controller.signal,
+      sessionId: conversation.id,
+      sessionCreated: conversation.created,
+      /**
+       * The assistant's turn, appended once the run is done.
+       *
+       * Only when there is text: an empty assistant message is not a turn,
+       * and a run that failed before saying anything leaves the question
+       * standing alone in the thread — which is the honest record. The run
+       * itself is in `agent_run` either way, so nothing is lost to the audit.
+       */
+      onTurn: async ({ runId, text, toolCalls }) => {
+        if (!text.trim()) return;
+        try {
+          await sessions.append(identity, {
+            sessionId: conversation.id,
+            role: "assistant",
+            content: text,
+            toolCalls,
+            agentRunId: runId || null,
+          });
+        } catch (error) {
+          /**
+           * Swallowed for the caller, LOUD for us (steward rider).
+           *
+           * The answer was delivered and the run survives in `agent_run`, so
+           * nothing is lost-lost — but a thread quietly missing a reply the
+           * person watched arrive is indistinguishability debt: from the
+           * outside it looks identical to a model that said nothing. Failing
+           * the stream to avoid that would be worse, so the fault goes to the
+           * log instead, and it is findable rather than a mystery someone
+           * reports weeks later.
+           *
+           * Codes and ids only — the content is exactly what must not be
+           * here, and it is the one thing this failure is holding.
+           */
+          request.log.error({
+            event: "session_append_failed",
+            session_id: conversation.id,
+            run_id: runId || null,
+            pg: pgErrorFields(error),
+          }, "assistant turn was delivered but not recorded");
+        }
+      },
     }, {
       write: (chunk) => { reply.raw.write(chunk); },
       end: () => { reply.raw.end(); },

@@ -37,6 +37,57 @@ import type { TranscriptTiming } from "./vocabulary.ts";
  * sail past that branch into a 500 — the api reporting its own fault for a
  * refusal the database issued on purpose.
  */
+/**
+ * One part of a call's recording, as the wire sees it.
+ *
+ * What is deliberately NOT here is the point. `echo.call_part` also carries
+ * `storage_bucket`, `storage_path` and `audio_sha256` — where the bytes live
+ * and how to verify them. A client never addresses storage directly (audio is
+ * served through the api, which is what keeps the sealed-object rule
+ * enforceable), so those fields would be pure infrastructure disclosure: a
+ * map of the bucket layout handed to anyone who can read a call. `attempts`
+ * is retry bookkeeping that means nothing outside the worker.
+ *
+ * `failure_reason` IS included: a part that failed is a visible gap in the
+ * transcript (M20), and "some of this recording is missing" without "why" is
+ * the kind of half-answer that generates a support ticket per occurrence.
+ */
+export interface CallPart {
+  id: string;
+  /** Position in the recording. THE ordering field — see `parts()`. */
+  idx: number;
+  offset_ms: number;
+  duration_ms: number | null;
+  status: string;
+  /** M20's ladder: does this part have per-word timing, or only segments? */
+  has_word_timestamps: boolean;
+  /** The bytes never arrived. A gap the UI must show rather than skip over. */
+  missing: boolean;
+  failure_reason: string | null;
+  audio_format: string | null;
+  byte_size: number | null;
+}
+
+const PART_COLUMNS = `
+  id, idx, offset_ms, duration_ms, status, has_word_timestamps,
+  missing, failure_reason, audio_format, byte_size
+`;
+
+const toPart = (row: Record<string, unknown>): CallPart => ({
+  id: row.id as string,
+  idx: Number(row.idx),
+  offset_ms: Number(row.offset_ms),
+  duration_ms: row.duration_ms === null ? null : Number(row.duration_ms),
+  status: String(row.status),
+  has_word_timestamps: row.has_word_timestamps === true,
+  missing: row.missing === true,
+  failure_reason: (row.failure_reason as string | null) ?? null,
+  audio_format: (row.audio_format as string | null) ?? null,
+  // bigint: postgres.js hands these back as strings, and `byte_size: "1048576"`
+  // on the wire turns a size comparison into a lexicographic one in the client.
+  byte_size: row.byte_size === null || row.byte_size === undefined ? null : Number(row.byte_size),
+});
+
 function refusalIsNotFound(error: unknown): never {
   if ((error as { code?: unknown })?.code === "42501") {
     throw new NotFoundError("call not found");
@@ -288,6 +339,37 @@ export function createCallsRepo(db: Db) {
       );
       if (!rows[0]) throw new NotFoundError("call not found");
       return this.get(identity, id);
+    },
+
+    /**
+     * The call's parts (M7, M20) — the recording's segments on disk.
+     *
+     * On the DETAIL response only, never the list. The list already carries
+     * `transcribed_part_count` and `timed_part_count`, which is what a list
+     * row needs; attaching every part to every row would multiply a page of
+     * fifty calls by however many parts each has, to render a number.
+     *
+     * Order the caller must be able to rely on: `idx`, which is the part's
+     * position in the recording. `offset_ms` agrees with it today, and if a
+     * future feature ever inserts a part out of band, `idx` is the field that
+     * still means "the nth piece".
+     *
+     * Called AFTER `get()` in the route, and that sequencing is the whole
+     * answer to rule 12 here: `call_part_read` filters by `can_read_call`, so
+     * a call you may not see and a call with no parts both return zero rows.
+     * `get()` has already turned the first case into a 404, so an empty array
+     * from here unambiguously means "no parts".
+     */
+    async parts(identity: Identity, callId: string): Promise<CallPart[]> {
+      const id = assertUuid(callId, "call id");
+      const rows = await db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe<Record<string, unknown>>(
+          `select ${PART_COLUMNS} from echo.call_part
+            where call_id = $1 order by idx`,
+          [id],
+        ),
+      );
+      return rows.map(toPart);
     },
 
     /**

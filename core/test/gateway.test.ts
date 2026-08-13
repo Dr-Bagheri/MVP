@@ -256,6 +256,37 @@ describe("key lifecycle", () => {
   });
 });
 
+/**
+ * The idle-in-transaction reaper (db/0053) must arrive as a NAMED diagnosis.
+ *
+ * I objected to a role-wide timeout on the grounds that it could silently
+ * abort a live api transaction. The steward's answer was that the objection
+ * was about SILENCE rather than the timeout, and that closing it was my half
+ * of the work — so these pin that half: the reap is ours, it is loud, and it
+ * says what happened instead of leaving someone to look up 25P03 at 3am.
+ */
+describe("the idle-in-transaction reap names itself", () => {
+  it.each(["25P03", "57P01"])("maps %s to a loud 500 carrying a diagnosis", (code) => {
+    const mapped = mapError(Object.assign(new Error("terminated"), { code }));
+    expect(mapped.status).toBe(500);
+    expect(mapped.ours).toBe(true);
+    expect(mapped.diagnosis).toMatch(/idle-in-transaction/);
+  });
+
+  it("keeps the diagnosis OUT of the response body", () => {
+    // An operational note for us. A caller learns nothing about our
+    // connection handling from a 500, and should not.
+    const mapped = mapError(Object.assign(new Error("terminated"), { code: "25P03" }));
+    expect(JSON.stringify(mapped.body)).not.toMatch(/idle|transaction|handler/);
+  });
+
+  it("does not label unrelated database errors with it", () => {
+    // A diagnosis that attaches to everything explains nothing.
+    const mapped = mapError(Object.assign(new Error("boom"), { code: "40001" }));
+    expect(mapped.diagnosis).toBeUndefined();
+  });
+});
+
 describe("a database failure is logged by field, never by message", () => {
   it("keeps schema identifiers and drops message and detail", () => {
     // `detail` is where Postgres quotes the offending row back — for this

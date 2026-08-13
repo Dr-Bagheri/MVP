@@ -27,6 +27,24 @@ export interface AskRequest {
   model?: string | undefined;
   callId?: string | null | undefined;
   signal?: AbortSignal | undefined;
+  /** The conversation this turn belongs to (M4, db/0018). */
+  sessionId?: string | undefined;
+  /**
+   * True when the ask opened the conversation implicitly.
+   *
+   * Streamed as the first event so a client that started typing on the hub
+   * learns the id it is now in — without it, every message starts a NEW
+   * conversation, because the client has nothing to send back as
+   * `session_id`. Lazy creation only works if creation is announced.
+   */
+  sessionCreated?: boolean | undefined;
+  /**
+   * Called once the run is done, with the assistant's turn. The api uses it
+   * to append to the thread; it is a callback rather than a return value
+   * because `ask` resolves when the STREAM closes, and the turn must be
+   * recorded before that resolution is observed.
+   */
+  onTurn?: ((turn: { runId: string; text: string; toolCalls: unknown[]; failed: boolean }) => Promise<void>) | undefined;
 }
 
 export interface AssistantDeps<TDeps> {
@@ -55,6 +73,26 @@ export function createAssistant<TDeps>(config: AssistantDeps<TDeps>) {
       const runtime = createAgentRuntime({ runs });
 
       let seenSteps = 0;
+      /**
+       * The turn's text, accumulated from the same deltas the client sees.
+       *
+       * Taken from the stream rather than re-read from `agent_run` on
+       * purpose: what is stored and what was shown are then the same string
+       * by construction, and cannot drift into a thread that disagrees with
+       * the conversation the person actually had.
+       */
+      let answer = "";
+      const toolCalls: unknown[] = [];
+
+      // Announced before anything else: a client typing on the hub has no id
+      // to send back until we give it one (see `sessionCreated`).
+      if (request.sessionId) {
+        stream.send({
+          type: "session",
+          id: request.sessionId,
+          created: request.sessionCreated === true,
+        });
+      }
       try {
         const result = await runtime.run({
           identity: request.identity,
@@ -68,9 +106,17 @@ export function createAssistant<TDeps>(config: AssistantDeps<TDeps>) {
           adminOnlyTools: config.adminOnlyTools,
           signal: request.signal,
           apiKey: config.apiKey,
-          onText: (delta) => stream.send({ type: "text_delta", delta }),
-          onToolStart: ({ id, tool, label }) =>
-            stream.send({ type: "tool_call", id, name: tool, label, state: "started" }),
+          onText: (delta) => {
+            answer += delta;
+            stream.send({ type: "text_delta", delta });
+          },
+          onToolStart: ({ id, tool, label }) => {
+            // Codes only. Arguments quote the transcript the person asked
+            // about, and a conversation thread is a far wider surface than
+            // the audit screen where the full trace already lives.
+            toolCalls.push({ id, name: tool });
+            stream.send({ type: "tool_call", id, name: tool, label, state: "started" });
+          },
           /**
            * A write tool proposed a change (M4) — the approval card. Streamed
            * as it happens rather than at the end, because the run continues:
@@ -107,6 +153,26 @@ export function createAssistant<TDeps>(config: AssistantDeps<TDeps>) {
         for (const step of result.steps.slice(seenSteps)) {
           stream.send(stepToEvent(step, labels.get(step.tool) ?? step.tool));
           seenSteps += 1;
+        }
+
+        /**
+         * Record the turn BEFORE finishing the stream.
+         *
+         * A client that reloads on `done` must find the message already in
+         * the thread; appending afterwards is a race it loses often enough to
+         * look like messages randomly vanishing. Its own failure must not
+         * take down a completed run either — the answer was delivered, and
+         * turning a persistence fault into a broken stream would lose the
+         * text the person is reading.
+         */
+        if (request.onTurn) {
+          try {
+            await request.onTurn({
+              runId: result.runId, text: answer, toolCalls, failed: result.failed,
+            });
+          } catch {
+            // Swallowed deliberately: see above. The run is in agent_run.
+          }
         }
 
         stream.finish({

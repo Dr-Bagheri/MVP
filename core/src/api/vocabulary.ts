@@ -106,6 +106,81 @@ export const AGENT_RUN_STATUSES = ["running", "ok", "error"] as const;
 export type AgentRunStatus = (typeof AGENT_RUN_STATUSES)[number];
 
 /**
+ * How a person wants dates rendered (FE2's review-round-2 preference).
+ *
+ * **`auto` is a VALUE, not an absence** — it means "follow the active
+ * language" (Jalali in fa, Gregorian in en), which is exactly today's
+ * behaviour and therefore the default. FE2 made the case and it decides the
+ * column shape: if this were nullable, `null` and `"auto"` would be two
+ * spellings of one state, and the codebase has spent a day on what happens
+ * when two spellings of one fact drift.
+ *
+ * So there is no "clear" operation for it. Resetting IS choosing `auto`.
+ *
+ * Published before the column exists so FE2 can import the set rather than
+ * re-type it. Application-level, not a database enum — if db/ makes it one,
+ * this gains a `pg_enum` assertion in `schema-contract.ts` like the others.
+ */
+export const CALENDAR_PREFERENCES = ["auto", "jalali", "gregorian"] as const;
+export type CalendarPreference = (typeof CALENDAR_PREFERENCES)[number];
+
+/**
+ * Timezone is a free string rather than a closed set — IANA has ~420 zones
+ * and they change — with ONE sentinel: `"auto"` means "follow the device",
+ * resolved at render time rather than snapshotted. Snapshotting the browser's
+ * zone at the moment of choosing would silently freeze a traveller's dates,
+ * which is FE2's point and a good one.
+ */
+export const TIMEZONE_AUTO = "auto";
+
+/**
+ * The three halves of the audit trail (M25).
+ *
+ * Moved here from `audit.ts` at FE3's asking, and they were right about the
+ * reason: it is a closed vocabulary crossing the boundary, which is exactly
+ * what this module is for. They had written a local `as const` copy with a
+ * two-way type assertion to catch a fourth source being added — a good
+ * stopgap, and still two spellings of one list that nobody chose to have.
+ *
+ * NOT a database enum: these are the union's own labels, so this array IS the
+ * authority rather than a mirror of one. `schema-contract.ts` cannot check it
+ * against `pg_enum` because there is nothing to check against — the guard is
+ * that the SQL naming them lives beside it in `audit.ts`.
+ */
+export const AUDIT_SOURCES = ["admin_action", "proposal_decision", "agent_run"] as const;
+export type AuditSource = (typeof AUDIT_SOURCES)[number];
+
+/**
+ * `echo.member_role` — and published NOW, before it changes, on purpose.
+ *
+ * M23 revokes the two-role rule and adds `owner`. I published this list while
+ * the catalogue still said `member | admin`, deliberately matching the
+ * catalogue rather than the plan, and armed the `schema-contract.ts`
+ * assertion to go red the day db/'s migration landed.
+ *
+ * **It fired within the hour**, on the first run after their migration:
+ *
+ *     FAIL core/'s MEMBER_ROLES matches pg_enum exactly
+ *          {"catalogue":["member","admin","owner"],"typescript":["member","admin"]}
+ *
+ * That is the entire value of the pattern. The same drift caught
+ * `agent_run_status` weeks late, after every terminal write had been failing
+ * in production; here it was named on arrival, and it pointed straight at
+ * three gates comparing `role !== "admin"` that would have refused the org's
+ * ROOT as insufficiently privileged. A vocabulary that is CHECKED can afford
+ * to be behind. One that is merely believed cannot.
+ */
+export const MEMBER_ROLES = ["member", "admin", "owner"] as const;
+export type MemberRole = (typeof MEMBER_ROLES)[number];
+
+/**
+ * `echo.user_status`. `pending` is M15's waiting room, `disabled` is
+ * reversible (M24 keeps it distinct from true delete).
+ */
+export const USER_STATUSES = ["pending", "active", "disabled"] as const;
+export type UserStatus = (typeof USER_STATUSES)[number];
+
+/**
  * Webhook events (M17). Not a database enum — a `text[]` column with an
  * application-level closed set, so this list IS the authority rather than a
  * mirror of one. An unknown event is a 400 that names the bad value.

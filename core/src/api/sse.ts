@@ -4,10 +4,19 @@
  * The event vocabulary is a CONTRACT with the frontend session — they built
  * a reducer against it, so the names and shapes here are not free to drift:
  *
+ *   session     {id, created}      — FIRST event when the turn has a thread
  *   text_delta  {delta}
  *   tool_call   {id, name, label, state: started|ok|denied|blocked|error, ms?}
  *   proposal    {id, kind, summary, payload}
  *   done        {runId, failed, error?}
+ *
+ * `session` was ADDED, not changed — an unknown event type is ignorable, so a
+ * client built before it keeps working and simply never learns its
+ * conversation id. It carries the id because conversations open lazily: a
+ * person typing on the hub has no id to send back as `session_id`, so without
+ * this every message would start a new conversation. `created` distinguishes
+ * "this ask opened a thread" from "you are in the one you named", which is
+ * what tells a sidebar whether to insert a row or select an existing one.
  *
  * Two rules the frontend depends on, and the reasons they exist:
  *
@@ -26,6 +35,7 @@
 import type { AgentStep } from "../agent/types.ts";
 
 export type SseEvent =
+  | { type: "session"; id: string; created: boolean }
   | { type: "text_delta"; delta: string }
   | { type: "tool_call"; id: string; name: string; label: string;
       state: "started" | "ok" | "denied" | "blocked" | "error"; ms?: number }

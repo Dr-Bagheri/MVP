@@ -208,6 +208,53 @@ describe("delete is soft (M11)", () => {
   });
 });
 
+describe("parts on the call detail (M25)", () => {
+  const partRow = {
+    id: "p1", idx: 0, offset_ms: 0, duration_ms: 9000, status: "diarized",
+    has_word_timestamps: false, missing: false, failure_reason: null,
+    audio_format: "opus", byte_size: "1048576",
+  };
+
+  it("never selects storage locations or integrity hashes", async () => {
+    // A client never addresses storage directly — audio is served through the
+    // api, which is what keeps the sealed-object rule enforceable. Selecting
+    // these would hand a map of the bucket layout to anyone who can read a
+    // call, for no capability they gain.
+    const { db, log } = fakeDb(() => [partRow]);
+    await createCallsRepo(db).parts(IDENTITY, CALL);
+    const sql = queries(log).find((l) => l.sql.includes("echo.call_part"))!.sql;
+    for (const forbidden of ["storage_bucket", "storage_path", "audio_sha256", "attempts"]) {
+      expect(sql).not.toContain(forbidden);
+    }
+    // And the positive half, or `select *` would satisfy the loop above.
+    expect(sql).toContain("has_word_timestamps");
+  });
+
+  it("orders by idx — the field that means 'the nth piece'", async () => {
+    const { db, log } = fakeDb(() => [partRow]);
+    await createCallsRepo(db).parts(IDENTITY, CALL);
+    expect(queries(log).find((l) => l.sql.includes("echo.call_part"))!.sql)
+      .toContain("order by idx");
+  });
+
+  it("returns byte_size as a NUMBER, not the string postgres.js hands back", async () => {
+    // bigint arrives as a string. `byte_size: "1048576"` on the wire turns a
+    // size comparison in the client into a lexicographic one, where
+    // "9" > "1048576" — a bug that looks like a backend lie about file sizes.
+    const { db } = fakeDb(() => [partRow]);
+    const [part] = await createCallsRepo(db).parts(IDENTITY, CALL);
+    expect(part!.byte_size).toBe(1048576);
+  });
+
+  it("distinguishes a null duration from a zero one", async () => {
+    const { db } = fakeDb(() => [{ ...partRow, duration_ms: null }]);
+    const [part] = await createCallsRepo(db).parts(IDENTITY, CALL);
+    // Not yet known is not the same as an empty part; `Number(null)` is 0 and
+    // would quietly claim the second.
+    expect(part!.duration_ms).toBeNull();
+  });
+});
+
 describe("archive and restore (M11)", () => {
   it("archives with a TIMESTAMP, not a flag", async () => {
     // "when" carries strictly more than "whether", and the filter becomes

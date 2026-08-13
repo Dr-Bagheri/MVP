@@ -12,6 +12,7 @@
  * with the actor set, so db/0003's policies scope it — a caller can only ever
  * resolve *itself*.
  */
+import type { MemberRole, UserStatus } from "../api/vocabulary.ts";
 import type { Identity } from "../agent/types.ts";
 import { assertUuid, type Db, type SqlTx } from "./identity.ts";
 
@@ -42,8 +43,11 @@ export class InactiveOwnerError extends Error {
 interface AppUserRow {
   id: string;
   org_id: string;
-  role: "admin" | "member";
-  status: "pending" | "active" | "disabled";
+  // From `echo.member_role` / `echo.user_status` — sourced, not restated, so
+  // a migration adding a label (M23's `owner`) shows up as a type error here
+  // instead of as a caller silently mis-gated by a stale union.
+  role: MemberRole;
+  status: UserStatus;
   /** NULL when the org row is invisible to this actor — see SELECT_SELF. */
   org_status: "active" | "suspended" | null;
 }

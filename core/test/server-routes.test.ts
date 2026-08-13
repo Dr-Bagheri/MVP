@@ -15,11 +15,14 @@ vi.mock("../src/agent/pi.ts", () => ({
 
 const { buildServer } = await import("../src/api/server.ts");
 import { createDb, type SqlClient, type SqlTx } from "../src/db/identity.ts";
+import { isAdmin, isOwner } from "../src/agent/types.ts";
+import { MEMBER_ROLES } from "../src/api/vocabulary.ts";
 
 const SECRET = "test-secret";
 const ALICE = "11111111-1111-4111-8111-111111111111";
 const CALL = "33333333-3333-4333-8333-333333333333";
 const RUN = "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa";
+const SESSION = "55555555-5555-4555-8555-555555555555";
 
 const b64 = (v: object) => Buffer.from(JSON.stringify(v)).toString("base64url");
 function token(sub = ALICE) {
@@ -97,6 +100,24 @@ function fakeDb({
         // db/0032's named deletion operations. `true` = done, `false` =
         // already in that state; a refusal arrives as a raised 42501, which
         // calls.ts turns into 404.
+        /**
+         * Assistant conversations (db/0018). Ahead of the generic branches:
+         * `ask` now opens or resolves a thread BEFORE the stream, so a fake
+         * that answered nothing here would turn every assistant test into a
+         * 400 — which is exactly what it did until this existed.
+         */
+        if (sql.includes("agent_session")) {
+          return sql.includes("update") ? [] : [{
+            id: SESSION, title: "چه خبر", last_message_at: null,
+            archived_at: null, created_at: new Date("2026-08-13T00:00:00Z"),
+          }];
+        }
+        if (sql.includes("echo.agent_message")) {
+          return [{
+            id: "m1", seq: 0, role: "user", content: "…", tool_calls: [],
+            agent_run_id: null, created_at: new Date("2026-08-13T00:00:00Z"),
+          }];
+        }
         if (sql.includes("soft_delete_call")) return [{ deleted: true }];
         if (sql.includes("restore_call")) return [{ restored: true }];
         /**
@@ -270,6 +291,151 @@ describe("POST /v1/signup", () => {
       payload: { org_name: "Acme" },
     });
     expect(res.statusCode).toBe(409);
+  });
+});
+
+/**
+ * last_seen_at (M24) — "last active means a human did something".
+ *
+ * The ruling is one sentence and every part of it is a trap. Stamping in the
+ * shared resolver marks people active from 3am worker jobs (Backend 2 caught
+ * me proposing that). Stamping on the gateway path marks them active because
+ * their integration polls. Failing the request when the stamp fails takes the
+ * product down for a cosmetic column.
+ */
+/**
+ * M23's third role, pinned at the gate.
+ *
+ * `owner` arrived in `echo.member_role` and three independent checks read
+ * `role !== "admin"` — the admin route gate, the admin-only tool wall, and
+ * the skills `editable` flag. Each would have refused the org's ROOT as
+ * insufficiently privileged, and no test could have failed, because every
+ * fixture was a member or an admin. The schema-contract enum assertion is
+ * what found it; these keep it found.
+ */
+describe("a chosen-nothing is present-and-null, never omitted (M24)", () => {
+  /**
+   * `username` is legally NULL — a person who has not chosen a handle — and
+   * `last_seen_at` is legally NULL for someone never seen. Both must arrive
+   * as the KEY with a null value, not as a missing key.
+   *
+   * The difference matters at the client: `"username" in member` is how a
+   * form decides whether the field is unset versus whether the server simply
+   * does not serve it, and an omitted key makes "not chosen yet" and "not
+   * implemented" identical. Same rule as `history_since` on the stat tiles
+   * and `deleted_at` on a call — this codebase's recurring bug is two kinds
+   * of nothing wearing one shape.
+   */
+  it("serves /v1/me with null handles as explicit nulls", async () => {
+    const res = await server().inject({ method: "GET", url: "/v1/me", headers: authed });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    for (const field of ["username", "display_name_en", "last_seen_at", "accepted_at", "preferred_model"]) {
+      expect(Object.hasOwn(body, field), `${field} must be present even when null`).toBe(true);
+      expect(body[field]).toBeNull();
+    }
+  });
+
+  it("serves the members list the same way", async () => {
+    // admin, because the route is admin-gated — the default fixture identity
+    // is a member and would have made this a 403 that looked like a bug.
+    const res = await server(fakeDb({ userRole: "admin" })).inject({
+      method: "GET", url: "/v1/admin/members", headers: authed,
+    });
+    expect(res.statusCode).toBe(200);
+    const [member] = res.json().members;
+    expect(Object.hasOwn(member, "username")).toBe(true);
+    expect(member.username).toBeNull();
+  });
+});
+
+describe("the owner holds admin authority (M23)", () => {
+  it("admits an owner to an admin route", async () => {
+    const res = await server(fakeDb({ userRole: "owner" })).inject({
+      method: "GET", url: "/v1/admin/members", headers: authed,
+    });
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("still refuses a plain member", async () => {
+    const res = await server(fakeDb({ userRole: "member" })).inject({
+      method: "GET", url: "/v1/admin/members", headers: authed,
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  /**
+   * The predicate itself, over the WHOLE enum rather than the two roles that
+   * happen to have fixtures.
+   *
+   * I first wrote this as a route test on the skills `editable` flag, and it
+   * failed — the fake serves no org-level skill, so the assertion ran against
+   * an empty list. It only surfaced because I had asserted the list was
+   * non-empty first; without that it would have "passed" while checking
+   * nothing, which is the exact fixture-shaped lie this file keeps finding.
+   * Asserting the rule where the rule lives is both truer and cheaper.
+   */
+  it.each(MEMBER_ROLES)("isAdmin/isOwner are exhaustive over %s", (role) => {
+    const identity = { role };
+    expect(isAdmin(identity)).toBe(role === "admin" || role === "owner");
+    expect(isOwner(identity)).toBe(role === "owner");
+  });
+});
+
+describe("last_seen_at is stamped only for a human", () => {
+  // Same shape the M17 block uses; declared here so this describe stands on
+  // its own rather than depending on a sibling's scope.
+  const keyed = { authorization: "Bearer echo_sk_test-token" };
+  const statements = (log: string[]) => log.filter((s) => s.includes("last_seen_at"));
+
+  function spyDb(shape: DbShape = {}) {
+    const db = fakeDb(shape);
+    const seen: string[] = [];
+    const original = db.withIdentity.bind(db);
+    db.withIdentity = ((identity: unknown, fn: (tx: SqlTx) => Promise<unknown>, options?: unknown) =>
+      original(identity as never, async (tx: SqlTx) => {
+        const unsafe = tx.unsafe.bind(tx);
+        (tx as unknown as { unsafe: SqlTx["unsafe"] }).unsafe = ((sql: string, params?: unknown[]) => {
+          seen.push(sql);
+          return unsafe(sql, params);
+        }) as SqlTx["unsafe"];
+        return fn(tx);
+      }, options as never)) as typeof db.withIdentity;
+    return { db, seen };
+  }
+
+  it("stamps a browser caller", async () => {
+    const { db, seen } = spyDb();
+    const res = await server(db).inject({ method: "GET", url: "/v1/calls", headers: authed });
+    expect(res.statusCode).toBe(200);
+    expect(statements(seen).length).toBe(1);
+  });
+
+  it("does NOT stamp a gateway key — a machine acting as you is not you", async () => {
+    // The 3am problem in M17's costume: an integration polling every minute
+    // would keep its owner looking permanently online, and an admin deciding
+    // who to disable would be reading a cron schedule.
+    const { db, seen } = spyDb();
+    const res = await server(db).inject({ method: "GET", url: "/v1/calls", headers: keyed });
+    expect(res.statusCode).toBe(200);
+    expect(statements(seen)).toEqual([]);
+  });
+
+  it("never fails the request when the stamp fails", async () => {
+    const db = fakeDb();
+    const original = db.withIdentity.bind(db);
+    db.withIdentity = ((identity: unknown, fn: (tx: SqlTx) => Promise<unknown>, options?: unknown) =>
+      original(identity as never, async (tx: SqlTx) => {
+        const unsafe = tx.unsafe.bind(tx);
+        (tx as unknown as { unsafe: SqlTx["unsafe"] }).unsafe = ((sql: string, params?: unknown[]) => {
+          if (sql.includes("last_seen_at")) throw Object.assign(new Error("nope"), { code: "42501" });
+          return unsafe(sql, params);
+        }) as SqlTx["unsafe"];
+        return fn(tx);
+      }, options as never)) as typeof db.withIdentity;
+
+    const res = await server(db).inject({ method: "GET", url: "/v1/calls", headers: authed });
+    expect(res.statusCode).toBe(200);
   });
 });
 

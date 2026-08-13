@@ -29,6 +29,7 @@ const REQUIRED_ROUTES: [method: string, path: string, why: string][] = [
   ["GET", "/health", "liveness"],
 
   ["GET", "/v1/me", "M1 — the browser never sees the token, so the shell cannot self-identify"],
+  ["PATCH", "/v1/me", "M24 round 1 — the caller edits their own names (display_name, display_name_en, username)"],
   ["POST", "/v1/signup", "M15 — the only caller of echo.register_account(); without it a signed-up person 401s forever and never reaches the pending queue"],
 
   ["GET", "/v1/calls", "SPEC §Calls — the list"],
@@ -48,12 +49,26 @@ const REQUIRED_ROUTES: [method: string, path: string, why: string][] = [
   ["POST", "/v1/assistant/ask", "SPEC §The assistant"],
   ["POST", "/v1/assistant/proposals/:id/confirm", "M4 — an inferred write is proposed, then approved"],
   ["POST", "/v1/assistant/proposals/:id/reject", "M4 — a refusal is recorded, not discarded"],
+  ["GET", "/v1/assistant/sessions", "M4/db-0018 — conversations persist; the hub needs a list to resume from"],
+  ["GET", "/v1/assistant/sessions/:id/messages", "M4 — resume is a read of what was said, never a replay"],
+  ["POST", "/v1/assistant/sessions/:id/archive", "Q5 — conversations are archived, never deleted"],
+  ["POST", "/v1/assistant/sessions/:id/unarchive", "the archive filter implies its inverse"],
   ["GET", "/v1/skills", "SPEC §Skills — the picker"],
 
   ["GET", "/v1/models", "SPEC §The assistant — 'each user picks their own model'"],
   ["PUT", "/v1/models/preferred", "M5 — the pick is the person's own"],
 
+  ["GET", "/v1/org", "M25 — Settings·General: the org profile, readable by any active member"],
+  ["PATCH", "/v1/admin/org", "M25 — Settings·General is admin-gated for writes"],
+  ["GET", "/v1/admin/audit", "M25 — Settings·COMPLIANCE: admin_action + proposal_decision + agent_run as one feed"],
+  ["GET", "/v1/admin/server", "M25 — the Management surface: queue depths, retry pressure, keys, storage"],
+  ["GET", "/v1/admin/invitations", "M24 — the outstanding invites an admin issued"],
+  ["POST", "/v1/admin/invitations", "M24/D25 — invite as the second door; token shown once"],
+  ["POST", "/v1/admin/invitations/:id/revoke", "M24 — terms are immutable, so re-invite is revoke-and-reissue"],
+  ["POST", "/v1/invitations/redeem", "D8's fifth door — token AND address; a forwarded link is not a bearer token"],
+  ["DELETE", "/v1/admin/members/:id", "M24 — true delete via echo.tombstone_user, owner-only (M23 irreversible)"],
   ["GET", "/v1/admin/members", "SPEC §Settings & admin — members list"],
+  ["GET", "/v1/admin/members/stats", "M24 — the UM stat tiles; trends from user_status_history, never faked from created_at"],
   ["POST", "/v1/admin/members/:id/accept", "M15 — the pending-approval queue"],
   ["PATCH", "/v1/admin/members/:id", "SPEC §Settings & admin — role assignment"],
 
@@ -72,7 +87,9 @@ const REQUIRED_ROUTES: [method: string, path: string, why: string][] = [
  * distinction that let /v1/models go missing.
  */
 const KNOWN_ABSENT: [what: string, why: string][] = [
-  ["GET /v1/admin/models", "org-level model curation: echo.org.allowed_models has no admin endpoint yet; frontend's screen is mock-fed and marked known-stale"],
+  ["GET /v1/admin/org", "deliberate: it would return the same row and columns as GET /v1/org, and a second read of one row is a second thing that can disagree with the first. The admin screen reads /v1/org and writes PATCH /v1/admin/org"],
+  ["avatar_url on the member wire", "steward-ruled deliberate: echo.app_user.avatar_url exists and stays unexposed because no UPLOAD path exists. Shipping it would be a consumer with no producer — permanently empty images rendered with full confidence. Initials serve v1; it returns alongside an upload design, which is a signer question (M10), not a column question"],
+  ["GET /v1/admin/models", "the CURATION list (which models an admin may choose from) has no endpoint; setting the choice does — PATCH /v1/admin/org carries allowed_models. Until then an admin screen can show the current curation but not the menu to pick from"],
   // (SPEC's three write tools landed in milestone 3 — they are TOOLS, not
   // routes, and their approval flow is the two /proposals routes above.)
 ];

@@ -16,7 +16,7 @@ import { NotActivatedError, UnauthenticatedError } from "./errors.ts";
 import { createVerifier, type VerifiedClaims } from "./jwt.ts";
 import { resolveIdentity, UnknownActorError } from "../db/actor.ts";
 import type { Db } from "../db/identity.ts";
-import type { Identity } from "../agent/types.ts";
+import { isAdmin, isOwner, type Identity } from "../agent/types.ts";
 
 /**
  * Defined in errors.ts (next to the mapping that gives them meaning) and
@@ -37,8 +37,73 @@ export interface AuthedRequest {
   headers: { authorization?: string | undefined };
 }
 
+/**
+ * How stale `last_seen_at` may get before we spend a write on it (M24).
+ *
+ * "Last active" is a human-legible fact on an admin screen, not telemetry —
+ * five minutes of imprecision is invisible there, and the alternative is a
+ * write on every authenticated request for a column nobody reads in real
+ * time.
+ */
+const LAST_SEEN_STALE_SECONDS = 300;
+
 export function createAuth({ db, jwtSecret, issuer }: AuthOptions) {
   const verify = createVerifier({ secret: jwtSecret, issuer });
+
+  /** Skip the round trip entirely for callers we stamped recently. */
+  const stampedAt = new Map<string, number>();
+
+  /**
+   * Stamp `last_seen_at` — the ONE place in the product that writes it (M24).
+   *
+   * Deliberately HERE and not in `resolveIdentity`, which looks like the
+   * obvious home and is the wrong one: that resolver is shared with the
+   * worker, so a 3am summarizer job running as its owner would mark that
+   * person active. Backend 2 caught me proposing exactly that. "Last active"
+   * has to mean a human did something, or the column is worse than absent —
+   * an admin deciding who to disable would be reading job schedules.
+   *
+   * For the same reason a gateway key never reaches here: `identify()`
+   * returns on the api-key branch above, so an integration polling every
+   * minute does not keep its owner looking permanently online. A machine
+   * acting as you is not you being active — the 3am problem wearing M17's
+   * costume.
+   *
+   * Throttled twice over. The in-process map skips the statement for callers
+   * seen recently; the SQL predicate makes the write a no-op anyway, so
+   * correctness does not depend on the memo and several api processes cannot
+   * stampede the row.
+   *
+   * Never fails a request. A refused or failed stamp means an admin screen
+   * shows a slightly stale time; turning that into a 500 would take the
+   * product down for a cosmetic column.
+   */
+  async function touchLastSeen(identity: Identity): Promise<void> {
+    const now = Date.now();
+    const last = stampedAt.get(identity.userId);
+    // One number, two clocks. The in-process memo and the SQL predicate must
+    // agree, so they are derived from the same constant rather than written
+    // twice — `5 * 60 * 1000` here and `'5 minutes'` there is two spellings
+    // of one rule, and the one nobody exercises is the one that drifts.
+    if (last !== undefined && now - last < LAST_SEEN_STALE_SECONDS * 1000) return;
+    stampedAt.set(identity.userId, now);
+    try {
+      await db.withIdentity(identity, (tx) =>
+        tx.unsafe(
+          `update echo.app_user
+              set last_seen_at = now()
+            where id = $1
+              and (last_seen_at is null
+                   or last_seen_at < now() - make_interval(secs => $2))`,
+          [identity.userId, LAST_SEEN_STALE_SECONDS],
+        ),
+      );
+    } catch {
+      // Deliberately swallowed — see above. Not even logged at warn: a
+      // failure here repeats on every request and would drown the log in
+      // noise about a column that does not gate anything.
+    }
+  }
 
   /**
    * Verified caller, membership fresh from the DB. Throws for a missing,
@@ -108,7 +173,9 @@ export function createAuth({ db, jwtSecret, issuer }: AuthOptions) {
     }
 
     try {
-      return await resolveIdentity(db, subject);
+      const identity = await resolveIdentity(db, subject);
+      await touchLastSeen(identity);
+      return identity;
     } catch (error) {
       if (error instanceof UnknownActorError) {
         // Verified token, no app_user row. Since /v1/signup exists this is a
@@ -141,14 +208,34 @@ export function createAuth({ db, jwtSecret, issuer }: AuthOptions) {
     return identity;
   }
 
-  /** Admin-only routes. Same not-probeable posture as the tool wall. */
+  /**
+   * Admin-only routes. Same not-probeable posture as the tool wall.
+   *
+   * `isAdmin` rather than `role === "admin"`: since M23 the OWNER is the
+   * founding admin with more authority, not a different kind of user, so
+   * every admin gate must admit them. This line read `role !== "admin"`
+   * until the schema-contract check caught `owner` arriving in the enum —
+   * which would have locked an org's root out of its own admin routes.
+   */
   async function requireAdmin(request: AuthedRequest): Promise<Identity> {
     const identity = await requireActive(request);
-    if (identity.role !== "admin") throw new NotActivatedError("not permitted");
+    if (!isAdmin(identity)) throw new NotActivatedError("not permitted");
     return identity;
   }
 
-  return { identify, requireActive, requireAdmin, verifiedClaims };
+  /**
+   * Owner-only routes: M23's org-level irreversibles (member true-delete,
+   * org settings, promoting or demoting an admin). An ADMIN is refused here,
+   * and gets the same indistinguishable "not permitted" a member gets — the
+   * wall does not explain how far up it goes.
+   */
+  async function requireOwner(request: AuthedRequest): Promise<Identity> {
+    const identity = await requireActive(request);
+    if (!isOwner(identity)) throw new NotActivatedError("not permitted");
+    return identity;
+  }
+
+  return { identify, requireActive, requireAdmin, requireOwner, verifiedClaims };
 }
 
 export type Auth = ReturnType<typeof createAuth>;

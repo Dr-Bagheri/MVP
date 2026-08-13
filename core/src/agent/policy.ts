@@ -23,7 +23,7 @@
  * ends that pattern fast and sets Pi's `terminate` hint so the run stops
  * deterministically instead of burning the turn ceiling.
  */
-import type { AgentStep, Identity } from "./types.ts";
+import { isAdmin, type AgentStep, type Identity } from "./types.ts";
 
 export interface PolicyDecision {
   block?: boolean;
@@ -89,7 +89,9 @@ export function createPolicy({
     if (declared && !declared.has(name)) {
       return block(`tool "${name}" is not in this skill's tool list`);
     }
-    if (adminOnlyTools.has(name) && identity.role !== "admin") {
+    // isAdmin, not role === "admin": M23's owner holds admin authority and
+    // more, so an admin-only tool must admit them (see agent/types.ts).
+    if (adminOnlyTools.has(name) && !isAdmin(identity)) {
       // same shape as any other refusal — capability isn't probeable
       return block(`tool "${name}" is not available`);
     }

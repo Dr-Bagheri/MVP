@@ -5,7 +5,8 @@
   "type": "module",
   "description": "Echo core — one codebase, two processes (api, worker). M1.",
   "exports": {
-    "./vocabulary": "./src/api/vocabulary.ts"
+    "./vocabulary": "./src/api/vocabulary.ts",
+    "./wire": "./src/api/wire.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

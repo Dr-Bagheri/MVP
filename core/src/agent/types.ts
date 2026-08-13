@@ -6,12 +6,20 @@
  * built through the wrapper in `tools.ts`.
  */
 
+import type { MemberRole } from "../api/vocabulary.ts";
+
 /** Who a run acts as. Never a service account (M3/M4). */
 export interface Identity {
   /** echo.app_user.id — the value the connection factory SET LOCALs. */
   userId: string;
   orgId: string;
-  role: "admin" | "member";
+  /**
+   * Three roles since M23 (`member | admin | owner`). Sourced from
+   * `vocabulary.ts` so it cannot drift from `echo.member_role` unnoticed —
+   * writing `"admin" | "member"` inline here is what made `owner` a
+   * type-level surprise in six files at once.
+   */
+  role: MemberRole;
   /** Active users only; a pending/disabled person cannot run an agent (M15). */
   isActive: boolean;
   /**
@@ -23,6 +31,29 @@ export interface Identity {
    * here. `isActive` is the gate; this explains it.
    */
   inactiveReason?: "pending" | "suspended" | "disabled";
+}
+
+/**
+ * Does this caller hold admin authority? (M23)
+ *
+ * ONE definition, because the alternative is six. When `owner` joined
+ * `member_role`, `role !== "admin"` appeared in the admin gate, the
+ * admin-only tool wall, and the assistant's tool loop — three independent
+ * places that would each have refused the org's ROOT as insufficiently
+ * privileged, and each of which had to be found by hand.
+ *
+ * The owner is the founding admin with more, never less: M23 gives them the
+ * org-level irreversibles ON TOP of what an admin may do. So every existing
+ * admin check must admit them, and the places where only the owner qualifies
+ * say so explicitly via `isOwner` rather than by excluding admins here.
+ */
+export function isAdmin(identity: Pick<Identity, "role">): boolean {
+  return identity.role === "admin" || identity.role === "owner";
+}
+
+/** Owner-only authority: admins do NOT qualify (M23's irreversibles). */
+export function isOwner(identity: Pick<Identity, "role">): boolean {
+  return identity.role === "owner";
 }
 
 export type AgentRunKind = "assistant" | "summarizer";
