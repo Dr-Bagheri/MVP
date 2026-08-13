@@ -305,6 +305,68 @@ the mark's color; no ruling yet on the app's surface palette.)
    changes their own role; only owner changes admins). All numbered at
    the amendment.
 
+## User review round 1 (2026-08-13, on the live shell — DIRECTIVES)
+
+1. **Finish all sections to the end** — every started surface completes;
+   necessary missing parts added without re-asking.
+2. **Username is a first-class field**: profiles gain a username; the
+   members/users tables show it in its own proper column (not an
+   under-name annotation).
+3. **The fa↔en switch must be SOLID — everything renders in the active
+   locale, including people's names**: profiles ask for an **English
+   version of the name** (`display_name_en`); en locale renders the
+   Latin name everywhere (fallback: fa display_name — honest, never
+   auto-transliterated). Evidence: the hub greeted "Hi, سارا محمدی".
+4. **Prompt input alignment follows locale** — RTL entry/caret in fa,
+   LTR in en.
+5. **Dropdown chevron spacing** — the select's arrow sits too close to
+   its border edge; fix globally.
+6. **Members table gains a "last action" column** — last_seen_at is now
+   written (api identity path), render it honestly (null = unknown, not
+   a dash pretending to be data).
+7. **Every sub-page gets a back affordance.**
+
+## User review round 2 (2026-08-13, Settings sidebar screenshot — DIRECTIVE)
+
+Section group headers (پیکربندی / اتصال‌ها / انطباق و سوابق) must not
+read as menu items — currently the sidebar looks like one flat menu:
+1. **Spacing**: a clear gap between a group title and its items (and
+   above the next group) so the grouping is visible at a glance.
+2. **Color**: group titles a step lighter or darker than items,
+   theme-dependent (whichever recedes on that theme), so they read as
+   LABELS, not destinations.
+3. **Applies to ALL grouped menus**, not just Settings — one
+   design-system pattern, adopted everywhere a menu has group headers.
+   Scope [steward-confirmed on FE1's flag]: MENU group labels only —
+   content section headings (e.g., Summary/Transcript over call
+   detail cards) are structure and must NOT recede; forcing the
+   pattern there would invert its purpose.
+4. **Management adopts the Settings LAYOUT** (same review pass, same
+   screenshot as the example): a sidebar beside — each section an
+   option in the menu — with the page content coming in the middle.
+   One two-pane shell pattern shared by Settings and Management, so
+   the platform's two admin surfaces read as siblings.
+5. **Breadcrumb trail on top [REVISES round-1 item 7]** (2026-08-13,
+   Supabase org/project/branch bar as the example): the top bar shows
+   the path "like folders" as pages go deeper — every ancestor
+   clickable, so the trail IS the back navigation. This is the chosen
+   FORM of round 1's "back option for all sub-pages" (one mechanism,
+   not a breadcrumb plus per-page back buttons); user flagged the back
+   option still isn't visible on deep pages — twice asked, so this
+   LEADS the layout batch. Deepest crumb = current page title,
+   non-clickable; direction follows locale.
+6. **Avatar/profile menu — required set** (2026-08-13, Supabase-menu
+   screenshot as the example; "not all of it… these are the options
+   we definitely need"): (a) identity header — name + email; (b)
+   Account; (c) Theme; (d) Time and calendar (timezone + Jalali/
+   Gregorian preference); (e) Sign out. The example's other entries
+   are NOT required — the five are the floor, extras only if they
+   earn their place. Any control that also lives in Settings shares
+   ONE state (the "one control, two homes, never two states" rule).
+   Calendar preference interacts with the locale-solid dates rule:
+   default "Auto (follows language)" preserves ruled behavior; an
+   explicit choice overrides.
+
 ## Sequencing (locked by the user's own instruction)
 
 1. **Milestone 3 closes first** (write-tools live loop, dispatcher + purge,

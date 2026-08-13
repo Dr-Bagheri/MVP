@@ -35,15 +35,34 @@ Rather than hide the unbuilt ones, the app names them and says so on the page
 — a control that looks live and silently does nothing is worse than an honest
 blank. Where this README describes the product, it marks the difference too:
 
+"Verified" is three different claims here, and the project keeps them apart —
+flattening them is how a repo starts lying about itself:
+
+1. **Fixture-proven** — the logic is asserted against a captured response body.
+2. **Screen-verified** — someone loaded it in a browser and measured it: RTL at
+   both widths, contrast, the awkward states.
+3. **Live-token-verified** — exercised against the real server as a real signed-in
+   person. **Nothing is at level 3 yet**, because sign-in doesn't complete end to
+   end (see below).
+
 | Surface | State |
 |---|---|
-| Assistant hub · Echo calls & detail · search · Management (Users, Connectors) | **Built** — server-backed |
-| Settings — the section IA, and your own preferences | **Built** |
-| Settings — organisation fields, Management · Models / Server | **Named, not wired** — visible with an on-page notice |
-| Audit Logs, Log Drains | **Backend exists; read surface not wired yet** |
+| Assistant hub · Echo (record + calls) · call detail · search · Management (Users, Connectors) | **Built** — screen-verified |
+| Audit Logs — read surface | **Built** — reads the real trail (admin actions, agent runs, proposal decisions) |
+| Management · Server health | **Built** — live per-metric reads, screen-verified |
+| Settings — section IA, your own preferences, organisation form | **Built** — screens live; the client swaps to the live path with auth |
+| Conversations | **Server live, UI live** — joined end to end with auth |
+| Management · Models | **Named, not wired** — visible with an on-page notice |
+| Log Drains | **Backend exists; read surface not wired** |
 | SSO, Legal Documents | **Out of v1 scope** — listed so the IA is honest, not implemented |
 
-Everything above the line is what the screenshots show.
+**Sign-in is the one gap that matters.** The accounts, roles and permission wall
+are all built and tested, but the browser sign-in flow isn't completable yet, so
+no surface has been exercised end to end as a real signed-in user. Until it is,
+the two token-gated surfaces (Audit Logs, Server health) can't be photographed
+truthfully — an unauthenticated browser shows their error state, which would
+libel a working surface. They're absent from the screenshots below for exactly
+that reason.
 
 ## Screenshots
 
@@ -54,17 +73,21 @@ these are the Persian screens; the English locale is the same UI mirrored.
 |---|---|
 | ![The hub in Persian: the N-mark over the greeting, the prompt box, and one app card — Echo. The caption under the greeting is the scope promise: "whatever you ask stays inside your own access."](docs/screenshots/hub-fa.png) | ![The same hub in English, mirrored left-to-right — one layout, not two designs.](docs/screenshots/hub-en.png) |
 
-| Echo — calls | Management · Users |
+| Echo — record and calls, one screen | Management · Users |
 |---|---|
-| ![The calls list with the assistant docked beside it: each call shows owner, Jalali date, duration, private/org scope and status — including one still summarizing, one failed, and one soft-deleted with its restore window counted down in days.](docs/screenshots/echo-calls.png) | ![User management: pending sign-ups awaiting approval, then the member table with role and status. The stat tiles show counts with "—" where a trend would go, and say why in a line underneath: until status history accumulates, a percentage would be invented.](docs/screenshots/management-users.png) |
+| ![Echo after the pivot: recording controls on top — record in the browser or upload a file, with the level meter and a note that sessions longer than 30 minutes split themselves into parts that stay one call with one timeline — and the calls list directly below, each row showing owner, Jalali date, duration, private/org scope and status, including one still summarizing and one failed.](docs/screenshots/echo-merged.png) | ![User management: pending sign-ups awaiting approval, then the member table with username, role and status. The stat tiles show counts with "—" where a trend would go, and say why in a line underneath: until status history accumulates, a percentage would be invented.](docs/screenshots/management-users.png) |
 
 | Call detail — the timing ladder | Search |
 |---|---|
 | ![A call whose transcript is partly word-timed: the amber chip says "part of this call has reduced accuracy" — part, not the whole — and the line beneath explains that one part came through the fallback lane and lacks word-level timing while the rest of the transcript is complete. Lines with word timing are seekable per word; the degraded part is seekable per line.](docs/screenshots/call-detail.png) | ![Searching transcripts and summaries, four hits across two calls, each labelled "in transcript" or "in summary" with its timestamp. Matching is Persian-folded, so a hit can be correct without being highlighted — the layout is built to read properly with no marks at all.](docs/screenshots/search.png) |
 
-| Management · Connectors |
-|---|
-| ![The API gateway surface: keys listed by the member who owns them — each acting with that member's authority and dying with their account — showing last use, expiry, revoked and expired states, and whether the key may reach the assistant. Below, webhooks that report that something happened without shipping the content.](docs/screenshots/management-connectors.png) |
+| Management · Connectors | Management — two-pane, grouped |
+|---|---|
+| ![The API gateway surface: keys listed by the member who owns them — each acting with that member's authority and dying with their account — showing last use, expiry, revoked and expired states, and whether the key may reach the assistant. Below, webhooks that report that something happened without shipping the content.](docs/screenshots/management-connectors.png) | ![Management's two-pane layout: a sidebar grouped under People / Assistant / Service, with an unbuilt entry carrying its own "not connected yet" tag rather than being hidden, and a breadcrumb that appears on inner pages but never on the hub.](docs/screenshots/management-two-pane.png) |
+
+| Settings · General | Account menu |
+|---|---|
+| ![Settings with the organisation form live: your own preferences (interface language, theme) separated from organisation-wide settings, each field carrying the line that says who it affects — a personal choice overrides the org default.](docs/screenshots/settings-general.png) | ![The account menu open over the shell: identity header first, then the entries — so who you are is answered before what you can do.](docs/screenshots/avatar-menu.png) |
 
 Four things worth noticing, because they are deliberate. **Nothing is faked**:
 a tile with no honest trend to show prints `—` and explains itself. **The
@@ -77,10 +100,11 @@ warning as though the whole transcript were unreliable was a real bug; the
 chip naming *part* of the call is the fix, and the visible proof of the timing
 ladder.
 
-> Captured from the current build. The Echo calls surface is mid-rework — Record
-> and Calls merge into one screen — so that shot will change; sign-in screens are
-> deliberately absent because the flow can't complete end to end yet, and a
-> screenshot of it would promise something that doesn't work.
+> Captured from the current build. Sign-in screens are deliberately absent
+> because the flow can't complete end to end yet, and a screenshot would promise
+> something that doesn't work — as are the two surfaces that need a real token to
+> render their data, for the same reason in reverse: unauthenticated, they show
+> an error that isn't the truth about them.
 
 ## Architecture
 

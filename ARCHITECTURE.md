@@ -152,6 +152,124 @@ with one org — a deployment choice, not a fork.
   agent_run.steps — revoked when it collided with 0011's closed-run
   invariant; the invariant won.]
 
+**M4 amendment — persisted conversations [ruled 2026-08-13, from B1's
+table-granularity instrument]:** `agent_session`/`agent_message` were
+found as a designed-but-never-scheduled feature — real tables, real
+policies (agent_session_own), a Q5 purge ruling (conversations survive
+call purge, run link cut)… and zero rows, zero api surface, nothing
+writing a thread. register_account at table scale, caught by the
+instrument instead of a user. Ruling: **neither "missed" nor silently
+deferred — designed schema whose build was never scheduled; now
+scheduled.** It is load-bearing for the pivot: the hub IS the first
+page, "proposals live and die in their conversation" requires a
+conversation that exists to live in, and an assistant with amnesia
+across reloads is not the product the user described. B1 builds the
+api + agent-loop writer (sessions, thread append for both prompts and
+replies, owner-scoped via the existing policies, Q5 semantics already
+in the schema); B1 shapes the contract and steward ratifies — deciding
+with reasons, not by steward over-specification. UI consumption
+follows as a separate dispatch once the contract lands.
+**BUILT + contract RATIFIED same day [B1, 540 tests, round-tripped
+live]:** sessions open LAZILY (no "new chat" row before anything is
+said; the assistant IS the page, so there is no creation moment to
+hang a button on) — announced by a new additive SSE `session
+{id, created}` event sent FIRST (lazy creation only works if
+announced; unknown event types are ignorable so yesterday's client
+keeps working). One agent_run per MESSAGE, never per session (a run
+has status/tokens/replayability — none true of an afternoon;
+agent_message.agent_run_id nullable is load-bearing: a human's turn
+has no run). Titles derive from the first question, truncated on a
+word boundary, NEVER rewritten (a title that follows the drift
+renames the entry someone is scanning for while they scan). Resume
+is a READ, never a replay from steps — the thread is the record.
+tool_calls in the thread are codes only {id, name} (arguments quote
+transcripts; the full trace lives on the narrower audit surface).
+Ordering, both bug-shaped if reversed: the user's turn is written
+BEFORE the stream opens (bad session_id = clean 404, not an error
+event on a half-open SSE; a failed run leaves the question standing —
+the honest record), the assistant's turn BEFORE `done` (a client
+reloading on done must find the message, or messages vanish at
+random); an assistant-persistence fault never breaks a stream being
+read — swallowed at the stream, with the steward rider that swallowed
+must still be LOUD in observability (dead-letter-sink family: the
+run survives in agent_run, but a thread quietly missing a delivered
+answer must be findable). Render rule [FE2, ratified]: a failed run
+shows as an ANNOTATION on the user's message — no bubble, no role,
+muted — because **the thread is the record, and our commentary on it
+must never be able to join it** (a persisted "something went wrong"
+bubble is, a week later, indistinguishable from something the
+assistant said); a question counts as unanswered only when the run
+is OVER (an error state shown on the normal path is how users learn
+to ignore a warning).
+**Truncation ruling [FE2 finding, ruled 2026-08-13]:** the persist
+condition is emptiness, not failure — which yields TWO failed shapes.
+Shape A (failed having said nothing): user message alone, unchanged —
+persisting a turn that said nothing would be commentary wearing a
+message's clothes. Shape B (failed AFTER emitting text): the partial
+answer persists, and unmarked it **renders identically to a complete
+answer the model chose to give** — in a product whose value is not
+re-listening to the call, a truncated «سه موضوع مطرح شد: نخست» acted
+on as whole is the worst available lie (fabricated completeness
+arrived at by honest persistence — the history_since family, one
+layer up). Ruled: **a marker on the EXISTING assistant row** when a
+run fails after emitting text — annotating how a real turn ended,
+never fabricating one; part of the messages() read; rendered as the
+same annotation-not-bubble. Shape A's reasoning does not reach B.
+Implementation ratified [B1, 576 tests]: `truncated` is **derived,
+not stored** — LEFT JOIN to agent_run.status; the fact was already in
+the database, so no migration and no second copy that can disagree.
+`= true` deliberately, never `!== 'ok'`: an unreadable/missing run
+yields null and the safe default is NOT claiming truncation — a false
+"cut off" on a complete answer is its own lie. Purge edge — found independently by B1 and steward, RULED
+**materialize-at-death**: Q5 cuts the run link on purge, so a purely
+derived marker evaporates when its run dies — the truncated-reads-
+as-complete lie returning one purge cycle later ("fails toward the
+vaguer answer" is true of the system's claim and FALSE of the
+reader's experience; **the record's honesty must not have an expiry
+date**). Design: nullable marker column on agent_message stamped
+ONLY at link-cut (trigger on agent_run delete or purge-job step —
+B3's cut, record_status_change pattern: stamp the fact at the moment
+it would otherwise be lost); read = COALESCE(stored, derived).
+**At most one authoritative source at any moment** — column NULL
+while the run lives, fills exactly at death — which dissolves the
+two-spellings drift objection rather than overriding it. The `=
+true` safe-null default remains correct for UNREADABLE runs
+(transient); purge is gone-forever, a different nothing.
+B3 narrowed the ask twice, both ratified: the stamp writes BOTH
+outcomes (NULL-after-purge would make "fine" and "nothing wrote
+here" identical — on a marker whose whole job is telling those
+apart), and echo_app holds NO write on the column (never two
+writable copies, applied to its own proposer).
+RESOLVED [B3 0046+0047, 296 checks]: mechanism is **BEFORE DELETE
+on agent_run** — the message-side trigger cannot work (ON DELETE SET
+NULL fires after the run row is gone, the status already unreadable
+in-transaction), and the purge-job step would put the rule in code
+that must remember; **the database is where the fact stops being
+readable, so it is where the fact gets written down**. 0047 fixed
+the three-states bug the steward's "more endings" hint exposed: a
+run still `running` at purge NEVER FINISHED — stamping it complete
+is the precise lie the marker prevents; the stamp trusts only a
+clean finish (anything not `ok` is not complete). Boolean kept, not
+enum: failed-vs-never-finished belongs to the RUN (purged with the
+call's content); the message needs one surviving fact — whether
+what the reader sees is all of it. SEAM CLOSED [B3 0048–0050, 300 checks]: one predicate now serves
+both halves — not-ok AND (terminal OR stalled past a window from
+`started_at`). The four-migration churn is on the record by B3's own
+insistence: 0049 removed the clock when append-after-resolve
+ordering made it look redundant; 0050 restored it for the reason
+neither session had said — **the start time frees the read from
+depending on that ordering AT ALL** ("I had removed the structure
+and kept the dependency" — depending on another package's discipline
+where structure can carry the answer is the wrong direction). All
+four steps reasoned in 0050's header so it cannot oscillate a fifth
+time. **NO SWEEPER — ruled by B3, steward's suggestion declined
+with better reasoning, ratified**: stale `running` rows are hygiene,
+not correctness, now that the predicate handles them — bounded and
+query-discoverable. The sweeper earns its place only when "runs in
+progress" becomes a number a person acts on — and then as a named
+operation with an explicit actor, never a silent background writer
+on agent_run.
+
 ## M5 — Models: all cloud, user-chosen, admin-curated, no Claude
 
 - **No local LLMs, no Ollama, no air-gapped profile** (user decision —
@@ -223,13 +341,33 @@ with one org — a deployment choice, not a fork.
   person alternating with themselves, and doubled the STT charge on every
   such file, silently, with all-but-one checks green. The rule was written
   for telephony (each party its own leg) and was never true of consumer
-  audio. Dual-mono downmixes and diarizes, loudly. Second finding, honest
-  status: **the local sherpa diarizer over-splits real conversational
-  audio** (threshold sweep jumps 5 speakers → 1; no value yields 2) — the
-  multi-speaker gate passes via SONIOX's native diarization, which produced
-  clean turns on the same clip; the local path is the fallback/hedge and is
-  NOT production-quality on conversational audio — recorded so nobody
-  re-derives confidence from the synthetic Phase-0 numbers. Third: M21
+  audio. Dual-mono downmixes and diarizes, loudly. Second finding, **[CORRECTED
+  2026-08-13 — the over-split caveat was WRONG, and the correction is a
+  casebook rule]**: the clip is a FOUR-person conversation — Soniox and
+  the local diarizer independently agree on 4 (median turn gap 0.18s, a
+  backchannel-only voice, a participant addressed by name); "the number
+  2 came from what someone typed in the filename." The sweep was scoring
+  a correct-ish clusterer against a fabricated target. Real defect
+  underneath: a mis-set default — threshold 0.5→**1.0** (yields 4 on the
+  4-person clip; the single-speaker CONTROL is flat at 1 across the
+  whole range, which is what makes the change safe). Deliberately NOT
+  1.05-which-fits-exactly (fitting a constant to n=2 recordings), and
+  1.0 errs toward over-split, the fixable direction: a human can merge
+  at speaker-linking; a merge reads as fact. minDurationOn/Off rejected
+  as the knob — it barely moves clusters while DELETING 17% of speech
+  (M21: the knob that most reduces splitting is the one that deletes
+  the user's words). Conditions attached: two recordings, Persian,
+  counts 1 and 4, threshold specific to this embedding model.
+  **Crosstalk bound [measured 2026-08-13, synthetic-with-method
+  overlay of two real passages]**: under full overlap, **30% of words
+  vanish while every indicator reads clean** — both voices detected,
+  transcript coherent, confidence drop (4pts) inside normal
+  between-clip spread; "it reads as an ordinary conversation that is
+  simply missing a third of itself." No cheap signal exists — a real
+  overlap detector is a model (pyannote) and a package of its own
+  [BACKLOG, named]; until then this is a recorded forfeit the pipeline
+  cannot see or declare (the M21 clause with nothing behind it —
+  written here so it is a known bound, not a discovered one). Third: M21
   enforcement — `max_speakers` is a hint that is REPORTED ON when exceeded,
   never a knife; the fallback normalizer briefly deleted speech to satisfy
   a config number (the forfeit hierarchy inverted), fixed with regression.
@@ -274,9 +412,20 @@ with one org — a deployment choice, not a fork.
 
 ## M8 — Data & retrieval
 
-- **Schema in hand-written SQL** (numbered migrations); Drizzle for queries
-  only — generators can't emit RLS/roles/grants and would silently drop the
-  security layer.
+- **Schema in hand-written SQL** (numbered migrations); queries via
+  **postgres.js** (`postgres` ^3.4.5 in core/; db/'s runner uses pg)
+  [CORRECTED 2026-08-13 — was "Drizzle for queries only". Drizzle was
+  never installed: the blueprint session verified no workspace
+  dependency anywhere, while core/ was built, reviewed, and 576-tested
+  on postgres.js tagged-template SQL. The deviation was never flagged
+  by any session — discovered by documentation, which is itself a
+  finding (a per-dependency claim forced the check, the
+  built-vs-designed table's lesson again). Ratified retroactively
+  because the decision's REASON is served better, not worse: hand-
+  written SQL owns structure AND queries; no query-builder layer to
+  drift from the RLS/grants wall]. Generators can't emit
+  RLS/roles/grants and would silently drop the security layer —
+  unchanged.
 - **Transcripts: one segment per row** (search, windows, surgical corrections).
 - **Search**: Postgres FTS (`tsvector`) over transcripts + summaries; RLS
   filters by construction. Persian normalization (TS port of `fa_normalize`)
@@ -295,7 +444,7 @@ with one org — a deployment choice, not a fork.
 | Language | **TypeScript-first**; Python only inside ml/ if measurement demands (M1) |
 | web/ | Next.js App Router · next-intl (fa default + en) · RTL-first · Vazirmatn · ui-ux-pro-max-driven design system |
 | core/ | Fastify · pnpm workspaces · zod at every boundary · pino (no content in logs) · SSE streaming |
-| ORM | Drizzle (queries); SQL owns structure |
+| ORM | none — postgres.js tagged-template SQL (queries); SQL owns structure [CORRECTED 2026-08-13, see M8] |
 | Queue | pgmq |
 | Tests | Vitest · **SQL test suite for RLS/grants** (the wall gets its own tests) · Playwright E2E |
 | Desktop | Tauri wrapper, phase 1.5 (same Next.js app; native capture stays out per spec) |
@@ -326,6 +475,21 @@ not a policy.
   spec's scope rules). Admins **read everything** in their org.
 - **Admins may delete ANY recording — including members' private ones.**
   Members delete only their own. Human, plain-code paths, always logged.
+  **[AMENDED 2026-08-13 — "always logged" named honestly]**: admin
+  deletions write admin_action (live); a MEMBER's own deletion is
+  today recorded only as the `deleted_by` stamp on the row itself —
+  which the purge job eventually deletes, so after the 30-day window
+  no trace remains that a deletion happened. RULED, direction now /
+  build deferred: **member deletion events get their own
+  metadata-only record surface** (actor, call id, timestamp — codes
+  never content; severable link, survives purge exactly as
+  proposal_decision outlives purged runs — the precedent that kept
+  admin_action's name honest). "Purge removes the content" and "the
+  trail is append-only" were never about the same thing: the row's
+  content purges; the fact of a deletion is not content. Until the
+  build slot, this sentence is the record of the gap (found by 0055
+  making a narrowed policy visible — the drizzle lesson pre-empted:
+  the doc must not promise what does not exist).
 - The **agent deletes nothing, ever** (role grant — M3).
 - **[Ratified round 3]** Deletion = soft-delete with a **30-day purge
   window** (visible to admins), then hard purge of audio, transcript, and
@@ -615,6 +779,331 @@ principle a number:
   stated so the next person doesn't "fix" the inconsistency in either
   direction.
 - Underneath all of it: **the user's recording is never what gets spent.**
+
+## M22 — The NeurAI platform [user directive + design verdict, 2026-08-13]
+
+**M18 is REVISED: NeurAI is the platform; Echo (اکو) is an app inside it.**
+Echo Mobile naming unaffected. Full directive record: docs/PLATFORM-BRIEF.md;
+design authority: design-system/neurai-platform/ (PROPOSAL-01/-02 +
+hub-mock, all user-approved).
+
+- **First page = the AI-assistant hub**: icon rail (inline-START), centered
+  N-mark (no orb — the mark, with an idle glow doing the orb's job) over
+  the greeting; the caption IS the scope promise («هرچه بپرسید در محدودهٔ
+  دسترسی خودتان می‌ماند»); prompt box; app cards — Echo only, NO invented
+  tiles. Top bar: en/fa switcher · global search · avatar. Menu bottom:
+  Settings · Help · GitHub link. On the hub the assistant IS the page;
+  selecting Echo docks the assistant (bottom sheet under md, never open on
+  load) and opens Echo's surface: **Record on top, Calls below, one
+  screen**. Mobile shell: bottom bar of four (Hub · Echo · Management ·
+  More); the law: **the app must be reachable on load, at every width,
+  without dismissing anything.**
+- **Design system**: computed violet family from the measured brand
+  (#A274FF on #130036), verify-pairs.mjs as the running gate, dark-first
+  with light DERIVED; ONE accent family — Echo identified by its soft-red
+  mark (#FF6F59, measured away from --danger), never a second palette.
+  The N-mark always sits on its indigo (tile on light surfaces; the hub's
+  canvas IS the tile color). --on-accent is dark; --border splits from
+  --border-strong. **DEFAULT_THEME = dark, one constant, one answer per
+  document [ratified 2026-08-13]**: the two-theme-stores defect (the
+  anti-flash script read one key defaulting light while the toggle
+  wrote another defaulting dark — the script caused the flash it
+  existed to prevent, and a chosen theme was lost on every first
+  paint) is fixed structurally: `lib/theme.ts` owns the key and
+  default and GENERATES the inline script, so drift is
+  unrepresentable; Echo's screens follow the platform's dark-first.
+  Group labels: `--fg-subtle` recedes from `--fg-muted`, and
+  verify-pairs asserts the RELATIONSHIP (subtle < muted), not just
+  legibility — a future "improve the label contrast" would silently
+  restore the flat menu while every absolute check passed.
+- **Breadcrumb trail [user directive, built 2026-08-13; supersedes the
+  per-page back affordance]**: top-bar trail, ancestors clickable =
+  the back navigation, deepest crumb = non-clickable page title
+  (aria-current), locale-aware by construction; hub renders NO trail
+  (a one-crumb trail is a label that navigates nowhere, on the one
+  screen whose anatomy the user signed off); at 375 the trail
+  re-renders as chevron+parent — the same trail in its most compact
+  honest form, never a second thing to sync. **The trail is a
+  DECLARED TABLE (trail.ts: parent+label per route), never a pathname
+  split [ratified]**: /calls sits under Echo in the product's IA and
+  the URL does not say so — a path-derived trail quietly teaches an
+  IA that the rail, the hub cards and the pivot all contradict.
+  Coverage instrument: every servable route has a trail entry or an
+  explicit reason (derived from the route tree — a hand-written route
+  list is a second thing to remember); crumb labels must match the
+  page's own h1 in BOTH locales (a crumb naming a page differently
+  from its own heading is the same drift one layer out); no dynamic
+  pattern may be anyone's parent. Title hook distinguishes
+  null (genuinely untitled) from undefined (not loaded) — kinds of
+  nothing, again.
+- **Management adopts the Settings layout [user directive, built
+  2026-08-13]**: ONE extracted `TwoPane` component renders BOTH
+  admin surfaces (copying it would mean every grouped-header fix
+  made twice, "and the second one is the one nobody makes"); nav
+  model declared in one place. Groups answer different questions:
+  افراد / دستیار / سرویس. Ratified decisions: **/management keeps a
+  landing, never redirects into a section** (Users is admin-gated —
+  a redirect would make a refusal card the first thing Management
+  ever shows a member; the cards say what a section is FOR, the menu
+  says its name — not the menu repeated); **a role refusal keeps the
+  pane** (stripping the shell strands the user beside siblings they
+  may open); **no back affordance inside a pane** (with the menu
+  permanently beside, a section isn't descended into — the
+  breadcrumb carries the way out of the surface). /management/models
+  now in menu AND cards, carrying honest `notWired`, named by its
+  own h1.
+- **Conversation is a STATE of the hub, not a redesign of it [ruled
+  2026-08-13, FE2 proposal; reversible by user preference]**: IDLE =
+  exactly the approved anatomy, unchanged — what a user meets on
+  arrival and returns to; ACTIVE = the thread replaces the
+  centrepiece, the prompt box moves to the foot and stays the thing
+  you type into (mark/greeting/cards step aside, never pushed down a
+  scrolling page); HISTORY = reachable from the top bar, never
+  permanent width ("a conversation list that is empty for every new
+  org is chrome that costs a first impression to earn nothing"). The
+  conventional permanent-sidebar layout was considered and declined
+  because it would alter the user-approved first screen; if the user
+  ever prefers it, it is the same components in a different frame.
+
+## M23 — Three roles: owner / admin / member [user ruling, 2026-08-13]
+
+SPEC's two-role rule is revoked. **Owner = the org's root** (steward
+semantics, user may refine): the founding admin becomes owner; exactly one
+per org in v1 (transfer = explicit action); owner manages admins
+(promote/demote/disable) and org-level irreversibles (member true-delete,
+org-level settings); admins manage members as today. Schema: member_role
+gains 'owner'; the self-change guard generalizes (nobody changes their own
+role or status; only the owner changes an admin's); RLS/trigger updates
+ride db/'s package with the full authorization matrix walked (rule 7).
+**Ownership is never set through the general role patch** [api ruling,
+ratified]: one owner per org means "set role = owner" is a TRANSFER — it
+moves authority away from the current owner as a side effect of a request
+that never mentions them; transfer is its own endpoint with its own
+confirmation.
+
+## M24 — User Management [user directive: ALL options, 2026-08-13]
+
+Stat tiles (counts from status; **trends from a status-history record** —
+a minimal append-only log written by the existing app_user trigger, because
+deltas must never be faked), search, columns/filter/export, multi-select
+bulk actions, inline role dropdown (three roles), date added, sortable
+last-active, per-row actions, overflow menu. Rulings that bound it:
+- **last_seen_at** is written ONLY in the api's JWT identity path
+  (deliberate, throttled — never in the shared resolver: a 3am job must
+  not mark its owner active; **and never in the gateway path**: an
+  integration polling every minute would keep its owner permanently
+  "online", and an admin deciding who to disable would be reading a cron
+  schedule. "Last active means a human did something").
+- **Add user = BOTH doors**: an invite flow (pending row + invitation
+  artifact — new schema; the email path is a designed seam, invite links
+  shown to the admin for out-of-band delivery in v1) AND direct admin
+  creation — a numbered, deliberate second door (admin vouching =
+  acceptance built in), never an accident.
+- **Delete = BOTH**: disable (reversible) and true delete behind warning +
+  explicit confirmation — true delete must preserve the append-only audit
+  (anonymize/tombstone the person; references survive), designed in db/'s
+  package as a numbered decision.
+
+**M24 amendment — identity fields [user review round 1, 2026-08-13]:**
+- **username is first-class**: a real `app_user` column (unique, stable
+  handle), shown in the members table as **its own column**, asked for in
+  the profile — not an annotation under the display name. Interplay with
+  tombstone true-delete (does a deleted user's handle free or stay
+  reserved?) is db/'s to propose as part of the tombstone decision:
+  freeing a handle lets a newcomer wear a departed colleague's name;
+  reserving it leaks that the name existed. Neither is obviously right —
+  it gets decided, not defaulted.
+- **Dual display name**: profile carries `display_name` (fa) AND
+  `display_name_en`; the locale switch is SOLID — en renders the Latin
+  name everywhere (greeting, avatar, tables, mentions). Fallback when
+  `display_name_en` is absent: the fa name unchanged — honest mixed
+  script over auto-transliteration, which fabricates a name nobody chose.
+- **Locale-solid extends past names** [steward interpretation of "solid",
+  reversible]: text direction, prompt-input alignment/caret, dates
+  (Jalali in fa, Gregorian in en), and digits follow the active locale.
+- **Two ratified refinements [FE1 2026-08-13]**: (a) the fa fallback
+  renders **visibly as the same string** — no styled variant; a gap that
+  looks handled stops being noticed as a gap. (b) Scope = **identity
+  surfaces only** (greeting, avatar menu, member tables, member
+  mentions).
+- **Name resolution is ONE rule [FE2 2026-08-13, ratified]**: a single
+  shared `personName(person, locale)` resolver — two implementations of
+  one rule is the drift shape (the shell saying "Sara" while a table
+  says «سارا محمدی»). And **search matches BOTH names regardless of
+  locale**: matching only the rendered one means an English user can't
+  find a colleague by the Persian spelling they were told, and vice
+  versa. Applies wherever members are searched (UM, mentions, filters). Names inside content — a speaker label someone typed, a
+  name in a transcript — stay exactly as authored: they have no English
+  variant, and rendering user-authored text differently per locale would
+  be translation, a different and much larger claim.
+- **Members table adds "last action"** (last_seen_at, the M24 3am-rule
+  stamp): null renders as honest "not seen yet", never a dash that reads
+  as data. Every sub-page gets a back affordance.
+- **Avatar menu landed [FE2 2026-08-13; user's required set]**: all
+  five entries live (identity header via personName; Account;
+  Theme as menuitemradio; Time & calendar collapsible; Sign out
+  through FE1's route, consumed not forked); Settings entry KEPT —
+  it earns its place below md where the rail is hidden. Theme is ONE
+  shared store, proven both directions live (menu click flips the
+  Settings select; Settings select flips the menu radios).
+  **Calendar preference axes [ratified]**: "Auto (follows language)"
+  default preserves the locale-solid ruling; an explicit choice
+  overrides — and **digits stay with the LANGUAGE while months
+  follow the CALENDAR** (a Persian UI on Gregorian reads
+  «۱۴ Jun ۲۰۲۶») — two axes, easy to tie together by accident.
+  Persistence is INTERIM per-device (localStorage) with the expiry
+  condition in code; the wire slot (PATCH /v1/me preferences) is
+  being opened with B1 — a signed-in user elsewhere gets auto, the
+  honest default rather than a wrong guess, until it lands.
+- **Wire rulings [B1 2026-08-13, ratified]**: self-naming is a separate
+  route from admin member-PATCH (names you call yourself vs. things
+  done TO you — one route would make them differ only by which fields
+  are filled). Username case NORMALIZED, not rejected. PATCH semantics:
+  **null clears, omit leaves alone** (explicit supplied-flags — the
+  coalesce reflex makes clearing impossible forever). Format rule
+  enforced by the DB constraint, mirrored at the api edge which states
+  it in the refusal; if they ever disagree the constraint wins and the
+  regex is the bug. Username conflict = 409 naming the field. 
+  **avatar_url stays UNEXPOSED (deliberate, KNOWN_ABSENT)**: no upload
+  path exists, so exposing the column would render permanently-empty
+  images — a consumer with no producer; initials serve v1, revisit when
+  an upload design (signer, not policy — M10 pattern) is on the table.
+- **Schema rulings [B3 0035–0042, ratified 2026-08-13]**: username is
+  unique **PER ORG, not globally** — global uniqueness would make
+  "that handle is taken" an existence oracle over every other
+  customer's org (signup as a cross-tenant probe); per-org is all
+  mentions need. Format is ASCII (`^[a-z][a-z0-9_]{2,31}$`) — not
+  style: an @mention inline in a bidirectional line has no unambiguous
+  end if the handle is Persian. NULL = no handle chosen, stays legal.
+  display_name_en refuses blank strings so the fa fallback actually
+  fires. Status-history INSERT is held by NO role: the guard writes
+  through `record_status_change()`, granted to echo_app but refusing
+  any call at `pg_trigger_depth() = 0` — **the api can neither author
+  a trend nor omit one**; only permitted changes are recorded (a
+  refused attempt leaves no line).
+- **Tombstone username ruling: RESERVED, never freed [B3 proposal,
+  steward-ratified 2026-08-13]**: a true-deleted person's handle stays
+  with the tombstone. Freeing it is impersonation-by-succession —
+  every historical reference to @sara silently resolving to a
+  different person makes a handle that changes owner "a small forgery
+  machine", with retroactive damage to records already written. The
+  privacy counter-argument (reserving leaks the handle existed) was
+  defused by the tenancy decision: under per-org uniqueness the leak
+  reaches only future members of the org where the person actually
+  worked. If an org ever genuinely needs a handle back, that is an
+  explicit named owner operation on a specific handle — visible,
+  attributable, never a side effect of deleting someone — and it is
+  NOT built until demonstrated need. Boundary noted: the tombstone
+  keeps the handle so references resolve to "a deleted person,
+  formerly @x" — accuracy of the record is the product; full-erasure
+  requests are a platform-level operation outside v1.
+- **Invitations + tombstone landed [B3 0043–0045, D23–D26,
+  ratified 2026-08-13]**: show-once invitation token (hash-only at
+  rest, one live per email — re-inviting replaces, never two working
+  links; terms immutable after issue: revoke and reissue).
+  **D25 arrival semantics**: invited → ACTIVE (someone vouched, by
+  name); self-signup joining an org → pending; self-signup creating an
+  org → the FOUNDER is pending until the vendor accepts (the org
+  itself is created ACTIVE — corrected 2026-08-13 by B3's
+  verification; the founder waits, not the org). This RATIFIES B3's deliberate
+  deviation from the steward dispatch ("pending row" phrasing): the
+  inviter's role decides what role they may GRANT (only owner invites
+  admin, nobody invites owner), never whether acceptance is needed —
+  an admin's invitee waiting while an owner's does not is "a
+  difference the invitee experiences and cannot explain".
+  `redeem_invitation` (fifth D8 door) requires the ADDRESS to match —
+  a forwarded link must not turn a named invitation into a bearer
+  token; expired/revoked/used/unknown/wrong-address refuse
+  identically (not a probe). Tombstone: empties the person, REPLACES
+  the email (NOT NULL + unique survive), disables, stamps, and
+  soft-deletes their calls attributed to the deleter — M11's window
+  and audio purge apply as to any deletion; the row survives so
+  admin_action / proposal_decision / agent_run / corrected lines all
+  still resolve. Reservation ASSERTED: the newcomer-wearing-the-handle
+  test refuses. Routes live [B1, ratified]: invitation token mirrors
+  the api-key pattern with a DISTINCT `echo_inv_` prefix (isApiKey can
+  never claim one; tested that the raw token appears in no query
+  parameter), role ceiling checked against the ISSUER, one-live 409
+  names revoke-and-reissue, redeem refusals identical across all
+  raise codes; DELETE /v1/admin/members/:id rides tombstone_user
+  owner-only; the retired-handle 409 fires for real members ("retired"
+  not "taken"), with the pending-member case degrading to the vaguer
+  fallback — settled empirically by B3 (a pending member cannot see
+  the tombstoned row at all).
+  current state (app_user — replaying the log for "how many pending"
+  would drift), movement from user_status_history (deriving trends
+  from created_at is the forbidden shortcut: an org that accepted ten
+  and disabled three reports zero because nobody was *created*). The
+  teeth: **`history_since` — null means "we were not recording",
+  and the client renders "—", never "0"**; a confident "+0 this
+  month" over an hours-old log is a fabricated delta arrived at by
+  honest arithmetic. The were-we-recording query is deliberately
+  unwindowed — windowing would make an old quiet log look like no log.
+- **Members list query rulings [B1 2026-08-13, ratified]**: sort is a
+  closed set of KEYS mapped to SQL, never a column name (injection,
+  plus column names must not become API contract — the test asserts
+  key and SQL differ, the gap IS the proof of mapping). `last_seen`
+  sorts NULLS LAST ("someone never seen is not the most recent thing
+  that happened"). Search spans display_name / display_name_en /
+  username / email — the server-side half of the search-matches-BOTH-
+  names rule, independently converged — via escaped-wildcard ilike
+  prefix matching, not FTS (an unescaped `%` makes the filter silently
+  stop filtering). Filters validate against the vocabulary constants,
+  never literal unions — `owner` became filterable the moment the
+  vocabulary adopted it, and the test is named for that fact.
+
+## M25 — Settings IA + where the surfaces live [user directive, 2026-08-13]
+
+Sections adopted structure-not-style: **CONFIGURATION** (General ·
+Security · SSO) / **CONNECTIONS** (OAuth Apps — the connectors/gateway
+surface re-homed) / **COMPLIANCE** (Audit Logs · Audit Log Drains · Legal
+Documents). Depth rulings (user may re-rule): **Audit Logs is REAL now**
+(read UI over **admin_action** + proposal_decision + agent_run — the
+trail's three halves; an earlier draft of this entry said "human_action",
+a name 0029 reversed out of existence — corrected before it got typed
+into a query and debugged as a permissions problem). Two properties of
+the feed [api rulings, ratified]: agent runs contribute a hand-built
+detail object — `request`/`steps` (prompt + tool traces = content) are
+never selected — while `admin_action.detail` IS forwarded, so
+**codes-not-content on the read surface holds only if every
+admin_action WRITER respects it**: the discipline belongs to whoever
+writes the record. And keyset-paged, never OFFSET — an audit trail
+grows at the head, so offsets silently skip rows between pages. Org
+status is NOT settable through the api [ratified]: suspension is what
+the platform does to an org, not what an org does to itself — a
+self-service button whose only outcome is an unrecoverable lockout is
+not a feature. **[AMENDED 2026-08-13, B3's measurement — the original
+"the grant stays, the api is simply not the operator path" was the
+vulnerability]**: at the db layer an admin COULD suspend their own
+org (org_admin_update covered status) and every predicate authorizing
+the reverse required an active org — the reverse was unreachable from
+inside the product; an admin could brick their organization for
+everyone, permanently, exit = operator raw SQL. Fixed in 0052: org
+status is **vendor-only at the GUARD** (refused from application
+roles — the layer that can't be routed around), with
+`vendor_set_org_status` carrying BOTH directions through one door (an
+operation that could only suspend would rebuild the street it exists
+to remove); members' own statuses untouched (a suspended org changes
+what its people can reach, not who they are). **D27 minted as a
+class**: any state transition that removes the actor's power to make
+the reverse transition needs its exit built at the same time as its
+entrance. Its distilled form [B3]: **a decision enforced at a layer
+the write can be routed around is a preference, not a rule** — B1's
+api-level refusal was right and protected nothing while the grant
+sat underneath it (third arrival of the altitude finding, after the
+run-store-on-app-role bug and the pg_has_role seam). Also verified: vendor_accept_org / vendor_pending_orgs
+exist, echo_vendor-only, audited through user_status_history
+(changed_by NULL = vendor, the accepted_by convention). Framing
+corrected: **the org is never pending — register_account creates it
+ACTIVE with a pending OWNER; the founder waits, not the org.** Audit Log Drains rides the shipped dispatcher pattern;
+**SSO and Legal Documents render as honest visible-but-inactive entries**
+(named, not fabricated — SPEC still excludes SSO's implementation from
+v1). Surface homes, unblocking the api's route package: org
+settings/profile → Settings·General (admin-gated); **server management =
+its own Management surface** (queue depths + dead letters [already
+permitted reads], provider/key health, storage usage); **speaker directory
+lives inside Echo** (it is call-domain); agent-runs read = the Audit Logs
+surface; archive/restore write routes = Echo app surfaces.
 
 ---
 
