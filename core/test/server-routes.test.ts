@@ -62,23 +62,67 @@ interface DbShape {
   userStatus?: string; userRole?: string; orgStatus?: string;
   callVisible?: boolean; summaryVisible?: boolean;
   keyValid?: boolean; keyAllowsAssistant?: boolean;
+  preferredModel?: string | null;
+  /** Make echo.register_account() raise a duplicate-key, as a second signup does. */
+  registerFails?: boolean;
+  /**
+   * No `app_user` row for the token's subject: signed up with Supabase,
+   * never registered here. The state the whole recovery flow keys off.
+   */
+  userMissing?: boolean;
 }
 
 function fakeDb({
   userStatus = "active", userRole = "member", orgStatus = "active",
   callVisible = true, summaryVisible = true,
-  keyValid = true, keyAllowsAssistant = false,
+  keyValid = true, keyAllowsAssistant = false, preferredModel = null,
+  registerFails = false, userMissing = false,
 }: DbShape = {}) {
   const make = (): SqlClient => ({
     async begin<T>(fn: (tx: SqlTx) => Promise<T>): Promise<T> {
       const tx = (async () => []) as unknown as SqlTx;
+      /**
+       * `count` on the returned array: postgres.js reports affected rows
+       * there, and the soft delete deliberately has no RETURNING clause (it
+       * writes a row db/0013 forbids it to read back). A fake that only
+       * models returned ROWS cannot represent that statement at all.
+       */
+      const answer = (rows: unknown[]): never[] =>
+        Object.assign([...rows], { count: rows.length || 1 }) as unknown as never[];
       (tx as unknown as { unsafe: SqlTx["unsafe"] }).unsafe = (async (sql: string) => {
         if (sql.includes("resolve_api_key")) {
           return keyValid ? [{ actor_id: ALICE, allow_assistant: keyAllowsAssistant }] : [];
         }
+        if (sql.includes("preferred_model")) return [{ preferred_model: preferredModel }];
+        // db/0032's named deletion operations. `true` = done, `false` =
+        // already in that state; a refusal arrives as a raised 42501, which
+        // calls.ts turns into 404.
+        if (sql.includes("soft_delete_call")) return [{ deleted: true }];
+        if (sql.includes("restore_call")) return [{ restored: true }];
+        /**
+         * Registration. Ahead of the `app_user` branch on purpose: the
+         * function's name does not contain "app_user", but its RESULT is an
+         * app_user row, and a fake that answered the membership shape here
+         * would let the route "work" without ever calling db/0015's door.
+         */
+        if (sql.includes("register_account")) {
+          if (registerFails) throw Object.assign(new Error("dup"), { code: "23505" });
+          return [{
+            id: ALICE, org_id: "org-a", email: "new@example.com", display_name: "New Person",
+            role: "admin", status: "pending", accepted_at: null, last_seen_at: null,
+            created_at: new Date().toISOString(),
+          }];
+        }
         if (sql.includes("app_user")) {
+          if (userMissing) return [];   // verified token, no membership row
           return [{ id: ALICE, org_id: "org-a", role: userRole, status: userStatus, org_status: orgStatus }];
         }
+        // An UPDATE with no RETURNING reports its result as an affected-row
+        // COUNT — the soft delete is the one such statement, because the row
+        // it writes is one db/0013 forbids it to read back. Checked before
+        // the table branches below, or `update echo.call …` matches the
+        // calls branch and returns rows the real statement never asks for.
+        if (/^\s*update\s/i.test(sql.trim()) && !/returning/i.test(sql)) return answer([]);
         if (sql.includes("echo.api_key")) return [apiKeyRow];
         if (sql.includes("insert into echo.agent_run")) return [{ id: RUN }];
         // Order matters, in both directions: the search query JOINS echo.call
@@ -103,11 +147,137 @@ const server = (db = fakeDb()) =>
 
 const authed = { authorization: `Bearer ${token()}` };
 
+/**
+ * Registration (M15).
+ *
+ * These exist because the route did not, for reasons no test could have
+ * caught: `echo.register_account()` was written, documented as the only way
+ * an account is created, granted to echo_app — and never called. Everything
+ * around it was correct. The chain simply stopped, and a new person's token
+ * verified, resolved to no membership, and 401'd forever.
+ */
+describe("POST /v1/signup", () => {
+  /**
+   * A Supabase-shaped token: `sub` plus the `email` claim we register with.
+   *
+   * `null` means OMIT the claim — not `undefined`, which in JavaScript
+   * triggers the default parameter instead. My first version of the no-email
+   * test passed `undefined` and therefore tested a token that carried an
+   * email, asserting nothing while looking thorough.
+   */
+  function signupToken(sub = ALICE, email: string | null = "new@example.com") {
+    const head = b64({ alg: "HS256", typ: "JWT" });
+    const claims = { sub, exp: Math.floor(Date.now() / 1000) + 3600 };
+    const body = b64(email === null ? claims : { ...claims, email });
+    const sig = createHmac("sha256", Buffer.from(SECRET, "utf8"))
+      .update(`${head}.${body}`).digest().toString("base64url");
+    return `${head}.${body}.${sig}`;
+  }
+
+  it("creates a PENDING account and says so", async () => {
+    const res = await server().inject({
+      method: "POST", url: "/v1/signup",
+      headers: { authorization: `Bearer ${signupToken()}` },
+      payload: { display_name: "New Person", org_name: "Acme" },
+    });
+    expect(res.statusCode).toBe(201);
+    const body = res.json();
+    // pending is the contract, not an implementation detail: the client
+    // routes straight to the waiting-for-approval screen on it.
+    expect(body.status).toBe("pending");
+    expect(body.org_id).toBe("org-a");
+  });
+
+  it("registers the TOKEN's subject, never a body-supplied id", async () => {
+    // The whole security of this route. If a body field could name the
+    // account, anyone holding any valid token could register an account for
+    // someone else's uuid — including one an admin is about to accept.
+    const seen: string[] = [];
+    const db = fakeDb();
+    const original = db.withoutIdentity.bind(db);
+    db.withoutIdentity = ((fn: (tx: SqlTx) => Promise<unknown>) =>
+      original(async (tx: SqlTx) => {
+        const unsafe = tx.unsafe.bind(tx);
+        (tx as unknown as { unsafe: SqlTx["unsafe"] }).unsafe = ((sql: string, params?: unknown[]) => {
+          if (sql.includes("register_account")) seen.push(String(params?.[0]));
+          return unsafe(sql, params);
+        }) as SqlTx["unsafe"];
+        return fn(tx);
+      })) as typeof db.withoutIdentity;
+
+    const res = await server(db).inject({
+      method: "POST", url: "/v1/signup",
+      headers: { authorization: `Bearer ${signupToken()}` },
+      payload: { display_name: "X", org_name: "Acme", id: CALL, user_id: CALL, sub: CALL },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(seen).toEqual([ALICE]);
+  });
+
+  it("refuses an api key — a gateway key must not create accounts", async () => {
+    const res = await server().inject({
+      method: "POST", url: "/v1/signup",
+      headers: { authorization: "Bearer echo_sk_live_deadbeefdeadbeefdeadbeef" },
+      payload: { org_name: "Acme" },
+    });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("rejects a token with no email claim rather than inventing one", async () => {
+    const res = await server().inject({
+      method: "POST", url: "/v1/signup",
+      headers: { authorization: `Bearer ${signupToken(ALICE, null)}` },
+      payload: { org_name: "Acme" },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("rejects org_name AND join_org together instead of silently picking one", async () => {
+    const res = await server().inject({
+      method: "POST", url: "/v1/signup",
+      headers: { authorization: `Bearer ${signupToken()}` },
+      payload: { org_name: "Acme", join_org: CALL },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  /**
+   * The state nobody's suite exercised: signed up with Supabase, never
+   * registered here. Front-end 1 named it, and it is not hypothetical — with
+   * email confirmation switched on, Supabase returns no session at sign-up,
+   * so `/v1/signup` is never called. The person confirms, signs in, and holds
+   * a perfectly valid token for a subject with no membership.
+   *
+   * `unknown_actor` is what makes that recoverable: it is how the client
+   * learns "authenticated but unregistered" and routes to org-choice instead
+   * of treating it as a bad token. So this asserts the KIND, not just the
+   * 401 — the status alone would leave the client unable to tell this from a
+   * trust-root mismatch, which is the failure the taxonomy exists to end.
+   */
+  it("tells an unregistered-but-verified caller apart from a bad token", async () => {
+    const res = await server(fakeDb({ userMissing: true })).inject({
+      method: "GET", url: "/v1/me",
+      headers: { authorization: `Bearer ${signupToken()}` },
+    });
+    expect(res.statusCode).toBe(401);
+    expect(res.json()).toEqual({ error: "unauthenticated", kind: "unknown_actor" });
+  });
+
+  it("answers 409, not 500, when the account already exists", async () => {
+    const res = await server(fakeDb({ registerFails: true })).inject({
+      method: "POST", url: "/v1/signup",
+      headers: { authorization: `Bearer ${signupToken()}` },
+      payload: { org_name: "Acme" },
+    });
+    expect(res.statusCode).toBe(409);
+  });
+});
+
 describe("auth contract on /v1", () => {
   it("401s with no token", async () => {
     const res = await server().inject({ method: "GET", url: "/v1/calls" });
     expect(res.statusCode).toBe(401);
-    expect(res.json()).toEqual({ error: "unauthenticated" });
+    expect(res.json()).toEqual({ error: "unauthenticated", kind: "no_token" });
   });
 
   it("401s on a forged token", async () => {
@@ -297,7 +467,10 @@ describe("gateway keys reach the SAME wall as a session (M17)", () => {
     const res = await server(fakeDb({ keyValid: false }))
       .inject({ method: "GET", url: "/v1/calls", headers: keyed });
     expect(res.statusCode).toBe(401);
-    expect(res.json()).toEqual({ error: "unauthenticated" });
+    // `bad_key` covers every way a key fails, deliberately. If a future kind
+    // ever splits "no such key" from "revoked", this endpoint becomes an
+    // oracle for which keys exist — the exact thing apikeys.ts refuses.
+    expect(res.json()).toEqual({ error: "unauthenticated", kind: "bad_key" });
   });
 
   it("inherits the member's pending status — a key is not a way around M15", async () => {
@@ -324,7 +497,9 @@ describe("gateway keys reach the SAME wall as a session (M17)", () => {
       return { text: "سلام", model: "m", tokensIn: 1, tokensOut: 1 };
     });
     const res = await server(fakeDb({ keyAllowsAssistant: true })).inject({
-      method: "POST", url: "/v1/assistant/ask", headers: keyed, payload: { question: "چه شد؟" },
+      method: "POST", url: "/v1/assistant/ask", headers: keyed,
+      // a model is required now: the caller names one or has saved one
+      payload: { question: "چه شد؟", model: "google/gemini-3.6-flash" },
     });
     expect(res.headers["content-type"]).toContain("text/event-stream");
   });
@@ -403,6 +578,34 @@ describe("assistant SSE route", () => {
     expect(res.body.trimEnd().endsWith("}")).toBe(true);
     const events = res.body.split("\n\n").filter(Boolean);
     expect(events.at(-1)).toContain("event: done");
+  });
+
+  it("falls back to the caller's SAVED model when the request names none", async () => {
+    // `preferred_model` was written by PUT /v1/models/preferred and read by
+    // NOTHING — a person could pick a model, see it saved, and have every
+    // conversation ignore it. Found by driving the live loop with a real
+    // account instead of a fixture that always passed a model.
+    runPiMock.mockReset();
+    runPiMock.mockResolvedValue({ text: "پاسخ", model: "m", tokensIn: 1, tokensOut: 1 });
+    const db = fakeDb({ preferredModel: "anthropic/claude-opus-5" });
+    const res = await server(db).inject({
+      method: "POST", url: "/v1/assistant/ask", headers: authed, payload: { question: "چه شد؟" },
+    });
+    expect(res.headers["content-type"]).toContain("text/event-stream");
+    const call = runPiMock.mock.calls[0]![0] as { model: { id: string } };
+    expect(call.model.id).toBe("anthropic/claude-opus-5");
+  });
+
+  it("400s BEFORE the stream when no model is chosen anywhere", async () => {
+    // modelForRun throws deep in the runtime, so without a pre-stream check
+    // the caller gets a FAILED RUN for what is really a 400 — an error event
+    // on a half-open SSE connection that every client must special-case.
+    const res = await server().inject({
+      method: "POST", url: "/v1/assistant/ask", headers: authed, payload: { question: "چه شد؟" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.headers["content-type"]).toContain("application/json");
+    expect(res.json().error).toMatch(/no model selected/);
   });
 
   it("400s a missing question before opening a stream", async () => {

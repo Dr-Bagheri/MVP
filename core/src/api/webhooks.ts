@@ -37,6 +37,8 @@ export interface WebhookRecord {
   url: string;
   events: string[];
   enabled: boolean;
+  /** Whose authority deliveries run as — the id; the UI joins members. */
+  created_by: string;
   created_at: string;
 }
 
@@ -88,13 +90,23 @@ export interface WebhookPayload {
   status?: string | undefined;
 }
 
-const WEBHOOK_COLUMNS = `id, url, events, enabled, created_at`;
+/**
+ * `created_by` is on the wire because M17 promises the admin UI shows whose
+ * authority a webhook runs as, and the frontend went to build that and found
+ * the wire structurally could not carry it — they refused to fake it.
+ *
+ * It matters operationally, not cosmetically: db/0029 pins a delivery to the
+ * REGISTERING actor, so demoting an admin stops their org's deliveries. With
+ * no creator on the wire, nothing on screen says which ones died or why.
+ */
+const WEBHOOK_COLUMNS = `id, url, events, enabled, created_by, created_at`;
 
 const toRecord = (row: Record<string, unknown>): WebhookRecord => ({
   id: row.id as string,
   url: row.url as string,
   events: (row.events as string[]) ?? [],
   enabled: Boolean(row.enabled),
+  created_by: row.created_by as string,
   created_at: iso(row.created_at),
 });
 

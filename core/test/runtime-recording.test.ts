@@ -1,3 +1,9 @@
+import { NO_TOOL_CALL_MARKER } from "../src/agent/runtime.ts";
+
+// The marker is a shared constant so the harness and the producer cannot
+// drift. That makes its CONTENT untestable by comparison — so assert the one
+// property a shared constant can still lose: being there at all. An emptied
+// marker would satisfy every `includes` check downstream.
 /**
  * Invariant 5 (runs are replayable) and the in-band-error rule, exercised
  * through the real runtime with Pi stubbed at the one interface file.
@@ -11,6 +17,10 @@ vi.mock("../src/agent/pi.ts", () => ({
 }));
 
 const { createAgentRuntime, InactiveActorError } = await import("../src/agent/runtime.ts");
+
+if (NO_TOOL_CALL_MARKER.trim().length < 8) {
+  throw new Error("the M21 decline marker is empty or trivial; every downstream check would pass vacuously");
+}
 const { ToolDenied } = await import("../src/agent/tools.ts");
 import type { AgentRunStore, AgentStep, Identity, Skill } from "../src/agent/types.ts";
 
@@ -113,9 +123,9 @@ describe("agent runtime — recording and failure surfacing", () => {
                description: "", prompt: "p", model: null, tools: ["read_call"],
                enabled: true, maxToolCalls: null },
     });
-    expect(summarizer.degraded).toMatch(/no tool was called/);
+    expect(summarizer.degraded).toMatch(new RegExp(NO_TOOL_CALL_MARKER));
     expect(withSkill.finished[0]).toMatchObject({ status: "ok" });
-    expect((withSkill.finished[0] as { error: string }).error).toMatch(/no tool was called/);
+    expect((withSkill.finished[0] as { error: string }).error).toMatch(new RegExp(NO_TOOL_CALL_MARKER));
 
     // Same run without a tool-declaring skill: recorded, not surfaced.
     const plain = fakeStore();
@@ -123,7 +133,7 @@ describe("agent runtime — recording and failure surfacing", () => {
       ...baseRequest, tools: [okTool as never],
     });
     expect(chat.degraded).toBeUndefined();
-    expect((plain.finished[0] as { error: string }).error).toMatch(/no tool was called/);
+    expect((plain.finished[0] as { error: string }).error).toMatch(new RegExp(NO_TOOL_CALL_MARKER));
   });
 
   it("does not mark a run degraded when a tool WAS used", async () => {

@@ -13,7 +13,7 @@ import {
   assistantAllowed, createApiKeysRepo, hashToken, identityFromApiKey, isApiKey,
   KEY_PREFIX, safeEqual,
 } from "../src/api/apikeys.ts";
-import { pgErrorFields, UnauthenticatedError, ValidationError } from "../src/api/errors.ts";
+import { mapError, pgErrorFields, UnauthenticatedError, ValidationError } from "../src/api/errors.ts";
 import {
   createWebhooksRepo, signPayload, verifySignature, WEBHOOK_EVENTS,
 } from "../src/api/webhooks.ts";
@@ -282,6 +282,33 @@ describe("a database failure is logged by field, never by message", () => {
     // named here too because these two are the point of the rule
     expect(Object.keys(fields)).not.toContain("detail");
     expect(Object.keys(fields)).not.toContain("message");
+  });
+
+  it("maps an RLS row-policy refusal to 404, but a GRANT refusal to 500", () => {
+    // Two 42501s with opposite meanings. A WITH CHECK refusal is "not your
+    // row" and must answer like every other invisible row, or the difference
+    // between 500 and 404 tells a caller which rows exist. A grant refusal is
+    // OUR wiring being wrong — the run-store-on-the-app-role shape — and has
+    // to stay loud.
+    const rowPolicy = Object.assign(new Error("new row violates row-level security policy"), {
+      code: "42501", routine: "ExecWithCheckOptions",
+    });
+    expect(mapError(rowPolicy)).toMatchObject({
+      status: 404, ours: false, body: { kind: "not_found" },
+    });
+
+    const grant = Object.assign(new Error("permission denied for table transcript_segment"), {
+      code: "42501", routine: "aclcheck_error",
+    });
+    expect(mapError(grant)).toMatchObject({ status: 500, ours: true });
+  });
+
+  it("maps a client's malformed request to its own status, not 500", () => {
+    // Fastify's parser errors carry a real statusCode and are the CALLER's
+    // mistake. Found by POSTing to a no-body route with a JSON content-type —
+    // what every HTTP client does by default — and getting a 500.
+    const badBody = Object.assign(new Error("invalid json body"), { statusCode: 400 });
+    expect(mapError(badBody)).toMatchObject({ status: 400, ours: false });
   });
 
   it("returns nothing for an error that is not from the database", () => {

@@ -78,9 +78,41 @@ export async function main(): Promise<void> {
     db: createDb(pools),
     jwtSecret: requireEnv("SUPABASE_JWT_SECRET"),
     issuer: process.env.SUPABASE_JWT_ISSUER,
-    tools: [],
+    /**
+     * `tools` and `toolDeps` are OMITTED so the server builds the shipped set
+     * — the four read tools and the three write tools.
+     *
+     * This said `tools: []` and it was written before the default existed.
+     * When I made `[]` mean "deliberately none" (so an explicit empty array
+     * would stop being overridden), this line silently became a real
+     * instruction: the live api offered the model **zero tools**. Every unit
+     * test passes `tools: []` on purpose, so none of them could notice that
+     * the entrypoint did too.
+     *
+     * Found by asking the audit trail — `request->>'tools'` on the failed run
+     * read `[]`, which answered in one query what three model probes had not.
+     * A fix for absent-vs-empty that created an absent-vs-empty bug one file
+     * away, and the tests that would normally catch a regression were the
+     * exact shape of the regression.
+     */
     toolDeps: {},
     openrouterKey: process.env.OPENROUTER_API_KEY,
+    /**
+     * ON, and it was off.
+     *
+     * `buildServer` defaults `logger` to false — right for tests, wrong for
+     * the process. The error handler's whole point is
+     * `request.log.error({err, pg}, "internal error")`, the structured
+     * convention the steward ratified so a database failure is diagnosable
+     * without putting a row value in a log. With the logger disabled that
+     * call went nowhere: **every 500 in production was silent.**
+     *
+     * Found because a confirm returned `{"error":"internal error"}` and there
+     * was nothing whatsoever to read. The log was built, ratified, tested —
+     * and not turned on, which no test could see, because tests construct the
+     * server themselves and want it quiet.
+     */
+    logger: true,
   });
 
   const shutdown = async (signal: string): Promise<void> => {

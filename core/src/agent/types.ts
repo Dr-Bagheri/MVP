@@ -56,6 +56,12 @@ export interface AgentStep {
   outcome: "ok" | "denied" | "blocked" | "error";
   /** Short, non-content summary for the audit trail (no transcript text). */
   detail?: string;
+  /**
+   * Present when this step PROPOSED a write (M4). Carried on the step so the
+   * proposal lands in `agent_run.steps` — which is where the confirm endpoint
+   * reads it back from, rather than trusting a client to post it back.
+   */
+  proposal?: unknown;
   ms: number;
   startedAt: string;
 }

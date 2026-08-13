@@ -12,6 +12,7 @@
  * the same not-probeable posture the tool wall uses. Existence is itself
  * information.
  */
+import { AlreadyDecidedError } from "../agent/proposals.ts";
 import { InvalidTimingError } from "../worker/transcript-mapping.ts";
 import { MissingIdentityError } from "../db/identity.ts";
 
@@ -24,7 +25,46 @@ import { MissingIdentityError } from "../db/identity.ts";
  * unrelated import reordering made it stop. auth.ts re-exports them, so every
  * existing importer is unaffected.
  */
-export class UnauthenticatedError extends Error {}
+/**
+ * Why a caller is not authenticated. The 401 twin of `RefusalKind`, and it
+ * exists for debuggability rather than for the browser (Front-end 2's
+ * observation, via Front-end 1 — and the right layer for it is this one).
+ *
+ *   bad_signature — the token did not verify. In practice: the two services
+ *                   do not share a trust root. core/ running on a smoke
+ *                   secret while Supabase signs with the project key
+ *                   produces exactly this, for every user at once.
+ *   unknown_actor — the token verified and the person is real, but there is
+ *                   no `app_user` row for that subject: unregistered, or
+ *                   seed data that does not match the auth directory.
+ *   no_token      — nothing presented, or not a bearer token.
+ *   bad_key       — an M17 gateway key that did not resolve. ONE kind for
+ *                   every way a key can fail, on purpose: apikeys.ts keeps
+ *                   "no such key", "revoked" and "resolves to nobody"
+ *                   indistinguishable so the endpoint is not an oracle for
+ *                   which keys exist, and a kind that split them would undo
+ *                   that from the outside.
+ *
+ * These are opposite problems — a config mismatch between two services versus
+ * missing data — and they answered identically until now, so at the moment
+ * someone debugs a failing sign-in the most plausible-looking suspect is the
+ * auth layer, which is the one thing that is not wrong.
+ *
+ * The caller still gets a flat 401 with the same body. The distinction lives
+ * in the `kind` and in our logs, exactly as pending/suspended/forbidden do.
+ * Nothing is disclosed that the holder of the token does not already know.
+ */
+export type UnauthenticatedKind = "no_token" | "bad_signature" | "unknown_actor" | "bad_key";
+
+export class UnauthenticatedError extends Error {
+  /** Field, not a parameter property — see NotActivatedError below. */
+  readonly kind: UnauthenticatedKind;
+
+  constructor(message: string, kind: UnauthenticatedKind = "no_token") {
+    super(message);
+    this.kind = kind;
+  }
+}
 
 /**
  * Why a caller who IS authenticated may not proceed.
@@ -67,7 +107,7 @@ export class ConflictError extends Error {}
 
 export interface ErrorBody {
   error: string;
-  kind?: RefusalKind | "not_found" | "invalid" | "conflict" | "internal";
+  kind?: RefusalKind | UnauthenticatedKind | "not_found" | "invalid" | "conflict" | "internal";
 }
 
 export interface MappedError {
@@ -104,7 +144,9 @@ export function pgErrorFields(error: unknown): Record<string, string> | undefine
 
 export function mapError(error: unknown): MappedError {
   if (error instanceof UnauthenticatedError) {
-    return { status: 401, body: { error: "unauthenticated" }, ours: false };
+    // Same status and same `error` string as before — only the kind is new,
+    // so nothing that keyed off the old shape breaks.
+    return { status: 401, body: { error: "unauthenticated", kind: error.kind }, ours: false };
   }
   if (error instanceof NotActivatedError) {
     // Three distinguishable 403s, and the distinction is the caller's own
@@ -131,6 +173,13 @@ export function mapError(error: unknown): MappedError {
   if (error instanceof ValidationError) {
     return { status: 400, body: { error: error.message, kind: "invalid" }, ours: false };
   }
+  if (error instanceof AlreadyDecidedError) {
+    // db/0029's primary key did the refusing. A second decision on one
+    // proposal is a conflict, not a fault: the first decision stands, and
+    // saying 409 is what stops a double-click writing a second summary
+    // version.
+    return { status: 409, body: { error: error.message, kind: "conflict" }, ours: false };
+  }
   if (error instanceof ConflictError) {
     return { status: 409, body: { error: error.message, kind: "conflict" }, ours: false };
   }
@@ -143,5 +192,48 @@ export function mapError(error: unknown): MappedError {
     // not a caller mistake. Never leak the detail.
     return { status: 500, body: { error: "internal error", kind: "internal" }, ours: true };
   }
+  /**
+   * An RLS **WITH CHECK** refusal is "you may not do that to this row", and
+   * this product answers that with the same 404 it gives for a row you cannot
+   * see. Anything else re-opens the probe: a caller who can READ an org-scoped
+   * call but not modify it would learn, from a 500 vs a 404, exactly which
+   * rows exist and which of those they merely lack rights on.
+   *
+   * Found live: a member soft-deleting a call they can see but do not own got
+   * `{"error":"internal error"}`. USING-clause refusals filter to zero rows
+   * and were already 404 via the "no row" branch; WITH CHECK refusals RAISE,
+   * and fell straight through to 500 — so the two halves of one policy gave
+   * two different answers. Affects update, delete, archive and restore alike.
+   *
+   * Narrowed by `routine` on purpose. 42501 also covers GRANT refusals
+   * ("permission denied for table …"), which are wiring faults — the
+   * run-store-on-the-app-role bug was one — and those must stay loud 500s.
+   * `ExecWithCheckOptions` is the row-policy path specifically.
+   */
+  const pg = error as { code?: unknown; routine?: unknown };
+  if (pg?.code === "42501" && pg.routine === "ExecWithCheckOptions") {
+    return { status: 404, body: { error: "not found", kind: "not_found" }, ours: false };
+  }
+
+  /**
+   * Fastify's own client errors — malformed JSON, an empty body where one was
+   * declared, an unsupported media type, a body over the limit. They carry a
+   * real `statusCode` and they are the CALLER's mistake, not ours.
+   *
+   * Without this every one of them fell through to 500. Found by POSTing to
+   * `/v1/calls/:id/archive` with `content-type: application/json` and no body
+   * — which is exactly what a client does for a route that takes no body, and
+   * what my own probe did. A 500 there tells the caller the server broke when
+   * the server understood perfectly and objected.
+   *
+   * `ours: false` matters as much as the status: a caller's bad request must
+   * not be logged at error level, or a client looping on a malformed body
+   * fills the log with our own alarms.
+   */
+  const status = (error as { statusCode?: unknown })?.statusCode;
+  if (typeof status === "number" && status >= 400 && status < 500) {
+    return { status, body: { error: "bad request", kind: "invalid" }, ours: false };
+  }
+
   return { status: 500, body: { error: "internal error", kind: "internal" }, ours: true };
 }

@@ -119,6 +119,22 @@ export const WEBHOOK_EVENTS = [
 export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
 
 /**
+ * Proposed-write kinds (M4). Published here rather than left in agent/ for
+ * the reason every list in this file is published: a consumer had already
+ * hand-written `edit_speakers` and nothing in the system could contradict it
+ * — the fourth invented vocabulary this week.
+ *
+ * Not a database enum: proposals live inside `agent_run.steps`, so this list
+ * IS the authority rather than a mirror of one.
+ */
+export const PROPOSAL_KINDS = [
+  "correct_transcript",
+  "edit_speaker_roster",
+  "replace_summary",
+] as const;
+export type ProposalKind = (typeof PROPOSAL_KINDS)[number];
+
+/**
  * Provenance of word-level timing across a call's transcribed parts (M20).
  * `null` on the wire — not a member here — means no transcript exists yet;
  * "none" would claim a real prose-only transcript.

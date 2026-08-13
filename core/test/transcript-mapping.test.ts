@@ -217,3 +217,132 @@ describe("call-level derived flag (what the UI reads)", () => {
     expect(callHasWordTimestamps([])).toBe(false);
   });
 });
+
+/**
+ * M20 segmentation: speaker change OR VAD speech boundary, with a backstop.
+ *
+ * The rule this replaced broke on speaker change and nothing else, and the
+ * fixtures that covered it all had two speakers — which is why it looked
+ * right. On a two-speaker fixture, "breaks on speaker change" and "breaks on
+ * speaker change or silence" produce the same answer for the same reason
+ * max and sum agree on a single-part call. The input where they differ is one
+ * speaker talking with pauses, and it was measured on real audio: 86 seconds
+ * of one voice arrived as ONE segment.
+ */
+describe("segmentation — the line boundary (M20)", () => {
+  /** One speaker, three utterances separated by silence. The monologue case. */
+  const monologue = (over: Partial<MlResult> = {}): MlResult => ({
+    words: [
+      { text: "یک", start_ms: 100, end_ms: 400, speaker: "S1" },
+      { text: "دو", start_ms: 450, end_ms: 800, speaker: "S1" },
+      // ── silence ──
+      { text: "سه", start_ms: 5_000, end_ms: 5_300, speaker: "S1" },
+      { text: "چهار", start_ms: 5_400, end_ms: 5_800, speaker: "S1" },
+      // ── silence ──
+      { text: "پنج", start_ms: 12_000, end_ms: 12_400, speaker: "S1" },
+    ],
+    speech: {
+      segments: [
+        { start_ms: 100, end_ms: 800 },
+        { start_ms: 5_000, end_ms: 5_800 },
+        { start_ms: 12_000, end_ms: 12_400 },
+      ],
+    },
+    provenance: { stt: { lane: "soniox", timestamps: "word" } },
+    degraded: false,
+    ...over,
+  });
+
+  it("breaks a SINGLE-SPEAKER recording at the silences", () => {
+    const { segments } = mapWordsToSegments(monologue(), PART);
+    // The whole point: one speaker, more than one segment.
+    expect(segments).toHaveLength(3);
+    expect(segments.map((s) => s.text)).toEqual(["یک دو", "سه چهار", "پنج"]);
+    expect(segments.map((s) => s.speaker)).toEqual(["S1", "S1", "S1"]);
+  });
+
+  it("would have produced ONE segment without the speech regions — the old behaviour", () => {
+    // Same words, no VAD regions. This is the bug, pinned: if a future change
+    // stops consuming speech.segments, this test keeps passing and the one
+    // above starts failing, which says exactly what broke.
+    const { segments } = mapWordsToSegments(monologue({ speech: undefined }), PART);
+    expect(segments).toHaveLength(1);
+  });
+
+  it("keeps segments on the call timeline, boundaries included", () => {
+    const { segments } = mapWordsToSegments(monologue(), PART);
+    // Regions are 0-based like the words; the offset is added once, to both.
+    expect(segments[1]!.startMs).toBe(35_000);
+    expect(segments[2]!.startMs).toBe(42_000);
+    expect(segments.every((s) => s.endMs > s.startMs)).toBe(true);
+  });
+
+  it("still breaks on a speaker change INSIDE one speech region", () => {
+    // Two people talking over each other are one continuous region of speech
+    // and two segments. Silence is an additional boundary, never a replacement.
+    const interjection: MlResult = {
+      words: [
+        { text: "من", start_ms: 100, end_ms: 300, speaker: "S1" },
+        { text: "نه", start_ms: 350, end_ms: 500, speaker: "S2" },
+        { text: "باشه", start_ms: 550, end_ms: 800, speaker: "S1" },
+      ],
+      speech: { segments: [{ start_ms: 100, end_ms: 800 }] },
+      provenance: { stt: { lane: "soniox", timestamps: "word" } },
+    };
+    const { segments } = mapWordsToSegments(interjection, PART);
+    expect(segments.map((s) => s.speaker)).toEqual(["S1", "S2", "S1"]);
+  });
+
+  it("does not manufacture a break for a word landing in the silence", () => {
+    // A word whose start falls between two regions keeps the preceding
+    // region's index rather than inventing one of its own — otherwise ordinary
+    // boundary jitter would shred a sentence into one-word rows.
+    const jitter: MlResult = {
+      words: [
+        { text: "الف", start_ms: 100, end_ms: 400, speaker: "S1" },
+        { text: "ب", start_ms: 900, end_ms: 1_000, speaker: "S1" }, // after region 0 ends
+      ],
+      speech: { segments: [{ start_ms: 100, end_ms: 800 }, { start_ms: 5_000, end_ms: 6_000 }] },
+      provenance: { stt: { lane: "soniox", timestamps: "word" } },
+    };
+    expect(mapWordsToSegments(jitter, PART).segments).toHaveLength(1);
+  });
+
+  it("caps a segment when a lane offers no speakers and no regions", () => {
+    // The backstop. It is a ceiling, not a line-length preference — without it
+    // a lane giving neither boundary puts an entire recording in one row.
+    const many: MlResult = {
+      words: Array.from({ length: 200 }, (_, i) => ({
+        text: `w${i}`,
+        start_ms: i * 100,
+        end_ms: i * 100 + 50,
+        speaker: null,
+      })),
+      provenance: { stt: { lane: "openrouter", timestamps: "word" } },
+    };
+    const { segments } = mapWordsToSegments(many, PART);
+    expect(segments.length).toBeGreaterThan(1);
+    expect(Math.max(...segments.map((s) => s.words.length))).toBeLessThanOrEqual(80);
+  });
+
+  it("leaves the DEGRADED rung as one anchored span (M20's bottom rung)", () => {
+    // Every word carries the same anchored span here, so splitting would
+    // produce rows that all claim the same moment — precision we do not have,
+    // asserted anyway. The ladder says this rung is one segment.
+    const anchored: MlResult = {
+      words: Array.from({ length: 150 }, (_, i) => ({
+        text: `w${i}`,
+        start_ms: 1_000,
+        end_ms: 90_000,
+        speaker: null,
+      })),
+      speech: { segments: [{ start_ms: 1_000, end_ms: 40_000 }, { start_ms: 60_000, end_ms: 90_000 }] },
+      provenance: { stt: { lane: "openrouter", timestamps: "none" } },
+      degraded: true,
+    };
+    const { segments, hasWordTimestamps } = mapWordsToSegments(anchored, PART);
+    expect(hasWordTimestamps).toBe(false);
+    expect(segments).toHaveLength(1);
+    expect(segments[0]!.words).toEqual([]);
+  });
+});

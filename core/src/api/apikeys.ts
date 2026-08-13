@@ -119,8 +119,10 @@ export async function identityFromApiKey(db: Db, token: string): Promise<Gateway
   const row = rows[0];
   // Unknown, revoked, expired, and belonging-to-a-disabled-member are one
   // answer. Distinguishing them would turn this into an oracle for which
-  // keys exist.
-  if (!row?.actor_id) throw new UnauthenticatedError("invalid api key");
+  // keys exist. The `kind` below is `bad_key` for the same reason it is
+  // `bad_key` at every other key failure: one kind, or the taxonomy hands
+  // back exactly what this line refuses to.
+  if (!row?.actor_id) throw new UnauthenticatedError("invalid api key", "bad_key");
 
   try {
     const identity = await resolveIdentity(db, row.actor_id);
@@ -128,7 +130,7 @@ export async function identityFromApiKey(db: Db, token: string): Promise<Gateway
     // row, or a column that vanished in a refactor, must not read as "open".
     return { ...identity, viaApiKey: true, allowAssistant: row.allow_assistant === true };
   } catch (error) {
-    if (error instanceof UnknownActorError) throw new UnauthenticatedError("invalid api key");
+    if (error instanceof UnknownActorError) throw new UnauthenticatedError("invalid api key", "bad_key");
     throw error;
   }
 }

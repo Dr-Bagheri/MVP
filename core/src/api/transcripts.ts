@@ -89,6 +89,16 @@ export function toWords(raw: unknown): TranscriptWord[] {
   return words;
 }
 
+export interface SpeakerRecord {
+  id: string;
+  label: string;
+  /** Set when the audio was two-channel and no diarization ran (M6). */
+  channel: number | null;
+  person_id: string | null;
+  sample_start_ms: number | null;
+  sample_end_ms: number | null;
+}
+
 export interface SummaryVersion {
   id: string;
   version: number;
@@ -155,6 +165,35 @@ export function createTranscriptsRepo(db: Db) {
         text: row.text as string,
         words: toWords(row.words),
         edited: Boolean(row.edited),
+      }));
+    },
+
+    /**
+     * The call's speaker roster.
+     *
+     * Segments carry `speaker_id` and it is NULLABLE — an unattributed line is
+     * a real state, not a gap. Without this route the client has ids it cannot
+     * resolve to names, which is how a roster lookup renders `undefined`
+     * instead of "unattributed". The frontend found exactly that.
+     */
+    async speakers(identity: Identity, callId: string): Promise<SpeakerRecord[]> {
+      const id = assertUuid(callId, "call id");
+      const rows = await db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe<Record<string, unknown>>(
+          `select id, label, channel, person_id, sample_start_ms, sample_end_ms
+             from echo.call_speaker where call_id = $1
+            order by label`,
+          [id],
+        ),
+      );
+      return rows.map((row) => ({
+        id: row.id as string,
+        label: row.label as string,
+        channel: (row.channel as number | null) ?? null,
+        person_id: (row.person_id as string | null) ?? null,
+        // Offsets on the call's timeline, never copied audio (db/0005).
+        sample_start_ms: (row.sample_start_ms as number | null) ?? null,
+        sample_end_ms: (row.sample_end_ms as number | null) ?? null,
       }));
     },
 

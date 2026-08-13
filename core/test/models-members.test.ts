@@ -11,15 +11,19 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("../src/agent/pi.ts", () => ({
   // A stand-in catalogue: the real one is 335 models and its CONTENT is not
   // what these assertions are about. The shape is real.
+  // Includes an excluded provider ON PURPOSE: the exclusion tests need the
+  // upstream catalogue to contain what the product must refuse to serve, or
+  // they would pass against a list that never had one.
   catalogue: () => [
     { id: "google/gemini-3.6-flash", name: "Gemini 3.6 Flash", reasoning: true },
     { id: "anthropic/claude-opus-5", name: "Claude Opus 5", reasoning: false },
+    { id: "anthropic/claude-3-haiku", name: "Claude 3 Haiku", reasoning: false },
     { id: "openai/gpt-5", name: "GPT-5", reasoning: false },
   ],
   Type: {},
 }));
 
-const { createModelsRepo } = await import("../src/api/models.ts");
+const { createModelsRepo, SUGGESTED_MODELS } = await import("../src/api/models.ts");
 const { toolCapability, resetCapabilityCache } = await import("../src/api/model-capability.ts");
 const { createMembersRepo } = await import("../src/api/members.ts");
 import { ConflictError, NotFoundError, ValidationError } from "../src/api/errors.ts";
@@ -56,16 +60,21 @@ describe("model catalogue (M5)", () => {
     // is permitted" would leave every new org unable to pick any model.
     const { db } = fakeDb(() => [{ allowed_models: [], preferred_model: null }]);
     const result = await createModelsRepo(db).list(ADMIN_ID);
-    expect(result.models).toHaveLength(3);
+    // 2, not 4: the mocked catalogue holds two excluded providers, and M5's
+    // exclusion applies before anything else. "Whole catalogue" means the
+    // whole OFFERED catalogue.
+    expect(result.models).toHaveLength(2);
     expect(result.curated).toBe(false);
   });
 
   it("a curated allow-list filters, and says it is curated", async () => {
+    // A permitted provider: an admin's allow-list narrows what is offered,
+    // and cannot widen it past M5's exclusion (asserted separately).
     const { db } = fakeDb(() => [{
-      allowed_models: ["anthropic/claude-opus-5"], preferred_model: null,
+      allowed_models: ["openai/gpt-5"], preferred_model: null,
     }]);
     const result = await createModelsRepo(db).list(ADMIN_ID);
-    expect(result.models.map((m) => m.id)).toEqual(["anthropic/claude-opus-5"]);
+    expect(result.models.map((m) => m.id)).toEqual(["openai/gpt-5"]);
     expect(result.curated).toBe(true);
   });
 
@@ -100,7 +109,10 @@ describe("model catalogue (M5)", () => {
     // empty one implying "you have none" is not.
     const { db } = fakeDb(() => [{ allowed_models: [], preferred_model: null }]);
     const result = await createModelsRepo(db, { capability: unknown }).list(ADMIN_ID);
-    expect(result.models).toHaveLength(3);
+    // "nothing" means no CAPABILITY filtering — M5's exclusion still applies,
+    // because it is a product rule rather than a fact about a provider we
+    // failed to look up.
+    expect(result.models).toHaveLength(2);
     expect(result.tool_capability_filtered).toBe(false);
     // and no per-model claim is made either — absent, not false
     expect(result.models[0]).not.toHaveProperty("tools");
@@ -141,15 +153,74 @@ describe("model catalogue (M5)", () => {
 
   it("refuses a KNOWN-incapable model, and allows one it could not check", async () => {
     const { db } = fakeDb(() => [{ preferred_model: "openai/gpt-5" }]);
+    // A PERMITTED model that simply cannot call tools — using an excluded one
+    // here would pass on the wrong rule and prove nothing about capability.
     await expect(
       createModelsRepo(db, { capability: capable(["openai/gpt-5"]) })
-        .choose(ADMIN_ID, "anthropic/claude-opus-5"),
+        .choose(ADMIN_ID, "google/gemini-3.6-flash"),
     ).rejects.toThrow(/cannot call tools/);
 
     // unreachable catalogue must not block a legitimate choice
     await expect(
-      createModelsRepo(db, { capability: unknown }).choose(ADMIN_ID, "anthropic/claude-opus-5"),
+      createModelsRepo(db, { capability: unknown }).choose(ADMIN_ID, "google/gemini-3.6-flash"),
     ).resolves.toBeDefined();
+  });
+
+  describe("M5's provider exclusion — negative space", () => {
+    /**
+     * The user directive is "definitely not Claude". It was decided, recorded,
+     * and existed in NO CODE: the live catalogue served **28 `anthropic/*`
+     * models** and my own suggestion ranking named two of them. Everyone
+     * believed the filter existed because it had been described.
+     *
+     * So these assert the ABSENCE, the way Backend 3 forbade a call-level
+     * timing column — a future catalogue addition cannot quietly reintroduce
+     * one, because the test is about what must never appear rather than about
+     * what happens to be there today.
+     */
+    const withClaude = () => [
+      { id: "google/gemini-3.6-flash", name: "G", reasoning: true },
+      { id: "anthropic/claude-opus-5", name: "C", reasoning: false },
+      { id: "anthropic/claude-3-haiku", name: "H", reasoning: false },
+      { id: "openai/gpt-5", name: "O", reasoning: false },
+    ];
+
+    it("serves no excluded provider, ever", async () => {
+      const { db } = fakeDb(() => [{ allowed_models: [], preferred_model: null }]);
+      const result = await createModelsRepo(db, {
+        capability: capable(withClaude().map((m) => m.id)),
+      }).list(ADMIN_ID);
+      expect(result.models.filter((m) => m.id.startsWith("anthropic/"))).toEqual([]);
+    });
+
+    it("cannot be re-admitted by an admin's allow-list", async () => {
+      // A rule any later filter could undo is not a rule. An admin naming a
+      // barred model explicitly must not get it back.
+      const { db } = fakeDb(() => [{
+        allowed_models: ["anthropic/claude-opus-5", "openai/gpt-5"],
+        preferred_model: null,
+      }]);
+      const result = await createModelsRepo(db, {
+        capability: capable(withClaude().map((m) => m.id)),
+      }).list(ADMIN_ID);
+      expect(result.models.map((m) => m.id)).toEqual(["openai/gpt-5"]);
+    });
+
+    it("cannot be CHOSEN by name either", async () => {
+      // Hiding it is not enough: `preferred_model` is read on every assistant
+      // turn, so a barred model merely absent from the list would still run.
+      const { db } = fakeDb(() => [{ preferred_model: null }]);
+      await expect(
+        createModelsRepo(db, { capability: capable(["anthropic/claude-opus-5"]) })
+          .choose(ADMIN_ID, "anthropic/claude-opus-5"),
+      ).rejects.toThrow(/not available on this product/);
+    });
+
+    it("is not named by the suggestion ranking", async () => {
+      // The ranking recommended two of them. A suggestion list must never
+      // name what the catalogue excludes.
+      expect(SUGGESTED_MODELS.filter((id) => id.startsWith("anthropic/"))).toEqual([]);
+    });
   });
 
   it("refuses a model id that is not in the catalogue", async () => {

@@ -55,6 +55,8 @@ export interface Lifecycle {
   markPartMissing(identity: Identity, partId: string, reason: string): Promise<void>;
   /** Why a `ready` call has no summary (db/0023). Cleared by trigger, not by us. */
   noteSummarySkipped(identity: Identity, callId: string, reason: string): Promise<void>;
+  /** Recompute `call.duration_ms` from the parts that have landed. */
+  recomputeCallDuration(identity: Identity, callId: string): Promise<void>;
   failCall(identity: Identity, callId: string, reason: string): Promise<void>;
   bumpAttempts(identity: Identity, partId: string): Promise<void>;
 }
@@ -134,7 +136,37 @@ export function createLifecycle(db: Db): Lifecycle {
       );
     },
 
-  async failCall(identity, callId, reason) {
+    /**
+     * The call's length, from its parts.
+     *
+     * `max(offset_ms + duration_ms)`, NOT `sum(duration_ms)` — and the
+     * difference is not pedantry. Parts sit at explicit offsets on one
+     * continuous timeline, so a sum under-reports any call with a gap between
+     * parts (a recording paused and resumed comes back short by the length of
+     * the pause) and over-reports any overlap. The obvious implementation is
+     * the wrong one, which is why this is a named method rather than an inline
+     * update someone copies.
+     *
+     * Recomputed from scratch each time rather than accumulated, so it is
+     * idempotent: a re-run of a part produces the same answer, and a part
+     * written off as a gap simply stops contributing.
+     */
+    async recomputeCallDuration(identity, callId) {
+      await db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe(
+          `update echo.call c
+              set duration_ms = (
+                    select max(p.offset_ms + p.duration_ms)
+                      from echo.call_part p
+                     where p.call_id = c.id and p.duration_ms is not null
+                  )
+            where c.id = $1`,
+          [callId],
+        ),
+      );
+    },
+
+    async failCall(identity, callId, reason) {
       await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe(`update echo.call set status = 'failed', failure_reason = $2 where id = $1`, [
           callId,

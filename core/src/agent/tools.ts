@@ -15,6 +15,7 @@
  * - Tools receive `identity`, never raw connection credentials; the data layer
  *   is reached through the caller-scoped handle the factory hands us.
  */
+import { isProposalResult, type WriteProposal } from "./proposals.ts";
 import type { AgentStep, Identity } from "./types.ts";
 
 export class ToolDenied extends Error {}
@@ -50,6 +51,12 @@ export interface WrapOptions<TDeps> {
    * row per attempt while the UI can render a tool as it runs.
    */
   onStart?: ((info: { id: string; tool: string; label: string }) => void) | undefined;
+  /**
+   * Called when a write tool PROPOSES a change (M4). Separate from onStep so
+   * the audit keeps one row per attempt while the UI can render an approval
+   * card the moment it is offered.
+   */
+  onProposal?: ((proposal: WriteProposal) => void) | undefined;
 }
 
 const MAX_RESULT_CHARS = 24_000;
@@ -60,7 +67,7 @@ const MAX_RESULT_CHARS = 24_000;
  */
 export function wrapTools<TDeps>(
   tools: DomainTool<TDeps, never>[],
-  { identity, deps, onStep, onStart }: WrapOptions<TDeps>,
+  { identity, deps, onStep, onStart, onProposal }: WrapOptions<TDeps>,
 ): unknown[] {
   if (!identity.isActive) {
     // M15: a pending or disabled person gets no tools at all. Not an empty
@@ -80,10 +87,25 @@ export function wrapTools<TDeps>(
       try {
         const result = await tool.run({ identity, deps, signal }, args as never);
         const text = serialize(result);
+        /**
+         * A write tool returns a PROPOSAL instead of performing the write
+         * (M4). The wrapper is where that is noticed, for the same reason
+         * every other cross-cutting concern lives here: a tool that had to
+         * remember to announce itself is a tool that can forget to.
+         *
+         * The proposal rides on the STEP, so it lands in `agent_run.steps` —
+         * which is exactly what the confirm endpoint reads it back out of.
+         * The result the MODEL sees still says `awaiting_confirmation`, so it
+         * cannot report the write as done.
+         */
+        const proposal = isProposalResult(result) ? result.proposal : undefined;
         await onStep({
           tool: tool.name, args, outcome: "ok",
-          detail: `${text.length}b`, ms: Date.now() - t0, startedAt,
+          detail: proposal ? `proposed ${proposal.kind}` : `${text.length}b`,
+          ms: Date.now() - t0, startedAt,
+          ...(proposal ? { proposal } : {}),
         });
+        if (proposal) onProposal?.(proposal);
         return { content: [{ type: "text", text }] };
       } catch (error) {
         const denied = error instanceof ToolDenied;

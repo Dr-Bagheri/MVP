@@ -22,6 +22,8 @@
  * Until it has been RUN against a live database it proves nothing — which is
  * precisely the failure it exists to prevent, so it is worth stating.
  */
+import { readdirSync, readFileSync } from "node:fs";
+
 import postgres from "postgres";
 
 import { SYSTEM_SLUGS } from "../../src/agent/skill-store.ts";
@@ -166,6 +168,199 @@ try {
       check(`system skill "${slug}" is seeded and enabled`, slugs.includes(slug), slugs);
     }
   });
+  /**
+   * M11: the OWNER of a call can soft-delete it.
+   *
+   * This is a policy check rather than a shape check, and it is here because
+   * it cannot live anywhere else: no unit test can see it (a fake db accepts
+   * every update) and the api's own answer actively hides it — an RLS refusal
+   * maps to 404, so a delete that the database refuses is indistinguishable,
+   * over HTTP, from a call that was never there.
+   *
+   * It is currently RED, and the failure is the point. Live, as a member who
+   * owns the row, in the same transaction:
+   *
+   *     update … set archived_at = now()  → 1 row
+   *     update … set deleted_at  = now()  → 42501
+   *
+   * with every term of `call_update`'s WITH CHECK true (org_ok, owner_ok) and
+   * the same statement succeeding for an admin. The one clause in the whole
+   * policy set that names `deleted_at` and separates the two is in `call_read`:
+   * `((deleted_at IS NULL) OR echo.actor_is_admin())`. The post-update row is
+   * invisible to its own owner, so the write is refused — soft delete works
+   * only for admins, which is the opposite of what M11 asks for.
+   *
+   * db/ owns the fix. This check is the reproduction, and it turns green on
+   * its own when the policy changes.
+   */
+  console.log("M11: an owner may soft-delete their own call (db/0011 policies)");
+  await sql.begin(async (tx) => {
+    /**
+     * Drop to the application role FIRST, and prove we are not above the law.
+     *
+     * A policy check run as a role that bypasses RLS — a superuser, or the
+     * owner of the table — passes unconditionally and proves nothing. It
+     * would have reported this very bug as fixed. `set local role` is what
+     * the api itself does on every request, so this runs at the same altitude
+     * the product does (rule 11).
+     */
+    await tx.unsafe("set local role echo_app");
+    await tx.unsafe("select set_config('echo.actor_id', $1, true)", [DEV_MEMBER]);
+    const [privilege] = await tx.unsafe<{ bypasses: boolean; owns: boolean }[]>(
+      `select r.rolbypassrls as bypasses,
+              (select c.relowner = r.oid from pg_class c where c.oid = 'echo.call'::regclass) as owns
+         from pg_roles r where r.rolname = current_user`,
+    );
+    check("the check runs under row-level security, not above it",
+      privilege?.bypasses === false && privilege?.owns === false, privilege);
+
+    /**
+     * Seed the call this check deletes, rather than finding one (rule 9).
+     *
+     * It used to grab any live call the member owned — and then I swept the
+     * dev project's fixture calls, there were none left, and the check could
+     * not run at all. It reported that honestly instead of passing, which is
+     * the only reason this is a footnote rather than a second silent hole.
+     *
+     * Seeding costs nothing here because the whole transaction rolls back, so
+     * the check now depends on no ambient data and leaves none behind.
+     */
+    const [seeded] = await tx.unsafe<{ id: string }[]>(
+      `insert into echo.call (org_id, owner_id, title, scope, status, language, started_at)
+       select org_id, id, 'schema-contract M11 probe', 'private', 'ready', 'fa', now()
+         from echo.app_user where id = $1
+       returning id`, [DEV_MEMBER],
+    );
+    const call = seeded;
+    if (!call) {
+      // rule 12: not being able to make a call to try this on is a DIFFERENT
+      // failure from the try failing, and must not be reported as the latter.
+      check("a call could be seeded to run the M11 check against",
+        false, "insert produced no row — the M11 check did not run, its result is unknown");
+      return;
+    }
+    try {
+      const [deleted] = await tx.unsafe<{ deleted: boolean }[]>(
+        `select echo.soft_delete_call($1::uuid) as deleted`, [call.id]);
+      check("the owner's own soft delete succeeds", deleted?.deleted === true, deleted);
+
+      // Idempotence is part of the contract, not a nicety: a second click on
+      // one delete button must not be an error.
+      const [again] = await tx.unsafe<{ deleted: boolean }[]>(
+        `select echo.soft_delete_call($1::uuid) as deleted`, [call.id]);
+      check("deleting an already-deleted call answers false, not an error",
+        again?.deleted === false, again);
+
+      /**
+       * The other direction, which Backend 3 asked for and which I would not
+       * have thought to check before it bit: restore used to match zero rows
+       * and raise NOTHING — no error at any layer, indistinguishable from a
+       * call that never existed. It is now a refusal a caller can see.
+       *
+       * A non-admin restoring is REFUSED (Q2: deletion feels like deletion,
+       * only an admin restores). So the assertion is that it raises — this
+       * check goes red if that ruling is ever quietly reversed in the schema
+       * without anyone amending Q2.
+       */
+      let refused = false;
+      try {
+        await tx.unsafe(`select echo.restore_call($1::uuid)`, [call.id]);
+      } catch (error) {
+        refused = (error as { code?: string }).code === "42501";
+      }
+      check("a non-admin restoring is refused OUT LOUD, not silently ignored",
+        refused, { note: "Q2 — only an admin restores; silence here was the old bug" });
+    } catch (error) {
+      const pg = error as { code?: string; routine?: string };
+      check("the owner's soft delete is not refused", false, { code: pg.code, routine: pg.routine });
+    }
+    // Never keep it: this runs against the dev database, and a contract check
+    // that deletes a real call would be a worse bug than the one it reports.
+    throw new Error("__rollback__");
+  }).catch((error: unknown) => {
+    if ((error as Error)?.message !== "__rollback__") throw error;
+  });
+  /**
+   * THE INSTRUMENT: every function granted to `echo_app` has a caller.
+   *
+   * `echo.register_account()` existed for weeks — SECURITY DEFINER, granted,
+   * documented as "the only way an app_user row is created" — and nothing
+   * called it. A person who signed up got a valid token, 401'd forever, and
+   * never reached the admin's pending queue. Every layer was correct; the
+   * chain had no link.
+   *
+   * No test could have caught it from inside one package, which is the whole
+   * point: db/ could see the function was granted, core/ could see its own
+   * routes pass, and neither could see the gap BETWEEN them. This check spans
+   * the two — pg catalogue on one side, `core/src` text on the other — and it
+   * is the cheapest possible instrument for it. Grep, not cleverness.
+   *
+   * "Caller" deliberately includes SQL-side consumers: a function used by a
+   * policy, another function, or a trigger is consumed even though `core/`
+   * never names it. Counting only TypeScript would flag every helper in
+   * db/0003 and the noise would kill the check inside a week.
+   */
+  console.log("every function granted to echo_app has a consumer");
+  const granted = await sql<{ proname: string; prosrc: string }[]>`
+    select p.proname, p.prosrc
+      from pg_proc p
+      join pg_namespace n on n.oid = p.pronamespace
+      join pg_type t on t.oid = p.prorettype
+     where n.nspname = 'echo'
+       and t.typname <> 'trigger'
+       and has_function_privilege('echo_app', p.oid, 'execute')
+     order by p.proname`;
+
+  /**
+   * SQL-side consumers: policy expressions, and the bodies of EVERY function
+   * in the schema — not just the granted ones.
+   *
+   * My first version searched only the granted non-trigger bodies and duly
+   * reported `purge_window` as having no caller. It is called by
+   * `tg_call_guard`, a trigger function I had excluded from the very list I
+   * was searching. A checker that manufactures its own false positives gets
+   * muted within a week, and then it is worse than absent — so this is the
+   * same vacuous-instrument trap the rolbypassrls guard above exists for,
+   * pointed the other way: not "passes when it shouldn't" but "fails when it
+   * shouldn't".
+   */
+  const policySources = await sql<{ src: string }[]>`
+    select coalesce(qual, '') || ' ' || coalesce(with_check, '') as src
+      from pg_policies where schemaname = 'echo'`;
+  const allBodies = await sql<{ proname: string; prosrc: string }[]>`
+    select p.proname, p.prosrc from pg_proc p
+      join pg_namespace n on n.oid = p.pronamespace
+     where n.nspname = 'echo'`;
+  const sqlText = [
+    ...policySources.map((p) => p.src),
+    ...allBodies.map((f) => f.prosrc),
+  ].join("\n");
+
+  // TypeScript-side consumers: everything under core/src.
+  const coreText = (function read(dir: URL): string {
+    let text = "";
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const child = new URL(`${entry.name}${entry.isDirectory() ? "/" : ""}`, dir);
+      text += entry.isDirectory() ? read(child) : readFileSync(child, "utf8");
+    }
+    return text;
+  })(new URL("../../src/", import.meta.url));
+
+  const orphans = granted.filter((fn) => {
+    if (coreText.includes(fn.proname)) return false;
+    // Its own body always mentions its name in the CREATE text? No — prosrc
+    // is the BODY only, so a self-match here would be a genuine recursive
+    // call. Count every other function's body, and its own.
+    const others = sqlText.split(fn.proname).length - 1;
+    const self = fn.prosrc.split(fn.proname).length - 1;
+    return others - self <= 0;
+  });
+  check(
+    "no function is granted to echo_app with nothing calling it",
+    orphans.length === 0,
+    orphans.map((o) => o.proname),
+  );
+  console.log(`       (${granted.length} granted functions checked)`);
 } finally {
   await sql.end();
 }

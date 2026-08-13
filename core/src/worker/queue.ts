@@ -23,10 +23,12 @@ export const Q_PROCESS_PART = "echo_process_part";
 /** Per call, once its parts are done. */
 export const Q_LINK_SPEAKERS = "echo_link_speakers";
 export const Q_SUMMARIZE = "echo_summarize";
+/** Webhook fan-out (db/0026). One message per delivery, not per event. */
+export const Q_DELIVER_WEBHOOK = "echo_deliver_webhook";
 
 export const PART_QUEUES = [Q_PROCESS_PART] as const;
 export const CALL_QUEUES = [Q_LINK_SPEAKERS, Q_SUMMARIZE] as const;
-export const ALL_QUEUES = [...PART_QUEUES, ...CALL_QUEUES] as const;
+export const ALL_QUEUES = [...PART_QUEUES, ...CALL_QUEUES, Q_DELIVER_WEBHOOK] as const;
 
 export type QueueName = (typeof ALL_QUEUES)[number];
 
@@ -43,7 +45,32 @@ export interface JobPayload {
   partId?: string;
 }
 
-export interface QueueMessage<T = JobPayload> {
+/**
+ * A webhook delivery carries a DIFFERENT identity to a pipeline job.
+ *
+ * A pipeline job runs as the call's owner. A delivery has no call and no
+ * owner — it runs as the webhook's `created_by`, an admin by construction
+ * (db/0013's `webhook_admin` required admin at creation). M17, ratified: this
+ * matches D6's posture for inbound keys, where "disabling an employee stops
+ * their integrations immediately" was ratified as a feature. Outbound behaves
+ * the same way, and it fails closed: demote that admin and their org's
+ * deliveries stop.
+ */
+export interface DeliveryPayload {
+  deliveryId: string;
+  webhookId: string;
+  orgId: string;
+  /** The webhook's created_by. Written at enqueue time, when a caller existed. */
+  actorId: string;
+}
+
+export type QueuePayload = JobPayload | DeliveryPayload;
+
+export function isDeliveryPayload(body: QueuePayload): body is DeliveryPayload {
+  return typeof (body as DeliveryPayload).deliveryId === "string";
+}
+
+export interface QueueMessage<T = QueuePayload> {
   msgId: number;
   /** pgmq's delivery count — the attempt number, with no state of our own. */
   readCt: number;
@@ -51,7 +78,7 @@ export interface QueueMessage<T = JobPayload> {
 }
 
 export interface Queue {
-  send(queue: QueueName, body: JobPayload, delaySec?: number): Promise<number>;
+  send(queue: QueueName, body: QueuePayload, delaySec?: number): Promise<number>;
   read(queue: QueueName, vtSec: number, qty: number): Promise<QueueMessage[]>;
   /** Done: drop it. */
   remove(queue: QueueName, msgId: number): Promise<void>;
@@ -72,11 +99,11 @@ interface PgmqRow {
    * this completely, which is how the worker "worked" in 39 tests while
    * silently seeing `partId: undefined` on every job.
    */
-  message: JobPayload | string;
+  message: QueuePayload | string;
 }
 
-function parsePayload(message: JobPayload | string): JobPayload {
-  return typeof message === "string" ? (JSON.parse(message) as JobPayload) : message;
+function parsePayload(message: QueuePayload | string): QueuePayload {
+  return typeof message === "string" ? (JSON.parse(message) as QueuePayload) : message;
 }
 
 // EVERY pgmq argument is cast explicitly. `pgmq.send` is overloaded on its

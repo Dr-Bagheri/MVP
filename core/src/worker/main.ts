@@ -108,7 +108,7 @@ export async function main(): Promise<void> {
     handlers: [
       createPartStep({ db, ml, queue, lifecycle, storage }),
       createLinkSpeakersStep({ db, queue, lifecycle }),
-      createSummarizeStep({ db, lifecycle, summarizer }),
+      createSummarizeStep({ db, lifecycle, summarizer, queue }),
     ],
     config,
     sink: createDeadLetterSink({ db, lifecycle, queue, log }),

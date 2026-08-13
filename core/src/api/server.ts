@@ -21,6 +21,8 @@ import { createMembersRepo, type MembersRepo } from "./members.ts";
 import { createModelsRepo, type ModelsRepo } from "./models.ts";
 import { createTranscriptsRepo, type TranscriptsRepo } from "./transcripts.ts";
 import { createDomainTools } from "../agent/domain-tools.ts";
+import { findProposal, recordDecision } from "../agent/proposals.ts";
+import { applyProposal, createWriteTools } from "../agent/write-tools.ts";
 import { createNamedSkillResolver, listResolvedSkills } from "../agent/skill-store.ts";
 import type { DomainTool } from "../agent/tools.ts";
 import type { Db } from "../db/identity.ts";
@@ -72,7 +74,7 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
    * writing that sentence to the steward.
    */
   const domainTools = options.tools === undefined
-    ? (createDomainTools() as unknown as DomainTool<TDeps, never>[])
+    ? ([...createDomainTools(), ...createWriteTools()] as unknown as DomainTool<TDeps, never>[])
     : options.tools;
   const domainDeps = options.tools === undefined
     ? ({ db: options.db } as unknown as TDeps)
@@ -86,6 +88,29 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     apiKey: options.openrouterKey,
   });
 
+  /**
+   * An empty body is valid where no body is expected.
+   *
+   * Fastify's JSON parser rejects a zero-length body outright, so a client
+   * POSTing to a no-body route (`/archive`, `/unarchive`, `/restore`) with a
+   * JSON content-type — which is what every HTTP client does by default —
+   * got FST_ERR_CTP_EMPTY_JSON_BODY. Treating "" as `{}` is what those routes
+   * mean, and it costs nothing: a route that wants a field still validates it
+   * and still 400s when it is missing.
+   */
+  app.addContentTypeParser("application/json", { parseAs: "string" }, (_request, body, done) => {
+    const text = typeof body === "string" ? body.trim() : "";
+    if (text === "") return done(null, {});
+    try {
+      done(null, JSON.parse(text) as unknown);
+    } catch {
+      // A malformed body is the CALLER's error. Fastify's own parser would
+      // give this a 400 statusCode; mapError now honours that rather than
+      // turning every client mistake into a 500.
+      done(Object.assign(new Error("invalid json body"), { statusCode: 400 }), undefined);
+    }
+  });
+
   /** One error path for every route — no handler formats its own. */
   app.setErrorHandler((error, request, reply) => {
     const mapped = mapError(error);
@@ -97,6 +122,25 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       // say WHICH rule broke, and unlike the message they cannot contain a
       // row value (steward-ratified convention).
       request.log.error({ err: kind, pg: pgErrorFields(error) }, "internal error");
+    } else {
+      /**
+       * Not ours — but one class of "theirs" earns a line anyway.
+       *
+       * An RLS refusal maps to 404, which is the right answer for the caller
+       * and complete silence for us. That silence hid a real policy bug: an
+       * owner soft-deleting their own call got `not found`, because the
+       * post-update row is invisible to a non-admin under `call_read` and
+       * Postgres therefore refuses the write. The route looked like it worked
+       * on a row that did not exist. Nothing was logged, so nothing was
+       * noticed until I probed the database directly.
+       *
+       * warn, not error: usually it IS just a caller reaching for a row they
+       * may not touch. But "usually" is the point — at zero volume you cannot
+       * tell that case from a policy that refuses everyone. Structured fields
+       * only, never the message.
+       */
+      const pg = pgErrorFields(error);
+      if (pg?.code === "42501") request.log.warn({ pg }, "row policy refused a write");
     }
     reply.code(mapped.status).send(mapped.body);
   });
@@ -153,11 +197,85 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     }));
   });
 
+  /**
+   * State transitions, not partial updates — POST rather than PATCH, the same
+   * shape as the members accept route. `PATCH {archived: true}` would invite a
+   * body that can also carry `title`, and archiving is permitted to people who
+   * may not rename (db/0011's guard); one verb per transition keeps that
+   * difference visible in the route table.
+   */
+  app.post("/v1/calls/:id/archive", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id } = request.params as { id: string };
+    return reply.send(await calls.setArchived(identity, id, true));
+  });
+
+  app.post("/v1/calls/:id/unarchive", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id } = request.params as { id: string };
+    return reply.send(await calls.setArchived(identity, id, false));
+  });
+
+  app.post("/v1/calls/:id/restore", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id } = request.params as { id: string };
+    return reply.send(await calls.restore(identity, id));
+  });
+
   app.delete("/v1/calls/:id", async (request, reply) => {
     const identity = await auth.requireActive(request);
     const { id } = request.params as { id: string };
     await calls.softDelete(identity, id);   // soft — M11
     return reply.code(204).send();
+  });
+
+  // ---- who am I ----------------------------------------------------------
+
+  /**
+   * The signed-in person. Blocking for the web shell and unfallbackable:
+   * M1 keeps the token server-side, so the browser cannot read its own
+   * claims. Role comes from the database, not the token.
+   */
+  app.get("/v1/me", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    return reply.send(await members.me(identity));
+  });
+
+  /**
+   * Registration (M15). The one route that takes a verified token and does
+   * NOT require an `app_user` row — because creating that row is its job.
+   *
+   * It closes a hole rather than adding a feature: `echo.register_account()`
+   * had no caller anywhere in the product, so a person who signed up with
+   * Supabase held a perfectly valid token, got 401 "no account for this
+   * token" forever, and never reached the admin's pending queue. Every layer
+   * was working as written; the chain simply had no link here.
+   *
+   * The account id and email come from the TOKEN, never the body. The body
+   * carries only what the token cannot know: what to call them, and whether
+   * they are starting an org or joining one.
+   */
+  app.post("/v1/signup", async (request, reply) => {
+    const claims = auth.verifiedClaims(request);
+    const body = (request.body ?? {}) as {
+      display_name?: unknown; org_name?: unknown; join_org?: unknown;
+    };
+    const text = (value: unknown, field: string): string | undefined => {
+      if (value === undefined || value === null) return undefined;
+      if (typeof value !== "string") throw new ValidationError(`${field} must be a string`);
+      return value.trim() || undefined;
+    };
+    const member = await members.register({
+      userId: claims.sub,
+      email: typeof claims.email === "string" ? claims.email : "",
+      displayName: text(body.display_name, "display_name") ?? "",
+      orgName: text(body.org_name, "org_name"),
+      joinOrg: text(body.join_org, "join_org"),
+    });
+    // 201 with the pending account: the client can go straight to the
+    // waiting-for-approval screen without a second round trip that would
+    // 403 anyway.
+    return reply.code(201).send(member);
   });
 
   // ---- transcripts, summaries, search ------------------------------------
@@ -184,6 +302,13 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       limit: num(query.limit, "limit"),
     });
     return reply.send({ call_id: id, segments });
+  });
+
+  app.get("/v1/calls/:id/speakers", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id } = request.params as { id: string };
+    await calls.get(identity, id);   // 404 the call, not an empty roster
+    return reply.send({ call_id: id, speakers: await transcripts.speakers(identity, id) });
   });
 
   app.get("/v1/calls/:id/summary", async (request, reply) => {
@@ -306,6 +431,69 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     }));
   });
 
+  // ---- proposed writes: confirm / reject (M4) -----------------------------
+  //
+  // An agent write is proposed, never performed. These two routes are where a
+  // human's decision becomes a mutation, and they are deliberately the only
+  // place in the api that applies one.
+  //
+  // The body carries `{run_id}` and nothing else — the proposal is re-read
+  // from `agent_run.steps`, never accepted from the client. See
+  // agent/proposals.ts: if the approved payload arrived from the caller,
+  // "what was proposed" and "what was approved" would be two unrelated
+  // claims, and the audit exists precisely to say they are one object.
+
+  app.post("/v1/assistant/proposals/:id/confirm", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { run_id?: unknown };
+    if (typeof body.run_id !== "string") throw new ValidationError("run_id is required");
+
+    const proposal = await findProposal(options.db, identity, body.run_id, id);
+    /**
+     * DECISION FIRST, then the write — and they are two transactions because
+     * db/0029 makes them two ROLES: `proposal_decision` is insertable by
+     * echo_app only ("the agent proposes; it does not decide"), while the
+     * product write runs on echo_agent so the column grants stay the floor
+     * for agent-inferred content. Both constraints are right and jointly
+     * forbid the single transaction that was directed.
+     *
+     * So the ORDER carries the guarantee. The decision row's primary key is
+     * the replay refusal: a second confirm raises 23505 before anything is
+     * applied, which is what makes a double-click safe — a replayed
+     * `replace_summary` would otherwise write a second version of a person's
+     * summary. `AlreadyDecidedError` → 409.
+     *
+     * The residual risk inverts deliberately: a decision can be recorded for
+     * a write that then fails. That is visible — the caller gets the error
+     * and the row plainly disagrees with the decision — and it duplicates
+     * nothing. An audit line to reconcile beats a user's summary silently
+     * doubled.
+     */
+    await recordDecision(options.db, identity, {
+      runId: body.run_id, proposal, decision: "confirmed",
+    });
+    const applied = await applyProposal(options.db, identity, proposal, body.run_id);
+    return reply.send({ ...applied, proposal_id: proposal.id });
+  });
+
+  app.post("/v1/assistant/proposals/:id/reject", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { run_id?: unknown };
+    if (typeof body.run_id !== "string") throw new ValidationError("run_id is required");
+
+    const proposal = await findProposal(options.db, identity, body.run_id, id);
+    // A rejection is a decision worth the same record as an approval — "the
+    // agent proposed this and a person said no" is exactly the history this
+    // flow exists to keep — and it takes the same primary key, so a proposal
+    // cannot be rejected and then approved.
+    await recordDecision(options.db, identity, {
+      runId: body.run_id, proposal, decision: "rejected",
+    });
+    return reply.send({ rejected: true, proposal_id: proposal.id });
+  });
+
   // ---- gateway administration (M17) --------------------------------------
   //
   // Managing keys and webhooks is admin-only, enforced by RLS (db/0013's
@@ -402,6 +590,35 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       if (!skill) throw new ValidationError(`unknown skill: ${body.skill}`);
     }
 
+    /**
+     * The caller's STORED preference, when this request names no model.
+     *
+     * `PUT /v1/models/preferred` wrote `app_user.preferred_model` and nothing
+     * anywhere read it — the assistant used `body.model` alone. So a user
+     * could pick a model, see it saved, and have every conversation ignore
+     * it. Found by driving the live loop with a real account rather than a
+     * fixture that always passed a model.
+     *
+     * Precedence is M5's: a skill's pin wins (modelForRun), then this
+     * request's explicit choice, then the person's saved one. No product
+     * default underneath — that is the rule, not an omission.
+     */
+    const chosenModel = typeof body.model === "string" && body.model !== ""
+      ? body.model
+      : await models.preferred(identity);
+
+    /**
+     * Refuse BEFORE the stream opens, for the same reason as the gateway
+     * check above: once headers are out the only way to say "you have not
+     * chosen a model" is an error event on a half-open SSE connection, which
+     * every client has to special-case. `modelForRun` throws deep in the
+     * runtime, so without this the caller gets a *failed run* for what is
+     * really a 400.
+     */
+    if (!chosenModel && !skill?.model) {
+      throw new ValidationError("no model selected — choose one in settings, or pass `model`");
+    }
+
     // Headers must go out before the first event or proxies may buffer.
     reply.raw.writeHead(200, {
       "Content-Type": "text/event-stream",
@@ -419,7 +636,7 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       identity,
       question: body.question,
       skill,
-      model: typeof body.model === "string" ? body.model : undefined,
+      model: chosenModel ?? undefined,
       callId: typeof body.call_id === "string" ? body.call_id : null,
       signal: controller.signal,
     }, {

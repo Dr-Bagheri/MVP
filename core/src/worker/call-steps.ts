@@ -10,6 +10,7 @@ import type { Db, SqlTx } from "../db/identity.ts";
 import type { Lifecycle } from "./lifecycle.ts";
 import { Q_LINK_SPEAKERS, Q_SUMMARIZE, type JobPayload, type Queue } from "./queue.ts";
 import { StepError, type StepHandler } from "./runner.ts";
+import { enqueueWebhooks } from "./webhook-enqueue.ts";
 
 export interface LinkSpeakersOptions {
   db: Db;
@@ -58,6 +59,10 @@ export function createLinkSpeakersStep({ db, queue, lifecycle }: LinkSpeakersOpt
       await lifecycle.setCallStatus(identity, payload.callId, "summarizing");
       await queue.send(Q_SUMMARIZE, { callId: payload.callId, ownerId: payload.ownerId });
       log.info({ call_id: payload.callId }, "speakers linked; queued summarize");
+
+      // Every part has settled, so the transcript is complete — this is the
+      // moment `call.transcribed` becomes true, not when the summary lands.
+      await enqueueWebhooks(db, identity, "call.transcribed", payload.callId, queue, log);
     },
   };
 }
@@ -94,6 +99,8 @@ export interface SummarizeOptions {
   db: Db;
   lifecycle: Lifecycle;
   summarizer: Summarizer;
+  /** For the webhook fan-out; the summarize step queues nothing else. */
+  queue: Queue;
   /** Ceiling on transcript characters handed to the model. Context is the budget (M8). */
   maxTranscriptChars?: number;
 }
@@ -102,6 +109,7 @@ export function createSummarizeStep({
   db,
   lifecycle,
   summarizer,
+  queue,
   maxTranscriptChars = 120_000,
 }: SummarizeOptions): StepHandler {
   return {
@@ -128,6 +136,7 @@ export function createSummarizeStep({
         // cannot do.
         await lifecycle.failCall(identity, payload.callId, "no transcript to summarize");
         log.error({ call_id: payload.callId }, "no transcript; call failed rather than summarized");
+        await enqueueWebhooks(db, identity, "call.failed", payload.callId, queue, log);
         return;
       }
 
@@ -205,6 +214,7 @@ export function createSummarizeStep({
 
       await lifecycle.setCallStatus(identity, payload.callId, "ready");
       log.info({ call_id: payload.callId, run_id: result.runId }, "call ready");
+      await enqueueWebhooks(db, identity, "call.summarized", payload.callId, queue, log);
     },
   };
 }

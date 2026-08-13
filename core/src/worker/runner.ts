@@ -11,7 +11,7 @@
 import { OwnerMismatchError, UnknownActorError } from "../db/actor.ts";
 import { MlRequestError } from "./ml-client.ts";
 import { backoffSeconds, type WorkerConfig } from "./config.ts";
-import type { JobPayload, Queue, QueueMessage, QueueName } from "./queue.ts";
+import type { Queue, QueueMessage, QueueName, QueuePayload } from "./queue.ts";
 
 /** A step's own failure, when it is not an ml/ failure. */
 export class StepError extends Error {
@@ -192,7 +192,7 @@ export interface StepLogger {
 export interface StepHandler {
   readonly name: string;
   readonly queue: QueueName;
-  handle(payload: JobPayload, context: { attempt: number; log: StepLogger }): Promise<void>;
+  handle(payload: QueuePayload, context: { attempt: number; log: StepLogger }): Promise<void>;
 }
 
 /**
@@ -204,7 +204,7 @@ export interface StepHandler {
 export interface DeadLetterSink {
   onDeadLetter(
     queue: QueueName,
-    payload: JobPayload,
+    payload: QueuePayload,
     info: { errorType: string; reason: string; exhausted: boolean },
   ): Promise<void>;
 }

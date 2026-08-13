@@ -16,11 +16,13 @@ import { identityForJob } from "../db/actor.ts";
 import type { Db } from "../db/identity.ts";
 import { allPartsMissing, partsSettled, type Lifecycle } from "./lifecycle.ts";
 import {
+  isDeliveryPayload,
   PART_QUEUES,
   Q_LINK_SPEAKERS,
   type JobPayload,
   type Queue,
   type QueueName,
+  type QueuePayload,
 } from "./queue.ts";
 import type { DeadLetterSink, StepLogger } from "./runner.ts";
 
@@ -36,7 +38,21 @@ const isPartQueue = (queue: QueueName): boolean =>
 
 export function createDeadLetterSink({ db, lifecycle, queue, log }: DeadLetterOptions): DeadLetterSink {
   return {
-    async onDeadLetter(queueName, payload: JobPayload, info) {
+    async onDeadLetter(queueName, body: QueuePayload, info) {
+      // A dead-lettered DELIVERY has no call to fail and no part to gap. Its
+      // own row already carries `failed_at` and the reason, written by the
+      // step before it threw — so the only thing left is to say so. Reaching
+      // for `payload.callId` here would fail a call that has nothing to do
+      // with a webhook that could not be delivered.
+      if (isDeliveryPayload(body)) {
+        log.error(
+          { queue: queueName, delivery_id: body.deliveryId, webhook_id: body.webhookId,
+            org_id: body.orgId, error_type: info.errorType, exhausted: info.exhausted },
+          "webhook delivery dead-lettered",
+        );
+        return;
+      }
+      const payload: JobPayload = body;
       let identity;
       try {
         identity = await identityForJob(db, payload);

@@ -17,6 +17,7 @@
  *  5. Content enters the prompt quoted, never as instructions (M4 injection
  *     posture); the caller supplies already-quoted material.
  */
+import type { WriteProposal } from "./proposals.ts";
 import { createPolicy, DEFAULT_MAX_TOOL_CALLS, filterDeclaredTools } from "./policy.ts";
 import { runPi, type PiModelRef } from "./pi.ts";
 import { modelForRun } from "./skills.ts";
@@ -40,12 +41,28 @@ export interface RunRequest<TDeps> {
   adminOnlyTools?: ReadonlySet<string> | undefined;
   /** Overrides the skill's pin and the default (rarely needed). */
   maxToolCalls?: number | undefined;
+  /** Streamed to the client as an SSE `proposal` when a write is proposed. */
+  onProposal?: ((proposal: WriteProposal) => void) | undefined;
   maxBlockedAttempts?: number | undefined;
   signal?: AbortSignal | undefined;
   onText?: ((delta: string) => void) | undefined;
   /** SSE `tool_call` lifecycle: started (here) and terminal (via steps). */
   onToolStart?: ((info: { id: string; tool: string; label: string }) => void) | undefined;
   apiKey?: string | undefined;
+}
+
+/**
+ * The M21 decline marker, built in ONE place.
+ *
+ * The acceptance harness asserts this string and so do the unit tests. Two
+ * hand-written beliefs about one message is the boundary-fixture trap in
+ * miniature: reword it here and a matcher somewhere else goes red — or worse,
+ * keeps matching something it no longer means. The producer owns the wording.
+ */
+export const NO_TOOL_CALL_MARKER = "no tool was called although";
+
+export function noToolCallMarker(offeredCount: number): string {
+  return `${NO_TOOL_CALL_MARKER} ${offeredCount} were available`;
 }
 
 export class InactiveActorError extends Error {}
@@ -101,7 +118,9 @@ export function createAgentRuntime({ runs }: AgentRuntimeOptions) {
         // nothing depends on this filter having run.
         const offered = filterDeclaredTools(request.tools, skill?.tools);
         const tools = wrapTools(offered, {
-          identity, deps: request.deps, onStep, onStart: request.onToolStart,
+          identity, deps: request.deps, onStep,
+          onStart: request.onToolStart,
+          onProposal: request.onProposal,
         });
         const beforeToolCall = createPolicy({
           identity,
@@ -174,9 +193,7 @@ export function createAgentRuntime({ runs }: AgentRuntimeOptions) {
          * search" is visible rather than deduced from an absence.
          */
         const usedNoTools = offered.length > 0 && steps.length === 0;
-        const note = usedNoTools
-          ? `no tool was called although ${offered.length} were available`
-          : null;
+        const note = usedNoTools ? noToolCallMarker(offered.length) : null;
         /**
          * Recorded on every run; SURFACED only when the skill declares tools
          * as its substance (steward calibration).

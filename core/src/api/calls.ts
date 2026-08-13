@@ -21,8 +21,28 @@ export {
   CALL_STATUSES, PART_STATUSES, TRANSCRIPT_TIMINGS,
   type CallStatus, type PartStatus, type TranscriptTiming,
 } from "./vocabulary.ts";
-import { iso } from "./vocabulary.ts";
+import { iso, isoOrNull } from "./vocabulary.ts";
 import type { TranscriptTiming } from "./vocabulary.ts";
+
+/**
+ * db/0032's deletion functions refuse with 42501 — "not yours" for
+ * `soft_delete_call`, "admin only" for `restore_call` — and this turns both
+ * into the 404 every other invisible row gets. A member must not learn that a
+ * deleted call exists by being told they are merely not permitted to touch it.
+ *
+ * It has to be caught HERE rather than in errors.ts, and the reason is easy to
+ * miss: errors.ts pins its RLS branch to `routine === "ExecWithCheckOptions"`,
+ * which is the executor's policy path. A plpgsql `raise … using errcode =
+ * 'insufficient_privilege'` carries `exec_stmt_raise` instead, so it would
+ * sail past that branch into a 500 — the api reporting its own fault for a
+ * refusal the database issued on purpose.
+ */
+function refusalIsNotFound(error: unknown): never {
+  if ((error as { code?: unknown })?.code === "42501") {
+    throw new NotFoundError("call not found");
+  }
+  throw error;
+}
 
 export interface CallSummary {
   id: string;
@@ -37,6 +57,26 @@ export interface CallSummary {
   started_at: string;
   duration_ms: number | null;
   owner_id: string;
+  /**
+   * Lifecycle fields the SCHEMA has always carried and this wire did not.
+   *
+   * `archived_at`, `deleted_at`, `purge_after` and `current_summary_id` are
+   * real columns on `echo.call`; I shipped a narrower select and the frontend
+   * built archive/restore, a purge countdown and a version pointer against
+   * data the api simply never sent. Not "not built" — unexposed, which from
+   * the outside is indistinguishable.
+   *
+   * `deleted_at` is always null in a normal listing (the query filters
+   * soft-deleted rows out); it is here so a future restore surface reads the
+   * same shape rather than needing a parallel one.
+   */
+  source: string | null;
+  archived_at: string | null;
+  deleted_at: string | null;
+  /** When a soft-deleted call becomes purgeable — the countdown's source. */
+  purge_after: string | null;
+  /** Pointer to the current summary row, or null if none has been written. */
+  current_summary_id: string | null;
   /**
    * Provenance summary, NOT a gate (steward-ratified).
    *   "full"  — every part has word timing
@@ -105,7 +145,8 @@ const PART_HAS_SEGMENTS = `
 
 const CALL_COLUMNS = `
   c.id, c.title, c.scope, c.status, c.language, c.started_at,
-  c.duration_ms, c.owner_id,
+  c.duration_ms, c.owner_id, c.source, c.archived_at, c.deleted_at,
+  c.purge_after, c.current_summary_id,
   (select count(*) from echo.call_part p
     where p.call_id = c.id and ${PART_HAS_SEGMENTS}) as transcribed_part_count,
   (select count(*) from echo.call_part p
@@ -116,6 +157,11 @@ interface CallRow {
   id: string; title: string; scope: "private" | "org"; status: string;
   language: string; started_at: string; duration_ms: number | null;
   owner_id: string;
+  source: string | null;
+  archived_at: unknown;
+  deleted_at: unknown;
+  purge_after: unknown;
+  current_summary_id: string | null;
   transcribed_part_count: number | string;
   timed_part_count: number | string;
 }
@@ -156,6 +202,11 @@ const toSummary = (row: CallRow): CallSummary => ({
   started_at: iso(row.started_at),
   duration_ms: row.duration_ms,
   owner_id: row.owner_id,
+  source: row.source,
+  archived_at: isoOrNull(row.archived_at),
+  deleted_at: isoOrNull(row.deleted_at),
+  purge_after: isoOrNull(row.purge_after),
+  current_summary_id: row.current_summary_id,
   transcript_timing: timingFromCounts(
     Number(row.transcribed_part_count), Number(row.timed_part_count),
   ),
@@ -240,21 +291,100 @@ export function createCallsRepo(db: Db) {
     },
 
     /**
-     * Soft delete (M11). echo_app holds no DELETE grant anywhere — deletion
-     * in this product is setting deleted_at, and the purge job (echo_purge,
-     * the only role with DELETE) removes rows after the window.
+     * Archive / unarchive.
+     *
+     * A timestamp, not a boolean — "when" carries strictly more than
+     * "whether", and the archived filter becomes `archived_at is null`
+     * rather than a flag that can drift out of sync with the moment it
+     * happened. The frontend independently reached the same conclusion from
+     * the payload, which is the good kind of agreement.
+     *
+     * NOT owner-only: db/0011's `tg_call_guard` refuses content edits from a
+     * non-owner but says in its own message that "others may archive, delete
+     * or restore it". So an admin can file away a call they cannot rewrite,
+     * and this layer does not narrow that — RLS and the trigger already say
+     * exactly who may do what.
      */
-    async softDelete(identity: Identity, callId: string): Promise<void> {
+    async setArchived(identity: Identity, callId: string, archived: boolean): Promise<CallSummary> {
       const id = assertUuid(callId, "call id");
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<{ id: string }>(
           `update echo.call
-              set deleted_at = now(), deleted_by = $2
+              set archived_at = case when $2::boolean then now() else null end
             where id = $1 and deleted_at is null
             returning id`,
-          [id, identity.userId],
+          [id, archived],
         ),
       );
+      // A deleted call cannot be archived: it is already out of the way, and
+      // the two states would then need an order of precedence nobody has
+      // decided. Reported as 404 like every other invisible row.
+      if (!rows[0]) throw new NotFoundError("call not found");
+      return this.get(identity, id);
+    },
+
+    /**
+     * Restore a soft-deleted call within its purge window (M11).
+     *
+     * The only read in this file that must NOT filter `deleted_at is null` —
+     * the row it is looking for is precisely the one every other query hides.
+     * Clearing `purge_after` too, or the purge job would still take it: a
+     * restore that leaves the countdown running is a promise the product
+     * does not keep.
+     *
+     * Past the window the row may already be gone, and that is a 404 rather
+     * than an error — the retention policy did what it said.
+     */
+    async restore(identity: Identity, callId: string): Promise<CallSummary> {
+      const id = assertUuid(callId, "call id");
+      const rows = await db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe<{ restored: boolean }>(
+          `select echo.restore_call($1::uuid) as restored`, [id],
+        ),
+      ).catch(refusalIsNotFound);
+      // `false` = already live. Idempotent, not an error: two clicks on one
+      // restore button is not a failure, and the caller wanted the call back
+      // — which it now is. `true` and `false` both end with the same read.
+      if (!rows[0]) throw new NotFoundError("no deleted call with that id");
+      return this.get(identity, id);
+    },
+
+    /**
+     * Soft delete (M11) — a named database operation, not an UPDATE.
+     *
+     * echo_app holds no DELETE grant anywhere: deletion in this product means
+     * marking the row, and only echo_purge removes it after the window.
+     *
+     * The history is worth keeping, because I got the diagnosis half right
+     * and the fix wrong. An owner deleting their own call was refused with
+     * 42501 while an ADMIN doing the same succeeded. My first theory was that
+     * `RETURNING` made Postgres apply the SELECT policy to a row `call_read`
+     * hides from non-admins — so I dropped the RETURNING and read the
+     * affected count instead. **It still failed.** Setting `deleted_at` moves
+     * the row outside the actor's own read policy whether or not you ask to
+     * read it back, and Postgres refuses an UPDATE whose result the actor
+     * could not see.
+     *
+     * db/0032 answered it by making deletion a function rather than widening
+     * `call_read` — which I had suggested and which would also have worked,
+     * at the cost of every call an owner ever deleted becoming permanently
+     * visible to them in every listing. That is a ruled product behaviour
+     * ("deletion feels like deletion"), and it would then have survived only
+     * in whatever WHERE clause this file remembered to write. The rule
+     * belongs in the wall, not in my filters.
+     *
+     * Direct `deleted_at` writes now raise for application roles — including
+     * the admin path that used to work. One door, deliberately.
+     */
+    async softDelete(identity: Identity, callId: string): Promise<void> {
+      const id = assertUuid(callId, "call id");
+      const rows = await db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe<{ deleted: boolean }>(
+          `select echo.soft_delete_call($1::uuid) as deleted`, [id],
+        ),
+      ).catch(refusalIsNotFound);
+      // true = deleted, false = already deleted. Both mean "it is gone now",
+      // so both are success — a retry is not a failure.
       if (!rows[0]) throw new NotFoundError("call not found");
     },
   };

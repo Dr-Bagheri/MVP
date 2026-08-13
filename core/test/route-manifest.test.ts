@@ -28,17 +28,26 @@ import { createDb, type SqlClient, type SqlTx } from "../src/db/identity.ts";
 const REQUIRED_ROUTES: [method: string, path: string, why: string][] = [
   ["GET", "/health", "liveness"],
 
+  ["GET", "/v1/me", "M1 — the browser never sees the token, so the shell cannot self-identify"],
+  ["POST", "/v1/signup", "M15 — the only caller of echo.register_account(); without it a signed-up person 401s forever and never reaches the pending queue"],
+
   ["GET", "/v1/calls", "SPEC §Calls — the list"],
   ["GET", "/v1/calls/:id", "SPEC §Calls — one call"],
   ["PATCH", "/v1/calls/:id", "SPEC §Calls — rename / re-scope"],
   ["DELETE", "/v1/calls/:id", "M11 — soft delete"],
+  ["POST", "/v1/calls/:id/archive", "SPEC §Calls — file away without deleting"],
+  ["POST", "/v1/calls/:id/unarchive", "SPEC §Calls — the archive filter implies its inverse"],
+  ["POST", "/v1/calls/:id/restore", "M11 — db/0011 names restore as a non-owner-permitted act"],
 
   ["GET", "/v1/calls/:id/transcript", "SPEC §The transcript"],
+  ["GET", "/v1/calls/:id/speakers", "SPEC §The transcript — resolving a segment's speaker_id"],
   ["GET", "/v1/calls/:id/summary", "SPEC §The summary"],
   ["GET", "/v1/calls/:id/summaries", "invariant 4 — versions, never edits"],
   ["GET", "/v1/search", "SPEC §Search"],
 
   ["POST", "/v1/assistant/ask", "SPEC §The assistant"],
+  ["POST", "/v1/assistant/proposals/:id/confirm", "M4 — an inferred write is proposed, then approved"],
+  ["POST", "/v1/assistant/proposals/:id/reject", "M4 — a refusal is recorded, not discarded"],
   ["GET", "/v1/skills", "SPEC §Skills — the picker"],
 
   ["GET", "/v1/models", "SPEC §The assistant — 'each user picks their own model'"],
@@ -64,7 +73,8 @@ const REQUIRED_ROUTES: [method: string, path: string, why: string][] = [
  */
 const KNOWN_ABSENT: [what: string, why: string][] = [
   ["GET /v1/admin/models", "org-level model curation: echo.org.allowed_models has no admin endpoint yet; frontend's screen is mock-fed and marked known-stale"],
-  ["POST /v1/calls/:id/transcript/correct", "SPEC's three agent WRITE tools are not built; steward to rule whether they land this milestone or next"],
+  // (SPEC's three write tools landed in milestone 3 — they are TOOLS, not
+  // routes, and their approval flow is the two /proposals routes above.)
 ];
 
 function fakeDb() {

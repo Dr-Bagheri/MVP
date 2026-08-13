@@ -75,6 +75,76 @@ export interface ModelsOptions {
   capability?: (() => Promise<CapabilityMap>) | undefined;
 }
 
+/**
+ * Suggested models, best first. Everything else follows in catalogue order.
+ *
+ * The steward asked me to "order by the existing suggestion ranking, never
+ * alphabetically". **There was no existing ranking** — `builtinModels()`
+ * gives id, name and reasoning, and the api had been serving them in
+ * catalogue order, which is alphabetical, which is why the first thing every
+ * new user saw was `ai21/jamba-large-1.7` from a provider that has been
+ * RETIRED. A live loop run died on it.
+ *
+ * So this list is new, and it is a judgement rather than a measurement: these
+ * are the models this product actually runs on and that have been observed
+ * answering with tools. Saying that plainly matters — a ranking presented as
+ * derived when it is curated is the same lie as a filter presented as
+ * enforcement when it is a guess.
+ *
+ * The real fix is liveness, and the steward has named the seam: our own
+ * `agent_run` error classes per model are a reputation source, so a later
+ * pass can demote recently-hard-failing models. Until then this is
+ * presentation only, and it does not pretend otherwise — nothing is removed,
+ * only ordered.
+ */
+export const SUGGESTED_MODELS: readonly string[] = [
+  "google/gemini-3.6-flash",
+  "openai/gpt-5",
+  "google/gemini-2.5-flash",
+  "openai/gpt-5-mini",
+  "google/gemini-3.6-pro",
+];
+
+/**
+ * Providers this product does not offer (M5, user directive: no Claude).
+ *
+ * ── How this came to be missing, because that is the useful part ────────────
+ *
+ * The rule was decided and recorded, and it existed in NO CODE. The live
+ * catalogue served **28 `anthropic/*` models**, and my own curated ranking
+ * named two of them at positions 2 and 5 — so the product was offering, and
+ * recommending, models the user had explicitly excluded. I wrote that ranking
+ * hours after the directive was set and never checked it against the rule.
+ *
+ * It is not in SPEC.md either. A rule that lives only in a decision log is a
+ * rule the code has never been asked about, and this is what that looks like
+ * from the inside: everyone believed the filter existed because the filter
+ * was described. That belief survived a live catalogue read, a live model
+ * pick and an end-to-end run.
+ *
+ * So it is enforced here, in both directions — a barred model is not listed
+ * AND cannot be chosen — and `test/models-members.test.ts` asserts the
+ * absence directly, in the negative-space idiom Backend 3 used to forbid a
+ * call-level timing column: the assertion is that nothing matching this ever
+ * appears, so a future catalogue addition cannot reintroduce one quietly.
+ */
+export const EXCLUDED_PROVIDERS: readonly string[] = ["anthropic/"];
+
+const isExcluded = (id: string): boolean =>
+  EXCLUDED_PROVIDERS.some((prefix) => id.startsWith(prefix));
+
+/** Suggested first (in the order above), then everything else unchanged. */
+function bySuggestion<T extends { id: string }>(models: T[]): T[] {
+  const rank = (id: string): number => {
+    const at = SUGGESTED_MODELS.indexOf(id);
+    return at === -1 ? SUGGESTED_MODELS.length : at;
+  };
+  // A STABLE sort: models outside the suggested list keep catalogue order
+  // relative to each other rather than being shuffled by an arbitrary tie
+  // break. Array.prototype.sort is stable in every runtime we target.
+  return [...models].sort((a, b) => rank(a.id) - rank(b.id));
+}
+
 export function createModelsRepo(db: Db, options: ModelsOptions = {}) {
   const capabilityOf = options.capability ?? toolCapability;
   return {
@@ -101,15 +171,20 @@ export function createModelsRepo(db: Db, options: ModelsOptions = {}) {
       // Empty allow-list = admin has not curated = the shipped catalogue
       // (db/0002's comment). NOT "nothing is allowed" — that reading would
       // leave every new org unable to pick a model at all.
-      const permitted = curated ? all.filter((m) => allowed.includes(m.id)) : all;
+      // M5's provider exclusion applies FIRST and unconditionally: an admin's
+      // allow-list cannot re-admit a barred provider, and neither can the
+      // capability filter passing it through. A rule that any later filter
+      // could undo is not a rule.
+      const offered = all.filter((m) => !isExcluded(m.id));
+      const permitted = curated ? offered.filter((m) => allowed.includes(m.id)) : offered;
 
       // SPEC: models that cannot call tools are not selectable. Enforced from
       // OpenRouter's real metadata, and only when that metadata was readable
       // — see model-capability.ts for why an outage does not empty the list.
       const capability = await capabilityOf();
-      const models = (capability.known
+      const models = bySuggestion(capability.known
         ? permitted.filter((m) => capability.toolCapable.has(m.id))
-        : permitted
+        : permitted,
       ).map((m) => ({
         ...m,
         selected: m.id === row.preferred_model,
@@ -123,6 +198,25 @@ export function createModelsRepo(db: Db, options: ModelsOptions = {}) {
         tool_capability_filtered: capability.known,
         ...(capability.stale === true ? { tool_capability_stale: true } : {}),
       };
+    },
+
+    /**
+     * The caller's saved model, or null.
+     *
+     * Exists because `preferred_model` was WRITTEN and read by nothing: a
+     * person could choose a model, see it saved, and have every conversation
+     * ignore it, because the assistant used only the request body. Stored and
+     * unqueried is unverified — the same shape as `request` being
+     * double-encoded because no query ever asked it anything.
+     */
+    async preferred(identity: Identity): Promise<string | null> {
+      const rows = await db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe<{ preferred_model: string | null }>(
+          `select preferred_model from echo.app_user where id = $1 limit 1`,
+          [identity.userId],
+        ),
+      );
+      return rows[0]?.preferred_model ?? null;
     },
 
     /**
@@ -140,6 +234,12 @@ export function createModelsRepo(db: Db, options: ModelsOptions = {}) {
         // the mistake.
         if (!catalogue().some((m) => m.id === modelId)) {
           throw new ValidationError(`unknown model: ${modelId}`);
+        }
+        // Both directions, or the filter is decorative: a barred model that
+        // is merely hidden can still be chosen by anyone who names it, and
+        // `preferred_model` is read by the assistant on every turn.
+        if (isExcluded(modelId)) {
+          throw new ValidationError(`model is not available on this product: ${modelId}`);
         }
         // Fail closed on a KNOWN-incapable model (steward ruling): choosing
         // one would produce an assistant whose every tool call fails, which

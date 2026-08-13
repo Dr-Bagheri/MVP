@@ -31,9 +31,23 @@ export interface MlProvenance {
   stt?: { lane?: string; timestamps?: "word" | "segment" | "none" } | undefined;
 }
 
+export interface MlSpeechRegion {
+  start_ms: number;
+  end_ms: number;
+}
+
 export interface MlResult {
   words: MlWord[];
   media?: { duration_ms?: number } | undefined;
+  /**
+   * Where the VAD heard speech, on the same timeline as `words`.
+   *
+   * This is the line boundary (M20). ml/ measured it from the audio itself
+   * rather than guessing it from the text, which is what makes it usable as a
+   * boundary at all — the alternative is a pause threshold someone invents and
+   * everyone then argues about.
+   */
+  speech?: { segments?: MlSpeechRegion[] | undefined } | undefined;
   provenance?: MlProvenance | undefined;
   degraded?: boolean | undefined;
   warnings?: string[] | undefined;
@@ -143,8 +157,52 @@ function assertSpan(startMs: number, endMs: number, context: string): void {
 }
 
 /**
- * Group ml/ words into speaker-turn segments and place them on the call
- * timeline. A new segment starts when the speaker changes.
+ * The backstop, for a lane that offers neither speakers nor speech regions.
+ *
+ * Deliberately generous: it is not a line-length preference, it is a ceiling
+ * that stops one row swallowing an entire recording when both real boundaries
+ * are missing. If it fires often, the input is the problem.
+ */
+const SEGMENT_MAX_WORDS = 80;
+
+/**
+ * Which VAD speech region does this moment fall in?
+ *
+ * Returns the index of the last region starting at or before `ms`, or -1 for a
+ * word that precedes every region. Only CHANGES matter to the caller, so a
+ * word sitting in the silence between two regions keeps the preceding index
+ * and does not manufacture a break of its own.
+ */
+function speechRegionAt(regions: readonly MlSpeechRegion[], ms: number): number {
+  let found = -1;
+  for (let i = 0; i < regions.length; i++) {
+    const region = regions[i]!;
+    if (!Number.isFinite(region.start_ms)) continue;
+    if (region.start_ms <= ms) found = i;
+    else break; // regions are ordered; nothing later can start earlier
+  }
+  return found;
+}
+
+/**
+ * Group ml/ words into segments and place them on the call timeline.
+ *
+ * **A new segment starts on a speaker change OR a VAD speech boundary** (M20),
+ * with a word-count backstop when a lane gives neither.
+ *
+ * Speaker change alone was the original rule, and it made a single-speaker
+ * recording ONE segment: 86 seconds of one voice landed as a single row, and a
+ * 30-minute dictation would have landed as one row holding every word. Three
+ * things break at once when that happens — the timing ladder's middle rung has
+ * nothing to degrade to (word → line → span, with no lines), a search snippet's
+ * unit becomes the entire call, and ml/'s contract says in as many words that
+ * lines are the product's to build ("ml/ returns words, not lines") while the
+ * product was not building them.
+ *
+ * The boundary is `speech.segments` — silence MEASURED from the audio, already
+ * delivered on every response and previously discarded — rather than a pause
+ * threshold invented here. That distinction is the reason this is a fix and
+ * not a preference.
  */
 export function mapWordsToSegments(result: MlResult, part: PartRef): MappedTranscript {
   const timestamps = result.provenance?.stt?.timestamps ?? "none";
@@ -159,13 +217,29 @@ export function mapWordsToSegments(result: MlResult, part: PartRef): MappedTrans
   const segments: MappedSegment[] = [];
   let current: MappedSegment | undefined;
 
+  // Regions are on ml/'s 0-based part timeline, exactly like `word.start_ms`,
+  // so they are compared BEFORE the offset is added. Adding it to one side
+  // only would put every boundary in the wrong place on any part after the
+  // first — silently, and only on multi-part calls.
+  const regions = result.speech?.segments ?? [];
+  // On a degraded part every word carries the same anchored span, so region
+  // lookups and word counts would slice one span into rows that all claim the
+  // same moment. M20 says that rung is ONE anchored segment; keep it that way.
+  const canSplitOnSpeech = hasWordTimestamps && regions.length > 0;
+  let previousRegion = -1;
+
   for (const word of result.words) {
     const startMs = offset + word.start_ms;
     const endMs = offset + word.end_ms;
     assertWordTiming(startMs, endMs, `word "${word.text.slice(0, 24)}"`);
 
     const speaker = word.speaker ?? null;
-    if (!current || current.speaker !== speaker) {
+    const region = canSplitOnSpeech ? speechRegionAt(regions, word.start_ms) : previousRegion;
+    const crossedSilence = current !== undefined && region !== previousRegion;
+    const tooLong = hasWordTimestamps && (current?.words.length ?? 0) >= SEGMENT_MAX_WORDS;
+    previousRegion = region;
+
+    if (!current || current.speaker !== speaker || crossedSilence || tooLong) {
       current = {
         partId: part.id,
         seq: (part.seqStart ?? 0) + segments.length,

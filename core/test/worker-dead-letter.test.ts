@@ -44,7 +44,7 @@ function harness(parts: PartRow[]) {
     setPartStatus: vi.fn(),
     setCallStatus: vi.fn(),
     markPartMissing: vi.fn(),
-    noteSummarySkipped: vi.fn(),
+    noteSummarySkipped: vi.fn(), recomputeCallDuration: vi.fn(),
     failCall: vi.fn(),
     bumpAttempts: vi.fn(),
   } satisfies Lifecycle as unknown as Lifecycle & Record<string, ReturnType<typeof vi.fn>>;
@@ -135,7 +135,7 @@ describe("when the owner cannot be resolved", () => {
   it("writes nothing at all rather than writing as somebody else", async () => {
     const lifecycle = {
       getPart: vi.fn(), partsOfCall: vi.fn(), setPartStatus: vi.fn(), setCallStatus: vi.fn(),
-      markPartMissing: vi.fn(), noteSummarySkipped: vi.fn(), failCall: vi.fn(), bumpAttempts: vi.fn(),
+      markPartMissing: vi.fn(), noteSummarySkipped: vi.fn(), recomputeCallDuration: vi.fn(), failCall: vi.fn(), bumpAttempts: vi.fn(),
     } as unknown as Lifecycle & Record<string, ReturnType<typeof vi.fn>>;
 
     // A payload whose owner id is not a UUID: identityForJob throws.

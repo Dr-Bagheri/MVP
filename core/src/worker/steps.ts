@@ -190,6 +190,11 @@ export function createPartStep({
         ),
       );
 
+      // The call's own duration, from the parts that have landed. db/0004's
+      // comment has always said "maintained by the worker as parts land";
+      // until now nothing did it, and the api served null on every live row.
+      await lifecycle.recomputeCallDuration(identity, part.call_id);
+
       log.info(
         {
           part_id: part.id,

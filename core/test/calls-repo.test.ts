@@ -17,8 +17,15 @@ const IDENTITY: Identity = { userId: ALICE, orgId: "org-a", role: "member", isAc
 const row = (over: Record<string, unknown> = {}) => ({
   id: CALL, title: "جلسه بودجه", scope: "private", status: "ready",
   language: "fa", started_at: "2026-08-12T09:00:00.000Z",
-  duration_ms: 1_800_000, owner_id: ALICE, transcribed_part_count: 2, timed_part_count: 2, ...over,
+  duration_ms: 1_800_000, owner_id: ALICE,
+  source: null, archived_at: null, deleted_at: null,
+  purge_after: null, current_summary_id: null,
+  transcribed_part_count: 2, timed_part_count: 2, ...over,
 });
+
+// (A `withCount` helper lived here, for statements that read postgres.js's
+// affected-row count because they could not use RETURNING. db/0032 replaced
+// those with functions that return a boolean, so nothing needs it now.)
 
 function fakeDb(rowsFor: (sql: string, params?: unknown[]) => unknown[]) {
   const log: { sql: string; params?: unknown[] | undefined }[] = [];
@@ -93,6 +100,12 @@ describe("list", () => {
       id: CALL, title: "جلسه بودجه", scope: "private", status: "ready",
       language: "fa", started_at: "2026-08-12T09:00:00.000Z",
       duration_ms: 1_800_000, owner_id: ALICE, transcript_timing: "mixed",
+      // Lifecycle fields the schema always carried and this wire did not.
+      // The frontend had built archive/restore, a purge countdown and a
+      // version pointer against columns the api never sent — "not built" and
+      // "not exposed" are indistinguishable from outside.
+      source: null, archived_at: null, deleted_at: null,
+      purge_after: null, current_summary_id: null,
     });
   });
 });
@@ -141,19 +154,117 @@ describe("update", () => {
 });
 
 describe("delete is soft (M11)", () => {
-  it("sets deleted_at/deleted_by instead of issuing DELETE", async () => {
-    const { db, log } = fakeDb(() => [{ id: CALL }]);
+  /**
+   * These used to assert the SQL — `set deleted_at = now()`, and the ABSENCE
+   * of a RETURNING clause. db/0032 moved deletion into a named function, so
+   * they were rewritten; but the more useful lesson is why they were wrong
+   * even while green.
+   *
+   * They pinned a MECHANISM I inferred from a live failure, and the inference
+   * was half wrong. Seeing an owner's delete refused with 42501, I concluded
+   * RETURNING made Postgres apply the SELECT policy to a row `call_read`
+   * hides — dropped the clause, and wrote a test asserting it stays dropped.
+   * The delete still failed live: setting `deleted_at` at ALL moves the row
+   * outside the actor's own read policy. So the test passed, described a real
+   * constraint, and guarded a fix that did not work.
+   *
+   * What is asserted now is the CONTRACT — which door, and what each answer
+   * means. The mechanism is the database's business, which is precisely why
+   * it was able to change without this file being wrong again.
+   */
+  it("goes through echo.soft_delete_call, never a direct write", async () => {
+    const { db, log } = fakeDb(() => [{ deleted: true }]);
     await createCallsRepo(db).softDelete(IDENTITY, CALL);
-    const statement = log.find((l) => l.sql.includes("echo.call"))!;
-    expect(statement.sql).toContain("set deleted_at = now()");
-    expect(statement.sql).not.toMatch(/\bdelete\s+from\b/i);
-    expect(statement.params).toEqual([CALL, ALICE]);
+    const statement = log.find((l) => l.sql.includes("soft_delete_call"))!;
+    expect(statement.params).toEqual([CALL]);
+    // Direct deleted_at writes now raise for application roles (db/0032):
+    // one door, so deletion cannot quietly acquire a second implementation.
+    expect(log.some((l) => /set\s+deleted_at/i.test(l.sql))).toBe(false);
+    expect(log.some((l) => /\bdelete\s+from\b/i.test(l.sql))).toBe(false);
   });
 
-  it("is idempotent-safe: deleting an already-deleted call is 404", async () => {
-    const { db } = fakeDb(() => []);
+  it("treats a second delete as success, not an error", async () => {
+    // `false` = already deleted. The caller wanted it gone and it is gone; a
+    // double-clicked delete button is not a failure.
+    const { db } = fakeDb(() => [{ deleted: false }]);
+    await expect(createCallsRepo(db).softDelete(IDENTITY, CALL)).resolves.toBeUndefined();
+  });
+
+  it("turns the database's refusal into 404, not 500", async () => {
+    /**
+     * `soft_delete_call` raises 42501 for a call that is not yours — via a
+     * plpgsql RAISE, so it carries `routine: exec_stmt_raise`, NOT the
+     * `ExecWithCheckOptions` that errors.ts pins its RLS branch to. Without
+     * the catch in calls.ts this lands in the 500 bucket and the api claims
+     * its own fault for a refusal the database issued deliberately.
+     */
+    const { db } = fakeDb(() => {
+      throw Object.assign(new Error("insufficient privilege"), {
+        code: "42501", routine: "exec_stmt_raise",
+      });
+    });
     await expect(createCallsRepo(db).softDelete(IDENTITY, CALL))
       .rejects.toBeInstanceOf(NotFoundError);
+  });
+});
+
+describe("archive and restore (M11)", () => {
+  it("archives with a TIMESTAMP, not a flag", async () => {
+    // "when" carries strictly more than "whether", and the filter becomes
+    // `archived_at is null` rather than a boolean that can drift out of sync
+    // with the moment it happened.
+    const { db, log } = fakeDb((sql) => (sql.includes("update echo.call") ? [{ id: CALL }] : [row()]));
+    await createCallsRepo(db).setArchived(IDENTITY, CALL, true);
+    const update = queries(log).find((l) => l.sql.includes("update echo.call"))!;
+    expect(update.sql).toContain("archived_at = case when $2::boolean then now() else null end");
+    expect(update.params).toEqual([CALL, true]);
+  });
+
+  it("unarchives by clearing it, through the same path", async () => {
+    const { db, log } = fakeDb((sql) => (sql.includes("update echo.call") ? [{ id: CALL }] : [row()]));
+    await createCallsRepo(db).setArchived(IDENTITY, CALL, false);
+    expect(queries(log).find((l) => l.sql.includes("update echo.call"))!.params).toEqual([CALL, false]);
+  });
+
+  it("refuses to archive a DELETED call", async () => {
+    // Already out of the way; archiving it too would need a precedence
+    // between the two states that nobody has decided.
+    const { db, log } = fakeDb(() => []);
+    await expect(createCallsRepo(db).setArchived(IDENTITY, CALL, true))
+      .rejects.toBeInstanceOf(NotFoundError);
+    expect(queries(log)[0]!.sql).toContain("deleted_at is null");
+  });
+
+  it("goes through echo.restore_call", async () => {
+    const { db, log } = fakeDb((sql) => (sql.includes("restore_call") ? [{ restored: true }] : [row()]));
+    await createCallsRepo(db).restore(IDENTITY, CALL);
+    expect(queries(log).find((l) => l.sql.includes("restore_call"))!.params).toEqual([CALL]);
+    // Clearing the purge countdown is now the function's job. Asserting it in
+    // SQL here would be this file re-stating a rule it does not enforce —
+    // and, when db/0032 moved it, would have failed while nothing was broken.
+    expect(queries(log).some((l) => /purge_after\s*=\s*null/i.test(l.sql))).toBe(false);
+  });
+
+  it("surfaces a non-admin's refused restore as 404, not 500 and not silence", async () => {
+    /**
+     * The bug this replaces was the quiet one. Restore used to be an UPDATE
+     * whose WHERE matched zero rows for a non-admin — nothing raised, nothing
+     * logged, indistinguishable from a call that never existed. db/0032 makes
+     * it RAISE, so there is something to catch; this asserts we catch it and
+     * answer like every other invisible row.
+     */
+    const { db } = fakeDb(() => {
+      throw Object.assign(new Error("insufficient privilege"), {
+        code: "42501", routine: "exec_stmt_raise",
+      });
+    });
+    await expect(createCallsRepo(db).restore(IDENTITY, CALL))
+      .rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it("is 404 when the window has already passed and the row is gone", async () => {
+    const { db } = fakeDb(() => []);
+    await expect(createCallsRepo(db).restore(IDENTITY, CALL)).rejects.toBeInstanceOf(NotFoundError);
   });
 });
 

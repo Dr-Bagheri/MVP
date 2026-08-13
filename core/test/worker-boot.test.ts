@@ -42,8 +42,22 @@ interface BootResult {
   output: string;
 }
 
-/** Boot the real entrypoint the real way, let it run, then stop it. */
-async function boot(ms = 3000): Promise<BootResult> {
+/**
+ * Boot the real entrypoint the real way, wait for what we are asserting, then
+ * stop it.
+ *
+ * Waits on the CONDITION, not on a stopwatch. A fixed sleep makes this test's
+ * result depend on how many other processes the suite happens to be starting —
+ * and it did: it lost the race once when the api's boot test grew a second
+ * spawned process. Widening the sleep would only move the race somewhere
+ * slower.
+ *
+ * A flaky boot test is worse than most flaky tests. This is the instrument for
+ * the class of bug nothing else catches — a process that cannot start while
+ * every unit test passes — and one unexplained red is all it takes for someone
+ * to learn to re-run it instead of reading it.
+ */
+async function bootUntil(marker: RegExp, ceilingMs = 15_000): Promise<BootResult> {
   const child = spawn(process.execPath, ["--experimental-strip-types", entry], {
     env: {
       ...process.env,
@@ -65,10 +79,22 @@ async function boot(ms = 3000): Promise<BootResult> {
   child.stderr.on("data", (d) => (output += String(d)));
 
   let exited: number | null = null;
-  child.on("exit", (code) => (exited = code));
+  let hasExited = false;
+  child.on("exit", (code) => {
+    exited = code;
+    hasExited = true;
+  });
 
-  await new Promise((r) => setTimeout(r, ms));
-  const alive = exited === null;
+  // Poll for the marker OR an exit, whichever comes first. Fast when the
+  // machine is idle, patient when it is not, and it stops the moment there is
+  // an answer either way — including the silent-exit-zero case, which must not
+  // wait out the ceiling to be detected.
+  const deadline = Date.now() + ceilingMs;
+  while (Date.now() < deadline && !hasExited && !marker.test(output)) {
+    await new Promise((r) => setTimeout(r, 50));
+  }
+
+  const alive = !hasExited;
   child.kill();
 
   return { exited: alive ? null : exited, output };
@@ -76,7 +102,7 @@ async function boot(ms = 3000): Promise<BootResult> {
 
 describe("the worker boots under the production runtime", () => {
   it("starts, stays up, and keeps polling when the database is unreachable", async () => {
-    const { exited, output } = await boot();
+    const { exited, output } = await bootUntil(/poll failed; backing off/);
 
     // A parameter property anywhere in the import graph fails HERE, by name.
     expect(output).not.toMatch(/ERR_INVALID_TYPESCRIPT_SYNTAX/);
@@ -89,7 +115,7 @@ describe("the worker boots under the production runtime", () => {
     // And it is doing its job rather than merely existing: the database is
     // unreachable, so it must report the failure and carry on, not die.
     expect(output).toMatch(/poll failed; backing off/);
-  }, 20_000);
+  }, 30_000);
 
   it("refuses to start when required configuration is absent", async () => {
     // Failing loudly at startup beats dead-lettering every job for an hour
@@ -112,5 +138,5 @@ describe("the worker boots under the production runtime", () => {
 
     expect(code, `expected a nonzero exit, got ${code} — output:\n${output}`).not.toBe(0);
     expect(output).toMatch(/DATABASE_URL_APP|failed to start/);
-  }, 20_000);
+  }, 30_000);
 });
