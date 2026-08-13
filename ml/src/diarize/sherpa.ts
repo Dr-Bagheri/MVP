@@ -19,8 +19,18 @@
 // CAVEAT carried from the spike, worth keeping in view: its ground truth was
 // clean synthetic TTS — two maximally distinct voices, strict alternation, no
 // overlap. Perfect scores there prove the plumbing and the clustering, NOT
-// real-meeting robustness. Far-field noise, crosstalk and same-gender voices
-// are where diarizers actually fail, and none of that has been measured.
+// real-meeting robustness.
+//
+// Since measured on real audio (test/smoke/diarizer-threshold.ts): the
+// clustering threshold the spike validated was wrong by a factor of five on a
+// real conversation, and the default moved 0.5 → 1.0 as a result. At 1.0 the
+// count is right within one on a 4-person recording and exactly 1 on a
+// single-speaker recording.
+//
+// Still NOT measured: far-field noise and same-gender voices. Crosstalk HAS
+// now been measured (test/smoke/crosstalk.ts) and it is a real bound —
+// roughly a third of the words are lost when two people speak at once, with
+// nothing in the response saying so.
 
 import { access } from "node:fs/promises";
 import { config } from "../config.js";
@@ -94,11 +104,16 @@ export class SherpaDiarizer implements Diarizer {
       const { segments, speakersFound, exceededMax } = normalize(raw, opts.maxSpeakers);
 
       if (exceededMax) {
-        // Said out loud rather than trimmed away. Over-splitting is REAL on
-        // conversational audio — measured at 15+ clusters on a genuine
-        // two-voice Persian recording at every threshold from 0.5 to 0.9 — and
-        // the honest response is a visible warning, not a quietly shorter
-        // transcript.
+        // Said out loud rather than trimmed away.
+        //
+        // The over-split this was written for turned out to be a mis-set
+        // threshold, not a property of the clusterer (see config.ts: the
+        // default moved 0.5 → 1.0 on measurement, and the "two-voice"
+        // recording it was measured against is actually a FOUR-person
+        // conversation — the old ground truth came from the file's name).
+        // The warning stays regardless: a real recording can still exceed a
+        // caller's hint, and the honest response to that is a visible warning
+        // rather than a quietly shorter transcript.
         logger.warn(
           { speakers_found: speakersFound, max_speakers: opts.maxSpeakers },
           "diarizer found more speakers than max_speakers; keeping every segment",

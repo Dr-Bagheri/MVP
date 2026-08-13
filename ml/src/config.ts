@@ -72,12 +72,35 @@ const Schema = z.object({
   // Re-measure on the deployment box; the same file swung 6x under CPU
   // contention, so these numbers size nothing on their own.
   ML_DIARIZER_THREADS: int(4),
-  // M6 requires the clustering threshold to be tunable. 0.5 is what the spike
-  // validated, not a universal truth.
+  // M6 requires the clustering threshold to be tunable.
+  //
+  // Was 0.5 — what the Phase-0 spike validated on clean synthetic TTS: two
+  // maximally distinct voices, strict alternation, no overlap. On the first
+  // REAL conversational recording it produced **22 clusters for a 4-person
+  // conversation**, which is where the "sherpa over-splits" caveat came from.
+  //
+  // Measured (test/smoke/diarizer-threshold.ts, both real Persian clips):
+  //
+  //   threshold   4-speaker clip   1-speaker clip
+  //   0.50               22               1
+  //   0.90                9               1
+  //   1.00                5               1
+  //   1.05                4               1
+  //   1.15                2               1
+  //
+  // The single-speaker column is the control: raising this merges nothing and
+  // invents nothing on one-voice audio, so the old value bought no safety
+  // there and cost a factor of five on the other side.
+  //
+  // 1.0 rather than the 1.05 that fits our sample exactly — deliberately not
+  // the best-fitting value on n=2 recordings, and on the safer side of the
+  // error: splitting one person into two mislabels, while merging two people
+  // attributes one person's words to another. Over-split is recoverable by a
+  // human at the speaker-linking step; misattribution reads as fact.
   ML_DIARIZER_THRESHOLD: z
     .string()
     .optional()
-    .transform((v) => (v === undefined || v === "" ? 0.5 : Number(v)))
+    .transform((v) => (v === undefined || v === "" ? 1.0 : Number(v)))
     .pipe(z.number().positive()),
 
   ML_LOG_LEVEL: z.string().optional().transform((v) => v || "info"),

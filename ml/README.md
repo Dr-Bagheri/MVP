@@ -44,8 +44,12 @@ takes speakers from the channels:
 npm test
 ```
 
-75 tests, no network and no keys — the STT lanes are stubbed. ffmpeg-dependent
-suites skip themselves when ffmpeg is missing rather than failing.
+No network and no keys — the STT lanes are stubbed. ffmpeg-dependent suites
+skip themselves when ffmpeg is missing rather than failing.
+
+(The count is deliberately not written here. It said 75 for long enough to be
+wrong by a third, and a number a human has to remember to update is a number
+that will be wrong again; `npm test` prints the real one.)
 
 Audio fixtures are **generated, never committed**: `test/helpers.ts` builds
 tones and silence from a formula, so a failing assertion points at a number you
@@ -103,17 +107,49 @@ validation needs real speech and lives in the live smoke.
   the way speakers actually say them. 280 sub-word tokens assembled into **124
   words** — matching the Phase-0 spike's independent count exactly. Proper nouns
   are the weak spot (`اکو` came back wrong); that is a provider limit, not ours.
-- **Diarization**: 2 speakers discovered in the two-voice clip (19 of 20 turn
-  changes correct) and **1 speaker in the Persian monologue** — it did not
-  invent a second voice, which is the failure that would matter most.
+- **Diarization**: **1 speaker in the Persian monologue** — it did not invent a
+  second voice, which is the failure that would matter most. Re-confirmed since
+  at every clustering threshold from 0.5 to 1.15.
+  - An earlier line here claimed "2 speakers discovered in the two-voice clip,
+    19 of 20 turn changes correct". Its provenance is ambiguous — it predates
+    the delivery of `persian-2voice-1.mp3`, so it likely refers to the spike's
+    synthetic TTS pair rather than to any real recording. **Left unasserted
+    rather than restated**, because the one claim of that shape that could be
+    checked turned out to rest on a filename (below).
 - **VAD**: trims ~11 % of a real recording with the transcript unchanged.
 
 ## Current gaps
 
-- **Diarization is unmeasured on hard audio.** Everything above is one clean
-  voice per clip, no overlap, no far-field noise. Crosstalk, same-gender voices
-  and room noise are where diarizers actually fail, and none of that has been
-  tested. The `Diarizer` interface stays swappable for exactly this reason.
+- **Crosstalk loses roughly a third of the words, and nothing says so.**
+  Measured (`test/smoke/crosstalk.ts`) by overlaying two real single-speaker
+  passages at equal gain and comparing against the *same two passages played
+  sequentially* — identical speech, identical voices, only the overlap differs:
+
+  | | words | speakers | mean confidence |
+  |---|---|---|---|
+  | sequential (control) | 37 | 2 | 86 % |
+  | overlaid (crosstalk) | 26 | 2 | 82 % |
+
+  Both voices are still detected and the transcript interleaves them, so it is
+  not garbled — it reads as a perfectly ordinary conversation with **30 % of
+  the words missing**. `degraded` stays `false` and `warnings` stays empty.
+  Confidence is *not* a usable detector: the 4-point drop sits inside the
+  normal spread between clips (85 %, 84 %, 86 % on non-overlapping audio).
+  So this is a real forfeit of the user's data that the pipeline currently
+  cannot see and therefore cannot declare (M21). **The fixture is synthetic
+  with its method recorded** — the real recording contains no measurable
+  overlap at all (0 of 27 consecutive turn pairs cross in time).
+- **Same-gender voices and far-field noise are still unmeasured.** The
+  `Diarizer` interface stays swappable for exactly this reason.
+- **A recorded caveat here was wrong, and the way it was wrong is the lesson.**
+  This section used to say the local diarizer over-splits real conversation and
+  that "no threshold yields 2". The ground truth of *2* came from the file's
+  NAME — `persian-2voice-1.mp3` is a **four-person** conversation, which Soniox
+  and the local diarizer independently agree on. The over-split was a
+  clustering threshold set five times too low (`0.5`, validated by the spike on
+  synthetic TTS); at `1.0` the count is right within one, and on single-speaker
+  audio the threshold changes nothing at all. Default moved 0.5 → 1.0; the
+  measured curve and its conditions are in `test/smoke/diarizer-threshold.ts`.
 - **RTF numbers size nothing.** Diarization measured 0.24–0.41× realtime here,
   but the same file swung 6× under CPU contention. Measure on the deployment
   box before setting worker concurrency.
