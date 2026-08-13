@@ -15,12 +15,12 @@ select t.denied(
      where id = 'c1000000-0000-4000-8000-000000000001'$$,
   'an admin cannot publish someone else''s private call to the org');
 
-update echo.call set deleted_at = now()
- where id = 'c1000000-0000-4000-8000-000000000001';
+select t.ok(echo.soft_delete_call('c1000000-0000-4000-8000-000000000001'),
+  'an admin may delete a member''s private recording (M11)');
 select t.ok(
   (select deleted_by from echo.call where id = 'c1000000-0000-4000-8000-000000000001')
     = '01000000-0000-4000-8000-000000000001',
-  'an admin may delete a member''s private recording (M11), and the record says who did');
+  'and the record says who did');
 select t.ok(
   (select purge_after > now() + interval '29 days'
      from echo.call where id = 'c1000000-0000-4000-8000-000000000001'),

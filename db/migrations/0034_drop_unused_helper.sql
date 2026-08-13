@@ -1,0 +1,23 @@
+-- Echo — 0034: remove echo.actor_in_org, which nothing has ever called.
+--
+-- Written in 0003 as a convenience for policy authors — actor_is_active() AND
+-- the org matches, the pair that appears in most policies — and then never
+-- used, because every policy spells the pair out inline. Found by the api
+-- session's granted-vs-called instrument, which asks the catalogue which
+-- functions echo_app may execute and then looks for a consumer; confirmed here
+-- against policy expressions, function bodies, indexes, constraints and column
+-- defaults, none of which mention it.
+--
+-- Dropped rather than wired, deliberately. Wiring it would mean rewriting
+-- twenty working, tested policies to call a helper for cosmetic gain — a
+-- refactor of the security layer with no behavioural improvement, which is a
+-- bad trade at any time.
+--
+-- And an unused function is worse here than elsewhere. Its body happens to
+-- match what the policies do inline, but nothing keeps the two in step: the
+-- next author to find it may reasonably take it for the canonical org check
+-- and use it somewhere the inline version has since diverged. Two spellings of
+-- one rule, one of them unexercised, is the drift shape this schema keeps
+-- trying to design out. The version that is tested is the version that stays.
+
+drop function echo.actor_in_org(uuid);

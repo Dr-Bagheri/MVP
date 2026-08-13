@@ -21,6 +21,11 @@ in its own transaction against a fixed fixture of two orgs and five people.
 its own fixture — two org ids nothing else uses — and clears them again on the
 way out, so another session's work is neither read nor destroyed.
 
+The cleanup runs **after** the migrations, not before, and skips tables that
+are not there. A table rename is what taught us why: **cleaning before
+migrating means naming tomorrow's schema against today's database.** The list
+of fixture tables tracks the migrations, so it must never run ahead of them.
+
 ### `--fresh` is not "the thorough option"
 
 `--fresh` drops and rebuilds the whole schema, which proves the migrations
@@ -219,9 +224,57 @@ projects. A plausible-name guess there is unrecoverable: a session nearly
 pointed a service key at the wrong project. Never read a `supabase_*` or
 `echo_supabase_*` name from platform code.
 
-Platform names in use: `echo_platform_supabase_url`,
-`echo_platform_supabase_secret_key`, `echo_platform_db_url`,
-`echo_platform_db_app_url`, `echo_platform_db_agent_url`.
+| secret name | what it is |
+|---|---|
+| `echo_platform_supabase_url` | the dev project's URL |
+| `echo_platform_supabase_secret_key` | Supabase secret key (storage signing, purge deletes) |
+| `echo_platform_db_url` | owner connection — migrations, this tool |
+| `echo_platform_db_app_url` | `echo_app` — api and worker |
+| `echo_platform_db_agent_url` | `echo_agent` — agent tool calls |
+| `echo_platform_db_purge_url` | `echo_purge` — the purge job, nothing else |
+| `openrouter_key` | **cross-product canonical — deliberate exception to the prefix rule** |
+| `soniox_key` | **cross-product canonical — deliberate exception to the prefix rule** |
+
+The last two are the exception worth stating loudly, because it costs twenty
+minutes every time it isn't: **model and STT provider keys are shared across
+all three products and keep their bare names.** They are ours to read from
+platform code, and they must **never** be duplicated under an
+`echo_platform_*` alias — two names for one credential means one of them is
+stale the day it rotates.
+
+Nothing else without the prefix is ours. A `supabase_*` or `echo_supabase_*`
+name belongs to another product, and reading one from platform code points a
+key at the wrong project — the near-miss that produced the rule.
+
+The failure this table exists to prevent is the quiet one: grepping
+`echo_platform_` for the provider key, finding nothing, and concluding the
+credential doesn't exist. Now the search lands on the pointer instead of on
+silence.
+
+**Rotation log.** `echo_platform_service_key` held the pre-rotation Supabase
+secret key and was **deleted from the store on 2026-08-12**, after confirming
+nothing in the tree consumed the name and that the credential itself was dead.
+A dead credential under a plausible name, sitting beside a live one, is the
+same failure class the prefix rule exists to prevent — so a rotation is not
+finished when the new key is stored, only when the old name is gone.
+
+**No Supabase management token (`sbp_…`) is in this store**, checked by format
+across every unprefixed entry rather than by guessing at names.
+
+Two different things follow, and conflating them costs a session either way:
+
+- **There is no token value to read, pass to a script, or put in an env var.**
+  Anything that needs to *hold* a management token needs one minted for it.
+- **The Supabase CLI on this machine is logged in, and is usable as a tool.**
+  Its credential lives in the OS credential manager, not in `~/.supabase` —
+  which is empty, and looks exactly like "not logged in" to anyone who checks
+  there. Verified by running it: `npx supabase projects list` returns the dev
+  project. CLI-driven deploys work today; that is the established pattern from
+  the Echo Mobile sessions.
+
+So: the CLI's login is available, its token is not. If a task needs the
+Management API through the CLI, it works now; if it needs the raw token, that
+is a fresh mint.
 
 ## How an identity reaches the database
 
@@ -294,6 +347,48 @@ generally: when resolving an identity, read `echo.app_user` alone, then decide.
 Anything you join to it inherits its policy's gate, and the gates are not the
 same.
 
+**The same trap catches policy authors, and there it has a better fix.** An
+`EXISTS` against another protected table inside a policy is evaluated as the
+caller, so a guard like "this delivery must name a webhook in my org" — written
+as a subquery against `echo.webhook`, which members cannot see — denies every
+insert instead of the wrong ones. This was written, and caught by re-reading,
+within hours of the paragraph above being added.
+
+So: **when a policy needs a fact about another protected table, reach for a
+constraint, not a subquery.** The cross-org guard is a composite foreign key
+(D9), which makes the bad row unrepresentable and never asks who is looking.
+Structure does not have the intersection problem; predicates do.
+
+### 42501 arrives from three different places, and they mean different things
+
+A consumer mapping errors needs to tell them apart, because two are the product
+answering correctly and one is a deployment fault. This is invisible from the
+schema's side and cost the api session a debugging round.
+
+| what happened | how it surfaces | what it means | what the consumer owes it |
+|---|---|---|---|
+| a policy filtered the rows | **no error at all**, zero rows affected | the caller may not reach that row | its own branch — nothing raises, so an error handler never sees it |
+| the executor refused the row | 42501, routine `ExecWithCheckOptions` | a policy or a missing GRANT: **our misconfiguration** | stay loud — a 500 that wakes someone |
+| this schema refused deliberately | 42501, routine `exec_stmt_raise` | a guard or named operation saying no on purpose | the product's refusal — 403/404, quiet |
+
+Rows 1 and 3 are **answers**; row 2 is a **fault**. One SQLSTATE, three
+obligations — which is why the api pins its branches on `routine` rather than
+on the code.
+
+The third is the one to get right. Every trigger guard and every named
+operation in this schema refuses through `raise … using errcode =
+'insufficient_privilege'`, so it carries `routine: exec_stmt_raise` and sails
+straight past an RLS branch pinned to `ExecWithCheckOptions`. Left unhandled,
+**every deliberate refusal becomes a 500 blaming us for our own correct
+answer.** Map it to the product's refusal (403/404); keep the executor branch
+for the genuine misconfiguration it was written to catch.
+
+And note the first row is not an error path at all. Where a silent filter is
+possible and a caller needs to distinguish "refused" from "already done" from
+"never existed", that operation should be a named function returning a value,
+not an `UPDATE` returning a count — which is why deletion is
+`echo.soft_delete_call()` (D21).
+
 ### Percent-encode the password in the connection string
 
 Read this before debugging a connection. Supabase generates database passwords
@@ -354,7 +449,7 @@ search breaks.
 ## Facts the suite asserts
 
 Not a summary of intentions — these run. Last verified green against the dev
-project (Supabase, Postgres 17.6): **11 files, 170 checks**, 16 tables, every
+project (Supabase, Postgres 17.6): **14 files, 222 checks**, 17 tables, every
 table with RLS enabled and forced.
 
 - an org sees none of another org's calls, transcripts, members or search hits
@@ -362,6 +457,9 @@ table with RLS enabled and forced.
   in the org, including soft-deleted calls inside the purge window
 - a pending user (M15) sees nothing but their own row
 - no identity → no rows, anywhere
+- a member deletes their own call and an admin deletes any, both through
+  `echo.soft_delete_call()`; setting `deleted_at` directly is refused, because
+  a write that hides its own result cannot be an UPDATE
 - an admin may delete any recording but cannot retitle or re-scope one they
   do not own
 - nobody changes their own role or status
@@ -392,6 +490,8 @@ table with RLS enabled and forced.
   member is disabled
 - a gateway key cannot reach the assistant unless an admin opened it, and no
   key written before that feature existed acquired it
+- a member can learn that a webhook subscribes to an event, and never where it
+  points or what signs it; they can enqueue a delivery and cannot read it back
 - the `call_current_summary` view respects the caller's RLS rather than its
   owner's
 

@@ -37,7 +37,8 @@ DELETE, and its RLS policies let it see and delete only rows whose 30-day
 window has already expired — a purge job with a bad `WHERE` clause still
 cannot take a live call. *(Implements M3/M11.)*
 
-Append-only tables go further: `summary` and `admin_action` carry **no UPDATE
+Append-only tables go further: `summary`, `admin_action` and
+`proposal_decision` carry **no UPDATE
 grant for any role**, core/ included. Running the suite is what surfaced this
 — the immutability triggers were doing the work while the grants still said
 UPDATE was fine, so the invariant held only as long as the trigger did. Both
@@ -298,6 +299,197 @@ than the worker remembering to. Keeping a history of past failures is an audit
 question — `agent_run` and the admin action log are where history lives, not a
 column on the live row.
 
+**D19 — A subscription's existence is an org fact; its URL and secret are a
+credential.** *(`0026`, M17.)* `echo.subscribed_webhooks(event)` returns
+`{id, events, enabled}` for the caller's own org to active members, and never
+`url` or `secret_sha256`. `echo.webhook` itself stays admin-only for every
+command.
+
+The line is drawn there because the two halves are different kinds of thing.
+**That the org emits an event, and which events**, is something the org agreed
+to; a member whose own call triggers one is already a party to it, and needs to
+know in order to record that a delivery is due. **Where it points and what
+signs it** is neither — it is the destination and the credential together, and
+knowing them is the difference between "my call will be announced" and "I can
+announce anything to that endpoint, signed". Members get the fact; admins keep
+the credential.
+
+The helper is the identity-helper class — self-scoped, secret-free, unable to
+answer at all without an identity — not a pre-identity door in D8's sense. It
+reveals strictly less than `echo.webhook`'s own admin policy, to strictly fewer
+people. Disabled subscriptions are returned rather than filtered, so the
+enqueuer can report "3 subscribed, 1 disabled" instead of silently emitting
+less than the org expects (M21: forfeits are said out loud).
+
+`0027` added `created_by` and `dispatchable` to the return, because `0026` had
+made the ratified chain unbuildable: dispatch runs as the webhook's registrar,
+that identity travels in the queue payload written at enqueue time, and the
+enqueuer is a member who cannot read `echo.webhook` by any other route — so it
+could create the delivery and not say who would send it, and the dispatcher
+cannot resolve it afterwards, because reading `created_by` needs the very admin
+identity it is trying to obtain. `created_by` is on the right side of the line:
+a colleague already visible in the member list, not the destination and not the
+credential.
+
+`0030` closed the hole that made `created_by` load-bearing without being
+bound: nothing had required it to be the acting admin, so admin A could
+register a webhook that dispatches as admin B — handing B's outbound authority
+to an endpoint B has never seen. Registration now requires
+`created_by = actor`, and a trigger forbids reassigning it afterwards, because
+binding creation is pointless if an edit can undo it.
+
+The contrast with `api_key.actor_id`, which *may* name another member, is not
+an inconsistency: **acts-as is that feature's explicit design**, chosen at mint
+and surfaced as "runs as X". `created_by` is a **fact** — who registered this
+— and a fact must not be supplyable. The seam is recorded here so the
+distinction survives: if webhooks ever need acts-as, it arrives as an explicit
+`actor_id` column chosen at creation, the way `api_key` did, never as an
+accident of `created_by`. Editing and disabling stay any-admin, so a departed
+creator strands nothing — recovery is another admin re-registering under their
+own name, revoke-and-reissue in outbound form.
+
+`dispatchable` — whether that registrar is *still* an active admin — is the
+same forfeit-out-loud shape as returning disabled rows. The dispatcher already
+fails closed on a demoted identity, correctly, but silently and late: queued,
+attempted, refused by the wall. Saying it at enqueue time lets the decision to
+emit be an informed one.
+
+**The split that made this necessary:** enqueue is the call **owner**, a
+member; dispatch is the webhook's **creator**, an admin, carrying identity in
+the queue payload and failing closed if later demoted — the outbound twin of
+D6. `0013`'s comment had claimed a member-run dispatcher, which its own
+policies forbade (a member could insert a delivery but never select one, and
+`echo.webhook` was admin-only). Nothing had been built yet, so nothing failed;
+a comment describing a control nobody wrote is worse than no comment, because
+it reads as evidence. `0026` makes comment and policy describe the same worker.
+
+One consequence worth stating for consumers: a member **cannot read back what
+it enqueued**, including through `RETURNING`, which Postgres subjects to the
+select policy. An enqueuer therefore generates the delivery id itself rather
+than expecting one back. And a delivery cannot name another org's webhook —
+that is a composite foreign key (D9), not a policy predicate, because an
+`EXISTS` against `echo.webhook` inside an INSERT policy is evaluated as the
+member, who cannot see that table, and would deny every enqueue. Same
+intersection trap as the pending-user 401.
+
+**D20 — `agent_run` records what the agent did; a person's decision is a
+different event that references it.** *(`0028`, corrected by `0029`.)*
+
+A directive to record proposal approvals in `agent_run.steps` met `0011`'s "a
+finished agent run is closed" and lost. That is the invariant working: an
+approval is not something the agent did, and storing it there would have meant
+reopening closed runs for every confirm — trading replayability (invariant 5)
+for storage convenience.
+
+`0028` put approvals on the human-action surface and renamed it
+`human_action`, because a member approving a correction on their own call is
+not an admin action. `0029` replaced that with `echo.proposal_decision`, a
+dedicated table, and renamed `admin_action` **back** — with decisions on their
+own surface, that name is true again. The rename had solved a problem the new
+table stops creating. Reversing it cost a migration rather than an edit, which
+is the price of append-only and worth paying to never disagree with ourselves
+about our own shape.
+
+Three things the dedicated table gets right that the shared one could not:
+
+- **`proposal_id` is the primary key**, so replay refusal needs no partial
+  index and no `decided` flag: a second decision is one INSERT and one `23505`,
+  which the api maps to 409. Nothing to read before writing means nothing for
+  two concurrent confirms to race over — the loser loses at the key.
+- **A rejection is recorded as fully as an approval.** The interesting audit
+  question is "was this ever put to someone, and what did they say", and an
+  approval-only design answers it with silence for every refusal. One decision
+  per proposal, final either way; a fresh proposal gets a fresh id.
+- **Both links are severable.** `run_id` and `call_id` are `ON DELETE SET NULL`
+  — the latter using PG15's column-list form, since `org_id` is `NOT NULL` and
+  a whole-row null would fail. Without this the purge would stop dead on any
+  call somebody had decided something on: `0018`'s lesson, which this table
+  would otherwise have reintroduced in a new place.
+
+`decided_by` is **stamped rather than supplied**: a row naming someone else is
+corrected, not rejected, because the insert policy already refuses a forged
+decider and rejecting would only make an honest caller's slip fatal. The agent
+gets no grant at all — it proposes, it does not decide, and it does not read
+the verdict, because an agent reading the human's answer is how a decision
+becomes a prompt.
+
+`45_approvals.sql` asserts, in both directions, that the decision row and the
+product write share a fate — but that is a **schema capability, not the product
+guarantee**, and the annotation there says so. In `core/` the decision inserts
+on `echo_app` while the approved write applies on `echo_agent`, and different
+roles are different connections: no transaction spans them. The product
+guarantee is **decision-first ordering** (M4 as corrected) — the primary key
+refuses a replay before anything applies, and the residual (decision recorded,
+write failed) is visible and reconcilable rather than silent.
+
+The two roles are not an inefficiency to remove. Applying the write as
+`echo_app` would restore atomicity *and* let an approved proposal touch columns
+the agent can never touch — `echo_app` may write a segment's `confidence` and
+`provenance`; `echo_agent` may write only `text` and `words`. Giving up
+atomicity is what keeps an approved write confined to the agent's grants. That
+trade is the entry worth remembering: **an approval widens who consented, never
+what may be written.**
+
+**Neither audit table carries a hash chain, and that is deliberate.** Checked
+against the migrations rather than recalled: the only `sha256` columns in this
+schema are API-key and webhook-secret hashes and an audio checksum — there is
+no `prev_hash`, no entry digest, nothing chained. `admin_action` and
+`proposal_decision` are append-only by **grant and trigger** (no role holds
+UPDATE or DELETE), which resists the application and the agent but not someone
+with owner access to the database.
+
+That is the right v1 posture — tamper-evidence belongs to the compliance suite,
+which SPEC excludes — but it is a genuinely different property from
+append-only, so it is written down here rather than assumed either way. The
+predecessor's `adminlog` (neurai-mvp D12) *did* chain, and that memory has
+already prompted one session to ask; the answer is that Echo's does not, by
+choice, and adding one is a future seam. If it is ever added, note that a
+rename or a rebuild re-anchors the chain — a re-anchored chain verifies
+cleanly from its new genesis, which is exactly the gap a verification pass
+cannot see.
+
+**D21 — Deletion and restoration are named operations, because a write that
+hides its own result cannot be an UPDATE.** *(`0032`, from a bug the api
+session found.)*
+
+An owner could not soft-delete their own call. Every term of `call_update`'s
+`WITH CHECK` was true, the same row accepted `archived_at` in the same
+transaction, and an admin succeeded on the identical statement — but the owner
+got 42501. The discriminator was in `call_read`, not `call_update`:
+`(deleted_at is null or echo.actor_is_admin())`. Setting `deleted_at` moves the
+row outside the actor's **own SELECT policy**, and Postgres refuses an UPDATE
+whose result the actor could not see. An admin's read clause has no
+`deleted_at` condition, so an admin never met it.
+
+**The rejected fix matters as much as the chosen one.** Widening `call_read`
+with `or deleted_by = echo.actor_id()` is the smaller diff and makes the delete
+work — it was confirmed by experiment — but it would overturn Q2, which the
+user has since confirmed as final: a deleted call is gone for its owner,
+"deletion should feel like deletion". It
+would make every call an owner ever deleted permanently visible to them, and
+the ruled behaviour would survive only in whatever `WHERE` clause `core/`
+remembered to write. A product rule living in the app's filters instead of the
+wall is what this schema exists to avoid. So the read stays as ruled and
+deletion becomes `echo.soft_delete_call()` / `echo.restore_call()`.
+
+Direct `deleted_at` writes are now refused for application roles, so there is
+one door rather than two. That is the part worth generalising: **the UPDATE
+path worked for admins and failed for owners, which is how the bug survived —
+a path that succeeds for the privileged caller looks correct from wherever it
+was tested.**
+
+The class, checked rather than assumed: **`call_read` is the only SELECT policy
+in the schema that tests a column an application role can write.** Every other
+read policy turns on identity and org, so no other table has a write that can
+hide its own result. Verified against `pg_policies` and
+`information_schema.column_privileges` on the live catalogue.
+
+And the reason the suite missed it, which is the more useful finding: M11 has
+two halves — admins delete any, members delete their own — and the suite tested
+the admin half and the members-cannot-touch-others half, never the plain case.
+**Asserting the privileged path and the refused path can leave the ordinary
+path unproven, and the ordinary path is the product.**
+
 ---
 
 ## Questions the schema could not settle
@@ -318,8 +510,15 @@ a documented SQL step) before signup can work end to end. If it is wrong, the
 alternative is that a founder is auto-accepted and only *joiners* wait. **A
 ruling changes one line of `0015`, and nothing else.**
 
-**Q2 — RULED as built (steward): only an admin restores.** Deletion should feel
-like deletion. Original question kept for the record:
+**Q2 — RULED as built: only an admin restores. Deletion should feel like
+deletion.**
+
+*Provenance, because it changed and the difference matters:* originally a
+steward ruling that the user could override. When `0032` made owner-restore a
+one-line change rather than a policy widening, the question was put to the user
+directly and **confirmed by them as final** — admin-only stands. The line stays
+unwritten, and it stays unwritten by decision rather than by nobody having
+asked. Original question kept for the record:
 
 **Q3 — RULED as built (steward):** renaming is org-wide, linking stays
 owner-only. The privacy-relevant act is the link.

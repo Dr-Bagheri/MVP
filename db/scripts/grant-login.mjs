@@ -26,10 +26,16 @@ import pg from 'pg'
 // echo_vendor is absent by design, not by oversight: the acceptance procedure
 // (D13) runs from the owner connection, and giving it a login would turn a
 // deliberate operator path into a reachable service account.
+// `verify` is the assertion that must hold on the new credential before it is
+// stored, and it is NOT the same question for every role. For the application
+// roles it is "sees nothing without an identity". For echo_purge that would be
+// vacuously true — its policies are deliberately actor-independent — so the
+// discriminating question is instead "sees only what is past its window", and
+// answering it needs data to discriminate against.
 const GRANTABLE = {
-  echo_app: { env: 'ECHO_APP_PASSWORD', secret: 'echo_platform_db_app_url' },
-  echo_agent: { env: 'ECHO_AGENT_PASSWORD', secret: 'echo_platform_db_agent_url' },
-  echo_purge: { env: 'ECHO_PURGE_PASSWORD', secret: 'echo_platform_db_purge_url' },
+  echo_app: { env: 'ECHO_APP_PASSWORD', secret: 'echo_platform_db_app_url', verify: 'blind' },
+  echo_agent: { env: 'ECHO_AGENT_PASSWORD', secret: 'echo_platform_db_agent_url', verify: 'blind' },
+  echo_purge: { env: 'ECHO_PURGE_PASSWORD', secret: 'echo_platform_db_purge_url', verify: 'window' },
 }
 const NEVER = new Set(['echo_vendor'])
 
@@ -66,6 +72,68 @@ function buildUrl(adminUrl, role, password) {
   const at = adminUrl.lastIndexOf('@')
   const tail = adminUrl.slice(at + 1) // host:port/database
   return `postgresql://${encodeURIComponent(role)}:${encodeURIComponent(password)}@${tail}`
+}
+
+// An application role with no identity attached must see nothing at all.
+async function verifyBlind(role, probe) {
+  const visible = (await probe.query('select count(*)::int as n from echo.call')).rows[0].n
+  if (visible !== 0) {
+    throw new Error(
+      `${role} sees ${visible} call(s) with no identity attached — the wall is not holding`,
+    )
+  }
+}
+
+// echo_purge is not gated on identity, so "sees nothing" proves nothing —
+// on an empty database it is true of a role that could delete everything.
+// Give it one live call and one whose window has expired, and require it to
+// tell them apart: see only the expired one, fail to delete the live one, and
+// delete the expired one. Probe data lives in its own org and is removed in
+// the finally, whatever happens.
+async function verifyPurgeWindow(admin, probe) {
+  const ORG = '0c000000-0000-4000-8000-00000000000c'
+  const USER = '0c000000-0000-4000-8000-000000000001'
+  const LIVE = '0c000000-0000-4000-8000-0000000000a1'
+  const EXPIRED = '0c000000-0000-4000-8000-0000000000a2'
+  try {
+    await admin.query(
+      `insert into auth.users (id, email) values ($1, 'purge-probe@echo.local')
+       on conflict (id) do nothing`, [USER])
+    await admin.query(
+      `insert into echo.org (id, name) values ($1, 'purge probe') on conflict (id) do nothing`, [ORG])
+    await admin.query(
+      `insert into echo.app_user (id, org_id, email, role, status, accepted_at)
+       values ($1,$2,'purge-probe@echo.local','member','active', now())
+       on conflict (id) do nothing`, [USER, ORG])
+    await admin.query(
+      `insert into echo.call (id, org_id, owner_id, title, deleted_at, deleted_by, purge_after)
+       values ($1,$3,$4,'live', null, null, null),
+              ($2,$3,$4,'expired', now() - interval '40 days', $4, now() - interval '10 days')
+       on conflict (id) do nothing`, [LIVE, EXPIRED, ORG, USER])
+
+    const seen = (await probe.query(
+      `select id from echo.call where org_id = $1`, [ORG])).rows.map((r) => r.id)
+    if (seen.length !== 1 || seen[0] !== EXPIRED) {
+      throw new Error(
+        `echo_purge sees ${JSON.stringify(seen)}; expected only the expired call — its window predicate is not holding`,
+      )
+    }
+
+    const spared = await probe.query(`delete from echo.call where id = $1`, [LIVE])
+    if (spared.rowCount !== 0) {
+      throw new Error('echo_purge deleted a call that is still inside its window')
+    }
+
+    const taken = await probe.query(`delete from echo.call where id = $1`, [EXPIRED])
+    if (taken.rowCount !== 1) {
+      throw new Error('echo_purge could not delete a call whose window has expired')
+    }
+  } finally {
+    await admin.query(`delete from echo.call where org_id = $1`, [ORG]).catch(() => {})
+    await admin.query(`delete from echo.app_user where org_id = $1`, [ORG]).catch(() => {})
+    await admin.query(`delete from echo.org where id = $1`, [ORG]).catch(() => {})
+    await admin.query(`delete from auth.users where id = $1`, [USER]).catch(() => {})
+  }
 }
 
 const roles = process.argv.slice(2)
@@ -124,16 +192,15 @@ try {
 
     const url = buildUrl(normalizedAdmin, role, password)
 
-    // Prove the credential works AND that the wall still stands on it: with no
-    // identity attached, an application role must see nothing at all.
     const probe = new pg.Client({ connectionString: url, ...ssl })
     await probe.connect()
     try {
       const who = (await probe.query('select current_user as u')).rows[0].u
       if (who !== role) throw new Error(`connected as ${who}, expected ${role}`)
-      const visible = (await probe.query('select count(*)::int as n from echo.call')).rows[0].n
-      if (visible !== 0) {
-        throw new Error(`${role} sees ${visible} call(s) with no identity attached — the wall is not holding`)
+      if (GRANTABLE[role].verify === 'window') {
+        await verifyPurgeWindow(admin, probe)
+      } else {
+        await verifyBlind(role, probe)
       }
     } finally {
       await probe.end()

@@ -254,13 +254,20 @@ const FIXTURE_ORGS = [
 const FIXTURE_TABLES = [
   'agent_message', 'agent_session', 'summary', 'agent_run',
   'transcript_segment', 'call_speaker', 'call_part', 'person', 'call',
-  'api_key', 'webhook_delivery', 'webhook', 'admin_action', 'skill',
+  'proposal_decision', 'api_key', 'webhook_delivery', 'webhook', 'admin_action', 'skill',
   'app_user', 'org',
 ]
 
 async function clearFixture(db) {
   await db.query('drop schema if exists t cascade')
   for (const table of FIXTURE_TABLES) {
+    // Tables come and go with migrations, and a rename means this list names
+    // something that does not exist yet on a database mid-upgrade. Skipping is
+    // right: there is nothing of ours in a table that isn't there.
+    const { rows } = await db.query(`select to_regclass($1) is not null as present`, [
+      `echo.${table}`,
+    ])
+    if (!rows[0].present) continue
     const column = table === 'org' ? 'id' : 'org_id'
     await db.query(`delete from echo.${table} where ${column} = any($1::uuid[])`, [FIXTURE_ORGS])
   }
@@ -325,25 +332,7 @@ async function test() {
       `  ·  ${FRESH ? 'FRESH (drops and rebuilds everything)' : 'fixture-only cleanup'}\n`,
   )
 
-  if (FRESH) {
-    await reset()
-  } else {
-    const pre = await connect()
-    try {
-      const { rows } = await pre.query(`select to_regclass('echo.app_user') is not null as ready`)
-      if (!rows[0].ready) {
-        console.log('schema not present yet — doing a full build')
-        await pre.end()
-        await reset()
-      } else {
-        await clearFixture(pre)
-        await pre.end()
-      }
-    } catch (err) {
-      await pre.end().catch(() => {})
-      throw err
-    }
-  }
+  if (FRESH) await reset()
 
   // Supabase Auth stands behind app_user in production. Locally there is no
   // auth schema, so install the shim; remotely there already is one, and we
@@ -376,6 +365,11 @@ async function test() {
         console.log(`  note: could not join role ${role} — ${err.message.split('\n')[0]}`)
       }
     }
+
+    // Clear AFTER migrating, not before: the table list evolves with the
+    // migrations, so cleaning first means naming tomorrow's schema against
+    // today's database. A rename is where that bites.
+    await clearFixture(db)
 
     // Helpers and fixture are committed; tests read them and roll back.
     await db.query(readFileSync(join(TESTS, 'helpers.sql'), 'utf8'))

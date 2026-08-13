@@ -12,6 +12,8 @@ do $$
 declare
   found    text[];
   expected text[] := array[
+    -- outbound: one message per delivery attempt (M17)
+    'echo_deliver_webhook',
     -- per-call: genuinely one step per message
     'echo_link_speakers',
     -- per-part: ONE message walks the whole ml/ ladder
