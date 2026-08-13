@@ -214,6 +214,34 @@ so, rather than being lost (the timing ladder, M20).
 Everything below is reproducible on a clean machine with **your own** Supabase
 project. No credential in this repo, ever — see [Secrets](#secrets).
 
+### Quick start
+
+**Set up once:**
+
+1. **Node ≥ 22** and **pnpm**, then `pnpm install` in the repo root.
+2. **The NeurAI engine**, which provides the encrypted (Windows DPAPI) secret
+   store the launcher reads from.
+3. **The [Neurai-Echo](https://github.com/Dr-Bagheri/Neurai-Echo) repo cloned
+   beside this one** — `mvp/` and `Neurai-Echo/` as siblings. Its
+   `backend/scripts/get_key.py` is what reads the store.
+4. **Store your secrets by name** (values never touch this repo):
+   `echo_platform_db_app_url`, `echo_platform_db_agent_url`,
+   `echo_platform_jwt_secret`, `echo_platform_supabase_url`,
+   `echo_platform_supabase_secret_key`, `openrouter_key` — plus
+   `soniox_key` if you want real transcription rather than the stub.
+
+**Then, every day:** double-click **`scripts\start-platform.cmd`**.
+
+It fetches the secrets from the store at runtime, starts the core api
+(`:8080`), ml (`:7801`), the worker and the web app (`:3100`) — each in its own
+window so a crash stays readable — skips anything already running, waits for
+the app to answer, and opens your browser at http://localhost:3100.
+
+Re-run it after a crash: it restarts only what actually died.
+
+> The rest of this section is the detailed reference — what the launcher does
+> for you, in case you want to run a piece by hand or on another OS.
+
 ### Prerequisites
 
 - **Node ≥ 22** (the packages run TypeScript directly via

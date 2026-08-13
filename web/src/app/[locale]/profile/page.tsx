@@ -63,7 +63,12 @@ export default function ProfilePage() {
   }
 
   useEffect(() => {
-    void api.me().then(adopt);
+    // `null` is "no identity" (401), not "an empty profile" — adopting it
+    // would blank the form's saved-state baseline and make every field look
+    // cleared, which is the one thing this screen must never infer wrongly.
+    void api.me().then((identity) => {
+      if (identity) adopt(identity);
+    });
     // no client-side filtering: core/ has already applied the org allow-list,
     // and nothing filters on tool support (see ModelsResponse)
     void api.models().then((res) => setModels(res.models));

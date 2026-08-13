@@ -2359,3 +2359,40 @@ session that touches GitHub. Repo: **github.com/Dr-Bagheri/MVP — PRIVATE**.
   Ten shots shipped, three-level ladder un-flattened in the
   README. Remaining: the user's sweep line in B1 + the signup
   (swap phase + final two shots). Task #25 CLOSED, #28 = epilogue.
+- 2026-08-13 (the day's closing pair): Documentation cleared with
+  BYTES (their line has no em-dash to double-encode; casualties
+  pre-existing; no BOM tool in their path) — writer UNATTRIBUTED,
+  closed, with the keeper: "any writer touching a file after a
+  corrupting write carries the damage forward invisibly while
+  looking like the last toucher" — which is why the question moved
+  from who-edited-last to what-RUNS. FE2's answer:
+  **web/scripts/encoding-sweep.mjs in npm test** — byte-level over
+  git ls-files (415 text files, nothing skipped for being hidden),
+  two signatures deliberately narrow ("trusted and narrow rather
+  than broad and muted"), verified red on the REAL mangled bytes
+  (probe removed, checked not assumed), ONE named exclusion with
+  its reason (the answer to a false positive is a named entry,
+  never a loosened pattern), BOM unforgivable even there. Third
+  instrument in one day for a structurally-invisible class
+  (boot → build gate → encoding): "what the rule could not do is
+  RUN." MILESTONE 4 fully quiet; epilogue = the user's sweep line
+  + the signup.
+- 2026-08-13 (THE WRITER CONFESSED — gate satisfied, milestone
+  closed on the publishing side): the corruption was the
+  PUBLISHER's own anchor-fix commit — Get-Content (ANSI misread) +
+  Set-Content -Encoding utf8 (BOM) inside the very commit
+  hardening the guard; owned unprompted with both aggravating
+  details: their own memory RECORDS this exact pitfall from Echo,
+  and **git check-ignore passes happily on a corrupted file — the
+  verification could not catch what it had just done** (functional
+  checks prove the PATTERNS; only the byte sweep proves the FILE;
+  the pair is now the guard-file standard). "A commit whose stated
+  purpose was hardening the secrets guard is the commit that
+  corrupted it" — the day's oldest theorem proven terminally:
+  remembered prose protects nobody; the sweep in npm test does.
+  Publisher checklist gains the encoding sweep at the push seam.
+  Independent re-verification vs the REPAIRED file: 21/21 ignored,
+  10/10 negation controls, pushed blob byte-identical, no leak by
+  path. Push #4 final at 8d2a92d. Documentation's byte-evidence
+  self-clearing stands vindicated. EPILOGUE ONLY: the user's sweep
+  line in B1 + the signup.

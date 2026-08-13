@@ -54,6 +54,12 @@ import type {
   User,
   UserStatus,
 } from "./types";
+/**
+ * The producer's own shape for `GET /v1/me`, imported rather than described.
+ * `import type` is erased, so nothing from core/ reaches the bundle — the same
+ * basis as the `Call`/`Org` migrations.
+ */
+import type { MeRecord } from "@echo/core/wire";
 
 /**
  * Persisted conversations. Titles are the server's, derived from the first
@@ -210,13 +216,44 @@ async function bff<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   // ---- session ---------------------------------------------------------------
   /**
+   * **LIVE** — `GET /api/me` → core/'s `GET /v1/me`. The first fixture retired.
+   *
    * Returns `Me`, not `User`: preferences live on core/'s `MeRecord` and a
    * members-list row genuinely does not carry them. Typing this as `User`
    * would push every consumer into `me.calendar ?? "auto"`, and that fallback
    * cannot tell "they chose auto" from "the payload never had it".
+   *
+   * **`null` means NO IDENTITY, and only a 401 produces it.** Every other
+   * refusal is re-thrown on purpose: `403 pending` and `403 suspended` are
+   * different facts with different screens, and flattening them into "signed
+   * out" would tell a suspended organisation to log in again — an instruction
+   * that cannot work, aimed at the wrong person. The shell already guards for
+   * null (FE2 built that guard before this call was live).
+   *
+   * **Two fields are adapted, and both would otherwise fail silently:**
+   *
+   *  - `preferred_model` → `model_id`. The wire has never used our name. Left
+   *    unmapped, `model_id` arrives `undefined`, `?? ""` catches it, and the
+   *    model picker shows "no model chosen" to someone who chose one — the
+   *    server's answer overwritten by our fallback, with nothing to notice it
+   *    by. (M5's null is a real state; this would have manufactured one.)
+   *  - `avatar_url` → `null`. It is not on `MeRecord` at all. `null` is the
+   *    honest value — "no avatar" — where `undefined` is "we never asked".
+   *
+   * The adapter is typed against the producer's `MeRecord`, so a rename on
+   * core/'s side becomes a compile error here rather than a blank name in a
+   * greeting. It is a translation layer and should stay a small one: the right
+   * end state is `types.ts` calling these fields what the wire calls them, and
+   * that rename touches other sessions' files, so it is not in this hot path.
    */
-  async me(): Promise<Me> {
-    return wait(me);
+  async me(): Promise<Me | null> {
+    try {
+      const row = await bff<MeRecord>("/api/me");
+      return { ...row, model_id: row.preferred_model, avatar_url: null };
+    } catch (error) {
+      if (error instanceof BffError && error.status === 401) return null;
+      throw error;
+    }
   },
   async org(): Promise<Org> {
     return wait(org);
