@@ -485,64 +485,67 @@ session that touches GitHub. Repo: **github.com/Dr-Bagheri/MVP — PRIVATE**.
   (on-prem predecessor), `Desktop\Neurai-Echo` (cloud recorder — the pgmq-style
   worker, RLS wall, harness lanes, and near-miss hygiene lessons live there).
 
-## CURRENT STATE — read this first (2026-08-13 end of day; supersedes
-## wading through the day's log entries below)
+## CURRENT STATE — read this first (2026-08-14, sessions closed for the
+## night; the user resumes with FRESH sessions that onboard from THIS file
+## + ARCHITECTURE.md + docs/PLATFORM-BRIEF.md)
 
-**Shipped and real (push #4 + follow-ups, repo at e26d602, private,
-tree clean):** the full NeurAI-platform restructure — db/ 55 migrations
-(invitations D25 / tombstone+RESERVED / org-status vendor-only D27 /
-status-history / prefs / idle-tx timeouts 0053 / admin_action policy
-0055); core/ 627 tests (identity fields, invitation+tombstone routes,
-persisted conversations + truncation materialize-at-death, admin_action
-writers tx-coupled, org, server health, refusal {code,params}, member
-search/stats); web/ 149 tests (breadcrumb=declared-table back-nav,
-TwoPane Settings+Management, avatar menu, merged Record+Calls at /echo,
-UM server-side, Audit Logs 3-sources, org form, production build gate,
-byte-level encoding sweep with marker opt-out); Quick Start launcher
-(scripts/start-platform.ps1/.cmd — tested; fetches 6 secret NAMES from
-the DPAPI store at runtime) + README section; blueprint docx 32pp
-(local-only) + build pipeline at docs/blueprint-src/.
+**THE PLATFORM HAS ITS FIRST REAL MEMBER.** neurai.git.acc@gmail.com =
+active OWNER of org "neurai" (vendor-accepted 2026-08-14 ~14:19, history
+recorded, accepted_by NULL). The full chain is live-proven end to end:
+dashboard Add-user -> sign-in -> register-on-first-sign-in (org-choice
+screen) -> real pending screen -> vendor_accept_org -> active. The
+sign-in's ES256 token was verified by the NEW JWKS branch live. The dev
+db holds ONLY this member + seeded fixtures (residue swept).
 
-**Client-body swap state (the fixture→live ledger):** LIVE = me()
-(adapter typed from MeRecord; 401→null; 403 pending/suspended
-DELIBERATELY re-thrown — currently unhandled by `void .then()` callers,
-flagged), listCalls/getCall/setScope/getTranscript/getSpeakers/
-getSummaries (three BFF envelope lies fixed on the way; ?archived
-client-side now — core never had it; list capped at 100 honestly,
-pagination unbuilt), audit(), serverHealth(), updateProfile(),
-updatePreferences(), setLocale(). STILL FIXTURE = **the AUTH FORMS
-(sign-up/sign-in — the user's "signup" and "login" never touched the
-server; B3 proved zero rows in auth.users AND echo.app_user)**,
-members()/memberStats() (FE1 was starting item 3 when their turn
-ended), org()/updateOrg() (FE3's form renders, client not swapped),
-conversations client, restoreCall/setArchived/deleteCall (no callers
-or no route — deliberate), write-path calls (correctLine etc.).
+**Deployment (Option C, chosen):** web on Vercel = production LIVE at
+**mvp-web-beta.vercel.app** (project mvp-web, personal Hobby scope
+"neurai", slug neurai2; auto-deploys on push to main; deployment
+protection OFF; Next patched for the RSC CVE). api/worker/ml/web run on
+the user's PC via **scripts/start-platform.cmd** (idempotent; fetches 6
+secret NAMES from the DPAPI store at runtime) + stop-platform.ps1. ONE
+dedicated user session runs the stack — no other session may
+start/stop servers, EVER (collision class). MISSING for full online
+use: Cloudflare Tunnel + CORE_API_URL env in Vercel (user's word
+pending) — until then the Vercel copy renders with unreachable-api
+states on live-swapped screens. Supabase facts a session must know:
+project aqgpxnyuxukwgphrxslw; **tokens are ES256** (kid 4800f423...,
+P-256; legacy HS256 rotated out — core verifies via JWKS, code in
+core/src/api/jwt.ts, SUPABASE_URL env required); built-in email sender
+rate-limits (~2-4/hr) — dashboard Add-user bypasses email; Site URL
+should be the Vercel URL + localhost:3100 in additional redirects.
 
-**Hard facts to not re-learn:** (1) NO real user exists — the
-signup was absorbed by the mock forms; do not "approve" anything (the
-only pending org is B2's test fixture — B3's read-first refused it).
-(2) **ORDERING (load-bearing, B1):** the residue sweep matches
-`call_id is null`; a real hub conversation produces exactly that —
-**sweep BEFORE the first real signup.** (3) The sweep is
-user-approved (their line is in B1's session) but blocked:
-echo_app holds no DELETE anywhere by design — it needs the PURGE
-credential (echo_platform_db_purge_url) or the owner; B1 rightly
-refused credential discovery without authorization. (4) ALL FOUR
-SERVICES ARE DOWN (web 3100 / api 8080 / ml 7801 / worker) — the
-session-hosted instances died with their sessions; scripts/
-start-platform.ps1 restarts everything in one command. (5) Sessions
-must NEVER start/restart servers (collision class — exit-4 restarts,
-.next wipes); one owner runs the stack. (6) Publisher's parked
-items: final 2 README screenshots need a real signed-in session;
-Neurai-Echo DEPLOY.md hardcodes a live project URL (placeholder-vs-
-env decision pending, user's call).
+**Client-body swap ledger:** LIVE = auth forms (sign-up/sign-in REAL —
+email-not-username, suspended screen exists, Google buttons removed),
+me() (adapter, 401->null, 403s re-thrown), listCalls/getCall/setScope/
+getTranscript/getSpeakers/getSummaries, audit(), serverHealth(),
+updateProfile(), updatePreferences(), setLocale(). STILL FIXTURE =
+members()/memberStats() (item 3, FE-next), org()/updateOrg(),
+conversations client, write-path calls, restore/archive/delete (no
+callers/routes — deliberate).
 
-**Next actions (user decides the order/go):** restart stack → run
-the sweep (credential decision) → FE1 wires the REAL auth forms
-(order-change may not have reached them; resend on go) → user signs
-up FOR REAL → B3 vendor-accepts (read-first, email-checked) → FE1
-finishes swaps (members/org/conversations) → FE2 not-the-author
-verification → publisher's final 2 shots → epilogue closed.
+**IN FLIGHT AT SHUTDOWN (a fresh session picks these up from the brief
+round 3 + this block):** (1) FE: password self-service — change-password
+(signed-in) + forgot-password recovery page consuming Supabase's
+recovery via server-side code exchange (M1: browser never holds
+tokens); was mid-build when sessions closed — check the tree for
+partial work before restarting it. (2) B: vendor-identity proposal owed
+(how the product knows the signed-in person is the platform owner —
+schema-grantable only, D27) -> then the APPROVALS CONSOLE (user
+approves pending registrations in-product; round-3 directive). (3)
+remaining swaps + the shell identity guard (direct-URL 403 for
+pending/suspended). (4) publisher: final 2 README screenshots (Audit
+Logs + Management-Server need a signed-in browser — now possible via a
+dashboard-created test account, accepted via vendor op). (5) push #5
+(epilogue commit) was requested at shutdown — VERIFY main==origin
+before any new work; if the push didn't land, the evening's work
+(auth forms, JWKS verifier, swaps) sits UNPUSHED in the tree.
+
+**Roster at shutdown:** FE2, FE3, B2, B3 deleted earlier (lanes closed;
+ownership: all web -> FE1-successor, db operator steps -> B1-successor,
+ml dormant). ALL remaining sessions closed tonight by the user. Fresh
+sessions onboard from this file; the casebook rules 1-13.5 + the
+Windows/PS hazards below are the law of the repo; the day's ~50 minted
+lessons live in the Status log below and in ARCHITECTURE's amendments.
 
 ## Status
 
@@ -2455,3 +2458,38 @@ verification → publisher's final 2 shots → epilogue closed.
   path. Push #4 final at 8d2a92d. Documentation's byte-evidence
   self-clearing stands vindicated. EPILOGUE ONLY: the user's sweep
   line in B1 + the signup.
+- 2026-08-13 (VERCEL PRODUCTION LIVE — Option C's cloud half done):
+  production at **mvp-web-beta.vercel.app** (project mvp-web,
+  personal Hobby scope "neurai"; slug is neurai2), built from main
+  at 829f509 = the React2Shell/RSC CVE patch PR (#1) MERGED — Next
+  bumped to the advisory's fixed version. Publicly verified from
+  outside: fa=«اکو» / en="Echo", sign-up/echo/management/settings/
+  sign-in all 200. Deployment protection DISABLED (shareable).
+  Road here recorded: team-scope Pro paywall (env vars are FREE —
+  the TEAM was the paywall; personal Hobby scope is the home);
+  stale pnpm-lock (ml gained sherpa-onnx-node without regen —
+  frozen-lockfile refused; fixed via --lockfile-only + push
+  302cf92); "Redeploy" REBUILDS THE SAME COMMIT (a new deployment
+  is needed for a new commit); mvp-web.vercel.app is a STRANGER'S
+  app ("Pollpick") — verify content, never status codes; the
+  stray mvp-ml Vercel project deleted (serverless can't run the
+  speech service). REMAINING for full Option C: CORE_API_URL env +
+  Cloudflare Tunnel when the user is ready — until then Vercel
+  screens show unreachable-api states honestly; the PC stack via
+  scripts/start-platform.cmd is the working copy.
+- 2026-08-14 (THE FIRST REAL MEMBER — the epilogue's summit): after
+  the full gauntlet (mock forms exposed and rewired; ES256/JWKS
+  verifier built and live-proven by the user's own token; email
+  rate limit dodged via dashboard Add-user; the FK protecting a
+  registration from deletion; the unwind executing on "reset me"
+  before the steward's late hold — B1 corrected the premise), the
+  user signed in: auth 14:17:48 → app_user 23s later →
+  vendor_accept_org → **status active, role owner, org "neurai",
+  accepted_by NULL, history recorded.** B1: "your account is now
+  the only thing on that database that isn't test residue."
+  Unwind order cancelled permanently. ROUND 3 DIRECTIVES dispatched:
+  password self-service (change + recovery page — FE1, building) +
+  the vendor approvals console (B1 owes the vendor-identity
+  proposal; UI follows). Remaining epilogue: swaps 3-5 + shell
+  guard, final 2 README screenshots (now possible via a
+  dashboard-created test account), tunnel on user's word.

@@ -213,8 +213,163 @@ async function bff<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
+/**
+ * Who the caller is, as FIVE distinct answers rather than a value-or-null.
+ *
+ * `me()` collapses every 401 into `null`, which is right for a shell that only
+ * needs "is there someone here". It is wrong at the front door, where the
+ * differences ARE the routing:
+ *
+ *  - `unregistered` — a valid token for a subject with no `app_user` row.
+ *    **This is the M15 hole's signature**: sign-up's second half never ran, so
+ *    the person authenticates perfectly and does not exist to the product.
+ *    Indistinguishable from "signed out" unless the kind is read, and the
+ *    recovery (register-on-first-sign-in) hangs off exactly this branch.
+ *  - `pending` and `suspended` are both 403 and mean opposite things to the
+ *    person: one points at a colleague who can let them in, the other at a
+ *    vendor who must switch the org back on. A screen that knows only "403"
+ *    has to pick one sentence and will be wrong half the time.
+ */
+export type IdentityState =
+  | { state: "member"; me: Me }
+  | { state: "unregistered" }
+  | { state: "signed_out" }
+  | { state: "pending"; detail?: string }
+  | { state: "suspended"; detail?: string };
+
 export const api = {
   // ---- session ---------------------------------------------------------------
+  /**
+   * **LIVE** — the same `GET /api/me`, read for its REFUSAL rather than its
+   * payload. Nothing here decides anything; it only reports which of the five
+   * states the server put the caller in.
+   */
+  /**
+   * **LIVE** — `POST /api/auth/sign-in`. The token set is exchanged
+   * server-side into an httpOnly cookie; **the browser never sees a token**
+   * (M1), so there is nothing useful in the response and nothing is returned.
+   *
+   * A resolved promise means the PASSWORD was accepted — nothing more. Whether
+   * this person may use the product is a separate question, answered by
+   * `identityState()`, and conflating the two is how a pending account gets
+   * told its password is wrong.
+   */
+  async signIn(email: string, password: string): Promise<void> {
+    await bff<{ ok: true }>("/api/auth/sign-in", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+  },
+
+  /**
+   * **LIVE** — `POST /api/auth/sign-up`: the Supabase identity AND core/'s
+   * `/v1/signup` row, in one call, because either alone leaves a person who
+   * cannot be helped by an admin.
+   *
+   * `confirmationRequired` is a real outcome, not an error: the identity
+   * exists and the product row does not, because there was no session to
+   * create it with. The caller must say so rather than showing the
+   * waiting-for-approval screen, which would claim a queue entry that isn't
+   * there.
+   */
+  async signUp(input: {
+    email: string;
+    password: string;
+    display_name: string;
+    org_name?: string;
+  }): Promise<{ confirmationRequired: boolean; member: User | null }> {
+    const body = await bff<User | { ok: true; confirmationRequired: true }>("/api/auth/sign-up", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    return "confirmationRequired" in body
+      ? { confirmationRequired: true, member: null }
+      : { confirmationRequired: false, member: body };
+  },
+
+  /**
+   * **LIVE** — `POST /api/auth/register`, the second half of sign-up run late.
+   *
+   * Reached only from `identityState() === "unregistered"`, which is the one
+   * signal that separates "authenticated but unknown to the product" from
+   * "signed out". Without this branch that person is permanently stuck while
+   * every screen they see looks correct.
+   */
+  async register(input: {
+    display_name: string;
+    org_name?: string;
+    join_org?: string;
+  }): Promise<User> {
+    return bff<User>("/api/auth/register", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    });
+  },
+
+  /**
+   * **LIVE** — `POST /api/auth/change-password`. Requires the current one; see
+   * the route for why GoTrue's not requiring it is a hole rather than a
+   * convenience.
+   */
+  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    await bff<{ ok: true }>("/api/auth/change-password", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+    });
+  },
+
+  /**
+   * **LIVE** — `POST /api/auth/recover`.
+   *
+   * Resolves whether or not the address has an account, deliberately: a
+   * different answer would make this a membership oracle. The caller must say
+   * "if that address has an account, the mail is on its way" and mean it
+   * literally, not as a polite evasion of a fact it knows.
+   */
+  async requestPasswordRecovery(email: string): Promise<void> {
+    await bff<{ ok: true }>("/api/auth/recover", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+  },
+
+  /**
+   * **LIVE** — `POST /api/auth/reset`: consume the emailed token and set the
+   * new password in one request, because the token is single-use and splitting
+   * the steps would burn it on a form that might never be submitted.
+   */
+  async resetPassword(tokenHash: string, newPassword: string): Promise<void> {
+    await bff<{ ok: true }>("/api/auth/reset", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ token_hash: tokenHash, new_password: newPassword }),
+    });
+  },
+
+  async identityState(): Promise<IdentityState> {
+    try {
+      const row = await bff<MeRecord>("/api/me");
+      return { state: "member", me: { ...row, model_id: row.preferred_model, avatar_url: null } };
+    } catch (error) {
+      if (!(error instanceof BffError)) throw error;
+      if (error.status === 401) {
+        return error.kind === "unknown_actor" ? { state: "unregistered" } : { state: "signed_out" };
+      }
+      if (error.status === 403 && error.kind === "pending") {
+        return { state: "pending", detail: error.detail };
+      }
+      if (error.status === 403 && error.kind === "suspended") {
+        return { state: "suspended", detail: error.detail };
+      }
+      throw error;
+    }
+  },
+
   /**
    * **LIVE** — `GET /api/me` → core/'s `GET /v1/me`. The first fixture retired.
    *

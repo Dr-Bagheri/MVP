@@ -47,40 +47,43 @@ const activeRow = (over: Record<string, unknown> = {}) => [{
 describe("jwt verification", () => {
   const verify = createVerifier({ secret: SECRET });
 
-  it("accepts a well-formed HS256 token", () => {
-    expect(verify(sign({ sub: ALICE, exp: future() })).sub).toBe(ALICE);
+  it("accepts a well-formed HS256 token", async () => {
+    expect((await verify(sign({ sub: ALICE, exp: future() }))).sub).toBe(ALICE);
   });
 
-  it("rejects algorithm confusion, including alg:none", () => {
-    expect(() => verify(sign({ sub: ALICE, exp: future() }, { alg: "none" })))
-      .toThrow(InvalidTokenError);
-    expect(() => verify(sign({ sub: ALICE, exp: future() }, { alg: "RS256" })))
-      .toThrow(/unsupported algorithm/);
+  it("rejects algorithm confusion, including alg:none", async () => {
+    await expect(verify(sign({ sub: ALICE, exp: future() }, { alg: "none" })))
+      .rejects.toThrow(InvalidTokenError);
+    await expect(verify(sign({ sub: ALICE, exp: future() }, { alg: "RS256" })))
+      .rejects.toThrow(/unsupported algorithm/);
   });
 
-  it("rejects a signature made with the wrong secret", () => {
-    expect(() => verify(sign({ sub: ALICE, exp: future() }, { secret: "attacker" })))
-      .toThrow(/bad signature/);
+  it("rejects a signature made with the wrong secret", async () => {
+    await expect(verify(sign({ sub: ALICE, exp: future() }, { secret: "attacker" })))
+      .rejects.toThrow(/bad signature/);
   });
 
-  it("rejects tampered claims (signature no longer matches)", () => {
+  it("rejects tampered claims (signature no longer matches)", async () => {
     const token = sign({ sub: ALICE, exp: future() });
     const [head, , sig] = token.split(".");
     const forged = `${head}.${b64({ sub: "99999999-9999-4999-8999-999999999999", exp: future() })}.${sig}`;
-    expect(() => verify(forged)).toThrow(/bad signature/);
+    await expect(verify(forged))
+      .rejects.toThrow(/bad signature/);
   });
 
-  it("rejects expired tokens and enforces the issuer when pinned", () => {
-    expect(() => verify(sign({ sub: ALICE, exp: Math.floor(Date.now() / 1000) - 120 })))
-      .toThrow(/expired/);
+  it("rejects expired tokens and enforces the issuer when pinned", async () => {
+    await expect(verify(sign({ sub: ALICE, exp: Math.floor(Date.now() / 1000) - 120 })))
+      .rejects.toThrow(/expired/);
     const pinned = createVerifier({ secret: SECRET, issuer: "https://echo.example" });
-    expect(() => pinned(sign({ sub: ALICE, exp: future(), iss: "https://evil.example" })))
-      .toThrow(/bad issuer/);
+    await expect(pinned(sign({ sub: ALICE, exp: future(), iss: "https://evil.example" })))
+      .rejects.toThrow(/bad issuer/);
   });
 
-  it("rejects malformed tokens without throwing something opaque", () => {
-    expect(() => verify("not.a.jwt")).toThrow(InvalidTokenError);
-    expect(() => verify("onlyonepart")).toThrow(/malformed/);
+  it("rejects malformed tokens without throwing something opaque", async () => {
+    await expect(verify("not.a.jwt"))
+      .rejects.toThrow(InvalidTokenError);
+    await expect(verify("onlyonepart"))
+      .rejects.toThrow(/malformed/);
   });
 });
 

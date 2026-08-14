@@ -35,7 +35,10 @@ import { isAdmin, type Identity, type Skill } from "../agent/types.ts";
 
 export interface ServerOptions<TDeps> {
   db: Db;
-  jwtSecret: string;
+  /** HS256 shared secret (legacy projects, and the test suite). */
+  jwtSecret?: string | undefined;
+  /** JWKS endpoint for ES256 projects. At least one of the two is required. */
+  jwksUrl?: string | undefined;
   issuer?: string | undefined;
   /** Omit for the shipped domain tools; `[]` deliberately means none. */
   tools?: DomainTool<TDeps, never>[] | undefined;
@@ -50,7 +53,8 @@ export interface ServerOptions<TDeps> {
 export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstance {
   const app = Fastify({ logger: options.logger ?? false });
   const auth: Auth = createAuth({
-    db: options.db, jwtSecret: options.jwtSecret, issuer: options.issuer,
+    db: options.db, jwtSecret: options.jwtSecret,
+    jwksUrl: options.jwksUrl, issuer: options.issuer,
   });
   const calls: CallsRepo = createCallsRepo(options.db);
   const transcripts: TranscriptsRepo = createTranscriptsRepo(options.db);
@@ -357,7 +361,7 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
    * they are starting an org or joining one.
    */
   app.post("/v1/signup", async (request, reply) => {
-    const claims = auth.verifiedClaims(request);
+    const claims = await auth.verifiedClaims(request);
     const body = (request.body ?? {}) as {
       display_name?: unknown; org_name?: unknown; join_org?: unknown;
     };
@@ -639,7 +643,7 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
    * the address match is the one thing separating a link from a bearer token.
    */
   app.post("/v1/invitations/redeem", async (request, reply) => {
-    const claims = auth.verifiedClaims(request);
+    const claims = await auth.verifiedClaims(request);
     const body = (request.body ?? {}) as { token?: unknown };
     if (typeof body.token !== "string" || !body.token) {
       throw new ValidationError("token is required");

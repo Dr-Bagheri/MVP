@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { usePathname, useRouter } from "@/i18n/routing";
 import { api, BffError } from "@/api/client";
 import type { Me, ModelInfo } from "@/api/types";
+import { ChangePassword } from "@/components/platform/ChangePassword";
 import { PlatformShell } from "@/components/platform/PlatformShell";
 import { Card, Chip, Field, PageHeader } from "@/components/ui";
 
@@ -251,6 +252,14 @@ export default function ProfilePage() {
             {saved ? <Chip tone="success">{t("saved")}</Chip> : null}
           </div>
         </Card>
+
+        {/* Its own card, and its own save. A password change is not another
+            profile field: it re-authenticates, it can fail for reasons the
+            fields above never can, and folding it into the same submit would
+            mean a rejected password discarded a perfectly good rename. */}
+        <div className="mt-6">
+          <ChangePassword />
+        </div>
       </div>
     </PlatformShell>
   );

@@ -93,6 +93,15 @@ export const NO_TRAIL: Readonly<Record<string, string>> = {
   "/sign-in": "auth screens render outside the shell — there is no bar to hold a trail, and no 'up' from signing in",
   "/sign-up": "auth screens render outside the shell",
   "/pending": "auth screens render outside the shell",
+  /*
+   * Outside the shell like its siblings — and doubly so: there is no 'up' from
+   * here BY DESIGN. Nothing in the product is reachable while the organisation
+   * is switched off, so a crumb offering a way back in would be a link that
+   * cannot work, on the one screen whose whole job is to say it cannot.
+   */
+  "/suspended": "auth screens render outside the shell; and no 'up' exists while the org is suspended",
+  "/forgot": "auth screens render outside the shell — reached while signed out, by someone who cannot get in",
+  "/reset": "auth screens render outside the shell; reached from an emailed link, with no in-product ancestor",
   "/skills": "redirect-only (→ /management/skills); the destination carries the trail",
   "/connectors": "redirect-only (→ /management/connectors)",
   "/admin": "redirect-only (→ /management)",

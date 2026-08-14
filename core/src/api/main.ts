@@ -56,7 +56,42 @@ function requireEnv(name: string): string {
   return value;
 }
 
+/**
+ * Where the project publishes its signing keys.
+ *
+ * Explicit `SUPABASE_JWKS_URL` wins; otherwise it is derived from
+ * `SUPABASE_URL`, because the path is fixed by Supabase and a hand-copied URL
+ * is one more thing to typo in a deployment. Returns undefined when neither
+ * is set, which leaves the api on the shared-secret path — correct for a
+ * project still using legacy signing.
+ */
+function jwksUrl(): string | undefined {
+  const explicit = process.env.SUPABASE_JWKS_URL;
+  if (explicit) return explicit;
+  const base = process.env.SUPABASE_URL;
+  if (!base) return undefined;
+  return `${base.replace(/\/+$/, "")}/auth/v1/.well-known/jwks.json`;
+}
+
+/**
+ * Refuse to boot with NEITHER verification path configured.
+ *
+ * `SUPABASE_JWT_SECRET` used to be `requireEnv`, which is what kept this
+ * honest. Making it optional for ES256 projects removed that guard, so the
+ * check moves here rather than disappearing — an api that starts cleanly and
+ * rejects every token is the failure this whole change exists to end, and it
+ * would be a bitter way to reintroduce it.
+ */
+function assertVerificationConfigured(): void {
+  if (!process.env.SUPABASE_JWT_SECRET && !jwksUrl()) {
+    throw new Error(
+      "api: no token verification configured — set SUPABASE_JWKS_URL or SUPABASE_URL "
+      + "(asymmetric signing keys), or SUPABASE_JWT_SECRET (legacy shared secret)");
+  }
+}
+
 export async function main(): Promise<void> {
+  assertVerificationConfigured();
   const port = Number(process.env.PORT || 8080);
   if (!Number.isFinite(port)) throw new Error("api: PORT must be a number");
 
@@ -76,7 +111,20 @@ export async function main(): Promise<void> {
 
   const app = buildServer({
     db: createDb(pools),
-    jwtSecret: requireEnv("SUPABASE_JWT_SECRET"),
+    /**
+     * BOTH signing paths, and the secret is no longer required.
+     *
+     * A project on asymmetric signing keys has no shared secret at all, so
+     * `requireEnv("SUPABASE_JWT_SECRET")` would refuse to boot the very
+     * configuration that is now correct. It stays supported because a project
+     * on legacy signing still uses it and the test suite mints those.
+     *
+     * `SUPABASE_JWKS_URL` is derived from `SUPABASE_URL` when not given
+     * explicitly — one fewer thing to get subtly wrong in a deployment, and
+     * the derived form is the one Supabase documents.
+     */
+    jwtSecret: process.env.SUPABASE_JWT_SECRET,
+    jwksUrl: jwksUrl(),
     issuer: process.env.SUPABASE_JWT_ISSUER,
     /**
      * `tools` and `toolDeps` are OMITTED so the server builds the shipped set

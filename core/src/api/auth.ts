@@ -27,8 +27,15 @@ export { NotActivatedError, UnauthenticatedError } from "./errors.ts";
 
 export interface AuthOptions {
   db: Db;
-  /** Supabase JWT secret (HS256) — from env, never a literal (invariant 7). */
-  jwtSecret: string;
+  /**
+   * Shared secret for legacy HS256 projects — from env, never a literal
+   * (invariant 7). OPTIONAL: a project on asymmetric signing keys has none,
+   * and requiring it would refuse to start the configuration that is now
+   * correct.
+   */
+  jwtSecret?: string | undefined;
+  /** JWKS endpoint for ES256 projects. At least one of the two is required. */
+  jwksUrl?: string | undefined;
   /** Optional issuer/audience pinning. */
   issuer?: string | undefined;
 }
@@ -47,8 +54,8 @@ export interface AuthedRequest {
  */
 const LAST_SEEN_STALE_SECONDS = 300;
 
-export function createAuth({ db, jwtSecret, issuer }: AuthOptions) {
-  const verify = createVerifier({ secret: jwtSecret, issuer });
+export function createAuth({ db, jwtSecret, jwksUrl, issuer }: AuthOptions) {
+  const verify = createVerifier({ secret: jwtSecret, jwksUrl, issuer });
 
   /** Skip the round trip entirely for callers we stamped recently. */
   const stampedAt = new Map<string, number>();
@@ -136,13 +143,14 @@ export function createAuth({ db, jwtSecret, issuer }: AuthOptions) {
    *  - an api key is refused outright. A gateway key belongs to an org that
    *    already exists, and must not be a door to creating accounts (M17).
    */
-  function verifiedClaims(request: AuthedRequest): VerifiedClaims {
+  // Async since the ES256 branch may fetch the project's JWKS — see jwt.ts.
+  async function verifiedClaims(request: AuthedRequest): Promise<VerifiedClaims> {
     const token = bearer(request);
     if (isApiKey(token)) {
       throw new UnauthenticatedError("an api key cannot register an account", "no_token");
     }
     try {
-      return verify(token);
+      return await verify(token);
     } catch (error) {
       throw new UnauthenticatedError(
         error instanceof Error ? error.message : "invalid token",
@@ -164,7 +172,7 @@ export function createAuth({ db, jwtSecret, issuer }: AuthOptions) {
 
     let subject: string;
     try {
-      subject = verify(token).sub;
+      subject = (await verify(token)).sub;
     } catch (error) {
       throw new UnauthenticatedError(
         error instanceof Error ? error.message : "invalid token",

@@ -3,15 +3,85 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/routing";
+import { api, BffError } from "@/api/client";
 import { Card, Field } from "@/components/ui";
 
-/** Self-registration exists, but the account lands pending (M15). */
+/**
+ * Self-registration — **and this form registered nobody.**
+ *
+ * It called `router.push("/pending")` on submit. The person saw the
+ * waiting-for-approval screen, believed they had an account, and the server
+ * had recorded nothing at all: zero rows in `auth.users`, zero in
+ * `echo.app_user`. The screen that says "an admin will accept you shortly" was
+ * a local route transition.
+ *
+ * It is the worst version of the failure this codebase keeps finding, because
+ * the fake output is *reassurance*: every other instance leaves something
+ * missing on screen, and this one produced a page whose entire job is to tell
+ * you it worked.
+ *
+ * Sign-up is TWO steps and both must run (M15):
+ *   1. Supabase creates the auth identity;
+ *   2. core/'s `POST /v1/signup` creates the `app_user` row that makes the
+ *      person exist to the product.
+ * With only the first, someone holds a valid token, 401s forever, and never
+ * appears in an admin's queue. The BFF route runs both and returns the created
+ * member — **and the pending screen now renders because the server said
+ * `status: "pending"`, not because we navigated there.**
+ */
 export default function SignUpPage() {
   const t = useTranslations("auth");
   const router = useRouter();
-  const [displayName, setDisplayName] = useState("");
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [orgName, setOrgName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [confirmEmail, setConfirmEmail] = useState(false);
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await api.signUp({
+        email,
+        password,
+        display_name: displayName,
+        org_name: orgName,
+      });
+      /*
+       * 202 means the identity exists but the project requires email
+       * confirmation, so there was no session to register with — the account
+       * is HALF created and saying "you're all set" would be the same lie this
+       * form was built out of. They are told to confirm, and the second half
+       * runs on first sign-in.
+       */
+      if (result.confirmationRequired) {
+        setConfirmEmail(true);
+        return;
+      }
+      router.push("/pending");
+    } catch (cause) {
+      setError(refusalText(cause, t));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (confirmEmail) {
+    return (
+      <Card>
+        <h1 className="text-lg font-bold text-fg">{t("confirmEmailTitle")}</h1>
+        <p className="mt-2 text-sm leading-7 text-fg-muted">{t("confirmEmailBody")}</p>
+        <Link href="/sign-in" className="btn-secondary mt-5 w-full">
+          {t("backToSignIn")}
+        </Link>
+      </Card>
+    );
+  }
 
   return (
     <Card>
@@ -22,13 +92,20 @@ export default function SignUpPage() {
         <h1 className="text-xl font-bold text-fg">{t("signUpTitle")}</h1>
       </div>
 
-      <form
-        className="space-y-4"
-        onSubmit={(e) => {
-          e.preventDefault();
-          router.push("/pending");
-        }}
-      >
+      <form className="space-y-4" onSubmit={submit}>
+        {/* EMAIL, not «نام کاربری» — Supabase authenticates an address. The
+            old form collected a username, which is a different, optional field
+            chosen later on the profile screen and cannot be signed in with. */}
+        <Field label={t("email")}>
+          <input
+            className="input"
+            dir="ltr"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoComplete="email"
+          />
+        </Field>
         <Field label={t("displayName")}>
           <input
             className="input"
@@ -36,38 +113,41 @@ export default function SignUpPage() {
             onChange={(e) => setDisplayName(e.target.value)}
           />
         </Field>
-        <Field label={t("username")}>
-          <input
-            className="input"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            autoComplete="username"
-          />
+        {/*
+          Creating an organisation is the only path offered, and that is a
+          limit rather than a choice: core/'s `join_org` takes an org UUID,
+          which is not something a person can be asked to type. Joining an
+          existing org needs an invite flow that does not exist yet, so
+          offering the option would be a control that cannot succeed.
+        */}
+        <Field label={t("orgName")} hint={t("orgNameHint")}>
+          <input className="input" value={orgName} onChange={(e) => setOrgName(e.target.value)} />
         </Field>
         <Field label={t("password")}>
           <input
             className="input"
+            dir="ltr"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             autoComplete="new-password"
           />
         </Field>
-        <button className="btn-primary w-full" disabled={!username || !password || !displayName}>
-          {t("signUp")}
+        {error ? (
+          <p role="alert" className="text-sm text-danger">
+            {error}
+          </p>
+        ) : null}
+        <button
+          className="btn-primary w-full"
+          disabled={busy || !email || !password || !displayName || !orgName.trim()}
+        >
+          {busy ? t("working") : t("signUp")}
         </button>
       </form>
 
-      <div className="my-4 flex items-center gap-3">
-        <div className="h-px flex-1 bg-border" />
-        <span className="text-xs text-fg-muted">{t("orDivider")}</span>
-        <div className="h-px flex-1 bg-border" />
-      </div>
-
-      <button className="btn-secondary w-full" onClick={() => router.push("/pending")}>
-        <span className="ltr font-medium">G</span>
-        {t("google")}
-      </button>
+      {/* The Google button is REMOVED — it pushed to /pending with no OAuth
+          behind it, which advertised a sign-in method that does not exist. */}
 
       <p className="mt-4 text-center text-sm">
         <Link href="/sign-in" className="text-accent hover:underline">
@@ -76,4 +156,18 @@ export default function SignUpPage() {
       </p>
     </Card>
   );
+}
+
+/**
+ * Server sentence first. `conflict` is the one worth carrying verbatim: core/
+ * distinguishes "this account is already registered" from a taken username,
+ * and both are actionable in different ways.
+ */
+function refusalText(cause: unknown, t: (key: string) => string): string {
+  if (cause instanceof BffError) {
+    if (cause.kind === "invalid" || cause.kind === "conflict" || cause.status === 400) {
+      return cause.detail ?? t("signUpFailed");
+    }
+  }
+  return t("signUpFailed");
 }

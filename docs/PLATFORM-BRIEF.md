@@ -397,3 +397,20 @@ read as menu items — currently the sidebar looks like one flat menu:
   (Echo Mobile) is unaffected. The neurai-mvp (on-prem predecessor) name
   collision is noted — the platform brand deliberately reuses the NeurAI
   name per the user.
+
+## User review round 3 (2026-08-14, from the first real signup — DIRECTIVES)
+
+1. **The approval process goes into the USER'S hands**: a screen where
+   the platform owner sees pending registrations and approves/rejects
+   them — replacing the operator-path accept as the normal flow.
+   Open design question (proposal owed): how the product knows the
+   signed-in person IS the platform owner (vendor identity in-product;
+   must be grantable only at the schema layer, never via api — D27
+   discipline applies).
+2. **Password self-service, both halves**: (a) change password while
+   signed in (Settings/profile); (b) forgot-password recovery — the
+   email flow plus the in-app reset page that consumes it (the missing
+   consumer for Supabase's recovery/magic links; server-side code
+   exchange per M1 — the browser never holds tokens).
+   Context: the first real signup lost its password with no recourse
+   short of an operator unwind; never again.
