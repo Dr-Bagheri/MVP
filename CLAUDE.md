@@ -485,6 +485,65 @@ session that touches GitHub. Repo: **github.com/Dr-Bagheri/MVP — PRIVATE**.
   (on-prem predecessor), `Desktop\Neurai-Echo` (cloud recorder — the pgmq-style
   worker, RLS wall, harness lanes, and near-miss hygiene lessons live there).
 
+## CURRENT STATE — read this first (2026-08-13 end of day; supersedes
+## wading through the day's log entries below)
+
+**Shipped and real (push #4 + follow-ups, repo at e26d602, private,
+tree clean):** the full NeurAI-platform restructure — db/ 55 migrations
+(invitations D25 / tombstone+RESERVED / org-status vendor-only D27 /
+status-history / prefs / idle-tx timeouts 0053 / admin_action policy
+0055); core/ 627 tests (identity fields, invitation+tombstone routes,
+persisted conversations + truncation materialize-at-death, admin_action
+writers tx-coupled, org, server health, refusal {code,params}, member
+search/stats); web/ 149 tests (breadcrumb=declared-table back-nav,
+TwoPane Settings+Management, avatar menu, merged Record+Calls at /echo,
+UM server-side, Audit Logs 3-sources, org form, production build gate,
+byte-level encoding sweep with marker opt-out); Quick Start launcher
+(scripts/start-platform.ps1/.cmd — tested; fetches 6 secret NAMES from
+the DPAPI store at runtime) + README section; blueprint docx 32pp
+(local-only) + build pipeline at docs/blueprint-src/.
+
+**Client-body swap state (the fixture→live ledger):** LIVE = me()
+(adapter typed from MeRecord; 401→null; 403 pending/suspended
+DELIBERATELY re-thrown — currently unhandled by `void .then()` callers,
+flagged), listCalls/getCall/setScope/getTranscript/getSpeakers/
+getSummaries (three BFF envelope lies fixed on the way; ?archived
+client-side now — core never had it; list capped at 100 honestly,
+pagination unbuilt), audit(), serverHealth(), updateProfile(),
+updatePreferences(), setLocale(). STILL FIXTURE = **the AUTH FORMS
+(sign-up/sign-in — the user's "signup" and "login" never touched the
+server; B3 proved zero rows in auth.users AND echo.app_user)**,
+members()/memberStats() (FE1 was starting item 3 when their turn
+ended), org()/updateOrg() (FE3's form renders, client not swapped),
+conversations client, restoreCall/setArchived/deleteCall (no callers
+or no route — deliberate), write-path calls (correctLine etc.).
+
+**Hard facts to not re-learn:** (1) NO real user exists — the
+signup was absorbed by the mock forms; do not "approve" anything (the
+only pending org is B2's test fixture — B3's read-first refused it).
+(2) **ORDERING (load-bearing, B1):** the residue sweep matches
+`call_id is null`; a real hub conversation produces exactly that —
+**sweep BEFORE the first real signup.** (3) The sweep is
+user-approved (their line is in B1's session) but blocked:
+echo_app holds no DELETE anywhere by design — it needs the PURGE
+credential (echo_platform_db_purge_url) or the owner; B1 rightly
+refused credential discovery without authorization. (4) ALL FOUR
+SERVICES ARE DOWN (web 3100 / api 8080 / ml 7801 / worker) — the
+session-hosted instances died with their sessions; scripts/
+start-platform.ps1 restarts everything in one command. (5) Sessions
+must NEVER start/restart servers (collision class — exit-4 restarts,
+.next wipes); one owner runs the stack. (6) Publisher's parked
+items: final 2 README screenshots need a real signed-in session;
+Neurai-Echo DEPLOY.md hardcodes a live project URL (placeholder-vs-
+env decision pending, user's call).
+
+**Next actions (user decides the order/go):** restart stack → run
+the sweep (credential decision) → FE1 wires the REAL auth forms
+(order-change may not have reached them; resend on go) → user signs
+up FOR REAL → B3 vendor-accepts (read-first, email-checked) → FE1
+finishes swaps (members/org/conversations) → FE2 not-the-author
+verification → publisher's final 2 shots → epilogue closed.
+
 ## Status
 
 - 2026-08-10: Folder created; private repo live (Dr-Bagheri/MVP); SPEC.md

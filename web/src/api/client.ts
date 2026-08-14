@@ -348,26 +348,64 @@ export const api = {
   },
 
   // ---- calls -----------------------------------------------------------------
-  /** Visibility mirrors the RLS rule: own calls + org-scoped; admins read all. */
+  /**
+   * **LIVE** — `GET /api/calls`.
+   *
+   * **The visibility filter is GONE, and its removal is the point.** It used to
+   * re-derive the RLS rule here (own + org-scoped, admins read all) against
+   * fixtures. Kept against a live wire it would be a second implementation of
+   * an access rule — one that can only ever be wrong, because rows the caller
+   * may not see never arrive to be filtered. A client-side permission check
+   * over server-filtered data is decoration that reads as enforcement.
+   *
+   * **Archived rows are filtered HERE, and that is not a shortcut.** core/'s
+   * list has no archived parameter: it returns archived calls alongside the
+   * rest, always. So `includeArchived` is a genuine client concern, on
+   * `archived_at` — a timestamp, where null is the un-archived state, because
+   * *when* carries more than *whether*.
+   *
+   * **Soft-deleted calls never arrive** — core/'s list is `deleted_at is null`,
+   * unconditionally. So the deleted-calls card renders empty against live data
+   * no matter who is looking, exactly as its own header predicted. That is not
+   * this function's bug to fix and it must not be papered over here.
+   */
   async listCalls(opts?: { includeArchived?: boolean }): Promise<Call[]> {
-    const visible = calls.filter((c) => {
-      if (c.deleted_at) return me.role === "admin";
-      if (me.role === "admin") return true;
-      return c.owner_id === me.id || c.scope === "org";
-    });
-    // `archived_at` is a timestamp, not a flag — "when" carries more than
-    // "whether", and null is the un-archived state
-    const filtered = opts?.includeArchived
-      ? visible
-      : visible.filter((c) => c.archived_at === null);
-    return wait(filtered);
+    const rows = await bff<Call[]>("/api/calls");
+    return opts?.includeArchived ? rows : rows.filter((c) => c.archived_at === null);
   },
+
+  /**
+   * **LIVE** — `GET /api/calls/{id}`, which core/ answers with the call plus
+   * its parts.
+   *
+   * `null` for a 404, and the 404 is an ANSWER rather than a fault: core/
+   * returns the same status for a call that does not exist and one the caller
+   * may not see, deliberately, so ids cannot be probed. The screen shows "not
+   * found" for both, which is the only honest rendering of a deliberately
+   * ambiguous answer.
+   */
   async getCall(id: string): Promise<Call | null> {
-    return wait(calls.find((c) => c.id === id) ?? null);
+    try {
+      return await bff<Call>(`/api/calls/${id}`);
+    } catch (error) {
+      if (error instanceof BffError && error.status === 404) return null;
+      throw error;
+    }
   },
-  async setScope(id: string, scope: CallScope) {
-    calls = calls.map((c) => (c.id === id ? { ...c, scope } : c));
-    return wait(calls.find((c) => c.id === id)!);
+
+  /**
+   * **LIVE** — `PATCH /api/calls/{id}`.
+   *
+   * Only `scope` and `title` exist on that route. An `archived` key here would
+   * be accepted by our BFF and dropped in silence by core/, which is why
+   * archiving goes through its own verb (see `setArchived`).
+   */
+  async setScope(id: string, scope: CallScope): Promise<Call> {
+    return bff<Call>(`/api/calls/${id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ scope }),
+    });
   },
   /**
    * Archive/unarchive are LIVE and verified end-to-end against core/
@@ -411,8 +449,21 @@ export const api = {
   },
 
   // ---- transcript & speakers --------------------------------------------------
+  /**
+   * **LIVE** — `GET /api/calls/{id}/transcript`, unwrapped from core/'s
+   * `{call_id, segments}`.
+   *
+   * **An empty array here means "this call has no words", and that is a real
+   * claim** — core/ 404s an invisible call before it ever reaches the segment
+   * read, precisely so the two cannot be confused. The rejection propagates
+   * rather than being swallowed into `[]`: a transcript that failed to load
+   * must not render as a meeting where nobody spoke.
+   */
   async getTranscript(callId: string): Promise<TranscriptSegment[]> {
-    return wait(transcripts[callId] ?? []);
+    const { segments } = await bff<{ call_id: string; segments: TranscriptSegment[] }>(
+      `/api/calls/${callId}/transcript`,
+    );
+    return segments;
   },
   async correctLine(callId: string, rowId: string, text: string) {
     const rows = transcripts[callId] ?? [];
@@ -421,8 +472,9 @@ export const api = {
     );
     return wait(true);
   },
+  /** **LIVE** — `GET /api/calls/{id}/speakers` (the BFF unwraps the envelope). */
   async getSpeakers(callId: string): Promise<Speaker[]> {
-    return wait(speakers[callId] ?? []);
+    return bff<Speaker[]>(`/api/calls/${callId}/speakers`);
   },
   async renameSpeaker(callId: string, speakerId: string, label: string) {
     speakers[callId] = (speakers[callId] ?? []).map((s) =>
@@ -444,8 +496,19 @@ export const api = {
   },
 
   // ---- summaries --------------------------------------------------------------
+  /**
+   * **LIVE** — `GET /api/calls/{id}/summaries`, newest first.
+   *
+   * Regenerating APPENDS a version and moves the pointer; it never destroys
+   * the previous one, so this list only grows. Each entry carries the model
+   * that produced it — the provenance invariant, and the reason the history is
+   * a list rather than a single current row.
+   */
   async getSummaries(callId: string): Promise<SummaryVersion[]> {
-    return wait(summaries[callId] ?? []);
+    const { summaries: rows } = await bff<{ summaries: SummaryVersion[] }>(
+      `/api/calls/${callId}/summaries`,
+    );
+    return rows;
   },
 
   // ---- search -----------------------------------------------------------------
