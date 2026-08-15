@@ -128,9 +128,13 @@ function fakeDb({
          */
         if (sql.includes("register_account")) {
           if (registerFails) throw Object.assign(new Error("dup"), { code: "23505" });
+          // Mirrors db/0056: a FOUNDER is owner of the new org and ACTIVE at
+          // birth (email confirmation was the acceptance), with no acceptance
+          // stamp (0057). The join-an-existing-org path still produces
+          // pending — asserted where it lives, in db's 80_vendor_acceptance.
           return [{
             id: ALICE, org_id: "org-a", email: "new@example.com", display_name: "New Person",
-            role: "admin", status: "pending", accepted_at: null, last_seen_at: null,
+            role: "owner", status: "active", accepted_at: null, last_seen_at: null,
             created_at: new Date().toISOString(),
           }];
         }
@@ -195,7 +199,7 @@ describe("POST /v1/signup", () => {
     return `${head}.${body}.${sig}`;
   }
 
-  it("creates a PENDING account and says so", async () => {
+  it("a founder's account is ACTIVE at birth and says so (0056)", async () => {
     const res = await server().inject({
       method: "POST", url: "/v1/signup",
       headers: { authorization: `Bearer ${signupToken()}` },
@@ -203,9 +207,12 @@ describe("POST /v1/signup", () => {
     });
     expect(res.statusCode).toBe(201);
     const body = res.json();
-    // pending is the contract, not an implementation detail: the client
-    // routes straight to the waiting-for-approval screen on it.
-    expect(body.status).toBe("pending");
+    // active is the contract, not an implementation detail: the client
+    // routes a founder straight into the app on it — the confirmed email
+    // was the acceptance (M15 as amended). A JOINER still gets pending and
+    // the waiting screen; that path is asserted at its producer (db/80).
+    expect(body.status).toBe("active");
+    expect(body.role).toBe("owner");
     expect(body.org_id).toBe("org-a");
   });
 

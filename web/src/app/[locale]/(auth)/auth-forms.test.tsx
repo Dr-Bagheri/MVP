@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
  * **These forms did nothing, and nothing could see it.**
@@ -125,6 +125,63 @@ describe("sign-in actually signs in", () => {
     await waitFor(() =>
       expect(register).toHaveBeenCalledWith({ display_name: "person", org_name: "شرکت نمونه" }),
     );
+  });
+
+  it("routes a founder STRAIGHT IN after the org step — no waiting room (0056)", async () => {
+    // unregistered at sign-in; after register the server reports MEMBER,
+    // because a founder is active at birth (email confirmation was the
+    // acceptance). The old form hard-coded /pending here, which would park
+    // a working account on a reassurance screen about a queue it isn't in.
+    identityState
+      .mockResolvedValueOnce({ state: "unregistered" })
+      .mockResolvedValue({ state: "member" });
+    render(<SignInPage />);
+    type(/^رایانامه/, "person@example.com");
+    type(/^گذرواژه/, "hunter2");
+    fireEvent.click(screen.getByRole("button", { name: "ورود" }));
+
+    const orgField = await screen.findByLabelText(/^نام سازمان/);
+    register.mockResolvedValue({ id: "u-1", status: "active" });
+    fireEvent.change(orgField, { target: { value: "شرکت نمونه" } });
+    fireEvent.click(screen.getByRole("button", { name: "تکمیل ثبت‌نام" }));
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/echo"));
+  });
+});
+
+describe("the confirm-email landing (?confirmed=…)", () => {
+  afterEach(() => {
+    // the URL is ambient state; a leaked query would make later tests
+    // "arrive from a confirmation link" without meaning to
+    window.history.replaceState(null, "", "/");
+  });
+
+  it("?confirmed=1 SAYS the account is ready and routes with no password re-entry", async () => {
+    // /api/auth/confirm already wrote the session cookie; arriving here with
+    // the marker must (a) say the confirmation worked — a silent redirect
+    // reads as nothing happening — and (b) ask the server who we are and
+    // route: a fresh person gets the org step, no second password prompt two
+    // minutes after the first. Deleting the arrival effect leaves this red.
+    window.history.replaceState(null, "", "/?confirmed=1");
+    identityState.mockResolvedValue({ state: "unregistered" });
+    render(<SignInPage />);
+    expect(await screen.findByRole("status")).toHaveTextContent(/حسابتان آماده است/);
+    expect(await screen.findByLabelText(/^نام سازمان/)).toBeTruthy();
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("?confirmed=1 with a registered identity goes straight in", async () => {
+    window.history.replaceState(null, "", "/?confirmed=1");
+    identityState.mockResolvedValue({ state: "member" });
+    render(<SignInPage />);
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/echo"));
+  });
+
+  it("?confirmed=failed says the link is dead instead of presenting a bare form", async () => {
+    window.history.replaceState(null, "", "/?confirmed=failed");
+    render(<SignInPage />);
+    expect(await screen.findByRole("alert")).toHaveTextContent(/پیوند تأیید نامعتبر/);
+    expect(identityState).not.toHaveBeenCalled();
   });
 });
 

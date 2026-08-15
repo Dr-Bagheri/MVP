@@ -501,7 +501,7 @@ not a policy.
 
 ## M12 — Deployment profiles
 
-1. **Local dev (CURRENT)**: everything on the user's machine — local
+1. **Local dev**: everything on the user's machine — local
   processes + a dev Supabase project — until publish time [user ruling:
   host + domain chosen later].
 2. **Cloud (launch)**: managed Supabase + core//ml/ containers + web/ on
@@ -509,6 +509,23 @@ not a policy.
 3. **On-prem (per customer)**: self-hosted Supabase + same containers via one
   Docker Compose; models stay cloud (LLMs are online by decision — what moves
   on-prem is data at rest + the pipeline).
+
+**[AMENDED 2026-08-15 — profile 2 is CURRENT, user-directed]**: the host +
+domain are chosen: **neurai.pt** (registered at one.com, DNS on Cloudflare
+free tier; the one.com mailboxes ride on copied MX records). Backend =
+**Hetzner CX22** (Falkenstein, Ubuntu, `neurai-core-1`, 178.105.251.216):
+api/worker/ml as systemd services under a non-root `neurai` user, deployed
+from `git archive HEAD` + the gitignored ml/models, secrets in root-only
+`/etc/neurai/` env files **split per Invariant 6** (ml's env carries only
+its upstream keys + ML_* — never a product credential). Public entry =
+**Cloudflare Tunnel** `api.neurai.pt` → localhost:8080 (outbound-only; the
+box accepts SSH and nothing else inbound). web/ stays on Vercel with
+`CORE_API_URL=https://api.neurai.pt`. The PC's start-platform scripts
+remain the LOCAL-DEV path only; the PC is out of the serving path.
+Secrets provisioning = `scripts/deploy-secrets-to-server.ps1` (names in
+the script, values DPAPI-store → server over SSH; run by the user).
+Not yet hardened: the BFF↔core pre-shared edge header (JWT walls every
+route meanwhile) — tracked, ships with the CORE_API_URL flip.
 
 ## M13 — Clients roadmap
 
@@ -547,6 +564,18 @@ console). Ratified with it: the current-summary pointer moves only via a
 SECURITY DEFINER trigger (the agent holds zero grants on echo.call), and
 **assistant conversations are private even from admins** — the admin audit
 surface is agent_run (what the agent did), never colleagues' conversation text.
+**[AMENDED by the user, 2026-08-15 — round 4 #1, approved]**: registration
+is **fully self-serve: email confirmation IS the acceptance.** Sign-up →
+confirm email → the account is ACTIVE (owner of the org chosen at the
+org-choice screen). No vendor acceptance, no pending state on the happy
+path. This supersedes the round-3 approvals-console directive; the
+vendor-identity proposal stops being registration-critical (it may return
+for other vendor operations). The pending status stays in schema (invited/
+edge states; suspended flow unchanged); nothing routes there by default.
+Prerequisites for the email leg, both dashboard-side: custom SMTP (the
+built-in sender rate-limits at ~2–4/hr) and Site URL + redirect list
+pointing at the deployed web origin. D25 (invited → active) already agrees
+with this shape.
 
 ## M16 — (folded into M7: the 30-minute part model)
 
@@ -1104,6 +1133,30 @@ its own Management surface** (queue depths + dead letters [already
 permitted reads], provider/key health, storage usage); **speaker directory
 lives inside Echo** (it is call-domain); agent-runs read = the Audit Logs
 surface; archive/restore write routes = Echo app surfaces.
+
+## M26 — The design scaffold: one structural system, every surface
+## [user approved 2026-08-15 — docs/NeurAI-Design-Blueprint.docx is the record]
+
+Structure adopted from the Supabase studio's layout anatomy (extracted from
+their open-source components: Scaffold, PageLayout/PageHeader, ProductMenu,
+FormPanel/FormSection); **colors and font stay ours** (PROPOSAL-02 tokens,
+Vazirmatn both locales). The approved numbers — typography scale (9 roles),
+spacing rhythm, layout anatomy — are recorded in the blueprint docx and
+materialize as `web/src/components/scaffold/constants.ts`, the ONE source
+every scaffold component reads. The law: **pages never hand-roll layout.**
+Every surface — Settings, Profile, Management, every future app — renders
+through the scaffold components (AppFrame/SectionMenu/PageContainer/
+PageHeader/Section/FormPanel/PanelFooter); a page cannot disagree with the
+blueprint without a test going red. Anatomy: icon rail 60px inline-start →
+section menu 256px (grouped pills, 11px subtle group labels, NO
+letter-spacing on Persian) → content column max-1200 centered (wide variant
+for data-dense tables) → page header (24px title, 14px muted subtitle) →
+sections at 24px rhythm with hairline dividers → bordered panels with
+5/7 label-start/control-end rows and inline-end footer actions. The Hub is
+exempt (M22's approved first screen); rail, top bar and theme are shared.
+Changing a size or gap means changing the blueprint + constants first —
+never improvising in a page. Migration order (approved): scaffold → Settings
+→ Profile → Management → Echo surfaces.
 
 ---
 

@@ -63,7 +63,12 @@ export default function SignUpPage() {
         setConfirmEmail(true);
         return;
       }
-      router.push("/pending");
+      // No confirmation step meant a session existed and the server already
+      // registered them. Route by what it MADE: a founder is ACTIVE at birth
+      // (db/0056 — the confirmed email is the acceptance; with confirmation
+      // off, the project has waived even that) and goes straight in. Only a
+      // genuinely pending row — a joiner — earns the waiting screen.
+      router.push(result.member?.status === "active" ? "/echo" : "/pending");
     } catch (cause) {
       setError(refusalText(cause, t));
     } finally {

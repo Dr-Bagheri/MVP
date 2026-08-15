@@ -500,14 +500,16 @@ db holds ONLY this member + seeded fixtures (residue swept).
 **Deployment (Option C, chosen):** web on Vercel = production LIVE at
 **mvp-web-beta.vercel.app** (project mvp-web, personal Hobby scope
 "neurai", slug neurai2; auto-deploys on push to main; deployment
-protection OFF; Next patched for the RSC CVE). api/worker/ml/web run on
-the user's PC via **scripts/start-platform.cmd** (idempotent; fetches 6
-secret NAMES from the DPAPI store at runtime) + stop-platform.ps1. ONE
-dedicated user session runs the stack — no other session may
-start/stop servers, EVER (collision class). MISSING for full online
-use: Cloudflare Tunnel + CORE_API_URL env in Vercel (user's word
-pending) — until then the Vercel copy renders with unreachable-api
-states on live-swapped screens. Supabase facts a session must know:
+protection OFF; Next patched for the RSC CVE).
+**[SUPERSEDED 2026-08-15 — backend moved OFF the PC, M12 amendment is
+the record]**: api/worker/ml now run on **Hetzner neurai-core-1**
+(178.105.251.216, systemd, deploy = git archive + ml/models +
+scripts/deploy-secrets-to-server.ps1); public API =
+**https://api.neurai.pt** via Cloudflare Tunnel on the server; domain
+neurai.pt on Cloudflare DNS (one.com mailboxes preserved via MX copy).
+start-platform.cmd is now LOCAL DEV ONLY; the PC serves nothing. The
+old rule "one session runs the stack" applies to the SERVER now:
+service control via systemd over SSH, key ~/.ssh/neurai_hetzner. Supabase facts a session must know:
 project aqgpxnyuxukwgphrxslw; **tokens are ES256** (kid 4800f423...,
 P-256; legacy HS256 rotated out — core verifies via JWKS, code in
 core/src/api/jwt.ts, SUPABASE_URL env required); built-in email sender
@@ -546,6 +548,49 @@ ml dormant). ALL remaining sessions closed tonight by the user. Fresh
 sessions onboard from this file; the casebook rules 1-13.5 + the
 Windows/PS hazards below are the law of the repo; the day's ~50 minted
 lessons live in the Status log below and in ARCHITECTURE's amendments.
+
+## STEWARD HANDOVER (2026-08-14 — the steward session closed too;
+## its successor reads this after CURRENT STATE)
+
+**The role:** rulings, coordination, verification, release gate. The
+steward builds nothing and hosts nothing (tonight's server-hosting was
+an emergency exception, now retired to the user's dedicated server
+session). Hard-won protocol, all proven today: relays are for routing
+and rulings, NEVER the wire (producers send shape+fixture direct —
+rule 10); a summary is testimony, not a record (approvals re-asked,
+never adjudicated from memory); irreversible deletes take the user's
+line IN THE EXECUTING SESSION; the catalogue/database outranks any
+declaration including a session's account of itself; verify a red
+before relaying it; sessions confess their own instrument failures
+and the confessions become rules — that loop is the team's engine.
+
+**The user's working style:** short directives, screenshots as
+evidence, decisions theirs ("I decide") — present numbered options,
+wait for the word. They delete sessions freely once lanes close;
+everything must live in files, never in session context.
+
+**Open on the ruling desk for the successor:**
+1. Vendor-identity proposal (Backend owes it) -> user rules -> the
+   APPROVALS CONSOLE gets built (round-3 directive #1).
+2. Password self-service completion (was mid-build; round-3 #2).
+3. Cloudflare Tunnel on the user's word -> CORE_API_URL in Vercel ->
+   full Option C online.
+4. GO-PUBLIC DECISION POINT (recorded, not urgent): git history holds
+   core/supabase/.temp (dev project ref) since c791b3e — a decision,
+   not an oversight, if the repo ever goes public.
+5. Production Supabase project + paid Vercel tier when real customers
+   arrive (deliberate step, user's call).
+6. Neurai-Echo DEPLOY.md publish decision (hardcodes a live project
+   URL; placeholder-vs-env — user's call).
+7. Verify push #5 landed (main==origin) before ANY new work.
+8. Supabase Site URL -> Vercel URL + localhost:3100 redirect (small,
+   user does it in dashboard; improves confirm-email landing).
+
+**Where the full story lives:** this file's Status log (the day's ~50
+minted lessons in chronological order), ARCHITECTURE.md M1-M25 + amendments,
+docs/PLATFORM-BRIEF.md rounds 1-3, docs/CLOSE-m4-frontend.md + core's close
+declaration, and the steward's memory file (auto-memory, survives all
+sessions) for the cross-session narrative.
 
 ## Status
 

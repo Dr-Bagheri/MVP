@@ -239,8 +239,13 @@
     }
   }
 
+  /*
+   * M26 control height: 36px desktop visual. Below md the visual stays 36 but
+   * `.tap` (composed here) extends the HIT area to 44 — the standing 44px
+   * ruling is satisfied by the tap target, the approved density by the box.
+   */
   .btn {
-    @apply tap inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-2
+    @apply tap inline-flex min-h-control cursor-pointer items-center justify-center gap-2
            rounded-md px-4 text-sm font-semibold transition-colors duration-150
            disabled:pointer-events-none disabled:opacity-50;
   }
@@ -260,10 +265,16 @@
     @apply btn bg-danger text-white hover:brightness-110 active:brightness-95;
   }
 
+  /*
+   * Inputs are replaced-adjacent: `.tap` renders no ::after on them, so their
+   * VISUAL height IS their hit area. 44 below md (the ruling), 36 from md up
+   * (M26). Buttons get to stay 36 everywhere because .tap covers them; inputs
+   * do not, and pretending otherwise is the inert-.tap-on-a-select bug again.
+   */
   .input {
     @apply min-h-[44px] w-full rounded-md border border-border bg-surface px-3
            text-sm text-fg transition-colors duration-150 placeholder:text-fg-muted
-           focus:border-accent;
+           focus:border-accent md:min-h-control;
   }
 
   /*

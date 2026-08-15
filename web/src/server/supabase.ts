@@ -232,6 +232,22 @@ export function verifyRecoveryToken(tokenHash: string): Promise<TokenSet> {
 }
 
 /**
+ * Turn a CONFIRM-SIGNUP link into a session, server-side — the signup twin of
+ * `verifyRecoveryToken`, and M1-shaped for the same reason: the default
+ * Supabase confirmation link bounces back with tokens in the URL fragment
+ * (observed live on the first real Resend-delivered confirmation, 2026-08-15 —
+ * the whole session sat in the address bar).
+ *
+ * **Requires the "Confirm signup" email template to link to our
+ * `/api/auth/confirm` route with `{{ .TokenHash }}`** — a dashboard setting.
+ * `type` is "signup" for new-account confirmations; GoTrue also accepts
+ * "email" for some confirmation shapes, so the route allow-lists both.
+ */
+export function verifySignupToken(tokenHash: string, type: "signup" | "email"): Promise<TokenSet> {
+  return gotrue("/verify", { type, token_hash: tokenHash });
+}
+
+/**
  * The URL a user is sent to for Google. `redirectTo` must be an allow-listed
  * URL in the Supabase project, and the code comes back to our callback route
  * — never to the browser as a token.

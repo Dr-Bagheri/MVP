@@ -414,3 +414,39 @@ read as menu items — currently the sidebar looks like one flat menu:
    exchange per M1 — the browser never holds tokens).
    Context: the first real signup lost its password with no recourse
    short of an operator unwind; never again.
+
+## User directives round 4 (2026-08-15 — decision pass BEFORE build; the
+## user is still adding/removing items; nothing builds until they say start)
+
+1. **Registration goes fully self-serve — email confirmation IS the
+   acceptance.** Sign-up → confirm email → the account is ACTIVE (owner
+   of the org they chose at the org-choice screen). No vendor acceptance,
+   no pending state on the happy path. **Supersedes round 3 item 1** (the
+   approvals console): the vendor-identity proposal stops being urgent for
+   registration and may return later for other vendor operations (org
+   suspension, platform administration). At build time this amends M15's
+   registration flow and retires the pending screen from the default path
+   (the state stays in schema; the suspended flow is unchanged).
+   Blockers to make the email leg actually work (the user reports confirm
+   emails "not working"): (a) Supabase's built-in sender rate-limits at
+   ~2–4 emails/hour — custom SMTP must be configured in the dashboard for
+   real use; (b) Site URL + redirect list must point at the Vercel URL and
+   localhost:3100 so the confirm link lands on our screens (handover item
+   8). Both are dashboard steps; the code half is the flow change above.
+
+2. **One structural design system for every surface, modeled on the
+   Supabase dashboard's layout anatomy** (structure, NOT colors — the
+   NeurAI palette from PROPOSAL-02 stays): icon rail → grouped secondary
+   menu → content column with page header (title + muted subtitle),
+   sectioned content with dividers, and label-start/control-end form
+   panels. Every subpage — settings, profile, every management screen, and
+   every future app — renders through the same scaffold components, so a
+   new page inherits the design by construction rather than by imitation.
+   The user's example: profile settings must look exactly like the
+   settings page itself — same anatomy, different content.
+   Deliverable in flight: a blueprint docx (typography scale, spacing
+   rhythm, layout anatomy, RTL adaptation, component inventory, page
+   migration list) + rendered mocks, for the user's approval. Source
+   extracted from the open-source Supabase studio (Scaffold/PageLayout/
+   ProductMenu/FormPanel components, exact class values on record in the
+   steward session).

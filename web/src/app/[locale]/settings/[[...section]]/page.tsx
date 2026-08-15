@@ -7,10 +7,12 @@ import { AuditLogDrains } from "@/components/platform/AuditLogDrains";
 import { AuditLogs } from "@/components/platform/AuditLogs";
 import { GeneralSettings } from "@/components/platform/GeneralSettings";
 import { TwoPane } from "@/components/platform/TwoPane";
+import { PageHeader, Section } from "@/components/scaffold";
 
 /**
- * Settings (M25). Structure adopted from the user's reference; visual design is
- * ours.
+ * Settings (M25, anatomy M26). Structure adopted from the user's reference;
+ * every section renders through the scaffold: PageHeader carries the section's
+ * name and description, content lives in Sections below it.
  *
  * **The rule that shapes this file: a section that isn't built says so.**
  *
@@ -35,7 +37,7 @@ import { TwoPane } from "@/components/platform/TwoPane";
  */
 type SectionState = "ready" | "elsewhere" | "awaiting" | "not-in-v1";
 
-interface Section {
+interface SectionDef {
   slug: string;
   group: "configuration" | "connections" | "compliance";
   state: SectionState;
@@ -43,7 +45,7 @@ interface Section {
   href?: string;
 }
 
-const SECTIONS: readonly Section[] = [
+const SECTIONS: readonly SectionDef[] = [
   { slug: "general", group: "configuration", state: "ready" },
   { slug: "security", group: "configuration", state: "awaiting" },
   { slug: "sso", group: "configuration", state: "not-in-v1" },
@@ -80,43 +82,61 @@ export default function SettingsPage({
   }));
 
   return (
-    <TwoPane navLabel={t("title")} heading={t("title")} groups={groups} activeSlug={active.slug}>
-      <div className="card">
-        <h2 className="h-section mb-1">{t(`section.${active.slug}`)}</h2>
-        <p className="mb-4 text-sm leading-7 text-fg-muted">{t(`desc.${active.slug}`)}</p>
+    <TwoPane
+      navLabel={t("title")}
+      heading={t("title")}
+      groups={groups}
+      activeSlug={active.slug}
+      /* the audit feed is a data-dense table — the blueprint's wide column */
+      width={active.slug === "audit-logs" ? "wide" : "default"}
+    >
+      <PageHeader title={t(`section.${active.slug}`)} subtitle={t(`desc.${active.slug}`)} />
 
-        {active.state === "elsewhere" && active.href ? (
-          <Link href={active.href} className="btn-primary h-10 min-h-0 px-4 text-sm">
+      {active.state === "elsewhere" && active.href ? (
+        <Section>
+          <Link href={active.href} className="btn-primary">
             {t("openSurface")}
           </Link>
-        ) : null}
+        </Section>
+      ) : null}
 
-        {/*
-          `audit-log-drains` stays `awaiting` — the menu badge is correct, it
-          genuinely isn't built — but it has its own page rather than the
-          generic card, because it has something true and useful to say: the
-          webhook mechanism it will be built on works today. Every other
-          awaiting section has nothing to add beyond "not yet".
-        */}
-        {active.state === "awaiting" && active.slug !== "audit-log-drains" ? (
-          <div className="rounded-lg border border-border bg-surface-2 p-3">
+      {/*
+        `audit-log-drains` stays `awaiting` — the menu badge is correct, it
+        genuinely isn't built — but it has its own page rather than the
+        generic card, because it has something true and useful to say: the
+        webhook mechanism it will be built on works today. Every other
+        awaiting section has nothing to add beyond "not yet".
+      */}
+      {active.state === "awaiting" && active.slug !== "audit-log-drains" ? (
+        <Section>
+          <div className="rounded-lg border border-border bg-surface-2 px-5 py-4">
             <p className="text-sm font-medium text-fg">{t("awaitingTitle")}</p>
             <p className="mt-1 text-sm leading-6 text-fg-muted">{t(`awaiting.${active.slug}`)}</p>
           </div>
-        ) : null}
+        </Section>
+      ) : null}
 
-        {active.slug === "audit-log-drains" ? <AuditLogDrains /> : null}
+      {active.slug === "audit-log-drains" ? (
+        <Section>
+          <AuditLogDrains />
+        </Section>
+      ) : null}
 
-        {active.state === "not-in-v1" ? (
-          <div className="rounded-lg border border-border bg-surface-2 p-3">
+      {active.state === "not-in-v1" ? (
+        <Section>
+          <div className="rounded-lg border border-border bg-surface-2 px-5 py-4">
             <p className="text-sm font-medium text-fg">{t("notInV1Title")}</p>
             <p className="mt-1 text-sm leading-6 text-fg-muted">{t(`notInV1.${active.slug}`)}</p>
           </div>
-        ) : null}
+        </Section>
+      ) : null}
 
-        {active.state === "ready" && active.slug === "general" ? <GeneralSettings /> : null}
-        {active.state === "ready" && active.slug === "audit-logs" ? <AuditLogs /> : null}
-      </div>
+      {active.state === "ready" && active.slug === "general" ? <GeneralSettings /> : null}
+      {active.state === "ready" && active.slug === "audit-logs" ? (
+        <Section>
+          <AuditLogs />
+        </Section>
+      ) : null}
     </TwoPane>
   );
 }

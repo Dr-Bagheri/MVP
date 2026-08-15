@@ -1,10 +1,13 @@
 import type { Config } from "tailwindcss";
+import { SCAFFOLD } from "./src/components/scaffold/constants";
 
 /**
- * Echo design system — tokens only here; every value is a CSS variable so
+ * NeurAI design system — tokens only here; every color is a CSS variable so
  * light/dark switch without a second Tailwind theme (see globals.css).
- * Style direction: "Soft UI Evolution" (ui-ux-pro-max, mandated) — subtle
- * depth, clear contrast, WCAG AA+.
+ *
+ * Sizes and shape DERIVE from the M26 scaffold constants (the approved
+ * blueprint's numbers) — scaffold.test.tsx asserts this file and constants.ts
+ * agree, so neither can be hand-edited into a fork of the other.
  */
 const config: Config = {
   content: ["./src/**/*.{ts,tsx}"],
@@ -40,15 +43,43 @@ const config: Config = {
         danger: "rgb(var(--danger) / <alpha-value>)",
         info: "rgb(var(--info) / <alpha-value>)",
       },
+      /*
+       * M26 shape: controls 6 / panels 8 / tiles 12 / modals 16. The class
+       * NAMES existing code already wears keep their meaning (.input and .btn
+       * wear rounded-md, cards wear rounded-lg) — the VALUES tightened to the
+       * approved Supabase-anatomy scale. md < lg still holds (6 < 8).
+       */
       borderRadius: {
-        sm: "8px",
-        DEFAULT: "10px",
-        md: "12px",
-        lg: "16px",
-        xl: "20px",
+        sm: "4px",
+        DEFAULT: `${SCAFFOLD.radius.panel}px`,
+        md: `${SCAFFOLD.radius.control}px`,
+        lg: `${SCAFFOLD.radius.panel}px`,
+        xl: `${SCAFFOLD.radius.tile}px`,
+        "2xl": `${SCAFFOLD.radius.modal}px`,
+      },
+      fontSize: {
+        "pane-title": [`${SCAFFOLD.fontSize.paneTitle}px`, "1.6"],
+        "menu-item": [`${SCAFFOLD.fontSize.menuItem}px`, "1.7"],
+        detail: [`${SCAFFOLD.fontSize.detail}px`, "1.7"],
+        "group-label": [`${SCAFFOLD.fontSize.groupLabel}px`, "1.5"],
+      },
+      width: {
+        menu: `${SCAFFOLD.menuWidth}px`,
+        rail: `${SCAFFOLD.railWidth}px`,
+      },
+      maxWidth: {
+        content: `${SCAFFOLD.contentMaxWidth}px`,
+        "content-wide": `${SCAFFOLD.contentMaxWidthWide}px`,
+      },
+      height: {
+        control: `${SCAFFOLD.controlHeight}px`,
+        topbar: `${SCAFFOLD.topBarHeight}px`,
+      },
+      minHeight: {
+        control: `${SCAFFOLD.controlHeight}px`,
       },
       boxShadow: {
-        // soft-UI depth: two-layer, never heavy
+        // soft depth: two-layer, never heavy
         card: "0 1px 2px rgb(2 6 23 / 0.04), 0 4px 12px rgb(2 6 23 / 0.06)",
         pop: "0 2px 6px rgb(2 6 23 / 0.08), 0 12px 32px rgb(2 6 23 / 0.12)",
       },

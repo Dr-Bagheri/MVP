@@ -1,12 +1,18 @@
--- M15 amendment: who accepts whom.
+-- M15 as amended by 0056: who accepts whom.
 --
---   joining an existing org → that org's admin, through the product
---   a brand-new org         → the vendor, through an operator path that the
---                             product cannot reach
+--   founding a NEW org      → nobody. The confirmed email IS the acceptance:
+--                             the founder is ACTIVE from the first row, owner
+--                             of an empty org with nothing to leak into.
+--   joining an EXISTING org → that org's admin, through the product
+--                             (or an invitation, 0043 — active on redeem).
 --
--- The second is the interesting one to test, because the failure mode is not
--- "it doesn't work" but "core/ can quietly accept its own customers".
+-- The vendor path (vendor_pending_orgs / vendor_accept_org) REMAINS: it is
+-- vendor-only, product-unreachable, and correct for any founder registered
+-- before 0056. It is tested here against a hand-seeded legacy-shaped row,
+-- because register_account can no longer produce one — which is itself the
+-- fact 0056 exists to assert.
 
+-- --- a founder is ACTIVE at birth (0056) -----------------------------------
 reset role;
 insert into auth.users (id, email)
 values ('0f000000-0000-4000-8000-00000000000f', 'founder@example.com');
@@ -15,63 +21,93 @@ set local role echo_app;
 select echo.register_account(
   '0f000000-0000-4000-8000-00000000000f', 'founder@example.com', 'بنیان‌گذار');
 
--- Read it as the founder: with no identity attached, echo_app can see nothing
--- at all — including the row it just created. That is invariant 2 doing its
--- job, so the check has to authenticate like the real UI would.
+-- Authenticate as the founder, as the real UI would (invariant 2: with no
+-- identity attached, echo_app cannot see even the row it just created).
 select set_config('echo.actor_id', '0f000000-0000-4000-8000-00000000000f', true);
 select t.ok(
   (select status from echo.app_user where id = '0f000000-0000-4000-8000-00000000000f')
-    = 'pending',
-  'a self-registered founder starts pending, with nobody in their org to accept them');
+    = 'active',
+  'a founder is ACTIVE at birth — the confirmed email is the acceptance (0056)');
+select t.ok(
+  (select accepted_at is null and accepted_by is null
+     from echo.app_user where id = '0f000000-0000-4000-8000-00000000000f'),
+  'nothing was "accepted": the record of the gate lives in auth email '
+  'confirmation, not in an acceptance stamp nobody made');
 
--- --- the product cannot accept its own customers --------------------------
+-- --- joining an existing org still pends (the other half of the matrix) ----
+reset role;
+insert into auth.users (id, email)
+values ('0e000000-0000-4000-8000-00000000000e', 'joiner2@example.com');
+
+set local role echo_app;
+select t.ok(
+  (select status from echo.register_account(
+     '0e000000-0000-4000-8000-00000000000e', 'joiner2@example.com', 'پیوسته',
+     null, '0a000000-0000-4000-8000-00000000000a')) = 'pending',
+  'joining an EXISTING org lands pending — an org id is an identifier, '
+  'not an invitation (0056 deliberately does not reach this path)');
+
+-- --- the vendor path, exercised against a LEGACY pending founder -----------
+-- Seeded at owner altitude in the exact shape register_account produced
+-- before 0056. An auth.users row written here is fixture, not evidence of a
+-- signup — this represents an org that registered before the amendment.
+reset role;
+insert into auth.users (id, email)
+values ('0d000000-0000-4000-8000-00000000000d', 'legacy@example.com');
+insert into echo.org (id, name)
+values ('dd000000-0000-4000-8000-00000000000d', 'سازمان قدیمی');
+insert into echo.app_user (id, org_id, email, display_name, role, status)
+values ('0d000000-0000-4000-8000-00000000000d', 'dd000000-0000-4000-8000-00000000000d',
+        'legacy@example.com', 'بنیان‌گذار قدیمی', 'owner', 'pending');
+
+-- The product cannot accept its own customers.
+set local role echo_app;
 select t.denied(
-  $$select echo.vendor_accept_org(
-      (select org_id from echo.app_user where id = '0f000000-0000-4000-8000-00000000000f'))$$,
+  $$select echo.vendor_accept_org('dd000000-0000-4000-8000-00000000000d')$$,
   'core/ has no EXECUTE on the vendor acceptance path');
 select t.denied($$select echo.vendor_pending_orgs()$$,
   'nor can it even list the orgs awaiting acceptance');
 
--- The founder cannot self-accept through the ordinary product path either.
+-- The pending founder cannot self-accept through the ordinary product path.
 -- Filtered rather than refused, since 0018: a pending account cannot write to
 -- its own row at all, so the acceptance rules are never even reached.
-select set_config('echo.actor_id', '0f000000-0000-4000-8000-00000000000f', true);
+select set_config('echo.actor_id', '0d000000-0000-4000-8000-00000000000d', true);
 select t.writes_nothing(
   $$update echo.app_user set status = 'active'
-     where id = '0f000000-0000-4000-8000-00000000000f'$$,
+     where id = '0d000000-0000-4000-8000-00000000000d'$$,
   'and the founder cannot accept themselves — being an org''s only admin is not authority');
 
--- --- the vendor can ---------------------------------------------------------
--- The operator connects with no product identity attached, as it would in
--- reality; the acceptance must record itself correctly regardless.
+-- The vendor can — and sees exactly the legacy org, nothing born after 0056.
 reset role;
 select set_config('echo.actor_id', '', true);
 set local role echo_vendor;
 
 select t.ok(
   exists (select 1 from echo.vendor_pending_orgs()
-          where founder = '0f000000-0000-4000-8000-00000000000f'),
-  'the vendor sees the new org waiting');
+          where founder = '0d000000-0000-4000-8000-00000000000d'),
+  'the vendor sees the legacy org waiting');
+select t.ok(
+  not exists (select 1 from echo.vendor_pending_orgs()
+              where founder = '0f000000-0000-4000-8000-00000000000f'),
+  'a post-0056 founder''s org is NOT in the queue — born active, nothing to accept');
 select t.ok(
   not exists (select 1 from echo.vendor_pending_orgs()
               where org_id = '0a000000-0000-4000-8000-00000000000a'),
   'and does not see established orgs — those accept their own joiners');
 
-select echo.vendor_accept_org(
-  (select org_id from echo.vendor_pending_orgs()
-    where founder = '0f000000-0000-4000-8000-00000000000f'));
+select echo.vendor_accept_org('dd000000-0000-4000-8000-00000000000d');
 
 reset role;
 select t.ok(
-  (select status from echo.app_user where id = '0f000000-0000-4000-8000-00000000000f')
+  (select status from echo.app_user where id = '0d000000-0000-4000-8000-00000000000d')
     = 'active',
-  'the founder is active');
+  'the legacy founder is active');
 select t.ok(
   (select accepted_at is not null and accepted_by is null
-     from echo.app_user where id = '0f000000-0000-4000-8000-00000000000f'),
+     from echo.app_user where id = '0d000000-0000-4000-8000-00000000000d'),
   'accepted_at set with accepted_by NULL is the record that the VENDOR accepted, not an org admin');
 
--- --- and only for a brand-new org ------------------------------------------
+-- --- and only for an org that has someone to accept ------------------------
 set local role echo_vendor;
 select t.denied(
   $$select echo.vendor_accept_org('0a000000-0000-4000-8000-00000000000a')$$,

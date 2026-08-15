@@ -137,7 +137,7 @@ select t.ok(
   (select allow_assistant from echo.resolve_api_key('sha-live')) = true,
   'an admin opens it, and the resolution reflects it immediately');
 
--- --- registration always produces a pending account (M15) -----------------
+-- --- founding registration lands ACTIVE (M15 as amended by 0056) -----------
 reset role;
 insert into auth.users (id, email)
 values ('09000000-0000-4000-8000-000000000009', 'frank@example.com');
@@ -145,8 +145,9 @@ values ('09000000-0000-4000-8000-000000000009', 'frank@example.com');
 set local role echo_app;
 select t.ok(
   (select status from echo.register_account(
-     '09000000-0000-4000-8000-000000000009', 'frank@example.com', 'فرانک')) = 'pending',
-  'self-registration lands in pending — the function cannot produce an active user');
+     '09000000-0000-4000-8000-000000000009', 'frank@example.com', 'فرانک')) = 'active',
+  'founding a new org lands ACTIVE — the confirmed email is the acceptance (0056); '
+  'the join-an-existing-org path still pends, asserted in 80_vendor_acceptance');
 -- Read it as the new account: echo_app with no identity attached can see
 -- nothing, not even the row it just created (invariant 2).
 select set_config('echo.actor_id', '09000000-0000-4000-8000-000000000009', true);

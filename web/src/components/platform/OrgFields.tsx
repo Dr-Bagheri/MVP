@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { Org, User } from "@/api/types";
+import { FormPanel, FormRow, PanelFooter } from "@/components/scaffold";
 
 /**
  * The organization's own settings — name and interface locale (M25).
@@ -156,34 +157,32 @@ export function OrgFields() {
    * member — core serves it at `/v1/org` precisely so the shell can show the
    * org name — while the write is admin-gated, so hiding the values entirely
    * would withhold something they are allowed to see in order to express a
-   * restriction on something else.
+   * restriction on something else. (The Section title above this component is
+   * supplied by GeneralSettings — one heading for both branches.)
    */
   if (me !== null && !isAdmin) {
     return (
-      <div>
-        <h3 className="mb-1 text-sm font-semibold text-fg">{t("orgTitle")}</h3>
-        <dl className="mb-2 space-y-2 text-sm">
-          <div>
-            <dt className="text-xs text-fg-muted">{tAdmin("orgName")}</dt>
-            <dd className="text-fg">{org.name}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-fg-muted">{t("orgLocale")}</dt>
-            <dd className="text-fg">{t(`orgLocale_${org.locale === "en" ? "en" : "fa"}`)}</dd>
-          </div>
-        </dl>
-        <p className="text-xs leading-6 text-fg-muted">{t("orgAdminOnly")}</p>
-      </div>
+      <>
+        <FormPanel>
+          <FormRow label={tAdmin("orgName")}>
+            <span className="text-sm text-fg">{org.name}</span>
+          </FormRow>
+          <FormRow label={t("orgLocale")}>
+            <span className="text-sm text-fg">
+              {t(`orgLocale_${org.locale === "en" ? "en" : "fa"}`)}
+            </span>
+          </FormRow>
+        </FormPanel>
+        <p className="mt-2 text-detail leading-6 text-fg-muted">{t("orgAdminOnly")}</p>
+      </>
     );
   }
 
   return (
-    <div>
-      <h3 className="mb-3 text-sm font-semibold text-fg">{t("orgTitle")}</h3>
-
-      <label className="mb-3 block">
-        <span className="mb-1 block text-xs text-fg-muted">{tAdmin("orgName")}</span>
+    <FormPanel>
+      <FormRow label={tAdmin("orgName")} htmlFor="org-name">
         <input
+          id="org-name"
           className="input"
           value={name}
           disabled={busy}
@@ -192,12 +191,12 @@ export function OrgFields() {
             setSaved(false);
           }}
         />
-      </label>
+      </FormRow>
 
-      <label className="mb-4 block">
-        <span className="mb-1 block text-xs text-fg-muted">{t("orgLocale")}</span>
+      <FormRow label={t("orgLocale")} description={t("orgLocaleHint")} htmlFor="org-locale">
         <select
-          className="input h-11 min-h-0 w-auto py-0 text-sm md:h-10"
+          id="org-locale"
+          className="input min-h-0 h-11 w-auto py-0 md:h-control"
           value={locale}
           disabled={busy}
           onChange={(event) => {
@@ -214,12 +213,13 @@ export function OrgFields() {
             </option>
           ))}
         </select>
-        <span className="mt-1 block text-xs text-fg-muted">{t("orgLocaleHint")}</span>
-      </label>
+      </FormRow>
 
-      <div className="flex flex-wrap items-center gap-3">
+      <PanelFooter>
+        {saved ? <span className="text-detail text-success">{t("orgSaved")}</span> : null}
+        {failed ? <span className="text-detail text-danger">{t("orgSaveFailed")}</span> : null}
         <button
-          className="btn-primary h-10 min-h-0 px-4 text-sm"
+          className="btn-primary"
           /* Disabled when there is nothing to send: core answers an empty
              patch with a 400, and showing someone an error for changing their
              mind back is a worse answer than a button that stays quiet. */
@@ -228,9 +228,7 @@ export function OrgFields() {
         >
           {t("orgSave")}
         </button>
-        {saved ? <span className="text-xs text-success">{t("orgSaved")}</span> : null}
-        {failed ? <span className="text-xs text-danger">{t("orgSaveFailed")}</span> : null}
-      </div>
-    </div>
+      </PanelFooter>
+    </FormPanel>
   );
 }

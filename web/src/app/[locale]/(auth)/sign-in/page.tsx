@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/routing";
 import { api, BffError } from "@/api/client";
@@ -46,6 +46,37 @@ export default function SignInPage() {
   const [needsOrg, setNeedsOrg] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Arrived from a successful email confirmation — say so while routing. */
+  const [confirmedNote, setConfirmedNote] = useState(false);
+
+  /*
+   * The confirm-email landing (`/api/auth/confirm` redirects here).
+   *
+   * `?confirmed=1` means that route already exchanged the link for a session
+   * cookie — so route by identity IMMEDIATELY: a brand-new person lands on
+   * the org-choice step without retyping a password they entered two minutes
+   * ago, and a returning one goes straight in. `?confirmed=failed` names the
+   * dead link instead of presenting an unexplained sign-in form.
+   *
+   * Read from `location.search` in an effect, deliberately NOT
+   * `useSearchParams()`: that hook forces a prerender bailout that broke the
+   * production build on the hub while every dev render stayed green. A
+   * one-shot read after mount has no such trap.
+   */
+  useEffect(() => {
+    const confirmed = new URLSearchParams(window.location.search).get("confirmed");
+    if (confirmed === "1") {
+      // Say what just happened while the routing runs — a silent redirect
+      // reads as "nothing happened" for the two seconds it takes (user
+      // review, 2026-08-15: the confirmation must SAY the account is ready).
+      setConfirmedNote(true);
+      setBusy(true);
+      void routeByIdentity().finally(() => setBusy(false));
+    } else if (confirmed === "failed") {
+      setError(t("confirmFailed"));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot, on arrival
+  }, []);
 
   /** Route by what the SERVER says the caller is, never by what we sent it. */
   async function routeByIdentity() {
@@ -95,7 +126,12 @@ export default function SignInPage() {
       // carries the email, and asking again for something we already know is
       // friction. They rename themselves on the profile screen.
       await api.register({ display_name: email.split("@")[0] ?? email, org_name: orgName });
-      router.push("/pending");
+      // Route by what the server MADE of us, the same rule as sign-in: a
+      // founder is ACTIVE at birth (db/0056 — the confirmed email was the
+      // acceptance) and goes straight into the app; a joiner would still
+      // land pending and see the waiting screen. A hard-coded /pending here
+      // would park a working account in a waiting room (pre-0056 behavior).
+      await routeByIdentity();
     } catch (cause) {
       setError(refusalText(cause, t));
     } finally {
@@ -111,6 +147,18 @@ export default function SignInPage() {
         </span>
         <h1 className="text-xl font-bold text-fg">{t("signInTitle")}</h1>
       </div>
+
+      {confirmedNote ? (
+        /*
+         * The moment the email link lands: the account's email is verified and
+         * a session already exists. `role="status"` so screen readers hear it
+         * without it being an interruption; the org form or the app follows in
+         * a beat, but this line is what makes the click feel ANSWERED.
+         */
+        <p role="status" className="mb-4 rounded-lg border border-success/40 bg-success/10 px-3 py-2 text-sm text-success">
+          {t("confirmedReady")}
+        </p>
+      ) : null}
 
       {needsOrg ? (
         <form className="space-y-4" onSubmit={register}>

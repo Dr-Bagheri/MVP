@@ -25,6 +25,8 @@
     "finish": "Finish setting up",
     "finishSetup": "Your account exists but is not attached to an organization yet. Enter a name to finish.",
     "sessionLost": "The session was not established; please sign in again.",
+    "confirmFailed": "The confirmation link is invalid or expired. If you already confirmed, just sign in here; otherwise sign up again.",
+    "confirmedReady": "Your email is confirmed and your account is ready — signing you in…",
     "signInFailed": "Could not sign in. Please try again.",
     "signUpFailed": "Could not sign up. Please try again.",
     "alreadyRegistered": "This account is already registered.",

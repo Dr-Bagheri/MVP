@@ -2,13 +2,14 @@
 
 import { useLocale, useTranslations } from "next-intl";
 import { usePathname, useRouter } from "@/i18n/routing";
-import { Card, Field } from "@/components/ui";
 import { OrgFields } from "@/components/platform/OrgFields";
+import { FormPanel, FormRow, Section } from "@/components/scaffold";
 import { storeTheme, type Theme } from "@/lib/theme";
 import { useTheme } from "@/lib/useTheme";
 
 /**
- * Settings · General (M25).
+ * Settings · General (M25, anatomy M26): two scaffold Sections — preferences,
+ * then the organization — each a FormPanel of label-start/control-end rows.
  *
  * **The panel is split by what is actually true, not by topic.**
  *
@@ -63,38 +64,40 @@ export function GeneralSettings() {
    */
 
   return (
-    <div className="space-y-4">
-      <Card>
-        <h3 className="h-section mb-3">{t("prefsTitle")}</h3>
-
-        <Field label={t("language")} hint={t("languageHint")}>
-          <select
-            className="input h-11 min-h-0 md:h-10"
-            value={locale}
-            onChange={(e) => router.replace(pathname, { locale: e.target.value as "fa" | "en" })}
-          >
-            <option value="fa">فارسی</option>
-            <option value="en">English</option>
-          </select>
-        </Field>
-
-        <div className="mt-3">
-          <Field label={t("theme")} hint={t("themeHint")}>
+    <>
+      <Section title={t("prefsTitle")}>
+        <FormPanel>
+          <FormRow label={t("language")} description={t("languageHint")} htmlFor="pref-language">
             <select
-              className="input h-11 min-h-0 md:h-10"
+              id="pref-language"
+              /* a replaced element: `.tap` draws nothing on it, so its VISUAL
+                 height is its hit area — 44 below md, control height above */
+              className="input min-h-0 h-11 md:h-control"
+              value={locale}
+              onChange={(e) => router.replace(pathname, { locale: e.target.value as "fa" | "en" })}
+            >
+              <option value="fa">فارسی</option>
+              <option value="en">English</option>
+            </select>
+          </FormRow>
+          <FormRow label={t("theme")} description={t("themeHint")} htmlFor="pref-theme">
+            <select
+              id="pref-theme"
+              className="input min-h-0 h-11 md:h-control"
               value={theme}
               onChange={(e) => storeTheme(e.target.value as Theme)}
             >
               <option value="dark">{t("themeDark")}</option>
               <option value="light">{t("themeLight")}</option>
             </select>
-          </Field>
-        </div>
-      </Card>
+          </FormRow>
+        </FormPanel>
+      </Section>
 
       {/*
         The org block is FE3's `OrgFields`, self-contained and dropped in whole
-        rather than reimplemented here.
+        rather than reimplemented here. Its Section title lives HERE so the
+        member read-only branch and the admin form sit under one heading.
 
         It replaced an amber "not wired" notice that stood on a **wrong reading
         of a truthful 404** (see the header): the read lives at `GET /v1/org`
@@ -109,7 +112,9 @@ export function GeneralSettings() {
         does not have. A local type is a claim about someone else's data, and
         nothing checks it until someone reads the producer.
       */}
-      <OrgFields />
-    </div>
+      <Section title={t("orgTitle")} divided>
+        <OrgFields />
+      </Section>
+    </>
   );
 }
