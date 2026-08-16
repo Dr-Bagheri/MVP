@@ -527,6 +527,67 @@ export const api = {
   },
 
   /**
+   * **LIVE** — the Part 5 upload wire: create → sign → PUT → register →
+   * finish. Bytes go from the browser STRAIGHT to storage on a signed URL
+   * core mints (Vercel's request ceiling is smaller than one part, so they
+   * can never ride the BFF); everything that carries identity stays
+   * server-side.
+   */
+  async createCall(input: {
+    title?: string;
+    scope?: "private" | "org";
+    source: "web" | "upload";
+  }): Promise<{ id: string }> {
+    return bff<{ id: string }>("/api/calls", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    });
+  },
+
+  async signCallPart(
+    callId: string,
+    input: { idx: number; content_type: string },
+  ): Promise<{ upload_url: string; path: string; content_type: string }> {
+    return bff(`/api/calls/${callId}/parts/sign`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    });
+  },
+
+  /**
+   * The one browser→storage hop in the product. Plain fetch, not `bff`: the
+   * URL IS the credential (single object, expiring), no session cookie or
+   * token travels, and the response body is not consulted beyond ok-ness.
+   */
+  async putSignedPart(uploadUrl: string, blob: Blob, contentType: string): Promise<void> {
+    const response = await fetch(uploadUrl, {
+      method: "PUT",
+      headers: { "content-type": contentType },
+      body: blob,
+    });
+    if (!response.ok) {
+      throw new BffError(response.status, "upstream", `upload failed (${response.status})`);
+    }
+  },
+
+  async registerCallPart(
+    callId: string,
+    input: { idx: number; offset_ms: number; path: string },
+  ): Promise<{ part_id: string }> {
+    return bff(`/api/calls/${callId}/parts/register`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    });
+  },
+
+  async finishCall(callId: string): Promise<{ id: string; status: string }> {
+    return bff(`/api/calls/${callId}/finish`, { method: "POST" });
+  },
+
+  /**
    * **LIVE** — `GET /api/calls/{id}`, which core/ answers with the call plus
    * its parts.
    *

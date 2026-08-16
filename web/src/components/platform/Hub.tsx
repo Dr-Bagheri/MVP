@@ -8,6 +8,7 @@ import type { AgentEvent, AgentMessage, ModelInfo, Skill, User } from "@/api/typ
 import { Link, useRouter } from "@/i18n/routing";
 import { useSearchParams } from "next/navigation";
 import { personName, modelLabel } from "@/lib/format";
+import { useDictation } from "@/lib/dictation";
 import { ConversationThread } from "./ConversationThread";
 import { HistoryPanel } from "./HistoryPanel";
 import { EchoMark, MicIcon, PlusIcon, SendIcon, ToolsIcon } from "./icons";
@@ -66,6 +67,10 @@ export function Hub() {
   const [toolsOpen, setToolsOpen] = useState(false);
   const [toolNames, setToolNames] = useState<string[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
+  /** The mic dictates into the composer (it is NOT Echo's recorder). */
+  const dictation = useDictation(locale === "fa" ? "fa-IR" : "en-US", (text) =>
+    setInput((v) => (v.trim() === "" ? text : `${v} ${text}`)),
+  );
   /** Held in a ref, not state: it is read inside the stream loop, where a
    *  stale closure over state would silently start a second conversation. */
   const sessionId = useRef<string | undefined>(undefined);
@@ -468,13 +473,16 @@ export function Hub() {
       ) : null}
 
       <div
-        className={`w-full max-w-[660px] rounded-2xl border border-border-strong bg-surface p-3 text-start ${
+        /* focus-within: the PANEL is the control, so the panel carries the
+           focus affordance — the global :focus-visible ring on the inner
+           input drew a box inside a box (the user's report) */
+        className={`w-full max-w-[660px] rounded-2xl border border-border-strong bg-surface p-3 text-start transition-colors focus-within:border-accent ${
           idle ? "mt-7" : "sticky bottom-0 mx-auto"
         }`}
       >
         <div className="flex items-center gap-2">
           <input
-            className="min-h-[38px] flex-1 bg-transparent text-sm text-fg outline-none placeholder:text-fg-muted"
+            className="min-h-[38px] flex-1 bg-transparent text-sm text-fg outline-none placeholder:text-fg-muted focus-visible:ring-0 focus-visible:ring-offset-0"
             placeholder={t("promptPlaceholder")}
             aria-label={t("promptPlaceholder")}
             value={input}
@@ -489,8 +497,14 @@ export function Hub() {
           />
           <button
             type="button"
-            className="tap grid h-[38px] w-[38px] place-items-center rounded-xl text-fg-muted hover:bg-surface-2 hover:text-fg"
-            title={t("voice")}
+            className={`tap grid h-[38px] w-[38px] place-items-center rounded-xl ${
+              dictation.status === "listening"
+                ? "animate-pulse bg-accent-soft text-accent"
+                : "text-fg-muted hover:bg-surface-2 hover:text-fg"
+            }`}
+            title={dictation.status === "listening" ? t("voiceListening") : t("voice")}
+            aria-pressed={dictation.status === "listening"}
+            onClick={dictation.toggle}
           >
             <MicIcon width={18} height={18} />
           </button>
@@ -517,6 +531,12 @@ export function Hub() {
             </button>
           )}
         </div>
+        {dictation.status === "unsupported" || dictation.status === "denied" ? (
+          /* two different nothings: "this browser can't" vs "you said no" */
+          <p className="mt-2 text-xs leading-5 text-fg-muted">
+            {dictation.status === "unsupported" ? t("voiceUnsupported") : t("voiceDenied")}
+          </p>
+        ) : null}
         {attachments.length > 0 ? (
           <div className="mt-2 flex flex-wrap gap-1.5">
             {attachments.map((a) => (

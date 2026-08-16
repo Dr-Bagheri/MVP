@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { AssistantPane } from "@/components/AssistantPane";
 import { PlatformShell } from "@/components/platform/PlatformShell";
+import { MenuLayout } from "@/components/scaffold";
 
 /**
  * Echo's app shell — **the seam between the platform and an app inside it.**
@@ -38,11 +39,20 @@ export function EchoAppShell({
   children,
   page,
   presetCallId,
+  menu,
 }: {
   children: ReactNode;
   /** Context label the assistant shows for "the page you're on". */
   page: string;
   presetCallId?: string;
+  /**
+   * Echo's section menu (Part 5): when present the content column adopts
+   * the platform's two-pane anatomy — SectionMenu beside, page content in
+   * the middle, exactly Settings' skeleton — per the user's directive that
+   * Echo look like the rest of the platform. The pane padding then comes
+   * from the page's own PageContainer, not from this wrapper.
+   */
+  menu?: ReactNode;
 }) {
   const t = useTranslations("nav");
   const [assistantOpen, setAssistantOpen] = useState(false);
@@ -54,14 +64,14 @@ export function EchoAppShell({
   return (
     <PlatformShell>
       <div className="flex h-full min-h-0">
-        <div className="min-w-0 flex-1 overflow-y-auto p-5">
+        <div className={`min-w-0 flex-1 overflow-y-auto ${menu ? "" : "p-5"}`}>
           {/*
             The affordance to re-open the pane lives with the app, not the
             platform top bar: it is Echo's assistant, and on another app's
             surface this button would point at nothing.
           */}
           {!assistantOpen ? (
-            <div className="mb-4 flex justify-end">
+            <div className={`flex justify-end ${menu ? "px-5 pt-4" : "mb-4"}`}>
               <button
                 type="button"
                 className="btn-secondary h-9 min-h-0 px-3 text-xs"
@@ -71,7 +81,7 @@ export function EchoAppShell({
               </button>
             </div>
           ) : null}
-          {children}
+          {menu ? <MenuLayout menu={menu}>{children}</MenuLayout> : children}
         </div>
 
         <AssistantPane

@@ -60,6 +60,9 @@ export const TRAIL: Readonly<Record<string, TrailEntry>> = {
    * the merged surface lands.
    */
   "/echo": { label: "platform.echo", parent: "/" },
+  /** Echo's sections (Part 5): the same anatomy as Settings, so the same
+   *  trail shape — the slug builds the leaf label. */
+  "/echo/[section]": { labelPrefix: "echo.section", parent: "/echo" },
   /**
    * **`/calls/[id]`'s parent is `/echo`, not `/calls`.**
    *

@@ -36,3 +36,27 @@ export async function GET() {
     return errorResponse(error);
   }
 }
+
+/**
+ * POST /api/calls — a new call row, status `recording` (Part 5).
+ *
+ * Identity only: title/scope/source pass through, core validates and RLS
+ * scopes. The id that comes back is what every part upload and the finish
+ * hang off.
+ */
+export async function POST(request: Request) {
+  try {
+    const body = (await request.json()) as {
+      title?: string;
+      scope?: string;
+      source?: string;
+    };
+    const created = await coreFetch<{ id: string }>("/v1/calls", {
+      method: "POST",
+      body: { title: body.title, scope: body.scope, source: body.source },
+    });
+    return Response.json(created, { status: 201 });
+  } catch (error) {
+    return errorResponse(error);
+  }
+}
