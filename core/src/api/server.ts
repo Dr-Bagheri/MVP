@@ -299,7 +299,8 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
      * repo and forgets the route — which is exactly the failure this closes.
      */
     const ALLOWED = new Set([
-      "display_name", "display_name_en", "username", "calendar", "timezone", "locale",
+      "display_name", "display_name_en", "username", "avatar_url",
+      "calendar", "timezone", "locale",
     ]);
     const unknown = Object.keys(body).filter((key) => !ALLOWED.has(key));
     if (unknown.length > 0) {
@@ -340,6 +341,7 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       display_name: body.display_name as string | undefined,
       display_name_en: optionalText(body.display_name_en, "display_name_en"),
       username: optionalText(body.username, "username"),
+      avatar_url: optionalText(body.avatar_url, "avatar_url"),
       calendar: setting(body.calendar, "calendar"),
       timezone: setting(body.timezone, "timezone"),
       locale: setting(body.locale, "locale"),

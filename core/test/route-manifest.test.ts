@@ -88,7 +88,12 @@ const REQUIRED_ROUTES: [method: string, path: string, why: string][] = [
  */
 const KNOWN_ABSENT: [what: string, why: string][] = [
   ["GET /v1/admin/org", "deliberate: it would return the same row and columns as GET /v1/org, and a second read of one row is a second thing that can disagree with the first. The admin screen reads /v1/org and writes PATCH /v1/admin/org"],
-  ["avatar_url on the member wire", "steward-ruled deliberate: echo.app_user.avatar_url exists and stays unexposed because no UPLOAD path exists. Shipping it would be a consumer with no producer — permanently empty images rendered with full confidence. Initials serve v1; it returns alongside an upload design, which is a signer question (M10), not a column question"],
+  // avatar_url LEFT the absent list 2026-08-16 (user directive): the upload
+  // path exists — PATCH /v1/me accepts a capped data:image URL — so the
+  // condition the old entry set ("it returns alongside an upload design") is
+  // met. v1 stores the cropped image in the column rather than behind a
+  // storage signer; see members.ts for why that is a value change away from
+  // signed URLs, not a schema change.
   ["GET /v1/admin/models", "the CURATION list (which models an admin may choose from) has no endpoint; setting the choice does — PATCH /v1/admin/org carries allowed_models. Until then an admin screen can show the current curation but not the menu to pick from"],
   // (SPEC's three write tools landed in milestone 3 — they are TOOLS, not
   // routes, and their approval flow is the two /proposals routes above.)

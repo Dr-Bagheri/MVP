@@ -175,6 +175,40 @@ describe("locale is a preference like the others", () => {
   });
 });
 
+describe("the avatar is a capped data URL, never a remote address", () => {
+  const PIXEL =
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+
+  it("writes a valid data URL through the supplied-flag shape", async () => {
+    const { db, log } = fakeDb();
+    await createMembersRepo(db).updateProfile(IDENTITY, { avatar_url: PIXEL });
+    // [.., setAvatar, avatar] are indices 13 and 14.
+    expect(updateParams(log)[13]).toBe(true);
+    expect(updateParams(log)[14]).toBe(PIXEL);
+  });
+
+  it("null clears it — removing a photo is a real instruction", async () => {
+    const { db, log } = fakeDb();
+    await createMembersRepo(db).updateProfile(IDENTITY, { avatar_url: null });
+    expect(updateParams(log)[13]).toBe(true);
+    expect(updateParams(log)[14]).toBeNull();
+  });
+
+  it("refuses an https URL — a remote avatar is a tracking pixel", async () => {
+    const { db } = fakeDb();
+    await expect(
+      createMembersRepo(db).updateProfile(IDENTITY, { avatar_url: "https://example.com/me.png" }),
+    ).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  it("refuses an oversized image and names the fix", async () => {
+    const { db } = fakeDb();
+    const huge = `data:image/jpeg;base64,${"A".repeat(140000)}`;
+    await expect(createMembersRepo(db).updateProfile(IDENTITY, { avatar_url: huge }))
+      .rejects.toMatchObject({ code: "avatar_too_large" });
+  });
+});
+
 describe("date preferences: auto is a value, not an absence", () => {
   /**
    * Params are [id, setName, name, setNameEn, nameEn, setUsername, username,

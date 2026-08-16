@@ -35,6 +35,18 @@ export interface MemberRecord {
   display_name_en: string | null;
   /** Unique within the org, NULL until chosen. Format mirrored below. */
   username: string | null;
+  /**
+   * The profile photo as a `data:image/…;base64` URL, NULL until uploaded.
+   *
+   * On the wire since the upload path landed (user directive, 2026-08-16 —
+   * the KNOWN_ABSENT entry this retires said "it returns alongside an upload
+   * design"). v1 stores the image IN the column rather than behind a storage
+   * signer: the write path caps it at 128KB and a 256px crop is ~20KB, so the
+   * row stays sane, RLS already scopes who may read it, and the column holds
+   * a URL either way — a later move to signed storage URLs is a value change,
+   * not a schema change.
+   */
+  avatar_url: string | null;
   role: MemberRole;
   status: UserStatus;
   accepted_at: string | null;
@@ -128,7 +140,7 @@ export interface MeRecord extends MemberRecord {
  * landed while I was writing the check that watches for it.
  */
 export const MEMBER_COLUMNS = `
-  id, email, display_name, display_name_en, username,
+  id, email, display_name, display_name_en, username, avatar_url,
   role, status, accepted_at, last_seen_at, created_at
 `;
 
@@ -196,6 +208,7 @@ const toMember = (row: Record<string, unknown>): MemberRecord => ({
   display_name: (row.display_name as string) ?? "",
   display_name_en: (row.display_name_en as string | null) ?? null,
   username: (row.username as string | null) ?? null,
+  avatar_url: (row.avatar_url as string | null) ?? null,
   role: row.role as MemberRole,
   status: row.status as MemberRecord["status"],
   accepted_at: isoOrNull(row.accepted_at),
@@ -305,7 +318,7 @@ export function createMembersRepo(db: Db) {
           // comment or a cast. Two lists that must agree is the smaller risk
           // here than one list nobody can see the output of.
           `select u.id, u.email, u.display_name, u.display_name_en, u.username,
-                  u.role, u.status,
+                  u.avatar_url, u.role, u.status,
                   u.accepted_at, u.last_seen_at, u.created_at,
                   u.preferred_model, u.locale, u.calendar, u.timezone, o.name as org_name
              from echo.app_user u
@@ -354,6 +367,7 @@ export function createMembersRepo(db: Db) {
         display_name?: string | undefined;
         display_name_en?: string | null | undefined;
         username?: string | null | undefined;
+        avatar_url?: string | null | undefined;
         calendar?: string | undefined;
         timezone?: string | undefined;
         locale?: string | undefined;
@@ -383,6 +397,24 @@ export function createMembersRepo(db: Db) {
         }
       }
 
+      if (patch.avatar_url !== undefined && patch.avatar_url !== null) {
+        /**
+         * A data URL and nothing else. An https URL is refused ON PURPOSE:
+         * the product would be rendering an image it does not hold from an
+         * origin the uploader picked, which is a tracking pixel wearing a
+         * profile photo. The client crops to 256px before sending, so the
+         * cap is generous — hitting it means the caller skipped the crop.
+         */
+        if (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+=*$/.test(patch.avatar_url)) {
+          throw new ValidationError(
+            "avatar_url must be a data:image/jpeg|png|webp;base64 URL",
+            { code: "avatar_not_data_url" });
+        }
+        if (patch.avatar_url.length > 131072) {
+          throw new ValidationError("avatar too large — crop to 256px before uploading",
+            { code: "avatar_too_large", params: { max_chars: "131072" } });
+        }
+      }
       if (patch.calendar !== undefined
           && !CALENDAR_PREFERENCES.includes(patch.calendar as CalendarPreference)) {
         // Names the set, because "invalid calendar" leaves a dropdown with
@@ -403,6 +435,7 @@ export function createMembersRepo(db: Db) {
       }
 
       if (displayName === undefined && displayNameEn === undefined && username === undefined
+          && patch.avatar_url === undefined
           && patch.calendar === undefined && patch.timezone === undefined
           && patch.locale === undefined) {
         throw new ValidationError("nothing to update", { code: "nothing_to_update" });
@@ -421,7 +454,8 @@ export function createMembersRepo(db: Db) {
                     username        = case when $6  then $7::text  else username end,
                     calendar        = case when $8  then $9::text  else calendar end,
                     timezone        = case when $10 then $11::text else timezone end,
-                    locale          = case when $12 then $13::text else locale end
+                    locale          = case when $12 then $13::text else locale end,
+                    avatar_url      = case when $14 then $15::text else avatar_url end
               where id = $1
               returning ${MEMBER_COLUMNS}`,
             [
@@ -434,6 +468,7 @@ export function createMembersRepo(db: Db) {
               patch.calendar !== undefined, patch.calendar ?? null,
               patch.timezone !== undefined, patch.timezone ?? null,
               patch.locale !== undefined, patch.locale ?? null,
+              patch.avatar_url !== undefined, patch.avatar_url ?? null,
             ],
           ),
         );

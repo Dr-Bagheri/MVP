@@ -947,6 +947,17 @@ last-active, per-row actions, overflow menu. Rulings that bound it:
   name everywhere (greeting, avatar, tables, mentions). Fallback when
   `display_name_en` is absent: the fa name unchanged — honest mixed
   script over auto-transliteration, which fabricates a name nobody chose.
+  **[SUPERSEDED by user directive, 2026-08-16: names TRANSLITERATE on
+  locale switch** — «امیر» renders "Amir" in en, a Latin-only name
+  renders in Persian script in fa; usernames, emails and brands never
+  do. A CHOSEN spelling still always wins (`display_name_en` in en; a
+  Persian-script `display_name` is never rewritten in fa) — the
+  transliterator only fills the gap where no chosen spelling exists.
+  Implementation: `web/src/lib/transliterate.ts` (dictionary of common
+  names + suffix/compound handling + letter-map fallback), applied
+  ONLY inside `personName()` so nothing else can inherit it. The
+  2026-08-13 "fa name unchanged" reasoning stays on the record above
+  as the road not taken.]
 - **Locale-solid extends past names** [steward interpretation of "solid",
   reversible]: text direction, prompt-input alignment/caret, dates
   (Jalali in fa, Gregorian in en), and digits follow the active locale.
@@ -968,6 +979,19 @@ last-active, per-row actions, overflow menu. Rulings that bound it:
 - **Members table adds "last action"** (last_seen_at, the M24 3am-rule
   stamp): null renders as honest "not seen yet", never a dash that reads
   as data. Every sub-page gets a back affordance.
+- **Avatar upload landed [user directive, 2026-08-16]** — retires the
+  avatar_url KNOWN_ABSENT entry (its own condition: "it returns
+  alongside an upload design"). v1 design: the client crops a centered
+  256×256 square in-canvas, the person ACCEPTS the exact image that
+  will be uploaded, and `PATCH /v1/me` stores it as a
+  `data:image/…;base64` URL in the existing `app_user.avatar_url`
+  column (core caps at 128KB and refuses non-data URLs — a remote
+  avatar URL is a tracking pixel wearing a profile photo). Deliberate
+  deviation from the anticipated M10 signer design: a ≤25KB identity
+  image lives with the identity row under the same RLS, needs no
+  bucket lifecycle, and the column holds a URL either way — moving to
+  signed storage URLs later is a value change, not a schema change.
+  `null` clears; tombstone already empties it.
 - **Avatar menu landed [FE2 2026-08-13; user's required set]**: all
   five entries live (identity header via personName; Account;
   Theme as menuitemradio; Time & calendar collapsible; Sign out
