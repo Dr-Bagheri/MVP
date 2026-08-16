@@ -415,6 +415,30 @@ export interface Skill {
    * authorise one.
    */
   editable: boolean;
+  /** Suggested opening questions (M29), rendered as hub chips when active. */
+  starter_questions: string[];
+}
+
+/**
+ * The EDITOR's row (M29) — the full definition including the prompt, served
+ * only for rows the caller may edit (`/api/skills/manage`). Distinct from
+ * `Skill` on purpose: the picker's prompt-off-the-wire posture stands, and a
+ * type that carried `prompt?` optionally would blur exactly that line.
+ */
+export interface AuthoredSkill {
+  id: string;
+  level: "org" | "user";
+  slug: string;
+  name: string;
+  description: string;
+  prompt: string;
+  model: string | null;
+  tools: string[];
+  starter_questions: string[];
+  enabled: boolean;
+  max_tool_calls: number | null;
+  archived_at: string | null;
+  created_at: string;
 }
 
 // ---- agent ------------------------------------------------------------------

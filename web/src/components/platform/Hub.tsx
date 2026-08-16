@@ -357,6 +357,25 @@ export function Hub() {
           <p className="mt-2.5 max-w-[60ch] text-[13px] leading-6 text-fg-muted [text-wrap:balance]">
             {t("scopePromise")}
           </p>
+          {/* the active skill's starter questions (M29) — one press fills
+              the composer; sending stays the person's act */}
+          {(() => {
+            const active = skills.find((s) => s.slug === skill);
+            return active && active.starter_questions.length > 0 ? (
+              <div className="mt-4 flex w-full max-w-[660px] flex-wrap justify-center gap-2">
+                {active.starter_questions.map((q) => (
+                  <button
+                    key={q}
+                    type="button"
+                    className="chip border border-border bg-surface text-xs text-fg-muted transition-colors hover:border-border-strong hover:text-fg"
+                    onClick={() => setInput(q)}
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
+            ) : null;
+          })()}
         </>
       ) : !showHistory ? (
         <div className="mb-4 flex-1">
@@ -450,8 +469,10 @@ export function Hub() {
                 onChange={(e) => setSkill(e.target.value)}
               >
                 <option value="">{t("skillDefault")}</option>
+                {/* value = SLUG: core's resolver takes /slug, not an id —
+                    an id here would 400 as "unknown skill" on every ask */}
                 {skills.map((s) => (
-                  <option key={s.id} value={s.id}>
+                  <option key={s.id} value={s.slug}>
                     {s.name}
                   </option>
                 ))}

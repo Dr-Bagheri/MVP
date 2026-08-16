@@ -10,7 +10,6 @@ import type {
   GatewayWebhook,
   Me,
   Org,
-  Skill,
   Speaker,
   SummaryVersion,
   TranscriptSegment,
@@ -800,68 +799,9 @@ export const SUMMARIES: Record<string, SummaryVersion[]> = {
   ],
 };
 
-export const SKILLS: Skill[] = [
-  {
-    id: "sk-1",
-    level: "system",
-    slug: "call-recap",
-    name: "خلاصهٔ تماس",
-    description: "خلاصهٔ ساخت‌یافتهٔ گفت‌وگو با تصمیم‌ها و ادامهٔ کار.",
-    tools: ["search_transcripts", "read_window", "get_call"],
-    model: null,
-    editable: false,
-  },
-  {
-    id: "sk-2",
-    level: "system",
-    slug: "action-items",
-    name: "اقدام‌ها",
-    description: "استخراج اقدام‌ها با مسئول و مهلت.",
-    tools: ["read_window"],
-    model: null,
-    editable: false,
-  },
-  {
-    id: "sk-3",
-    level: "org",
-    slug: "objection-finder",
-    name: "یابندهٔ اعتراض‌ها",
-    description: "اعتراض‌ها و نگرانی‌های مشتری و پاسخ داده‌شده به هرکدام.",
-    tools: ["search_transcripts", "read_window"],
-    model: "google/gemini-3.1-pro",
-    editable: true,
-  },
-  {
-    id: "sk-4",
-    level: "org",
-    slug: "pricing-mentions",
-    name: "اشاره‌های قیمتی",
-    description: "هر جا عدد، تخفیف یا شرط پرداخت گفته شده.",
-    tools: ["search_transcripts", "read_window"],
-    model: null,
-    editable: true,
-  },
-  {
-    id: "sk-5",
-    level: "org",
-    slug: "talk-ratio",
-    name: "نسبت صحبت",
-    description: "سهم صحبت هر گوینده در گفت‌وگو.",
-    tools: ["get_call"],
-    model: null,
-    editable: true,
-  },
-  {
-    id: "sk-6",
-    level: "user",
-    slug: "pre-call-brief",
-    name: "برگهٔ پیش از تماس",
-    description: "خلاصهٔ آنچه پیش از تماس بعدی باید بدانید.",
-    tools: ["search_transcripts", "read_window", "get_call"],
-    model: "google/gemini-3.1-pro",
-    editable: true,
-  },
-];
+/* SKILLS fixture left with the Part-2 swap (M29): the picker and the
+   editor both read the live wire, and a fixture beside a live wire is two
+   sources for one fact. */
 
 export const CONNECTORS: Connector[] = [
   {

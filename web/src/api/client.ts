@@ -24,6 +24,7 @@ import type {
   AgentEvent,
   AgentMessage,
   AssistantSession,
+  AuthoredSkill,
   AuditCursor,
   AuditPage,
   AuditSource,
@@ -753,8 +754,64 @@ export const api = {
   },
   async skills(): Promise<Skill[]> {
     /* **LIVE** — `/api/skills` → `/v1/skills`, the resolver ladder's view
-       (system / org / user, most specific wins). */
-    return bff<Skill[]>("/api/skills");
+       (system / org / user, most specific wins). Core sends a WRAPPER; the
+       first swap typed it as a bare array and `skills.length` read
+       undefined — the picker silently never rendered (rule 10's shape,
+       caught by reading the producer). */
+    const { skills } = await bff<{ skills: Skill[] }>("/api/skills");
+    return skills;
+  },
+
+  // ---- skill authoring (M29, Part 2) ----------------------------------------
+  /** **LIVE** — the editor's rows (full definitions) + the tool vocabulary. */
+  async manageSkills(): Promise<{ skills: AuthoredSkill[]; available_tools: string[] }> {
+    return bff("/api/skills/manage");
+  },
+  /** **LIVE** — create. Core owns every rule and names every refusal. */
+  async createSkill(input: {
+    level: "org" | "user";
+    slug: string;
+    name: string;
+    prompt: string;
+    description?: string;
+    model?: string | null;
+    tools?: string[];
+    starter_questions?: string[];
+    max_tool_calls?: number | null;
+  }): Promise<AuthoredSkill> {
+    return bff<AuthoredSkill>("/api/skills", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    });
+  },
+  /** **LIVE** — edit. Absent = leave alone; `model: null` clears the pin. */
+  async updateSkill(
+    id: string,
+    patch: {
+      name?: string;
+      description?: string;
+      prompt?: string;
+      model?: string | null;
+      tools?: string[];
+      starter_questions?: string[];
+      enabled?: boolean;
+      max_tool_calls?: number | null;
+    },
+  ): Promise<AuthoredSkill> {
+    return bff<AuthoredSkill>(`/api/skills/${id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+  },
+  /** **LIVE** — archive/unarchive, the product's whole delete (db/0018). */
+  async archiveSkill(id: string, archived: boolean): Promise<AuthoredSkill> {
+    return bff<AuthoredSkill>(`/api/skills/${id}/archive`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ archived }),
+    });
   },
 
   // ---- admin --------------------------------------------------------------------
