@@ -33,7 +33,7 @@ import type { Identity, Skill } from "./types.ts";
  */
 const SKILL_COLUMNS = `
   id, level, slug, name, description, prompt, model, tools, enabled,
-  max_tool_calls
+  max_tool_calls, starter_questions
 `;
 
 interface SkillRow {
@@ -47,6 +47,7 @@ interface SkillRow {
   tools: unknown;
   enabled: boolean;
   max_tool_calls: number | null;
+  starter_questions: unknown;
 }
 
 /**
@@ -87,6 +88,8 @@ const toSkill = (row: SkillRow): Skill => ({
    * without a decision.
    */
   maxToolCalls: row.max_tool_calls,
+  // same discipline as tools: one malformed element costs one chip
+  starterQuestions: toTools(row.starter_questions),
 });
 
 export function createSkillStore(db: Db): SkillSource {

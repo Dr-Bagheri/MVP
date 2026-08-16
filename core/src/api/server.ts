@@ -16,6 +16,7 @@ import { createAssistant } from "./assistant.ts";
 import { createAuditRepo, type AuditRepo } from "./audit.ts";
 import { createOrgRepo, type OrgRepo } from "./org.ts";
 import { createSessionsRepo, type SessionsRepo } from "./sessions.ts";
+import { availableTools, createSkillAuthoring, type SkillAuthoring } from "./skills.ts";
 import { createInvitationsRepo, type InvitationsRepo } from "./invitations.ts";
 import { createHealthRepo, type HealthRepo } from "./health.ts";
 import { createAuth, type Auth } from "./auth.ts";
@@ -64,6 +65,7 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
   const audit: AuditRepo = createAuditRepo(options.db);
   const org: OrgRepo = createOrgRepo(options.db);
   const sessions: SessionsRepo = createSessionsRepo(options.db);
+  const skillAuthoring: SkillAuthoring = createSkillAuthoring(options.db);
   const invitations: InvitationsRepo = createInvitationsRepo(options.db);
   const health: HealthRepo = createHealthRepo(options.db);
   const webhooks: WebhooksRepo = createWebhooksRepo(options.db);
@@ -487,8 +489,92 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
         editable: s.level === "org"
           ? isAdmin(identity)          // M23: the owner is an admin and more
           : s.level === "user",
+        /** M29: opening chips for the hub when this skill is active. */
+        starter_questions: s.starterQuestions ?? [],
       })),
+      /**
+       * The tool vocabulary, from the REGISTRIES (M29) — the editor's
+       * checkbox list must come from the producer, or it drifts the way
+       * every hand-enumerated coverage list has (rule 13½).
+       */
+      available_tools: availableTools(),
     });
+  });
+
+  // ---- skill authoring (M29, Part 2) --------------------------------------
+  //
+  // db/0013's per-level policies are the wall; these routes add legible
+  // refusals and the vocabulary checks. Delete does not exist (db/0018):
+  // archive frees the slug and the definition stays attached to its runs.
+
+  app.get("/v1/skills/manage", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    return reply.send({
+      skills: await skillAuthoring.manageList(identity),
+      available_tools: availableTools(),
+    });
+  });
+
+  app.get("/v1/skills/manage/:id", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id } = request.params as { id: string };
+    return reply.send(await skillAuthoring.detail(identity, id));
+  });
+
+  app.post("/v1/skills", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    if (typeof body.slug !== "string") throw new ValidationError("slug is required");
+    if (typeof body.name !== "string") throw new ValidationError("name is required");
+    if (typeof body.prompt !== "string") throw new ValidationError("prompt is required");
+    const created = await skillAuthoring.create(identity, {
+      level: body.level as "org" | "user",
+      slug: body.slug,
+      name: body.name,
+      prompt: body.prompt,
+      description: typeof body.description === "string" ? body.description : undefined,
+      model: body.model === null ? null : typeof body.model === "string" ? body.model : undefined,
+      tools: Array.isArray(body.tools) ? (body.tools as string[]) : undefined,
+      starter_questions: Array.isArray(body.starter_questions)
+        ? (body.starter_questions as string[])
+        : undefined,
+      max_tool_calls: body.max_tool_calls === null
+        ? null
+        : typeof body.max_tool_calls === "number" ? body.max_tool_calls : undefined,
+    });
+    return reply.code(201).send(created);
+  });
+
+  app.patch("/v1/skills/:id", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    return reply.send(await skillAuthoring.update(identity, id, {
+      name: typeof body.name === "string" ? body.name : undefined,
+      description: typeof body.description === "string" ? body.description : undefined,
+      prompt: typeof body.prompt === "string" ? body.prompt : undefined,
+      model: body.model === null ? null : typeof body.model === "string" ? body.model : undefined,
+      tools: Array.isArray(body.tools) ? (body.tools as string[]) : undefined,
+      starter_questions: Array.isArray(body.starter_questions)
+        ? (body.starter_questions as string[])
+        : undefined,
+      enabled: typeof body.enabled === "boolean" ? body.enabled : undefined,
+      max_tool_calls: body.max_tool_calls === null
+        ? null
+        : typeof body.max_tool_calls === "number" ? body.max_tool_calls : undefined,
+    }));
+  });
+
+  app.post("/v1/skills/:id/archive", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id } = request.params as { id: string };
+    return reply.send(await skillAuthoring.setArchived(identity, id, true));
+  });
+
+  app.post("/v1/skills/:id/unarchive", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id } = request.params as { id: string };
+    return reply.send(await skillAuthoring.setArchived(identity, id, false));
   });
 
   // ---- models (M5: the user picks; the product imposes nothing) ----------

@@ -76,6 +76,11 @@ export interface Skill {
    * not from vibes.
    */
   maxToolCalls?: number | null;
+  /**
+   * Suggested opening questions (M29, db/0059) — rendered as hub chips when
+   * the skill is active. Absent = none; the runtime never reads these.
+   */
+  starterQuestions?: string[];
 }
 
 /** One recorded tool interaction — an element of echo.agent_run.steps. */
