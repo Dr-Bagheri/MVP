@@ -242,21 +242,15 @@ p.lead b { color: var(--fg); font-weight: 600; }
 .foot-meta a { color: var(--hud); text-decoration: none; }
 .foot-meta a:hover { color: var(--accent); }
 
-.scroll-hint { position: absolute; bottom: 52px; left: 50%; transform: translateX(-50%);
-  font-family: var(--mono); color: var(--hud); font-size: 10px; letter-spacing: .3em; }
-.scroll-hint::after { content: ""; display: block; width: 1px; height: 38px; margin: 8px auto 0;
-  background: linear-gradient(var(--accent), transparent); animation: fall 1.8s ease-in-out infinite; }
-@keyframes fall { 0% { transform: scaleY(0); transform-origin: top } 60% { transform: scaleY(1); transform-origin: top } 100% { opacity: 0 } }
-
 /* static fallback */
 body.static .track { display: none; }
 body.static .stage { position: static; opacity: 1; overflow: visible; height: auto; perspective: none; }
 body.static #aurora, body.static #brain { position: fixed; z-index: -1; }
 body.static .scene { position: relative; min-height: 100vh; pointer-events: auto; }
 body.static .fx { opacity: 1 !important; transform: none !important; }
-body.static .chapters, body.static .bar, body.static .scroll-hint { display: none; }
+body.static .chapters, body.static .bar { display: none; }
 noscript .noscript-note { display: block; padding: 12px 24px; text-align: center; color: var(--fg-muted); }
-@media (prefers-reduced-motion: reduce) { .hud .live i, .scroll-hint::after { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .hud .live i { animation: none; } }
 </style>
 </head>
 <body>
@@ -299,7 +293,6 @@ noscript .noscript-note { display: block; padding: 12px 24px; text-align: center
         <div class="tags boot-fade" id="boot-tags"><span>SPECIMEN: NEURAI</span><span>STATE: AI-NATIVE</span><span>STATUS: MAPPING</span></div>
       </div>
     </div>
-    <div class="scroll-hint fx" data-fx="s0-hint">SCROLL</div>
   </section>
 
   <!-- scene 1 · who we are -->
@@ -424,7 +417,6 @@ noscript .noscript-note { display: block; padding: 12px 24px; text-align: center
      * scroll: the wrapper is simply present, and the boot types/reveals its
      * children. The scroll only takes it away. */
     "s0-copy":   { E: { o: 1 }, X: { y: () => -18 * vh(), ry: 10, o: 0 }, st: 0, en: .001 },
-    "s0-hint":   { E: { o: 0 }, X: { o: 0 }, st: .34, en: .5, ex: .6 },
 
     "s1-kicker": { E: { x: () => 16 * vw(), o: 0 }, X: { x: () => -10 * vw(), o: 0 }, st: 0, en: .22 },
     "s1-title":  { E: { x: () => 30 * vw(), ry: 26, o: 0 }, X: { x: () => -18 * vw(), ry: -16, o: 0 }, st: .02, en: .3 },
