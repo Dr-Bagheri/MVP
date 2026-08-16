@@ -886,6 +886,136 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     return reply.send(await sessions.setArchived(identity, id, false));
   });
 
+  // ---- the assistant experience (M27, db/0058) ----------------------------
+
+  app.put("/v1/assistant/sessions/:id/title", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { title?: unknown };
+    if (typeof body.title !== "string") throw new ValidationError("title is required");
+    return reply.send(await sessions.rename(identity, id, body.title));
+  });
+
+  app.post("/v1/assistant/messages/:id/feedback", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { verdict?: unknown; note?: unknown };
+    if (body.verdict !== "up" && body.verdict !== "down") {
+      throw new ValidationError("verdict must be 'up' or 'down'");
+    }
+    if (body.note !== undefined && typeof body.note !== "string") {
+      throw new ValidationError("note must be a string");
+    }
+    await sessions.feedback(identity, id, { verdict: body.verdict, note: body.note });
+    return reply.code(204).send();
+  });
+
+  // The caller's own verdicts for one thread, keyed by message id — read
+  // alongside messages so the toolbar can render the pressed thumb.
+  app.get("/v1/assistant/sessions/:id/feedback", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id } = request.params as { id: string };
+    return reply.send({ feedback: await sessions.feedbackFor(identity, id) });
+  });
+
+  app.get("/v1/assistant/sessions/:id/share", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id } = request.params as { id: string };
+    return reply.send({ shared: await sessions.shareState(identity, id) });
+  });
+
+  app.post("/v1/assistant/sessions/:id/share", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id } = request.params as { id: string };
+    await sessions.setShared(identity, id, true);
+    return reply.send({ shared: true });
+  });
+
+  app.post("/v1/assistant/sessions/:id/unshare", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id } = request.params as { id: string };
+    await sessions.setShared(identity, id, false);
+    return reply.send({ shared: false });
+  });
+
+  /**
+   * A colleague's SHARED conversation, read-only, through db/0058's doors.
+   * One nothing on refusal (no share / other org / revoked) — none probeable.
+   */
+  app.get("/v1/assistant/shared/:id", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id } = request.params as { id: string };
+    return reply.send(await sessions.sharedThread(identity, id));
+  });
+
+  /**
+   * Regenerate (M27): re-answer the session's STANDING question, optionally
+   * on a different model, as a fresh run + fresh assistant turn. Append-only —
+   * the superseded answer keeps its row (the thread is the record); no
+   * user turn is written because the person did not ask again.
+   */
+  app.post("/v1/assistant/sessions/:id/regenerate", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { model?: unknown };
+    if (!assistantAllowed(identity)) {
+      throw new NotActivatedError("this api key may not use the assistant");
+    }
+    // The session must exist, be the caller's, and not be archived — the
+    // same resolve ask uses, which also refuses regenerating into an
+    // archived thread ("done with this" stays said).
+    const conversation = await sessions.resolveForAsk(identity, id, "");
+    const question = await sessions.lastUserQuestion(identity, id);
+
+    const chosenModel = typeof body.model === "string" && body.model !== ""
+      ? body.model
+      : await models.preferred(identity);
+    if (!chosenModel) {
+      throw new ValidationError("no model selected — choose one in settings, or pass `model`");
+    }
+
+    reply.raw.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    });
+    const controller = new AbortController();
+    request.raw.on("close", () => controller.abort());
+
+    await assistant.ask({
+      identity,
+      question,
+      model: chosenModel,
+      callId: null,
+      signal: controller.signal,
+      sessionId: conversation.id,
+      sessionCreated: false,
+      onTurn: async ({ runId, text, toolCalls }) => {
+        if (!text.trim()) return;
+        try {
+          await sessions.append(identity, {
+            sessionId: conversation.id,
+            role: "assistant",
+            content: text,
+            toolCalls,
+            agentRunId: runId || null,
+          });
+        } catch (error) {
+          request.log.error(
+            { session_id: conversation.id, run_id: runId,
+              code: (error as { code?: string }).code },
+            "assistant turn produced but not persisted (regenerate)",
+          );
+        }
+      },
+    }, {
+      write: (chunk) => { reply.raw.write(chunk); },
+      end: () => { reply.raw.end(); },
+    });
+    return reply;
+  });
+
   app.post("/v1/assistant/ask", async (request, reply) => {
     const identity = await auth.requireActive(request);
     const body = (request.body ?? {}) as {

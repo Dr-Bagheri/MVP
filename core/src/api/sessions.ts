@@ -358,6 +358,153 @@ export function createSessionsRepo(db: Db) {
       if (!row) throw new NotFoundError("conversation not found");
       return toSession(row);
     },
+
+    /**
+     * Rename (M27). The OWNER may retitle their conversation; the system
+     * still never rewrites one — the never-rewritten ruling was about
+     * auto-titles overwriting the entry someone is scanning for, and a
+     * person renaming their own thread is the opposite of that.
+     */
+    async rename(identity: Identity, sessionId: string, title: string): Promise<SessionRecord> {
+      const id = assertUuid(sessionId, "session id");
+      const clean = title.replace(/\s+/g, " ").trim();
+      if (!clean) throw new ValidationError("title cannot be empty", { code: "title_empty" });
+      const rows = await db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe<Record<string, unknown>>(
+          `update echo.agent_session set title = $2 where id = $1
+           returning ${SESSION_COLUMNS}`,
+          [id, clean.length > 80 ? `${clean.slice(0, 79)}…` : clean],
+        ),
+      );
+      const row = rows[0];
+      if (!row) throw new NotFoundError("conversation not found");
+      return toSession(row);
+    },
+
+    /**
+     * Feedback on one assistant turn (M27, db/0058). An UPSERT because the
+     * PK is the message: one verdict per answer, and changing your mind is
+     * an update — the 23505 a second INSERT would raise is not an error a
+     * person should ever see for pressing the other thumb.
+     */
+    async feedback(
+      identity: Identity,
+      messageId: string,
+      opinion: { verdict: "up" | "down"; note?: string | undefined },
+    ): Promise<void> {
+      const id = assertUuid(messageId, "message id");
+      const note = opinion.note?.trim() || null;
+      const rows = await db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe<{ message_id: string }>(
+          `insert into echo.agent_message_feedback
+             (message_id, session_id, org_id, verdict, note, created_by)
+           select m.id, m.session_id, m.org_id, $2, $3, $4
+             from echo.agent_message m
+            where m.id = $1 and m.role = 'assistant'
+           on conflict (message_id)
+             do update set verdict = excluded.verdict, note = excluded.note
+           returning message_id`,
+          [id, opinion.verdict, note, identity.userId],
+        ),
+      );
+      // No row: not visible, not ours, or not an assistant turn — one 404
+      // for all three, the not-probeable posture used everywhere else.
+      if (!rows[0]) throw new NotFoundError("message not found");
+    },
+
+    /** The caller's verdicts for one thread, keyed by message id. */
+    async feedbackFor(identity: Identity, sessionId: string): Promise<Record<string, string>> {
+      const id = assertUuid(sessionId, "session id");
+      const rows = await db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe<{ message_id: string; verdict: string }>(
+          `select message_id, verdict from echo.agent_message_feedback
+            where session_id = $1`,
+          [id],
+        ),
+      );
+      return Object.fromEntries(rows.map((r) => [r.message_id, r.verdict]));
+    },
+
+    /**
+     * Share / revoke (M27, db/0058). Org-scoped only — no public links.
+     * Re-sharing after a revoke clears the stamp on the same row.
+     */
+    async setShared(identity: Identity, sessionId: string, shared: boolean): Promise<void> {
+      const id = assertUuid(sessionId, "session id");
+      const rows = await db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe<{ session_id: string }>(
+          shared
+            ? `insert into echo.agent_session_share (session_id, org_id, created_by)
+               select s.id, s.org_id, $2 from echo.agent_session s where s.id = $1
+               on conflict (session_id) do update set revoked_at = null
+               returning session_id`
+            : `update echo.agent_session_share set revoked_at = now()
+                where session_id = $1 and revoked_at is null
+               returning session_id`,
+          shared ? [id, identity.userId] : [id],
+        ),
+      );
+      if (shared && !rows[0]) throw new NotFoundError("conversation not found");
+      // Revoking a share that does not exist changes nothing and is fine:
+      // the end state IS "not shared", and a 404 would make un-sharing
+      // twice look like a fault.
+    },
+
+    /** Is this session currently shared? For the owner's UI toggle. */
+    async shareState(identity: Identity, sessionId: string): Promise<boolean> {
+      const id = assertUuid(sessionId, "session id");
+      const rows = await db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe<{ session_id: string }>(
+          `select session_id from echo.agent_session_share
+            where session_id = $1 and revoked_at is null`,
+          [id],
+        ),
+      );
+      return Boolean(rows[0]);
+    },
+
+    /**
+     * A SHARED conversation, read through db/0058's definer doors — the one
+     * cross-member read of a table whose design is "nobody but the owner".
+     * The doors check active + same-org + live-share inside themselves; an
+     * empty answer here is deliberately one nothing (no such share, other
+     * org, revoked — none of them probeable).
+     */
+    async sharedThread(
+      identity: Identity, sessionId: string,
+    ): Promise<{ session: { id: string; title: string }; messages: MessageRecord[] }> {
+      const id = assertUuid(sessionId, "session id");
+      return db.withIdentity(identity, async (tx: SqlTx) => {
+        const meta = await tx.unsafe<{ id: string; title: string }>(
+          `select id, title from echo.shared_session_meta($1)`, [id],
+        );
+        if (!meta[0]) throw new NotFoundError("conversation not found");
+        const rows = await tx.unsafe<Record<string, unknown>>(
+          `select id, seq, role, content, tool_calls, agent_run_id, truncated, created_at
+             from echo.shared_session_thread($1)`,
+          [id],
+        );
+        return { session: { id: meta[0].id, title: meta[0].title }, messages: rows.map(toMessage) };
+      });
+    },
+
+    /**
+     * The last thing the person asked, for regenerate (M27): the re-run
+     * re-answers the STANDING question rather than inventing a new turn.
+     */
+    async lastUserQuestion(identity: Identity, sessionId: string): Promise<string> {
+      const id = assertUuid(sessionId, "session id");
+      const rows = await db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe<{ content: string }>(
+          `select content from echo.agent_message
+            where session_id = $1 and role = 'user'
+            order by seq desc limit 1`,
+          [id],
+        ),
+      );
+      if (!rows[0]) throw new NotFoundError("nothing to regenerate");
+      return rows[0].content;
+    },
   };
 }
 
