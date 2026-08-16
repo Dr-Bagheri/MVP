@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { Link } from "@/i18n/routing";
+import { Link, useRouter } from "@/i18n/routing";
 import { api } from "@/api/client";
 import type { Call, Me, User } from "@/api/types";
-import { Card, EmptyState, ScopeChip, StatusChip } from "@/components/ui";
+import { Card, EmptyState, StatusChip } from "@/components/ui";
 // `purgeDaysLeft` is deliberately NOT imported: the purge countdown belongs to
 // DeletedCallsCard now that soft-deleted rows have their own card, and a second
 // copy of that arithmetic beside the table is how two countdowns disagree.
@@ -29,6 +29,7 @@ export function CallsSection() {
   const tStatus = useTranslations("status");
   const tCommon = useTranslations("common");
   const locale = useLocale();
+  const router = useRouter();
   const [calls, setCalls] = useState<Call[] | null>(null);
   const [me, setMe] = useState<Me | null>(null);
   const [members, setMembers] = useState<User[]>([]);
@@ -123,8 +124,22 @@ export function CallsSection() {
               </thead>
               <tbody>
                 {live.map((call) => (
-                  <tr key={call.id} className="border-b border-border last:border-0">
-                    <td className="px-4 py-3">
+                  <tr
+                    key={call.id}
+                    /* the whole ROW is the way in (user directive) — the
+                       interactive cells stop the bubble so a toggle is never
+                       also a navigation */
+                    className="cursor-pointer border-b border-border transition-colors last:border-0 hover:bg-surface-2"
+                    onClick={() => router.push(`/calls/${call.id}`)}
+                  >
+                    <td
+                      className="px-4 py-3"
+                      onClick={(e) => {
+                        // renaming happens IN this cell; a click there must
+                        // not also be a navigation
+                        if (renamingId === call.id) e.stopPropagation();
+                      }}
+                    >
                       {renamingId === call.id ? (
                         <span className="flex items-center gap-1.5">
                           <input
@@ -197,28 +212,41 @@ export function CallsSection() {
                         ? t("durationUnknown")
                         : formatDuration(call.duration_ms / 1000, locale)}
                     </td>
-                    <td className="px-4 py-3">
-                      <button
-                        /* `tap` — this control changes who can see a call, and
-                           it was a 24px target on a phone. The chip keeps its
-                           size; only the hit area grows. */
-                        className="tap"
-                        onClick={async () => {
-                          await api.setScope(call.id, call.scope === "org" ? "private" : "org");
-                          void load(showArchived);
-                        }}
-                        title={call.scope === "org" ? t("makePrivate") : t("makeOrg")}
-                      >
-                        <ScopeChip
-                          scope={call.scope}
-                          label={call.scope === "org" ? t("scopeOrg") : t("scopePrivate")}
-                        />
-                      </button>
+                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                      {/* an ON/OFF switch (user directive): off = private,
+                          on = the whole organization — the state is visible
+                          from the position, not just the word */}
+                      <span className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={call.scope === "org"}
+                          aria-label={call.scope === "org" ? t("makePrivate") : t("makeOrg")}
+                          className={`tap relative inline-block h-5 w-9 shrink-0 rounded-full transition-colors ${
+                            call.scope === "org" ? "bg-accent" : "border border-border-strong bg-surface-2"
+                          }`}
+                          onClick={async () => {
+                            await api.setScope(call.id, call.scope === "org" ? "private" : "org");
+                            void load(showArchived);
+                          }}
+                        >
+                          <span
+                            className={`absolute top-0.5 h-4 w-4 rounded-full transition-all ${
+                              call.scope === "org"
+                                ? "start-[calc(100%-1.125rem)] bg-on-accent"
+                                : "start-0.5 bg-fg-muted"
+                            }`}
+                          />
+                        </button>
+                        <span className="text-xs text-fg-muted">
+                          {call.scope === "org" ? t("scopeOrg") : t("scopePrivate")}
+                        </span>
+                      </span>
                     </td>
                     <td className="px-4 py-3">
                       <StatusChip status={call.status} label={tStatus(call.status)} />
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                       {mayEdit(call) ? (
                         <span className="flex items-center gap-3 text-xs">
                           <button

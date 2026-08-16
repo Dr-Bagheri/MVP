@@ -80,7 +80,13 @@ export default function CallDetailPage({
   const [shownVersion, setShownVersion] = useState<number | null>(null);
   const [playheadMs, setPlayheadMs] = useState(0);
   const [playing, setPlaying] = useState(false);
-  const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+  /** Signed playback URLs, one per part. `null` = no audio to offer. */
+  const [audioParts, setAudioParts] = useState<
+    { idx: number; offset_ms: number; url: string }[] | null
+  >(null);
+  const audioEl = useRef<HTMLAudioElement | null>(null);
+  /** The part whose URL is loaded in the element right now. */
+  const loadedIdx = useRef<number | null>(null);
 
   useEffect(() => {
     void api.getCall(id).then(setCall);
@@ -90,19 +96,58 @@ export default function CallDetailPage({
       setVersions(all);
       setShownVersion(all.at(-1)?.version ?? null);
     });
+    // 404 = no audio (not there / not yours / nothing uploaded) — the
+    // player simply doesn't offer itself; other failures leave it hidden too
+    void api
+      .getCallAudio(id)
+      .then((res) => setAudioParts(res?.parts ?? null))
+      .catch(() => setAudioParts(null));
   }, [id]);
 
-  // stand-in for the real <audio> element until signed URLs exist
-  useEffect(() => {
-    if (playing) {
-      timer.current = setInterval(() => setPlayheadMs((ms) => ms + 500), 500);
-    } else if (timer.current) {
-      clearInterval(timer.current);
+  /**
+   * The REAL player (the fake clock this replaces once showed 0:11 of an
+   * 0:08 recording — a playhead with no audio behind it). One element, the
+   * parts as one continuous timeline: each part carries `offset_ms`, so
+   * global time = part offset + element time, a part ending rolls to the
+   * next, and a seek picks the right part before it sets the element.
+   */
+  const partFor = (ms: number) => {
+    if (!audioParts || audioParts.length === 0) return null;
+    let candidate = audioParts[0]!;
+    for (const part of audioParts) if (part.offset_ms <= ms) candidate = part;
+    return candidate;
+  };
+
+  const loadPart = (part: { idx: number; url: string }) => {
+    if (!audioEl.current || loadedIdx.current === part.idx) return;
+    audioEl.current.src = part.url;
+    loadedIdx.current = part.idx;
+  };
+
+  async function playFrom(ms: number): Promise<void> {
+    const part = partFor(ms);
+    if (!part || !audioEl.current) return;
+    loadPart(part);
+    audioEl.current.currentTime = Math.max(0, (ms - part.offset_ms) / 1000);
+    try {
+      await audioEl.current.play();
+      setPlaying(true);
+    } catch {
+      setPlaying(false);
     }
-    return () => {
-      if (timer.current) clearInterval(timer.current);
-    };
-  }, [playing]);
+  }
+
+  function togglePlay(): void {
+    if (!audioEl.current) return;
+    if (playing) {
+      audioEl.current.pause();
+      setPlaying(false);
+    } else if (loadedIdx.current === null) {
+      void playFrom(playheadMs);
+    } else {
+      void audioEl.current.play().then(() => setPlaying(true)).catch(() => setPlaying(false));
+    }
+  }
 
   const activeRowId = useMemo(
     () => rows.find((r) => playheadMs >= r.start_ms && playheadMs < r.end_ms)?.id ?? null,
@@ -195,10 +240,29 @@ export default function CallDetailPage({
         {/* transcript */}
         <Card className="!p-0">
           <div className="border-b border-border px-4 py-3">
+            {/* the element behind the whole player — parts roll through it */}
+            <audio
+              ref={audioEl}
+              className="hidden"
+              onTimeUpdate={(e) => {
+                const el = e.currentTarget;
+                const part = audioParts?.find((p) => p.idx === loadedIdx.current);
+                if (part) setPlayheadMs(part.offset_ms + el.currentTime * 1000);
+              }}
+              onEnded={() => {
+                // a part ending is not the CALL ending unless it was the last
+                const next = audioParts?.find((p) => p.idx === (loadedIdx.current ?? 0) + 1);
+                if (next) void playFrom(next.offset_ms);
+                else setPlaying(false);
+              }}
+              onPause={() => setPlaying(false)}
+            />
             <div className="flex items-center gap-3">
               <button
-                className="btn-primary h-10 min-h-0 w-10 px-0"
-                onClick={() => setPlaying((p) => !p)}
+                className="btn-primary h-10 min-h-0 w-10 px-0 disabled:opacity-50"
+                onClick={togglePlay}
+                disabled={audioParts === null || audioParts.length === 0}
+                title={audioParts === null ? t("noAudio") : undefined}
                 aria-label={playing ? "pause" : "play"}
               >
                 {playing ? "⏸" : "▶"}
@@ -251,7 +315,7 @@ export default function CallDetailPage({
                   // seek to 0 — offer no seek at all.
                   if (!rowSeekable(row)) return;
                   setPlayheadMs(row.start_ms);
-                  setPlaying(true);
+                  void playFrom(row.start_ms);
                 }}
               >
                 <span className="w-14 shrink-0 pt-0.5 text-xs text-fg-muted ltr">

@@ -19,6 +19,9 @@ import { useTranslations } from "next-intl";
  */
 const SYSTEM_SKILL_KEYS: Readonly<Record<string, string>> = {
   summarizer: "system_summarizer",
+  tasks: "system_tasks",
+  decisions: "system_decisions",
+  minutes: "system_minutes",
 };
 
 export function useSkillName(): (skill: { level: string; slug: string; name: string }) => string {

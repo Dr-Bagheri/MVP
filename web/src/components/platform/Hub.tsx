@@ -575,7 +575,14 @@ export function Hub() {
             <PlusIcon width={14} height={14} />
             {t("addFile")}
           </button>
-          <div className="relative">
+          <div
+            className="relative"
+            /* hover-driven (user directive): the list appears while the
+               mouse is over the button or the panel, and leaves with it.
+               Click still toggles, which is what a touch screen has. */
+            onMouseEnter={() => setToolsOpen(true)}
+            onMouseLeave={() => setToolsOpen(false)}
+          >
             <button
               type="button"
               className={headerBtn}

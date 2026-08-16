@@ -40,7 +40,6 @@ export function AvatarMenu({ me }: { me: User | null }) {
   const locale = useLocale();
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [timeOpen, setTimeOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   /*
    * A preference save can be REFUSED (core validates the calendar against its
@@ -178,22 +177,12 @@ export function AvatarMenu({ me }: { me: User | null }) {
             </div>
           </div>
 
-          {/* Time and calendar */}
+          {/* Time and calendar — SOLID (user directive): always open, no
+              +/- toggle. Two small controls don't earn a hiding place. */}
           <div className="border-t border-border px-3 pb-2 pt-2">
-            <button
-              type="button"
-              aria-expanded={timeOpen}
-              onClick={() => setTimeOpen((v) => !v)}
-              className="tap -mx-1 flex w-full items-center justify-between rounded-lg px-1 py-1 text-start text-sm text-fg hover:bg-surface-2"
-            >
-              <span>{t("timeAndCalendar")}</span>
-              <span aria-hidden className="text-xs text-fg-subtle">
-                {timeOpen ? "−" : "+"}
-              </span>
-            </button>
+            <p className="px-0 py-1 text-sm text-fg">{t("timeAndCalendar")}</p>
 
-            {timeOpen ? (
-              <div className="mt-2 space-y-2">
+            <div className="mt-1 space-y-2">
                 <label className="block">
                   <span className="mb-1 block text-[11px] text-fg-muted">{t("calendar")}</span>
                   <select
@@ -243,7 +232,6 @@ export function AvatarMenu({ me }: { me: User | null }) {
                   </p>
                 ) : null}
               </div>
-            ) : null}
           </div>
 
           {/* the locale pair lives here below md, and duplicates the bar's

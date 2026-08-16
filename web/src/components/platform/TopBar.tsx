@@ -7,6 +7,7 @@ import { api } from "@/api/client";
 import type { AssistantSession, User } from "@/api/types";
 import { AvatarMenu } from "./AvatarMenu";
 import { formatDate } from "@/lib/format";
+import { useTimezonePreference } from "@/lib/usePreferences";
 import { Breadcrumbs } from "./Breadcrumbs";
 import { HistoryIcon, SearchIcon } from "./icons";
 
@@ -20,6 +21,38 @@ import { HistoryIcon, SearchIcon } from "./icons";
  * folds into the avatar menu (it is a set-once-a-year control) and search
  * collapses to its icon. Both are visible from `md` up.
  */
+/**
+ * Today's date and the current time, in the bar (user directive). The date
+ * follows the CALENDAR preference through the same `formatDate` every other
+ * date uses (one formatter, one truth); the time follows the timezone
+ * preference. Rendered only after mount: the server has neither the
+ * viewer's clock nor their preference, and a hydration mismatch here would
+ * be a nightly flicker.
+ */
+function Clock() {
+  const locale = useLocale();
+  const timezone = useTimezonePreference();
+  const [now, setNow] = useState<Date | null>(null);
+  useEffect(() => {
+    setNow(new Date());
+    const timer = setInterval(() => setNow(new Date()), 30_000);
+    return () => clearInterval(timer);
+  }, []);
+  if (now === null) return null;
+  const time = new Intl.DateTimeFormat(locale === "fa" ? "fa-IR" : "en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    ...(timezone === "auto" ? {} : { timeZone: timezone }),
+  }).format(now);
+  return (
+    <span className="hidden shrink-0 items-center gap-1.5 text-xs text-fg-muted lg:flex">
+      <span>{formatDate(now.toISOString(), locale)}</span>
+      <span aria-hidden>·</span>
+      <span>{time}</span>
+    </span>
+  );
+}
+
 export function TopBar({ me }: { me: User | null }) {
   const t = useTranslations("platform");
   const locale = useLocale();
@@ -108,8 +141,13 @@ export function TopBar({ me }: { me: User | null }) {
         ) : null}
       </div>
 
+      <Clock />
+
       <button
         type="button"
+        /* it LOOKED like a search box and did nothing — the missing onClick
+           was the whole "search does not work" report */
+        onClick={() => router.push("/search")}
         className="tap flex h-9 items-center gap-2 rounded-lg border border-border bg-surface px-3 text-sm text-fg-muted transition-colors hover:text-fg"
       >
         <SearchIcon width={17} height={17} />

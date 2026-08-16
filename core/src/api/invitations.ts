@@ -120,8 +120,33 @@ async function sendInviteEmail(
       body: JSON.stringify({ email }),
     });
     if (response.ok) return "sent";
-    // GoTrue answers 422 for an address that already has an identity
-    if (response.status === 422) return "already_registered";
+    if (response.status === 422) {
+      /*
+       * The address already has an auth account, and GoTrue refuses to
+       * "invite" an existing user — so nothing would ever land (found
+       * live: three re-invites, zero emails, one confused admin). The
+       * RECOVERY email is the delivery vehicle that already works for
+       * existing accounts: they click, set a password, sign in — and the
+       * by-email door (db/0060) does the joining. Only if THAT send also
+       * fails does the status say already_registered, which the UI renders
+       * with the manual link as the rescue.
+       */
+      try {
+        const recover = await fetch(`${base}/auth/v1/recover`, {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${config.serviceKey}`,
+            apikey: config.serviceKey,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({ email }),
+        });
+        if (recover.ok) return "sent";
+      } catch {
+        /* fall through to the honest status */
+      }
+      return "already_registered";
+    }
     return "send_failed";
   } catch {
     return "send_failed";

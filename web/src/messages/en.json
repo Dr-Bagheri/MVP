@@ -224,6 +224,7 @@
     "linkSpeaker": "Link to a person",
     "renameSpeaker": "Rename speaker",
     "seekHint": "Click any word to seek the audio there.",
+    "noAudio": "No audio is available to play.",
     "seekHintMixed": "Click a word where word timing exists, otherwise click the line.",
     "seekHintLine": "Click any line to seek the audio there.",
     "degraded": "Reduced-accuracy transcript",
@@ -279,6 +280,9 @@
   "skills": {
     "title": "Skills",
     "system_summarizer": "Summarizer",
+    "system_tasks": "Action items",
+    "system_decisions": "Decisions",
+    "system_minutes": "Meeting minutes",
     "system": "System",
     "org": "Organization",
     "user": "Personal",

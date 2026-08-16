@@ -6,11 +6,9 @@
  */
 import {
   AGENT_RUNS,
-  CALLS,
   DIRECTORY,
   ME,
   SPEAKERS,
-  SUMMARIES,
   TRANSCRIPT,
   USERS,
 } from "./mock-data";
@@ -66,13 +64,13 @@ const LATENCY = 180;
 const wait = <T,>(value: T, ms = LATENCY): Promise<T> =>
   new Promise((resolve) => setTimeout(() => resolve(value), ms));
 
-// mutable session copies so Phase-A interactions persist while the tab lives
-let calls: Call[] = structuredClone(CALLS);
+// mutable session copies so Phase-A interactions persist while the tab lives.
+// (`calls` and `summaries` left with the last fixture bodies that read them —
+// call CRUD and search are on the wire now.)
 let users: User[] = structuredClone(USERS);
 let me: Me = structuredClone(ME);
 const transcripts: Record<string, TranscriptSegment[]> = structuredClone(TRANSCRIPT);
 const speakers: Record<string, Speaker[]> = structuredClone(SPEAKERS);
-const summaries: Record<string, SummaryVersion[]> = structuredClone(SUMMARIES);
 
 /**
  * A refusal that kept its REASON.
@@ -639,6 +637,22 @@ export const api = {
   },
 
   /**
+   * **LIVE** — signed playback URLs, one per part, expiring. `null` for a
+   * 404: no audio is an ANSWER (not yours / not there / nothing uploaded),
+   * and the player simply doesn't offer itself.
+   */
+  async getCallAudio(
+    callId: string,
+  ): Promise<{ parts: { idx: number; offset_ms: number; url: string }[] } | null> {
+    try {
+      return await bff(`/api/calls/${callId}/audio`);
+    } catch (error) {
+      if (error instanceof BffError && error.status === 404) return null;
+      throw error;
+    }
+  },
+
+  /**
    * **LIVE** — `GET /api/calls/{id}`, which core/ answers with the call plus
    * its parts.
    *
@@ -783,49 +797,20 @@ export const api = {
   },
 
   // ---- search -----------------------------------------------------------------
+  /**
+   * **LIVE** — `/api/search` → core's `/v1/search` (Persian-folded matching,
+   * `<mark>` highlights on the RAW text — a fold-only hit legitimately comes
+   * back unmarked and the page renders it as one plain chunk). This body
+   * generated fixture hits from the query for months, which is why "search
+   * does not work": the box searched an invented corpus and looked alive.
+   */
   async search(query: string): Promise<SearchHit[]> {
     const q = query.trim();
-    if (!q) return wait([]);
-    const hits: SearchHit[] = [];
-    /*
-     * The server highlights the RAW text while MATCHING folded, so a hit can
-     * legitimately come back with no <mark> at all. Mirroring that here keeps
-     * the unmarked path reachable — a mock that always marks would leave the
-     * "looks right with zero marks" claim untested (rule 9). Every third hit
-     * is returned unmarked to stand in for a fold-only match.
-     */
-    const mark = (text: string, marked: boolean) =>
-      marked ? text.split(q).join(`<mark>${q}</mark>`) : text;
-
-    for (const call of calls) {
-      if (call.deleted_at) continue;
-      for (const segment of transcripts[call.id] ?? []) {
-        if (segment.text.includes(q)) {
-          hits.push({
-            call_id: call.id,
-            call_title: call.title,
-            kind: "transcript",
-            start_ms: segment.start_ms,
-            end_ms: segment.end_ms,
-            snippet: mark(segment.text, hits.length % 3 !== 2),
-          });
-        }
-      }
-      for (const version of summaries[call.id] ?? []) {
-        if (version.content.includes(q)) {
-          hits.push({
-            call_id: call.id,
-            call_title: call.title,
-            kind: "summary",
-            // a summary is about the whole call — no honest timestamp exists
-            start_ms: null,
-            end_ms: null,
-            snippet: mark(version.content.slice(0, 180), hits.length % 3 !== 2),
-          });
-        }
-      }
-    }
-    return wait(hits);
+    if (q.length < 2) return []; // core 400s below 2 chars — don't ask
+    const { hits } = await bff<{ hits: SearchHit[] }>(
+      `/api/search?q=${encodeURIComponent(q)}`,
+    );
+    return hits;
   },
 
   // ---- models & skills ---------------------------------------------------------

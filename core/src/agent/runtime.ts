@@ -83,7 +83,19 @@ export function createAgentRuntime({ runs }: AgentRuntimeOptions) {
 
       const modelId = modelForRun(skill, request.callerModel);
       const modelRef: PiModelRef = { provider: request.provider ?? "openrouter", id: modelId };
-      const systemPrompt = skill?.prompt ?? DEFAULT_ASSISTANT_PROMPT;
+      /*
+       * The context call joins the PROMPT, not just the record. `callId` was
+       * stamped on the run row and never shown to the model — so a person
+       * attaching a call and asking "what was it about?" watched the model
+       * guess an id from the call's visible TITLE and fail three ways in a
+       * row (live, 2026-08-16: get_call("2") for a call titled "2"). The
+       * recorded systemPrompt includes the line, because the record's job is
+       * what the model actually saw.
+       */
+      const systemPrompt = (skill?.prompt ?? DEFAULT_ASSISTANT_PROMPT)
+        + (request.callId
+          ? `\n\nشناسهٔ تماسِ در حال بحث: ${request.callId} — هرجا کاربر به «این تماس» اشاره می‌کند، در ابزارها همین شناسه را به کار ببرید.`
+          : "");
 
       // (3) the run exists in the record BEFORE any provider or tool contact
       const runId = await runs.begin({

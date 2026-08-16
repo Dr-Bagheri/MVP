@@ -201,9 +201,23 @@ describe("the emailed invitation (db/0060's flow)", () => {
     expect(String(spy.mock.calls[0]![0])).toContain("/auth/v1/invite");
   });
 
-  it("names already_registered as a distinct NON-failure — the by-email door catches them at next sign-in", async () => {
+  it("an EXISTING account gets the recovery email instead — GoTrue refuses to invite one, and nothing would land", async () => {
     const { db } = fakeDb();
-    withFetch(422);
+    const spy = vi.fn((url: string | URL) =>
+      Promise.resolve(new Response("{}", {
+        status: String(url).includes("/recover") ? 200 : 422,
+      })));
+    vi.stubGlobal("fetch", spy);
+    const invite = await createInvitationsRepo(db, CONFIG)
+      .issue(ADMIN, { email: "new@example.com" });
+    expect(invite.emailed).toBe(true);
+    expect(invite.email_status).toBe("sent");
+    expect(spy.mock.calls.some((c) => String(c[0]).includes("/auth/v1/recover"))).toBe(true);
+  });
+
+  it("names already_registered honestly only when the recovery fallback ALSO fails", async () => {
+    const { db } = fakeDb();
+    withFetch(422); // both the invite and the recover answer 422
     const invite = await createInvitationsRepo(db, CONFIG)
       .issue(ADMIN, { email: "new@example.com" });
     expect(invite.emailed).toBe(false);

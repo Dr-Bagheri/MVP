@@ -23,6 +23,7 @@
 import { randomUUID } from "node:crypto";
 import { NotFoundError, ValidationError } from "./errors.ts";
 import { assertUuid, type Db, type SqlTx } from "../db/identity.ts";
+import { createStorageSigner } from "../storage/signer.ts";
 import { createQueue, Q_PROCESS_PART } from "../worker/queue.ts";
 import type { Identity } from "../agent/types.ts";
 
@@ -330,6 +331,47 @@ export function createUploadsRepo(db: Db, config: UploadsConfig) {
       });
 
       return { part_id: part[0].id };
+    },
+
+    /**
+     * PLAYBACK (the player's other half — audio has entered, now it comes
+     * back OUT): short-lived signed download URLs for every part the caller
+     * may see. RLS scopes the read (the join to `call` is what makes an
+     * invisible or deleted call answer "no audio" identically to a call
+     * with none); the signer is the wall (M10), and each URL expires while
+     * an incident would still be small.
+     */
+    async playback(
+      identity: Identity,
+      callId: string,
+    ): Promise<{ parts: { idx: number; offset_ms: number; url: string }[] }> {
+      const id = assertUuid(callId, "call id");
+      if (!this.configured) {
+        throw new ValidationError("uploads are not configured on this deployment",
+          { code: "uploads_unconfigured" });
+      }
+      const rows = await db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe<{ idx: number; offset_ms: number; storage_bucket: string; storage_path: string }>(
+          `select p.idx, p.offset_ms, p.storage_bucket, p.storage_path
+             from echo.call_part p
+             join echo.call c on c.id = p.call_id
+            where p.call_id = $1 and c.deleted_at is null
+            order by p.idx`,
+          [id],
+        ),
+      );
+      // no visible parts: no such call, not the caller's, or nothing
+      // uploaded yet — one answer, deliberately (the RLS fold)
+      if (rows.length === 0) throw new NotFoundError("no audio for that call");
+      const signer = createStorageSigner({ url: base!, serviceKey: config.serviceKey! });
+      const parts = await Promise.all(
+        rows.map(async (row) => ({
+          idx: Number(row.idx),
+          offset_ms: Number(row.offset_ms),
+          url: await signer.signDownload(row.storage_bucket, row.storage_path, 3600),
+        })),
+      );
+      return { parts };
     },
 
     /**

@@ -287,6 +287,13 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     return reply.send(await uploads.finish(identity, id));
   });
 
+  /** Playback: signed, expiring URLs for the caller's own view of the call. */
+  app.get("/v1/calls/:id/audio", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id } = request.params as { id: string };
+    return reply.send(await uploads.playback(identity, id));
+  });
+
   app.get("/v1/calls",async (request: FastifyRequest, reply: FastifyReply) => {
     const identity = await auth.requireActive(request);
     const query = request.query as { limit?: string; before?: string };
