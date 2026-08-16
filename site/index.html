@@ -658,227 +658,129 @@ gl_FragColor=vec4(col,1.);}`;
    * chapter (frontal → temporal → whole network → core), plus two dimmer
    * wandering activations so the specimen never reads as dead tissue.
    */
+  /* ============== layer 2: GLYPH RAIN — the mind as streaming binary =======
+   * The user-chosen direction (lab variant 07): the brain's side-profile
+   * silhouette filled with columns of falling glyphs. Each column has a
+   * bright falling head and a fading tail; characters mutate as the rain
+   * passes; the chapter's FOCUS region rains brighter; the cursor makes the
+   * glyphs beneath it flare and mutate faster — synapses firing in data.
+   */
   const brain = (function () {
     const canvas = document.getElementById("brain");
-    const gl = canvas.getContext("webgl", { antialias: true, alpha: true });
-    if (!gl) return null;
+    const ctx2 = canvas.getContext("2d");
+    if (!ctx2) return null;
+    let s2 = 4242;
+    const rnd = () => (s2 = (s2 * 16807) % 2147483647) / 2147483647;
+    const CHARS = "01";
+    const RARE = "()·∴⋅";
 
-    let s = 1337;
-    const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
-    const P = new Uint8Array(256);
-    for (let i = 0; i < 256; i++) P[i] = Math.floor(rnd() * 256);
-    const hp = (x, y, z) => P[(x + P[(y + P[z & 255]) & 255]) & 255] / 255;
-    const sm = (t) => t * t * (3 - 2 * t);
-    function noise3(x, y, z) {
-      const ix = Math.floor(x), iy = Math.floor(y), iz = Math.floor(z);
-      const fx = x - ix, fy = y - iy, fz = z - iz;
-      const u = sm(fx), v = sm(fy), w = sm(fz);
-      const X = ((ix % 256) + 256) % 256, Y = ((iy % 256) + 256) % 256, Z = ((iz % 256) + 256) % 256;
-      const l = (a, b, t) => a + (b - a) * t;
-      return l(
-        l(l(hp(X, Y, Z), hp(X + 1, Y, Z), u), l(hp(X, Y + 1, Z), hp(X + 1, Y + 1, Z), u), v),
-        l(l(hp(X, Y, Z + 1), hp(X + 1, Y, Z + 1), u), l(hp(X, Y + 1, Z + 1), hp(X + 1, Y + 1, Z + 1), u), v),
-        w,
-      );
-    }
-
-    /* The specimen, rebuilt with INTERNAL and EXTERNAL structure (round 6):
-     * layer 0 — the folded cortex SHELL (what you see from outside),
-     * layer 1 — inner white matter filling the volume, dimmer,
-     * layer 2 — the deep core (paired thalami + the callosal arch), brightest.
-     * Additive blending lets the inside glow through the translucent shell. */
-    const pts = [];
-    const CEREBRUM = 12000;
-    const cortexDir = () => {
-      let x, y, z, m;
-      do { x = rnd() * 2 - 1; y = rnd() * 2 - 1; z = rnd() * 2 - 1; m = x * x + y * y + z * z; } while (m > 1 || m < 0.04);
-      m = Math.sqrt(m); return [x / m, y / m, z / m];
-    };
-    // layer 0: the shell
-    for (let i = 0; i < CEREBRUM; i++) {
-      const [x, y, z] = cortexDir();
-      if (Math.abs(x) < 0.055 && y > -0.1) { i--; continue; }
-      let px = x * 1.12, py = y * 0.92, pz = z * 1.42;
-      const fold = 0.5 * noise3(px * 2.6 + 9, py * 2.6, pz * 2.6) + 0.5 * noise3(px * 6.2, py * 6.2 + 4, pz * 6.2);
-      const r = (1 + 0.10 * (fold - 0.5) * 2) * (0.975 + 0.035 * rnd());
-      px *= r; py *= r; pz *= r;
-      if (py < -0.62) py = -0.62 - (py + 0.62) * 0.25;
-      pts.push({ x: px, y: py, z: pz, ph: rnd(), sh: fold, ly: 0 });
-    }
-    // layer 1: white matter — the interior is MATTER, not vacuum
-    for (let i = 0; i < 5200; i++) {
-      const [x, y, z] = cortexDir();
-      if (Math.abs(x) < 0.04 && y > -0.1) { i--; continue; }
-      const rr = 0.5 + 0.42 * Math.pow(rnd(), 0.6); // biased toward the shell
-      let px = x * 1.12 * rr, py = y * 0.92 * rr, pz = z * 1.42 * rr;
-      const grain = noise3(px * 5 + 3, py * 5, pz * 5);
-      if (py < -0.6) continue;
-      pts.push({ x: px, y: py, z: pz, ph: rnd(), sh: grain * 0.7, ly: 1 });
-    }
-    // layer 2: the deep core — two thalamic lobes + the callosal arch over them
-    for (let i = 0; i < 1300; i++) {
-      const side = i % 2 ? 1 : -1;
-      let x, y, z, m;
-      do { x = rnd() * 2 - 1; y = rnd() * 2 - 1; z = rnd() * 2 - 1; m = x * x + y * y + z * z; } while (m > 1);
-      pts.push({ x: side * 0.24 + x * 0.16, y: -0.08 + y * 0.14, z: 0.05 + z * 0.3, ph: rnd(), sh: 0.6 + 0.4 * rnd(), ly: 2 });
-    }
-    for (let i = 0; i < 700; i++) {
-      const t = rnd() * Math.PI; // the arch
-      const jitter = () => (rnd() - 0.5) * 0.09;
-      pts.push({
-        x: jitter() * 1.6, y: 0.16 + Math.sin(t) * 0.18 + jitter(),
-        z: 0.05 + Math.cos(t) * 0.42 + jitter(), ph: rnd(), sh: 0.5 + 0.5 * rnd(), ly: 2,
-      });
-    }
-    // cerebellum + stem, as before
-    for (let i = 0; i < 2400; i++) {
-      const [x, y, z] = cortexDir();
-      const band = 0.06 * Math.sin(y * 26) * 0.5;
-      const px = x * (0.58 + band), py = -0.66 + y * 0.34, pz = -0.92 + z * (0.44 + band);
-      pts.push({ x: px, y: py, z: pz, ph: rnd(), sh: 0.5 + 0.5 * Math.abs(Math.sin(y * 26)), ly: 0 });
-    }
-    for (let i = 0; i < 500; i++) {
-      const t = rnd(), a = rnd() * 6.283, rr = 0.13 * Math.sqrt(rnd());
-      pts.push({ x: Math.cos(a) * rr, y: -0.55 - t * 0.5, z: -0.45 - t * 0.35 + Math.sin(a) * rr, ph: rnd(), sh: 0.4, ly: 1 });
+    /* side-profile silhouette in a unit box (front faces LEFT) */
+    function brainPath(c) {
+      c.beginPath();
+      c.moveTo(-0.86, 0.10);
+      c.bezierCurveTo(-1.02, -0.22, -0.86, -0.62, -0.45, -0.78);
+      c.bezierCurveTo(-0.10, -0.95, 0.42, -0.95, 0.68, -0.72);
+      c.bezierCurveTo(0.94, -0.52, 1.02, -0.18, 0.90, 0.06);
+      c.bezierCurveTo(0.98, 0.26, 0.84, 0.50, 0.62, 0.50);
+      c.bezierCurveTo(0.68, 0.72, 0.42, 0.86, 0.26, 0.74);
+      c.bezierCurveTo(0.18, 0.88, 0.02, 0.88, 0.00, 0.72);
+      c.bezierCurveTo(-0.24, 0.76, -0.52, 0.64, -0.60, 0.42);
+      c.bezierCurveTo(-0.80, 0.38, -0.94, 0.28, -0.86, 0.10);
+      c.closePath();
     }
 
-    const pointData = new Float32Array(pts.length * 6);
-    pts.forEach((p, i) => { pointData.set([p.x, p.y, p.z, p.ph, p.sh, p.ly], i * 6); });
+    /* the cell grid, computed ONCE in unit space via point-in-path */
+    const COL = 0.048, ROW = 0.044;
+    const columns = []; // { ux, cells: [uy...], head, speed, chars[], mut[] }
+    let cellCount = 0;
+    (function grid() {
+      const probe = document.createElement("canvas").getContext("2d");
+      probe.setTransform(100, 0, 0, 100, 110, 100);
+      brainPath(probe);
+      probe.setTransform(1, 0, 0, 1, 0, 0);
+      for (let ux = -1.02; ux <= 1.04; ux += COL) {
+        const cells = [];
+        for (let uy = -0.98; uy <= 0.92; uy += ROW) {
+          if (probe.isPointInPath(ux * 100 + 110, uy * 100 + 100)) cells.push(uy);
+        }
+        if (cells.length < 3) continue;
+        columns.push({
+          ux, cells,
+          head: rnd() * 2 - 1,
+          speed: 0.14 + rnd() * 0.22,
+          chars: cells.map(() => (rnd() > 0.94 ? RARE[Math.floor(rnd() * RARE.length)] : CHARS[Math.floor(rnd() * 2)])),
+          seed: rnd() * 1000,
+        });
+        cellCount += cells.length;
+      }
+    })();
 
-    const PVS = `attribute vec3 a_pos;attribute float a_ph;attribute float a_sh;attribute float a_ly;
-uniform mat4 u_mvp;uniform float u_size;uniform vec3 u_c0;uniform vec3 u_c1;uniform vec3 u_c2;uniform float u_w0;
-uniform float u_tv;uniform vec2 u_mouse;uniform float u_mstr;
-varying float v_ph;varying float v_sh;varying float v_act;varying float v_ly;varying float v_fire;
-void main(){
-/* idle turbulence: every grain breathes on its own phase; the deep core
-   holds steadier than the shell */
-float wob=.024*(1.-.4*step(1.5,a_ly));
-vec3 p2=a_pos+wob*vec3(sin(u_tv*.6+a_ph*6.28),cos(u_tv*.5+a_ph*4.7),sin(u_tv*.8+a_ph*2.9));
-vec4 cp=u_mvp*vec4(p2,1.);
-float d0=distance(a_pos,u_c0),d1=distance(a_pos,u_c1),d2=distance(a_pos,u_c2);
-v_act=u_w0*exp(-d0*d0*5.5)+.55*exp(-d1*d1*9.)+.4*exp(-d2*d2*9.);
-/* the cursor FIRES synapses: grains under it brighten — nothing moves */
-vec2 nd=cp.xy/max(cp.w,.0001);
-v_fire=smoothstep(.42,.0,length(nd-u_mouse))*u_mstr;
-gl_Position=cp;
-gl_PointSize=u_size*(1.+.5*a_sh+1.6*v_act+.9*v_fire)/max(cp.w,.4);
-v_ph=a_ph;v_sh=a_sh;v_ly=a_ly;}`;
-    const PFS = `precision mediump float;
-varying float v_ph;varying float v_sh;varying float v_act;varying float v_ly;varying float v_fire;
-uniform float u_t;uniform float u_act;uniform float u_dim;uniform float u_soft;
-void main(){vec2 c=gl_PointCoord-vec2(.5);float d=length(c);
-float halo=mix(smoothstep(.5,.03,d),smoothstep(.5,.28,d),u_soft);
-float tw=.72+.28*sin(u_t*1.4+v_ph*6.2831);
-/* synapse flash: rapid per-grain strobes, only where the cursor rests */
-float spark=pow(.5+.5*sin(u_t*7.+v_ph*53.),5.);
-float fire=v_act*u_act+v_fire*(.35+1.9*spark);
-/* moonlight blue, layered: shell / inner matter / burning core */
-vec3 blue=vec3(.24,.56,1.);vec3 ice=vec3(.5,.78,1.);vec3 hot=vec3(.93,.98,1.);
-float core=step(1.5,v_ly);float inner=step(.5,v_ly)-core;
-vec3 col=mix(mix(blue,ice,v_sh),hot,min(fire,1.)*.85+core*.25);
-float base=mix(.09,.05,u_soft)*(1.-inner*.45)+core*.12;
-float a=halo*tw*(base+.17*v_sh+.55*min(fire,1.4))*u_dim;
-gl_FragColor=vec4(col*a,a);}`;
-
-    function mkProg(vsSrc, fsSrc) {
-      const c = (ty, sc) => { const sh = gl.createShader(ty); gl.shaderSource(sh, sc); gl.compileShader(sh);
-        if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(sh)); return sh; };
-      const p = gl.createProgram();
-      gl.attachShader(p, c(gl.VERTEX_SHADER, vsSrc)); gl.attachShader(p, c(gl.FRAGMENT_SHADER, fsSrc));
-      gl.linkProgram(p);
-      if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error("link");
-      return p;
-    }
-    let pProg;
-    try { pProg = mkProg(PVS, PFS); } catch (e) {
-      // a silently-missing specimen cost a whole review round once — say why
-      console.error("BRAIN SHADER FAILED:", e && e.message);
-      return null;
-    }
-
-    const pBuf = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, pBuf); gl.bufferData(gl.ARRAY_BUFFER, pointData, gl.STATIC_DRAW);
-
-    /* wandering minor activations (the specimen is alive) */
-    const centers = [1, 2].map(() => ({ cur: [0, 0.6, 0.4], to: [0, 0.6, 0.4], t0: 0, dur: 1 }));
-    function pick() { const p = pts[Math.floor(rnd() * CEREBRUM)]; return [p.x, p.y, p.z]; }
-    function centerAt(c, tSec) {
-      if (tSec - c.t0 > c.dur) { c.cur = c.to; c.to = pick(); c.t0 = tSec; c.dur = 2.2 + rnd() * 2.4; }
-      const k = ease((tSec - c.t0) / c.dur);
-      return [0, 1, 2].map((i) => c.cur[i] + (c.to[i] - c.cur[i]) * k);
-    }
-
-    function persp(fov, asp, near, far) {
-      const f = 1 / Math.tan(fov / 2), nf = 1 / (near - far);
-      return [f / asp, 0, 0, 0, 0, f, 0, 0, 0, 0, (far + near) * nf, -1, 0, 0, 2 * far * near * nf, 0];
-    }
-    function mul(a, b) {
-      const o = new Array(16).fill(0);
-      for (let r = 0; r < 4; r++) for (let cc = 0; cc < 4; cc++) for (let k = 0; k < 4; k++) o[cc * 4 + r] += a[k * 4 + r] * b[cc * 4 + k];
-      return o;
-    }
-    const rotY = (a) => [Math.cos(a), 0, -Math.sin(a), 0, 0, 1, 0, 0, Math.sin(a), 0, Math.cos(a), 0, 0, 0, 0, 1];
-    const rotX = (a) => [1, 0, 0, 0, 0, Math.cos(a), Math.sin(a), 0, 0, -Math.sin(a), Math.cos(a), 0, 0, 0, 0, 1];
-    const scaleM = (k) => [k, 0, 0, 0, 0, k, 0, 0, 0, 0, k, 0, 0, 0, 0, 1];
-    const transM = (x, y, z) => [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, x, y, z, 1];
-
+    let W2 = 0, H2 = 0, DPR2 = 1;
     function resize() {
-      const dpr = Math.min(devicePixelRatio || 1, 1.75);
-      canvas.width = canvas.clientWidth * dpr; canvas.height = canvas.clientHeight * dpr;
-      gl.viewport(0, 0, canvas.width, canvas.height);
+      DPR2 = Math.min(devicePixelRatio || 1, 1.5);
+      W2 = canvas.width = canvas.clientWidth * DPR2;
+      H2 = canvas.height = canvas.clientHeight * DPR2;
     }
     addEventListener("resize", resize); resize();
 
-    gl.enable(gl.BLEND);
-    gl.blendFunc(gl.ONE, gl.ONE);
-    gl.disable(gl.DEPTH_TEST);
+    const mutChar = (col, i, tSec, fast) => {
+      // characters mutate on a per-cell clock; the cursor accelerates it
+      const rate = fast ? 6 : 1.2;
+      const tick = Math.floor(tSec * rate + col.seed + i * 0.7);
+      const h = Math.abs(Math.sin(tick * 12.9898 + i * 78.233 + col.seed)) * 43758.5453;
+      const f = h - Math.floor(h);
+      return f > 0.96 ? RARE[Math.floor(f * 100) % RARE.length] : f > 0.5 ? "1" : "0";
+    };
 
-    function draw(pose, tSec, region, regionW) {
-      gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
-      const asp = canvas.width / canvas.height;
-      const proj = persp(0.62, asp, 0.1, 30);
-      let mv = transM(pose.x, pose.y, -4.6);
-      mv = mul(mv, rotX(pose.rx));
-      mv = mul(mv, rotY(pose.ry));
-      mv = mul(mv, scaleM(pose.s));
-      const mvp = mul(proj, mv);
+    function draw(pose, tSec, region, regionW, mouse) {
+      ctx2.setTransform(1, 0, 0, 1, 0, 0);
+      ctx2.clearRect(0, 0, W2, H2);
+      const scale = Math.min(W2, H2 * 1.15) * 0.34 * pose.s;
+      const cx = W2 * 0.5 + pose.x * W2 * 0.13;
+      const cy = H2 * 0.52 - pose.y * H2 * 0.2;
+      const toX = (ux) => cx + ux * scale;
+      const toY = (uy) => cy + uy * scale;
+      const fontPx = Math.max(8, ROW * scale * 0.86);
+      ctx2.font = `${fontPx}px Consolas, ui-monospace, monospace`;
+      ctx2.textAlign = "center"; ctx2.textBaseline = "middle";
+      const mx = mouse ? (mouse.x * 0.5 + 0.5) * W2 : -1e4;
+      const my = mouse ? (-mouse.y * 0.5 + 0.5) * H2 : -1e4;
+      const mOn = mouse ? mouse.on : 0;
+      const fireR = scale * 0.34;
 
-      const c1 = centerAt(centers[0], tSec + 7), c2 = centerAt(centers[1], tSec + 13);
-      // the focus breathes around its anatomical anchor
-      const c0 = [
-        region[0] + 0.08 * Math.sin(tSec * 0.8),
-        region[1] + 0.06 * Math.sin(tSec * 0.6 + 2),
-        region[2] + 0.08 * Math.cos(tSec * 0.7),
-      ];
-
-      gl.useProgram(pProg);
-      gl.uniformMatrix4fv(gl.getUniformLocation(pProg, "u_mvp"), false, mvp);
-      gl.uniform1f(gl.getUniformLocation(pProg, "u_t"), tSec);
-      gl.uniform1f(gl.getUniformLocation(pProg, "u_tv"), tSec);
-      gl.uniform1f(gl.getUniformLocation(pProg, "u_act"), pose.act);
-      gl.uniform1f(gl.getUniformLocation(pProg, "u_dim"), pose.dim);
-      gl.uniform1f(gl.getUniformLocation(pProg, "u_w0"), regionW);
-      gl.uniform3fv(gl.getUniformLocation(pProg, "u_c0"), c0);
-      gl.uniform3fv(gl.getUniformLocation(pProg, "u_c1"), c1);
-      gl.uniform3fv(gl.getUniformLocation(pProg, "u_c2"), c2);
-      gl.uniform2f(gl.getUniformLocation(pProg, "u_mouse"), pose.mx ?? 0, pose.my ?? 0);
-      gl.uniform1f(gl.getUniformLocation(pProg, "u_mstr"),
-        (matchMedia("(pointer: fine)").matches ? 1 : 0) * (pose.mon ?? 0));
-      gl.bindBuffer(gl.ARRAY_BUFFER, pBuf);
-      const pa = gl.getAttribLocation(pProg, "a_pos"), pph = gl.getAttribLocation(pProg, "a_ph"),
-            psh = gl.getAttribLocation(pProg, "a_sh"), ply = gl.getAttribLocation(pProg, "a_ly");
-      gl.enableVertexAttribArray(pa); gl.vertexAttribPointer(pa, 3, gl.FLOAT, false, 24, 0);
-      gl.enableVertexAttribArray(pph); gl.vertexAttribPointer(pph, 1, gl.FLOAT, false, 24, 12);
-      gl.enableVertexAttribArray(psh); gl.vertexAttribPointer(psh, 1, gl.FLOAT, false, 24, 16);
-      gl.enableVertexAttribArray(ply); gl.vertexAttribPointer(ply, 1, gl.FLOAT, false, 24, 20);
-      gl.uniform1f(gl.getUniformLocation(pProg, "u_soft"), 1);
-      gl.uniform1f(gl.getUniformLocation(pProg, "u_size"), canvas.height * 0.016);
-      gl.drawArrays(gl.POINTS, 0, pts.length);
-      gl.uniform1f(gl.getUniformLocation(pProg, "u_soft"), 0);
-      gl.uniform1f(gl.getUniformLocation(pProg, "u_size"), canvas.height * 0.006);
-      gl.drawArrays(gl.POINTS, 0, pts.length);
+      for (const col of columns) {
+        // the head falls; wraps to the column's top
+        const span = 2.1;
+        const head = ((col.head + tSec * col.speed) % span + span) % span - 1.05;
+        const x = toX(col.ux);
+        if (x < -60 || x > W2 + 60) continue;
+        for (let i = 0; i < col.cells.length; i++) {
+          const uy = col.cells[i];
+          const y = toY(uy);
+          if (y < -30 || y > H2 + 30) continue;
+          // distance BEHIND the head (rain falls downward: head moves +uy)
+          let d = head - uy; if (d < 0) d += span;
+          // short tails keep the SILHOUETTE crisp — the shape is the design
+          const tail = Math.max(0, 1 - d * 2.1);
+          // region focus: the chapter's anatomy rains brighter
+          const rg = Math.exp(-(((col.ux - region[0]) ** 2) + ((uy - region[1]) ** 2)) * 5.5) * regionW;
+          // cursor: synapses fire in the data
+          const md = Math.hypot(x - mx, y - my);
+          const fire = md < fireR ? (1 - md / fireR) * mOn : 0;
+          const a = (0.05 + tail * 0.6 + rg * 0.25 + fire * 0.9) * pose.dim;
+          if (a < 0.03) continue;
+          const isHead = d < ROW * 1.4;
+          const flare = fire > 0.45;
+          ctx2.fillStyle = isHead || flare
+            ? `rgba(235,245,255,${Math.min(1, a + 0.25)})`
+            : rg > 0.5
+              ? `rgba(150,200,255,${a})`
+              : `rgba(86,177,255,${a})`;
+          ctx2.fillText(mutChar(col, i, tSec, flare), x, y);
+        }
+      }
     }
-    return { draw, count: pts.length };
+    return { draw, count: cellCount };
   })();
   document.getElementById("hud-particles").textContent =
     brain ? brain.count.toLocaleString("en-US") : "0";
@@ -892,13 +794,14 @@ gl_FragColor=vec4(col*a,a);}`;
     { yawOff: 0.5,  rx: -0.22, x: -1.35, y: -0.1, s: 1.18, act: 0.9,  dim: 0.9 },
     { yawOff: 2.4,  rx: 0.0,   x: 0.0,   y: 0.0,  s: 2.9,  act: 1.0,  dim: 1.0 },
   ];
-  /* anatomical anchors, model space: whole / frontal / temporal / parietal / core */
+  /* anatomical anchors on the SILHOUETTE (unit space, front faces left):
+   * whole / frontal / temporal / crown-network / deep core */
   const REGIONS = [
-    { c: [0, 0.2, 0.4], w: 0.5 },
-    { c: [0, 0.38, 1.0], w: 1.5 },
-    { c: [0.95, -0.05, 0.15], w: 1.6 },
-    { c: [0, 0.6, -0.3], w: 1.3 },
-    { c: [0, -0.05, 0], w: 1.8 },
+    { c: [0.0, -0.1], w: 0.4 },
+    { c: [-0.6, -0.45], w: 1.4 },
+    { c: [-0.15, 0.3], w: 1.5 },
+    { c: [0.1, -0.65], w: 1.2 },
+    { c: [0.05, 0.0], w: 1.8 },
   ];
   function posit(gi, tSec) {
     const i = Math.min(Math.floor(gi), SCENES - 1);
@@ -915,14 +818,14 @@ gl_FragColor=vec4(col*a,a);}`;
       s: lerp(a.s, b.s, t) * breathe,
       act: lerp(a.act, b.act, t),
       dim: lerp(a.dim, b.dim, t),
-      region: [0, 1, 2].map((k) => lerp(ra.c[k], rb.c[k], t)),
+      region: [0, 1].map((k) => lerp(ra.c[k], rb.c[k], t)),
       regionW: lerp(ra.w, rb.w, t),
     };
   }
 
   function drawFilm(gi, tSec, pose) {
     if (auroraDraw) auroraDraw(gi / (SCENES - 0.55), tSec);
-    if (brain) brain.draw(pose, tSec, pose.region, pose.regionW);
+    if (brain) brain.draw(pose, tSec, pose.region, pose.regionW, { x: pose.mx ?? 0, y: pose.my ?? 0, on: pose.mon ?? 0 });
   }
 
   /* action */
