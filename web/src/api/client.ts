@@ -9,9 +9,6 @@ import {
   CALLS,
   CONNECTORS,
   DIRECTORY,
-  GATEWAY_DELIVERIES,
-  GATEWAY_KEYS,
-  GATEWAY_WEBHOOKS,
   ME,
   SPEAKERS,
   SUMMARIES,
@@ -71,8 +68,6 @@ const wait = <T,>(value: T, ms = LATENCY): Promise<T> =>
 // mutable session copies so Phase-A interactions persist while the tab lives
 let calls: Call[] = structuredClone(CALLS);
 let users: User[] = structuredClone(USERS);
-let gatewayKeys: GatewayKey[] = structuredClone(GATEWAY_KEYS);
-let gatewayWebhooks: GatewayWebhook[] = structuredClone(GATEWAY_WEBHOOKS);
 let me: Me = structuredClone(ME);
 const transcripts: Record<string, TranscriptSegment[]> = structuredClone(TRANSCRIPT);
 const speakers: Record<string, Speaker[]> = structuredClone(SPEAKERS);
@@ -943,7 +938,9 @@ export const api = {
     return wait(CONNECTORS);
   },
   async gatewayKeys(): Promise<GatewayKey[]> {
-    return wait(gatewayKeys);
+    /* **LIVE** — `GET /api/gateway/keys` (admin; M17). */
+    const { keys } = await bff<{ keys: GatewayKey[] }>("/api/gateway/keys");
+    return keys;
   },
   /**
    * Mint. The token comes back HERE and nowhere else — mirroring core/, which
@@ -962,37 +959,40 @@ export const api = {
     actorId: string,
     expiresAt: string | null = null,
   ): Promise<GatewayKeyCreated> {
-    const created: GatewayKeyCreated = {
-      id: `gk-${gatewayKeys.length + 1}`,
-      name,
-      token_prefix: "echo_sk_test",
-      // the picker's choice, NOT `me.id` — otherwise it is a control that
-      // does nothing and a disabled-actor key can never be minted
-      actor_id: actorId,
-      last_used_at: null,
-      expires_at: expiresAt,
-      revoked_at: null,
-      created_at: new Date().toISOString(),
-      allow_assistant: allowAssistant,
-      token: `echo_sk_test_FAKE_MINTED_${String(gatewayKeys.length + 1).padStart(6, "0")}`,
-    };
-    const { token: _token, ...stored } = created;
-    gatewayKeys = [stored, ...gatewayKeys];
-    return wait(created);
+    /* **LIVE** — the token comes back HERE and nowhere else (core stores a
+       sha256 + prefix). `actor_id` is the picker's choice, NOT me.id, and it
+       now genuinely travels — the BFF used to drop it, which made the
+       acts-as picker a control that did nothing. */
+    return bff<GatewayKeyCreated>("/api/gateway/keys", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name,
+        allow_assistant: allowAssistant,
+        actor_id: actorId,
+        expires_at: expiresAt,
+      }),
+    });
   },
-  /** Revoke, not delete — the row stays, with a date on it. */
+  /** **LIVE** — revoke, not delete: the row stays, with a date on it. */
   async revokeGatewayKey(id: string): Promise<GatewayKey[]> {
-    gatewayKeys = gatewayKeys.map((k) =>
-      k.id === id ? { ...k, revoked_at: new Date().toISOString() } : k,
-    );
-    return wait(gatewayKeys);
+    const res = await fetch(`/api/gateway/keys/${id}`, { method: "DELETE" });
+    if (!res.ok) throw new BffError(res.status);
+    return api.gatewayKeys();
   },
   async gatewayWebhooks(): Promise<GatewayWebhook[]> {
-    return wait(gatewayWebhooks);
+    /* **LIVE** — `GET /api/gateway/webhooks` (admin; url/secret stay admin-only). */
+    const { webhooks } = await bff<{ webhooks: GatewayWebhook[] }>("/api/gateway/webhooks");
+    return webhooks;
   },
   async setWebhookEnabled(id: string, enabled: boolean): Promise<GatewayWebhook[]> {
-    gatewayWebhooks = gatewayWebhooks.map((w) => (w.id === id ? { ...w, enabled } : w));
-    return wait(gatewayWebhooks);
+    /* **LIVE** — disabled rows are returned-not-filtered downstream (D19/M21). */
+    await bff(`/api/gateway/webhooks/${id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ enabled }),
+    });
+    return api.gatewayWebhooks();
   },
   /**
    * Create. `secret` comes back once — same one-way-door rule as a key token.
@@ -1005,17 +1005,13 @@ export const api = {
     url: string,
     events: GatewayEvent[],
   ): Promise<GatewayWebhookCreated> {
-    const created: GatewayWebhookCreated = {
-      id: `wh-${gatewayWebhooks.length + 1}`,
-      url,
-      events,
-      enabled: true,
-      created_at: new Date().toISOString(),
-      secret: `whsec_test_FAKE_MINTED_${String(gatewayWebhooks.length + 1).padStart(6, "0")}`,
-    };
-    const { secret: _secret, ...stored } = created;
-    gatewayWebhooks = [stored, ...gatewayWebhooks];
-    return wait(created);
+    /* **LIVE** — `secret` comes back once, same one-way-door as a key token.
+       `events` forwarded verbatim: core 400s an unknown event BY NAME. */
+    return bff<GatewayWebhookCreated>("/api/gateway/webhooks", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ url, events }),
+    });
   },
   /**
    * `webhookId` is a SERVER filter — the BFF forwards it and core/ pages at
@@ -1024,10 +1020,14 @@ export const api = {
    * mirror where the real filtering happens.
    */
   async gatewayDeliveries(webhookId?: string): Promise<GatewayDelivery[]> {
-    const rows = webhookId
-      ? GATEWAY_DELIVERIES.filter((d) => d.webhook_id === webhookId)
-      : GATEWAY_DELIVERIES;
-    return wait(rows);
+    /* **LIVE** — `webhook_id` is a SERVER filter (core pages at 50); a
+       client-side filter would drop a quiet webhook's rows off a busy one's
+       page. */
+    const suffix = webhookId ? `?webhook_id=${encodeURIComponent(webhookId)}` : "";
+    const { deliveries } = await bff<{ deliveries: GatewayDelivery[] }>(
+      `/api/gateway/deliveries${suffix}`,
+    );
+    return deliveries;
   },
 
   /**

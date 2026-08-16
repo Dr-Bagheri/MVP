@@ -408,7 +408,7 @@
     "section": {
       "general": "General",
       "security": "Security",
-      "sso": "Single sign-on (SSO)",
+      "sso": "Sign-in methods",
       "oauth-apps": "Connected apps",
       "audit-logs": "Audit logs",
       "audit-log-drains": "Audit log drains",
@@ -416,24 +416,12 @@
     },
     "desc": {
       "general": "Organization name, default call scope, language and theme.",
-      "security": "Password, active sessions, and a summary of gateway keys.",
-      "sso": "Let staff sign in with your organization's account instead of a separate password.",
+      "security": "The wall this deployment keeps around your account and your data.",
+      "sso": "How people enter this platform. All methods are live.",
       "oauth-apps": "API keys and webhooks — the same gateway outside systems use.",
       "audit-logs": "Who did what, and when — human actions, approval decisions, and assistant runs.",
-      "audit-log-drains": "Ship audit records automatically to an external destination.",
-      "legal": "Terms of use and privacy policy."
-    },
-    "badgeSoon": "Not yet",
-    "badgeNotV1": "Not in v1",
-    "awaitingTitle": "This section isn't wired up yet",
-    "awaiting": {
-      "security": "Designed but not built. Until it is, there's nothing to show here — and we won't invent something.",
-      "audit-log-drains": "Built on the same webhook delivery mechanism that already works."
-    },
-    "notInV1Title": "Not built in this version",
-    "notInV1": {
-      "sso": "Deliberately not in v1. It's named here so you can see where it will live — not so you think it's available.",
-      "legal": "The legal texts haven't been written yet. An empty page beats invented wording."
+      "audit-log-drains": "Deliver audit events to your own systems - signed, retried, identifiers only.",
+      "legal": "The platform’s commitments, versioned."
     },
     "openSurface": "Go to this section",
     "generalPending": "This section is wired in the next step of this redesign.",
@@ -506,11 +494,32 @@
     }
   },
   "drains": {
-    "notBuiltTitle": "This section hasn't been built yet",
-    "notBuiltBody": "An audit log drain ships records continuously to an external destination. It isn't built, and until it is we show neither a form nor an empty list — an empty list would say \"you haven't configured any destinations\" where the truth is \"destinations cannot be configured yet\", and those are not the same statement.",
-    "todayTitle": "What is available today",
-    "todayBody": "The mechanism this will be built on already works: webhooks deliver signed events to your endpoint, retry what fails, and keep a delivery log. If you need audit records off the platform today, start there.",
-    "openConnectors": "Go to connectors"
+    "intro": "A drain is a signed webhook: every event carries identifiers and status only, is HMAC-signed with your secret, retried on failure, and logged below.",
+    "loadFailed": "Could not load the drains. Refresh to retry.",
+    "saveFailed": "Could not save. Please try again.",
+    "adminOnly": "Drains are managed by organization admins.",
+    "empty": "No drains configured yet.",
+    "newDrain": "New drain",
+    "urlLabel": "Destination URL",
+    "urlHint": "HTTPS endpoint that receives the events. Private and loopback addresses are refused at delivery time.",
+    "eventsLabel": "Events",
+    "eventsHint": "Which events this drain receives.",
+    "cancel": "Cancel",
+    "create": "Create",
+    "saving": "Saving…",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "enable": "Enable",
+    "disable": "Disable",
+    "secretTitle": "Signing secret - shown once",
+    "secretNote": "Store it now. It signs every delivery (v1 scheme, 5-minute replay tolerance) and cannot be shown again.",
+    "secretStored": "I stored it",
+    "deliveriesTitle": "Recent deliveries",
+    "noResponse": "no response",
+    "state_delivered": "Delivered",
+    "state_retrying": "Retrying",
+    "state_failed": "Failed",
+    "state_pending": "Pending"
   },
   "gateway": {
     "title": "API gateway",
@@ -672,5 +681,52 @@
     "done": "Done",
     "on": "On",
     "off": "Off"
+  },
+  "security": {
+    "passwordLabel": "Password",
+    "passwordHint": "Change your password from your profile.",
+    "passwordAction": "Open profile",
+    "methodsLabel": "Sign-in methods",
+    "methodsHint": "Email + password, Google and GitHub are live.",
+    "methodsAction": "View methods",
+    "postureTitle": "What this deployment enforces",
+    "fact_session": "Your browser never holds a token",
+    "fact_session_note": "The session is an httpOnly cookie; tokens live server-side only (M1).",
+    "fact_cache": "Signed-out means gone",
+    "fact_cache_note": "Authenticated pages are never cached, and signing out evicts the browser’s copies - Back lands on sign-in.",
+    "fact_oauth": "OAuth is PKCE with server-side exchange",
+    "fact_oauth_note": "Google and GitHub sign-ins exchange codes on the server; no token ever transits the browser.",
+    "fact_rls": "Access control lives in the database wall",
+    "fact_rls_note": "Row-level security and role grants decide every read and write. Prompts are never the wall.",
+    "fact_agent": "The assistant borrows your authority - never more",
+    "fact_agent_note": "Every tool call runs as you, under your permissions, and its writes need your explicit approval.",
+    "fact_logs": "Your content never reaches logs",
+    "fact_logs_note": "Diagnostics carry codes and identifiers only - never transcript or conversation text."
+  },
+  "signin": {
+    "intro": "How people enter this platform. Registration is self-serve: a confirmed email is the acceptance for founders; joiners are approved by an admin.",
+    "active": "Active",
+    "method_password": "Email and password",
+    "method_password_note": "Sign-up with email confirmation; passwords are handled by the auth service, never stored by the platform.",
+    "method_google": "Google",
+    "method_google_note": "OAuth 2.0 with PKCE; the code is exchanged server-side.",
+    "method_github": "GitHub",
+    "method_github_note": "OAuth 2.0 with PKCE; the code is exchanged server-side."
+  },
+  "legal": {
+    "version": "Version 2026-08-16",
+    "termsTitle": "Terms of service & privacy",
+    "ownershipTitle": "1. Your recordings are yours",
+    "ownershipBody": "Audio you record or upload, its transcripts, and everything derived from them belong to your organization. The transcript is the source of truth; derived artifacts are rebuildable and carry their provenance.",
+    "accessTitle": "2. Access follows your organization’s permissions",
+    "accessBody": "Every read and write - including every action of the AI assistant - runs under the requesting member’s own permissions, enforced at the database layer. Nobody, including the assistant, can reach content its caller could not.",
+    "processingTitle": "3. Processing",
+    "processingBody": "Speech is transcribed and summarized using the model providers your organization’s admin allows. Model providers receive the content needed to perform the requested task and nothing else.",
+    "retentionTitle": "4. Deletion",
+    "retentionBody": "Deleting a call hides it immediately and permanently purges its audio, transcript and derivatives after the retention window. Conversations with the assistant are archived, never silently deleted.",
+    "securityTitle": "5. Security",
+    "securityBody": "Sessions are httpOnly cookies; tokens never transit the browser. Content never appears in logs. Outbound webhooks carry identifiers and status only, signed with your secret.",
+    "changesTitle": "6. Changes",
+    "changesBody": "A revision of these terms changes the version date above. The text never changes silently."
   }
 }

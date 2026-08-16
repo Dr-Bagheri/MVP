@@ -20,10 +20,18 @@ export async function GET() {
  * consumes it has to be a one-way door.
  */
 export async function POST(request: Request) {
-  const { name, expires_at, allow_assistant } = (await request.json()) as {
+  const { name, expires_at, allow_assistant, actor_id } = (await request.json()) as {
     name: string;
     expires_at?: string | null;
     allow_assistant?: boolean;
+    /*
+     * MUST travel: core accepts it (defaulting to the creating admin), and
+     * this handler dropping it made the UI's acts-as picker a control that
+     * reads as wired and does nothing — the key would silently mint in the
+     * ADMIN's name whatever the picker showed. Same shape as the
+     * allow_assistant drop below, pointed at authority instead of capability.
+     */
+    actor_id?: string;
   };
   try {
     /*
@@ -47,7 +55,7 @@ export async function POST(request: Request) {
     return Response.json(
       await coreFetch<GatewayKeyCreated>("/v1/gateway/keys", {
         method: "POST",
-        body: { name, expires_at, allow_assistant },
+        body: { name, expires_at, allow_assistant, actor_id },
       }),
     );
   } catch (error) {
