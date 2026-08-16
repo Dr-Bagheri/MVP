@@ -534,7 +534,7 @@ noscript .noscript-note { display: block; padding: 12px 24px; text-align: center
   const hudFiring = document.getElementById("hud-firing");
   const hudCoh = document.getElementById("hud-coh");
   const hudFocus = document.getElementById("hud-focus");
-  const FOCUS = ["SPECIMEN · WHOLE", "FRONTAL_CORTEX", "TEMPORAL_ASSOC", "GLOBAL_NETWORK", "CORE_MEMORY"];
+  const FOCUS = ["SPECIMEN · WHOLE", "INPUT_LAYER", "HIDDEN_LAYER", "OUTPUT_LAYER", "CORE_MEMORY"];
   let hudNext = 0;
   function hud(tSec, active, act) {
     if (tSec < hudNext) return;
@@ -671,44 +671,51 @@ gl_FragColor=vec4(col,1.);}`;
     if (!ctx2) return null;
     let s2 = 4242;
     const rnd = () => (s2 = (s2 * 16807) % 2147483647) / 2147483647;
-    const CHARS = "01";
-    const RARE = "()·∴⋅";
+    /* 0/1 lead the mix, but the mind speaks more than binary */
+    const POOL = "0101010101ABCDEF23456789#%&@+=<>*ΔΣΨΩπλ·";
 
-    /* side-profile silhouette in a unit box (front faces LEFT) */
+    /* the silhouette: a BIG FAT N — the mark itself, raining data (round 8) */
     function brainPath(c) {
       c.beginPath();
-      c.moveTo(-0.86, 0.10);
-      c.bezierCurveTo(-1.02, -0.22, -0.86, -0.62, -0.45, -0.78);
-      c.bezierCurveTo(-0.10, -0.95, 0.42, -0.95, 0.68, -0.72);
-      c.bezierCurveTo(0.94, -0.52, 1.02, -0.18, 0.90, 0.06);
-      c.bezierCurveTo(0.98, 0.26, 0.84, 0.50, 0.62, 0.50);
-      c.bezierCurveTo(0.68, 0.72, 0.42, 0.86, 0.26, 0.74);
-      c.bezierCurveTo(0.18, 0.88, 0.02, 0.88, 0.00, 0.72);
-      c.bezierCurveTo(-0.24, 0.76, -0.52, 0.64, -0.60, 0.42);
-      c.bezierCurveTo(-0.80, 0.38, -0.94, 0.28, -0.86, 0.10);
+      c.moveTo(-0.95, -0.95);
+      c.lineTo(-0.42, -0.95);
+      c.lineTo(0.42, 0.34);
+      c.lineTo(0.42, -0.95);
+      c.lineTo(0.95, -0.95);
+      c.lineTo(0.95, 0.95);
+      c.lineTo(0.42, 0.95);
+      c.lineTo(-0.42, -0.34);
+      c.lineTo(-0.42, 0.95);
+      c.lineTo(-0.95, 0.95);
       c.closePath();
     }
 
-    /* the cell grid, computed ONCE in unit space via point-in-path */
+    /* the cell grid — the N tested ANALYTICALLY (a leaky point-in-path
+     * filled the letter's voids with ghost cells; math cannot leak) */
     const COL = 0.048, ROW = 0.044;
-    const columns = []; // { ux, cells: [uy...], head, speed, chars[], mut[] }
+    const SLOPE = 1.535, HALF = 0.305;
+    const inN = (ux, uy) => {
+      if (uy < -0.95 || uy > 0.95) return false;
+      if (ux >= -0.95 && ux <= -0.42) return true;                 // left stem
+      if (ux >= 0.42 && ux <= 0.95) return true;                   // right stem
+      if (ux > -0.42 && ux < 0.42) {                               // the diagonal
+        const c = SLOPE * ux;
+        return uy >= c - HALF && uy <= c + HALF;
+      }
+      return false;
+    };
+    const columns = [];
     let cellCount = 0;
     (function grid() {
-      const probe = document.createElement("canvas").getContext("2d");
-      probe.setTransform(100, 0, 0, 100, 110, 100);
-      brainPath(probe);
-      probe.setTransform(1, 0, 0, 1, 0, 0);
-      for (let ux = -1.02; ux <= 1.04; ux += COL) {
+      for (let ux = -1.0; ux <= 1.0; ux += COL) {
         const cells = [];
-        for (let uy = -0.98; uy <= 0.92; uy += ROW) {
-          if (probe.isPointInPath(ux * 100 + 110, uy * 100 + 100)) cells.push(uy);
-        }
-        if (cells.length < 3) continue;
+        for (let uy = -0.98; uy <= 0.96; uy += ROW) if (inN(ux, uy)) cells.push(uy);
+        if (cells.length < 2) continue;
         columns.push({
           ux, cells,
           head: rnd() * 2 - 1,
           speed: 0.14 + rnd() * 0.22,
-          chars: cells.map(() => (rnd() > 0.94 ? RARE[Math.floor(rnd() * RARE.length)] : CHARS[Math.floor(rnd() * 2)])),
+          chars: cells.map(() => POOL[Math.floor(rnd() * POOL.length)]),
           seed: rnd() * 1000,
         });
         cellCount += cells.length;
@@ -729,7 +736,7 @@ gl_FragColor=vec4(col,1.);}`;
       const tick = Math.floor(tSec * rate + col.seed + i * 0.7);
       const h = Math.abs(Math.sin(tick * 12.9898 + i * 78.233 + col.seed)) * 43758.5453;
       const f = h - Math.floor(h);
-      return f > 0.96 ? RARE[Math.floor(f * 100) % RARE.length] : f > 0.5 ? "1" : "0";
+      return POOL[Math.floor(f * POOL.length) % POOL.length];
     };
 
     function draw(pose, tSec, region, regionW, mouse) {
@@ -794,14 +801,14 @@ gl_FragColor=vec4(col,1.);}`;
     { yawOff: 0.5,  rx: -0.22, x: -1.35, y: -0.1, s: 1.18, act: 0.9,  dim: 0.9 },
     { yawOff: 2.4,  rx: 0.0,   x: 0.0,   y: 0.0,  s: 2.9,  act: 1.0,  dim: 1.0 },
   ];
-  /* anatomical anchors on the SILHOUETTE (unit space, front faces left):
-   * whole / frontal / temporal / crown-network / deep core */
+  /* focus anchors on the N (unit space): whole / left stem (input) /
+   * the diagonal (hidden) / right stem (output) / center core */
   const REGIONS = [
-    { c: [0.0, -0.1], w: 0.4 },
-    { c: [-0.6, -0.45], w: 1.4 },
-    { c: [-0.15, 0.3], w: 1.5 },
-    { c: [0.1, -0.65], w: 1.2 },
-    { c: [0.05, 0.0], w: 1.8 },
+    { c: [0.0, 0.0], w: 0.4 },
+    { c: [-0.68, -0.4], w: 1.4 },
+    { c: [0.0, 0.0], w: 1.5 },
+    { c: [0.68, -0.4], w: 1.2 },
+    { c: [0.0, 0.0], w: 1.8 },
   ];
   function posit(gi, tSec) {
     const i = Math.min(Math.floor(gi), SCENES - 1);
