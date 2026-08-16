@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
+import { useSkillName } from "@/lib/skillName";
 import { api, BffError } from "@/api/client";
 import type { AuthoredSkill, ModelInfo, Skill, User } from "@/api/types";
 import { ManagementPane } from "@/components/platform/ManagementPane";
@@ -59,6 +60,8 @@ const fromAuthored = (s: AuthoredSkill): Draft => ({
 
 export default function SkillsPage() {
   const t = useTranslations("skills");
+  /* system skills localize (shipped product content); authored names never do */
+  const skillName = useSkillName();
   const [me, setMe] = useState<User | null>(null);
   const [resolved, setResolved] = useState<Skill[]>([]);
   const [authored, setAuthored] = useState<AuthoredSkill[]>([]);
@@ -313,7 +316,7 @@ export default function SkillsPage() {
               {active.map((s) => (
                 <Card key={s.id}>
                   <div className="mb-1 flex items-start justify-between gap-2">
-                    <h3 className="font-medium text-fg">{s.name}</h3>
+                    <h3 className="font-medium text-fg">{skillName(s)}</h3>
                     <div className="flex gap-1.5">
                       {!s.enabled ? <Chip tone="warning">{t("disabled")}</Chip> : null}
                       <Chip tone={s.level === "user" ? "accent" : "info"}>{t(s.level)}</Chip>
@@ -359,7 +362,7 @@ export default function SkillsPage() {
               {archived.map((s) => (
                 <Card key={s.id}>
                   <div className="mb-1 flex items-start justify-between gap-2">
-                    <h3 className="font-medium text-fg-muted">{s.name}</h3>
+                    <h3 className="font-medium text-fg-muted">{skillName(s)}</h3>
                     <Chip tone="neutral">{t(s.level)}</Chip>
                   </div>
                   <p className="text-xs text-fg-muted ltr">/{s.slug}</p>
@@ -381,7 +384,7 @@ export default function SkillsPage() {
             {resolved.map((skill) => (
               <Card key={skill.id}>
                 <div className="mb-1 flex items-start justify-between gap-2">
-                  <h3 className="font-medium text-fg">{skill.name}</h3>
+                  <h3 className="font-medium text-fg">{skillName(skill)}</h3>
                   <Chip tone={skill.level === "user" ? "accent" : skill.level === "org" ? "info" : "neutral"}>
                     {t(skill.level)}
                   </Chip>

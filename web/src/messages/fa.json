@@ -74,7 +74,11 @@
     "restore": "بازگردانی",
     "parts": "{count} بخش",
     "durationUnknown": "نامعلوم",
-    "newCall": "ضبط تازه"
+    "newCall": "ضبط تازه",
+    "columnActions": "عملیات",
+    "rename": "تغییر عنوان",
+    "confirmDelete": "حذف شود؟",
+    "untitled": "بدون عنوان"
   },
   "status": {
     "recording": "در حال ضبط",
@@ -205,6 +209,7 @@
     "uploadedBody": "پردازش آغاز شد — تماس در فهرست تماس‌ها با وضعیت «در حال پردازش» می‌آید.",
     "uploadAnother": "بارگذاری فایل دیگر",
     "uploadFileFailed": "بارگذاری کامل نشد. فایل نزد شماست — دوباره تلاش کنید.",
+    "nothingRecorded": "صدایی ضبط نشد — میکروفون را بررسی کنید و دوباره ضبط کنید.",
     "accepted": "پذیرفته شد — در صف پردازش",
     "titleField": "عنوان تماس"
   },
@@ -273,6 +278,7 @@
   },
   "skills": {
     "title": "مهارت‌ها",
+    "system_summarizer": "خلاصه‌ساز",
     "system": "سیستمی",
     "org": "سازمانی",
     "user": "شخصی",
@@ -509,6 +515,9 @@
     "detailNameEn": "نام در محیط انگلیسی",
     "detailUsername": "نام کاربری",
     "detailNoUsername": "انتخاب نشده",
+    "deleteMember": "حذف عضو",
+    "confirmDeleteMember": "حذف قطعی عضو",
+    "deleteMemberNote": "حساب خالی می‌شود و نام کاربری برای همیشه بازنشسته می‌ماند؛ تماس‌های او طبق سیاست حذف نرم کنار گذاشته می‌شوند. این کار بازگشت ندارد.",
     "colName": "نام",
     "colStatus": "وضعیت",
     "colRole": "نقش",
@@ -825,6 +834,7 @@
   "common": {
     "cancel": "انصراف",
     "confirm": "تأیید",
+    "save": "ذخیره",
     "loading": "در حال بارگذاری…",
     "minutes": "دقیقه",
     "you": "شما",

@@ -141,6 +141,9 @@ async function bff<T>(path: string, init?: RequestInit): Promise<T> {
   // ANY successful write invalidates the read cache — one rule, one place,
   // no per-mutation bookkeeping to forget (sign-in included: it is a POST)
   if (init?.method && init.method !== "GET") readCache.clear();
+  // a 204 has no body by definition — json() on it would turn a clean
+  // delete into a parse crash
+  if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
 }
 
@@ -664,16 +667,23 @@ export const api = {
       body: JSON.stringify({ scope }),
     });
   },
-  /**
-   * Archive/unarchive are LIVE and verified end-to-end against core/
-   * (`archived_at` null → timestamp → null on a real row). This body swaps to
-   * `POST /api/calls/:id/archive` with the rest of the read path.
-   */
-  async setArchived(id: string, archived: boolean) {
-    calls = calls.map((c) =>
-      c.id === id ? { ...c, archived_at: archived ? new Date().toISOString() : null } : c,
-    );
-    return wait(true);
+  /** **LIVE** — `POST /api/calls/:id/archive` with `{archived}`, core's two
+   *  verbs behind one flag (the timestamp is the server's to write). */
+  async setArchived(id: string, archived: boolean): Promise<void> {
+    await bff(`/api/calls/${id}/archive`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ archived }),
+    });
+  },
+
+  /** **LIVE** — rename through the same PATCH that carries scope. */
+  async setCallTitle(id: string, title: string): Promise<Call> {
+    return bff<Call>(`/api/calls/${id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title }),
+    });
   },
   /**
    * Soft delete with a purge window (M11). Never the agent's path.
@@ -694,15 +704,15 @@ export const api = {
    * These stay fixture-backed only until the swap lands with the rest of the
    * write path — no longer because anything is broken.
    */
-  async deleteCall(id: string) {
-    calls = calls.map((c) =>
-      c.id === id ? { ...c, deleted_at: new Date().toISOString() } : c,
-    );
-    return wait(true);
+  async deleteCall(id: string): Promise<void> {
+    /* **LIVE** — the M11 named door: owner deletes their own, admin any;
+       idempotent 204, so a double-click is harmless. */
+    await bff(`/api/calls/${id}`, { method: "DELETE" });
   },
-  async restoreCall(id: string) {
-    calls = calls.map((c) => (c.id === id ? { ...c, deleted_at: null } : c));
-    return wait(true);
+  async restoreCall(id: string): Promise<void> {
+    /* **LIVE** — admin-only by the user's ruling; a member's attempt gets
+       core's 404, indistinguishable from "no such call" on purpose. */
+    await bff(`/api/calls/${id}/restore`, { method: "POST" });
   },
 
   // ---- transcript & speakers --------------------------------------------------

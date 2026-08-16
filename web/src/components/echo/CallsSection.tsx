@@ -33,6 +33,12 @@ export function CallsSection() {
   const [me, setMe] = useState<Me | null>(null);
   const [members, setMembers] = useState<User[]>([]);
   const [showArchived, setShowArchived] = useState(false);
+  // ---- row actions (the calls CRUD, user directive 2026-08-16) ----
+  const [busy, setBusy] = useState(false);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState("");
+  /** Two-step delete: the first press arms THIS row, the second deletes. */
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   async function load(includeArchived: boolean) {
     setCalls(await api.listCalls({ includeArchived }));
@@ -48,6 +54,22 @@ export function CallsSection() {
   /** id → display name, falling back to the id rather than to `undefined`. */
   function ownerName(id: string): string {
     return members.find((m) => m.id === id)?.display_name ?? id;
+  }
+
+  /** The rows this person may change: their own, or any as an admin (M11). */
+  function mayEdit(call: Call): boolean {
+    return call.owner_id === me?.id || me?.role === "admin" || me?.role === "owner";
+  }
+
+  async function act(fn: () => Promise<unknown>): Promise<void> {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await fn();
+      await load(showArchived);
+    } finally {
+      setBusy(false);
+    }
   }
 
   /*
@@ -96,18 +118,53 @@ export function CallsSection() {
                   <th className="table-head px-4 py-3">{t("columnLength")}</th>
                   <th className="table-head px-4 py-3">{t("columnScope")}</th>
                   <th className="table-head px-4 py-3">{t("columnStatus")}</th>
+                  <th className="table-head px-4 py-3">{t("columnActions")}</th>
                 </tr>
               </thead>
               <tbody>
                 {live.map((call) => (
                   <tr key={call.id} className="border-b border-border last:border-0">
                     <td className="px-4 py-3">
-                      <Link
-                        href={`/calls/${call.id}`}
-                        className="font-medium text-fg hover:text-accent"
-                      >
-                        {call.title}
-                      </Link>
+                      {renamingId === call.id ? (
+                        <span className="flex items-center gap-1.5">
+                          <input
+                            className="input h-8 min-h-0 w-44 py-0 text-sm"
+                            value={renameDraft}
+                            autoFocus
+                            onChange={(e) => setRenameDraft(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                void act(() => api.setCallTitle(call.id, renameDraft.trim()));
+                                setRenamingId(null);
+                              }
+                              if (e.key === "Escape") setRenamingId(null);
+                            }}
+                          />
+                          <button
+                            className="text-xs text-accent underline-offset-2 hover:underline"
+                            disabled={busy}
+                            onClick={() => {
+                              void act(() => api.setCallTitle(call.id, renameDraft.trim()));
+                              setRenamingId(null);
+                            }}
+                          >
+                            {tCommon("save")}
+                          </button>
+                        </span>
+                      ) : (
+                        <Link
+                          href={`/calls/${call.id}`}
+                          className="font-medium text-fg hover:text-accent"
+                        >
+                          {/* an empty title renders as a WORD, not as a blank
+                              link nobody can click on purpose */}
+                          {call.title.trim() === "" ? (
+                            <span className="text-fg-muted">{t("untitled")}</span>
+                          ) : (
+                            call.title
+                          )}
+                        </Link>
+                      )}
                       <div className="mt-1 flex flex-wrap items-center gap-2">
                         {/* `parts` is not on the wire yet — absent means "not
                             told", which renders as nothing rather than as "1
@@ -160,6 +217,54 @@ export function CallsSection() {
                     </td>
                     <td className="px-4 py-3">
                       <StatusChip status={call.status} label={tStatus(call.status)} />
+                    </td>
+                    <td className="px-4 py-3">
+                      {mayEdit(call) ? (
+                        <span className="flex items-center gap-3 text-xs">
+                          <button
+                            className="text-fg-muted underline-offset-2 hover:underline"
+                            disabled={busy}
+                            onClick={() => {
+                              setRenamingId(call.id);
+                              setRenameDraft(call.title);
+                              setConfirmDeleteId(null);
+                            }}
+                          >
+                            {t("rename")}
+                          </button>
+                          <button
+                            className="text-fg-muted underline-offset-2 hover:underline"
+                            disabled={busy}
+                            onClick={() =>
+                              void act(() => api.setArchived(call.id, call.archived_at === null))
+                            }
+                          >
+                            {call.archived_at === null ? t("archive") : t("unarchive")}
+                          </button>
+                          {confirmDeleteId === call.id ? (
+                            /* the second press is the real one; anything else
+                               on the row disarms it */
+                            <button
+                              className="font-semibold text-danger underline-offset-2 hover:underline"
+                              disabled={busy}
+                              onClick={() => {
+                                setConfirmDeleteId(null);
+                                void act(() => api.deleteCall(call.id));
+                              }}
+                            >
+                              {t("confirmDelete")}
+                            </button>
+                          ) : (
+                            <button
+                              className="text-danger/80 underline-offset-2 hover:text-danger hover:underline"
+                              disabled={busy}
+                              onClick={() => setConfirmDeleteId(call.id)}
+                            >
+                              {t("delete")}
+                            </button>
+                          )}
+                        </span>
+                      ) : null}
                     </td>
                   </tr>
                 ))}

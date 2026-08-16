@@ -74,7 +74,11 @@
     "restore": "Restore",
     "parts": "{count} parts",
     "durationUnknown": "Unknown",
-    "newCall": "New recording"
+    "newCall": "New recording",
+    "columnActions": "Actions",
+    "rename": "Rename",
+    "confirmDelete": "Delete?",
+    "untitled": "Untitled"
   },
   "status": {
     "recording": "Recording",
@@ -205,6 +209,7 @@
     "uploadedBody": "Processing has started — the call appears in the calls list as “processing”.",
     "uploadAnother": "Upload another file",
     "uploadFileFailed": "The upload did not complete. The file is still yours — try again.",
+    "nothingRecorded": "No audio was recorded — check the microphone and record again.",
     "accepted": "Accepted — queued for processing",
     "titleField": "Call title"
   },
@@ -273,6 +278,7 @@
   },
   "skills": {
     "title": "Skills",
+    "system_summarizer": "Summarizer",
     "system": "System",
     "org": "Organization",
     "user": "Personal",
@@ -509,6 +515,9 @@
     "detailNameEn": "Name in English contexts",
     "detailUsername": "Username",
     "detailNoUsername": "Not chosen",
+    "deleteMember": "Delete member",
+    "confirmDeleteMember": "Permanently delete member",
+    "deleteMemberNote": "The account is emptied and the username stays retired forever; their calls are set aside under the soft-delete policy. This cannot be undone.",
     "colName": "Name",
     "colStatus": "Status",
     "colRole": "Role",
@@ -825,6 +834,7 @@
   "common": {
     "cancel": "Cancel",
     "confirm": "Confirm",
+    "save": "Save",
     "loading": "Loading…",
     "minutes": "min",
     "you": "You",

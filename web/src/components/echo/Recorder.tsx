@@ -73,6 +73,10 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
   const partIdx = useRef<number>(0);
   const mimeType = useRef<string>("audio/webm");
   const previewEl = useRef<HTMLAudioElement>(null);
+  /** Resolved by `onstop` AFTER it has enqueued (or skipped) its part. */
+  const flushDone = useRef<(() => void) | null>(null);
+  /** Parts actually handed to the uploader — zero means nothing to finish. */
+  const partsEnqueued = useRef<number>(0);
 
   /** Refresh the device lists. Before a grant, labels are blank by the
    *  browser's privacy rule — the picker names them generically then. */
@@ -137,14 +141,27 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
     };
     rec.onstop = () => {
       const blob = new Blob(localChunks, { type: mimeType.current });
-      if (blob.size === 0) return; // a paused-then-finished empty tail is not a part
-      setPreviews((prev) => [...prev, { idx, url: URL.createObjectURL(blob) }]);
-      uploader.current?.enqueue({
-        idx,
-        offsetMs,
-        blob,
-        contentType: mimeType.current,
-      });
+      if (blob.size > 0) {
+        setPreviews((prev) => [...prev, { idx, url: URL.createObjectURL(blob) }]);
+        uploader.current?.enqueue({
+          idx,
+          offsetMs,
+          blob,
+          contentType: mimeType.current,
+        });
+        partsEnqueued.current += 1;
+      }
+      /*
+       * ALWAYS resolve the flush, even for an empty tail — and only AFTER
+       * the enqueue above. `finish()` awaits this before settling the
+       * upload barrier: `stop()` returns before `onstop` fires, so without
+       * the handshake the barrier settled on an EMPTY queue ("clean",
+       * vacuously), the call flipped to processing, and the only part
+       * arrived too late to a call that no longer accepts audio. Both live
+       * "stuck at processing" calls were exactly this — zero parts, ever.
+       */
+      flushDone.current?.();
+      flushDone.current = null;
     };
     recorder.current = rec;
     rec.start();
@@ -210,6 +227,7 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
     recordedRef.current = 0;
     partStartMs.current = 0;
     partIdx.current = 0;
+    partsEnqueued.current = 0;
     setRecordedMs(0);
     setPreviews([]);
     startMeter();
@@ -257,13 +275,28 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
     if (timer.current) clearInterval(timer.current);
     cancelAnimationFrame(meterRaf.current);
     setLevel(0);
-    if (recorder.current && recorder.current.state !== "inactive") {
-      recorder.current.stop(); // flushes the final part into the queue
-    }
+    // WAIT for onstop to enqueue the final part before settling the barrier
+    // (the handshake described on onstop; stop() alone returns too early)
+    await new Promise<void>((resolve) => {
+      if (!recorder.current || recorder.current.state === "inactive") {
+        resolve();
+        return;
+      }
+      flushDone.current = resolve;
+      recorder.current.stop();
+    });
     stream.current?.getTracks().forEach((track) => track.stop());
     stream.current = null;
     void audioCtx.current?.close();
     audioCtx.current = null;
+
+    if (partsEnqueued.current === 0) {
+      // no audio ever reached the uploader — finishing would create a call
+      // stuck at "processing" forever, with nothing for the pipeline to do
+      setPhase("failed");
+      setError(t("nothingRecorded"));
+      return;
+    }
 
     const settled = await uploader.current!.settle();
     if (!settled.clean) {
@@ -284,6 +317,12 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
   }
 
   async function retryUploads(): Promise<void> {
+    if (partsEnqueued.current === 0) {
+      // nothing was ever recorded — there is nothing to retry; start over
+      setPhase("idle");
+      setError(null);
+      return;
+    }
     setPhase("finishing");
     setError(null);
     uploader.current!.retryFailed();

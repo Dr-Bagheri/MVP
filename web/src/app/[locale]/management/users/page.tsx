@@ -696,6 +696,25 @@ export default function UsersPage() {
             assignableRoles={ASSIGNABLE_ROLES}
             onSetRole={(id, r) => void setRoleFor(id, r)}
             onToggleStatus={(u) => void toggleStatusFor(u)}
+            /* the true delete is the OWNER's alone (tombstone: emptied
+               person, retired handle — core's DELETE endpoint, M11 family);
+               admins keep disable, which is reversible */
+            {...(me?.role === "owner"
+              ? {
+                  onDelete: (u: User) => {
+                    void (async () => {
+                      setBusy(true);
+                      try {
+                        await api.rejectMember(u.id);
+                        setDetailId(null);
+                        await load();
+                      } finally {
+                        setBusy(false);
+                      }
+                    })();
+                  },
+                }
+              : {})}
             onClose={() => setDetailId(null)}
           />
         ) : null}

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import type { Role, User } from "@/api/types";
 import { Chip } from "@/components/ui";
@@ -26,6 +27,7 @@ export function MemberDetail({
   assignableRoles,
   onSetRole,
   onToggleStatus,
+  onDelete,
   onClose,
 }: {
   user: User;
@@ -34,11 +36,15 @@ export function MemberDetail({
   assignableRoles: readonly Role[];
   onSetRole: (id: string, role: Role) => void;
   onToggleStatus: (user: User) => void;
+  /** Owner-only true delete (tombstone). Absent = the button never renders. */
+  onDelete?: (user: User) => void;
   onClose: () => void;
 }) {
   const t = useTranslations("management");
   const tAdmin = useTranslations("admin");
   const locale = useLocale();
+  /** Two-step delete: the first press arms it, the second is the real one. */
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const statusTone =
     user.status === "active" ? "success" : user.status === "pending" ? "warning" : "neutral";
@@ -140,7 +146,7 @@ export function MemberDetail({
         </div>
 
         {editable ? (
-          <div className="mt-5">
+          <div className="mt-5 flex flex-wrap items-center gap-3">
             <button
               className={user.status === "disabled" ? "btn-primary" : "btn-secondary"}
               disabled={busy}
@@ -148,7 +154,39 @@ export function MemberDetail({
             >
               {tAdmin(user.status === "disabled" ? "enable" : "disable")}
             </button>
+            {onDelete ? (
+              confirmingDelete ? (
+                <span className="flex items-center gap-2">
+                  <button
+                    className="btn-danger"
+                    disabled={busy}
+                    onClick={() => onDelete(user)}
+                  >
+                    {t("confirmDeleteMember")}
+                  </button>
+                  <button
+                    className="text-xs text-fg-muted underline-offset-2 hover:underline"
+                    onClick={() => setConfirmingDelete(false)}
+                  >
+                    {t("detailClose")}
+                  </button>
+                </span>
+              ) : (
+                <button
+                  className="text-sm text-danger/80 underline-offset-2 hover:text-danger hover:underline"
+                  disabled={busy}
+                  onClick={() => setConfirmingDelete(true)}
+                >
+                  {t("deleteMember")}
+                </button>
+              )
+            ) : null}
           </div>
+        ) : null}
+        {onDelete && confirmingDelete ? (
+          /* what the button DOES, said before it happens: the person is
+             emptied and their handle retired forever — not a hide */
+          <p className="mt-2 text-xs leading-6 text-fg-muted">{t("deleteMemberNote")}</p>
         ) : null}
       </div>
     </aside>

@@ -9,6 +9,7 @@ import { Link, useRouter } from "@/i18n/routing";
 import { useSearchParams } from "next/navigation";
 import { personName, modelLabel } from "@/lib/format";
 import { useDictation } from "@/lib/dictation";
+import { useSkillName } from "@/lib/skillName";
 import { ConversationThread } from "./ConversationThread";
 import { HistoryPanel } from "./HistoryPanel";
 import { EchoMark, MicIcon, PlusIcon, SendIcon, ToolsIcon } from "./icons";
@@ -71,6 +72,8 @@ export function Hub() {
   const dictation = useDictation(locale === "fa" ? "fa-IR" : "en-US", (text) =>
     setInput((v) => (v.trim() === "" ? text : `${v} ${text}`)),
   );
+  /* system skills localize (shipped product content); authored names never do */
+  const skillName = useSkillName();
   /** Held in a ref, not state: it is read inside the stream loop, where a
    *  stale closure over state would silently start a second conversation. */
   const sessionId = useRef<string | undefined>(undefined);
@@ -617,7 +620,7 @@ export function Hub() {
                     an id here would 400 as "unknown skill" on every ask */}
                 {skills.map((s) => (
                   <option key={s.id} value={s.slug}>
-                    {s.name}
+                    {skillName(s)}
                   </option>
                 ))}
               </select>
