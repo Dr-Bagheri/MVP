@@ -63,43 +63,91 @@ export default function ModelsPage() {
           </Card>
         ) : null}
 
-        <Card>
-          <ul className="space-y-2">
-            {models.map((model) => (
-              <li key={model.id} className="flex items-center gap-2">
-                <label className="tap flex flex-1 items-center gap-2">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 accent-[rgb(var(--accent))]"
-                    checked={model.allowed}
-                    disabled={busy}
-                    onChange={async (e) => {
-                      setBusy(true);
-                      try {
-                        setModels(await api.setModelAllowed(model.id, e.target.checked));
-                      } catch {
-                        setFailed(true);
-                      } finally {
-                        setBusy(false);
-                      }
-                    }}
-                  />
-                  <span className="flex-1 text-sm text-fg">
-                    {modelLabel(model.name)}
-                    {/* provider derived from the id — not a field the server owes */}
-                    <span className="ltr ms-2 text-xs text-fg-muted">{model.id.split("/")[0]}</span>
-                  </span>
-                </label>
-                {model.tools === false ? (
-                  /* allowed-but-tool-incapable: members won't be OFFERED it
-                     (SPEC's filter) — the marker says why a checked box can
-                     still produce nothing in the picker */
-                  <Chip tone="warning">{t("modelNoTools")}</Chip>
-                ) : null}
-                {model.suggested ? <Chip tone="accent">{t("modelSuggested")}</Chip> : null}
-              </li>
-            ))}
-          </ul>
+        <Card className="!p-0">
+          <div className="overflow-x-auto">
+            {/* a TABLE with a master checkbox (user directive): one glance
+                says what is on, one click flips the whole catalogue */}
+            <table className="w-full min-w-[36rem] border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="w-10 px-4 py-3">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 accent-[rgb(var(--accent))]"
+                      aria-label={t("modelSelectAll")}
+                      checked={models.length > 0 && models.every((m) => m.allowed)}
+                      ref={(el) => {
+                        // the third state the checkbox can express and props
+                        // cannot: some-but-not-all
+                        if (el) el.indeterminate = models.some((m) => m.allowed) && !models.every((m) => m.allowed);
+                      }}
+                      disabled={busy || models.length === 0}
+                      onChange={async (e) => {
+                        // ONE write for the whole flip — per-row round trips
+                        // here would be N re-reads racing each other
+                        setBusy(true);
+                        try {
+                          await api.updateOrg({
+                            allowed_models: e.target.checked ? models.map((m) => m.id) : [],
+                          });
+                          setModels(await api.adminModels());
+                        } catch {
+                          setFailed(true);
+                        } finally {
+                          setBusy(false);
+                        }
+                      }}
+                    />
+                  </th>
+                  <th className="table-head px-2 py-3 text-start">{t("modelColName")}</th>
+                  <th className="table-head px-2 py-3 text-start">{t("modelColProvider")}</th>
+                  <th className="table-head px-2 py-3 text-start">{t("modelColSuggested")}</th>
+                  <th className="table-head px-2 py-3 text-start">{t("modelColNotes")}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {models.map((model) => (
+                  <tr key={model.id} className="transition-colors hover:bg-surface-2">
+                    <td className="w-10 px-4 py-2.5">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-[rgb(var(--accent))]"
+                        aria-label={modelLabel(model.name)}
+                        checked={model.allowed}
+                        disabled={busy}
+                        onChange={async (e) => {
+                          setBusy(true);
+                          try {
+                            setModels(await api.setModelAllowed(model.id, e.target.checked));
+                          } catch {
+                            setFailed(true);
+                          } finally {
+                            setBusy(false);
+                          }
+                        }}
+                      />
+                    </td>
+                    <td className="px-2 py-2.5 text-fg">{modelLabel(model.name)}</td>
+                    <td className="px-2 py-2.5">
+                      {/* provider derived from the id — not a field the server owes */}
+                      <span className="ltr text-xs text-fg-muted">{model.id.split("/")[0]}</span>
+                    </td>
+                    <td className="px-2 py-2.5">
+                      {model.suggested ? <Chip tone="accent">{t("modelSuggested")}</Chip> : null}
+                    </td>
+                    <td className="px-2 py-2.5">
+                      {model.tools === false ? (
+                        /* allowed-but-tool-incapable: members won't be OFFERED
+                           it (SPEC's filter) — the marker says why a checked
+                           box can still produce nothing in the picker */
+                        <Chip tone="warning">{t("modelNoTools")}</Chip>
+                      ) : null}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </Card>
       </div>
     </ManagementPane>

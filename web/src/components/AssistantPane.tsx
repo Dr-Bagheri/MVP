@@ -15,11 +15,15 @@ import { ProposalCard } from "./ProposalCard";
 export function AssistantPane({
   page,
   presetCallId,
+  presetSessionId,
   open,
   onClose,
 }: {
   page: string;
   presetCallId?: string;
+  /** Open an EXISTING conversation in the pane (the Conversations surface):
+   *  the stored thread loads, and every ask continues it. */
+  presetSessionId?: string;
   open: boolean;
   onClose: () => void;
 }) {
@@ -52,6 +56,21 @@ export function AssistantPane({
   );
   const [showMention, setShowMention] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  /**
+   * The conversation this pane is IN. A ref, not state: it is read inside
+   * the stream loop. Without it the pane asked with no session id every
+   * time — a NEW conversation per message, while the thread on screen
+   * looked continuous (the exact failure the hub's session-capture comment
+   * warns about, alive in the pane the whole time).
+   */
+  const sessionRef = useRef<string | undefined>(presetSessionId);
+
+  useEffect(() => {
+    // the Conversations surface hands us a stored thread to continue
+    if (!presetSessionId) return;
+    sessionRef.current = presetSessionId;
+    void api.agentMessages(presetSessionId).then(setMessages).catch(() => undefined);
+  }, [presetSessionId]);
 
   useEffect(() => {
     void api.models().then((res) => {
@@ -107,7 +126,8 @@ export function AssistantPane({
     // a stream that ends without it is a TRANSPORT failure, never success.
     let sawDone = false;
     try {
-      for await (const event of api.ask(question, { page, callIds: contextIds })) {
+      for await (const event of api.ask(question, { page, callIds: contextIds }, sessionRef.current)) {
+        if (event.type === "session") sessionRef.current = event.id;
         setMessages((prev) =>
           prev.map((m) => {
             if (m.id !== draft.id) return m;
@@ -118,7 +138,8 @@ export function AssistantPane({
                  * place the new conversation id will ever appear. Ignoring it
                  * loses the handle to something the server is now persisting —
                  * silently, because the answer still renders perfectly.
-                 * Held on the message so a resumed turn can continue it.
+                 * Adopted into sessionRef above so the NEXT ask continues
+                 * this conversation instead of opening one per message.
                  */
                 return { ...m, session_id: event.id };
               case "text_delta":

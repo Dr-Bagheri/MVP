@@ -62,7 +62,10 @@ export default function SearchPage() {
     <EchoAppShell page={t("title")}>
       <PageHeader title={t("title")} subtitle={t("scopeNote")} />
 
-      <Card className="mb-4">
+      {/* the CARD carries the focus affordance (focus-within border); the
+          input opts out of the global ring — same ruling as the composer:
+          no box inside a box while typing (user report) */}
+      <Card className="mb-4 transition-colors focus-within:border-accent">
         <form
           className="flex gap-2"
           onSubmit={(e) => {
@@ -71,7 +74,7 @@ export default function SearchPage() {
           }}
         >
           <input
-            className="input"
+            className="input focus-visible:ring-0 focus-visible:ring-offset-0"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={t("placeholder")}

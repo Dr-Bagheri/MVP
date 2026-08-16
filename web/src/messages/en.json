@@ -88,6 +88,19 @@
     "ready": "Ready",
     "failed": "Failed"
   },
+  "conversations": {
+    "title": "Conversations",
+    "searchPlaceholder": "Search conversations",
+    "empty": "No conversations yet — ask something on the home page.",
+    "untitled": "Untitled",
+    "hint": "Pick a conversation from the list to open it in the assistant and keep going."
+  },
+  "errorPage": {
+    "title": "Something went wrong",
+    "body": "The page hit an error. Trying again usually works; if it keeps happening, tell us.",
+    "retry": "Try again",
+    "home": "Back to home"
+  },
   "help": {
     "title": "Help",
     "group": {
@@ -505,6 +518,11 @@
     "noTrends": "Until status history accumulates, the change figure stays \"—\" — a \"0\" would be a fabricated number reached by correct arithmetic.",
     "searchMembers": "Search name or username",
     "noMatches": "No member matches that.",
+    "modelSelectAll": "Select or clear every model",
+    "modelColName": "Name",
+    "modelColProvider": "Provider",
+    "modelColSuggested": "Suggested",
+    "modelColNotes": "Notes",
     "bulkSelected": "{count} member(s) selected",
     "bulkEnable": "Enable selected",
     "bulkDisable": "Disable selected",
