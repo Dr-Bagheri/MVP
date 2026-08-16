@@ -91,12 +91,8 @@ export default function SignUpPage() {
 
   return (
     <Card>
-      <div className="mb-5 flex items-center gap-2">
-        <span className="grid h-9 w-9 place-items-center rounded-md bg-accent text-sm font-bold text-on-accent">
-          E
-        </span>
-        <h1 className="text-xl font-bold text-fg">{t("signUpTitle")}</h1>
-      </div>
+      {/* no logo on the gate (user ruling): the title carries the identity */}
+      <h1 className="mb-5 text-xl font-bold text-fg">{t("signUpTitle")}</h1>
 
       <form className="space-y-4" onSubmit={submit}>
         {/* EMAIL, not «نام کاربری» — Supabase authenticates an address. The

@@ -32,8 +32,8 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { locale } = await params;
   return locale === "fa"
-    ? { title: "اکو", description: "گفت‌وگوهای کاری، قابل جست‌وجو و قابل اتکا" }
-    : { title: "Echo", description: "Business conversations, searchable and reliable" };
+    ? { title: "پلتفرم نورای", description: "گفت‌وگوهای کاری، قابل جست‌وجو و قابل اتکا" }
+    : { title: "NeurAI Platform", description: "Business conversations, searchable and reliable" };
 }
 
 export function generateStaticParams() {

@@ -1,6 +1,6 @@
 {
   "app": {
-    "name": "Echo",
+    "name": "NeurAI Platform",
     "tagline": "Business conversations, searchable and reliable"
   },
   "nav": {
@@ -16,7 +16,7 @@
     "assistant": "Assistant"
   },
   "auth": {
-    "signInTitle": "Sign in to Echo",
+    "signInTitle": "Sign in to NeurAI Platform",
     "signUpTitle": "Create an account",
     "email": "Email",
     "orgName": "Organization name",
@@ -44,13 +44,13 @@
     "haveAccount": "Have an account? Sign in",
     "orDivider": "or",
     "pendingTitle": "Your account is awaiting approval",
-    "pendingBody": "Your sign-up was recorded. Nothing in Echo is accessible until an organization admin accepts your account. Once accepted, sign in with the same account.",
+    "pendingBody": "Your sign-up was recorded. Nothing in the NeurAI platform is accessible until an organization admin accepts your account. Once accepted, sign in with the same account.",
     "pendingHint": "There is no trial; access opens only on admin approval.",
     "backToSignIn": "Back to sign in",
     "invalid": "Incorrect username or password",
     "suspendedTitle": "Your organization's access is suspended",
-    "suspendedBody": "This is not about your account, and an organization admin cannot lift it. Contact Echo support to restore access.",
-    "suspendedContact": "Contact Echo support"
+    "suspendedBody": "This is not about your account, and an organization admin cannot lift it. Contact NeurAI support to restore access.",
+    "suspendedContact": "Contact NeurAI support"
   },
   "calls": {
     "title": "Calls",
@@ -509,7 +509,7 @@
     "allowAssistantHint": "The assistant spends model tokens, and that costs money. Closed by default: a leaked or runaway key can read transcripts, but it cannot drain a model budget.",
     "capabilitiesImmutable": "A key's capabilities are decided when it is created and never change afterwards. To change them, revoke the key and mint a new one — so the record reads “one credential ended, a different one began”, rather than leaving a key whose meaning depends on when you looked.",
     "keyOnceTitle": "This key is shown once",
-    "keyOnceBody": "Echo keeps only a cryptographic fingerprint of the key, so there is no way to show it again. If you close this without saving it somewhere, the only way forward is to revoke it and create a new one.",
+    "keyOnceBody": "The NeurAI platform keeps only a cryptographic fingerprint of the key, so there is no way to show it again. If you close this without saving it somewhere, the only way forward is to revoke it and create a new one.",
     "keySaved": "I have saved the key somewhere safe",
     "webhooks": "Webhooks",
     "webhooksNote": "A webhook is a doorbell, not a delivery: it only tells you which event happened to which call. Transcript and summary text is never sent — to read content, come back through this gateway, under the same permission wall and the same audit trail.",
@@ -533,7 +533,7 @@
     "eventSummarized": "Summary ready",
     "eventFailed": "Processing failed",
     "secretOnceTitle": "This secret is shown once",
-    "secretOnceBody": "You use this secret to verify the signature on each delivery, so you can be sure it came from Echo. Echo does not show it again.",
+    "secretOnceBody": "You use this secret to verify the signature on each delivery, so you can be sure it came from NeurAI. NeurAI does not show it again.",
     "secretSaved": "I have saved the secret somewhere safe",
     "deliveries": "Deliveries",
     "deliveriesNote": "Only identifiers and status are recorded here; there is no content involved.",

@@ -24,7 +24,7 @@ export async function GET(request: Request) {
   const type = url.searchParams.get("type");
 
   const to = (q: string) => {
-    const dest = new URL(`/fa/sign-in?confirmed=${q}`, url.origin);
+    const dest = new URL(`/en/sign-in?confirmed=${q}`, url.origin);
     return Response.redirect(dest, 303);
   };
 

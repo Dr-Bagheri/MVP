@@ -22,7 +22,7 @@ export async function GET(request: Request) {
   const verifier = store.get("echo_pkce")?.value;
   store.delete("echo_pkce"); // one round trip per verifier, success or not
 
-  const to = (q: string) => Response.redirect(new URL(`/fa/sign-in?${q}`, url.origin), 303);
+  const to = (q: string) => Response.redirect(new URL(`/en/sign-in?${q}`, url.origin), 303);
 
   if (!code || !verifier) return to("oauth=failed");
 

@@ -1,10 +1,14 @@
 import { defineRouting } from "next-intl/routing";
 import { createNavigation } from "next-intl/navigation";
 
-/** fa is the default locale and the product's primary language (M9/M6). */
+/**
+ * English is the DEFAULT locale (user ruling, 2026-08-16): a bare URL and
+ * the gate land on /en. Persian stays a first-class locale — RTL, digits,
+ * calendars all intact — it is simply chosen, not assumed.
+ */
 export const routing = defineRouting({
   locales: ["fa", "en"],
-  defaultLocale: "fa",
+  defaultLocale: "en",
 });
 
 export type Locale = (typeof routing.locales)[number];

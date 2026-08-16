@@ -20,7 +20,7 @@ export async function GET(
 
   if (!(OAUTH_PROVIDERS as readonly string[]).includes(provider)) {
     // a provider we never offered is a URL we never minted
-    return Response.redirect(new URL("/fa/sign-in?oauth=failed", origin), 303);
+    return Response.redirect(new URL("/en/sign-in?oauth=failed", origin), 303);
   }
 
   const verifier = randomBytes(48).toString("base64url");
