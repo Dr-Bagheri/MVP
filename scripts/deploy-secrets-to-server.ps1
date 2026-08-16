@@ -25,11 +25,19 @@ if (-not (Test-Path $get)) { Write-Error "get_key.py not found at $get" }
 $names = [ordered]@{
   DATABASE_URL_APP     = "echo_platform_db_app_url"
   DATABASE_URL_AGENT   = "echo_platform_db_agent_url"
-  SUPABASE_JWT_SECRET  = "echo_platform_jwt_secret"
   OPENROUTER_API_KEY   = "openrouter_key"
   SUPABASE_URL         = "echo_platform_supabase_url"
   SUPABASE_SERVICE_KEY = "echo_platform_supabase_secret_key"
   SONIOX_API_KEY       = "soniox_key"
+}
+
+# OPTIONAL: a project on asymmetric signing keys (ES256, the Frankfurt
+# project) has no shared JWT secret at all - core verifies via JWKS derived
+# from SUPABASE_URL. The var ships only when the store actually holds one;
+# requiring it here refused to deploy the exact configuration that is now
+# correct (core/src/api/main.ts makes the same choice).
+$optional = [ordered]@{
+  SUPABASE_JWT_SECRET  = "echo_platform_jwt_secret"
 }
 
 $lines = @("NODE_ENV=production")
@@ -38,6 +46,10 @@ foreach ($k in $names.Keys) {
   $v = (& $py $get $names[$k] | Out-String).Trim()
   if ([string]::IsNullOrWhiteSpace($v)) { $missing += $names[$k] }
   else { $lines += ($k + "=" + $v) }
+}
+foreach ($k in $optional.Keys) {
+  $v = (& $py $get $optional[$k] | Out-String).Trim()
+  if (-not [string]::IsNullOrWhiteSpace($v)) { $lines += ($k + "=" + $v) }
 }
 if ($missing.Count -gt 0) {
   Write-Error ("Missing from the store: " + ($missing -join ", "))
