@@ -579,6 +579,18 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
 
   // ---- models (M5: the user picks; the product imposes nothing) ----------
 
+  /**
+   * The curation view (Part 3): the whole offered catalogue with per-model
+   * allow flags, admin-only. The WRITE stays where it always was — PATCH
+   * /v1/admin/org carries allowed_models — this is the menu to pick from,
+   * which until now had no endpoint (the recorded gap behind the screen's
+   * "not saved" banner).
+   */
+  app.get("/v1/admin/models", async (request, reply) => {
+    const identity = await auth.requireAdmin(request);
+    return reply.send(await models.curation(identity));
+  });
+
   app.get("/v1/models", async (request, reply) => {
     const identity = await auth.requireActive(request);
     return reply.send(await models.list(identity));

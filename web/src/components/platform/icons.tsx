@@ -71,7 +71,15 @@ export const MicIcon = (p: SVGProps<SVGSVGElement>) => (
 );
 
 export const SendIcon = (p: SVGProps<SVGSVGElement>) => (
-  <svg {...base(p)}><path d="m4 12 16-8-6 8 6 8z" /></svg>
+  /*
+   * The plane points INLINE-FORWARD: the path aims left (RTL-forward, right
+   * for fa), so LTR flips it — the user caught it aiming backwards in the
+   * English UI. Baked into the icon rather than each call site, so no usage
+   * can point backwards again.
+   */
+  <svg {...base(p)} className={`ltr:-scale-x-100 ${p.className ?? ""}`}>
+    <path d="m4 12 16-8-6 8 6 8z" />
+  </svg>
 );
 
 export const PlusIcon = (p: SVGProps<SVGSVGElement>) => (

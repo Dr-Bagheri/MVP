@@ -53,9 +53,14 @@ export type Role = "member" | "admin" | "owner";
 export type MemberSort = "default" | "name" | "created" | "last_seen" | "status";
 
 export interface MemberStats {
-  total: number;
-  active: number;
-  inactive: number;
+  /**
+   * The PRODUCER's shape (core members.ts), adopted verbatim after the tiles
+   * rendered "undefined" in production: this type used to declare flat
+   * `total/active/inactive` while core has always sent `counts.{pending,
+   * active,disabled,total}` — a local type is a claim about someone else's
+   * data, and nothing checked it until the live screen did.
+   */
+  counts: { pending: number; active: number; disabled: number; total: number };
   /**
    * **`history_since: null` means the log was not recording — render "—",
    * never "0".**
@@ -461,13 +466,18 @@ export interface ModelInfo {
  * honest: `tool_capable`, `allowed`, `suggested` and `provider` are OUR
  * fields here, not core/'s, and none of them should migrate into `ModelInfo`.
  */
+/**
+ * The curation row — the WIRE's shape now (`GET /v1/admin/models`), not a
+ * Phase-A view-model. `tools` is present only when the capability catalogue
+ * was readable: absent means "not checked", never "no". Provider is derived
+ * from the id at the render site; it is not a field the server owes us.
+ */
 export interface AdminModelRow {
   id: string;
-  label: string;
-  provider: string;
-  tool_capable: boolean;
+  name: string;
   allowed: boolean;
   suggested: boolean;
+  tools?: boolean;
 }
 
 export interface ModelsResponse {

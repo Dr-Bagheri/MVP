@@ -30,7 +30,7 @@ import { Card } from "@/components/ui";
 const SECTIONS = [
   { key: "users", href: "/management/users", ready: true },
   { key: "skills", href: "/management/skills", ready: true },
-  { key: "models", href: "/management/models", ready: false },
+  { key: "models", href: "/management/models", ready: true },
   { key: "connectors", href: "/management/connectors", ready: true },
   /* wired by FE3 against `GET /v1/admin/server` — per-metric `measured_at`,
      so a real zero and a not-measured render differently */

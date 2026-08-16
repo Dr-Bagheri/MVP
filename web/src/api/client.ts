@@ -13,8 +13,6 @@ import {
   GATEWAY_KEYS,
   GATEWAY_WEBHOOKS,
   ME,
-  MODELS,
-  ORG,
   SPEAKERS,
   SUMMARIES,
   TRANSCRIPT,
@@ -73,11 +71,9 @@ const wait = <T,>(value: T, ms = LATENCY): Promise<T> =>
 // mutable session copies so Phase-A interactions persist while the tab lives
 let calls: Call[] = structuredClone(CALLS);
 let users: User[] = structuredClone(USERS);
-let models: AdminModelRow[] = structuredClone(MODELS);
 let gatewayKeys: GatewayKey[] = structuredClone(GATEWAY_KEYS);
 let gatewayWebhooks: GatewayWebhook[] = structuredClone(GATEWAY_WEBHOOKS);
 let me: Me = structuredClone(ME);
-let org: Org = structuredClone(ORG);
 const transcripts: Record<string, TranscriptSegment[]> = structuredClone(TRANSCRIPT);
 const speakers: Record<string, Speaker[]> = structuredClone(SPEAKERS);
 const summaries: Record<string, SummaryVersion[]> = structuredClone(SUMMARIES);
@@ -412,7 +408,9 @@ export const api = {
     }
   },
   async org(): Promise<Org> {
-    return wait(org);
+    /* **LIVE** — `GET /api/admin/org` → core's `GET /v1/org` (the read is
+       any-active-member; only the write is admin-gated). */
+    return bff<Org>("/api/admin/org");
   },
   /**
    * **LIVE** — `PATCH /api/me` → core/'s `PATCH /v1/me` (M24 round 1).
@@ -729,28 +727,27 @@ export const api = {
        filter, both core's. This layer filters nothing. */
     return bff<ModelsResponse>("/api/models");
   },
-  /** Phase-A only: the admin allow-list has no core/ endpoint yet. */
+  /** **LIVE** — the curation menu: the whole offered catalogue + allow flags. */
   async adminModels(): Promise<AdminModelRow[]> {
-    return wait(models);
+    const { models } = await bff<{ models: AdminModelRow[] }>("/api/admin/models");
+    return models;
   },
   /**
-   * Toggle one model in the org's allow-list.
-   *
-   * **Reads as a per-model write and is not one.** Curation is a single
-   * `allowed_models` array on the org, so this composes the whole next array
-   * and sends it through `updateOrg` — there is no `/v1/admin/models/{id}`,
-   * and aiming at one produced a 404 that read as "not built yet".
-   *
-   * Composing the array from the CURRENT rows means two admins toggling at the
-   * same time will clobber each other's edit — last write wins over the whole
-   * list, not the one checkbox. That is a property of the wire (the field is
-   * the unit), not something this can fix locally, and it is worth knowing
-   * before someone reports it as a lost setting.
+   * Toggle one model in the org's allow-list — **LIVE**, with the recorded
+   * lost-update decision now TAKEN: re-read before write. Curation is one
+   * `allowed_models` array on the org (the field is the unit), so a toggle
+   * composes the whole next list; composing it from stale rows meant two
+   * admins clobbering each other's edits wholesale. The fresh read narrows
+   * that window to the round trip — an accepted residual risk, stated here,
+   * chosen over a concurrency token the org form doesn't have either.
    */
-  async setModelAllowed(id: string, allowed: boolean) {
-    models = models.map((m) => (m.id === id ? { ...m, allowed } : m));
-    await api.updateOrg({ allowed_models: models.filter((m) => m.allowed).map((m) => m.id) });
-    return wait(models);
+  async setModelAllowed(id: string, allowed: boolean): Promise<AdminModelRow[]> {
+    const fresh = await api.adminModels();
+    const next = fresh
+      .filter((m) => (m.id === id ? allowed : m.allowed))
+      .map((m) => m.id);
+    await api.updateOrg({ allowed_models: next });
+    return api.adminModels();
   },
   async skills(): Promise<Skill[]> {
     /* **LIVE** — `/api/skills` → `/v1/skills`, the resolver ladder's view
@@ -932,9 +929,13 @@ export const api = {
    * `/v1/admin/org`, the one path core/ deliberately never registered, and the
    * truthful 404 got recorded as "the feature isn't built".
    */
-  async updateOrg(patch: { name?: string; locale?: string; allowed_models?: string[] }) {
-    org = { ...org, ...patch };
-    return wait(org);
+  async updateOrg(patch: { name?: string; locale?: string; allowed_models?: string[] }): Promise<Org> {
+    /* **LIVE** — `PATCH /api/admin/org` → `PATCH /v1/admin/org` (admin). */
+    return bff<Org>("/api/admin/org", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(patch),
+    });
   },
 
   // ---- connectors & gateway --------------------------------------------------------

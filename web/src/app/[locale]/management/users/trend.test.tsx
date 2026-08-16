@@ -46,7 +46,7 @@ vi.mock("@/api/client", () => ({
 const { default: UsersPage } = await import("./page");
 
 const withTrend = (trend: MemberStats["trend"]): MemberStats => ({
-  total: 5, active: 2, inactive: 3, trend,
+  counts: { pending: 1, active: 2, disabled: 2, total: 5 }, trend,
 });
 
 describe("Management · Users — trend honesty", () => {

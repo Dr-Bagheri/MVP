@@ -441,11 +441,6 @@ export function Hub() {
           )}
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          {idle ? (
-            <button type="button" className={headerBtn} onClick={() => setShowHistory(true)}>
-              {t("history")}
-            </button>
-          ) : null}
           <button type="button" className={headerBtn}>
             <PlusIcon width={14} height={14} />
             {t("addFile")}
@@ -497,6 +492,16 @@ export function Hub() {
           ) : null}
         </div>
       </div>
+
+      {/* History sits BELOW the chat box, at inline-start (user directive) —
+          outside the composer so the panel stays about composing */}
+      {idle ? (
+        <div className="mt-3 flex w-full max-w-[660px] justify-start">
+          <button type="button" className={headerBtn} onClick={() => setShowHistory(true)}>
+            {t("history")}
+          </button>
+        </div>
+      ) : null}
 
       {idle ? (
         <div className="mt-7 grid w-full max-w-[660px] grid-cols-[repeat(auto-fill,minmax(226px,1fr))] gap-3">

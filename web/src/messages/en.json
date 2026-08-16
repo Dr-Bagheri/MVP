@@ -376,8 +376,6 @@
     "colRole": "Role",
     "colAdded": "Added",
     "roleOwner": "Owner",
-    "modelsNotSavedTitle": "Choices on this page are not saved",
-    "modelsNotSavedBody": "The service behind the allowed-models list hasn't been built yet. Changes last while this page is open and are lost afterwards.",
     "modelSuggested": "Suggested",
     "colUsername": "Username",
     "colLastAction": "Last action",
@@ -396,7 +394,9 @@
       "status": "Status"
     },
     "trendUnavailable": "Status history hasn't been recorded yet, so no change can be calculated. A zero here would be invented.",
-    "trendWindow": "{delta} in the last {days} days"
+    "trendWindow": "{delta} in the last {days} days",
+    "modelsLoadFailed": "The catalogue could not be loaded. Refresh to retry.",
+    "modelNoTools": "No tool support"
   },
   "settings": {
     "title": "Settings",

@@ -98,11 +98,14 @@ export interface ModelsOptions {
  * only ordered.
  */
 export const SUGGESTED_MODELS: readonly string[] = [
-  "google/gemini-3.6-flash",
-  "openai/gpt-5",
-  "google/gemini-2.5-flash",
-  "openai/gpt-5-mini",
-  "google/gemini-3.6-pro",
+  // The user's chosen lineup (2026-08-16 directive): these five ARE the
+  // org's allow-list on the live deployment; the ranking matches it so the
+  // picker leads with what the org actually runs.
+  "google/gemini-3.1-pro-preview",
+  "openai/gpt-5.2",
+  "google/gemini-3.1-flash-lite",
+  "deepseek/deepseek-v3.2",
+  "meta-llama/llama-4-scout",
 ];
 
 /**
@@ -197,6 +200,49 @@ export function createModelsRepo(db: Db, options: ModelsOptions = {}) {
         curated,
         tool_capability_filtered: capability.known,
         ...(capability.stale === true ? { tool_capability_stale: true } : {}),
+      };
+    },
+
+    /**
+     * The CURATION view (Part 3): the whole offered catalogue with a flag
+     * per model, for the admin allow-list screen. Distinct from `list()` on
+     * purpose — the picker serves what a member may USE (allow-list applied),
+     * the curation serves what an admin may PERMIT (allow-list rendered, not
+     * applied). The M5 provider exclusion still applies FIRST: a barred
+     * provider is not offered even as a checkbox, because a rule any later
+     * filter can undo is not a rule.
+     *
+     * Tool capability is a MARKER here, never a filter: an admin allowing a
+     * tool-incapable model should see why members won't be offered it,
+     * rather than watching a checked box produce nothing.
+     */
+    async curation(identity: Identity): Promise<{
+      models: { id: string; name: string; allowed: boolean; suggested: boolean; tools?: boolean }[];
+      curated: boolean;
+    }> {
+      const rows = await db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe<{ allowed_models: string[] | null }>(
+          `select o.allowed_models
+             from echo.app_user u join echo.org o on o.id = u.org_id
+            where u.id = $1 limit 1`,
+          [identity.userId],
+        ),
+      );
+      const row = rows[0];
+      if (!row) throw new NotFoundError("member not found");
+      const allowed = row.allowed_models ?? [];
+      const curated = allowed.length > 0;
+      const offered = catalogue().filter((m) => !isExcluded(m.id));
+      const capability = await capabilityOf();
+      return {
+        models: bySuggestion(offered).map((m) => ({
+          id: m.id,
+          name: m.name,
+          allowed: !curated || allowed.includes(m.id),
+          suggested: SUGGESTED_MODELS.includes(m.id),
+          ...(capability.known ? { tools: capability.toolCapable.has(m.id) } : {}),
+        })),
+        curated,
       };
     },
 

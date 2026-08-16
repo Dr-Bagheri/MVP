@@ -46,7 +46,7 @@ vi.mock("@/api/client", () => ({
     // the tiles read stats, not rows — an unmocked call throws and the failure
     // surfaces as "table never rendered", which reads as a gate bug
     memberStats: async () => ({
-      total: 2, active: 2, inactive: 0,
+      counts: { pending: 0, active: 2, disabled: 0, total: 2 },
       trend: { window_days: 30, activated: 0, disabled: 0, joined: 0, history_since: null },
     }),
   },

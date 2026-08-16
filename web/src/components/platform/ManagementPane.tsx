@@ -32,11 +32,11 @@ const GROUPS: readonly { key: string; slugs: readonly string[] }[] = [
 ];
 
 /**
- * Sections whose surface is named but not yet wired. Marked in the menu, with
- * the same reasoning as Settings: a section that isn't built says so before
- * you spend a click on it.
+ * Sections whose surface is named but not yet wired — EMPTY since Part 3
+ * wired the last one (models). The mechanism stays: a future section that
+ * isn't built must say so before anyone spends a click on it.
  */
-const NOT_WIRED: readonly string[] = ["models"];
+const NOT_WIRED: readonly string[] = [];
 
 export function ManagementPane({
   activeSlug,

@@ -153,11 +153,21 @@ export default function UsersPage() {
         <div className="mb-4 grid gap-3 sm:grid-cols-3">
           {(["total", "active", "inactive"] as const).map((k) => {
             const delta = trendFor(k);
+            /* the producer's counts: "inactive" is the pending+disabled
+               tile ("Disabled or pending"), composed here from the two
+               real states rather than served as a third one */
+            const value = !stats
+              ? null
+              : k === "total"
+                ? stats.counts.total
+                : k === "active"
+                  ? stats.counts.active
+                  : stats.counts.pending + stats.counts.disabled;
             return (
               <Card key={k}>
                 <p className="text-xs text-fg-muted">{t(`tile.${k}`)}</p>
                 <p className="mt-1 text-2xl font-bold text-fg">
-                  {stats ? digits(stats[k], locale) : ""}
+                  {value === null ? "" : digits(value, locale)}
                 </p>
                 <p className="mt-0.5 text-xs text-fg-muted">
                   {delta === null ? <span title={t("trendUnavailable")}>—</span> : <span>{delta}</span>}

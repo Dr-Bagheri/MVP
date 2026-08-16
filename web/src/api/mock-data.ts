@@ -1,5 +1,4 @@
 import type {
-  AdminModelRow,
   AgentRun,
   Call,
   CallPart,
@@ -133,48 +132,7 @@ export const USERS: User[] = [
   },
 ];
 
-export const MODELS: AdminModelRow[] = [
-  {
-    id: "google/gemini-3.1-pro",
-    label: "Gemini 3.1 Pro",
-    provider: "Google",
-    tool_capable: true,
-    allowed: true,
-    suggested: true,
-  },
-  {
-    id: "google/gemini-3.1-flash",
-    label: "Gemini 3.1 Flash",
-    provider: "Google",
-    tool_capable: true,
-    allowed: true,
-    suggested: false,
-  },
-  {
-    id: "openai/gpt-5.2",
-    label: "GPT-5.2",
-    provider: "OpenAI",
-    tool_capable: true,
-    allowed: true,
-    suggested: false,
-  },
-  {
-    id: "deepseek/deepseek-v3.2",
-    label: "DeepSeek V3.2",
-    provider: "DeepSeek",
-    tool_capable: true,
-    allowed: false,
-    suggested: false,
-  },
-  {
-    id: "meta/llama-4-scout",
-    label: "Llama 4 Scout",
-    provider: "Meta",
-    tool_capable: false,
-    allowed: false,
-    suggested: false,
-  },
-];
+/* MODELS fixture left with the Part-3 wire: the curation menu reads GET /v1/admin/models. */
 
 /**
  * Parts now carry the WIRE's field names, because the type is core/'s

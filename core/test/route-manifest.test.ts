@@ -94,7 +94,9 @@ const KNOWN_ABSENT: [what: string, why: string][] = [
   // met. v1 stores the cropped image in the column rather than behind a
   // storage signer; see members.ts for why that is a value change away from
   // signed URLs, not a schema change.
-  ["GET /v1/admin/models", "the CURATION list (which models an admin may choose from) has no endpoint; setting the choice does — PATCH /v1/admin/org carries allowed_models. Until then an admin screen can show the current curation but not the menu to pick from"],
+  // GET /v1/admin/models LEFT the absent list 2026-08-16 (Part 3): the
+  // curation read exists — the whole offered catalogue with allow flags,
+  // admin-only. The write stays PATCH /v1/admin/org (allowed_models).
   // (SPEC's three write tools landed in milestone 3 — they are TOOLS, not
   // routes, and their approval flow is the two /proposals routes above.)
 ];
