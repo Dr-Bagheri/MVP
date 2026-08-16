@@ -124,11 +124,18 @@ h1.title, h2.title {
   font-weight: 750; letter-spacing: -0.025em; line-height: 1.08;
   margin-bottom: 20px;
 }
-/* the hero statement: two lines of high-contrast white, boot-revealed */
-.s0 h1.title { font-size: clamp(38px, 4.9vw, 76px); line-height: 1.06; letter-spacing: -0.03em; color: var(--fg); }
+/* the hero: the NeurAI wordmark (user round 6), boot-revealed */
+.s0 h1.title.wordmark { font-size: clamp(64px, 9vw, 132px); line-height: .95; letter-spacing: -0.04em; margin-bottom: 14px; }
+.s0 h1.title.wordmark .bl {
+  background: linear-gradient(115deg, #F2ECFF 30%, #A274FF 68%, #6D3BF5 94%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 0 40px rgba(162,116,255,.28));
+}
 .s0 h1.title .bl { display: block; opacity: 0; transform: translateY(14px); transition: opacity .7s ease, transform .7s cubic-bezier(.16,1,.3,1); }
 .s0 h1.title .bl.in { opacity: 1; transform: none; }
-.s0 p.lead { min-height: 5.2em; }
+.s0 p.lead { min-height: 4.2em; }
+.s0 p.lead .t1, .s0 p.lead .t2 { display: block; }
+.s0 p.lead .t2 { color: var(--fg); font-weight: 600; }
 .typing::after { content: "▍"; color: var(--accent); animation: caret 1s steps(1) infinite; }
 @keyframes caret { 50% { opacity: 0 } }
 .boot-fade { opacity: 0; transform: translateY(10px); transition: opacity .8s ease, transform .8s ease; }
@@ -266,16 +273,17 @@ noscript .noscript-note { display: block; padding: 12px 24px; text-align: center
     <div class="inner">
       <div class="copy fx" data-fx="s0-copy">
         <div class="kicker" id="boot-kick" data-text="ARRIVAL">ARRIVAL</div>
-        <h1 class="title">
-          <span class="bl" id="boot-l1">Eighty-six billion neurons,</span>
-          <span class="bl" id="boot-l2">one quiet field.</span>
+        <h1 class="title wordmark">
+          <span class="bl" id="boot-l1">NeurAI</span>
         </h1>
-        <p class="lead" id="boot-body" data-text="A mind resolves out of the dark. NeurAI builds intelligence into the fabric of work — calls become knowledge, meetings become memory, and the scan you are watching never sleeps.">A mind resolves out of the dark. NeurAI builds intelligence into the fabric of work — calls become knowledge, meetings become memory, and the scan you are watching never sleeps.</p>
+        <p class="lead">
+          <span class="t1" id="boot-b1" data-text="We build intelligence into the fabric of work.">We build intelligence into the fabric of work.</span>
+          <span class="t2" id="boot-b2" data-text="Calls become knowledge. Meetings become memory.">Calls become knowledge. Meetings become memory.</span>
+        </p>
         <div class="cta-row boot-fade" id="boot-cta">
           <a class="btn-primary" href="https://app.neurai.pt">Enter the Platform
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
           </a>
-          <a class="btn-ghost" href="#" id="watch">Watch the film ↓</a>
         </div>
         <div class="tags boot-fade" id="boot-tags"><span>SPECIMEN: NEURAI</span><span>STATE: AI-NATIVE</span><span>STATUS: MAPPING</span></div>
       </div>
@@ -475,43 +483,34 @@ noscript .noscript-note { display: block; padding: 12px 24px; text-align: center
     chapters.appendChild(b);
     return b;
   });
-  document.getElementById("watch").addEventListener("click", (e) => { e.preventDefault(); dots[1].click(); });
   document.getElementById("chrome-x").addEventListener("click", () => dots[SCENES - 1].click());
   document.getElementById("chrome-logo").addEventListener("click", () => scrollTo({ top: 0, behavior: "smooth" }));
 
   /* ================= the terminal boot ================= */
   (function boot() {
     const kick = document.getElementById("boot-kick");
-    const l1 = document.getElementById("boot-l1"), l2 = document.getElementById("boot-l2");
-    const body = document.getElementById("boot-body");
+    const l1 = document.getElementById("boot-l1");
+    const b1 = document.getElementById("boot-b1"), b2 = document.getElementById("boot-b2");
     const cta = document.getElementById("boot-cta"), tags = document.getElementById("boot-tags");
-    const kickText = kick.dataset.text, bodyText = body.dataset.text;
-    kick.textContent = ""; body.textContent = "";
     const after = (ms, fn) => setTimeout(fn, ms);
-    // the eyebrow clicks into place, fast
-    after(300, () => {
-      kick.classList.add("typing");
+    const type = (el, speed, step, done) => {
+      const text = el.dataset.text;
+      el.textContent = "";
+      el.classList.add("typing");
       let i = 0;
       const t = setInterval(() => {
-        kick.textContent = kickText.slice(0, ++i);
-        if (i >= kickText.length) { clearInterval(t); kick.classList.remove("typing"); }
-      }, 34);
-    });
-    // the statement, line by line
+        i += step;
+        el.textContent = text.slice(0, i);
+        if (i >= text.length) { clearInterval(t); el.classList.remove("typing"); el.textContent = text; done && done(); }
+      }, speed);
+    };
+    b1.textContent = ""; b2.textContent = "";
+    // the eyebrow clicks in fast → the wordmark lands → the tagline streams
+    after(300, () => type(kick, 34, 1));
     after(760, () => l1.classList.add("in"));
-    after(1060, () => l2.classList.add("in"));
-    // the body streams in like data — a few characters per tick
-    after(1500, () => {
-      body.classList.add("typing");
-      let i = 0;
-      const t = setInterval(() => {
-        i += 3;
-        body.textContent = bodyText.slice(0, i);
-        if (i >= bodyText.length) { clearInterval(t); body.classList.remove("typing"); body.textContent = bodyText; }
-      }, 12);
-    });
-    after(2450, () => cta.classList.add("in"));
-    after(2700, () => tags.classList.add("in"));
+    after(1250, () => type(b1, 11, 2, () => type(b2, 11, 2)));
+    after(2350, () => cta.classList.add("in"));
+    after(2600, () => tags.classList.add("in"));
   })();
 
   /* ================= the cursor is part of the physics ================= */
@@ -683,66 +682,102 @@ gl_FragColor=vec4(col,1.);}`;
       );
     }
 
+    /* The specimen, rebuilt with INTERNAL and EXTERNAL structure (round 6):
+     * layer 0 — the folded cortex SHELL (what you see from outside),
+     * layer 1 — inner white matter filling the volume, dimmer,
+     * layer 2 — the deep core (paired thalami + the callosal arch), brightest.
+     * Additive blending lets the inside glow through the translucent shell. */
     const pts = [];
-    const CEREBRUM = 16000;
-    for (let i = 0; i < CEREBRUM; i++) {
+    const CEREBRUM = 12000;
+    const cortexDir = () => {
       let x, y, z, m;
       do { x = rnd() * 2 - 1; y = rnd() * 2 - 1; z = rnd() * 2 - 1; m = x * x + y * y + z * z; } while (m > 1 || m < 0.04);
-      m = Math.sqrt(m); x /= m; y /= m; z /= m;
+      m = Math.sqrt(m); return [x / m, y / m, z / m];
+    };
+    // layer 0: the shell
+    for (let i = 0; i < CEREBRUM; i++) {
+      const [x, y, z] = cortexDir();
       if (Math.abs(x) < 0.055 && y > -0.1) { i--; continue; }
       let px = x * 1.12, py = y * 0.92, pz = z * 1.42;
       const fold = 0.5 * noise3(px * 2.6 + 9, py * 2.6, pz * 2.6) + 0.5 * noise3(px * 6.2, py * 6.2 + 4, pz * 6.2);
-      const r = (1 + 0.10 * (fold - 0.5) * 2) * (0.965 + 0.05 * rnd());
+      const r = (1 + 0.10 * (fold - 0.5) * 2) * (0.975 + 0.035 * rnd());
       px *= r; py *= r; pz *= r;
       if (py < -0.62) py = -0.62 - (py + 0.62) * 0.25;
-      pts.push({ x: px, y: py, z: pz, ph: rnd(), sh: fold });
+      pts.push({ x: px, y: py, z: pz, ph: rnd(), sh: fold, ly: 0 });
     }
-    for (let i = 0; i < 2600; i++) {
+    // layer 1: white matter — the interior is MATTER, not vacuum
+    for (let i = 0; i < 5200; i++) {
+      const [x, y, z] = cortexDir();
+      if (Math.abs(x) < 0.04 && y > -0.1) { i--; continue; }
+      const rr = 0.5 + 0.42 * Math.pow(rnd(), 0.6); // biased toward the shell
+      let px = x * 1.12 * rr, py = y * 0.92 * rr, pz = z * 1.42 * rr;
+      const grain = noise3(px * 5 + 3, py * 5, pz * 5);
+      if (py < -0.6) continue;
+      pts.push({ x: px, y: py, z: pz, ph: rnd(), sh: grain * 0.7, ly: 1 });
+    }
+    // layer 2: the deep core — two thalamic lobes + the callosal arch over them
+    for (let i = 0; i < 1300; i++) {
+      const side = i % 2 ? 1 : -1;
       let x, y, z, m;
-      do { x = rnd() * 2 - 1; y = rnd() * 2 - 1; z = rnd() * 2 - 1; m = x * x + y * y + z * z; } while (m > 1 || m < 0.05);
-      m = Math.sqrt(m); x /= m; y /= m; z /= m;
+      do { x = rnd() * 2 - 1; y = rnd() * 2 - 1; z = rnd() * 2 - 1; m = x * x + y * y + z * z; } while (m > 1);
+      pts.push({ x: side * 0.24 + x * 0.16, y: -0.08 + y * 0.14, z: 0.05 + z * 0.3, ph: rnd(), sh: 0.6 + 0.4 * rnd(), ly: 2 });
+    }
+    for (let i = 0; i < 700; i++) {
+      const t = rnd() * Math.PI; // the arch
+      const jitter = () => (rnd() - 0.5) * 0.09;
+      pts.push({
+        x: jitter() * 1.6, y: 0.16 + Math.sin(t) * 0.18 + jitter(),
+        z: 0.05 + Math.cos(t) * 0.42 + jitter(), ph: rnd(), sh: 0.5 + 0.5 * rnd(), ly: 2,
+      });
+    }
+    // cerebellum + stem, as before
+    for (let i = 0; i < 2400; i++) {
+      const [x, y, z] = cortexDir();
       const band = 0.06 * Math.sin(y * 26) * 0.5;
       const px = x * (0.58 + band), py = -0.66 + y * 0.34, pz = -0.92 + z * (0.44 + band);
-      pts.push({ x: px, y: py, z: pz, ph: rnd(), sh: 0.5 + 0.5 * Math.abs(Math.sin(y * 26)) });
+      pts.push({ x: px, y: py, z: pz, ph: rnd(), sh: 0.5 + 0.5 * Math.abs(Math.sin(y * 26)), ly: 0 });
     }
-    for (let i = 0; i < 600; i++) {
+    for (let i = 0; i < 500; i++) {
       const t = rnd(), a = rnd() * 6.283, rr = 0.13 * Math.sqrt(rnd());
-      pts.push({ x: Math.cos(a) * rr, y: -0.55 - t * 0.5, z: -0.45 - t * 0.35 + Math.sin(a) * rr, ph: rnd(), sh: 0.4 });
+      pts.push({ x: Math.cos(a) * rr, y: -0.55 - t * 0.5, z: -0.45 - t * 0.35 + Math.sin(a) * rr, ph: rnd(), sh: 0.4, ly: 1 });
     }
 
-    const pointData = new Float32Array(pts.length * 5);
-    pts.forEach((p, i) => { pointData.set([p.x, p.y, p.z, p.ph, p.sh], i * 5); });
+    const pointData = new Float32Array(pts.length * 6);
+    pts.forEach((p, i) => { pointData.set([p.x, p.y, p.z, p.ph, p.sh, p.ly], i * 6); });
 
-    const PVS = `attribute vec3 a_pos;attribute float a_ph;attribute float a_sh;
+    const PVS = `attribute vec3 a_pos;attribute float a_ph;attribute float a_sh;attribute float a_ly;
 uniform mat4 u_mvp;uniform float u_size;uniform vec3 u_c0;uniform vec3 u_c1;uniform vec3 u_c2;uniform float u_w0;
 uniform float u_tv;uniform vec2 u_mouse;uniform float u_mstr;
-varying float v_ph;varying float v_sh;varying float v_act;
+varying float v_ph;varying float v_sh;varying float v_act;varying float v_ly;varying float v_fire;
 void main(){
-/* idle turbulence: every grain breathes on its own phase — the scan is alive */
-vec3 p2=a_pos+.024*vec3(sin(u_tv*.6+a_ph*6.28),cos(u_tv*.5+a_ph*4.7),sin(u_tv*.8+a_ph*2.9));
+/* idle turbulence: every grain breathes on its own phase; the deep core
+   holds steadier than the shell */
+float wob=.024*(1.-.4*step(1.5,a_ly));
+vec3 p2=a_pos+wob*vec3(sin(u_tv*.6+a_ph*6.28),cos(u_tv*.5+a_ph*4.7),sin(u_tv*.8+a_ph*2.9));
 vec4 cp=u_mvp*vec4(p2,1.);
 float d0=distance(a_pos,u_c0),d1=distance(a_pos,u_c1),d2=distance(a_pos,u_c2);
 v_act=u_w0*exp(-d0*d0*5.5)+.55*exp(-d1*d1*9.)+.4*exp(-d2*d2*9.);
-/* magnetic cursor: nearby grains ripple away from the pointer in screen space */
+/* the cursor FIRES synapses: grains under it brighten — nothing moves */
 vec2 nd=cp.xy/max(cp.w,.0001);
-vec2 dm=nd-u_mouse;float md=length(dm);
-float push=smoothstep(.5,.0,md)*u_mstr;
-cp.xy+=normalize(dm+vec2(1e-4))*(push*.09+push*.02*sin(u_tv*3.+md*22.))*cp.w;
-v_act+=push*1.1;
+v_fire=smoothstep(.42,.0,length(nd-u_mouse))*u_mstr;
 gl_Position=cp;
-gl_PointSize=u_size*(1.+.5*a_sh+1.6*v_act)/max(cp.w,.4);
-v_ph=a_ph;v_sh=a_sh;}`;
-    const PFS = `precision mediump float;varying float v_ph;varying float v_sh;varying float v_act;
+gl_PointSize=u_size*(1.+.5*a_sh+1.6*v_act+.9*v_fire)/max(cp.w,.4);
+v_ph=a_ph;v_sh=a_sh;v_ly=a_ly;}`;
+    const PFS = `precision mediump float;
+varying float v_ph;varying float v_sh;varying float v_act;varying float v_ly;varying float v_fire;
 uniform float u_t;uniform float u_act;uniform float u_dim;uniform float u_soft;
 void main(){vec2 c=gl_PointCoord-vec2(.5);float d=length(c);
 float halo=mix(smoothstep(.5,.03,d),smoothstep(.5,.28,d),u_soft);
 float tw=.72+.28*sin(u_t*1.4+v_ph*6.2831);
-float fire=v_act*u_act;
-/* bioluminescent electric blue (round 5) */
-vec3 blue=vec3(.24,.56,1.);vec3 ice=vec3(.5,.78,1.);vec3 hot=vec3(.92,.98,1.);
-vec3 col=mix(mix(blue,ice,v_sh),hot,min(fire,1.)*.85);
-/* the specimen must READ like the reference scan — bright tissue, not haze */
-float a=halo*tw*(mix(.09,.05,u_soft)+.17*v_sh+.55*min(fire,1.2))*u_dim;
+/* synapse flash: rapid per-grain strobes, only where the cursor rests */
+float spark=pow(.5+.5*sin(u_t*7.+v_ph*53.),5.);
+float fire=v_act*u_act+v_fire*(.35+1.9*spark);
+/* moonlight blue, layered: shell / inner matter / burning core */
+vec3 blue=vec3(.24,.56,1.);vec3 ice=vec3(.5,.78,1.);vec3 hot=vec3(.93,.98,1.);
+float core=step(1.5,v_ly);float inner=step(.5,v_ly)-core;
+vec3 col=mix(mix(blue,ice,v_sh),hot,min(fire,1.)*.85+core*.25);
+float base=mix(.09,.05,u_soft)*(1.-inner*.45)+core*.12;
+float a=halo*tw*(base+.17*v_sh+.55*min(fire,1.4))*u_dim;
 gl_FragColor=vec4(col*a,a);}`;
 
     function mkProg(vsSrc, fsSrc) {
@@ -830,10 +865,12 @@ gl_FragColor=vec4(col*a,a);}`;
       gl.uniform1f(gl.getUniformLocation(pProg, "u_mstr"),
         (matchMedia("(pointer: fine)").matches ? 1 : 0) * (pose.mon ?? 0));
       gl.bindBuffer(gl.ARRAY_BUFFER, pBuf);
-      const pa = gl.getAttribLocation(pProg, "a_pos"), pph = gl.getAttribLocation(pProg, "a_ph"), psh = gl.getAttribLocation(pProg, "a_sh");
-      gl.enableVertexAttribArray(pa); gl.vertexAttribPointer(pa, 3, gl.FLOAT, false, 20, 0);
-      gl.enableVertexAttribArray(pph); gl.vertexAttribPointer(pph, 1, gl.FLOAT, false, 20, 12);
-      gl.enableVertexAttribArray(psh); gl.vertexAttribPointer(psh, 1, gl.FLOAT, false, 20, 16);
+      const pa = gl.getAttribLocation(pProg, "a_pos"), pph = gl.getAttribLocation(pProg, "a_ph"),
+            psh = gl.getAttribLocation(pProg, "a_sh"), ply = gl.getAttribLocation(pProg, "a_ly");
+      gl.enableVertexAttribArray(pa); gl.vertexAttribPointer(pa, 3, gl.FLOAT, false, 24, 0);
+      gl.enableVertexAttribArray(pph); gl.vertexAttribPointer(pph, 1, gl.FLOAT, false, 24, 12);
+      gl.enableVertexAttribArray(psh); gl.vertexAttribPointer(psh, 1, gl.FLOAT, false, 24, 16);
+      gl.enableVertexAttribArray(ply); gl.vertexAttribPointer(ply, 1, gl.FLOAT, false, 24, 20);
       gl.uniform1f(gl.getUniformLocation(pProg, "u_soft"), 1);
       gl.uniform1f(gl.getUniformLocation(pProg, "u_size"), canvas.height * 0.016);
       gl.drawArrays(gl.POINTS, 0, pts.length);
