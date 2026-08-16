@@ -50,4 +50,17 @@ describe("signed IN — the gate opens, the wall stays core's", () => {
     const loc = res.headers.get("location");
     if (loc) expect(new URL(loc).pathname).not.toMatch(/sign-in$/);
   });
+
+  it.each(["/fa/echo", "/en/settings"])(
+    "%s is served no-store — a cached copy would outlive the session (Back after sign-out)",
+    (path) => {
+      const res = middleware(req(path, true));
+      expect(res.headers.get("cache-control")).toContain("no-store");
+    },
+  );
+
+  it("the sign-in page itself stays cacheable — it holds nothing to protect", () => {
+    const res = middleware(req("/fa/sign-in"));
+    expect(res.headers.get("cache-control") ?? "").not.toContain("no-store");
+  });
 });

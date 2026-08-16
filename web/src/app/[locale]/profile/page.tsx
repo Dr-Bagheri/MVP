@@ -5,9 +5,23 @@ import { useTranslations } from "next-intl";
 import { usePathname, useRouter } from "@/i18n/routing";
 import { api, BffError } from "@/api/client";
 import type { Me, ModelInfo } from "@/api/types";
+import { AvatarEditor } from "@/components/platform/AvatarEditor";
 import { ChangePassword } from "@/components/platform/ChangePassword";
 import { PlatformShell } from "@/components/platform/PlatformShell";
-import { Card, Chip, Field, PageHeader } from "@/components/ui";
+import { FormPanel, FormRow, PageContainer, PageHeader, PanelFooter, Section } from "@/components/scaffold";
+import { Chip } from "@/components/ui";
+
+/**
+ * Profile, on the M26 scaffold (user directive: "the profile section should
+ * not be different from the settings or any other sub sections"). The page is
+ * PageContainer → PageHeader → Sections of FormPanel rows — the identical
+ * anatomy Settings renders, so adding a field here means adding a FormRow,
+ * never inventing a layout.
+ *
+ * The save button lives in PanelFooter at INLINE-end: logical position, so it
+ * mirrors correctly between fa and en instead of sitting on the same physical
+ * side in both (the round-3 direction finding).
+ */
 
 /**
  * The patch this screen sends, and the reason it is not `Partial<User>`.
@@ -39,12 +53,10 @@ export default function ProfilePage() {
    * `me` is the SAVED state and the drafts are what is typed. Both are needed:
    * "cleared" and "untouched" are only distinguishable by comparing the two,
    * and an empty box alone cannot tell them apart.
-   */
-  /*
+   *
    * `Me`, not `User`: on `User` the preference fields are optional (a members
    * row does not carry them), so `me.locale` would be `string | undefined` and
    * the language select would silently become uncontrolled the moment it was.
-   * The type that says what `/v1/me` actually returns is the one to hold here.
    */
   const [me, setMe] = useState<Me | null>(null);
   const [displayName, setDisplayName] = useState("");
@@ -140,127 +152,140 @@ export default function ProfilePage() {
   if (!me)
     return (
       <PlatformShell>
-        <div className="p-5">{null}</div>
+        <PageContainer>{null}</PageContainer>
       </PlatformShell>
     );
 
   return (
     <PlatformShell>
-      <div className="p-5">
-        <PageHeader title={t("title")} />
+      <PageContainer>
+        <PageHeader title={t("title")} subtitle={t("subtitle")} />
 
-        <Card className="max-w-xl space-y-4">
-          <div className="flex items-center gap-4">
-            <div className="grid h-16 w-16 place-items-center rounded-full bg-accent-soft text-xl font-bold text-accent">
-              {me.display_name.slice(0, 1)}
-            </div>
-            <button className="btn-secondary h-10 min-h-0 px-3 text-xs">{t("avatar")}</button>
-          </div>
+        <Section title={t("identityTitle")}>
+          <FormPanel>
+            <FormRow label={t("photo")} description={t("photoHint")}>
+              <AvatarEditor me={me} onSaved={adopt} />
+            </FormRow>
 
-          <Field label={t("displayName")}>
-            <input
-              className="input"
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-            />
-          </Field>
+            <FormRow label={t("displayName")} htmlFor="profile-name">
+              <input
+                id="profile-name"
+                className="input"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+              />
+            </FormRow>
 
-          {/*
-           * Both of these hold LATIN text by definition — one is the Latin
-           * name, the other is `^[a-z][a-z0-9_]{2,31}$`. `dir="ltr"` is stated
-           * rather than inherited: in the Persian UI these boxes inherit RTL,
-           * which puts the caret on the wrong side of an English word and
-           * moves the trailing underscore of `ali_` to the left of it.
-           */}
-          <Field label={t("displayNameEn")} hint={t("clearHint")}>
-            <input
-              className="input"
-              dir="ltr"
-              value={displayNameEn}
-              onChange={(e) => setDisplayNameEn(e.target.value)}
-            />
-          </Field>
+            {/*
+             * Both of these hold LATIN text by definition — one is the Latin
+             * name, the other is `^[a-z][a-z0-9_]{2,31}$`. `dir="ltr"` is
+             * stated rather than inherited: in the Persian UI these boxes
+             * inherit RTL, which puts the caret on the wrong side of an
+             * English word and moves the trailing underscore of `ali_` to the
+             * left of it.
+             */}
+            <FormRow label={t("displayNameEn")} description={t("clearHint")} htmlFor="profile-name-en">
+              <input
+                id="profile-name-en"
+                className="input"
+                dir="ltr"
+                value={displayNameEn}
+                onChange={(e) => setDisplayNameEn(e.target.value)}
+              />
+            </FormRow>
 
-          <Field label={t("username")} hint={t("usernameHint")}>
-            <input
-              className="input"
-              dir="ltr"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              aria-invalid={error?.field === "username" || undefined}
-              aria-describedby={error?.field === "username" ? "username-error" : undefined}
-            />
-            {error?.field === "username" ? (
-              <span id="username-error" className="mt-1 block text-xs text-danger">
-                {error.message}
-              </span>
+            <FormRow label={t("username")} description={t("usernameHint")} htmlFor="profile-username">
+              <div className="w-full">
+                <input
+                  id="profile-username"
+                  className="input"
+                  dir="ltr"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  aria-invalid={error?.field === "username" || undefined}
+                  aria-describedby={error?.field === "username" ? "username-error" : undefined}
+                />
+                {error?.field === "username" ? (
+                  <span id="username-error" className="mt-1 block text-xs text-danger">
+                    {error.message}
+                  </span>
+                ) : null}
+              </div>
+            </FormRow>
+
+            {/* A refusal that names no field belongs where the whole form can
+                see it, and it is the SERVER's sentence: core/ owns the
+                username rule and is the only thing that knows whether a
+                handle is taken or permanently retired. */}
+            {error && error.field === null ? (
+              <div className="px-5 py-3 md:px-8">
+                <p role="alert" className="text-sm text-danger">
+                  {error.message}
+                </p>
+              </div>
             ) : null}
-          </Field>
 
-          <Field label={t("language")}>
-            <select
-              className="input"
-              value={me.locale}
-              onChange={(e) => {
-                const locale = e.target.value as "fa" | "en";
-                setMe({ ...me, locale });
-                void api.setLocale(locale);
-                router.replace(pathname, { locale });
-              }}
-            >
-              <option value="fa">فارسی</option>
-              <option value="en">English</option>
-            </select>
-          </Field>
+            <PanelFooter>
+              {saved ? <Chip tone="success">{t("saved")}</Chip> : null}
+              <button className="btn-primary" disabled={!dirty || saving} onClick={() => void save()}>
+                {saving ? t("saving") : t("save")}
+              </button>
+            </PanelFooter>
+          </FormPanel>
+        </Section>
 
-          {/* The "tool-capable only" hint was REMOVED, not restyled: nothing
-              filters on tool support. core/ reports
-              `tool_capability_filtered: false` because the catalogue carries no
-              such field, so the hint was a safety claim with nothing behind it.
-              A missing hint is a gap; a false one is worse. */}
-          <Field label={t("model")}>
-            <select
-              className="input"
-              value={me.model_id ?? ""}
-              onChange={(e) => {
-                setMe({ ...me, model_id: e.target.value });
-                void api.setPreferredModel(e.target.value);
-              }}
-            >
-              {models.map((model) => (
-                <option key={model.id} value={model.id}>
-                  {model.name}
-                </option>
-              ))}
-            </select>
-          </Field>
+        <Section title={t("prefsTitle")} divided>
+          <FormPanel>
+            <FormRow label={t("language")} htmlFor="profile-language">
+              <select
+                id="profile-language"
+                className="input min-h-0 h-11 md:h-control"
+                value={me.locale}
+                onChange={(e) => {
+                  const locale = e.target.value as "fa" | "en";
+                  setMe({ ...me, locale });
+                  void api.setLocale(locale);
+                  router.replace(pathname, { locale });
+                }}
+              >
+                <option value="fa">فارسی</option>
+                <option value="en">English</option>
+              </select>
+            </FormRow>
 
-          {/* A refusal that names no field belongs where the whole form can
-              see it, and it is the SERVER's sentence: core/ owns the username
-              rule and is the only thing that knows whether a handle is taken
-              or permanently retired. */}
-          {error && error.field === null ? (
-            <p role="alert" className="text-sm text-danger">
-              {error.message}
-            </p>
-          ) : null}
+            {/* The "tool-capable only" hint was REMOVED, not restyled: nothing
+                filters on tool support. core/ reports
+                `tool_capability_filtered: false` because the catalogue carries
+                no such field, so the hint was a safety claim with nothing
+                behind it. A missing hint is a gap; a false one is worse. */}
+            <FormRow label={t("model")} htmlFor="profile-model">
+              <select
+                id="profile-model"
+                className="input min-h-0 h-11 md:h-control"
+                value={me.model_id ?? ""}
+                onChange={(e) => {
+                  setMe({ ...me, model_id: e.target.value });
+                  void api.setPreferredModel(e.target.value);
+                }}
+              >
+                {models.map((model) => (
+                  <option key={model.id} value={model.id}>
+                    {model.name}
+                  </option>
+                ))}
+              </select>
+            </FormRow>
+          </FormPanel>
+        </Section>
 
-          <div className="flex items-center gap-3">
-            <button className="btn-primary" disabled={!dirty || saving} onClick={() => void save()}>
-              {saving ? t("saving") : t("save")}
-            </button>
-            {saved ? <Chip tone="success">{t("saved")}</Chip> : null}
-          </div>
-        </Card>
-
-        {/* Its own card, and its own save. A password change is not another
+        {/* Its own section and its own save. A password change is not another
             profile field: it re-authenticates, it can fail for reasons the
             fields above never can, and folding it into the same submit would
             mean a rejected password discarded a perfectly good rename. */}
-        <div className="mt-6">
+        <Section title={t("passwordTitle")} divided>
           <ChangePassword />
-        </div>
-      </div>
+        </Section>
+      </PageContainer>
     </PlatformShell>
   );
 }
@@ -277,7 +302,7 @@ export default function ProfilePage() {
  *
  * Anything else is a failure of the CALL, not of what was typed, and gets the
  * generic sentence. `detail` may be absent — a refusal with an unreadable body
- * is still a real refusal — so every branch has its own wording to fall back on.
+ * is still a refusal, and the screen falls back to its own wording.
  */
 function toFormError(cause: unknown, t: (key: string) => string): FormError {
   if (cause instanceof BffError) {

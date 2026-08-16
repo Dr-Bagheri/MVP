@@ -436,6 +436,8 @@ export const api = {
     display_name?: string;
     display_name_en?: string | null;
     username?: string | null;
+    /** A `data:image/…;base64` URL ≤128KB (core refuses anything else); null removes the photo. */
+    avatar_url?: string | null;
     calendar?: CalendarPreference;
     timezone?: string;
     locale?: string;
@@ -784,94 +786,76 @@ export const api = {
     role?: Role;
     sort?: MemberSort;
   }): Promise<User[]> {
-    // the mock filters HERE to mirror where the server filters — a mock that
-    // returned everything would let a client-side filter look correct
-    let rows = users;
-    if (query?.status) rows = rows.filter((u) => u.status === query.status);
-    if (query?.role) rows = rows.filter((u) => u.role === query.role);
-    if (query?.search) {
-      const q = query.search.toLowerCase();
-      /*
-       * `username` is nullable (it is null until chosen), so the fields are
-       * narrowed rather than defaulted — `?? ""` on each was the old shape and
-       * it hid the nullability behind a value that matches every empty query.
-       *
-       * `email` is in the list because core/'s `MemberQuery` searches it too
-       * (members.ts). A mock that searched three of the server's four fields
-       * would make a working search look broken for anyone who typed an
-       * address — the mock disagreeing with the server it stands in for.
-       */
-      rows = rows.filter((u) =>
-        [u.display_name, u.display_name_en, u.username, u.email]
-          .filter((f): f is string => typeof f === "string")
-          .some((f) => f.toLowerCase().includes(q)),
-      );
-    }
-    const sorted = [...rows];
-    switch (query?.sort) {
-      case "name":
-        sorted.sort((a, b) => a.display_name.localeCompare(b.display_name, "fa"));
-        break;
-      case "created":
-        sorted.sort((a, b) => b.created_at.localeCompare(a.created_at));
-        break;
-      case "last_seen":
-        // nulls LAST — never-seen is not "oldest", it is a different fact
-        sorted.sort((a, b) =>
-          a.last_seen_at === b.last_seen_at
-            ? 0
-            : !a.last_seen_at
-              ? 1
-              : !b.last_seen_at
-                ? -1
-                : b.last_seen_at.localeCompare(a.last_seen_at),
-        );
-        break;
-      case "status":
-        sorted.sort((a, b) => a.status.localeCompare(b.status));
-        break;
-      default:
-        // pending first — the queue is why an admin opened this screen
-        sorted.sort((a, b) =>
-          a.status === b.status ? 0 : a.status === "pending" ? -1 : b.status === "pending" ? 1 : 0,
-        );
-    }
-    return wait(sorted);
+    /*
+     * **LIVE** — `GET /api/admin/members`, forwarded param-for-param to
+     * `GET /v1/admin/members`. Nothing is filtered or re-sorted on this side:
+     * the server owns the query (searching the four identity columns,
+     * pending-first default, nulls-last `last_seen`), and a client that
+     * re-sorted would quietly undo the pending-on-top decision the sort
+     * exists for.
+     */
+    const params = new URLSearchParams();
+    if (query?.search) params.set("search", query.search);
+    if (query?.status) params.set("status", query.status);
+    if (query?.role) params.set("role", query.role);
+    if (query?.sort) params.set("sort", query.sort);
+    const suffix = params.size > 0 ? `?${params}` : "";
+    const { members } = await bff<{ members: User[] }>(`/api/admin/members${suffix}`);
+    return members;
   },
   /**
-   * Counts for the stat tiles, from a SEPARATE unfiltered read.
+   * **LIVE** — `GET /api/admin/members/stats`, a SEPARATE unfiltered read.
    *
    * Deliberately not derived from whatever `members(query)` returned:
    * tiles that move when you type describe the QUERY, not the organisation.
    * That is the counting lie one level up from client-side filtering, and it
    * is worse because a filtered total still looks like a fact about the org.
    *
-   * `history_since: null` is the mock's value on purpose — the log is hours
-   * old, every org is in the null case, and it is the branch that renders
-   * "—". A fixture returning a real date would leave the honest-dash path
-   * unrendered, which is the branch most likely to ship wrong.
+   * `trend.history_since === null` travels through untouched — it means the
+   * history log was not recording, and the UI renders "—" rather than a
+   * fabricated zero.
    */
   async memberStats(): Promise<MemberStats> {
-    return wait({
-      total: users.length,
-      active: users.filter((u) => u.status === "active").length,
-      inactive: users.filter((u) => u.status !== "active").length,
-      trend: {
-        window_days: 30,
-        activated: 0,
-        disabled: 0,
-        joined: 0,
-        history_since: null,
-      },
+    return bff<MemberStats>("/api/admin/members/stats");
+  },
+  /**
+   * **LIVE** — `POST /api/admin/members/:id` → core's accept. Acceptance has
+   * its OWN endpoint rather than being `setUserStatus(id, "active")`: core's
+   * PATCH refuses pending members wholesale (`status <> 'pending'` in the
+   * update), so activation cannot happen through a general-purpose edit —
+   * and a client that spelled accept as a status write would 404 against
+   * the real wire while passing against any fixture.
+   */
+  async acceptMember(id: string): Promise<User> {
+    return bff<User>(`/api/admin/members/${id}`, { method: "POST" });
+  },
+  /**
+   * **LIVE** — `DELETE /api/admin/members/:id` → tombstone. This is what
+   * "reject" is on the real wire: a pending member cannot be PATCHed (see
+   * acceptMember) and there is no softer refuse-registration op — the
+   * owner-only true delete is the one door. Callers hide the button from
+   * non-owners rather than letting them collect a 403.
+   */
+  async rejectMember(id: string): Promise<void> {
+    await fetch(`/api/admin/members/${id}`, { method: "DELETE" }).then((r) => {
+      if (!r.ok) throw new BffError(r.status);
     });
   },
-  async setUserStatus(id: string, status: UserStatus) {
-    users = users.map((u) => (u.id === id ? { ...u, status } : u));
-    return wait(users);
+  /** **LIVE** — `PATCH /api/admin/members/:id` with `{status}` (decided members only). */
+  async setUserStatus(id: string, status: "active" | "disabled"): Promise<User> {
+    return bff<User>(`/api/admin/members/${id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
   },
-  async setUserRole(id: string, role: Role) {
-    users = users.map((u) => (u.id === id ? { ...u, role } : u));
-    return wait(users);
+  /** **LIVE** — `PATCH /api/admin/members/:id` with `{role}` (owner not assignable, M23). */
+  async setUserRole(id: string, role: Role): Promise<User> {
+    return bff<User>(`/api/admin/members/${id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ role }),
+    });
   },
   /**
    * Rename / re-locale / re-curate the org — `PATCH /v1/admin/org`.

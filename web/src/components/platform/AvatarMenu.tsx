@@ -82,7 +82,13 @@ export function AvatarMenu({ me }: { me: User | null }) {
       // FE1's route, consumed not forked: POST because signing out is a state
       // change and a GET would let any page log the user out with an <img>
       await fetch("/api/auth/sign-out", { method: "POST" });
-      router.replace("/sign-in");
+      /*
+       * A HARD navigation, not router.replace: the app router's client cache
+       * still holds the signed-in screens' payloads, and a soft navigation
+       * would leave them restorable through Back without any request hitting
+       * the middleware gate. Tearing the document down is the sign-out.
+       */
+      window.location.assign(`/${locale}/sign-in`);
     } finally {
       setSigningOut(false);
     }
@@ -94,12 +100,18 @@ export function AvatarMenu({ me }: { me: User | null }) {
     <div className="relative" ref={root}>
       <button
         type="button"
-        className="tap grid h-9 w-9 place-items-center rounded-full border border-border-strong bg-surface-2 text-sm font-semibold text-fg"
+        className="tap grid h-9 w-9 place-items-center overflow-hidden rounded-full border border-border-strong bg-surface-2 text-sm font-semibold text-fg"
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
       >
-        {name.trim().charAt(0) || "؟"}
+        {me?.avatar_url ? (
+          /* eslint-disable-next-line @next/next/no-img-element -- a data URL;
+             next/image would proxy an image the payload already carries */
+          <img src={me.avatar_url} alt="" className="h-full w-full object-cover" />
+        ) : (
+          name.trim().charAt(0) || "؟"
+        )}
         <span className="sr-only">{t("account")}</span>
       </button>
 

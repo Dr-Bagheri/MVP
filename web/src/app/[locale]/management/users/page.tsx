@@ -249,7 +249,10 @@ export default function UsersPage() {
                     onClick={async () => {
                       setBusy(true);
                       try {
-                        await api.setUserStatus(u.id, "active");
+                        /* acceptance has its OWN endpoint — core's PATCH
+                           refuses pending members, so spelling this as a
+                           status write would 404 against the real wire */
+                        await api.acceptMember(u.id);
                         await load();
                       } finally {
                         setBusy(false);
@@ -258,21 +261,26 @@ export default function UsersPage() {
                   >
                     {tAdmin("accept")}
                   </button>
-                  <button
-                    className="btn-secondary h-9 min-h-0 px-3 text-xs"
-                    disabled={busy}
-                    onClick={async () => {
-                      setBusy(true);
-                      try {
-                        await api.setUserStatus(u.id, "disabled");
-                        await load();
-                      } finally {
-                        setBusy(false);
-                      }
-                    }}
-                  >
-                    {tAdmin("reject")}
-                  </button>
+                  {/* reject = the owner-only true delete: a pending member
+                      cannot be PATCHed, and hiding the button beats letting
+                      an admin collect a 403 they can do nothing about */}
+                  {me?.role === "owner" ? (
+                    <button
+                      className="btn-secondary h-9 min-h-0 px-3 text-xs"
+                      disabled={busy}
+                      onClick={async () => {
+                        setBusy(true);
+                        try {
+                          await api.rejectMember(u.id);
+                          await load();
+                        } finally {
+                          setBusy(false);
+                        }
+                      }}
+                    >
+                      {tAdmin("reject")}
+                    </button>
+                  ) : null}
                 </li>
               ))}
             </ul>
@@ -312,7 +320,33 @@ export default function UsersPage() {
                         {u.username ? `@${u.username}` : "—"}
                       </td>
                       <td className="py-3 pe-3 align-top">
-                        <Chip tone={statusTone(u.status)}>{statusLabel(u.status)}</Chip>
+                        <div className="flex items-center gap-2">
+                          <Chip tone={statusTone(u.status)}>{statusLabel(u.status)}</Chip>
+                          {/* the page's own description promises "disable
+                              members" — a promise with no control is FE3's
+                              "row that cannot be filled". Not on the owner
+                              (M23) and not on yourself (core 409s it). */}
+                          {u.role !== "owner" && u.id !== me?.id ? (
+                            <button
+                              className="text-xs text-fg-muted underline-offset-2 hover:underline"
+                              disabled={busy}
+                              onClick={async () => {
+                                setBusy(true);
+                                try {
+                                  await api.setUserStatus(
+                                    u.id,
+                                    u.status === "disabled" ? "active" : "disabled",
+                                  );
+                                  await load();
+                                } finally {
+                                  setBusy(false);
+                                }
+                              }}
+                            >
+                              {tAdmin(u.status === "disabled" ? "enable" : "disable")}
+                            </button>
+                          ) : null}
+                        </div>
                       </td>
                       <td className="py-3 pe-3 align-top">
                         {u.role === "owner" ? (

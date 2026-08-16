@@ -39,3 +39,21 @@ export async function PATCH(
     return errorResponse(error);
   }
 }
+
+/**
+ * True delete — core's owner-only tombstone (M24). On this screen it is the
+ * "reject" for a pending registration, because a pending member cannot be
+ * PATCHed at all: acceptance is one-way on its own path, and there is no
+ * softer refuse-registration operation on the wire.
+ */
+export async function DELETE(_request: Request, { params }: { params: Promise<{ memberId: string }> }) {
+  const { memberId } = await params;
+  try {
+    // `raw`: core answers 204 with an empty body, which `.json()` would
+    // turn into a crash on the SUCCESS path only
+    await coreFetch<Response>(`/v1/admin/members/${memberId}`, { method: "DELETE", raw: true });
+    return new Response(null, { status: 204 });
+  } catch (error) {
+    return errorResponse(error);
+  }
+}

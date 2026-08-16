@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { api, BffError } from "@/api/client";
-import { Card, Chip, Field } from "@/components/ui";
+import { FormPanel, FormRow, PanelFooter } from "@/components/scaffold";
+import { Chip } from "@/components/ui";
 
 /**
  * Change your own password, from inside the product.
@@ -55,13 +56,17 @@ export function ChangePassword() {
     }
   }
 
+  /*
+   * The same FormPanel anatomy as every other form (M26): rows divided by
+   * the panel, submit in the footer at INLINE-end so it mirrors between
+   * fa and en instead of holding one physical side in both.
+   */
   return (
-    <Card className="max-w-xl space-y-4">
-      <h2 className="h-section">{t("title")}</h2>
-
-      <form className="space-y-4" onSubmit={submit}>
-        <Field label={t("current")}>
+    <form onSubmit={submit}>
+      <FormPanel>
+        <FormRow label={t("current")} htmlFor="pw-current">
           <input
+            id="pw-current"
             className="input"
             dir="ltr"
             type="password"
@@ -69,9 +74,10 @@ export function ChangePassword() {
             onChange={(e) => setCurrent(e.target.value)}
             autoComplete="current-password"
           />
-        </Field>
-        <Field label={t("new")}>
+        </FormRow>
+        <FormRow label={t("new")} htmlFor="pw-new">
           <input
+            id="pw-new"
             className="input"
             dir="ltr"
             type="password"
@@ -79,39 +85,44 @@ export function ChangePassword() {
             onChange={(e) => setNext(e.target.value)}
             autoComplete="new-password"
           />
-        </Field>
-        <Field label={t("confirm")}>
-          <input
-            className="input"
-            dir="ltr"
-            type="password"
-            value={confirm}
-            onChange={(e) => setConfirm(e.target.value)}
-            autoComplete="new-password"
-            aria-invalid={mismatch || undefined}
-            aria-describedby={mismatch ? "password-mismatch" : undefined}
-          />
-          {mismatch ? (
-            <span id="password-mismatch" className="mt-1 block text-xs text-danger">
-              {t("mismatch")}
-            </span>
-          ) : null}
-        </Field>
+        </FormRow>
+        <FormRow label={t("confirm")} htmlFor="pw-confirm">
+          <div className="w-full">
+            <input
+              id="pw-confirm"
+              className="input"
+              dir="ltr"
+              type="password"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              autoComplete="new-password"
+              aria-invalid={mismatch || undefined}
+              aria-describedby={mismatch ? "password-mismatch" : undefined}
+            />
+            {mismatch ? (
+              <span id="password-mismatch" className="mt-1 block text-xs text-danger">
+                {t("mismatch")}
+              </span>
+            ) : null}
+          </div>
+        </FormRow>
 
         {error ? (
-          <p role="alert" className="text-sm text-danger">
-            {error}
-          </p>
+          <div className="px-5 py-3 md:px-8">
+            <p role="alert" className="text-sm text-danger">
+              {error}
+            </p>
+          </div>
         ) : null}
 
-        <div className="flex items-center gap-3">
+        <PanelFooter>
+          {done ? <Chip tone="success">{t("changed")}</Chip> : null}
           <button className="btn-primary" disabled={!ready}>
             {busy ? t("saving") : t("save")}
           </button>
-          {done ? <Chip tone="success">{t("changed")}</Chip> : null}
-        </div>
-      </form>
-    </Card>
+        </PanelFooter>
+      </FormPanel>
+    </form>
   );
 }
 

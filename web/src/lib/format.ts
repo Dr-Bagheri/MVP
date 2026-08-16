@@ -1,6 +1,7 @@
 /** Persian digits + Jalali dates (M9). Display-time only — data stays ASCII. */
 
 import { resolvedCalendar, resolvedTimezone } from "./preferences";
+import { latinToPersian, persianToLatin } from "./transliterate";
 
 const FA_DIGITS = "۰۱۲۳۴۵۶۷۸۹";
 
@@ -14,33 +15,39 @@ export function digits(input: string | number, locale: string): string {
 }
 
 /**
- * A person's name for the ACTIVE locale (user directive, review round 1):
- * English UI renders `display_name_en` where a person has one, and falls back
- * to the Persian name unchanged.
+ * A person's name for the ACTIVE locale.
+ *
+ * English UI renders `display_name_en` where a person has one; where they
+ * don't, a Persian-script name is TRANSLITERATED («امیر» → "Amir"), and in
+ * the Persian UI a Latin-only name renders in Persian script the same way
+ * (user directive, 2026-08-16 — this SUPERSEDES the earlier fallback-is-the-
+ * fa-name-unchanged ruling, and the M24 amendment records it). Usernames,
+ * emails and brands never pass through here, so they never transliterate.
+ *
+ * A name the person chose always beats a spelling we derived:
+ * `display_name_en` wins in EN, and a Persian-script `display_name` is never
+ * rewritten in FA. The transliterator only fills the gap where no chosen
+ * spelling exists for the active script.
  *
  * Shared rather than per-surface on purpose. Name resolution is one rule, and
  * two implementations of one rule is the drift shape this codebase keeps
  * finding — the English shell would say "Sara" while an English table two
  * screens away said «سارا محمدی», and both would look correct alone.
- *
- * **The fallback is the fa name, and that is deliberate rather than a
- * placeholder.** A person who has not supplied a Latin name has one name, and
- * showing it in an English UI is accurate. Transliterating would invent a
- * spelling they never chose, and an empty string would erase them.
- *
- * `display_name_en` is typed optional here because the wire does not carry it
- * yet — the directive rules that it will. Until it lands this returns the
- * Persian name in both locales, which is exactly today's behaviour, so this
- * changes nothing until the field is real and then changes everything at once.
  */
+const PERSIAN_SCRIPT = /[؀-ۿ]/;
+
 export function personName(
   person: { display_name: string; display_name_en?: string | null } | null | undefined,
   locale: string,
 ): string {
   if (!person) return "";
-  if (locale === "fa") return person.display_name;
+  const fa = person.display_name;
+  if (locale === "fa") {
+    return PERSIAN_SCRIPT.test(fa) ? fa : latinToPersian(fa);
+  }
   const en = person.display_name_en?.trim();
-  return en && en.length > 0 ? en : person.display_name;
+  if (en && en.length > 0) return en;
+  return PERSIAN_SCRIPT.test(fa) ? persianToLatin(fa) : fa;
 }
 
 const JALALI_MONTHS = [

@@ -199,7 +199,10 @@ export function Hub() {
           <h1 className="mt-1.5 text-[25px] font-bold leading-snug tracking-tight text-fg md:text-[34px]">
             {t("ask")}
           </h1>
-          <p className="mt-2.5 max-w-[44ch] text-[13px] leading-6 text-fg-muted">
+          {/* wide enough for the EN sentence in ONE line (55ch); if a longer
+              translation ever wraps, text-wrap:balance splits it evenly
+              instead of orphaning the last word */}
+          <p className="mt-2.5 max-w-[60ch] text-[13px] leading-6 text-fg-muted [text-wrap:balance]">
             {t("scopePromise")}
           </p>
         </>

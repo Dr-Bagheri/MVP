@@ -59,7 +59,8 @@ export async function PATCH(request: Request) {
    * names the field instead of a save that quietly drops it.
    */
   const ALLOWED = [
-    "display_name", "display_name_en", "username", "calendar", "timezone", "locale",
+    "display_name", "display_name_en", "username", "avatar_url",
+    "calendar", "timezone", "locale",
   ] as const;
   const patch: Record<string, unknown> = {};
   for (const key of ALLOWED) if (key in body) patch[key] = body[key];

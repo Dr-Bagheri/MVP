@@ -39,7 +39,18 @@ export default function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  return intl(request);
+  const response = intl(request);
+  if (!isOpen) {
+    /*
+     * Authenticated pages are never HTTP-cached: a cached copy outlives the
+     * session that authorized it, and the Back button after sign-out would
+     * serve it without this gate ever running. `no-store` forces history
+     * navigations to revalidate (where the redirect above catches them);
+     * the bfcache half is closed by sign-out's Clear-Site-Data.
+     */
+    response.headers.set("cache-control", "no-store, must-revalidate");
+  }
+  return response;
 }
 
 export const config = {
