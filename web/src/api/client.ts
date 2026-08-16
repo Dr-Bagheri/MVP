@@ -61,75 +61,11 @@ import type {
  */
 import type { MeRecord } from "@echo/core/wire";
 
-/**
- * Persisted conversations. Titles are the server's, derived from the first
- * question — never re-derived here.
+/*
+ * The AGENT_SESSIONS/AGENT_THREADS fixtures left with the ask() mock (Part 1,
+ * M27): the conversation surface is live end to end, and a fixture beside a
+ * live wire is two sources for one fact.
  */
-const AGENT_SESSIONS: AssistantSession[] = [
-  {
-    id: "sess-1",
-    title: "مهم‌ترین نکات مذاکرهٔ تمدید قرارداد",
-    created_at: new Date(Date.now() - 3_600_000).toISOString(),
-    updated_at: new Date(Date.now() - 3_400_000).toISOString(),
-    message_count: 4,
-  },
-  {
-    id: "sess-2",
-    title: "اقدام‌های باز از جلسهٔ محصول",
-    created_at: new Date(Date.now() - 86_400_000).toISOString(),
-    updated_at: new Date(Date.now() - 86_000_000).toISOString(),
-    message_count: 2,
-  },
-  {
-    // ends in an UNANSWERED question — count is 1, and that is the point
-    id: "sess-3",
-    title: "خلاصهٔ تماس پشتیبانی",
-    created_at: new Date(Date.now() - 2 * 86_400_000).toISOString(),
-    updated_at: new Date(Date.now() - 2 * 86_400_000).toISOString(),
-    message_count: 1,
-  },
-];
-
-const turn = (id: string, role: "user" | "assistant", content: string): AgentMessage => ({
-  id,
-  role,
-  content,
-  tool_calls: [],
-  proposal: null,
-  session_id: id.split("-m")[0],
-});
-
-/**
- * Resume payloads.
- *
- * `sess-3` ends with a USER message and no assistant reply — the failed-run
- * shape, confirmed on the wire: a turn is written only on delivery, so a run
- * that failed leaves the question standing alone. There is deliberately no
- * assistant message carrying `failed: true`; that flag belongs to the LIVE
- * stream, where the client watched the failure happen. Rendering one here
- * would manufacture an event the server has no record of.
- *
- * Without this fixture that branch is unreachable, which is exactly how it
- * would have shipped wrong.
- */
-const AGENT_THREADS: Record<string, AgentMessage[]> = {
-  "sess-1": [
-    turn("sess-1-m1", "user", "مهم‌ترین نکات این مذاکره چه بود؟"),
-    turn(
-      "sess-1-m2",
-      "assistant",
-      "توافق بر کاهش زمان پاسخ‌گویی بحرانی به دو ساعت، در ازای قرارداد دوساله.",
-    ),
-    turn("sess-1-m3", "user", "چه چیزی هنوز باز مانده؟"),
-    turn("sess-1-m4", "assistant", "تأیید نهایی به بررسی مدیر طرف مقابل موکول شد."),
-  ],
-  "sess-2": [
-    turn("sess-2-m1", "user", "اقدام‌های باز را فهرست کن."),
-    turn("sess-2-m2", "assistant", "دو مورد: برآورد زمانی تیم، و بازبینی ترتیب انتشار."),
-  ],
-  "sess-3": [turn("sess-3-m1", "user", "این تماس را خلاصه کن.")],
-};
-
 const LATENCY = 180;
 const wait = <T,>(value: T, ms = LATENCY): Promise<T> =>
   new Promise((resolve) => setTimeout(() => resolve(value), ms));
@@ -211,6 +147,71 @@ async function bff<T>(path: string, init?: RequestInit): Promise<T> {
     throw new BffError(response.status, kind, detail);
   }
   return (await response.json()) as T;
+}
+
+/**
+ * The SSE hop — the browser half of core/'s typed event stream.
+ *
+ * Frames arrive as `event: <type>\ndata: <json>\n\n` with `:ka` comment
+ * lines as proxy keep-alives; only the data line matters, because the JSON
+ * carries the same discriminated `type` the reducer switches on. A torn
+ * frame at a chunk boundary is buffered, not parsed early — the classic
+ * SSE-by-hand bug is splitting on the first read() and losing the delta
+ * that straddled two packets.
+ *
+ * `signal` is the STOP button: aborting rejects the read, the finally
+ * releases the socket, the BFF's upstream fetch is torn down, and core's
+ * close handler aborts the run — one chain, no orphaned spend.
+ */
+async function* streamAssistant(
+  path: string,
+  body: unknown,
+  signal?: AbortSignal,
+): AsyncGenerator<AgentEvent> {
+  const response = await fetch(path, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+    ...(signal ? { signal } : {}),
+  });
+  if (!response.ok || !response.body) {
+    let kind: string | undefined;
+    let detail: string | undefined;
+    try {
+      const parsed = (await response.json()) as { kind?: string; error?: string };
+      kind = parsed.kind;
+      detail = parsed.error;
+    } catch {
+      /* not JSON — the status is still the fact worth keeping */
+    }
+    throw new BffError(response.status, kind, detail);
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let sep = buffer.indexOf("\n\n");
+      while (sep !== -1) {
+        const frame = buffer.slice(0, sep);
+        buffer = buffer.slice(sep + 2);
+        const data = frame.split("\n").find((line) => line.startsWith("data: "));
+        if (data) {
+          try {
+            yield JSON.parse(data.slice(6)) as AgentEvent;
+          } catch {
+            /* a malformed frame is dropped; the contract is unknown-ignorable */
+          }
+        }
+        sep = buffer.indexOf("\n\n");
+      }
+    }
+  } finally {
+    await reader.cancel().catch(() => undefined);
+  }
 }
 
 /**
@@ -1017,17 +1018,107 @@ export const api = {
    * Titles are SERVER-derived from the first question and never rewritten —
    * the client must not re-derive them, or two spellings of one title drift.
    */
-  async agentSessions(): Promise<AssistantSession[]> {
-    return wait(AGENT_SESSIONS);
+  async agentSessions(archived = false): Promise<AssistantSession[]> {
+    /* **LIVE** — `GET /api/assistant/sessions`, core's own ordering (most
+       recently active first, nulls last). Titles are server-derived and the
+       owner may rename them (M27); the client never re-derives one. */
+    const { sessions } = await bff<{ sessions: AssistantSession[] }>(
+      `/api/assistant/sessions?archived=${archived}`,
+    );
+    return sessions;
   },
   /**
-   * Messages for resume. Returns `AgentMessage[]` so a resumed conversation
-   * renders through the SAME component as a live one — two renderers for one
-   * conversation is the drift shape, and the resumed half is the one nobody
-   * looks at.
+   * **LIVE** — messages for resume, through the BFF. Returns `AgentMessage[]`
+   * so a resumed conversation renders through the SAME component as a live
+   * one — two renderers for one conversation is the drift shape, and the
+   * resumed half is the one nobody looks at.
+   *
+   * The wire's `tool_calls` are CODES ({id, name} — arguments quote
+   * transcripts and stay on the audit surface), so they normalize to a
+   * settled shape: a resumed thread shows WHICH tools ran, not their live
+   * progress, and inventing a state would be manufacturing an event the
+   * server has no record of.
    */
   async agentMessages(sessionId: string): Promise<AgentMessage[]> {
-    return wait(AGENT_THREADS[sessionId] ?? []);
+    const { messages } = await bff<{
+      messages: {
+        id: string; role: "user" | "assistant" | "tool"; content: string;
+        tool_calls: { id?: string; name?: string }[];
+        agent_run_id: string | null; truncated: boolean;
+      }[];
+    }>(`/api/assistant/sessions/${sessionId}/messages`);
+    /*
+     * `tool` rows are filtered, not mapped: the thread renders what was SAID,
+     * and nothing writes tool-role rows today — but the enum allows them, and
+     * a future one must not crash a component whose union is user|assistant.
+     */
+    return messages
+      .filter((m): m is typeof m & { role: "user" | "assistant" } => m.role !== "tool")
+      .map((m) => ({
+      id: m.id,
+      role: m.role,
+      content: m.content,
+      tool_calls: (m.tool_calls ?? []).map((c, i) => ({
+        id: c.id ?? `tc-${i}`,
+        name: c.name ?? "tool",
+        label: c.name ?? "tool",
+        state: "ok" as const,
+      })),
+      proposal: null,
+      run_id: m.agent_run_id ?? undefined,
+      truncated: m.truncated,
+    }));
+  },
+
+  // ---- the assistant experience (M27) ----------------------------------------
+  /** **LIVE** — owner rename; the returned row is the adopted truth. */
+  async renameSession(sessionId: string, title: string): Promise<AssistantSession> {
+    return bff<AssistantSession>(`/api/assistant/sessions/${sessionId}/title`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title }),
+    });
+  },
+  /** **LIVE** — archive/unarchive a conversation (Q5: never a delete). */
+  async archiveSession(sessionId: string, archived: boolean): Promise<void> {
+    await bff(`/api/assistant/sessions/${sessionId}/${archived ? "archive" : "unarchive"}`, {
+      method: "POST",
+    });
+  },
+  /** **LIVE** — a verdict on one answer; pressing the other thumb updates it. */
+  async messageFeedback(messageId: string, verdict: "up" | "down", note?: string): Promise<void> {
+    const res = await fetch(`/api/assistant/messages/${messageId}/feedback`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ verdict, note }),
+    });
+    if (!res.ok) throw new BffError(res.status);
+  },
+  /** **LIVE** — the caller's verdicts for one thread, keyed by message id. */
+  async sessionFeedback(sessionId: string): Promise<Record<string, string>> {
+    const { feedback } = await bff<{ feedback: Record<string, string> }>(
+      `/api/assistant/sessions/${sessionId}/feedback`,
+    );
+    return feedback;
+  },
+  /** **LIVE** — the owner's share state + toggle (org-scoped, M27). */
+  async shareState(sessionId: string): Promise<boolean> {
+    const { shared } = await bff<{ shared: boolean }>(`/api/assistant/sessions/${sessionId}/share`);
+    return shared;
+  },
+  async setShared(sessionId: string, shared: boolean): Promise<boolean> {
+    const res = await bff<{ shared: boolean }>(`/api/assistant/sessions/${sessionId}/share`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ shared }),
+    });
+    return res.shared;
+  },
+  /** **LIVE** — a colleague's shared thread, read-only, through db/0058's doors. */
+  async sharedThread(
+    sessionId: string,
+  ): Promise<{ session: { id: string; title: string }; messages: AgentMessage[] }> {
+    return bff(`/api/assistant/shared/${sessionId}`);
   },
 
   // ---- agent ------------------------------------------------------------------------
@@ -1055,104 +1146,39 @@ export const api = {
     question: string,
     ctx: { page: string; callIds: string[] },
     sessionId?: string,
+    opts?: { model?: string; skill?: string; signal?: AbortSignal },
   ): AsyncGenerator<AgentEvent> {
-    const wantsWrite = /اصلاح|تصحیح|عوض کن|تغییر بده/.test(question);
+    /* **LIVE** — the real stream, through the BFF's SSE passthrough. The
+       vocabulary is core/'s SseEvent union verbatim (session first, then
+       deltas/tools/proposals, done always last), so this swap was
+       transport-only — exactly what the mock's contract promised. */
+    yield* streamAssistant(
+      '/api/assistant/ask',
+      {
+        question,
+        session_id: sessionId,
+        call_id: ctx.callIds[0],
+        model: opts?.model,
+        skill: opts?.skill,
+      },
+      opts?.signal,
+    );
+  },
 
-    /*
-     * FIRST, and `created` reflects which path ran. A mock that always
-     * created would leave the continue-existing branch unexercised — the
-     * branch that matters, since it is the one every message after the first
-     * takes.
-     */
-    yield {
-      type: "session",
-      id: sessionId ?? `sess-${Date.now()}`,
-      created: sessionId === undefined,
-    };
-
-    yield {
-      type: "tool_call",
-      id: "tc-1",
-      name: "search_transcripts",
-      label: `جست‌وجو: «${question.slice(0, 20)}»`,
-      state: "started",
-    };
-    await wait(null, 420);
-    yield {
-      type: "tool_call",
-      id: "tc-1",
-      name: "search_transcripts",
-      label: "۳ بازه پیدا شد",
-      state: "ok",
-      ms: 412,
-    };
-
-    if (ctx.callIds.length > 0) {
-      yield {
-        type: "tool_call",
-        id: "tc-2",
-        name: "read_window",
-        label: "خواندن بازهٔ تماس",
-        state: "started",
-      };
-      await wait(null, 380);
-      yield {
-        type: "tool_call",
-        id: "tc-2",
-        name: "read_window",
-        label: "۲ بازه خوانده شد",
-        state: "ok",
-        ms: 377,
-      };
-    } else {
-      // a call outside the caller's reach: the tool's own scope check refuses
-      yield {
-        type: "tool_call",
-        id: "tc-3",
-        name: "read_window",
-        label: "خارج از دسترسی شما",
-        state: "denied",
-        ms: 8,
-      };
-    }
-
-    const answer = wantsWrite
-      ? "پیشنهاد اصلاح آماده است؛ پیش از اعمال، تأیید شما لازم است."
-      : `بر پایهٔ چیزی که در ${ctx.callIds.length > 0 ? "تماس‌های انتخاب‌شده" : "این صفحه"} پیدا شد: مهم‌ترین نکته، توافق بر کاهش زمان پاسخ‌گویی بحرانی به دو ساعت در ازای قرارداد دوساله بود. تأیید نهایی به بررسی مدیر طرف مقابل موکول شد.`;
-
-    for (const delta of answer.match(/.{1,28}/g) ?? []) {
-      yield { type: "text_delta", delta };
-      await wait(null, 60);
-    }
-
-    if (wantsWrite) {
-      /*
-       * `before` is the CURRENT value and core/ spends a query fetching it, so
-       * a card can show before/after rather than asking for blind consent. The
-       * fixture carried none, which made that branch unreachable — the card
-       * would have looked finished while never rendering the half that makes
-       * it a decision (rule 9).
-       *
-       * `before`/`after` are a matched pair — same keys on both sides, so
-       * the reader compares values rather than reconciling shapes. Both are
-       * DISPLAY values and may be excerpted; the authoritative payload lives
-       * server-side and is re-read at confirm.
-       */
-      yield {
-        type: "proposal",
-        id: "pr-1",
-        kind: "correct_transcript",
-        summary: "اصلاح خط ۰۰:۴۱ — «زمان پاسخ‌گویی بحرانی» به‌جای «زمان پاسخ‌گوی بحرانی»",
-        payload: {
-          call_id: ctx.callIds[0] ?? "c-1",
-          row_id: "t-3",
-          before: { text: "زمان پاسخ‌گوی بحرانی باید به دو ساعت کاهش پیدا کند." },
-          after: { text: "زمان پاسخ‌گویی بحرانی باید به دو ساعت کاهش پیدا کند." },
-        },
-      };
-    }
-
-    yield { type: "done", runId: `run-${Date.now()}`, failed: false };
+  /**
+   * **LIVE** — regenerate (M27): re-answers the session's standing question
+   * as a fresh run, optionally on a different model. Same stream, same
+   * reducer; no user turn is written because the person did not ask again.
+   */
+  async *regenerate(
+    sessionId: string,
+    opts?: { model?: string; signal?: AbortSignal },
+  ): AsyncGenerator<AgentEvent> {
+    yield* streamAssistant(
+      `/api/assistant/sessions/${sessionId}/regenerate`,
+      { model: opts?.model },
+      opts?.signal,
+    );
   },
 
   // ---- audit trail (M25, Settings · COMPLIANCE) ------------------------------
