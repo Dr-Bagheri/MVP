@@ -296,7 +296,8 @@
     "archiveConversation": "Archive",
     "modelPicker": "Model",
     "skillPicker": "Skill",
-    "skillDefault": "Default skill"
+    "skillDefault": "Default skill",
+    "askFailed": "The question was refused before a run started."
   },
   "management": {
     "title": "Management",

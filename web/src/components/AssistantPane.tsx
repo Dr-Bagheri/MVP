@@ -58,13 +58,16 @@ export function AssistantPane({
       // support, so this must not pretend to either
       setModels(res.models);
       /*
-       * `preferred_model: null` means "has not chosen", and M5 imposes no
-       * default — so we do NOT fall back to a suggested-or-first model here.
-       * Picking one on the user's behalf destroys the very information the
-       * null carries, and it does it invisibly: they would never know a
-       * choice had been made for them.
+       * The state adopts what the <select> RENDERS. The earlier `?? ""`
+       * defended the null's has-not-chosen information — and produced the
+       * silent-substitution select: state "" matched no option, the box
+       * displayed its first model anyway, and every ask 400d with "no model
+       * selected" against a picker that looked chosen (live failure,
+       * 2026-08-16). A state the screen contradicts carries no information
+       * at all. M5 stands: these are the org's curated options; the state
+       * just tells the truth about which one is showing.
        */
-      setModelId(res.preferred_model ?? "");
+      setModelId(res.preferred_model ?? res.models[0]?.id ?? "");
     });
     void api.listCalls().then(setCalls);
   }, []);

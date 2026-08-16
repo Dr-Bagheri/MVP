@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { useLocale, useTranslations } from "next-intl";
-import { api } from "@/api/client";
+import { api, BffError } from "@/api/client";
 import type { AgentEvent, AgentMessage, ModelInfo, Skill, User } from "@/api/types";
 import { Link, useRouter } from "@/i18n/routing";
 import { useSearchParams } from "next/navigation";
@@ -53,6 +53,8 @@ export function Hub() {
   const [skills, setSkills] = useState<Skill[]>([]);
   const [model, setModel] = useState<string>("");
   const [skill, setSkill] = useState<string>("");
+  /** The SERVER's refusal sentence, when an ask never opened a stream. */
+  const [askError, setAskError] = useState<string | null>(null);
   /** Held in a ref, not state: it is read inside the stream loop, where a
    *  stale closure over state would silently start a second conversation. */
   const sessionId = useRef<string | undefined>(undefined);
@@ -70,8 +72,18 @@ export function Hub() {
     void api.me().then(setMe);
     void api.models().then((res) => {
       setModels(res.models);
-      // the person's saved choice is the default; "" = let the server say
-      setModel(res.preferred_model ?? "");
+      /*
+       * The state ADOPTS what the select will render. `?? ""` here caused
+       * the live failure this line replaces: with no saved preference the
+       * state held "" while the <select> displayed its first option — the
+       * screen showed Gemini, the wire carried no model, and the server
+       * refused with "no model selected" against a picker that looked
+       * chosen (the silent-substitution select bug, FE3's class). M5 still
+       * holds: the product imposes nothing — the ORG's curated list is what
+       * the picker offers, and the state now simply tells the truth about
+       * which of them is on screen.
+       */
+      setModel(res.preferred_model ?? res.models[0]?.id ?? "");
     });
     void api.skills().then(setSkills);
   }, []);
@@ -189,6 +201,16 @@ export function Hub() {
         if (sessionId.current) await adoptThread(sessionId.current).catch(() => undefined);
       } else {
         setMessages((prev) => prev.filter((m) => !(m.id === replyId && m.content === "")));
+        /*
+         * The refusal's own sentence, rendered — the previous version knew
+         * only "the run did not finish" and swallowed WHY, which left the
+         * user staring at an unanswered question with no lever to pull.
+         * The server names the problem ("no model selected…"); saying it
+         * is the difference between a bug report and a fixed dropdown.
+         */
+        setAskError(
+          cause instanceof BffError && cause.detail ? cause.detail : t("askFailed"),
+        );
       }
     } finally {
       abortRef.current = null;
@@ -201,6 +223,7 @@ export function Hub() {
     if (question === "" || streaming) return;
     setInput("");
     setShowHistory(false);
+    setAskError(null);
 
     const userMsg: AgentMessage = {
       id: `u-${Date.now()}`,
@@ -386,6 +409,11 @@ export function Hub() {
             onFeedback={(id, verdict) => void judge(id, verdict)}
             onRegenerate={() => void regenerate()}
           />
+          {askError ? (
+            <p role="alert" className="mt-2 text-xs leading-6 text-danger">
+              {askError}
+            </p>
+          ) : null}
           <div ref={threadEnd} />
         </div>
       ) : null}

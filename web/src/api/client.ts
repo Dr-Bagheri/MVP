@@ -7,7 +7,6 @@
 import {
   AGENT_RUNS,
   CALLS,
-  CONNECTORS,
   DIRECTORY,
   ME,
   SPEAKERS,
@@ -933,10 +932,7 @@ export const api = {
     });
   },
 
-  // ---- connectors & gateway --------------------------------------------------------
-  async connectors() {
-    return wait(CONNECTORS);
-  },
+  // ---- gateway (M17) ----------------------------------------------------------
   async gatewayKeys(): Promise<GatewayKey[]> {
     /* **LIVE** — `GET /api/gateway/keys` (admin; M17). */
     const { keys } = await bff<{ keys: GatewayKey[] }>("/api/gateway/keys");

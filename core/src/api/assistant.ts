@@ -53,6 +53,8 @@ export interface AssistantDeps<TDeps> {
   deps: TDeps;
   adminOnlyTools?: ReadonlySet<string> | undefined;
   apiKey?: string | undefined;
+  /** Structured log hook for pre-run failures (codes only, never content). */
+  log?: ((fields: Record<string, unknown>) => void) | undefined;
 }
 
 export function createAssistant<TDeps>(config: AssistantDeps<TDeps>) {
@@ -181,8 +183,19 @@ export function createAssistant<TDeps>(config: AssistantDeps<TDeps>) {
           error: result.error,
         });
       } catch (error) {
-        // Thrown before/instead of a result — e.g. an inactive actor slipping
-        // past the route guard. The stream still ends properly.
+        /*
+         * Thrown before/instead of a result — no run row exists, so this
+         * catch is the ONLY record on our side. It used to ride the `done`
+         * event alone, which meant a pre-run failure was invisible in the
+         * logs while the user stared at "unanswered" (found diagnosing the
+         * live no-model 400: one ask, no row, no log line, nothing to read).
+         * Loud here per M21 — the CLASS only, never the message, which can
+         * quote the question.
+         */
+        config.log?.(
+          { event: "assistant_pre_run_failure",
+            err: error instanceof Error ? error.constructor.name : typeof error },
+        );
         stream.finish({
           runId: "",
           failed: true,

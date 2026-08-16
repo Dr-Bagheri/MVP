@@ -296,7 +296,8 @@
     "archiveConversation": "بایگانی",
     "modelPicker": "مدل",
     "skillPicker": "مهارت",
-    "skillDefault": "مهارت پیش‌فرض"
+    "skillDefault": "مهارت پیش‌فرض",
+    "askFailed": "پرسش پیش از شروع اجرا رد شد."
   },
   "management": {
     "title": "مدیریت",

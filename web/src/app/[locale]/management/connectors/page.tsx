@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { api } from "@/api/client";
-import type { Connector, GatewayKey, GatewayWebhook, User } from "@/api/types";
+import type { GatewayKey, GatewayWebhook, User } from "@/api/types";
 import { ManagementPane } from "@/components/platform/ManagementPane";
 import { Card, Chip, PageHeader } from "@/components/ui";
 import { DeliveriesCard } from "./_components/DeliveriesCard";
@@ -21,8 +21,9 @@ import { WebhooksCard } from "./_components/WebhooksCard";
  * could not be repaired; it had to go, and with it the `GatewayConfig`
  * view-model it read.
  *
- * The gateway ships in v1 and leads the page; the connector catalogue below it
- * is previews (named connectors get built ON the gateway later).
+ * The gateway ships in v1 and IS the page — the named-connector preview
+ * catalogue that used to sit under it was removed (user directive: no
+ * coming-soons; a fabricated catalogue is a roadmap we would have to keep).
  *
  * Two sentences carry this screen, and they are the ones the steward blessed:
  * a key **can do what you can do** — never "full API access", which is both
@@ -33,7 +34,6 @@ export default function ConnectorsPage() {
   const g = useTranslations("gateway");
 
   const [me, setMe] = useState<User | null>(null);
-  const [connectors, setConnectors] = useState<Connector[]>([]);
   const [keys, setKeys] = useState<GatewayKey[]>([]);
   const [webhooks, setWebhooks] = useState<GatewayWebhook[]>([]);
   const [members, setMembers] = useState<User[]>([]);
@@ -49,7 +49,9 @@ export default function ConnectorsPage() {
    * If it ever disagreed with the server, the server wins and the user gets a
    * refusal, not a silent success.
    */
-  const isAdmin = me?.role === "admin";
+  // M23: the owner is an admin and more — `=== "admin"` alone locked the
+  // OWNER out of their own gateway (caught while removing the catalogue)
+  const isAdmin = me?.role === "admin" || me?.role === "owner";
 
   const refreshGateway = useCallback(async () => {
     const [nextKeys, nextWebhooks] = await Promise.all([
@@ -62,7 +64,6 @@ export default function ConnectorsPage() {
 
   useEffect(() => {
     void api.me().then(setMe);
-    void api.connectors().then(setConnectors);
   }, []);
 
   useEffect(() => {
@@ -109,24 +110,15 @@ export default function ConnectorsPage() {
         </Card>
       )}
 
-      {/* catalogue: previews in v1 — these get built ON the gateway above.
-          No heading of its own: `connectors.*` is Front-end 1's namespace and
-          has no key for one, and inventing a string in someone else's
-          namespace to justify a divider is not worth a divider. */}
-      <div className="mt-6 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-        {connectors.map((connector) => (
-          <Card key={connector.id}>
-            <div className="mb-1 flex items-start justify-between gap-2">
-              <h3 className="font-medium text-fg">{connector.name}</h3>
-              <Chip tone="neutral">{t("preview")}</Chip>
-            </div>
-            <p className="text-sm text-fg-muted">{connector.description}</p>
-            <p className="ltr mt-2 text-xs uppercase tracking-wide text-fg-muted">
-              {connector.category}
-            </p>
-          </Card>
-        ))}
-      </div>
+      {/*
+        The named-connector preview cards (Slack, Teams, HubSpot, …) are GONE
+        (user directive: no coming-soons anywhere). They were the hub's
+        no-invented-app-tiles rule broken one surface over: a fabricated
+        catalogue is a roadmap we would then have to keep. The gateway above
+        is the real integration surface — any system can already push audio
+        in and pull answers out — and a named connector returns here the day
+        it EXISTS, not the day it is imagined.
+      */}
     </div>
     </ManagementPane>
   );

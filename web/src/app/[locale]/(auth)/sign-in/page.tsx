@@ -87,7 +87,9 @@ export default function SignInPage() {
     const identity = await api.identityState();
     switch (identity.state) {
       case "member":
-        router.push("/echo");
+        // the hub — the AI assistant is the platform's first page (M22);
+        // Echo is one card on it (user directive: land on the assistant)
+        router.push("/");
         return;
       case "pending":
         router.push("/pending");

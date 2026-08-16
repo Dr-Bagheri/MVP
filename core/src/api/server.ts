@@ -102,6 +102,8 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     deps: domainDeps,
     adminOnlyTools: options.adminOnlyTools,
     apiKey: options.openrouterKey,
+    // pre-run failures leave no run row; this is their only record (M21)
+    log: (fields) => app.log.error(fields, "assistant pre-run failure"),
   });
 
   /**

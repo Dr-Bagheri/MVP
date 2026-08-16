@@ -87,7 +87,7 @@ describe("sign-in actually signs in", () => {
   });
 
   it.each([
-    ["member", "/echo"],
+    ["member", "/"],
     ["pending", "/pending"],
     ["suspended", "/suspended"],
   ])("routes a %s to %s — the SERVER decides the destination", async (state, destination) => {
@@ -145,7 +145,7 @@ describe("sign-in actually signs in", () => {
     fireEvent.change(orgField, { target: { value: "شرکت نمونه" } });
     fireEvent.click(screen.getByRole("button", { name: "تکمیل ثبت‌نام" }));
 
-    await waitFor(() => expect(push).toHaveBeenCalledWith("/echo"));
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/"));
   });
 });
 
@@ -174,7 +174,7 @@ describe("the confirm-email landing (?confirmed=…)", () => {
     window.history.replaceState(null, "", "/?confirmed=1");
     identityState.mockResolvedValue({ state: "member" });
     render(<SignInPage />);
-    await waitFor(() => expect(push).toHaveBeenCalledWith("/echo"));
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/"));
   });
 
   it("?confirmed=failed says the link is dead instead of presenting a bare form", async () => {
