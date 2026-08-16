@@ -13,6 +13,7 @@ import type {
   UserStatus,
 } from "@/api/types";
 import { ManagementPane } from "@/components/platform/ManagementPane";
+import { MemberDetail } from "@/components/platform/MemberDetail";
 import { Card, Chip, EmptyState } from "@/components/ui";
 import { digits, formatDate, personName } from "@/lib/format";
 
@@ -74,6 +75,12 @@ export default function UsersPage() {
   const [role, setRole] = useState<Role | "">("");
   const [sort, setSort] = useState<MemberSort>("default");
   const [busy, setBusy] = useState(false);
+
+  // ---- bulk selection + detail (Part 4 tail) ----
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const [detailId, setDetailId] = useState<string | null>(null);
+  /** The last bulk run's honest tally — failures are COUNTED, never swallowed. */
+  const [bulkResult, setBulkResult] = useState<{ done: number; failed: number } | null>(null);
 
   // ---- invitations (D23–D25, Part 4) ----
   const [invitations, setInvitations] = useState<Invitation[]>([]);
@@ -160,6 +167,74 @@ export default function UsersPage() {
   const lastSeenServed = rows.some((m) => m.last_seen_at !== undefined);
   const pending = rows.filter((m) => m.status === "pending");
   const listed = rows.filter((m) => m.status !== "pending");
+
+  /** The rows bulk actions may touch: never the owner, never yourself. */
+  const selectable = listed.filter((u) => u.role !== "owner" && u.id !== me?.id);
+  const allSelected = selectable.length > 0 && selectable.every((u) => selected.has(u.id));
+  /** Derived from the live rows so the panel refreshes with every load(). */
+  const detailUser = detailId === null ? null : (rows.find((u) => u.id === detailId) ?? null);
+
+  function toggleSelected(id: string): void {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  /** ONE mutation path for role — the table row and the detail panel share it. */
+  async function setRoleFor(id: string, newRole: Role): Promise<void> {
+    setBusy(true);
+    try {
+      await api.setUserRole(id, newRole);
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** ONE mutation path for status — table, panel and bulk all end here. */
+  async function toggleStatusFor(u: User): Promise<void> {
+    setBusy(true);
+    try {
+      await api.setUserStatus(u.id, u.status === "disabled" ? "active" : "disabled");
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /**
+   * Bulk enable/disable: sequential on purpose (each write is an audited
+   * admin action and a burst of parallel PATCHes hammers the same rows), and
+   * the tally is HONEST — a member the server refused stays refused and is
+   * counted, not silently skipped. Rows already in the target state are
+   * skipped as already-there, which is idempotence, not failure.
+   */
+  async function bulkSetStatus(target: "active" | "disabled"): Promise<void> {
+    if (busy) return;
+    setBusy(true);
+    setBulkResult(null);
+    let done = 0;
+    let failed = 0;
+    try {
+      for (const u of selectable.filter((row) => selected.has(row.id))) {
+        if (u.status === target) continue;
+        try {
+          await api.setUserStatus(u.id, target);
+          done += 1;
+        } catch {
+          failed += 1;
+        }
+      }
+      await load();
+    } finally {
+      setBusy(false);
+    }
+    setBulkResult({ done, failed });
+    setSelected(new Set());
+  }
 
   const statusTone = (s: UserStatus) =>
     s === "active" ? "success" : s === "pending" ? "warning" : "neutral";
@@ -445,6 +520,48 @@ export default function UsersPage() {
 
         <Card>
           <h2 className="h-section mb-3">{tAdmin("members")}</h2>
+
+          {selected.size > 0 ? (
+            /* the bulk bar appears WITH a selection and leaves with it —
+               permanent chrome for an occasional action is noise */
+            <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface-2 px-3 py-2">
+              <span className="text-sm text-fg">
+                {t("bulkSelected", { count: digits(selected.size, locale) })}
+              </span>
+              <button
+                className="btn-secondary h-9 min-h-0 px-3 text-xs"
+                disabled={busy}
+                onClick={() => void bulkSetStatus("active")}
+              >
+                {t("bulkEnable")}
+              </button>
+              <button
+                className="btn-secondary h-9 min-h-0 px-3 text-xs"
+                disabled={busy}
+                onClick={() => void bulkSetStatus("disabled")}
+              >
+                {t("bulkDisable")}
+              </button>
+              <button
+                className="ms-auto text-xs text-fg-muted underline-offset-2 hover:underline"
+                onClick={() => setSelected(new Set())}
+              >
+                {t("bulkClear")}
+              </button>
+            </div>
+          ) : null}
+          {bulkResult ? (
+            <p
+              role="status"
+              className={`mb-3 text-sm ${bulkResult.failed > 0 ? "text-danger" : "text-fg-muted"}`}
+            >
+              {t("bulkResult", {
+                done: digits(bulkResult.done, locale),
+                failed: digits(bulkResult.failed, locale),
+              })}
+            </p>
+          ) : null}
+
           {listed.length === 0 ? (
             <EmptyState text={t("noMatches")} />
           ) : (
@@ -452,6 +569,19 @@ export default function UsersPage() {
               <table className="w-full min-w-[40rem] border-collapse text-sm">
                 <thead>
                   <tr className="border-b border-border">
+                    <th className="w-10 py-2 pe-2">
+                      {/* select-all covers the SELECTABLE rows — owner and
+                          self are not silently included by a header click */}
+                      <input
+                        type="checkbox"
+                        aria-label={t("bulkSelectAll")}
+                        checked={allSelected}
+                        disabled={selectable.length === 0}
+                        onChange={() =>
+                          setSelected(allSelected ? new Set() : new Set(selectable.map((u) => u.id)))
+                        }
+                      />
+                    </th>
                     <th className="table-head py-2 pe-3">{t("colName")}</th>
                     <th className="table-head py-2 pe-3">{t("colUsername")}</th>
                     <th className="table-head py-2 pe-3">{t("colStatus")}</th>
@@ -467,8 +597,26 @@ export default function UsersPage() {
                 <tbody className="divide-y divide-border">
                   {listed.map((u) => (
                     <tr key={u.id}>
+                      <td className="w-10 py-3 pe-2 align-top">
+                        {u.role !== "owner" && u.id !== me?.id ? (
+                          <input
+                            type="checkbox"
+                            aria-label={t("bulkSelectRow", { name: personName(u, locale) })}
+                            checked={selected.has(u.id)}
+                            onChange={() => toggleSelected(u.id)}
+                          />
+                        ) : null}
+                      </td>
                       <td className="py-3 pe-3 align-top">
-                        <p className="font-medium text-fg">{personName(u, locale)}</p>
+                        {/* the name opens the detail panel — a magnified row,
+                            not a navigation */}
+                        <button
+                          type="button"
+                          className="font-medium text-fg underline-offset-2 hover:text-accent hover:underline"
+                          onClick={() => setDetailId(u.id)}
+                        >
+                          {personName(u, locale)}
+                        </button>
                       </td>
                       <td className="py-3 pe-3 align-top text-xs text-fg-muted">
                         {/* a column keeps its placeholder so the rows stay
@@ -486,18 +634,7 @@ export default function UsersPage() {
                             <button
                               className="text-xs text-fg-muted underline-offset-2 hover:underline"
                               disabled={busy}
-                              onClick={async () => {
-                                setBusy(true);
-                                try {
-                                  await api.setUserStatus(
-                                    u.id,
-                                    u.status === "disabled" ? "active" : "disabled",
-                                  );
-                                  await load();
-                                } finally {
-                                  setBusy(false);
-                                }
-                              }}
+                              onClick={() => void toggleStatusFor(u)}
                             >
                               {tAdmin(u.status === "disabled" ? "enable" : "disable")}
                             </button>
@@ -512,15 +649,7 @@ export default function UsersPage() {
                             className="input h-11 min-h-0 w-32 py-0 text-xs md:h-9"
                             value={u.role}
                             disabled={busy}
-                            onChange={async (e) => {
-                              setBusy(true);
-                              try {
-                                await api.setUserRole(u.id, e.target.value as Role);
-                                await load();
-                              } finally {
-                                setBusy(false);
-                              }
-                            }}
+                            onChange={(e) => void setRoleFor(u.id, e.target.value as Role)}
                           >
                             {ASSIGNABLE_ROLES.map((r) => (
                               <option key={r} value={r}>
@@ -558,6 +687,18 @@ export default function UsersPage() {
             </div>
           )}
         </Card>
+
+        {detailUser ? (
+          <MemberDetail
+            user={detailUser}
+            me={me}
+            busy={busy}
+            assignableRoles={ASSIGNABLE_ROLES}
+            onSetRole={(id, r) => void setRoleFor(id, r)}
+            onToggleStatus={(u) => void toggleStatusFor(u)}
+            onClose={() => setDetailId(null)}
+          />
+        ) : null}
       </div>
     </ManagementPane>
   );
