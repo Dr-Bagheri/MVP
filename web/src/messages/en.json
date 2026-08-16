@@ -397,7 +397,20 @@
     "trendUnavailable": "Status history hasn't been recorded yet, so no change can be calculated. A zero here would be invented.",
     "trendWindow": "{delta} in the last {days} days",
     "modelsLoadFailed": "The catalogue could not be loaded. Refresh to retry.",
-    "modelNoTools": "No tool support"
+    "modelNoTools": "No tool support",
+    "invitationsTitle": "Invitations",
+    "invite": "Invite",
+    "inviteEmailPlaceholder": "colleague@company.com",
+    "inviteFailed": "Could not issue the invitation.",
+    "inviteMintedTitle": "Invitation link - shown once",
+    "inviteMintedNote": "Hand this token to {email} out of band. Redeeming requires signing in with that exact address; a forwarded link is useless to anyone else.",
+    "inviteStored": "I passed it on",
+    "noInvitations": "No invitations yet.",
+    "inviteRevoke": "Revoke",
+    "inviteState_open": "Open",
+    "inviteState_redeemed": "Redeemed",
+    "inviteState_revoked": "Revoked",
+    "inviteState_expired": "Expired"
   },
   "settings": {
     "title": "Settings",

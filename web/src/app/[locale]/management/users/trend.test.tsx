@@ -36,6 +36,7 @@ const stats = vi.fn();
 vi.mock("@/api/client", () => ({
   api: {
     me: async () => admin,
+    invitations: async () => [],
     members: async () => [admin],
     memberStats: () => stats(),
     setUserStatus: vi.fn(),

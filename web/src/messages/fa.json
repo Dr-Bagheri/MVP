@@ -397,7 +397,20 @@
     "trendUnavailable": "تاریخچهٔ تغییر وضعیت هنوز ثبت نشده، پس تغییری قابل محاسبه نیست. عدد صفر این‌جا ساختگی می‌بود.",
     "trendWindow": "{delta} در {days} روز گذشته",
     "modelsLoadFailed": "خواندن فهرست مدل‌ها ممکن نشد. برای تلاش دوباره صفحه را تازه کنید.",
-    "modelNoTools": "بدون پشتیبانی ابزار"
+    "modelNoTools": "بدون پشتیبانی ابزار",
+    "invitationsTitle": "دعوت‌نامه‌ها",
+    "invite": "دعوت",
+    "inviteEmailPlaceholder": "colleague@company.com",
+    "inviteFailed": "صدور دعوت‌نامه ممکن نشد.",
+    "inviteMintedTitle": "پیوند دعوت - فقط یک بار نمایش داده می‌شود",
+    "inviteMintedNote": "این توکن را خارج از سامانه به {email} برسانید. بازخرید فقط با ورود با همان نشانی ممکن است؛ پیوندِ دست‌به‌دست‌شده برای دیگران بی‌فایده است.",
+    "inviteStored": "رساندم",
+    "noInvitations": "هنوز دعوتی نیست.",
+    "inviteRevoke": "لغو",
+    "inviteState_open": "باز",
+    "inviteState_redeemed": "استفاده‌شده",
+    "inviteState_revoked": "لغوشده",
+    "inviteState_expired": "منقضی"
   },
   "settings": {
     "title": "تنظیمات",

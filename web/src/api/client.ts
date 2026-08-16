@@ -32,6 +32,8 @@ import type {
   GatewayKeyCreated,
   GatewayWebhook,
   GatewayWebhookCreated,
+  Invitation,
+  MintedInvitation,
   AdminModelRow,
   Me,
   MemberSort,
@@ -898,6 +900,25 @@ export const api = {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ role }),
     });
+  },
+
+  // ---- invitations (D23–D25, Part 4) -----------------------------------------
+  /** **LIVE** — the org's invitations, prefixes only. */
+  async invitations(): Promise<Invitation[]> {
+    const { invitations } = await bff<{ invitations: Invitation[] }>("/api/admin/invitations");
+    return invitations;
+  },
+  /** **LIVE** — issue. The token comes back HERE and never again. */
+  async createInvitation(email: string, role?: Role, ttlDays?: number): Promise<MintedInvitation> {
+    return bff<MintedInvitation>("/api/admin/invitations", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email, role, ttl_days: ttlDays }),
+    });
+  },
+  /** **LIVE** — revoke; re-inviting is a fresh issue (terms immutable, D24). */
+  async revokeInvitation(id: string): Promise<Invitation> {
+    return bff<Invitation>(`/api/admin/invitations/${id}/revoke`, { method: "POST" });
   },
   /**
    * Rename / re-locale / re-curate the org — `PATCH /v1/admin/org`.

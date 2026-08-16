@@ -2,8 +2,16 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { api } from "@/api/client";
-import type { MemberSort, MemberStats, Role, User, UserStatus } from "@/api/types";
+import { api, BffError } from "@/api/client";
+import type {
+  Invitation,
+  MemberSort,
+  MemberStats,
+  MintedInvitation,
+  Role,
+  User,
+  UserStatus,
+} from "@/api/types";
 import { ManagementPane } from "@/components/platform/ManagementPane";
 import { Card, Chip, EmptyState } from "@/components/ui";
 import { digits, formatDate, personName } from "@/lib/format";
@@ -67,6 +75,13 @@ export default function UsersPage() {
   const [sort, setSort] = useState<MemberSort>("default");
   const [busy, setBusy] = useState(false);
 
+  // ---- invitations (D23–D25, Part 4) ----
+  const [invitations, setInvitations] = useState<Invitation[]>([]);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<Role>("member");
+  const [minted, setMinted] = useState<MintedInvitation | null>(null);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+
   const isAdmin = me?.role === "admin" || me?.role === "owner";
 
   const load = useCallback(async () => {
@@ -86,6 +101,32 @@ export default function UsersPage() {
   useEffect(() => {
     void api.me().then(setMe);
   }, []);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    void api.invitations().then(setInvitations).catch(() => undefined);
+  }, [isAdmin]);
+
+  async function issueInvitation() {
+    const email = inviteEmail.trim();
+    if (!email || busy) return;
+    setBusy(true);
+    setInviteError(null);
+    try {
+      // the token exists HERE and never again (D23's show-once contract)
+      setMinted(await api.createInvitation(email, inviteRole));
+      setInviteEmail("");
+      setInvitations(await api.invitations());
+    } catch (cause) {
+      // core's sentence: it owns one-live-per-email, the role ceiling, and
+      // the address rules — re-deriving any of them here would drift
+      setInviteError(
+        cause instanceof BffError ? (cause.detail ?? t("inviteFailed")) : t("inviteFailed"),
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -296,6 +337,111 @@ export default function UsersPage() {
             </ul>
           </Card>
         ) : null}
+
+        <Card className="mb-4">
+          <h2 className="h-section mb-3">{t("invitationsTitle")}</h2>
+
+          {minted ? (
+            /* the one-way door: the invitation token's ONLY appearance.
+               Dismissed by the person, never a timer (SecretOnce's rule). */
+            <div className="mb-3 rounded-lg border border-accent bg-surface-2 p-3">
+              <p className="text-sm font-semibold text-fg">{t("inviteMintedTitle")}</p>
+              <p className="mt-1 text-sm leading-6 text-fg-muted">
+                {t("inviteMintedNote", { email: minted.email })}
+              </p>
+              <p className="ltr mt-2 break-all rounded-md bg-surface p-2 font-mono text-xs text-fg">
+                {minted.token}
+              </p>
+              <button
+                className="btn-secondary mt-3 h-9 min-h-0 px-3 text-xs"
+                onClick={() => setMinted(null)}
+              >
+                {t("inviteStored")}
+              </button>
+            </div>
+          ) : null}
+
+          {inviteError ? (
+            <p role="alert" className="mb-2 text-sm text-danger">
+              {inviteError}
+            </p>
+          ) : null}
+
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <input
+              className="input min-w-[14rem] flex-1"
+              dir="ltr"
+              type="email"
+              placeholder={t("inviteEmailPlaceholder")}
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+            />
+            <select
+              className="input h-11 min-h-0 w-auto py-0 text-sm md:h-10"
+              value={inviteRole}
+              onChange={(e) => setInviteRole(e.target.value as Role)}
+            >
+              <option value="member">{tAdmin("roleMember")}</option>
+              {/* D25: the issuer's role bounds the GRANT — only the owner
+                  may mint an admin, and nobody mints an owner */}
+              {me?.role === "owner" ? <option value="admin">{tAdmin("roleAdmin")}</option> : null}
+            </select>
+            <button
+              className="btn-primary h-10 min-h-0 px-4 text-sm"
+              disabled={busy || !inviteEmail.trim()}
+              onClick={() => void issueInvitation()}
+            >
+              {t("invite")}
+            </button>
+          </div>
+
+          {invitations.length === 0 ? (
+            <p className="text-sm text-fg-muted">{t("noInvitations")}</p>
+          ) : (
+            <ul className="divide-y divide-border">
+              {invitations.map((inv) => {
+                const state = inv.redeemed_at
+                  ? "redeemed"
+                  : inv.revoked_at
+                    ? "revoked"
+                    : new Date(inv.expires_at) < new Date()
+                      ? "expired"
+                      : "open";
+                return (
+                  <li key={inv.id} className="flex flex-wrap items-center gap-3 py-2.5">
+                    <span className="ltr min-w-0 flex-1 truncate text-sm text-fg">{inv.email}</span>
+                    <Chip tone="neutral">
+                      {inv.role === "admin" ? tAdmin("roleAdmin") : tAdmin("roleMember")}
+                    </Chip>
+                    <Chip tone={state === "open" ? "success" : state === "redeemed" ? "accent" : "neutral"}>
+                      {t(`inviteState_${state}`)}
+                    </Chip>
+                    <span className="text-xs text-fg-muted">
+                      {formatDate(inv.expires_at, locale)}
+                    </span>
+                    {state === "open" ? (
+                      <button
+                        className="text-xs text-fg-muted underline-offset-2 hover:underline"
+                        disabled={busy}
+                        onClick={async () => {
+                          setBusy(true);
+                          try {
+                            await api.revokeInvitation(inv.id);
+                            setInvitations(await api.invitations());
+                          } finally {
+                            setBusy(false);
+                          }
+                        }}
+                      >
+                        {t("inviteRevoke")}
+                      </button>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </Card>
 
         <Card>
           <h2 className="h-section mb-3">{tAdmin("members")}</h2>

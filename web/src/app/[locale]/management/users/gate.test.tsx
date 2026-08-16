@@ -40,6 +40,7 @@ const members = vi.fn();
 vi.mock("@/api/client", () => ({
   api: {
     me: () => me(),
+    invitations: async () => [],
     members: () => members(),
     setUserStatus: vi.fn(),
     setUserRole: vi.fn(),

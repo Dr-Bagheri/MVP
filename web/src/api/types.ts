@@ -446,6 +446,27 @@ export interface AuthoredSkill {
   created_at: string;
 }
 
+/**
+ * An invitation row (D23–D25): the PREFIX identifies it in a list and can
+ * never redeem it; the full token exists once, in `MintedInvitation`, on the
+ * issuing response — the api-key show-once contract applied to onboarding.
+ */
+export interface Invitation {
+  id: string;
+  email: string;
+  role: Role;
+  token_prefix: string;
+  expires_at: string;
+  redeemed_at: string | null;
+  revoked_at: string | null;
+  created_at: string;
+}
+
+export interface MintedInvitation extends Invitation {
+  /** Shown once. Not stored, not recoverable, not logged. */
+  token: string;
+}
+
 // ---- agent ------------------------------------------------------------------
 
 export interface ModelInfo {
