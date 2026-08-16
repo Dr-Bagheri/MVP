@@ -17,6 +17,7 @@ import { createAuditRepo, type AuditRepo } from "./audit.ts";
 import { createOrgRepo, type OrgRepo } from "./org.ts";
 import { createSessionsRepo, type SessionsRepo } from "./sessions.ts";
 import { availableTools, createSkillAuthoring, type SkillAuthoring } from "./skills.ts";
+import { createUploadsRepo, type UploadsRepo } from "./uploads.ts";
 import { createInvitationsRepo, type InvitationsRepo } from "./invitations.ts";
 import { createHealthRepo, type HealthRepo } from "./health.ts";
 import { createAuth, type Auth } from "./auth.ts";
@@ -48,6 +49,9 @@ export interface ServerOptions<TDeps> {
   /** Resolve a skill slug for the caller (system < org < user). */
   resolveSkill?: ((identity: Identity, slug: string) => Promise<Skill | undefined>) | undefined;
   openrouterKey?: string | undefined;
+  /** Storage config for the upload surface (Part 5). Absent = uploads refuse with a named reason. */
+  storageUrl?: string | undefined;
+  storageServiceKey?: string | undefined;
   logger?: boolean;
 }
 
@@ -66,6 +70,10 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
   const org: OrgRepo = createOrgRepo(options.db);
   const sessions: SessionsRepo = createSessionsRepo(options.db);
   const skillAuthoring: SkillAuthoring = createSkillAuthoring(options.db);
+  const uploads: UploadsRepo = createUploadsRepo(options.db, {
+    storageUrl: options.storageUrl,
+    serviceKey: options.storageServiceKey,
+  });
   const invitations: InvitationsRepo = createInvitationsRepo(options.db);
   const health: HealthRepo = createHealthRepo(options.db);
   const webhooks: WebhooksRepo = createWebhooksRepo(options.db);
@@ -116,6 +124,21 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
    * mean, and it costs nothing: a route that wants a field still validates it
    * and still 400s when it is missing.
    */
+  /*
+   * Audio arrives as RAW BYTES (Part 5's upload surface) — buffered, not
+   * parsed. One parser for every container the recorder or a file can send;
+   * the route validates the specific type against its own allow-list, so an
+   * unknown audio/* still gets a named refusal rather than FST_ERR_CTP.
+   */
+  for (const type of [
+    "application/octet-stream", "audio/webm", "audio/ogg", "audio/mpeg",
+    "audio/mp4", "audio/wav", "audio/x-wav", "audio/flac",
+  ]) {
+    app.addContentTypeParser(type, { parseAs: "buffer" }, (_request, body, done) => {
+      done(null, body);
+    });
+  }
+
   app.addContentTypeParser("application/json", { parseAs: "string" }, (_request, body, done) => {
     const text = typeof body === "string" ? body.trim() : "";
     if (text === "") return done(null, {});
@@ -190,7 +213,47 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
 
   // ---- calls -------------------------------------------------------------
 
-  app.get("/v1/calls", async (request: FastifyRequest, reply: FastifyReply) => {
+  // ---- the upload surface (Part 5): audio enters the pipeline ------------
+
+  app.post("/v1/calls", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const body = (request.body ?? {}) as { title?: unknown; scope?: unknown; source?: unknown };
+    const source = body.source === "upload" ? "upload" : "web";
+    const created = await uploads.createCall(identity, {
+      title: typeof body.title === "string" ? body.title : undefined,
+      scope: typeof body.scope === "string" ? body.scope : undefined,
+      source,
+    });
+    return reply.code(201).send(created);
+  });
+
+  app.post("/v1/calls/:id/parts", {
+    // 30 minutes of webm opus at recorder bitrates is ~15–30MB; 64MB is the
+    // ceiling with honest headroom, not a promise of unbounded files
+    bodyLimit: 64 * 1024 * 1024,
+  }, async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id } = request.params as { id: string };
+    const query = request.query as { idx?: string; offset_ms?: string };
+    if (!Buffer.isBuffer(request.body)) {
+      throw new ValidationError("the body must be raw audio bytes");
+    }
+    const result = await uploads.uploadPart(identity, id, {
+      idx: Number(query.idx ?? "0"),
+      offsetMs: Number(query.offset_ms ?? "0"),
+      contentType: request.headers["content-type"] ?? "application/octet-stream",
+      bytes: request.body,
+    });
+    return reply.code(201).send(result);
+  });
+
+  app.post("/v1/calls/:id/finish", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id } = request.params as { id: string };
+    return reply.send(await uploads.finish(identity, id));
+  });
+
+  app.get("/v1/calls",async (request: FastifyRequest, reply: FastifyReply) => {
     const identity = await auth.requireActive(request);
     const query = request.query as { limit?: string; before?: string };
     const limit = query.limit === undefined ? undefined : Number(query.limit);

@@ -126,6 +126,13 @@ export async function main(): Promise<void> {
     jwtSecret: process.env.SUPABASE_JWT_SECRET,
     jwksUrl: jwksUrl(),
     issuer: process.env.SUPABASE_JWT_ISSUER,
+    /*
+     * The upload surface (Part 5). Absent config = uploads answer with a
+     * NAMED refusal, never a stub — the env already carries both on the
+     * server (they are the purge job's pair, reused, same M10 posture).
+     */
+    storageUrl: process.env.SUPABASE_URL,
+    storageServiceKey: process.env.SUPABASE_SERVICE_KEY,
     /**
      * `tools` and `toolDeps` are OMITTED so the server builds the shipped set
      * — the four read tools and the three write tools.
