@@ -79,6 +79,58 @@ export function reasoningFor(reasoningRequired: boolean): "low" | undefined {
   return reasoningRequired ? "low" : undefined;
 }
 
+/**
+ * Pi's agent loop NEVER emits stream events at the top level: every provider
+ * event arrives WRAPPED as `{type: "message_update", assistantMessageEvent}`
+ * (agent-loop.js re-emits them that way). The first version of this bridge
+ * matched `event.type === "text_delta"` at the top level — which never
+ * matches — so the assistant streamed nothing and persisted nothing while
+ * every run finished `ok` with billed output tokens. Four live "unanswered"
+ * questions in the thread, zero errors anywhere: the boundary-fixture class
+ * (rule 10), between us and a dependency this time.
+ *
+ * Extracted and exported so the wrapped fixture can be asserted in a test
+ * rather than re-learned in production.
+ */
+export function bridgeAgentEvent(
+  raw: unknown,
+  hooks: {
+    onText?: ((delta: string) => void) | undefined;
+    onError: (message: string) => void;
+    onUsage: (input: number, output: number) => void;
+  },
+): void {
+  const event = raw as {
+    type: string;
+    delta?: string;
+    assistantMessageEvent?: { type: string; delta?: string };
+    message?: {
+      stopReason?: string;
+      errorMessage?: string;
+      usage?: { input?: number; output?: number };
+    };
+  };
+  // the wrapped shape — the one the loop actually sends
+  if (
+    event.type === "message_update"
+    && event.assistantMessageEvent?.type === "text_delta"
+    && event.assistantMessageEvent.delta
+  ) {
+    hooks.onText?.(event.assistantMessageEvent.delta);
+  }
+  // kept for a future Pi that flattens its events; harmless today because
+  // the top-level type is never "text_delta"
+  if (event.type === "text_delta" && event.delta) hooks.onText?.(event.delta);
+  if (event.type !== "message_end" || !event.message) return;
+  // IN-BAND ERRORS: surface, never swallow
+  if (event.message.stopReason === "error") {
+    hooks.onError(event.message.errorMessage ?? "provider error");
+  }
+  if (event.message.usage) {
+    hooks.onUsage(event.message.usage.input ?? 0, event.message.usage.output ?? 0);
+  }
+}
+
 export async function runPi(options: PiRunOptions): Promise<PiRunResult> {
   const { model, reasoningRequired } = resolveModel(options.model);
   const models = builtinModels();
@@ -109,31 +161,15 @@ export async function runPi(options: PiRunOptions): Promise<PiRunResult> {
     ...(options.apiKey ? { getApiKey: () => options.apiKey } : {}),
   };
 
-  // Pi's AgentEvent is a wide union; we only care about two shapes, so narrow
-  // through a local view rather than re-declaring the union.
-  type EventView = {
-    type: string;
-    delta?: string;
-    message?: {
-      stopReason?: string;
-      errorMessage?: string;
-      usage?: { input?: number; output?: number };
-    };
-  };
-
-  const onEvent = (raw: unknown): void => {
-    const event = raw as EventView;
-    if (event.type === "text_delta" && event.delta) options.onText?.(event.delta);
-    if (event.type !== "message_end" || !event.message) return;
-    // IN-BAND ERRORS: surface, never swallow
-    if (event.message.stopReason === "error") {
-      errorMessage = event.message.errorMessage ?? "provider error";
-    }
-    if (event.message.usage) {
-      tokensIn = (tokensIn ?? 0) + (event.message.usage.input ?? 0);
-      tokensOut = (tokensOut ?? 0) + (event.message.usage.output ?? 0);
-    }
-  };
+  const onEvent = (raw: unknown): void =>
+    bridgeAgentEvent(raw, {
+      onText: options.onText,
+      onError: (message) => { errorMessage = message; },
+      onUsage: (input, output) => {
+        tokensIn = (tokensIn ?? 0) + input;
+        tokensOut = (tokensOut ?? 0) + output;
+      },
+    });
 
   const messages = await runAgentLoop(
     context.messages as never,

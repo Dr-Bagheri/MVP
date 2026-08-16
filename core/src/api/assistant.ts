@@ -158,6 +158,22 @@ export function createAssistant<TDeps>(config: AssistantDeps<TDeps>) {
         }
 
         /**
+         * Delivery floor: if the run produced text and NONE of it streamed,
+         * deliver it whole rather than losing it. This is the branch that
+         * would have saved four live "unanswered" questions — the delta
+         * bridge matched an event name Pi never sends, so runs finished `ok`
+         * with billed tokens while the thread stayed empty. The bridge is
+         * fixed; this floor makes the failure mode "answer arrives all at
+         * once, loudly logged" instead of "answer vanishes silently"
+         * (rule 12: the fallback names itself in observability).
+         */
+        if (answer.trim() === "" && !result.failed && result.text.trim() !== "") {
+          config.log?.({ event: "assistant_text_stream_fallback", runId: result.runId });
+          stream.send({ type: "text_delta", delta: result.text });
+          answer = result.text;
+        }
+
+        /**
          * Record the turn BEFORE finishing the stream.
          *
          * A client that reloads on `done` must find the message already in

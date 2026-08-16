@@ -110,8 +110,10 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     deps: domainDeps,
     adminOnlyTools: options.adminOnlyTools,
     apiKey: options.openrouterKey,
-    // pre-run failures leave no run row; this is their only record (M21)
-    log: (fields) => app.log.error(fields, "assistant pre-run failure"),
+    // pre-run failures leave no run row; this is their only record (M21).
+    // The same hook now also carries the stream-fallback marker, so the
+    // message names the EVENT FIELD rather than presuming one cause.
+    log: (fields) => app.log.error(fields, String(fields.event ?? "assistant failure")),
   });
 
   /**
