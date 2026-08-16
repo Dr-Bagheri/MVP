@@ -55,13 +55,24 @@ body {
 ::selection { background: var(--accent-deep); color: #fff; }
 
 .track { height: 660vh; }
+/* NO preserve-3d anywhere in the stage: while a 3D rendering context was
+ * open, the composited glyph canvas depth-sorted against the copy and PAINTED
+ * OVER it (measured — glyphs on the finale's title strokes and CTA face;
+ * z-index could not save it, and elementFromPoint still returned the H2, so
+ * only the pixels told the truth). Each animated block now flattens into its
+ * parent, which carries `perspective` instead — the transforms keep their
+ * foreshortened 3D look, but painting follows plain stacking order: canvases
+ * below, copy above, always. */
 .stage {
   position: fixed; inset: 0; overflow: hidden;
-  perspective: 1200px; perspective-origin: 50% 45%;
   opacity: 0; transition: opacity .6s ease;
 }
 body.ready .stage { opacity: 1; }
-#aurora, #brain { position: absolute; inset: 0; width: 100%; height: 100%; }
+/* Own stacking layer BELOW the scenes: without it the canvases sit on the
+ * z=0 plane of the stage's 3D context, and any copy entering from negative
+ * translateZ (s4-title flies in from -560) is depth-sorted BEHIND the glyph
+ * rain — the film's closing line rendered under its own background. */
+#aurora, #brain { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; }
 
 /* ---------- the HUD ---------- */
 .hud {
@@ -98,18 +109,18 @@ body.ready .stage { opacity: 1; }
 
 /* ---------- scenes ---------- */
 .scene {
-  position: absolute; inset: 0;
+  position: absolute; inset: 0; z-index: 1; /* copy always above the rain */
   display: grid; place-items: center;
   padding: 60px 6vw;
-  transform-style: preserve-3d;
   pointer-events: none;
 }
 .scene.active { pointer-events: auto; }
-.scene > .inner { width: 100%; max-width: 1280px; transform-style: preserve-3d; }
+.scene > .inner { width: 100%; max-width: 1280px; perspective: 1200px; perspective-origin: 50% 45%; }
 .fx { will-change: transform, opacity; opacity: 0; }
 
-/* the copy panel — the reference's overlay block */
-.copy { max-width: 560px; }
+/* the copy panel — the reference's overlay block. Carries perspective so its
+ * fx children (kicker/title/cards) foreshorten; s2's mock gets it from .inner. */
+.copy { max-width: 560px; perspective: 1200px; perspective-origin: 50% 45%; }
 .copy.side-r { margin-left: auto; }
 @media (max-width: 900px) { .copy { max-width: 100%; } .copy.side-r { margin-left: 0; } }
 
@@ -437,11 +448,15 @@ noscript .noscript-note { display: block; padding: 12px 24px; text-align: center
     "s3-t3":     { E: { y: () => 34 * vh(), ry: 14, o: 0 }, X: { y: () => -22 * vh(), o: 0 }, st: .26, en: .52 },
     "s3-meta":   { E: { o: 0 }, X: { o: 0 }, st: .34, en: .56 },
 
-    "s4-kicker": { E: { o: 0 }, X: {}, st: 0, en: .3, ex: 1.01 },
-    "s4-title":  { E: { z: -560, rx: 16, o: 0 }, X: {}, st: .05, en: .42, ex: 1.01 },
-    "s4-sub":    { E: { y: 34, o: 0 }, X: {}, st: .22, en: .52, ex: 1.01 },
-    "s4-cta":    { E: { y: 44, rx: -22, o: 0 }, X: {}, st: .32, en: .62, ex: 1.01 },
-    "s4-meta":   { E: { o: 0 }, X: {}, st: .52, en: .78, ex: 1.01 },
+    /* The finale's windows must all CLOSE before local t = .45: the scroll
+     * timeline ends at g = SCENES - 0.55, so t never passes .45 — windows
+     * beyond it are unreachable, and the CTA sat frozen at 40% opacity with
+     * the rain showing through it, reading as "glyphs over the button". */
+    "s4-kicker": { E: { o: 0 }, X: {}, st: 0, en: .16, ex: 1.01 },
+    "s4-title":  { E: { z: -560, rx: 16, o: 0 }, X: {}, st: .02, en: .26, ex: 1.01 },
+    "s4-sub":    { E: { y: 34, o: 0 }, X: {}, st: .12, en: .32, ex: 1.01 },
+    "s4-cta":    { E: { y: 44, rx: -22, o: 0 }, X: {}, st: .18, en: .38, ex: 1.01 },
+    "s4-meta":   { E: { o: 0 }, X: {}, st: .26, en: .42, ex: 1.01 },
   };
   const EX_DEFAULT = 0.78;
 
