@@ -247,6 +247,34 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     return reply.code(201).send(result);
   });
 
+  /*
+   * The SIGNED flow — sign, PUT to storage from the browser, register.
+   * It exists because the web app's host (Vercel) caps request bodies below
+   * one part's size, so bytes can never ride the BFF in production. The
+   * direct-bytes route above stays for callers without that ceiling.
+   */
+  app.post("/v1/calls/:id/parts/sign", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { idx?: unknown; content_type?: unknown };
+    return reply.send(await uploads.signPart(identity, id, {
+      idx: typeof body.idx === "number" ? body.idx : Number(body.idx ?? Number.NaN),
+      contentType: typeof body.content_type === "string" ? body.content_type : "",
+    }));
+  });
+
+  app.post("/v1/calls/:id/parts/register", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { idx?: unknown; offset_ms?: unknown; path?: unknown };
+    const result = await uploads.registerPart(identity, id, {
+      idx: typeof body.idx === "number" ? body.idx : Number(body.idx ?? Number.NaN),
+      offsetMs: typeof body.offset_ms === "number" ? body.offset_ms : Number(body.offset_ms ?? Number.NaN),
+      path: typeof body.path === "string" ? body.path : "",
+    });
+    return reply.code(201).send(result);
+  });
+
   app.post("/v1/calls/:id/finish", async (request, reply) => {
     const identity = await auth.requireActive(request);
     const { id } = request.params as { id: string };

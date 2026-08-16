@@ -169,6 +169,170 @@ export function createUploadsRepo(db: Db, config: UploadsConfig) {
     },
 
     /**
+     * Mint a signed upload URL for one part — the browser PUTs the bytes to
+     * storage DIRECTLY, then calls registerPart.
+     *
+     * Why this exists beside uploadPart: the web app is served by Vercel,
+     * whose request-body ceiling (~4.5MB) is smaller than one 30-minute
+     * part, so bytes can never ride the BFF in production. This is M10's
+     * posture verbatim — "the missing piece is a signer, not a policy":
+     * the URL is a single-object, expiring credential minted per operation,
+     * and the service key never leaves this process.
+     */
+    async signPart(
+      identity: Identity,
+      callId: string,
+      input: { idx: number; contentType: string },
+    ): Promise<{ upload_url: string; path: string; content_type: string }> {
+      const id = assertUuid(callId, "call id");
+      if (!this.configured) {
+        throw new ValidationError("uploads are not configured on this deployment",
+          { code: "uploads_unconfigured" });
+      }
+      if (!Number.isInteger(input.idx) || input.idx < 0) {
+        throw new ValidationError("idx must be a non-negative integer");
+      }
+      const ext = FORMATS[input.contentType.split(";")[0]!.trim()];
+      if (!ext) {
+        throw new ValidationError(
+          `unsupported audio type: ${input.contentType} — one of ${Object.keys(FORMATS).join(", ")}`,
+          { code: "unsupported_audio" },
+        );
+      }
+      const call = await db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe<{ id: string; status: string }>(
+          `select id, status from echo.call where id = $1 and deleted_at is null`,
+          [id],
+        ),
+      );
+      if (!call[0]) throw new NotFoundError("call not found");
+      if (call[0].status !== "recording") {
+        throw new ValidationError("this call no longer accepts audio",
+          { code: "call_not_recording" });
+      }
+
+      const storagePath = `${id}/${input.idx}-${randomUUID()}.${ext}`;
+      const response = await fetch(
+        `${base}/storage/v1/object/upload/sign/${encodeURIComponent(BUCKET)}/${storagePath}`,
+        {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${config.serviceKey}`,
+            apikey: config.serviceKey!,
+            "content-type": "application/json",
+          },
+          body: "{}",
+        },
+      );
+      if (!response.ok) {
+        // status only — the signer's own discipline (a body can echo paths)
+        throw new ValidationError(`audio storage refused to sign (${response.status})`,
+          { code: "storage_refused" });
+      }
+      const signed = (await response.json()) as { url?: string };
+      if (!signed.url) {
+        throw new ValidationError("audio storage answered without a URL",
+          { code: "storage_refused" });
+      }
+      // storage answers a relative path under /storage/v1
+      return {
+        upload_url: `${base}/storage/v1${signed.url.replace(/^\/storage\/v1/, "")}`,
+        path: storagePath,
+        content_type: input.contentType,
+      };
+    },
+
+    /**
+     * The second half of the signed flow: the bytes are in storage, now the
+     * part becomes REAL — row + enqueue, same tail as uploadPart.
+     *
+     * The path is caller-supplied but caged: it must sit under this call's
+     * own prefix (a caller can only ever register objects the signer minted
+     * for their call), and the object's existence and size are read from
+     * storage with the service key — byte_size is never taken on faith. The
+     * worst a hostile caller can do is register their own audio twice under
+     * two idx values, tripping UNIQUE or double-transcribing their own call.
+     */
+    async registerPart(
+      identity: Identity,
+      callId: string,
+      input: { idx: number; offsetMs: number; path: string },
+    ): Promise<{ part_id: string }> {
+      const id = assertUuid(callId, "call id");
+      if (!this.configured) {
+        throw new ValidationError("uploads are not configured on this deployment",
+          { code: "uploads_unconfigured" });
+      }
+      if (!Number.isInteger(input.idx) || input.idx < 0) {
+        throw new ValidationError("idx must be a non-negative integer");
+      }
+      if (!Number.isInteger(input.offsetMs) || input.offsetMs < 0) {
+        throw new ValidationError("offset_ms must be a non-negative integer");
+      }
+      if (!input.path.startsWith(`${id}/`) || input.path.includes("..")) {
+        throw new ValidationError("path does not belong to this call");
+      }
+      const ext = input.path.split(".").pop() ?? "";
+      if (!Object.values(FORMATS).includes(ext)) {
+        throw new ValidationError("path has no recognized audio extension");
+      }
+      const call = await db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe<{ id: string; status: string }>(
+          `select id, status from echo.call where id = $1 and deleted_at is null`,
+          [id],
+        ),
+      );
+      if (!call[0]) throw new NotFoundError("call not found");
+      if (call[0].status !== "recording") {
+        throw new ValidationError("this call no longer accepts audio",
+          { code: "call_not_recording" });
+      }
+
+      // the object must EXIST before the row does — a row pointing at
+      // nothing is a part the pipeline retries forever (the same ordering
+      // uploadPart enforces, verified here instead of performed here)
+      const head = await fetch(
+        `${base}/storage/v1/object/${encodeURIComponent(BUCKET)}/${input.path}`,
+        {
+          method: "HEAD",
+          headers: {
+            authorization: `Bearer ${config.serviceKey}`,
+            apikey: config.serviceKey!,
+          },
+        },
+      );
+      if (!head.ok) {
+        throw new ValidationError("no uploaded audio at that path",
+          { code: "object_missing" });
+      }
+      const byteSize = Number(head.headers.get("content-length") ?? 0);
+      if (!Number.isFinite(byteSize) || byteSize <= 0) {
+        throw new ValidationError("uploaded audio is empty", { code: "object_missing" });
+      }
+
+      const part = await db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe<{ id: string }>(
+          `insert into echo.call_part
+             (call_id, org_id, idx, offset_ms, storage_bucket, storage_path,
+              audio_format, byte_size, status)
+           values ($1, $2, $3, $4, $5, $6, $7, $8, 'uploaded')
+           returning id`,
+          [id, identity.orgId, input.idx, input.offsetMs, BUCKET, input.path,
+           ext, byteSize],
+        ),
+      );
+      if (!part[0]) throw new ValidationError("could not record the part");
+
+      await queue.send(Q_PROCESS_PART, {
+        callId: id,
+        ownerId: identity.userId,
+        partId: part[0].id,
+      });
+
+      return { part_id: part[0].id };
+    },
+
+    /**
      * The FINISH button: recording is over, the pipeline owns it now. Only a
      * 'recording' call flips — finishing twice is a no-op with the same
      * answer, because the end state IS "processing has begun".
