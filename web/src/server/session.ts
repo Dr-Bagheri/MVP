@@ -7,8 +7,9 @@
  * response body.
  */
 import { cookies } from "next/headers";
+import { SESSION_COOKIE } from "./session-cookie";
 
-export const SESSION_COOKIE = "echo_session";
+export { SESSION_COOKIE };
 
 export interface Session {
   /** Supabase-issued JWT — core/ verifies it and re-derives membership. */
