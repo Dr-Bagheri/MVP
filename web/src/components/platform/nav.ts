@@ -17,12 +17,13 @@ export interface NavItem {
 }
 
 /**
- * GitHub's target is an open user question (which repo — and a private repo's
- * link 404s for a customer). It ships pointing at a named constant so the entry
- * exists and the answer has exactly one place to land. A plausible-looking URL
- * would be worse than an obvious placeholder.
+ * The GitHub entry points at the product's repo — ANSWERED by the user
+ * (2026-08-16): github.com/Dr-Bagheri/MVP. The repo is private today, so the
+ * link 404s for anyone outside the org; that is the recorded trade until a
+ * public repo exists, and the env var stays as the override seam for that
+ * day.
  */
-export const GITHUB_HREF = process.env.NEXT_PUBLIC_GITHUB_URL ?? "#";
+export const GITHUB_HREF = process.env.NEXT_PUBLIC_GITHUB_URL ?? "https://github.com/Dr-Bagheri/MVP";
 
 /** Primary destinations — the top of the rail. */
 export const NAV_PRIMARY: readonly NavItem[] = [

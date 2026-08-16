@@ -306,6 +306,19 @@
   [dir="rtl"] select.select-pill {
     background-position: left 0.75rem center;
   }
+  /*
+   * The native OPTION LIST paints on the browser's own popup sheet, not on
+   * our surface — and options INHERIT the select's text colour. The pill's
+   * muted light text on Chrome's white sheet was unreadable (user report:
+   * "the list becomes unreadable"). Both sides get set explicitly, from the
+   * theme's own tokens, so the list is legible whichever sheet the browser
+   * chooses; the selected row keeps the browser's highlight.
+   */
+  select.input option,
+  select.select-pill option {
+    background-color: rgb(var(--surface));
+    color: rgb(var(--fg));
+  }
 
   .select-pill {
     @apply h-8 rounded-full border border-border bg-transparent ps-3 pe-8 text-xs

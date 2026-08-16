@@ -84,6 +84,66 @@
     "ready": "Ready",
     "failed": "Failed"
   },
+  "help": {
+    "title": "Help",
+    "group": {
+      "start": "Getting started",
+      "parts": "Parts of the platform"
+    },
+    "section": {
+      "overview": "The platform at a glance",
+      "assistant": "AI assistant",
+      "echo": "Echo — recording & transcripts",
+      "management": "Management",
+      "settings": "Settings & profile"
+    },
+    "desc": {
+      "overview": "How the platform is laid out and how to reach each part.",
+      "assistant": "Asking, choosing a model and skill, adding files and tools.",
+      "echo": "Recording a session in the browser, uploading files, reading transcripts.",
+      "management": "Members, invitations, roles, models and skills.",
+      "settings": "Theme, language, calendar, names and your profile photo."
+    },
+    "stepsTitle": "Step by step",
+    "githubCard": "Project GitHub repository",
+    "githubNote": "The platform's code, docs and development history live on GitHub.",
+    "openGithub": "Open GitHub",
+    "s": {
+      "overview": {
+        "step1": "Sign in with your email and password; the home page IS the AI assistant.",
+        "step2": "Open “Echo” from the side rail to record calls and read transcripts.",
+        "step3": "“Management” holds members, models and skills; “Settings” holds the organization.",
+        "step4": "The avatar menu (top of the page) carries theme, calendar and sign-out."
+      },
+      "assistant": {
+        "step1": "Type your question in the center box and press Enter.",
+        "step2": "Pick the model and the skill from the two lists beside the box.",
+        "step3": "Attach up to three text files with “Add file”.",
+        "step4": "The microphone button turns your speech into text.",
+        "step5": "“History” brings back previous conversations; answers can be rated or regenerated."
+      },
+      "echo": {
+        "step1": "In “Record in browser”, pick your microphone and speaker and start recording.",
+        "step2": "The level bar should move as you speak; if it stays flat, check the microphone.",
+        "step3": "Long sessions split automatically into 30-minute parts, uploaded as you go.",
+        "step4": "“Pause” holds the recording; “Finish & process” hands the call to transcription.",
+        "step5": "Send already-recorded files from “Upload a file”; results appear under “Calls”."
+      },
+      "management": {
+        "step1": "In “Users”, add a member with an invitation — the link is shown exactly once.",
+        "step2": "Accept or reject pending requests; change each member's role right there.",
+        "step3": "Select several rows to enable or disable members in one action.",
+        "step4": "“Models” manages the organization's allowed model list.",
+        "step5": "“Skills” creates and edits the assistant's ready-made instructions."
+      },
+      "settings": {
+        "step1": "Theme (dark/light), language and calendar change from the avatar menu or “Settings”.",
+        "step2": "In “Profile”, edit your display name, Latin-script name and username — names are never translated.",
+        "step3": "Set your profile photo with the camera button on the circle and accept the crop.",
+        "step4": "“Audit logs” in Settings shows the organization's administrative actions."
+      }
+    }
+  },
   "echo": {
     "group": {
       "capture": "Capture",

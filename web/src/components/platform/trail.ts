@@ -83,6 +83,8 @@ export const TRAIL: Readonly<Record<string, TrailEntry>> = {
 
   "/profile": { label: "profile.title", parent: "/" },
   "/help": { label: "platform.help", parent: "/" },
+  /** Help's guide sections (2026-08-16) — same anatomy as Settings/Echo. */
+  "/help/[section]": { labelPrefix: "help.section", parent: "/help" },
 };
 
 /**

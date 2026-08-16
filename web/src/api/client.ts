@@ -138,7 +138,41 @@ async function bff<T>(path: string, init?: RequestInit): Promise<T> {
     }
     throw new BffError(response.status, kind, detail);
   }
+  // ANY successful write invalidates the read cache — one rule, one place,
+  // no per-mutation bookkeeping to forget (sign-in included: it is a POST)
+  if (init?.method && init.method !== "GET") readCache.clear();
   return (await response.json()) as T;
+}
+
+/**
+ * A short-lived shared cache for the HOT identity/catalogue reads.
+ *
+ * Measured cause (server logs, 2026-08-16): one page navigation fired SIX
+ * `/v1/me` requests inside four seconds — every component asks on its own —
+ * and each round trip costs ~350ms of api↔database latency. The felt
+ * "delay loading information" is mostly the same three answers re-fetched
+ * per component, serially.
+ *
+ * The rules that keep it honest:
+ *  - only reads whose staleness is harmless for 60s live here (identity,
+ *    the model catalogue, skills, tool names) — lists people ACT on
+ *    (members, calls, invitations) are never cached;
+ *  - any successful non-GET through `bff` clears it, so a saved profile,
+ *    changed preference, or fresh sign-in is visible immediately;
+ *  - a failed fetch is evicted rather than cached — errors don't linger.
+ */
+const readCache = new Map<string, { at: number; value: Promise<unknown> }>();
+const READ_CACHE_TTL_MS = 60_000;
+
+function cachedRead<T>(key: string, fetcher: () => Promise<T>): Promise<T> {
+  const hit = readCache.get(key);
+  if (hit && Date.now() - hit.at < READ_CACHE_TTL_MS) return hit.value as Promise<T>;
+  const value = fetcher().catch((error) => {
+    readCache.delete(key);
+    throw error;
+  });
+  readCache.set(key, { at: Date.now(), value });
+  return value;
 }
 
 /**
@@ -347,7 +381,7 @@ export const api = {
   async identityState(): Promise<IdentityState> {
     try {
       const row = await bff<MeRecord>("/api/me");
-      return { state: "member", me: { ...row, model_id: row.preferred_model, avatar_url: null } };
+      return { state: "member", me: { ...row, model_id: row.preferred_model } };
     } catch (error) {
       if (!(error instanceof BffError)) throw error;
       if (error.status === 401) {
@@ -378,15 +412,20 @@ export const api = {
    * that cannot work, aimed at the wrong person. The shell already guards for
    * null (FE2 built that guard before this call was live).
    *
-   * **Two fields are adapted, and both would otherwise fail silently:**
+   * **One field is adapted, and it would otherwise fail silently:**
    *
    *  - `preferred_model` → `model_id`. The wire has never used our name. Left
    *    unmapped, `model_id` arrives `undefined`, `?? ""` catches it, and the
    *    model picker shows "no model chosen" to someone who chose one — the
    *    server's answer overwritten by our fallback, with nothing to notice it
    *    by. (M5's null is a real state; this would have manufactured one.)
-   *  - `avatar_url` → `null`. It is not on `MeRecord` at all. `null` is the
-   *    honest value — "no avatar" — where `undefined` is "we never asked".
+   *
+   * `avatar_url` used to be OVERWRITTEN here with `null` on the belief that
+   * MeRecord did not carry it. It does — `MeRecord extends MemberRecord`,
+   * which has carried it all along — so a photo the server stored and served
+   * was thrown away on arrival: saved, adopted, and gone, in one line. The
+   * fifth member of the stored-and-never-served family, this one discarded
+   * at the CLIENT. "core has no X" deserves a catalogue read every time.
    *
    * The adapter is typed against the producer's `MeRecord`, so a rename on
    * core/'s side becomes a compile error here rather than a blank name in a
@@ -395,13 +434,18 @@ export const api = {
    * that rename touches other sessions' files, so it is not in this hot path.
    */
   async me(): Promise<Me | null> {
-    try {
-      const row = await bff<MeRecord>("/api/me");
-      return { ...row, model_id: row.preferred_model, avatar_url: null };
-    } catch (error) {
-      if (error instanceof BffError && error.status === 401) return null;
-      throw error;
-    }
+    /* Cached: the hottest read in the product — one navigation used to fire
+       it six times (server logs), each a ~350ms round trip. Every write
+       (profile save, preference change, sign-in) clears the cache in bff. */
+    return cachedRead("me", async () => {
+      try {
+        const row = await bff<MeRecord>("/api/me");
+        return { ...row, model_id: row.preferred_model };
+      } catch (error) {
+        if (error instanceof BffError && error.status === 401) return null;
+        throw error;
+      }
+    });
   },
   async org(): Promise<Org> {
     /* **LIVE** — `GET /api/admin/org` → core's `GET /v1/org` (the read is
@@ -781,8 +825,10 @@ export const api = {
   async models(): Promise<ModelsResponse> {
     /* **LIVE** — `/api/models` → `/v1/models`: the catalogue already
        intersected with the org allow-list AND the structural no-Claude
-       filter, both core's. This layer filters nothing. */
-    return bff<ModelsResponse>("/api/models");
+       filter, both core's. This layer filters nothing. Cached: the
+       catalogue changes when an admin curates, which is a write and
+       clears the cache. */
+    return cachedRead("models", () => bff<ModelsResponse>("/api/models"));
   },
   /** **LIVE** — the curation menu: the whole offered catalogue + allow flags. */
   async adminModels(): Promise<AdminModelRow[]> {
@@ -811,13 +857,16 @@ export const api = {
        (system / org / user, most specific wins). Core sends a WRAPPER; the
        first swap typed it as a bare array and `skills.length` read
        undefined — the picker silently never rendered (rule 10's shape,
-       caught by reading the producer). */
-    const { skills } = await bff<{ skills: Skill[] }>("/api/skills");
+       caught by reading the producer). Cached under ONE key with
+       assistantTools — same response, one request for both. */
+    const { skills } = await cachedRead("skills", () =>
+      bff<{ skills: Skill[]; available_tools?: string[] }>("/api/skills"));
     return skills;
   },
   /** **LIVE** — the assistant's tool vocabulary, from the same wrapper. */
   async assistantTools(): Promise<string[]> {
-    const { available_tools } = await bff<{ available_tools: string[] }>("/api/skills");
+    const { available_tools } = await cachedRead("skills", () =>
+      bff<{ skills: Skill[]; available_tools?: string[] }>("/api/skills"));
     return available_tools ?? [];
   },
 
