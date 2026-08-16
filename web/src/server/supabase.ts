@@ -247,13 +247,39 @@ export function verifySignupToken(tokenHash: string, type: "signup" | "email"): 
   return gotrue("/verify", { type, token_hash: tokenHash });
 }
 
+/** The providers the product offers. A name outside this list is a URL we
+ * never minted — the oauth route refuses it rather than forwarding it. */
+export const OAUTH_PROVIDERS = ["google", "github"] as const;
+export type OAuthProvider = (typeof OAUTH_PROVIDERS)[number];
+
 /**
- * The URL a user is sent to for Google. `redirectTo` must be an allow-listed
- * URL in the Supabase project, and the code comes back to our callback route
- * — never to the browser as a token.
+ * The URL a user is sent to for an OAuth provider — PKCE-shaped, M1-shaped.
+ *
+ * Without the code challenge, GoTrue's authorize flow bounces the browser
+ * back with tokens in the URL FRAGMENT — the same arrangement the confirm
+ * and recovery flows exist to avoid. With it, the provider round-trip comes
+ * back to our callback as an opaque `?code=`, and the exchange (code +
+ * verifier → session) happens server-side in `exchangeOAuthCode`. The
+ * verifier never leaves an httpOnly cookie; the browser never sees a token.
+ *
+ * `redirectTo` must be allow-listed in the Supabase project's Redirect URLs.
  */
-export function googleAuthorizeUrl(redirectTo: string): string {
+export function oauthAuthorizeUrl(
+  provider: OAuthProvider,
+  redirectTo: string,
+  codeChallenge: string,
+): string {
   const { url } = config();
-  const params = new URLSearchParams({ provider: "google", redirect_to: redirectTo });
+  const params = new URLSearchParams({
+    provider,
+    redirect_to: redirectTo,
+    code_challenge: codeChallenge,
+    code_challenge_method: "s256",
+  });
   return `${url}/auth/v1/authorize?${params}`;
+}
+
+/** The second half of the PKCE round trip: opaque code + our verifier → session. */
+export function exchangeOAuthCode(authCode: string, codeVerifier: string): Promise<TokenSet> {
+  return gotrue("/token?grant_type=pkce", { auth_code: authCode, code_verifier: codeVerifier });
 }

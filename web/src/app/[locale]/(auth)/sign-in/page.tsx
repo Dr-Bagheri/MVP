@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/routing";
 import { api, BffError } from "@/api/client";
 import { Card, Field } from "@/components/ui";
+import { OAuthButtons } from "../OAuthButtons";
 
 /**
  * Sign-in — **and this form did not sign anyone in.**
@@ -74,6 +75,9 @@ export default function SignInPage() {
       void routeByIdentity().finally(() => setBusy(false));
     } else if (confirmed === "failed") {
       setError(t("confirmFailed"));
+    } else if (new URLSearchParams(window.location.search).get("oauth") === "failed") {
+      // the provider round trip died (expired code, denied consent, replay)
+      setError(t("oauthFailed"));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot, on arrival
   }, []);
@@ -212,6 +216,7 @@ export default function SignInPage() {
           <button className="btn-primary w-full" disabled={busy || !email || !password}>
             {busy ? t("working") : t("signIn")}
           </button>
+          <OAuthButtons />
         </form>
       )}
 

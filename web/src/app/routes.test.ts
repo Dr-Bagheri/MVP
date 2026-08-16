@@ -67,6 +67,24 @@ function servableRoutes(): string[][] {
   return routes;
 }
 
+/**
+ * Every path the BFF can serve — `route.ts` files under `app/api`, as
+ * segment arrays INCLUDING the leading `api`. A link may promise an API
+ * route too (the OAuth buttons navigate to `/api/auth/oauth/google`), and
+ * the promise is kept by a route handler, not a page. Derived from the
+ * producer like everything else here: hand-listing the API paths would be
+ * the coverage hole the Role-drift guard taught us about.
+ */
+function servableApiRoutes(): string[][] {
+  const routes: string[][] = [];
+  for (const file of walk(join(APP, "api"))) {
+    if (!/route\.tsx?$/.test(file)) continue;
+    const rel = file.slice(APP.length + 1).replace(/route\.tsx?$/, "");
+    routes.push(rel.split(/[\\/]/).filter(Boolean));
+  }
+  return routes;
+}
+
 function matches(route: string[], wanted: string[]): boolean {
   for (let i = 0; i < route.length; i++) {
     const seg = route[i]!;
@@ -155,10 +173,12 @@ function navHrefs(): { href: string; file: string }[] {
 
 describe("every internal href resolves in the route tree", () => {
   const routes = servableRoutes();
+  const apiRoutes = servableApiRoutes();
 
   it("finds the route tree at all", () => {
     // if this is empty the whole suite would pass by testing nothing
     expect(routes.length).toBeGreaterThan(5);
+    expect(apiRoutes.length).toBeGreaterThan(5);
   });
 
   it("finds hrefs to check", () => {
@@ -172,8 +192,28 @@ describe("every internal href resolves in the route tree", () => {
   });
 
   it("has no link pointing at a route that does not exist", () => {
-    const dead = [...renderedHrefs(), ...navHrefs()].filter(({ href }) => !resolves(href, routes));
+    const dead = [...renderedHrefs(), ...navHrefs()].filter(({ href }) => {
+      // an /api/ href promises a ROUTE HANDLER; everything else, a page. The
+      // api tree keeps its literal `api` segment, so match against the raw
+      // path (no locale stripping — the BFF lives outside [locale]).
+      if (href === "/api" || href.startsWith("/api/")) {
+        const wanted = href.split("?")[0]!.split("/").filter(Boolean);
+        return !apiRoutes.some((r) => matches(r, wanted));
+      }
+      return !resolves(href, routes);
+    });
     // name the file too — "some link is dead" is a worse report than "this one"
     expect(dead.map((d) => `${d.href}  ← ${d.file}`)).toEqual([]);
+  });
+
+  it("still fires on an api href with no handler behind it (the upgrade did not blunt it)", () => {
+    // the checker's own negative control: a plausible-looking BFF path that
+    // does not exist must be reported dead, or the api branch above is
+    // ambience wearing a check's clothes. NOT /api/auth/oauth/anything —
+    // `[provider]` is dynamic and matches every name by design (the HANDLER
+    // refuses unknown providers; a tree check cannot see that and must not
+    // pretend to).
+    const wanted = "/api/auth/no-such-flow".split("/").filter(Boolean);
+    expect(apiRoutes.some((r) => matches(r, wanted))).toBe(false);
   });
 });

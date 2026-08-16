@@ -27,6 +27,8 @@
     "sessionLost": "The session was not established; please sign in again.",
     "confirmFailed": "The confirmation link is invalid or expired. If you already confirmed, just sign in here; otherwise sign up again.",
     "confirmedReady": "Your email is confirmed and your account is ready — signing you in…",
+    "oauthFailed": "Signing in with the external account did not complete. Try again, or sign in with email.",
+    "orContinueWith": "or continue with",
     "signInFailed": "Could not sign in. Please try again.",
     "signUpFailed": "Could not sign up. Please try again.",
     "alreadyRegistered": "This account is already registered.",

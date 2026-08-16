@@ -183,6 +183,31 @@ describe("the confirm-email landing (?confirmed=…)", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(/پیوند تأیید نامعتبر/);
     expect(identityState).not.toHaveBeenCalled();
   });
+
+  it("?oauth=failed names the provider failure — not the email-link message", async () => {
+    window.history.replaceState(null, "", "/?oauth=failed");
+    render(<SignInPage />);
+    expect(await screen.findByRole("alert")).toHaveTextContent(/حساب بیرونی/);
+  });
+});
+
+describe("the provider buttons are REAL links (the mock's dead Google button is this screen's origin story)", () => {
+  it.each([
+    ["Google", "/api/auth/oauth/google"],
+    ["GitHub", "/api/auth/oauth/github"],
+  ])("sign-in offers %s pointing at the live PKCE route", (name, href) => {
+    render(<SignInPage />);
+    const a = screen.getByRole("link", { name: new RegExp(name) });
+    // the EXACT BFF path, un-locale-prefixed: a /fa/api/... href would 404,
+    // which is precisely a dead button wearing a live one's clothes
+    expect(a.getAttribute("href")).toBe(href);
+  });
+
+  it("sign-up offers both providers too", () => {
+    render(<SignUpPage />);
+    expect(screen.getByRole("link", { name: /Google/ }).getAttribute("href")).toBe("/api/auth/oauth/google");
+    expect(screen.getByRole("link", { name: /GitHub/ }).getAttribute("href")).toBe("/api/auth/oauth/github");
+  });
 });
 
 describe("sign-up actually creates an account", () => {
