@@ -498,25 +498,26 @@ gl_FragColor=vec4(col,1.);}`;
 
     /* --- geometry --- */
     const pts = [];
-    // cerebrum: 6200 points on the folded ellipsoid
-    for (let i = 0; i < 6200; i++) {
+    // cerebrum: a dense volumetric shell — the texture IS the point dust
+    for (let i = 0; i < 16000; i++) {
       // uniform direction
       let x, y, z, m;
       do { x = rnd() * 2 - 1; y = rnd() * 2 - 1; z = rnd() * 2 - 1; m = x * x + y * y + z * z; } while (m > 1 || m < 0.04);
       m = Math.sqrt(m); x /= m; y /= m; z /= m;
       // the longitudinal fissure: reject a thin slice on top
       if (Math.abs(x) < 0.055 && y > -0.1) { i--; continue; }
-      // cortical folds: two octaves of radial displacement
+      // cortical folds: two octaves of radial displacement, plus a little
+      // volumetric depth so the shell reads as matter, not a skin
       let px = x * 1.12, py = y * 0.92, pz = z * 1.42;
       const fold = 0.5 * noise3(px * 2.6 + 9, py * 2.6, pz * 2.6) + 0.5 * noise3(px * 6.2, py * 6.2 + 4, pz * 6.2);
-      const r = 1 + 0.10 * (fold - 0.5) * 2;
+      const r = (1 + 0.10 * (fold - 0.5) * 2) * (0.965 + 0.05 * rnd());
       px *= r; py *= r; pz *= r;
       // flatten the underside where the brain sits
       if (py < -0.62) py = -0.62 - (py + 0.62) * 0.25;
       pts.push({ x: px, y: py, z: pz, ph: rnd(), sh: fold });
     }
     // cerebellum: banded ellipsoid tucked low at the back
-    for (let i = 0; i < 1100; i++) {
+    for (let i = 0; i < 2600; i++) {
       let x, y, z, m;
       do { x = rnd() * 2 - 1; y = rnd() * 2 - 1; z = rnd() * 2 - 1; m = x * x + y * y + z * z; } while (m > 1 || m < 0.05);
       m = Math.sqrt(m); x /= m; y /= m; z /= m;
@@ -525,64 +526,40 @@ gl_FragColor=vec4(col,1.);}`;
       pts.push({ x: px, y: py, z: pz, ph: rnd(), sh: 0.5 + 0.5 * Math.abs(Math.sin(y * 26)) });
     }
     // brainstem: short angled column
-    for (let i = 0; i < 300; i++) {
+    for (let i = 0; i < 600; i++) {
       const t = rnd(), a = rnd() * 6.283, rr = 0.13 * Math.sqrt(rnd());
       pts.push({ x: Math.cos(a) * rr, y: -0.55 - t * 0.5, z: -0.45 - t * 0.35 + Math.sin(a) * rr, ph: rnd(), sh: 0.4 });
     }
 
-    /* --- synapses: nearest neighbours via a spatial grid --- */
-    const CELL = 0.16, grid = new Map();
-    const key = (x, y, z) => `${Math.floor(x / CELL)},${Math.floor(y / CELL)},${Math.floor(z / CELL)}`;
-    pts.forEach((p, i) => { const k = key(p.x, p.y, p.z); (grid.get(k) ?? grid.set(k, []).get(k)).push(i); });
-    const lineVerts = [];
-    const MAXD2 = 0.15 * 0.15;
-    pts.forEach((p, i) => {
-      let linked = 0;
-      const cx = Math.floor(p.x / CELL), cy = Math.floor(p.y / CELL), cz = Math.floor(p.z / CELL);
-      outer:
-      for (let dx = 0; dx <= 1 && linked < 2; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
-        const cell = grid.get(`${cx + dx},${cy + dy},${cz + dz}`);
-        if (!cell) continue;
-        for (const j of cell) {
-          if (j <= i) continue;
-          const q = pts[j];
-          const d2 = (p.x - q.x) ** 2 + (p.y - q.y) ** 2 + (p.z - q.z) ** 2;
-          if (d2 > MAXD2) continue;
-          const ph = rnd();
-          lineVerts.push(p.x, p.y, p.z, ph, 0, q.x, q.y, q.z, ph, 1);
-          if (++linked >= 2) break outer;
-        }
-      }
-    });
-
+    /* No wireframe. Round 4's verdict: connecting lines read as a template,
+     * not a film. The activity lives in ACTIVATIONS instead — three centers
+     * wander the cortex and the dust around them lights up and fades, the
+     * way a mind actually looks when it thinks. */
     const pointData = new Float32Array(pts.length * 5);
     pts.forEach((p, i) => { pointData.set([p.x, p.y, p.z, p.ph, p.sh], i * 5); });
-    const lineData = new Float32Array(lineVerts);
 
-    /* --- shaders --- */
+    /* --- shaders: volumetric dust, drawn twice (soft bloom + bright core).
+     * v_act carries per-point activation: how close this grain sits to one
+     * of the three wandering thought-centers (computed in the vertex stage,
+     * in MODEL space, so activity clings to anatomy while the brain turns). */
     const PVS = `attribute vec3 a_pos;attribute float a_ph;attribute float a_sh;
-uniform mat4 u_mvp;uniform float u_size;varying float v_ph;varying float v_sh;
+uniform mat4 u_mvp;uniform float u_size;uniform vec3 u_c0;uniform vec3 u_c1;uniform vec3 u_c2;
+varying float v_ph;varying float v_sh;varying float v_act;
 void main(){vec4 cp=u_mvp*vec4(a_pos,1.);gl_Position=cp;
-gl_PointSize=u_size*(1.2+a_sh)/max(cp.w,.4);v_ph=a_ph;v_sh=a_sh;}`;
-    const PFS = `precision mediump float;varying float v_ph;varying float v_sh;
-uniform float u_t;uniform float u_act;uniform float u_dim;
+float d0=distance(a_pos,u_c0),d1=distance(a_pos,u_c1),d2=distance(a_pos,u_c2);
+v_act=exp(-d0*d0*9.)+.8*exp(-d1*d1*9.)+.6*exp(-d2*d2*9.);
+gl_PointSize=u_size*(1.+.5*a_sh+1.6*v_act)/max(cp.w,.4);
+v_ph=a_ph;v_sh=a_sh;}`;
+    const PFS = `precision mediump float;varying float v_ph;varying float v_sh;varying float v_act;
+uniform float u_t;uniform float u_act;uniform float u_dim;uniform float u_soft;
 void main(){vec2 c=gl_PointCoord-vec2(.5);float d=length(c);
-float halo=smoothstep(.5,.05,d);
-float pulse=pow(.5+.5*sin(u_t*2.2+v_ph*6.2831),8.)*u_act;
-vec3 violet=vec3(.635,.455,1.);vec3 hot=vec3(.95,.9,1.);
-vec3 col=mix(violet,hot,pulse*.9);
-float a=halo*(.16+.5*v_sh*.4+.85*pulse)*u_dim;
+float halo=mix(smoothstep(.5,.03,d),smoothstep(.5,.28,d),u_soft);
+float tw=.72+.28*sin(u_t*1.4+v_ph*6.2831);
+float fire=v_act*u_act;
+vec3 violet=vec3(.6,.42,1.);vec3 ice=vec3(.78,.66,1.);vec3 hot=vec3(1.,.96,1.);
+vec3 col=mix(mix(violet,ice,v_sh),hot,min(fire,1.)*.85);
+float a=halo*tw*(mix(.05,.028,u_soft)+.1*v_sh+.5*min(fire,1.2))*u_dim;
 gl_FragColor=vec4(col*a,a);}`;
-    const LVS = `attribute vec3 a_pos;attribute float a_ph;attribute float a_end;
-uniform mat4 u_mvp;varying float v_ph;varying float v_end;
-void main(){gl_Position=u_mvp*vec4(a_pos,1.);v_ph=a_ph;v_end=a_end;}`;
-    const LFS = `precision mediump float;varying float v_ph;varying float v_end;
-uniform float u_t;uniform float u_act;uniform float u_dim;
-void main(){float w=fract(u_t*.22+v_ph);
-float glow=smoothstep(.3,.0,abs(v_end-w));
-vec3 violet=vec3(.55,.38,.95);vec3 hot=vec3(.9,.82,1.);
-float a=(.045+.5*glow*u_act)*u_dim;
-gl_FragColor=vec4(mix(violet,hot,glow)*a,a);}`;
 
     function mkProg(vsSrc, fsSrc) {
       const c = (ty, sc) => { const sh = gl.createShader(ty); gl.shaderSource(sh, sc); gl.compileShader(sh);
@@ -593,13 +570,27 @@ gl_FragColor=vec4(mix(violet,hot,glow)*a,a);}`;
       if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error("link");
       return p;
     }
-    let pProg, lProg;
-    try { pProg = mkProg(PVS, PFS); lProg = mkProg(LVS, LFS); } catch { return null; }
+    let pProg;
+    try { pProg = mkProg(PVS, PFS); } catch { return null; }
 
     const pBuf = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, pBuf); gl.bufferData(gl.ARRAY_BUFFER, pointData, gl.STATIC_DRAW);
-    const lBuf = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, lBuf); gl.bufferData(gl.ARRAY_BUFFER, lineData, gl.STATIC_DRAW);
+
+    /* the three thought-centers: each wanders the cortex, gliding from one
+     * sampled surface point to the next — activity that belongs to the
+     * anatomy, never a pattern painted over it */
+    const centers = [0, 1, 2].map(() => ({
+      cur: [0, 0.6, 0.4], to: [0, 0.6, 0.4], t0: 0, dur: 1,
+    }));
+    function pick() { const p = pts[Math.floor(rnd() * 16000)]; return [p.x, p.y, p.z]; }
+    function centerAt(c, tSec) {
+      if (tSec - c.t0 > c.dur) {
+        c.cur = c.to; c.to = pick();
+        c.t0 = tSec; c.dur = 2.2 + rnd() * 2.4;
+      }
+      const k = ease((tSec - c.t0) / c.dur);
+      return [0, 1, 2].map((i) => c.cur[i] + (c.to[i] - c.cur[i]) * k);
+    }
 
     /* tiny mat4 kit — column-major */
     function persp(fov, asp, near, far) {
@@ -637,30 +628,27 @@ gl_FragColor=vec4(mix(violet,hot,glow)*a,a);}`;
       mv = mul(mv, scaleM(pose.s));
       const mvp = mul(proj, mv);
 
-      /* synapses under the points */
-      gl.useProgram(lProg);
-      gl.uniformMatrix4fv(gl.getUniformLocation(lProg, "u_mvp"), false, mvp);
-      gl.uniform1f(gl.getUniformLocation(lProg, "u_t"), tSec);
-      gl.uniform1f(gl.getUniformLocation(lProg, "u_act"), pose.act);
-      gl.uniform1f(gl.getUniformLocation(lProg, "u_dim"), pose.dim);
-      gl.bindBuffer(gl.ARRAY_BUFFER, lBuf);
-      const la = gl.getAttribLocation(lProg, "a_pos"), lph = gl.getAttribLocation(lProg, "a_ph"), le = gl.getAttribLocation(lProg, "a_end");
-      gl.enableVertexAttribArray(la); gl.vertexAttribPointer(la, 3, gl.FLOAT, false, 20, 0);
-      gl.enableVertexAttribArray(lph); gl.vertexAttribPointer(lph, 1, gl.FLOAT, false, 20, 12);
-      gl.enableVertexAttribArray(le); gl.vertexAttribPointer(le, 1, gl.FLOAT, false, 20, 16);
-      gl.drawArrays(gl.LINES, 0, lineData.length / 5);
+      const c0 = centerAt(centers[0], tSec), c1 = centerAt(centers[1], tSec + 7), c2 = centerAt(centers[2], tSec + 13);
 
       gl.useProgram(pProg);
       gl.uniformMatrix4fv(gl.getUniformLocation(pProg, "u_mvp"), false, mvp);
       gl.uniform1f(gl.getUniformLocation(pProg, "u_t"), tSec);
       gl.uniform1f(gl.getUniformLocation(pProg, "u_act"), pose.act);
       gl.uniform1f(gl.getUniformLocation(pProg, "u_dim"), pose.dim);
-      gl.uniform1f(gl.getUniformLocation(pProg, "u_size"), canvas.height * 0.012);
+      gl.uniform3fv(gl.getUniformLocation(pProg, "u_c0"), c0);
+      gl.uniform3fv(gl.getUniformLocation(pProg, "u_c1"), c1);
+      gl.uniform3fv(gl.getUniformLocation(pProg, "u_c2"), c2);
       gl.bindBuffer(gl.ARRAY_BUFFER, pBuf);
       const pa = gl.getAttribLocation(pProg, "a_pos"), pph = gl.getAttribLocation(pProg, "a_ph"), psh = gl.getAttribLocation(pProg, "a_sh");
       gl.enableVertexAttribArray(pa); gl.vertexAttribPointer(pa, 3, gl.FLOAT, false, 20, 0);
       gl.enableVertexAttribArray(pph); gl.vertexAttribPointer(pph, 1, gl.FLOAT, false, 20, 12);
       gl.enableVertexAttribArray(psh); gl.vertexAttribPointer(psh, 1, gl.FLOAT, false, 20, 16);
+      // pass 1: wide soft bloom · pass 2: fine bright core — film glow
+      gl.uniform1f(gl.getUniformLocation(pProg, "u_soft"), 1);
+      gl.uniform1f(gl.getUniformLocation(pProg, "u_size"), canvas.height * 0.016);
+      gl.drawArrays(gl.POINTS, 0, pts.length);
+      gl.uniform1f(gl.getUniformLocation(pProg, "u_soft"), 0);
+      gl.uniform1f(gl.getUniformLocation(pProg, "u_size"), canvas.height * 0.006);
       gl.drawArrays(gl.POINTS, 0, pts.length);
     }
     return { draw };
