@@ -9,6 +9,7 @@ import { AvatarEditor } from "@/components/platform/AvatarEditor";
 import { ChangePassword } from "@/components/platform/ChangePassword";
 import { PlatformShell } from "@/components/platform/PlatformShell";
 import { FormPanel, FormRow, PageContainer, PageHeader, PanelFooter, Section } from "@/components/scaffold";
+import { modelLabel } from "@/lib/format";
 import { Chip } from "@/components/ui";
 
 /**
@@ -270,7 +271,7 @@ export default function ProfilePage() {
               >
                 {models.map((model) => (
                   <option key={model.id} value={model.id}>
-                    {model.name}
+                    {modelLabel(model.name)}
                   </option>
                 ))}
               </select>

@@ -7,7 +7,7 @@ import { api, BffError } from "@/api/client";
 import type { AgentEvent, AgentMessage, ModelInfo, Skill, User } from "@/api/types";
 import { Link, useRouter } from "@/i18n/routing";
 import { useSearchParams } from "next/navigation";
-import { personName } from "@/lib/format";
+import { personName, modelLabel } from "@/lib/format";
 import { ConversationThread } from "./ConversationThread";
 import { HistoryPanel } from "./HistoryPanel";
 import { EchoMark, MicIcon, PlusIcon, SendIcon, ToolsIcon } from "./icons";
@@ -55,6 +55,17 @@ export function Hub() {
   const [skill, setSkill] = useState<string>("");
   /** The SERVER's refusal sentence, when an ask never opened a stream. */
   const [askError, setAskError] = useState<string | null>(null);
+  /**
+   * Attached files (user directive: "add files and ask about them"). Text
+   * files only, read CLIENT-side and sent as part of the question — the ask
+   * wire is text, so this needs no new backend and the record shows exactly
+   * what the model saw. Binary and oversized files are refused with a
+   * sentence, never silently dropped.
+   */
+  const [attachments, setAttachments] = useState<{ name: string; text: string }[]>([]);
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const [toolNames, setToolNames] = useState<string[]>([]);
+  const fileRef = useRef<HTMLInputElement>(null);
   /** Held in a ref, not state: it is read inside the stream loop, where a
    *  stale closure over state would silently start a second conversation. */
   const sessionId = useRef<string | undefined>(undefined);
@@ -86,7 +97,31 @@ export function Hub() {
       setModel(res.preferred_model ?? res.models[0]?.id ?? "");
     });
     void api.skills().then(setSkills);
+    void api.assistantTools().then(setToolNames).catch(() => setToolNames([]));
   }, []);
+
+  const ATTACH_MAX_BYTES = 50_000;
+  const ATTACH_MAX_COUNT = 3;
+
+  async function attach(file: File) {
+    setAskError(null);
+    if (attachments.length >= ATTACH_MAX_COUNT) {
+      setAskError(t("fileTooMany"));
+      return;
+    }
+    if (file.size > ATTACH_MAX_BYTES) {
+      setAskError(t("fileTooBig", { name: file.name }));
+      return;
+    }
+    const text = await file.text();
+    if (text.includes("\u0000")) {
+      // a NUL byte is the honest binary test — an audio file belongs in
+      // Echo's uploader, and pretending to read it would feed the model noise
+      setAskError(t("fileNotText", { name: file.name }));
+      return;
+    }
+    setAttachments((prev) => [...prev, { name: file.name, text }]);
+  }
 
   const adoptThread = useCallback(async (id: string) => {
     const [thread, verdicts] = await Promise.all([
@@ -219,11 +254,25 @@ export function Hub() {
   }
 
   async function send() {
-    const question = input.trim();
-    if (question === "" || streaming) return;
+    const typed = input.trim();
+    if (typed === "" || streaming) return;
     setInput("");
     setShowHistory(false);
     setAskError(null);
+
+    /*
+     * Attachments travel INSIDE the question — the ask wire is text, and
+     * the persisted record then shows exactly what the model was given
+     * (the thread refetch renders it, deliberately: an invisible context
+     * would be a prompt the record can't explain).
+     */
+    const question =
+      attachments.length === 0
+        ? typed
+        : attachments
+            .map((a) => `[${t("attachmentTag")}: ${a.name}]\n${a.text}`)
+            .join("\n\n") + `\n\n${typed}`;
+    setAttachments([]);
 
     const userMsg: AgentMessage = {
       id: `u-${Date.now()}`,
@@ -468,15 +517,67 @@ export function Hub() {
             </button>
           )}
         </div>
+        {attachments.length > 0 ? (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {attachments.map((a) => (
+              <span key={a.name} className="chip bg-surface-2 text-xs text-fg">
+                <span className="ltr">{a.name}</span>
+                <button
+                  type="button"
+                  aria-label={t("removeAttachment", { name: a.name })}
+                  className="ms-1 text-fg-muted hover:text-fg"
+                  onClick={() =>
+                    setAttachments((prev) => prev.filter((x) => x.name !== a.name))
+                  }
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        ) : null}
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <button type="button" className={headerBtn}>
+          <input
+            ref={fileRef}
+            type="file"
+            className="hidden"
+            accept=".txt,.md,.csv,.json,.log,.tsv,text/*"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = "";
+              if (file) void attach(file);
+            }}
+          />
+          <button type="button" className={headerBtn} onClick={() => fileRef.current?.click()}>
             <PlusIcon width={14} height={14} />
             {t("addFile")}
           </button>
-          <button type="button" className={headerBtn}>
-            <ToolsIcon width={14} height={14} />
-            {t("tools")}
-          </button>
+          <div className="relative">
+            <button
+              type="button"
+              className={headerBtn}
+              aria-expanded={toolsOpen}
+              onClick={() => setToolsOpen((v) => !v)}
+            >
+              <ToolsIcon width={14} height={14} />
+              {t("tools")}
+            </button>
+            {toolsOpen ? (
+              /* the assistant's REAL reach, from the server's own registry —
+                 facts about what a question can trigger, not switches */
+              <div className="absolute bottom-10 z-30 w-72 rounded-xl border border-border bg-surface p-3 text-start shadow-lg">
+                <p className="mb-2 text-xs font-semibold text-fg">{t("toolsTitle")}</p>
+                <ul className="space-y-1.5">
+                  {toolNames.map((name) => (
+                    <li key={name} className="text-xs leading-5">
+                      <span className="ltr font-mono text-fg">{name}</span>
+                      <span className="block text-fg-muted">{t(`tool_${name}`)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </div>
           <span className="flex-1" />
           {/*
             The model choice (M5 precedence: skill pin → this explicit choice
@@ -487,7 +588,7 @@ export function Hub() {
             <label className="flex items-center gap-1">
               <span className="sr-only">{t("skillPicker")}</span>
               <select
-                className="h-8 max-w-[10rem] rounded-full border border-border bg-transparent px-2 text-xs text-fg-muted outline-none hover:border-border-strong"
+                className="select-pill max-w-[10rem]"
                 value={skill}
                 onChange={(e) => setSkill(e.target.value)}
               >
@@ -506,13 +607,13 @@ export function Hub() {
             <label className="flex items-center gap-1">
               <span className="sr-only">{t("modelPicker")}</span>
               <select
-                className="h-8 max-w-[11rem] rounded-full border border-border bg-transparent px-2 text-xs text-fg-muted outline-none hover:border-border-strong"
+                className="select-pill max-w-[11rem]"
                 value={model}
                 onChange={(e) => setModel(e.target.value)}
               >
                 {models.map((m) => (
                   <option key={m.id} value={m.id}>
-                    {m.name}
+                    {modelLabel(m.name)}
                   </option>
                 ))}
               </select>

@@ -1,7 +1,6 @@
 /** Persian digits + Jalali dates (M9). Display-time only — data stays ASCII. */
 
 import { resolvedCalendar, resolvedTimezone } from "./preferences";
-import { latinToPersian, persianToLatin } from "./transliterate";
 
 const FA_DIGITS = "۰۱۲۳۴۵۶۷۸۹";
 
@@ -15,39 +14,40 @@ export function digits(input: string | number, locale: string): string {
 }
 
 /**
- * A person's name for the ACTIVE locale.
+ * A person's name for the ACTIVE locale: `display_name_en` in English where
+ * one exists, otherwise `display_name` EXACTLY AS AUTHORED, both locales.
  *
- * English UI renders `display_name_en` where a person has one; where they
- * don't, a Persian-script name is TRANSLITERATED («امیر» → "Amir"), and in
- * the Persian UI a Latin-only name renders in Persian script the same way
- * (user directive, 2026-08-16 — this SUPERSEDES the earlier fallback-is-the-
- * fa-name-unchanged ruling, and the M24 amendment records it). Usernames,
- * emails and brands never pass through here, so they never transliterate.
- *
- * A name the person chose always beats a spelling we derived:
- * `display_name_en` wins in EN, and a Persian-script `display_name` is never
- * rewritten in FA. The transliterator only fills the gap where no chosen
- * spelling exists for the active script.
+ * **Names are never transliterated, translated or respelled** (user verdict,
+ * 2026-08-16 evening). A dictionary-and-letter-map version shipped for a few
+ * hours and rendered the user's own name as an unreadable «دربقری» — the
+ * letter map cannot know the vowels Persian script omits, and a wrong
+ * spelling of someone's NAME is worse than a foreign-script one. The verdict
+ * closes the question: a name renders in whatever script its owner typed,
+ * and a Latin name in the Persian UI is correct, not a gap.
  *
  * Shared rather than per-surface on purpose. Name resolution is one rule, and
  * two implementations of one rule is the drift shape this codebase keeps
  * finding — the English shell would say "Sara" while an English table two
  * screens away said «سارا محمدی», and both would look correct alone.
  */
-const PERSIAN_SCRIPT = /[؀-ۿ]/;
-
 export function personName(
   person: { display_name: string; display_name_en?: string | null } | null | undefined,
   locale: string,
 ): string {
   if (!person) return "";
-  const fa = person.display_name;
-  if (locale === "fa") {
-    return PERSIAN_SCRIPT.test(fa) ? fa : latinToPersian(fa);
-  }
+  if (locale === "fa") return person.display_name;
   const en = person.display_name_en?.trim();
-  if (en && en.length > 0) return en;
-  return PERSIAN_SCRIPT.test(fa) ? persianToLatin(fa) : fa;
+  return en && en.length > 0 ? en : person.display_name;
+}
+
+/**
+ * A model's DISPLAY name: the catalogue's "Provider: Model" with the
+ * provider half dropped (user directive — "Google: Gemini 3.1" reads as
+ * noise; the model IS the name). The id keeps the provider for anything
+ * that routes; this is display only, one rule for every picker.
+ */
+export function modelLabel(name: string): string {
+  return name.replace(/^[^:]+:\s*/, "");
 }
 
 const JALALI_MONTHS = [

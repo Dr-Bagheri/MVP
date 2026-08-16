@@ -278,21 +278,39 @@
   }
 
   /*
-   * A `<select>` wearing `.input` gets the browser's native chevron drawn
-   * inside the padding box, so `px-3` left it 12px from the border — reading
-   * as crowded against the edge rather than as part of the control.
+   * THE select template (user directive: one dropdown look for the whole
+   * platform). The native chevron is replaced — browsers pin theirs flush
+   * to the edge and ignore padding, which is exactly the "down symbol too
+   * much to the side" report — with our own, inset 0.75rem from the
+   * inline-END so the margin follows direction: right in en, left in fa.
+   * The stroke is the mid-muted tone that reads on both themes.
    *
-   * `pe-9` is padding-inline-END, so it follows direction: the chevron sits
-   * right in en and left in fa, and the breathing room moves with it. A
-   * `pr-9` here would look correct in English and push Persian text away from
-   * the wrong side — an RTL bug that only shows in the locale we are less
-   * likely to open.
-   *
-   * Shared rather than per-screen so every select gains it at once; this was
-   * reported on the role dropdowns and is not a property of that screen.
+   * Every `<select class="input">` inherits this at once; `.select-pill`
+   * is the same template in the composer's pill anatomy.
    */
+  select.input,
+  select.select-pill {
+    appearance: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23948bb5' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='m6 9 6 6 6-6'/></svg>");
+    background-repeat: no-repeat;
+    background-size: 0.85rem;
+  }
   select.input {
     @apply pe-9;
+  }
+  [dir="ltr"] select.input,
+  [dir="ltr"] select.select-pill {
+    background-position: right 0.75rem center;
+  }
+  [dir="rtl"] select.input,
+  [dir="rtl"] select.select-pill {
+    background-position: left 0.75rem center;
+  }
+
+  .select-pill {
+    @apply h-8 rounded-full border border-border bg-transparent ps-3 pe-8 text-xs
+           text-fg-muted outline-none transition-colors hover:border-border-strong
+           hover:text-fg;
   }
 
   .chip {

@@ -947,17 +947,17 @@ last-active, per-row actions, overflow menu. Rulings that bound it:
   name everywhere (greeting, avatar, tables, mentions). Fallback when
   `display_name_en` is absent: the fa name unchanged — honest mixed
   script over auto-transliteration, which fabricates a name nobody chose.
-  **[SUPERSEDED by user directive, 2026-08-16: names TRANSLITERATE on
-  locale switch** — «امیر» renders "Amir" in en, a Latin-only name
-  renders in Persian script in fa; usernames, emails and brands never
-  do. A CHOSEN spelling still always wins (`display_name_en` in en; a
-  Persian-script `display_name` is never rewritten in fa) — the
-  transliterator only fills the gap where no chosen spelling exists.
-  Implementation: `web/src/lib/transliterate.ts` (dictionary of common
-  names + suffix/compound handling + letter-map fallback), applied
-  ONLY inside `personName()` so nothing else can inherit it. The
-  2026-08-13 "fa name unchanged" reasoning stays on the record above
-  as the road not taken.]
+  **[The transliteration experiment, opened and closed 2026-08-16:**
+  a same-day directive had names transliterate on locale switch; the
+  dictionary-and-letter-map implementation shipped for a few hours and
+  rendered the user's own name as unreadable «دربقری» — Persian script
+  omits the vowels a letter map would need. **User verdict, same
+  evening: names, usernames and profile names are NEVER changed or
+  translated** — a name renders exactly as its owner typed it, in
+  whatever script, and a Latin name in the Persian UI is correct, not
+  a gap. `transliterate.ts` deleted; the original fallback-unchanged
+  rule above is the standing law, now with a user verdict rather than
+  a steward inference behind it.]
 - **Locale-solid extends past names** [steward interpretation of "solid",
   reversible]: text direction, prompt-input alignment/caret, dates
   (Jalali in fa, Gregorian in en), and digits follow the active locale.

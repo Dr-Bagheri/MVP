@@ -297,7 +297,20 @@
     "modelPicker": "مدل",
     "skillPicker": "مهارت",
     "skillDefault": "مهارت پیش‌فرض",
-    "askFailed": "پرسش پیش از شروع اجرا رد شد."
+    "askFailed": "پرسش پیش از شروع اجرا رد شد.",
+    "attachmentTag": "فایل پیوست",
+    "removeAttachment": "حذف {name}",
+    "fileTooBig": "{name} بزرگ است - تا ۵۰ کیلوبایت متن برای هر فایل.",
+    "fileTooMany": "تا ۳ فایل برای هر پرسش.",
+    "fileNotText": "{name} فایل متنی نیست. صدا به بارگذاری اکو تعلق دارد.",
+    "toolsTitle": "دسترسی دستیار",
+    "tool_search_transcripts": "جست‌وجو در رونوشت‌های شما",
+    "tool_read_window": "خواندن بازه‌ای از رونوشت",
+    "tool_get_call": "دیدن یک تماس",
+    "tool_list_related_calls": "یافتن تماس‌های مرتبط",
+    "tool_correct_transcript": "پیشنهاد اصلاح رونوشت (اول از شما می‌پرسد)",
+    "tool_edit_speaker_roster": "پیشنهاد تغییر گوینده (اول از شما می‌پرسد)",
+    "tool_replace_summary": "پیشنهاد خلاصهٔ تازه (اول از شما می‌پرسد)"
   },
   "management": {
     "title": "مدیریت",

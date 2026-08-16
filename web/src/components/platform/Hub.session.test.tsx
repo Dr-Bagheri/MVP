@@ -85,6 +85,7 @@ vi.mock("@/api/client", () => ({
     // (session continuity) unchanged
     models: async () => ({ models: [], preferred_model: null, curated: false, tool_capability_filtered: false }),
     skills: async () => [],
+    assistantTools: async () => [],
     sessionFeedback: async () => ({}),
     shareState: async () => false,
   },

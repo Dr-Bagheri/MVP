@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { AgentMessage, Call, ModelInfo } from "@/api/types";
+import { modelLabel } from "@/lib/format";
 import { ProposalCard } from "./ProposalCard";
 
 /**
@@ -321,7 +322,7 @@ export function AssistantPane({
           >
             {models.map((model) => (
               <option key={model.id} value={model.id}>
-                {model.name}
+                {modelLabel(model.name)}
               </option>
             ))}
           </select>

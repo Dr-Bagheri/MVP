@@ -754,6 +754,11 @@ export const api = {
     const { skills } = await bff<{ skills: Skill[] }>("/api/skills");
     return skills;
   },
+  /** **LIVE** — the assistant's tool vocabulary, from the same wrapper. */
+  async assistantTools(): Promise<string[]> {
+    const { available_tools } = await bff<{ available_tools: string[] }>("/api/skills");
+    return available_tools ?? [];
+  },
 
   // ---- skill authoring (M29, Part 2) ----------------------------------------
   /** **LIVE** — the editor's rows (full definitions) + the tool vocabulary. */

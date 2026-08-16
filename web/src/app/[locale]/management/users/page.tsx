@@ -291,7 +291,7 @@ export default function UsersPage() {
                     {/* `username` is null until chosen, and a PENDING member is
                         the likeliest person never to have chosen one — so the
                         line is dropped rather than rendered as a bare "@". */}
-                    {u.username ? <p className="ltr text-xs text-fg-muted">@{u.username}</p> : null}
+                    {u.username ? <p className="text-xs text-fg-muted"><span className="ltr">@{u.username}</span></p> : null}
                   </div>
                   <span className="text-xs text-fg-muted">{formatDate(u.created_at, locale)}</span>
                   <button
@@ -470,7 +470,7 @@ export default function UsersPage() {
                       <td className="py-3 pe-3 align-top">
                         <p className="font-medium text-fg">{personName(u, locale)}</p>
                       </td>
-                      <td className="ltr py-3 pe-3 align-top text-xs text-fg-muted">
+                      <td className="py-3 pe-3 align-top text-xs text-fg-muted">
                         {/* a column keeps its placeholder so the rows stay
                             aligned; "@" with nothing after it is not a handle */}
                         {u.username ? `@${u.username}` : "—"}

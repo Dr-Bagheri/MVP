@@ -297,7 +297,20 @@
     "modelPicker": "Model",
     "skillPicker": "Skill",
     "skillDefault": "Default skill",
-    "askFailed": "The question was refused before a run started."
+    "askFailed": "The question was refused before a run started.",
+    "attachmentTag": "Attached file",
+    "removeAttachment": "Remove {name}",
+    "fileTooBig": "{name} is too large - up to 50KB of text per file.",
+    "fileTooMany": "Up to 3 files per question.",
+    "fileNotText": "{name} is not a text file. Audio belongs in Echo’s uploader.",
+    "toolsTitle": "What the assistant can reach",
+    "tool_search_transcripts": "Search your transcripts",
+    "tool_read_window": "Read a span of a transcript",
+    "tool_get_call": "Look up one call",
+    "tool_list_related_calls": "Find related calls",
+    "tool_correct_transcript": "Propose a transcript correction (asks you first)",
+    "tool_edit_speaker_roster": "Propose a speaker change (asks you first)",
+    "tool_replace_summary": "Propose a new summary (asks you first)"
   },
   "management": {
     "title": "Management",

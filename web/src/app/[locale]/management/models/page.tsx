@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { AdminModelRow, User } from "@/api/types";
 import { ManagementPane } from "@/components/platform/ManagementPane";
+import { modelLabel } from "@/lib/format";
 import { Card, Chip } from "@/components/ui";
 
 /**
@@ -84,7 +85,7 @@ export default function ModelsPage() {
                     }}
                   />
                   <span className="flex-1 text-sm text-fg">
-                    {model.name}
+                    {modelLabel(model.name)}
                     {/* provider derived from the id — not a field the server owes */}
                     <span className="ltr ms-2 text-xs text-fg-muted">{model.id.split("/")[0]}</span>
                   </span>
