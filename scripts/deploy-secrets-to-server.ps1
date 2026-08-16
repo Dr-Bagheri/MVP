@@ -57,6 +57,14 @@ if ($missing.Count -gt 0) {
 
 Write-Host ("Fetched " + ($lines.Count - 1) + " secrets (names only shown above). Writing to server...")
 $content = ($lines -join "`n") + "`n"
-$content | & ssh -i $sshKey $server "cat > /etc/neurai/env && chown root:neurai /etc/neurai/env && chmod 640 /etc/neurai/env && echo OK: wrote /etc/neurai/env with `$(grep -c = /etc/neurai/env) entries"
+# TARGET: /etc/neurai/core.env - the file the systemd units actually load
+# (EnvironmentFile=). This script wrote /etc/neurai/env for a day, which
+# nothing reads: the deploy "succeeded" while the services kept the old
+# values, and the Frankfurt cutover shipped tokens to a deleted project's
+# verifier. Two files, one truth - the wrong one was ours.
+# The sed strips the BOM PowerShell's pipe prepends: systemd would read the
+# first variable as "﻿NODE_ENV", silently a different name (the
+# CLAUDE.md encoding rule, at the deploy seam this time).
+$content | & ssh -i $sshKey $server "sed '1s/^\xEF\xBB\xBF//' > /etc/neurai/core.env && chown root:neurai /etc/neurai/core.env && chmod 640 /etc/neurai/core.env && head -c 8 /etc/neurai/core.env | grep -q '^NODE_ENV' && echo OK: wrote /etc/neurai/core.env with `$(grep -c = /etc/neurai/core.env) entries, BOM-free"
 
 Write-Host "Done. The services on the server can now start."
