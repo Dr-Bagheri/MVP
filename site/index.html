@@ -33,15 +33,15 @@
   /* obsidian → midnight blue; the scan glows bioluminescent electric blue
      (user prompt, round 5). Brand violet stays on the platform; the film
      wears the lab's light. */
-  --bg: #05091C;
-  --fg: #EFF4FF;
-  --fg-muted: #92A6CC;
-  --hud: #677FAE;
-  --accent: #56B1FF;
-  --accent-deep: #2E6BFF;
-  --line: rgba(110, 150, 210, 0.22);
-  --line-bright: rgba(86, 177, 255, 0.5);
-  --glow: rgba(86, 150, 255, 0.4);
+  --bg: #0B0020;
+  --fg: #F2ECFF;
+  --fg-muted: #B6A6D6;
+  --hud: #9382BC;
+  --accent: #A274FF;
+  --accent-deep: #6D3BF5;
+  --line: rgba(122, 94, 184, 0.28);
+  --line-bright: rgba(162, 116, 255, 0.5);
+  --glow: rgba(162, 116, 255, 0.4);
   --mono: "SFMono-Regular", ui-monospace, Consolas, "Cascadia Mono", monospace;
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -68,7 +68,7 @@ body.ready .stage { opacity: 1; }
   position: fixed; top: 0; left: 0; right: 0; height: 42px; z-index: 20;
   display: flex; align-items: center; gap: 26px; padding: 0 18px;
   font-family: var(--mono); font-size: 10px; letter-spacing: .14em;
-  color: var(--hud); background: rgba(4, 6, 22, 0.55);
+  color: var(--hud); background: rgba(11, 0, 32, 0.55);
   border-bottom: 1px solid var(--line); backdrop-filter: blur(8px);
   white-space: nowrap; overflow: hidden;
 }
@@ -192,7 +192,7 @@ p.lead b { color: var(--fg); font-weight: 600; }
 }
 .btn-primary {
   background: linear-gradient(115deg, var(--accent), var(--accent-deep));
-  color: #0B0020; box-shadow: 0 0 0 1px var(--line-bright), 0 10px 40px rgba(109,59,245,.35);
+  color: #130036; box-shadow: 0 0 0 1px var(--line-bright), 0 10px 40px rgba(109,59,245,.35);
 }
 .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 0 0 1px var(--line-bright), 0 16px 56px rgba(109,59,245,.5); }
 .btn-ghost { color: var(--fg); border: 1px solid var(--line); background: rgba(255,255,255,.03); backdrop-filter: blur(6px); }
@@ -371,7 +371,7 @@ noscript .noscript-note { display: block; padding: 12px 24px; text-align: center
 </div>
 
 <button class="chrome-logo" id="chrome-logo" title="NeurAI — back to the top" aria-label="Back to the top">
-  <svg width="26" height="26" viewBox="0 0 64 64"><rect width="64" height="64" rx="16" fill="rgba(86,177,255,.12)"/><path d="M18 46V18l28 28V18" stroke="#56B1FF" stroke-width="7" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  <svg width="26" height="26" viewBox="0 0 64 64"><rect width="64" height="64" rx="16" fill="rgba(162,116,255,.12)"/><path d="M18 46V18l28 28V18" stroke="#A274FF" stroke-width="7" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
 </button>
 <button class="chrome-x" id="chrome-x" title="Skip the film" aria-label="Skip to the end of the film">✕</button>
 
@@ -552,7 +552,7 @@ noscript .noscript-note { display: block; padding: 12px 24px; text-align: center
     const N = 34, w = bars.width / N;
     for (let i = 0; i < N; i++) {
       const h = (0.25 + 0.75 * Math.abs(Math.sin(tSec * (1.4 + i * 0.13) + i * 1.7))) * (0.45 + 0.55 * act);
-      btx.fillStyle = i % 4 === 0 ? "rgba(162,116,255,.9)" : "rgba(124,134,194,.75)";
+      btx.fillStyle = i % 4 === 0 ? "rgba(162,116,255,.9)" : "rgba(147,130,188,.75)";
       btx.fillRect(i * w, bars.height * (1 - h), w * 0.55, bars.height * h);
     }
   }
@@ -610,7 +610,7 @@ void main(){vec2 uv=gl_FragCoord.xy/r;vec2 q=uv*vec2(r.x/r.y,1.);
 float T=t*.03+g*1.2;
 float f1=fbm(q*1.4+vec2(T*.4,-T*.2));
 /* obsidian at the foot, midnight blue above, a faint cold nebula */
-vec3 deep=vec3(.010,.014,.055);vec3 navy=vec3(.022,.05,.16);vec3 neb=vec3(.14,.3,.62);
+vec3 deep=vec3(.043,.0,.125);vec3 navy=vec3(.075,.0,.21);vec3 neb=vec3(.36,.24,.66);
 vec3 col=mix(deep,navy,uv.y*.8+f1*.3);
 col+=neb*smoothstep(.55,.95,f1)*.13*(1.+.5*g);
 /* starfield: hash-thresholded cells, each star a ROUND point at a hashed
@@ -779,10 +779,10 @@ gl_FragColor=vec4(col,1.);}`;
           const isHead = d < ROW * 1.4;
           const flare = fire > 0.45;
           ctx2.fillStyle = isHead || flare
-            ? `rgba(235,245,255,${Math.min(1, a + 0.25)})`
+            ? `rgba(242,236,255,${Math.min(1, a + 0.25)})`
             : rg > 0.5
-              ? `rgba(150,200,255,${a})`
-              : `rgba(86,177,255,${a})`;
+              ? `rgba(196,163,255,${a})`
+              : `rgba(162,116,255,${a})`;
           ctx2.fillText(mutChar(col, i, tSec, flare), x, y);
         }
       }
