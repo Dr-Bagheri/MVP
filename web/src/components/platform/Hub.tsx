@@ -1,115 +1,206 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
-import type { AgentMessage, User } from "@/api/types";
-import { Link } from "@/i18n/routing";
+import type { AgentEvent, AgentMessage, ModelInfo, Skill, User } from "@/api/types";
+import { Link, useRouter } from "@/i18n/routing";
 import { useSearchParams } from "next/navigation";
 import { personName } from "@/lib/format";
 import { ConversationThread } from "./ConversationThread";
+import { HistoryPanel } from "./HistoryPanel";
 import { EchoMark, MicIcon, PlusIcon, SendIcon, ToolsIcon } from "./icons";
 
 /**
  * The AI-assistant hub — NeurAI's first page (M22, user-approved).
  *
  * **The conversation is a STATE of this surface, not a redesign of it**
- * (steward ruling). Three states, one screen:
- *
- *   - **idle** — the approved anatomy exactly: mark, greeting, the scope
- *     promise, prompt box, app cards. This is what a user meets on arrival.
- *   - **active** — the thread takes the centre and the prompt moves to the
- *     foot. The mark and app cards step aside rather than being pushed down a
- *     scrolling page.
- *   - **resumed** — a stored thread rendered through the SAME component as a
- *     live one; two renderers for one conversation is the drift shape, and the
- *     resumed half is the one nobody looks at.
- *
- * A permanent session sidebar was the alternative and was declined: it would
- * alter the first screen the user signed off, and it renders empty for every
- * new org — chrome that costs a first impression to earn nothing. Reversible if
- * the user ever wants it: same components, different frame.
+ * (steward ruling). Four states now, one screen: idle (the approved anatomy),
+ * active (thread center, prompt at foot), resumed (a stored thread through
+ * the SAME component as a live one), and history (the conversation list as
+ * an overlay state, per the M22 amendment — never permanent chrome).
  *
  * ---
  *
- * **`session` capture is the load-bearing part of this file.** On a sessionless
- * ask the server creates a conversation and announces it in a `session` event
- * sent before any delta — and on `created: true` that event is the ONLY place
- * the id will ever appear. A client that drops it starts a brand-new
- * conversation on every message **while looking like it remembers**: the answer
- * still renders perfectly, the thread still scrolls, and nothing on screen
- * indicates that yesterday's context is gone. That is why the id is captured
- * into a ref before the first delta is handled, not derived afterwards.
+ * **`session` capture is the load-bearing part of this file.** On a
+ * sessionless ask the server creates a conversation and announces it in a
+ * `session` event sent before any delta — on `created: true` that event is
+ * the ONLY place the id will ever appear. A client that drops it starts a
+ * brand-new conversation on every message while looking like it remembers.
  *
- * The three other decisions the wire dictates:
- *   - **Unknown event types are ignored**, by contract. The switch has no
- *     `default` that throws; a future event must not break an older client.
- *   - **`done` means the turn is already persisted** (core/ writes before it
- *     emits), so a refetch after `done` always finds the message. Built to that
- *     guarantee rather than defensively polling.
- *   - **A failed run leaves the question standing.** The empty assistant
- *     placeholder is removed rather than filled with an apology — the thread
- *     records what was said, and a fabricated bubble would be indistinguishable
- *     from a real answer a week later.
+ * The wire's other rules, kept: unknown event types are ignored by contract;
+ * `done` means the turn is persisted (a refetch after done always finds it);
+ * a failed run leaves the question standing, nothing invented beside it.
+ *
+ * **After `done` the thread is REFETCHED** (M27): the streamed reply lived
+ * under a local id the server never heard of, and every toolbar action
+ * (feedback, regenerate) needs the persisted id. Onyx refetches for the same
+ * reason; adopting the server's rows is what makes the toolbar honest.
  */
 export function Hub() {
   const t = useTranslations("platform");
   const locale = useLocale();
+  const router = useRouter();
   const [me, setMe] = useState<User | null>(null);
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [feedback, setFeedback] = useState<Record<string, string>>({});
+  const [shared, setShared] = useState(false);
+  const [models, setModels] = useState<ModelInfo[]>([]);
+  const [skills, setSkills] = useState<Skill[]>([]);
+  const [model, setModel] = useState<string>("");
+  const [skill, setSkill] = useState<string>("");
   /** Held in a ref, not state: it is read inside the stream loop, where a
    *  stale closure over state would silently start a second conversation. */
   const sessionId = useRef<string | undefined>(undefined);
+  const abortRef = useRef<AbortController | null>(null);
   const threadEnd = useRef<HTMLDivElement>(null);
 
   /**
-   * Resume is driven by a URL param (`?c=<id>`), not component state.
-   *
-   * Three things fall out of that and none of them work with local state: the
-   * browser Back button leaves a conversation, a reload returns to the same
-   * one, and a thread can be linked to. A conversation the user can reach but
-   * not return to is a worse memory than none.
+   * Resume is driven by a URL param (`?c=<id>`), not component state: Back
+   * leaves a conversation, reload returns to it, a thread can be linked.
    */
   const params = useSearchParams();
   const resumeId = params.get("c");
 
   useEffect(() => {
     void api.me().then(setMe);
+    void api.models().then((res) => {
+      setModels(res.models);
+      // the person's saved choice is the default; "" = let the server say
+      setModel(res.preferred_model ?? "");
+    });
+    void api.skills().then(setSkills);
+  }, []);
+
+  const adoptThread = useCallback(async (id: string) => {
+    const [thread, verdicts] = await Promise.all([
+      api.agentMessages(id),
+      api.sessionFeedback(id).catch(() => ({}) as Record<string, string>),
+    ]);
+    setMessages(thread);
+    setFeedback(verdicts);
+    sessionId.current = id;
+    void api.shareState(id).then(setShared).catch(() => setShared(false));
   }, []);
 
   useEffect(() => {
     if (!resumeId) return;
     let cancelled = false;
-    void api.agentMessages(resumeId).then((thread) => {
+    void adoptThread(resumeId).then(() => {
       if (cancelled) return;
-      /*
-       * The resumed thread renders through the SAME component as a live one.
-       * Two renderers for one conversation is the drift shape, and the resumed
-       * half is the one nobody looks at — including, notably, the failed-run
-       * thread that ends in an unanswered question.
-       */
-      setMessages(thread);
-      sessionId.current = resumeId;
     });
     return () => {
       cancelled = true;
     };
-  }, [resumeId]);
+  }, [resumeId, adoptThread]);
 
   useEffect(() => {
     threadEnd.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages]);
 
-  const idle = messages.length === 0;
+  /**
+   * Draft autosave, per conversation (Onyx's composer habit): a half-typed
+   * question survives a tab close. sessionStorage, not the server — a draft
+   * is a device fact, and the reload-gap rule cuts the other way for text
+   * nobody submitted.
+   */
+  useEffect(() => {
+    const key = `neurai-draft-${resumeId ?? "new"}`;
+    const saved = sessionStorage.getItem(key);
+    if (saved) setInput(saved);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- restore once per conversation
+  }, [resumeId]);
+  useEffect(() => {
+    const key = `neurai-draft-${resumeId ?? "new"}`;
+    if (input) sessionStorage.setItem(key, input);
+    else sessionStorage.removeItem(key);
+  }, [input, resumeId]);
+
+  const idle = messages.length === 0 && !showHistory;
+
+  /** One reducer for ask and regenerate — same events, same thread. */
+  async function consume(stream: AsyncGenerator<AgentEvent>, replyId: string) {
+    for await (const event of stream) {
+      switch (event.type) {
+        case "session":
+          sessionId.current = event.id;
+          break;
+        case "text_delta":
+          setMessages((prev) =>
+            prev.map((m) => (m.id === replyId ? { ...m, content: m.content + event.delta } : m)),
+          );
+          break;
+        case "tool_call":
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === replyId
+                ? {
+                    ...m,
+                    tool_calls: [
+                      ...m.tool_calls.filter((c) => c.id !== event.id),
+                      { id: event.id, name: event.name, label: event.label, state: event.state, ms: event.ms },
+                    ],
+                  }
+                : m,
+            ),
+          );
+          break;
+        case "done":
+          setMessages((prev) =>
+            prev
+              .map((m) =>
+                m.id === replyId
+                  ? { ...m, streaming: false, run_id: event.runId, failed: event.failed }
+                  : m,
+              )
+              /* a failed run with nothing said is no turn at all — the
+                 question stands, which is what the server persisted */
+              .filter((m) => !(m.id === replyId && event.failed && m.content === "")),
+          );
+          break;
+        // no default: unknown event types are ignorable by contract
+      }
+    }
+  }
+
+  async function run(start: (signal: AbortSignal) => AsyncGenerator<AgentEvent>, replyId: string) {
+    setStreaming(true);
+    const controller = new AbortController();
+    abortRef.current = controller;
+    try {
+      await consume(start(controller.signal), replyId);
+      // adopt the persisted rows — the toolbar needs server ids
+      if (sessionId.current) await adoptThread(sessionId.current);
+    } catch (cause) {
+      if ((cause as Error).name === "AbortError") {
+        /*
+         * The STOP button. What remains on screen is what was said before
+         * the abort; the server's Shape-A/B rules decide what persists, and
+         * the next adoptThread shows exactly that. Settle the local flag so
+         * the caret stops blinking on a message nobody is writing.
+         */
+        setMessages((prev) =>
+          prev.map((m) => (m.id === replyId ? { ...m, streaming: false } : m)),
+        );
+        if (sessionId.current) await adoptThread(sessionId.current).catch(() => undefined);
+      } else {
+        setMessages((prev) => prev.filter((m) => !(m.id === replyId && m.content === "")));
+      }
+    } finally {
+      abortRef.current = null;
+      setStreaming(false);
+    }
+  }
 
   async function send() {
     const question = input.trim();
     if (question === "" || streaming) return;
     setInput("");
-    setStreaming(true);
+    setShowHistory(false);
 
     const userMsg: AgentMessage = {
       id: `u-${Date.now()}`,
@@ -125,57 +216,81 @@ export function Hub() {
       { id: replyId, role: "assistant", content: "", tool_calls: [], proposal: null, streaming: true },
     ]);
 
-    try {
-      for await (const event of api.ask(question, { page: "hub", callIds: [] }, sessionId.current)) {
-        switch (event.type) {
-          case "session":
-            // captured before anything else can need it
-            sessionId.current = event.id;
-            break;
-          case "text_delta":
-            setMessages((prev) =>
-              prev.map((m) => (m.id === replyId ? { ...m, content: m.content + event.delta } : m)),
-            );
-            break;
-          case "tool_call":
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === replyId
-                  ? {
-                      ...m,
-                      tool_calls: [
-                        ...m.tool_calls.filter((c) => c.id !== event.id),
-                        { id: event.id, name: event.name, label: event.label, state: event.state, ms: event.ms },
-                      ],
-                    }
-                  : m,
-              ),
-            );
-            break;
-          case "done":
-            setMessages((prev) =>
-              prev
-                .map((m) =>
-                  m.id === replyId
-                    ? { ...m, streaming: false, run_id: event.runId, failed: event.failed }
-                    : m,
-                )
-                /*
-                 * A failed run with nothing said is not an empty assistant
-                 * turn — it is no turn at all. Dropping the placeholder leaves
-                 * the question standing, which is what the server persisted and
-                 * therefore what a reload will show.
-                 */
-                .filter((m) => !(m.id === replyId && event.failed && m.content === "")),
-            );
-            break;
-          // no default: unknown event types are ignorable by contract
-        }
-      }
-    } finally {
-      setStreaming(false);
-    }
+    await run(
+      (signal) =>
+        api.ask(question, { page: "hub", callIds: [] }, sessionId.current, {
+          model: model || undefined,
+          skill: skill || undefined,
+          signal,
+        }),
+      replyId,
+    );
   }
+
+  async function regenerate() {
+    if (!sessionId.current || streaming) return;
+    const replyId = `a-${Date.now()}`;
+    setMessages((prev) => [
+      ...prev,
+      { id: replyId, role: "assistant", content: "", tool_calls: [], proposal: null, streaming: true },
+    ]);
+    await run(
+      (signal) => api.regenerate(sessionId.current!, { model: model || undefined, signal }),
+      replyId,
+    );
+  }
+
+  function stop() {
+    abortRef.current?.abort();
+  }
+
+  async function judge(messageId: string, verdict: "up" | "down") {
+    // optimistic — the row is the caller's own and the upsert cannot conflict
+    setFeedback((prev) => ({ ...prev, [messageId]: verdict }));
+    await api.messageFeedback(messageId, verdict).catch(() => {
+      setFeedback((prev) => {
+        const next = { ...prev };
+        delete next[messageId];
+        return next;
+      });
+    });
+  }
+
+  async function toggleShare() {
+    if (!sessionId.current) return;
+    setShared(await api.setShared(sessionId.current, !shared));
+  }
+
+  /** The visible thread as Markdown — a file the reader can keep. */
+  function exportMarkdown() {
+    const lines = messages
+      .filter((m) => m.content)
+      .map((m) => (m.role === "user" ? `**${t("exportYou")}:** ${m.content}` : m.content));
+    const blob = new Blob([lines.join("\n\n---\n\n") + "\n"], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "conversation.md";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function openConversation(id: string) {
+    setShowHistory(false);
+    router.push({ pathname: "/", query: { c: id } });
+  }
+
+  function newConversation() {
+    sessionId.current = undefined;
+    setMessages([]);
+    setFeedback({});
+    setShared(false);
+    setShowHistory(false);
+    router.push("/");
+  }
+
+  const headerBtn =
+    "tap flex h-8 items-center gap-1.5 rounded-full border border-border px-3 text-xs text-fg-muted hover:border-border-strong hover:text-fg";
 
   return (
     <div
@@ -183,6 +298,43 @@ export function Hub() {
         idle ? "items-center justify-center py-10 text-center" : "py-6"
       }`}
     >
+      {/* the conversation controls — visible whenever we are not idle */}
+      {!idle ? (
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <button type="button" className={headerBtn} onClick={() => setShowHistory((v) => !v)}>
+            {t("history")}
+          </button>
+          <button type="button" className={headerBtn} onClick={newConversation}>
+            {t("newConversation")}
+          </button>
+          {messages.length > 0 && sessionId.current ? (
+            <>
+              <button
+                type="button"
+                className={shared ? `${headerBtn} border-accent text-accent` : headerBtn}
+                aria-pressed={shared}
+                onClick={() => void toggleShare()}
+              >
+                {shared ? t("sharedWithOrg") : t("share")}
+              </button>
+              <button type="button" className={headerBtn} onClick={exportMarkdown}>
+                {t("exportMd")}
+              </button>
+            </>
+          ) : null}
+        </div>
+      ) : null}
+
+      {showHistory ? (
+        <div className={idle ? "w-full" : "mb-4"}>
+          <HistoryPanel
+            activeId={sessionId.current}
+            onOpen={openConversation}
+            onClose={() => setShowHistory(false)}
+          />
+        </div>
+      ) : null}
+
       {idle ? (
         <>
           <Image
@@ -206,12 +358,18 @@ export function Hub() {
             {t("scopePromise")}
           </p>
         </>
-      ) : (
+      ) : !showHistory ? (
         <div className="mb-4 flex-1">
-          <ConversationThread messages={messages} streaming={streaming} />
+          <ConversationThread
+            messages={messages}
+            streaming={streaming}
+            feedback={feedback}
+            onFeedback={(id, verdict) => void judge(id, verdict)}
+            onRegenerate={() => void regenerate()}
+          />
           <div ref={threadEnd} />
         </div>
-      )}
+      ) : null}
 
       <div
         className={`w-full max-w-[660px] rounded-2xl border border-border-strong bg-surface p-3 text-start ${
@@ -230,6 +388,7 @@ export function Hub() {
                 e.preventDefault();
                 void send();
               }
+              if (e.key === "Escape" && streaming) stop();
             }}
           />
           <button
@@ -239,31 +398,82 @@ export function Hub() {
           >
             <MicIcon width={18} height={18} />
           </button>
-          <button
-            type="button"
-            className="tap grid h-[38px] w-[38px] place-items-center rounded-xl bg-accent text-on-accent disabled:opacity-50"
-            title={t("send")}
-            disabled={streaming || input.trim() === ""}
-            onClick={() => void send()}
-          >
-            <SendIcon width={18} height={18} />
-          </button>
+          {streaming ? (
+            /* send morphs into STOP — one button, one place, per the donor's
+               composer; Esc does the same from the keyboard */
+            <button
+              type="button"
+              className="tap grid h-[38px] w-[38px] place-items-center rounded-xl bg-surface-2 text-fg"
+              title={t("stop")}
+              onClick={stop}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden><rect x="5" y="5" width="14" height="14" rx="2" /></svg>
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="tap grid h-[38px] w-[38px] place-items-center rounded-xl bg-accent text-on-accent disabled:opacity-50"
+              title={t("send")}
+              disabled={input.trim() === ""}
+              onClick={() => void send()}
+            >
+              <SendIcon width={18} height={18} />
+            </button>
+          )}
         </div>
-        <div className="mt-3 flex gap-2">
-          <button
-            type="button"
-            className="tap flex h-8 items-center gap-1.5 rounded-full border border-border px-3 text-xs text-fg-muted hover:border-border-strong hover:text-fg"
-          >
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {idle ? (
+            <button type="button" className={headerBtn} onClick={() => setShowHistory(true)}>
+              {t("history")}
+            </button>
+          ) : null}
+          <button type="button" className={headerBtn}>
             <PlusIcon width={14} height={14} />
             {t("addFile")}
           </button>
-          <button
-            type="button"
-            className="tap flex h-8 items-center gap-1.5 rounded-full border border-border px-3 text-xs text-fg-muted hover:border-border-strong hover:text-fg"
-          >
+          <button type="button" className={headerBtn}>
             <ToolsIcon width={14} height={14} />
             {t("tools")}
           </button>
+          <span className="flex-1" />
+          {/*
+            The model choice (M5 precedence: skill pin → this explicit choice
+            → the saved preference; no product default underneath). "" =
+            "let the server resolve", rendered as the saved-choice line.
+          */}
+          {skills.length > 0 ? (
+            <label className="flex items-center gap-1">
+              <span className="sr-only">{t("skillPicker")}</span>
+              <select
+                className="h-8 max-w-[10rem] rounded-full border border-border bg-transparent px-2 text-xs text-fg-muted outline-none hover:border-border-strong"
+                value={skill}
+                onChange={(e) => setSkill(e.target.value)}
+              >
+                <option value="">{t("skillDefault")}</option>
+                {skills.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          {models.length > 0 ? (
+            <label className="flex items-center gap-1">
+              <span className="sr-only">{t("modelPicker")}</span>
+              <select
+                className="h-8 max-w-[11rem] rounded-full border border-border bg-transparent px-2 text-xs text-fg-muted outline-none hover:border-border-strong"
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+              >
+                {models.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
         </div>
       </div>
 

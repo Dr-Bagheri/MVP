@@ -47,15 +47,26 @@ vi.mock("next/navigation", () => ({
 const askCalls: (string | undefined)[] = [];
 const SESSION_ID = "sess-fixed-1";
 
+/**
+ * What the server has PERSISTED, appended as the script streams. The mock
+ * must honour persisted-before-done (rule 10): `done` means the turn is
+ * already written, and the hub refetches after it — a mock whose refetch
+ * returns [] would wipe the thread and fail the render for a reason the
+ * real wire guarantees cannot happen.
+ */
+const persisted: { id: string; role: "user" | "assistant"; content: string }[] = [];
+
 async function* scriptedAsk(
-  _q: string,
+  q: string,
   _ctx: { page: string; callIds: string[] },
   sessionId?: string,
 ): AsyncGenerator<AgentEvent> {
   askCalls.push(sessionId);
   // mirrors the wire: `session` first, `created` false when continuing
   yield { type: "session", id: sessionId ?? SESSION_ID, created: sessionId === undefined };
+  persisted.push({ id: `m-${persisted.length}`, role: "user", content: q });
   yield { type: "text_delta", delta: "پاسخ" };
+  persisted.push({ id: `m-${persisted.length}`, role: "assistant", content: "پاسخ" });
   yield { type: "done", runId: "run-1", failed: false };
 }
 
@@ -67,7 +78,15 @@ vi.mock("@/api/client", () => ({
       model_id: null, created_at: new Date().toISOString(),
     }),
     ask: (...args: Parameters<typeof scriptedAsk>) => scriptedAsk(...args),
-    agentMessages: async () => [],
+    agentMessages: async () =>
+      persisted.map((m) => ({ ...m, tool_calls: [], proposal: null })),
+    // the Part-1 surface the hub now touches on mount / after done — empty
+    // answers keep the pickers unrendered and the subject of THIS file
+    // (session continuity) unchanged
+    models: async () => ({ models: [], preferred_model: null, curated: false, tool_capability_filtered: false }),
+    skills: async () => [],
+    sessionFeedback: async () => ({}),
+    shareState: async () => false,
   },
 }));
 
@@ -86,6 +105,7 @@ async function ask(text: string) {
 describe("Hub — session continuity", () => {
   beforeEach(() => {
     askCalls.length = 0;
+    persisted.length = 0;
   });
 
   it("starts without a session id, then sends the captured one back", async () => {

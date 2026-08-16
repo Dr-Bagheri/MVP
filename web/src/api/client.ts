@@ -15,7 +15,6 @@ import {
   ME,
   MODELS,
   ORG,
-  SKILLS,
   SPEAKERS,
   SUMMARIES,
   TRANSCRIPT,
@@ -724,18 +723,10 @@ export const api = {
    * heuristic that would look like enforcement.
    */
   async models(): Promise<ModelsResponse> {
-    const allowed = models.filter((m) => m.allowed);
-    return wait({
-      models: allowed.map((m) => ({
-        id: m.id,
-        name: m.label,
-        reasoning: m.suggested,
-        selected: m.id === me.model_id,
-      })),
-      preferred_model: me.model_id,
-      curated: models.some((m) => !m.allowed),
-      tool_capability_filtered: false,
-    });
+    /* **LIVE** — `/api/models` → `/v1/models`: the catalogue already
+       intersected with the org allow-list AND the structural no-Claude
+       filter, both core's. This layer filters nothing. */
+    return bff<ModelsResponse>("/api/models");
   },
   /** Phase-A only: the admin allow-list has no core/ endpoint yet. */
   async adminModels(): Promise<AdminModelRow[]> {
@@ -761,7 +752,9 @@ export const api = {
     return wait(models);
   },
   async skills(): Promise<Skill[]> {
-    return wait(SKILLS);
+    /* **LIVE** — `/api/skills` → `/v1/skills`, the resolver ladder's view
+       (system / org / user, most specific wins). */
+    return bff<Skill[]>("/api/skills");
   },
 
   // ---- admin --------------------------------------------------------------------
