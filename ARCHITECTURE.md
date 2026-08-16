@@ -1182,6 +1182,38 @@ Changing a size or gap means changing the blueprint + constants first —
 never improvising in a page. Migration order (approved): scaffold → Settings
 → Profile → Management → Echo surfaces.
 
+## M27 — Assistant experience contract [user directive 2026-08-16;
+## detail in docs/NeurAI-Platform-Architecture-v2.docx §5]
+
+Owner-rename of sessions (the SYSTEM never rewrites a title — the
+never-rewritten ruling's intent — but the conversation's owner may);
+regenerate = append-only re-run of the last user turn with optional model
+override (no branching tree — designed seam); message feedback = new table,
+verdict code + optional note (the note is content: never in logs); share =
+org-scoped read-only for active members, NO public links (invariant 2);
+stop = client abort + the existing Shape-A/B persistence rulings.
+
+## M28 — Onyx adoption & license rule [cut 2026-08-16]
+
+Donor: github.com/onyx-dot-app/onyx (local read-only clone
+Desktop/onyx-reference). MIT code may be adapted with attribution in
+NOTICE.md; the three ee/ directories are enterprise-licensed and
+contribute CONCEPTS only — zero code copied, paraphrased or
+transliterated from ee/ files. All adopted code is rewritten to this
+repo's conventions before landing. Deliberate non-adoptions (each a
+decision, not an oversight): connector/indexing pipeline, app-level user
+groups & permission tokens (RLS + roles stay the wall), multi-tenant
+machinery, Slack/Discord bots, Craft, KG, image-gen/voice, standard
+answers, Stripe/SCIM/whitelabeling.
+
+## M29 — Skills CRUD & scoping [cut 2026-08-16; detail in v2 docx §6]
+
+The resolveSkill ladder is unchanged (user → org → system floor, floor
+loud). Skills gain scope system|org|user: system rows API-immutable;
+org rows admin-writable under RLS; user rows owner-private. New columns:
+starter_questions, allowed_tools (vocabulary-checked subset of the M4
+registry). Management·Skills becomes full CRUD.
+
 ---
 
 ## Invariants (locked)
