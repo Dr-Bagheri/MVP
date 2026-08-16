@@ -373,11 +373,15 @@ export const api = {
    * new password in one request, because the token is single-use and splitting
    * the steps would burn it on a form that might never be submitted.
    */
-  async resetPassword(tokenHash: string, newPassword: string): Promise<void> {
+  async resetPassword(
+    tokenHash: string,
+    newPassword: string,
+    linkType: "recovery" | "invite" = "recovery",
+  ): Promise<void> {
     await bff<{ ok: true }>("/api/auth/reset", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ token_hash: tokenHash, new_password: newPassword }),
+      body: JSON.stringify({ token_hash: tokenHash, new_password: newPassword, type: linkType }),
     });
   },
 

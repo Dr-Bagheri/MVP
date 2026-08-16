@@ -54,6 +54,14 @@ export interface InvitationRecord {
 export interface MintedInvitation extends InvitationRecord {
   /** Shown once. Not stored, not recoverable, not logged. */
   token: string;
+  /**
+   * Whether the platform emailed the invitation itself (db/0060's flow:
+   * the recipient clicks, sets a password, and arrives active — no token
+   * ever shown to anyone). `false` carries a reason so the UI can offer
+   * the token link as the RESCUE, not the default.
+   */
+  emailed: boolean;
+  email_status: "sent" | "already_registered" | "send_failed" | "unconfigured";
 }
 
 const INVITATION_COLUMNS = `
@@ -77,7 +85,50 @@ const toInvitation = (row: Record<string, unknown>): InvitationRecord => ({
 /** Default validity. Long enough to survive a weekend, short enough to expire. */
 const DEFAULT_TTL_DAYS = 14;
 
-export function createInvitationsRepo(db: Db) {
+export interface InvitationsConfig {
+  /** Absent = invitations still mint, `email_status: "unconfigured"`. */
+  supabaseUrl?: string | undefined;
+  serviceKey?: string | undefined;
+}
+
+/**
+ * Ask the auth provider to SEND the invitation email (user directive,
+ * 2026-08-16: "invitation email does not send — make it simple, no token").
+ *
+ * GoTrue's admin invite creates the auth identity and emails a set-password
+ * link; when the person completes it and registers, db/0060 redeems the
+ * invitation on their verified address. "Already registered" is a distinct,
+ * NON-failure answer: the person has an auth account — the moment they next
+ * sign in without an app_user row, the same door catches them.
+ *
+ * Status-only error handling: an auth-api body can echo the address.
+ */
+async function sendInviteEmail(
+  config: InvitationsConfig,
+  email: string,
+): Promise<MintedInvitation["email_status"]> {
+  const base = config.supabaseUrl?.trim().replace(/\/+$/, "");
+  if (!base || !config.serviceKey) return "unconfigured";
+  try {
+    const response = await fetch(`${base}/auth/v1/invite`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${config.serviceKey}`,
+        apikey: config.serviceKey,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ email }),
+    });
+    if (response.ok) return "sent";
+    // GoTrue answers 422 for an address that already has an identity
+    if (response.status === 422) return "already_registered";
+    return "send_failed";
+  } catch {
+    return "send_failed";
+  }
+}
+
+export function createInvitationsRepo(db: Db, config: InvitationsConfig = {}) {
   return {
     async list(identity: Identity): Promise<InvitationRecord[]> {
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>
@@ -159,7 +210,16 @@ export function createInvitationsRepo(db: Db) {
         });
         const row = rows[0];
         if (!row) throw new NotFoundError("could not issue an invitation");
-        return { ...toInvitation(row), token };
+        // AFTER the row exists: an emailed link with no invitation behind it
+        // would invite someone into nothing; a row whose email failed still
+        // has the token as the rescue
+        const emailStatus = await sendInviteEmail(config, email);
+        return {
+          ...toInvitation(row),
+          token,
+          emailed: emailStatus === "sent",
+          email_status: emailStatus,
+        };
       } catch (error) {
         const pg = error as { code?: string; constraint_name?: string };
         if (pg.code === "23505" && pg.constraint_name === "invitation_one_live_per_email") {

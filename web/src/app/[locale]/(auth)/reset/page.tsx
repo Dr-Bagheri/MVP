@@ -28,6 +28,10 @@ export default function ResetPasswordPage() {
   const tAuth = useTranslations("auth");
   const router = useRouter();
   const [tokenHash, setTokenHash] = useState<string | null>(null);
+  /** `recovery` (forgot-password) or `invite` (the emailed invitation) — the
+   *  link says which, and the copy follows. Allow-listed; anything else
+   *  falls back to recovery. */
+  const [linkType, setLinkType] = useState<"recovery" | "invite">("recovery");
   const [checked, setChecked] = useState(false);
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -45,6 +49,7 @@ export default function ResetPasswordPage() {
      */
     const params = new URLSearchParams(window.location.search);
     setTokenHash(params.get("token_hash"));
+    if (params.get("type") === "invite") setLinkType("invite");
     setChecked(true);
   }, []);
 
@@ -57,10 +62,12 @@ export default function ResetPasswordPage() {
     setBusy(true);
     setError(null);
     try {
-      await api.resetPassword(tokenHash, next);
+      await api.resetPassword(tokenHash, next, linkType);
       // signed in by the reset itself — sending them to a login form seconds
-      // after they proved they own the address is a step with no purpose
-      router.push("/echo");
+      // after they proved they own the address is a step with no purpose.
+      // "/" so an invited arrival lands on the hub, where the shell's
+      // register-on-first-sign-in flow redeems their invitation (db/0060).
+      router.push("/");
     } catch (cause) {
       if (cause instanceof BffError && cause.kind === "invalid_token") {
         setExpired(true);
@@ -95,8 +102,12 @@ export default function ResetPasswordPage() {
 
   return (
     <Card>
-      <h1 className="text-lg font-bold text-fg">{t("resetTitle")}</h1>
-      <p className="mt-2 text-sm leading-7 text-fg-muted">{t("resetBody")}</p>
+      <h1 className="text-lg font-bold text-fg">
+        {linkType === "invite" ? t("inviteTitle") : t("resetTitle")}
+      </h1>
+      <p className="mt-2 text-sm leading-7 text-fg-muted">
+        {linkType === "invite" ? t("inviteBody") : t("resetBody")}
+      </p>
 
       <form className="mt-4 space-y-4" onSubmit={submit}>
         <Field label={t("new")}>

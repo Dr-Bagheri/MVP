@@ -256,6 +256,27 @@ export function createMembersRepo(db: Db) {
       const email = input.email.trim();
       if (!email) throw new ValidationError("token has no email claim");
 
+      /*
+       * The invitation door FIRST (db/0060): if a live invitation exists for
+       * this VERIFIED address, the person arrives active with the granted
+       * role and never sees the org-choice screen — the platform emailed
+       * them, so the email in their token IS the address match. NULL means
+       * "no invitation", the normal answer, and registration proceeds.
+       */
+      const redeemed = await db.withoutIdentity((tx: SqlTx) =>
+        tx.unsafe<Record<string, unknown>>(
+          // a NULL composite comes back as one all-null row — the filter
+          // turns "no invitation" into zero rows instead of a ghost member
+          `select * from echo.redeem_invitation_for_email($1::uuid, $2::citext) r
+            where r.id is not null`,
+          [input.userId, email],
+        ),
+      );
+      if (redeemed[0]) {
+        const row = redeemed[0];
+        return { ...toMember(row), org_id: row.org_id as string };
+      }
+
       try {
         // Explicit casts: with bare placeholders Postgres cannot resolve the
         // (uuid, citext, text, text, uuid) signature and answers 42P18

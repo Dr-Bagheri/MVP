@@ -227,8 +227,14 @@ export function requestPasswordRecovery(email: string, redirectTo: string): Prom
  * because a flow that is correct in code and unreachable in configuration is
  * indistinguishable from a broken one.
  */
-export function verifyRecoveryToken(tokenHash: string): Promise<TokenSet> {
-  return gotrue("/verify", { type: "recovery", token_hash: tokenHash });
+export function verifyRecoveryToken(
+  tokenHash: string,
+  type: "recovery" | "invite" = "recovery",
+): Promise<TokenSet> {
+  // "invite" joined "recovery" with the emailed-invitation flow (db/0060):
+  // both are set-a-password links that prove the address; GoTrue just names
+  // the first one differently.
+  return gotrue("/verify", { type, token_hash: tokenHash });
 }
 
 /**

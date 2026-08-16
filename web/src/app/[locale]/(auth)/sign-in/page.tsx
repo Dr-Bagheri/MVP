@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/routing";
 import { api, BffError } from "@/api/client";
@@ -45,6 +45,10 @@ export default function SignInPage() {
   const [orgName, setOrgName] = useState("");
   /** Set when the server says this token has no membership yet (M15 recovery). */
   const [needsOrg, setNeedsOrg] = useState(false);
+  /** The invitation probe runs ONCE. Without the bound, register-succeeds
+   *  while identity-stays-unregistered recurses forever — the suite found it
+   *  by eating the heap, which beats a browser tab finding it. */
+  const invitationProbed = useRef(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /** Arrived from a successful email confirmation — say so while routing. */
@@ -98,8 +102,24 @@ export default function SignInPage() {
         router.push("/suspended");
         return;
       case "unregistered":
-        // authenticated, but no `app_user` row — ask for the org and register
-        setNeedsOrg(true);
+        /*
+         * The INVITATION door first (db/0060): if the platform emailed this
+         * person an invitation, a bare register redeems it on their verified
+         * address and they are IN — active, granted role, no org screen. The
+         * refusal (no invitation, no org named) is the normal answer for
+         * everyone else and routes to the org-choice form exactly as before.
+         */
+        if (invitationProbed.current) {
+          setNeedsOrg(true);
+          return;
+        }
+        invitationProbed.current = true;
+        try {
+          await api.register({ display_name: email.split("@")[0] ?? email });
+          await routeByIdentity();
+        } catch {
+          setNeedsOrg(true);
+        }
         return;
       case "signed_out":
         // the cookie did not survive the hop; say so rather than looping

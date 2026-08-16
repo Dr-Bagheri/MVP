@@ -465,6 +465,11 @@ export interface Invitation {
 export interface MintedInvitation extends Invitation {
   /** Shown once. Not stored, not recoverable, not logged. */
   token: string;
+  /** True when the platform emailed the invitation itself (the simple flow —
+   *  no token shown to anyone). False carries `email_status` so the UI can
+   *  offer the token link as the RESCUE, not the default. */
+  emailed: boolean;
+  email_status: "sent" | "already_registered" | "send_failed" | "unconfigured";
 }
 
 // ---- agent ------------------------------------------------------------------

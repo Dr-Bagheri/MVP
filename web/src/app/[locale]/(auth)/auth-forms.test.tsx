@@ -135,6 +135,9 @@ describe("sign-in actually signs in", () => {
     identityState
       .mockResolvedValueOnce({ state: "unregistered" })
       .mockResolvedValue({ state: "member" });
+    // the invitation probe (a bare register, db/0060) REFUSES for a founder
+    // — nobody invited them; the refusal is what shows the org form
+    register.mockRejectedValueOnce(new Error("no invitation, no org named"));
     render(<SignInPage />);
     type(/^رایانامه/, "person@example.com");
     type(/^گذرواژه/, "hunter2");
@@ -146,6 +149,23 @@ describe("sign-in actually signs in", () => {
     fireEvent.click(screen.getByRole("button", { name: "تکمیل ثبت‌نام" }));
 
     await waitFor(() => expect(push).toHaveBeenCalledWith("/"));
+  });
+
+  it("an INVITED arrival never sees the org form — the bare register redeems and routes in (db/0060)", async () => {
+    identityState
+      .mockResolvedValueOnce({ state: "unregistered" })
+      .mockResolvedValue({ state: "member" });
+    // the probe succeeds: the platform emailed this person, the door opened
+    register.mockResolvedValue({ id: "u-2", status: "active" });
+    render(<SignInPage />);
+    type(/^رایانامه/, "invited@example.com");
+    type(/^گذرواژه/, "hunter2");
+    fireEvent.click(screen.getByRole("button", { name: "ورود" }));
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/"));
+    // the org form must never have rendered: the person answered no question
+    expect(screen.queryByLabelText(/^نام سازمان/)).toBeNull();
+    expect(register).toHaveBeenCalledWith({ display_name: "invited" });
   });
 });
 

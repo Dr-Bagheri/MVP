@@ -74,7 +74,11 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     storageUrl: options.storageUrl,
     serviceKey: options.storageServiceKey,
   });
-  const invitations: InvitationsRepo = createInvitationsRepo(options.db);
+  const invitations: InvitationsRepo = createInvitationsRepo(options.db, {
+    // the same pair the uploads signer and purge job use (M12's env)
+    supabaseUrl: options.storageUrl,
+    serviceKey: options.storageServiceKey,
+  });
   const health: HealthRepo = createHealthRepo(options.db);
   const webhooks: WebhooksRepo = createWebhooksRepo(options.db);
   // One resolver for the assistant's `/slug` and the pipeline's summarizer.

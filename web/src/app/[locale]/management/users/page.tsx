@@ -56,6 +56,7 @@ const SORTS: readonly MemberSort[] = ["default", "name", "created", "last_seen",
 export default function UsersPage() {
   const t = useTranslations("management");
   const tAdmin = useTranslations("admin");
+  const tCommon = useTranslations("common");
   const locale = useLocale();
 
   const [me, setMe] = useState<User | null>(null);
@@ -416,12 +417,29 @@ export default function UsersPage() {
         <Card className="mb-4">
           <h2 className="h-section mb-3">{t("invitationsTitle")}</h2>
 
-          {minted ? (
-            /* the one-way door: the invitation token's ONLY appearance.
-               Dismissed by the person, never a timer (SecretOnce's rule). */
+          {minted?.emailed ? (
+            /* the SIMPLE flow (user directive): the platform emailed the
+               invitation — no token, nothing for the admin to carry */
+            <div className="mb-3 rounded-lg border border-success/40 bg-surface-2 p-3">
+              <p className="text-sm text-fg" role="status">
+                {t("inviteEmailed", { email: minted.email })}
+              </p>
+              <button
+                className="btn-secondary mt-2 h-9 min-h-0 px-3 text-xs"
+                onClick={() => setMinted(null)}
+              >
+                {tCommon("done")}
+              </button>
+            </div>
+          ) : minted ? (
+            /* the RESCUE: the email did not go (already registered / sender
+               down / not configured) — the show-once token link is the manual
+               fallback, with the reason said out loud. Dismissed by the
+               person, never a timer (SecretOnce's rule). */
             <div className="mb-3 rounded-lg border border-accent bg-surface-2 p-3">
               <p className="text-sm font-semibold text-fg">{t("inviteMintedTitle")}</p>
               <p className="mt-1 text-sm leading-6 text-fg-muted">
+                {t(`inviteEmail_${minted.email_status}`, { email: minted.email })}{" "}
                 {t("inviteMintedNote", { email: minted.email })}
               </p>
               <p className="ltr mt-2 break-all rounded-md bg-surface p-2 font-mono text-xs text-fg">

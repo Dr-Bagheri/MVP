@@ -24,9 +24,10 @@ import { writeSession } from "@/server/session";
  * page says so and offers a fresh email, rather than a retry that cannot work.
  */
 export async function POST(request: Request) {
-  const { token_hash, new_password } = (await request.json()) as {
+  const { token_hash, new_password, type } = (await request.json()) as {
     token_hash?: string;
     new_password?: string;
+    type?: string;
   };
   if (!token_hash || !new_password) {
     return Response.json(
@@ -34,10 +35,14 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
+  // allow-listed: an INVITE link proves the address the same way a recovery
+  // link does, and sets the first password instead of a new one. Anything
+  // else verifies as recovery — never a caller-chosen free string.
+  const verifyType = type === "invite" ? "invite" : "recovery";
 
   let tokens;
   try {
-    tokens = await verifyRecoveryToken(token_hash);
+    tokens = await verifyRecoveryToken(token_hash, verifyType);
   } catch (error) {
     /*
      * Deliberately its own kind. Folding it into `invalid` would put "this

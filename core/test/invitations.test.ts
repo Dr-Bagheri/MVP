@@ -8,7 +8,7 @@
  * invitee, so a differentiated refusal turns a forwarded link into an oracle
  * for which addresses were invited to which org.
  */
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ConflictError, NotFoundError, ValidationError } from "../src/api/errors.ts";
 import { createInvitationsRepo } from "../src/api/invitations.ts";
@@ -178,5 +178,52 @@ describe("true delete", () => {
     });
     await expect(createInvitationsRepo(db).tombstone(OWNER, OTHER))
       .rejects.toBeInstanceOf(NotFoundError);
+  });
+});
+
+describe("the emailed invitation (db/0060's flow)", () => {
+  const withFetch = (status: number) => {
+    const spy = vi.fn((_url: string | URL, _init?: unknown) => Promise.resolve(new Response("{}", { status })));
+    vi.stubGlobal("fetch", spy);
+    return spy;
+  };
+  const CONFIG = { supabaseUrl: "https://project.supabase.co", serviceKey: "k" };
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("sends the invite through the auth provider and says so", async () => {
+    const { db } = fakeDb();
+    const spy = withFetch(200);
+    const invite = await createInvitationsRepo(db, CONFIG)
+      .issue(ADMIN, { email: "new@example.com" });
+    expect(invite.emailed).toBe(true);
+    expect(invite.email_status).toBe("sent");
+    expect(String(spy.mock.calls[0]![0])).toContain("/auth/v1/invite");
+  });
+
+  it("names already_registered as a distinct NON-failure — the by-email door catches them at next sign-in", async () => {
+    const { db } = fakeDb();
+    withFetch(422);
+    const invite = await createInvitationsRepo(db, CONFIG)
+      .issue(ADMIN, { email: "new@example.com" });
+    expect(invite.emailed).toBe(false);
+    expect(invite.email_status).toBe("already_registered");
+  });
+
+  it("a failed send still mints the invitation — the token is the rescue", async () => {
+    const { db } = fakeDb();
+    withFetch(500);
+    const invite = await createInvitationsRepo(db, CONFIG)
+      .issue(ADMIN, { email: "new@example.com" });
+    expect(invite.email_status).toBe("send_failed");
+    expect(invite.token.startsWith("echo_inv_")).toBe(true);
+  });
+
+  it("an unconfigured deployment says so rather than pretending it sent", async () => {
+    const { db } = fakeDb();
+    const spy = withFetch(200);
+    const invite = await createInvitationsRepo(db).issue(ADMIN, { email: "new@example.com" });
+    expect(invite.email_status).toBe("unconfigured");
+    expect(spy).not.toHaveBeenCalled();
   });
 });
