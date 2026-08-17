@@ -265,7 +265,7 @@ export function AvatarMenu({ me }: { me: User | null }) {
             role="menuitem"
             onClick={signOut}
             disabled={signingOut}
-            className="mt-1 block w-full rounded-lg border-t border-border px-3 py-2 text-start text-sm text-danger hover:bg-surface-2 disabled:opacity-50"
+            className="mt-1 block w-full rounded-lg bg-danger/10 px-3 py-2 text-start text-sm text-danger hover:bg-danger/20 disabled:opacity-50"
           >
             {t("signOut")}
           </button>
