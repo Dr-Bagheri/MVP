@@ -18,6 +18,7 @@ import { createOrgRepo, type OrgRepo } from "./org.ts";
 import { createSessionsRepo, type SessionsRepo } from "./sessions.ts";
 import { availableTools, createSkillAuthoring, type SkillAuthoring } from "./skills.ts";
 import { createUploadsRepo, type UploadsRepo } from "./uploads.ts";
+import { createDirectoryRepo, type DirectoryRepo } from "./directory.ts";
 import { createInvitationsRepo, type InvitationsRepo } from "./invitations.ts";
 import { createHealthRepo, type HealthRepo } from "./health.ts";
 import { createAuth, type Auth } from "./auth.ts";
@@ -74,6 +75,7 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     storageUrl: options.storageUrl,
     serviceKey: options.storageServiceKey,
   });
+  const directory: DirectoryRepo = createDirectoryRepo(options.db);
   const invitations: InvitationsRepo = createInvitationsRepo(options.db, {
     // the same pair the uploads signer and purge job use (M12's env)
     supabaseUrl: options.storageUrl,
@@ -517,6 +519,45 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       limit: num(query.limit, "limit"),
     });
     return reply.send({ call_id: id, segments });
+  });
+
+  // ---- the people directory + speaker attribution (0062) ------------------
+
+  app.get("/v1/directory", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    return reply.send({ people: await directory.list(identity) });
+  });
+
+  app.post("/v1/directory", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const body = (request.body ?? {}) as { display_name?: unknown; title?: unknown };
+    return reply.code(201).send(await directory.create(identity, {
+      displayName: typeof body.display_name === "string" ? body.display_name : "",
+      title: typeof body.title === "string" ? body.title : undefined,
+    }));
+  });
+
+  app.patch("/v1/directory/:id", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { display_name?: unknown; title?: unknown };
+    return reply.send(await directory.update(identity, id, {
+      displayName: typeof body.display_name === "string" ? body.display_name : undefined,
+      title: typeof body.title === "string" ? body.title : undefined,
+    }));
+  });
+
+  app.patch("/v1/calls/:id/speakers/:speakerId", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id, speakerId } = request.params as { id: string; speakerId: string };
+    const body = (request.body ?? {}) as { person_id?: unknown; label?: unknown };
+    return reply.send(await directory.updateSpeaker(identity, id, speakerId, {
+      // undefined = leave; null = UNLINK — two different nothings, kept apart
+      personId: body.person_id === undefined ? undefined
+        : body.person_id === null ? null
+          : typeof body.person_id === "string" ? body.person_id : undefined,
+      label: typeof body.label === "string" ? body.label : undefined,
+    }));
   });
 
   app.get("/v1/calls/:id/speakers", async (request, reply) => {

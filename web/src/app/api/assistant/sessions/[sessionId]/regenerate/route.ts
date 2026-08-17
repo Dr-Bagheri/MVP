@@ -1,5 +1,9 @@
 import { coreStream, errorResponse } from "@/server/core";
 
+/** Same reason as ask/route.ts: an agent run outlives Vercel's default
+ *  function duration, and a killed function reads as a dropped stream. */
+export const maxDuration = 300;
+
 /**
  * Regenerate (M27): re-answer the session's standing question as a fresh
  * run, optionally on a different model. SSE passthrough like ask — nothing

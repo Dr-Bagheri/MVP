@@ -169,13 +169,37 @@
     "section": {
       "record": "Record in browser",
       "upload": "Upload a file",
-      "calls": "Calls"
+      "calls": "Calls",
+      "speakers": "Speakers"
     },
     "desc": {
       "record": "Record a session with your device microphone — 30-minute parts, uploaded as you go.",
       "upload": "Upload a recorded audio file — transcription starts once it lands.",
-      "calls": "Recorded calls, transcripts and summaries."
+      "calls": "Recorded calls, transcripts and summaries.",
+      "speakers": "People and their titles — every call page picks speakers from this list."
     }
+  },
+  "speakersDir": {
+    "namePlaceholder": "Person's name",
+    "add": "Add",
+    "addFailed": "Not saved — try again.",
+    "empty": "Nobody yet — add a name and a title above.",
+    "colName": "Name",
+    "colTitle": "Title",
+    "noTitle": "No title"
+  },
+  "titles": {
+    "ceo": "CEO",
+    "cto": "CTO",
+    "coo": "COO",
+    "cmo": "CMO",
+    "cfo": "CFO",
+    "vp": "VP",
+    "director": "Director",
+    "manager": "Manager",
+    "lead": "Lead",
+    "employee": "Employee",
+    "other": "Other"
   },
   "capture": {
     "title": "Record or upload",
@@ -235,6 +259,9 @@
     "speakers": "Speakers",
     "unattributed": "Unattributed speaker",
     "linkSpeaker": "Link to a person",
+    "speakerLabel": "Speaker name",
+    "noPerson": "Not linked",
+    "manageSpeakers": "Manage speakers & titles",
     "renameSpeaker": "Rename speaker",
     "seekHint": "Click any word to seek the audio there.",
     "noAudio": "No audio is available to play.",
@@ -266,6 +293,8 @@
     "contextPage": "Current page: {page}",
     "mention": "Add a call to context",
     "toolCalls": "Tools",
+    "skill": "Skill",
+    "skillDefault": "Default skill",
     "model": "Model",
     "modelPicker": "Choose model",
     "toolCapableOnly": "Only tool-capable models are listed.",
@@ -863,6 +892,7 @@
     "cancel": "Cancel",
     "confirm": "Confirm",
     "save": "Save",
+    "actionFailed": "That didn't go through — try again.",
     "loading": "Loading…",
     "minutes": "min",
     "you": "You",

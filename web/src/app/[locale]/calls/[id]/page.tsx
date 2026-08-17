@@ -3,8 +3,9 @@
 import { use, useEffect, useMemo, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
-import type { Call, CallStatus, Speaker, SummaryVersion, TranscriptSegment } from "@/api/types";
+import type { Call, CallStatus, Person, Speaker, SummaryVersion, TranscriptSegment } from "@/api/types";
 import { EchoAppShell } from "@/components/echo/EchoAppShell";
+import { Link } from "@/i18n/routing";
 import { useCrumbTitle } from "@/components/platform/CrumbTitle";
 import { Card, Chip, PageHeader, StatusChip } from "@/components/ui";
 import { formatClock, formatDate, digits } from "@/lib/format";
@@ -69,6 +70,7 @@ export default function CallDetailPage({
 }) {
   const { id } = use(params);
   const t = useTranslations("call");
+  const tTitles = useTranslations("titles");
   const tStatus = useTranslations("status");
   const tCalls = useTranslations("calls");
   const locale = useLocale();
@@ -76,6 +78,8 @@ export default function CallDetailPage({
   const [call, setCall] = useState<Call | null>(null);
   const [rows, setRows] = useState<TranscriptSegment[]>([]);
   const [speakers, setSpeakers] = useState<Speaker[]>([]);
+  /** The Echo speakers directory — the dropdown's option list. */
+  const [directory, setDirectory] = useState<Person[]>([]);
   const [versions, setVersions] = useState<SummaryVersion[]>([]);
   const [shownVersion, setShownVersion] = useState<number | null>(null);
   const [playheadMs, setPlayheadMs] = useState(0);
@@ -92,6 +96,7 @@ export default function CallDetailPage({
     void api.getCall(id).then(setCall);
     void api.getTranscript(id).then(setRows);
     void api.getSpeakers(id).then(setSpeakers);
+    void api.directory().then(setDirectory).catch(() => setDirectory([]));
     void api.getSummaries(id).then((all) => {
       setVersions(all);
       setShownVersion(all.at(-1)?.version ?? null);
@@ -364,30 +369,68 @@ export default function CallDetailPage({
           </ul>
         </Card>
 
-        {/* speaker roster */}
+        {/* speaker roster: rename the LABEL in place, and pick the person
+            from the Echo speakers directory (user directive: a dropdown,
+            not a dead button). Talk time is GONE from here — nothing
+            measures it yet, and formatClock(undefined) was the NaN:NaN on
+            the card. */}
         <Card>
           <h2 className="mb-3 text-sm font-semibold text-fg">{t("speakers")}</h2>
-          <ul className="space-y-3">
+          <ul className="space-y-4">
             {speakers.map((speaker) => (
-              <li key={speaker.id}>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm font-medium text-fg">
-                    {speaker.person_name ?? speaker.label}
-                  </span>
-                  <span className="text-xs text-fg-muted">
-                    {formatClock(speaker.talk_seconds, locale)}
-                  </span>
-                </div>
-                {speaker.person_id ? (
-                  <Chip tone="success">{t("linkSpeaker")} ✓</Chip>
-                ) : (
-                  <button className="btn-secondary mt-1 h-8 min-h-0 px-2 text-xs">
-                    {t("linkSpeaker")}
-                  </button>
-                )}
+              <li key={speaker.id} className="space-y-1.5">
+                <input
+                  className="input h-9 min-h-0 text-sm"
+                  aria-label={t("speakerLabel")}
+                  defaultValue={speaker.label}
+                  onBlur={(e) => {
+                    const next = e.target.value.trim();
+                    if (next && next !== speaker.label) {
+                      void api
+                        .renameSpeaker(id, speaker.id, next)
+                        .then(() => api.getSpeakers(id))
+                        .then(setSpeakers)
+                        .catch(() => undefined);
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                  }}
+                />
+                <select
+                  className="input h-9 min-h-0 py-0 text-xs"
+                  aria-label={t("linkSpeaker")}
+                  value={speaker.person_id ?? ""}
+                  onChange={(e) => {
+                    void api
+                      .linkSpeaker(id, speaker.id, e.target.value || null)
+                      .then(() => api.getSpeakers(id))
+                      .then(setSpeakers)
+                      .catch(() => undefined);
+                  }}
+                >
+                  <option value="">{t("noPerson")}</option>
+                  {directory.map((person) => (
+                    <option key={person.id} value={person.id}>
+                      {person.display_name}
+                    </option>
+                  ))}
+                </select>
+                {speaker.person_name ? (
+                  <p className="text-xs text-fg-muted">
+                    {speaker.person_name}
+                    {speaker.person_title ? ` — ${tTitles(speaker.person_title)}` : ""}
+                  </p>
+                ) : null}
               </li>
             ))}
           </ul>
+          <Link
+            href="/echo/speakers"
+            className="mt-3 inline-block text-xs text-accent underline-offset-2 hover:underline"
+          >
+            {t("manageSpeakers")}
+          </Link>
         </Card>
       </div>
     </EchoAppShell>

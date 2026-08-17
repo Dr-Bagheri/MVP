@@ -1,6 +1,15 @@
 import { coreStream, errorResponse } from "@/server/core";
 
 /**
+ * Vercel kills a function at its plan's default duration — ~10s on the
+ * deployed tier — and an agent run with tools routinely outlives that. The
+ * stream then dies mid-answer and the client honestly reports "connection
+ * dropped" (user report, 2026-08-17: every tool-using ask on production).
+ * 300 asks for the plan maximum; Vercel clamps to what the tier allows.
+ */
+export const maxDuration = 300;
+
+/**
  * POST /api/assistant/ask → SSE passthrough.
  *
  * The agent runs in core/ as the caller (M4): this handler forwards the

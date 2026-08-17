@@ -6,9 +6,9 @@
  */
 import {
   AGENT_RUNS,
-  DIRECTORY,
+
   ME,
-  SPEAKERS,
+
   TRANSCRIPT,
   USERS,
 } from "./mock-data";
@@ -23,7 +23,7 @@ import type {
   CalendarPreference,
   Call,
   CallScope,
-  DirectoryPerson,
+  Person,
   GatewayDelivery,
   GatewayEvent,
   GatewayKey,
@@ -70,7 +70,7 @@ const wait = <T,>(value: T, ms = LATENCY): Promise<T> =>
 let users: User[] = structuredClone(USERS);
 let me: Me = structuredClone(ME);
 const transcripts: Record<string, TranscriptSegment[]> = structuredClone(TRANSCRIPT);
-const speakers: Record<string, Speaker[]> = structuredClone(SPEAKERS);
+
 
 /**
  * A refusal that kept its REASON.
@@ -761,23 +761,42 @@ export const api = {
   async getSpeakers(callId: string): Promise<Speaker[]> {
     return bff<Speaker[]>(`/api/calls/${callId}/speakers`);
   },
-  async renameSpeaker(callId: string, speakerId: string, label: string) {
-    speakers[callId] = (speakers[callId] ?? []).map((s) =>
-      s.id === speakerId ? { ...s, label } : s,
-    );
-    return wait(true);
+  /** **LIVE** — rename the transcript's word for a voice («S1» → anything). */
+  async renameSpeaker(callId: string, speakerId: string, label: string): Promise<void> {
+    await bff(`/api/calls/${callId}/speakers/${speakerId}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ label }),
+    });
   },
-  /** Directory links happen only by the owner's deliberate act (M11). */
-  async linkSpeaker(callId: string, speakerId: string, person: DirectoryPerson | null) {
-    speakers[callId] = (speakers[callId] ?? []).map((s) =>
-      s.id === speakerId
-        ? { ...s, person_id: person?.id ?? null, person_name: person?.name ?? null }
-        : s,
-    );
-    return wait(true);
+  /** **LIVE** — attach a directory person to a voice (null UNLINKS). */
+  async linkSpeaker(callId: string, speakerId: string, personId: string | null): Promise<void> {
+    await bff(`/api/calls/${callId}/speakers/${speakerId}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ person_id: personId }),
+    });
   },
-  async directory(): Promise<DirectoryPerson[]> {
-    return wait(DIRECTORY);
+  /** **LIVE** — the people directory (0062): names + titles, RLS-scoped. */
+  async directory(): Promise<Person[]> {
+    return bff<Person[]>("/api/directory");
+  },
+  async createPerson(displayName: string, title: string): Promise<Person> {
+    return bff<Person>("/api/directory", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ display_name: displayName, title }),
+    });
+  },
+  async updatePerson(
+    id: string,
+    patch: { display_name?: string; title?: string },
+  ): Promise<Person> {
+    return bff<Person>(`/api/directory/${id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(patch),
+    });
   },
 
   // ---- summaries --------------------------------------------------------------

@@ -3,8 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
-import type { AgentMessage, Call, ModelInfo } from "@/api/types";
+import type { AgentMessage, Call, ModelInfo, Skill } from "@/api/types";
 import { modelLabel } from "@/lib/format";
+import { useSkillName } from "@/lib/skillName";
 import { ProposalCard } from "./ProposalCard";
 
 /**
@@ -28,6 +29,7 @@ export function AssistantPane({
   onClose: () => void;
 }) {
   const t = useTranslations("assistant");
+  const skillName = useSkillName();
   /**
    * The composer's direction follows the LOCALE, stated explicitly rather
    * than inherited.
@@ -51,6 +53,8 @@ export function AssistantPane({
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [modelId, setModelId] = useState<string>("");
   const [calls, setCalls] = useState<Call[]>([]);
+  const [skills, setSkills] = useState<Skill[]>([]);
+  const [skill, setSkill] = useState<string>("");
   const [contextIds, setContextIds] = useState<string[]>(
     presetCallId ? [presetCallId] : [],
   );
@@ -90,6 +94,9 @@ export function AssistantPane({
       setModelId(res.preferred_model ?? res.models[0]?.id ?? "");
     });
     void api.listCalls().then(setCalls);
+    // skills in the docked pane too (user directive) — same resolver view
+    // the hub offers, slugs on the wire
+    void api.skills().then(setSkills).catch(() => setSkills([]));
   }, []);
 
   useEffect(() => {
@@ -126,7 +133,18 @@ export function AssistantPane({
     // a stream that ends without it is a TRANSPORT failure, never success.
     let sawDone = false;
     try {
-      for await (const event of api.ask(question, { page, callIds: contextIds }, sessionRef.current)) {
+      /*
+       * `model` TRAVELS. The pane rendered a model picker and then asked
+       * with no model at all — the server refused pre-stream and the catch
+       * dressed the 400 as "connection dropped" (user report, three empty
+       * bubbles). The hub passed it from day one; the pane never did.
+       */
+      for await (const event of api.ask(
+        question,
+        { page, callIds: contextIds },
+        sessionRef.current,
+        { model: modelId || undefined, skill: skill || undefined },
+      )) {
         if (event.type === "session") sessionRef.current = event.id;
         setMessages((prev) =>
           prev.map((m) => {
@@ -326,6 +344,23 @@ export function AssistantPane({
 
       <div className="border-t border-border p-3">
         <div className="mb-2 flex items-center gap-2">
+          <label className="text-xs text-fg-muted" htmlFor="assistant-skill">
+            {t("skill")}
+          </label>
+          <select
+            id="assistant-skill"
+            className="input h-9 min-h-0 flex-1 py-0 text-xs"
+            value={skill}
+            onChange={(e) => setSkill(e.target.value)}
+          >
+            <option value="">{t("skillDefault")}</option>
+            {/* value = SLUG: core's resolver takes /slug, not an id */}
+            {skills.map((s) => (
+              <option key={s.id} value={s.slug}>
+                {skillName(s)}
+              </option>
+            ))}
+          </select>
           <label className="text-xs text-fg-muted" htmlFor="assistant-model">
             {t("model")}
           </label>

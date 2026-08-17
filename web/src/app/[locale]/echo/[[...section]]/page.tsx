@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { EchoAppShell } from "@/components/echo/EchoAppShell";
 import { CallsSection } from "@/components/echo/CallsSection";
 import { Recorder } from "@/components/echo/Recorder";
+import { SpeakersDirectory } from "@/components/echo/SpeakersDirectory";
 import { UploadPanel } from "@/components/echo/UploadPanel";
 import { SectionMenu, PageContainer, PageHeader } from "@/components/scaffold";
 
@@ -24,12 +25,13 @@ import { SectionMenu, PageContainer, PageHeader } from "@/components/scaffold";
  * and `/capture` still redirect here, unchanged.
  */
 
-type Slug = "record" | "upload" | "calls";
+type Slug = "record" | "upload" | "calls" | "speakers";
 
 const SECTIONS: readonly { slug: Slug; group: "capture" | "review" }[] = [
   { slug: "record", group: "capture" },
   { slug: "upload", group: "capture" },
   { slug: "calls", group: "review" },
+  { slug: "speakers", group: "review" },
 ];
 
 const GROUPS = ["capture", "review"] as const;
@@ -81,6 +83,7 @@ export default function EchoPage({
           <UploadPanel onFinished={() => setCallsEpoch((n) => n + 1)} />
         ) : null}
         {slug === "calls" ? <CallsSection key={callsEpoch} /> : null}
+        {slug === "speakers" ? <SpeakersDirectory /> : null}
       </PageContainer>
     </EchoAppShell>
   );

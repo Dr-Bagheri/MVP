@@ -95,6 +95,10 @@ export interface SpeakerRecord {
   /** Set when the audio was two-channel and no diarization ran (M6). */
   channel: number | null;
   person_id: string | null;
+  /** The linked person's name and title code, joined at read (0062) —
+   *  null when the speaker is unlinked, which is a normal state. */
+  person_name: string | null;
+  person_title: string | null;
   sample_start_ms: number | null;
   sample_end_ms: number | null;
 }
@@ -180,9 +184,14 @@ export function createTranscriptsRepo(db: Db) {
       const id = assertUuid(callId, "call id");
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<Record<string, unknown>>(
-          `select id, label, channel, person_id, sample_start_ms, sample_end_ms
-             from echo.call_speaker where call_id = $1
-            order by label`,
+          // LEFT join: an unlinked speaker is a normal state, not a lost row
+          `select s.id, s.label, s.channel, s.person_id,
+                  s.sample_start_ms, s.sample_end_ms,
+                  p.display_name as person_name, p.title as person_title
+             from echo.call_speaker s
+             left join echo.person p on p.id = s.person_id
+            where s.call_id = $1
+            order by s.label`,
           [id],
         ),
       );
@@ -191,6 +200,8 @@ export function createTranscriptsRepo(db: Db) {
         label: row.label as string,
         channel: (row.channel as number | null) ?? null,
         person_id: (row.person_id as string | null) ?? null,
+        person_name: (row.person_name as string | null) ?? null,
+        person_title: (row.person_title as string | null) ?? null,
         // Offsets on the call's timeline, never copied audio (db/0005).
         sample_start_ms: (row.sample_start_ms as number | null) ?? null,
         sample_end_ms: (row.sample_end_ms as number | null) ?? null,

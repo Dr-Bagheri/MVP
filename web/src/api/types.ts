@@ -357,6 +357,15 @@ export interface SummaryVersion {
 
 // ---- speakers & directory ---------------------------------------------------
 
+/** A directory person (0062): a name and an org-chart title code. */
+export interface Person {
+  id: string;
+  display_name: string;
+  /** Closed vocabulary code ('' = not chosen); the UI localizes it. */
+  title: string;
+  app_user_id: string | null;
+}
+
 export interface Speaker {
   id: string;
   call_id: string;
@@ -365,9 +374,14 @@ export interface Speaker {
   /** directory person, once the OWNER links it (M11 privacy ruling) */
   person_id: string | null;
   person_name: string | null;
-  /** short snippet for identification */
-  sample_start_ms: number;
-  talk_seconds: number;
+  /** the linked person's title code (0062), null while unlinked */
+  person_title?: string | null;
+  /** short snippet for identification — null when no timing survived */
+  sample_start_ms: number | null;
+  /** NOT on the wire: nothing measures per-speaker talk time yet. Optional
+   *  so a renderer must face the absence — a required number here is what
+   *  painted NaN:NaN on the speakers card. */
+  talk_seconds?: number;
 }
 
 export interface DirectoryPerson {

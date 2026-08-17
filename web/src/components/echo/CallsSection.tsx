@@ -38,8 +38,10 @@ export function CallsSection() {
   const [busy, setBusy] = useState(false);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
-  /** Two-step delete: the first press arms THIS row, the second deletes. */
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  /** A row action's failure, said out loud — `act` used to swallow them,
+   *  and a refused delete looked exactly like "the table did not refresh"
+   *  (user report, on precisely that symptom). */
+  const [actionError, setActionError] = useState<string | null>(null);
 
   async function load(includeArchived: boolean) {
     setCalls(await api.listCalls({ includeArchived }));
@@ -65,9 +67,15 @@ export function CallsSection() {
   async function act(fn: () => Promise<unknown>): Promise<void> {
     if (busy) return;
     setBusy(true);
+    setActionError(null);
     try {
       await fn();
       await load(showArchived);
+    } catch {
+      // the refusal is visible AND the list re-syncs to what the server
+      // actually holds — a stale row beats a silently wrong one
+      setActionError(tCommon("actionFailed"));
+      await load(showArchived).catch(() => undefined);
     } finally {
       setBusy(false);
     }
@@ -93,6 +101,12 @@ export function CallsSection() {
           {showArchived ? t("hideArchived") : t("showArchived")}
         </button>
       </div>
+
+      {actionError ? (
+        <p role="alert" className="text-sm text-danger">
+          {actionError}
+        </p>
+      ) : null}
 
       {calls === null ? null : live.length === 0 ? (
         <Card>
@@ -261,7 +275,6 @@ export function CallsSection() {
                             onClick={() => {
                               setRenamingId(call.id);
                               setRenameDraft(call.title);
-                              setConfirmDeleteId(null);
                             }}
                           >
                             {t("rename")}
@@ -275,28 +288,16 @@ export function CallsSection() {
                           >
                             {call.archived_at === null ? t("archive") : t("unarchive")}
                           </button>
-                          {confirmDeleteId === call.id ? (
-                            /* the second press is the real one; anything else
-                               on the row disarms it */
-                            <button
-                              className="font-semibold text-danger underline-offset-2 hover:underline"
-                              disabled={busy}
-                              onClick={() => {
-                                setConfirmDeleteId(null);
-                                void act(() => api.deleteCall(call.id));
-                              }}
-                            >
-                              {t("confirmDelete")}
-                            </button>
-                          ) : (
-                            <button
-                              className="text-danger/80 underline-offset-2 hover:text-danger hover:underline"
-                              disabled={busy}
-                              onClick={() => setConfirmDeleteId(call.id)}
-                            >
-                              {t("delete")}
-                            </button>
-                          )}
+                          {/* ONE click (user verdict: the two-step read as
+                              an error). The 30-day restore window is the
+                              real safety net, not a second press. */}
+                          <button
+                            className="text-danger/80 underline-offset-2 hover:text-danger hover:underline"
+                            disabled={busy}
+                            onClick={() => void act(() => api.deleteCall(call.id))}
+                          >
+                            {t("delete")}
+                          </button>
                         </span>
                       ) : null}
                     </td>
