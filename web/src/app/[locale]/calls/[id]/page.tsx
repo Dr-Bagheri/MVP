@@ -82,6 +82,37 @@ export default function CallDetailPage({
   const [directory, setDirectory] = useState<Person[]>([]);
   const [versions, setVersions] = useState<SummaryVersion[]>([]);
   const [shownVersion, setShownVersion] = useState<number | null>(null);
+  /**
+   * English translations, per target (user directive): display-only, held
+   * in state — the Persian record stays the single source of truth. Three
+   * states each: null = not asked, "loading", or the text. `showEn` flips
+   * the view without refetching.
+   */
+  const [summaryEn, setSummaryEn] = useState<string | "loading" | null>(null);
+  const [transcriptEn, setTranscriptEn] = useState<string | "loading" | null>(null);
+  const [showSummaryEn, setShowSummaryEn] = useState(false);
+  const [showTranscriptEn, setShowTranscriptEn] = useState(false);
+  const [translateError, setTranslateError] = useState<string | null>(null);
+
+  async function translate(what: "summary" | "transcript"): Promise<void> {
+    const set = what === "summary" ? setSummaryEn : setTranscriptEn;
+    const show = what === "summary" ? setShowSummaryEn : setShowTranscriptEn;
+    setTranslateError(null);
+    set("loading");
+    show(true);
+    try {
+      // the model rides along so a user with no saved preference still
+      // translates — core falls back to their preference when omitted
+      const catalogue = await api.models();
+      const model = catalogue.preferred_model ?? catalogue.models[0]?.id;
+      const result = await api.translateCall(id, what, model);
+      set(result.text);
+    } catch {
+      set(null);
+      show(false);
+      setTranslateError(t("translateFailed"));
+    }
+  }
   const [playheadMs, setPlayheadMs] = useState(0);
   const [playing, setPlaying] = useState(false);
   /** Signed playback URLs, one per part. `null` = no audio to offer. */
@@ -107,6 +138,17 @@ export default function CallDetailPage({
       .getCallAudio(id)
       .then((res) => setAudioParts(res?.parts ?? null))
       .catch(() => setAudioParts(null));
+    /*
+     * ?translate=1 — the calls table's Translate action lands here and both
+     * translations fire on arrival. window.location, not useSearchParams: a
+     * mount-time read needs no Suspense boundary and cannot trip the
+     * prerender gate the way the hub's hook did.
+     */
+    if (new URLSearchParams(window.location.search).get("translate") === "1") {
+      void translate("summary");
+      void translate("transcript");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-once per call
   }, [id]);
 
   /**
@@ -231,14 +273,51 @@ export default function CallDetailPage({
         </div>
         {summary ? (
           <>
-            <p className="whitespace-pre-wrap text-sm leading-8 text-fg">{summary.body}</p>
-            <p className="mt-3 text-xs text-fg-muted ltr">{modelLabel(summary.model)}</p>
+            {showSummaryEn && summaryEn === "loading" ? (
+              <p className="text-sm text-fg-muted">{t("translating")}</p>
+            ) : showSummaryEn && typeof summaryEn === "string" ? (
+              /* the TRANSLATION view: LTR English, clearly a rendering of
+                 the record rather than the record itself */
+              <p className="ltr whitespace-pre-wrap text-start text-sm leading-8 text-fg">
+                {summaryEn}
+              </p>
+            ) : (
+              <p className="whitespace-pre-wrap text-sm leading-8 text-fg">{summary.body}</p>
+            )}
+            <div className="mt-3 flex items-center gap-3">
+              <p className="text-xs text-fg-muted ltr">{modelLabel(summary.model)}</p>
+              <span className="flex-1" />
+              {showSummaryEn && typeof summaryEn === "string" ? (
+                <button
+                  className="text-xs text-fg-muted underline-offset-2 hover:underline"
+                  onClick={() => setShowSummaryEn(false)}
+                >
+                  {t("showOriginal")}
+                </button>
+              ) : summaryEn !== "loading" ? (
+                <button
+                  className="text-xs text-accent underline-offset-2 hover:underline"
+                  onClick={() =>
+                    typeof summaryEn === "string"
+                      ? setShowSummaryEn(true)
+                      : void translate("summary")
+                  }
+                >
+                  {t("translateEn")}
+                </button>
+              ) : null}
+            </div>
           </>
         ) : (
           <p className="text-sm text-fg-muted">
             {call.status === "ready" ? t("noSummaryYet") : t("processing", { status: tStatus(call.status) })}
           </p>
         )}
+        {translateError ? (
+          <p role="alert" className="mt-2 text-xs text-danger">
+            {translateError}
+          </p>
+        ) : null}
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-[1fr_260px]">
@@ -281,6 +360,25 @@ export default function CallDetailPage({
                   : formatClock(call.duration_ms / 1000, locale)}
               </span>
               <span className="flex-1" />
+              {showTranscriptEn && typeof transcriptEn === "string" ? (
+                <button
+                  className="text-xs text-fg-muted underline-offset-2 hover:underline"
+                  onClick={() => setShowTranscriptEn(false)}
+                >
+                  {t("showOriginal")}
+                </button>
+              ) : transcriptEn !== "loading" && rows.length > 0 ? (
+                <button
+                  className="text-xs text-accent underline-offset-2 hover:underline"
+                  onClick={() =>
+                    typeof transcriptEn === "string"
+                      ? setShowTranscriptEn(true)
+                      : void translate("transcript")
+                  }
+                >
+                  {t("translateEn")}
+                </button>
+              ) : null}
               <span className="text-xs text-fg-muted">
                 {call.transcript_timing === "full"
                   ? t("seekHint")
@@ -308,6 +406,15 @@ export default function CallDetailPage({
               </div>
             ) : null}
           </div>
+          {showTranscriptEn && transcriptEn === "loading" ? (
+            <p className="p-4 text-sm text-fg-muted">{t("translating")}</p>
+          ) : showTranscriptEn && typeof transcriptEn === "string" ? (
+            /* the whole transcript as one English document — timestamps
+               survive translation because the prompt preserves structure */
+            <p className="ltr whitespace-pre-wrap p-4 text-start text-sm leading-8 text-fg">
+              {transcriptEn}
+            </p>
+          ) : (
           <ul className="divide-y divide-border">
             {rows.map((row) => (
               <li
@@ -367,6 +474,7 @@ export default function CallDetailPage({
               </li>
             ))}
           </ul>
+          )}
         </Card>
 
         {/* speaker roster: rename the LABEL in place, and pick the person

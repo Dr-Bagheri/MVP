@@ -77,6 +77,7 @@
     "newCall": "ضبط تازه",
     "columnActions": "عملیات",
     "rename": "تغییر عنوان",
+    "translate": "ترجمه",
     "confirmDelete": "حذف شود؟",
     "untitled": "بدون عنوان"
   },
@@ -268,6 +269,10 @@
     "speakerLabel": "نام گوینده",
     "noPerson": "بدون پیوند",
     "manageSpeakers": "مدیریت گویندگان و سمت‌ها",
+    "translateEn": "ترجمه به انگلیسی",
+    "translating": "در حال ترجمه…",
+    "showOriginal": "متن اصلی",
+    "translateFailed": "ترجمه انجام نشد — دوباره تلاش کنید.",
     "seekHint": "روی هر واژه بزنید تا صدا به همان لحظه برود.",
     "noAudio": "صدایی برای پخش در دسترس نیست.",
     "seekHintMixed": "هر جا زمان‌بندی واژه‌ای باشد روی واژه، وگرنه روی خط بزنید.",

@@ -637,6 +637,23 @@ export const api = {
   },
 
   /**
+   * **LIVE** — on-demand English translation of a call's summary or
+   * transcript, through the /translator system skill (0063). Display-only:
+   * nothing is persisted; the run is the record.
+   */
+  async translateCall(
+    callId: string,
+    what: "summary" | "transcript",
+    model?: string,
+  ): Promise<{ text: string; model: string }> {
+    return bff(`/api/calls/${callId}/translate`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ what, model }),
+    });
+  },
+
+  /**
    * **LIVE** — signed playback URLs, one per part, expiring. `null` for a
    * 404: no audio is an ANSWER (not yours / not there / nothing uploaded),
    * and the player simply doesn't offer itself.

@@ -288,6 +288,15 @@ export function CallsSection() {
                           >
                             {call.archived_at === null ? t("archive") : t("unarchive")}
                           </button>
+                          <button
+                            className="text-fg-muted underline-offset-2 hover:underline"
+                            disabled={busy}
+                            /* lands on the call with BOTH translations firing
+                               (?translate=1) — summary and transcript */
+                            onClick={() => router.push(`/calls/${call.id}?translate=1`)}
+                          >
+                            {t("translate")}
+                          </button>
                           {/* ONE click (user verdict: the two-step read as
                               an error). The 30-day restore window is the
                               real safety net, not a second press. */}

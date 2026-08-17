@@ -24,11 +24,13 @@ import { createHealthRepo, type HealthRepo } from "./health.ts";
 import { createAuth, type Auth } from "./auth.ts";
 import { createWebhooksRepo, type WebhooksRepo } from "./webhooks.ts";
 import { createCallsRepo, type CallsRepo } from "./calls.ts";
-import { mapError, NotActivatedError, pgErrorFields, ValidationError } from "./errors.ts";
+import { mapError, NotActivatedError, NotFoundError, pgErrorFields, ValidationError } from "./errors.ts";
 import { createMembersRepo, type MembersRepo } from "./members.ts";
 import { createModelsRepo, type ModelsRepo } from "./models.ts";
 import { createTranscriptsRepo, type TranscriptsRepo } from "./transcripts.ts";
 import { createDomainTools } from "../agent/domain-tools.ts";
+import { createAgentRunStore } from "../agent/run-store.ts";
+import { createAgentRuntime } from "../agent/runtime.ts";
 import { findProposal, recordDecision } from "../agent/proposals.ts";
 import { applyProposal, createWriteTools } from "../agent/write-tools.ts";
 import { createNamedSkillResolver, listResolvedSkills } from "../agent/skill-store.ts";
@@ -287,6 +289,72 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     const identity = await auth.requireActive(request);
     const { id } = request.params as { id: string };
     return reply.send(await uploads.finish(identity, id));
+  });
+
+  /**
+   * On-demand TRANSLATION of a call's summary or transcript to English
+   * (0063). Runs the /translator SYSTEM skill through the same runtime as
+   * every agent turn — the spend lands in agent_run with tokens and
+   * provenance, the skill declares zero tools so the model sees none, and
+   * a missing translator skill is a BROKEN DEPLOYMENT, loudly (rule 7's
+   * loud-floor corollary), never a silent fallback.
+   *
+   * The translation is DISPLAY-ONLY — nothing is persisted beside the
+   * transcript, which stays the single source of truth. Re-clicking
+   * re-translates; the run rows are the record either way.
+   */
+  app.post("/v1/calls/:id/translate", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { what?: unknown; model?: unknown };
+    const what = body.what;
+    if (what !== "summary" && what !== "transcript") {
+      throw new ValidationError("what must be summary or transcript");
+    }
+
+    let source: string;
+    if (what === "summary") {
+      const versions = await transcripts.summaries(identity, id);
+      const current = versions[0];
+      if (!current) throw new NotFoundError("no summary to translate");
+      source = current.body;
+    } else {
+      await calls.get(identity, id); // 404 before "empty transcript" (the probe rule)
+      const segments = await transcripts.segments(identity, id, {});
+      if (segments.length === 0) throw new NotFoundError("no transcript to translate");
+      const mmss = (ms: number) => {
+        const s = Math.floor(ms / 1000);
+        return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+      };
+      source = segments.map((s) => `[${mmss(s.start_ms)}] ${s.text}`).join("\n");
+    }
+    if (source.length > 24_000) {
+      // one honest refusal beats a truncated translation presented as whole
+      throw new ValidationError("this content is too long to translate in one pass",
+        { code: "too_long_to_translate" });
+    }
+
+    const skill = await resolveSkillFor(identity, "translator");
+    if (!skill) {
+      // a SYSTEM skill failing to resolve is never a fallback
+      throw new Error("system skill 'translator' is missing — broken deployment");
+    }
+    const callerModel = typeof body.model === "string" && body.model
+      ? body.model
+      : ((await members.me(identity)).preferred_model ?? undefined);
+
+    const runs = createAgentRunStore({ db: options.db, identity });
+    const runtime = createAgentRuntime({ runs });
+    const result = await runtime.run({
+      identity, kind: "assistant", skill, callerModel,
+      input: source, tools: [], deps: {}, callId: id,
+      apiKey: options.openrouterKey,
+    });
+    if (result.failed) {
+      throw new ValidationError(result.error ?? "translation failed",
+        { code: "translate_failed" });
+    }
+    return reply.send({ text: result.text, model: result.model });
   });
 
   /** Playback: signed, expiring URLs for the caller's own view of the call. */
