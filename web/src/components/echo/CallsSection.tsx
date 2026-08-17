@@ -16,15 +16,20 @@ import { DeletedCallsCard } from "./DeletedCallsCard";
  * The calls list, lifted out of `/calls` for the merged Echo surface.
  *
  * It owns its own loading rather than taking rows as a prop, because the
- * archive toggle and the scope switch both re-read — a parent holding the data
+ * row actions and the scope switch both re-read — a parent holding the data
  * would have to thread a refresh callback through for no gain.
+ *
+ * `view` (user directive): archived calls are a SECTION in the menu, not a
+ * toggle on this table — "live" shows working calls, "archive" shows the
+ * same table (same details, same actions) over the archived ones, and
+ * archiving a row moves it from one place to the other on the next load.
  *
  * **`DeletedCallsCard` renders here, admin-only.** M25 puts it with Echo
  * because it is call-domain, and the restore control is ruled admin-only
  * (deletion should feel like deletion). The gate is the same one the api
  * enforces; this is not the authority, just the screen agreeing with it.
  */
-export function CallsSection() {
+export function CallsSection({ view = "live" }: { view?: "live" | "archive" }) {
   const t = useTranslations("calls");
   const tStatus = useTranslations("status");
   const tCommon = useTranslations("common");
@@ -33,7 +38,6 @@ export function CallsSection() {
   const [calls, setCalls] = useState<Call[] | null>(null);
   const [me, setMe] = useState<Me | null>(null);
   const [members, setMembers] = useState<User[]>([]);
-  const [showArchived, setShowArchived] = useState(false);
   // ---- row actions (the calls CRUD, user directive 2026-08-16) ----
   const [busy, setBusy] = useState(false);
   const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -43,16 +47,17 @@ export function CallsSection() {
    *  (user report, on precisely that symptom). */
   const [actionError, setActionError] = useState<string | null>(null);
 
-  async function load(includeArchived: boolean) {
-    setCalls(await api.listCalls({ includeArchived }));
+  async function load() {
+    setCalls(await api.listCalls({ includeArchived: view === "archive" }));
   }
 
   useEffect(() => {
     void api.me().then(setMe);
     // the wire sends owner_id only — names come from the member list
     void api.members().then(setMembers).catch(() => setMembers([]));
-    void load(showArchived);
-  }, [showArchived]);
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- view is fixed per mount
+  }, [view]);
 
   /** id → display name, falling back to the id rather than to `undefined`. */
   function ownerName(id: string): string {
@@ -70,12 +75,12 @@ export function CallsSection() {
     setActionError(null);
     try {
       await fn();
-      await load(showArchived);
+      await load();
     } catch {
       // the refusal is visible AND the list re-syncs to what the server
       // actually holds — a stale row beats a silently wrong one
       setActionError(tCommon("actionFailed"));
-      await load(showArchived).catch(() => undefined);
+      await load().catch(() => undefined);
     } finally {
       setBusy(false);
     }
@@ -85,21 +90,21 @@ export function CallsSection() {
    * Soft-deleted rows are shown in their OWN card, not mixed into the table.
    * `api.listCalls` only returns them to an admin, so a member's list is
    * unchanged — and the split is what stops a deleted call reading as a normal
-   * one with a badge.
+   * one with a badge. The archive view is the same split one axis over:
+   * archived rows live THERE, so the live table never needs an "(archived)"
+   * badge again.
    */
   const deleted = (calls ?? []).filter((call) => call.deleted_at !== null);
-  const live = (calls ?? []).filter((call) => call.deleted_at === null);
+  const live = (calls ?? []).filter(
+    (call) =>
+      call.deleted_at === null
+      && (view === "archive" ? call.archived_at !== null : call.archived_at === null),
+  );
 
   return (
     <section className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="h-page">{t("title")}</h2>
-        <button
-          className="btn-secondary h-10 min-h-0 px-3 text-xs"
-          onClick={() => setShowArchived((v) => !v)}
-        >
-          {showArchived ? t("hideArchived") : t("showArchived")}
-        </button>
+        <h2 className="h-page">{t(view === "archive" ? "archiveTitle" : "title")}</h2>
       </div>
 
       {actionError ? (
@@ -110,7 +115,7 @@ export function CallsSection() {
 
       {calls === null ? null : live.length === 0 ? (
         <Card>
-          <EmptyState text={t("empty")} />
+          <EmptyState text={t(view === "archive" ? "emptyArchive" : "empty")} />
         </Card>
       ) : (
         <Card className="!p-0">
@@ -203,9 +208,6 @@ export function CallsSection() {
                             {t("parts", { count: digits(call.parts?.length ?? 0, locale) })}
                           </span>
                         ) : null}
-                        {call.archived_at !== null ? (
-                          <span className="text-xs text-fg-muted">({t("archive")})</span>
-                        ) : null}
                       </div>
                     </td>
                     <td className="px-4 py-3 text-sm text-fg-muted">
@@ -249,7 +251,7 @@ export function CallsSection() {
                           }`}
                           onClick={async () => {
                             await api.setScope(call.id, call.scope === "org" ? "private" : "org");
-                            void load(showArchived);
+                            void load();
                           }}
                         >
                           <span
@@ -279,6 +281,9 @@ export function CallsSection() {
                           >
                             {t("rename")}
                           </button>
+                          {/* archiving/restoring MOVES the row between the
+                              two sections — the reload drops it from this
+                              view, which is the move made visible */}
                           <button
                             className="text-fg-muted underline-offset-2 hover:underline"
                             disabled={busy}
@@ -324,8 +329,8 @@ export function CallsSection() {
         card on every visit trains people to ignore the one place a pending
         purge would announce itself.
       */}
-      {me?.role === "admin" && deleted.length > 0 ? (
-        <DeletedCallsCard deleted={deleted} onChanged={() => void load(showArchived)} />
+      {view === "live" && me?.role === "admin" && deleted.length > 0 ? (
+        <DeletedCallsCard deleted={deleted} onChanged={() => void load()} />
       ) : null}
     </section>
   );

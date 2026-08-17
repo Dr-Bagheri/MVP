@@ -65,8 +65,8 @@
     "scopeOrg": "Organization",
     "makePrivate": "Make private",
     "makeOrg": "Share with org",
-    "showArchived": "Show archived",
-    "hideArchived": "Hide archived",
+    "archiveTitle": "Archive",
+    "emptyArchive": "No archived calls.",
     "archive": "Archive",
     "unarchive": "Unarchive",
     "delete": "Delete",
@@ -176,12 +176,14 @@
       "record": "Record in browser",
       "upload": "Upload a file",
       "calls": "Calls",
+      "archive": "Archive",
       "speakers": "Speakers"
     },
     "desc": {
       "record": "Record a session with your device microphone — 30-minute parts, uploaded as you go.",
       "upload": "Upload a recorded audio file — transcription starts once it lands.",
       "calls": "Recorded calls, transcripts and summaries.",
+      "archive": "Archived calls — same details and actions; unarchive moves one back to Calls.",
       "speakers": "People and their titles — every call page picks speakers from this list."
     }
   },
@@ -335,6 +337,7 @@
     "system_tasks": "Action items",
     "system_decisions": "Decisions",
     "system_minutes": "Meeting minutes",
+    "system_translator": "Translator",
     "system": "System",
     "org": "Organization",
     "user": "Personal",

@@ -22,6 +22,7 @@ const SYSTEM_SKILL_KEYS: Readonly<Record<string, string>> = {
   tasks: "system_tasks",
   decisions: "system_decisions",
   minutes: "system_minutes",
+  translator: "system_translator",
 };
 
 export function useSkillName(): (skill: { level: string; slug: string; name: string }) => string {

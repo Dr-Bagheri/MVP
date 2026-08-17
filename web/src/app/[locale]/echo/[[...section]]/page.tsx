@@ -25,12 +25,15 @@ import { SectionMenu, PageContainer, PageHeader } from "@/components/scaffold";
  * and `/capture` still redirect here, unchanged.
  */
 
-type Slug = "record" | "upload" | "calls" | "speakers";
+type Slug = "record" | "upload" | "calls" | "archive" | "speakers";
 
 const SECTIONS: readonly { slug: Slug; group: "capture" | "review" }[] = [
   { slug: "record", group: "capture" },
   { slug: "upload", group: "capture" },
   { slug: "calls", group: "review" },
+  /* archived calls are a PLACE, not a toggle (user directive): same table,
+     same actions — reached from the menu instead of a mode button */
+  { slug: "archive", group: "review" },
   { slug: "speakers", group: "review" },
 ];
 
@@ -74,7 +77,7 @@ export default function EchoPage({
         />
       }
     >
-      <PageContainer width={slug === "calls" ? "wide" : "default"}>
+      <PageContainer width={slug === "calls" || slug === "archive" ? "wide" : "default"}>
         <PageHeader title={tEcho(`section.${slug}`)} subtitle={tEcho(`desc.${slug}`)} />
         {slug === "record" ? (
           <Recorder onFinished={() => setCallsEpoch((n) => n + 1)} />
@@ -83,6 +86,7 @@ export default function EchoPage({
           <UploadPanel onFinished={() => setCallsEpoch((n) => n + 1)} />
         ) : null}
         {slug === "calls" ? <CallsSection key={callsEpoch} /> : null}
+        {slug === "archive" ? <CallsSection view="archive" /> : null}
         {slug === "speakers" ? <SpeakersDirectory /> : null}
       </PageContainer>
     </EchoAppShell>
