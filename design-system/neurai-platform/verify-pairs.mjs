@@ -50,30 +50,37 @@ const over = (fg, bg, a) => {
 /** Chip fill alpha. One number, applied to every tone, verified for each. */
 export const TINT = 0.12;
 
+/**
+ * BLUE-VIOLET revision (user directive, 2026-08-17): "blueish purple —
+ * still more purple than blue — and light mode super light blue." Hues
+ * shift from ~262° toward ~248°; the violet stays dominant in the accent.
+ * The previous measured-brand palette is in git history if the direction
+ * ever reverts.
+ */
 export const DARK = {
-  bg: "#130036",            // the brand indigo IS the ground (measured from the asset)
-  surface: "#1C0A45",
-  surface2: "#271258",
-  border: "#3A2270",        // hairline, decorative
-  borderStrong: "#7A5EB8",  // control boundaries — clears 3:1
-  fg: "#F2ECFF",
-  fgMuted: "#B6A6D6",
-  fgSubtle: "#9382BC",     // group labels — recedes toward the surface
-  accent: "#A274FF",        // brand violet, measured, lossless source
-  onAccent: "#130036",      // DARK on violet: white is 3.24 and fails
+  bg: "#0D0C42",            // deep blue-violet ground
+  surface: "#16144F",
+  surface2: "#201D62",
+  border: "#322F78",        // hairline, decorative
+  borderStrong: "#7A76D4",  // control boundaries — clears 3:1
+  fg: "#EDEEFF",
+  fgMuted: "#B0B0E0",
+  fgSubtle: "#8F8FCC",     // group labels — recedes toward the surface
+  accent: "#9B85FF",        // violet with the blue lean — purple stays in charge
+  onAccent: "#0D0C42",      // DARK on violet: white fails here, as before
   success: "#4ADE80", warning: "#FBBF24", danger: "#FB7185", info: "#7DD3FC",
 };
 
 export const LIGHT = {
-  bg: "#FAF8FF",
+  bg: "#EEF4FF",            // the "super light blue" ground
   surface: "#FFFFFF",
-  surface2: "#F1ECFB",
-  border: "#E2D9F5",
-  borderStrong: "#8E7BB8",
-  fg: "#160A2E",
-  fgMuted: "#5B4B7A",
-  fgSubtle: "#786894",     // group labels — recedes toward the surface
-  accent: "#6D3BF5",        // DERIVED ink — the brand violet is 3.24 on white
+  surface2: "#E3EDFD",
+  border: "#CFDEF6",
+  borderStrong: "#7B85C8",
+  fg: "#121A40",
+  fgMuted: "#4A5384",
+  fgSubtle: "#656FA0",     // group labels — recedes toward the surface
+  accent: "#5747E6",        // DERIVED blue-violet ink; fills stay the brand's
   onAccent: "#FFFFFF",
   success: "#166534", warning: "#92400E", danger: "#BE123C", info: "#075985",
 };

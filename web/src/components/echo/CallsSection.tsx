@@ -222,8 +222,16 @@ export function CallsSection() {
                           role="switch"
                           aria-checked={call.scope === "org"}
                           aria-label={call.scope === "org" ? t("makePrivate") : t("makeOrg")}
-                          className={`tap relative inline-block h-5 w-9 shrink-0 rounded-full transition-colors ${
-                            call.scope === "org" ? "bg-accent" : "border border-border-strong bg-surface-2"
+                          /* FLEX places the knob, not absolute offsets: the
+                             first version's start-* arithmetic parked the
+                             circle half outside the track in RTL (user
+                             report). justify-start/end follow the document
+                             direction by definition — there is no offset to
+                             get wrong. */
+                          className={`tap flex h-5 w-9 shrink-0 items-center rounded-full px-0.5 transition-colors ${
+                            call.scope === "org"
+                              ? "justify-end bg-accent"
+                              : "justify-start border border-border-strong bg-surface-2"
                           }`}
                           onClick={async () => {
                             await api.setScope(call.id, call.scope === "org" ? "private" : "org");
@@ -231,10 +239,8 @@ export function CallsSection() {
                           }}
                         >
                           <span
-                            className={`absolute top-0.5 h-4 w-4 rounded-full transition-all ${
-                              call.scope === "org"
-                                ? "start-[calc(100%-1.125rem)] bg-on-accent"
-                                : "start-0.5 bg-fg-muted"
+                            className={`h-3.5 w-3.5 rounded-full ${
+                              call.scope === "org" ? "bg-on-accent" : "bg-fg-muted"
                             }`}
                           />
                         </button>

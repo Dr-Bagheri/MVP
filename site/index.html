@@ -33,15 +33,15 @@
   /* obsidian → midnight blue; the scan glows bioluminescent electric blue
      (user prompt, round 5). Brand violet stays on the platform; the film
      wears the lab's light. */
-  --bg: #0B0020;
-  --fg: #F2ECFF;
-  --fg-muted: #B6A6D6;
-  --hud: #9382BC;
-  --accent: #A274FF;
-  --accent-deep: #6D3BF5;
-  --line: rgba(122, 94, 184, 0.28);
-  --line-bright: rgba(162, 116, 255, 0.5);
-  --glow: rgba(162, 116, 255, 0.4);
+  --bg: #0A0930;
+  --fg: #EDEEFF;
+  --fg-muted: #B0B0E0;
+  --hud: #8F8FCC;
+  --accent: #9B85FF;
+  --accent-deep: #5747E6;
+  --line: rgba(122, 118, 212, 0.28);
+  --line-bright: rgba(155, 133, 255, 0.5);
+  --glow: rgba(155, 133, 255, 0.4);
   --mono: "SFMono-Regular", ui-monospace, Consolas, "Cascadia Mono", monospace;
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -79,7 +79,7 @@ body.ready .stage { opacity: 1; }
   position: fixed; top: 0; left: 0; right: 0; height: 42px; z-index: 20;
   display: flex; align-items: center; gap: 26px; padding: 0 18px;
   font-family: var(--mono); font-size: 10px; letter-spacing: .14em;
-  color: var(--hud); background: rgba(11, 0, 32, 0.55);
+  color: var(--hud); background: rgba(10, 9, 48, 0.55);
   border-bottom: 1px solid var(--line); backdrop-filter: blur(8px);
   white-space: nowrap; overflow: hidden;
 }
@@ -138,9 +138,9 @@ h1.title, h2.title {
 /* the hero: the NeurAI wordmark (user round 6), boot-revealed */
 .s0 h1.title.wordmark { font-size: clamp(64px, 9vw, 132px); line-height: .95; letter-spacing: -0.04em; margin-bottom: 14px; }
 .s0 h1.title.wordmark .bl {
-  background: linear-gradient(115deg, #F2ECFF 30%, #A274FF 68%, #6D3BF5 94%);
+  background: linear-gradient(115deg, #EDEEFF 30%, #9B85FF 68%, #5747E6 94%);
   -webkit-background-clip: text; background-clip: text; color: transparent;
-  filter: drop-shadow(0 0 40px rgba(162,116,255,.28));
+  filter: drop-shadow(0 0 40px rgba(155,133,255,.28));
 }
 .s0 h1.title .bl { display: block; opacity: 0; transform: translateY(14px); transition: opacity .7s ease, transform .7s cubic-bezier(.16,1,.3,1); }
 .s0 h1.title .bl.in { opacity: 1; transform: none; }
@@ -203,9 +203,9 @@ p.lead b { color: var(--fg); font-weight: 600; }
 }
 .btn-primary {
   background: linear-gradient(115deg, var(--accent), var(--accent-deep));
-  color: #130036; box-shadow: 0 0 0 1px var(--line-bright), 0 10px 40px rgba(109,59,245,.35);
+  color: #0D0C42; box-shadow: 0 0 0 1px var(--line-bright), 0 10px 40px rgba(87,71,230,.35);
 }
-.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 0 0 1px var(--line-bright), 0 16px 56px rgba(109,59,245,.5); }
+.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 0 0 1px var(--line-bright), 0 16px 56px rgba(87,71,230,.5); }
 .btn-ghost { color: var(--fg); border: 1px solid var(--line); background: rgba(255,255,255,.03); backdrop-filter: blur(6px); }
 .btn-ghost:hover { border-color: var(--line-bright); transform: translateY(-2px); }
 
@@ -215,8 +215,8 @@ p.lead b { color: var(--fg); font-weight: 600; }
 .echo-mark { color: #FF6F59; }
 .mock-ui {
   border-radius: 14px; border: 1px solid var(--line); overflow: hidden;
-  background: linear-gradient(180deg, rgba(16,14,52,.92), rgba(8,7,34,.92));
-  box-shadow: 0 30px 90px rgba(0,0,0,.55), 0 0 100px rgba(109,59,245,.12);
+  background: linear-gradient(180deg, rgba(15,14,58,.92), rgba(8,8,40,.92));
+  box-shadow: 0 30px 90px rgba(0,0,0,.55), 0 0 100px rgba(87,71,230,.12);
   backdrop-filter: blur(4px);
 }
 .mock-bar { display: flex; align-items: center; gap: 6px; padding: 11px 14px; border-bottom: 1px solid var(--line);
@@ -375,7 +375,7 @@ noscript .noscript-note { display: block; padding: 12px 24px; text-align: center
 </div>
 
 <button class="chrome-logo" id="chrome-logo" title="NeurAI — back to the top" aria-label="Back to the top">
-  <svg width="26" height="26" viewBox="0 0 64 64"><rect width="64" height="64" rx="16" fill="rgba(162,116,255,.12)"/><path d="M18 46V18l28 28V18" stroke="#A274FF" stroke-width="7" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  <svg width="26" height="26" viewBox="0 0 64 64"><rect width="64" height="64" rx="16" fill="rgba(155,133,255,.12)"/><path d="M18 46V18l28 28V18" stroke="#9B85FF" stroke-width="7" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
 </button>
 <button class="chrome-x" id="chrome-x" title="Skip the film" aria-label="Skip to the end of the film">✕</button>
 
@@ -559,7 +559,7 @@ noscript .noscript-note { display: block; padding: 12px 24px; text-align: center
     const N = 34, w = bars.width / N;
     for (let i = 0; i < N; i++) {
       const h = (0.25 + 0.75 * Math.abs(Math.sin(tSec * (1.4 + i * 0.13) + i * 1.7))) * (0.45 + 0.55 * act);
-      btx.fillStyle = i % 4 === 0 ? "rgba(162,116,255,.9)" : "rgba(147,130,188,.75)";
+      btx.fillStyle = i % 4 === 0 ? "rgba(155,133,255,.9)" : "rgba(143,143,204,.75)";
       btx.fillRect(i * w, bars.height * (1 - h), w * 0.55, bars.height * h);
     }
   }
@@ -789,7 +789,7 @@ gl_FragColor=vec4(col,1.);}`;
             ? `rgba(242,236,255,${Math.min(1, a + 0.25)})`
             : rg > 0.5
               ? `rgba(196,163,255,${a})`
-              : `rgba(162,116,255,${a})`;
+              : `rgba(155,133,255,${a})`;
           ctx2.fillText(mutChar(col, i, tSec, flare), x, y);
         }
       }

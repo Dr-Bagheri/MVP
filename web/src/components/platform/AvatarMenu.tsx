@@ -130,7 +130,15 @@ export function AvatarMenu({ me }: { me: User | null }) {
               <p className="truncate text-sm font-semibold text-fg">{name}</p>
               {/* `ltr` because an address is not Persian text — isolating it
                   keeps the domain from being reordered inside an RTL line */}
-              <p className="ltr truncate text-xs text-fg-muted">{me.email}</p>
+              {/* The PARAGRAPH keeps the locale's direction so it aligns
+                  with the name above it (right in fa, left in en — user
+                  report: the address sat on the far side in Persian);
+                  only the address itself is isolated LTR. `.ltr` on the
+                  block was the bug: direction:ltr makes text-align:start
+                  mean LEFT regardless of the menu's language. */}
+              <p className="truncate text-xs text-fg-muted">
+                <span className="ltr">{me.email}</span>
+              </p>
             </div>
           ) : null}
 
