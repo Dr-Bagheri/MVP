@@ -44,7 +44,9 @@ function Clock() {
     ...(timezone === "auto" ? {} : { timeZone: timezone }),
   }).format(now);
   return (
-    <span className="hidden shrink-0 items-center gap-1.5 text-xs text-fg-muted lg:flex">
+    /* boxed like its neighbours (user directive): the bar's controls all
+       wear the same bordered pill, and the clock was the one bare element */
+    <span className="hidden h-9 shrink-0 items-center gap-1.5 rounded-lg border border-border bg-surface px-3 text-xs text-fg-muted lg:flex">
       <span>{formatDate(now.toISOString(), locale)}</span>
       <span aria-hidden>·</span>
       <span>{time}</span>

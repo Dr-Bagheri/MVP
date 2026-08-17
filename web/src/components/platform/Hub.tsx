@@ -366,8 +366,15 @@ export function Hub() {
 
   return (
     <div
-      className={`mx-auto flex min-h-full w-full max-w-3xl flex-col px-5 ${
-        idle ? "items-center justify-center py-10 text-center" : "py-6"
+      /* idle = the signed-off first screen, and it does NOT scroll (user
+         directive): h-full + overflow-hidden pins it to the viewport, so
+         nothing — not even an open popover — can grow the page. The active
+         conversation keeps min-h-full: a thread is exactly the content
+         that must be allowed to scroll. */
+      className={`mx-auto flex w-full max-w-3xl flex-col px-5 ${
+        idle
+          ? "h-full items-center justify-center overflow-hidden py-6 text-center"
+          : "min-h-full py-6"
       }`}
     >
       {/* the conversation controls — visible whenever we are not idle */}
@@ -579,11 +586,14 @@ export function Hub() {
                  facts about what a question can trigger, not switches.
                  Opens DOWNWARD (user directive): upward covered the greeting
                  and read as a menu escaping the screen. */
-              <div className="absolute top-full z-30 mt-2 w-72 rounded-xl border border-border bg-surface p-3 text-start shadow-lg">
+              <div className="absolute start-0 top-full z-30 mt-2 w-max max-w-[min(88vw,52rem)] overflow-x-auto rounded-xl border border-border bg-surface p-3 text-start shadow-lg">
                 <p className="mb-2 text-xs font-semibold text-fg">{t("toolsTitle")}</p>
-                <ul className="space-y-1.5">
+                {/* grows SIDEWAYS, never down (user directive): four rows,
+                    then a new column per four tools — a growing registry must
+                    widen the panel, not push it past the viewport */}
+                <ul className="grid grid-flow-col grid-rows-4 gap-x-8 gap-y-1.5">
                   {toolNames.map((name) => (
-                    <li key={name} className="text-xs leading-5">
+                    <li key={name} className="w-52 text-xs leading-5">
                       <span className="ltr font-mono text-fg">{name}</span>
                       <span className="block text-fg-muted">{t(`tool_${name}`)}</span>
                     </li>
