@@ -1016,16 +1016,26 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
   app.patch("/v1/admin/members/:id", async (request, reply) => {
     const identity = await auth.requireAdmin(request);
     const { id } = request.params as { id: string };
-    const body = (request.body ?? {}) as { role?: unknown; status?: unknown };
+    const body = (request.body ?? {}) as {
+      role?: unknown; status?: unknown; display_name?: unknown; username?: unknown;
+    };
     if (body.role !== undefined && typeof body.role !== "string") {
       throw new ValidationError("role must be a string");
     }
     if (body.status !== undefined && typeof body.status !== "string") {
       throw new ValidationError("status must be a string");
     }
+    if (body.display_name !== undefined && typeof body.display_name !== "string") {
+      throw new ValidationError("display_name must be a string");
+    }
+    if (body.username !== undefined && body.username !== null && typeof body.username !== "string") {
+      throw new ValidationError("username must be a string or null");
+    }
     return reply.send(await members.update(identity, id, {
       role: body.role as "admin" | "member" | undefined,
       status: body.status as "active" | "disabled" | undefined,
+      displayName: body.display_name as string | undefined,
+      username: body.username as string | null | undefined,
     }));
   });
 

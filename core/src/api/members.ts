@@ -764,11 +764,34 @@ export function createMembersRepo(db: Db) {
      */
     async update(
       identity: Identity, memberId: string,
-      patch: { role?: MemberRole | undefined; status?: "active" | "disabled" | undefined },
+      patch: {
+        role?: MemberRole | undefined;
+        status?: "active" | "disabled" | undefined;
+        /**
+         * Admin renames (user directive, 2026-08-17: the detail panel's Edit
+         * covers names too). Same rules as self-naming: a blank display name
+         * refuses (a nameless row helps nobody), username case-normalizes
+         * and `null` CLEARS it — the constraint stays the enforcer and the
+         * 23505 mapping below re-speaks taken-vs-retired.
+         */
+        displayName?: string | undefined;
+        username?: string | null | undefined;
+      },
     ): Promise<MemberRecord> {
       const id = assertUuid(memberId, "member id");
-      if (patch.role === undefined && patch.status === undefined) {
+      if (patch.role === undefined && patch.status === undefined
+        && patch.displayName === undefined && patch.username === undefined) {
         throw new ValidationError("nothing to update");
+      }
+      if (patch.displayName !== undefined && !patch.displayName.trim()) {
+        throw new ValidationError("a display name cannot be blank");
+      }
+      let username: string | null | undefined = undefined;
+      if (patch.username !== undefined) {
+        username = patch.username === null ? null : patch.username.trim().toLowerCase();
+        if (username !== null && !USERNAME_FORMAT.test(username)) {
+          throw new ValidationError(USERNAME_RULE, USERNAME_REFUSAL);
+        }
       }
       /**
        * `owner` is NOT settable here, and that is a decision rather than an
@@ -801,14 +824,56 @@ export function createMembersRepo(db: Db) {
         throw new ConflictError("an admin cannot disable their own account");
       }
 
-      const rows = await db.withIdentity(identity, async (tx: SqlTx) => {
+      // supplied-flags for the identity fields: username null must CLEAR,
+      // so coalesce cannot carry it — the boolean drives the branch
+      const setUsername = patch.username !== undefined;
+      let rows: Record<string, unknown>[];
+      try {
+        rows = await runAdminUpdate();
+      } catch (error) {
+        // the SAME refusal mapping the self-naming route speaks: the
+        // constraint is the enforcer, and taken-vs-retired are distinct facts
+        const pg = error as { code?: string; constraint_name?: string };
+        if (pg.code === "23505" && pg.constraint_name === "app_user_username_per_org") {
+          let retired = false;
+          try {
+            const found = await db.withIdentity(identity, (tx: SqlTx) =>
+              tx.unsafe<{ id: string }>(
+                `select id from echo.app_user
+                  where org_id = $1 and username = $2 and tombstoned_at is not null
+                  limit 1`,
+                [identity.orgId, username ?? null],
+              ),
+            );
+            retired = found.length > 0;
+          } catch {
+            /* the vaguer refusal below still stands */
+          }
+          throw retired
+            ? new ConflictError(
+                "that username belonged to a deleted account and is permanently retired",
+                { code: "username_retired" })
+            : new ConflictError(
+                "username is already taken in this organization",
+                { code: "username_taken" });
+        }
+        if (pg.code === "23514" && pg.constraint_name === "app_user_username_format") {
+          throw new ValidationError(USERNAME_RULE, USERNAME_REFUSAL);
+        }
+        throw error;
+      }
+      function runAdminUpdate() {
+        return db.withIdentity(identity, async (tx: SqlTx) => {
         const changed = await tx.unsafe<Record<string, unknown>>(
           `update echo.app_user
-              set role   = coalesce($2::echo.member_role, role),
-                  status = coalesce($3::echo.user_status, status)
+              set role         = coalesce($2::echo.member_role, role),
+                  status       = coalesce($3::echo.user_status, status),
+                  display_name = coalesce($4, display_name),
+                  username     = case when $5 then $6::citext else username end
             where id = $1 and status <> 'pending'
             returning ${MEMBER_COLUMNS}`,
-          [id, patch.role ?? null, patch.status ?? null],
+          [id, patch.role ?? null, patch.status ?? null,
+           patch.displayName?.trim() ?? null, setUsername, username ?? null],
         );
         /**
          * TWO actions, not one "member_updated", because a role change and a
@@ -833,9 +898,22 @@ export function createMembersRepo(db: Db) {
               detail: { status: patch.status },
             });
           }
+          if (patch.displayName !== undefined || patch.username !== undefined) {
+            // FIELD names, never values — a name is a person (the log rule)
+            await record(tx, identity, {
+              action: "member_renamed", targetType: "member", targetId: id,
+              detail: {
+                fields: [
+                  ...(patch.displayName !== undefined ? ["display_name"] : []),
+                  ...(patch.username !== undefined ? ["username"] : []),
+                ],
+              },
+            });
+          }
         }
         return changed;
-      });
+        });
+      }
       const row = rows[0];
       // `status <> 'pending'` keeps acceptance on its own path: promoting a
       // pending person to admin would activate them by a side door.

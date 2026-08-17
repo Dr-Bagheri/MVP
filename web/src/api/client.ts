@@ -1043,6 +1043,19 @@ export const api = {
       body: JSON.stringify({ status }),
     });
   },
+  /** **LIVE** — admin rename (0064-era): display name and/or username;
+   *  `username: null` clears. Core owns the format and the taken/retired
+   *  distinction; the refusal's own sentence is what the form shows. */
+  async renameMember(
+    id: string,
+    patch: { display_name?: string; username?: string | null },
+  ): Promise<User> {
+    return bff<User>(`/api/admin/members/${id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+  },
   /** **LIVE** — `PATCH /api/admin/members/:id` with `{role}` (owner not assignable, M23). */
   async setUserRole(id: string, role: Role): Promise<User> {
     return bff<User>(`/api/admin/members/${id}`, {

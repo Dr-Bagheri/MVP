@@ -195,6 +195,24 @@ export default function UsersPage() {
     }
   }
 
+  /**
+   * ONE mutation path for identity edits (display name / username). The
+   * refusal RETHROWS so the panel can show core's own sentence — "taken"
+   * and "retired" are distinctions only the server can make.
+   */
+  async function renameFor(
+    id: string,
+    patch: { display_name?: string; username?: string | null },
+  ): Promise<void> {
+    setBusy(true);
+    try {
+      await api.renameMember(id, patch);
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  }
+
   /** ONE mutation path for status — table, panel and bulk all end here. */
   async function toggleStatusFor(u: User): Promise<void> {
     setBusy(true);
@@ -293,7 +311,6 @@ export default function UsersPage() {
             );
           })}
         </div>
-        <p className="mb-5 text-xs leading-6 text-fg-muted">{t("noTrends")}</p>
 
         <Card className="mb-4">
           <div className="flex flex-wrap gap-2">
@@ -759,6 +776,7 @@ export default function UsersPage() {
             assignableRoles={ASSIGNABLE_ROLES}
             onSetRole={(id, r) => void setRoleFor(id, r)}
             onToggleStatus={(u) => void toggleStatusFor(u)}
+            onRename={renameFor}
             /* the true delete is the OWNER's alone (tombstone: emptied
                person, retired handle — core's DELETE endpoint, M11 family);
                admins keep disable, which is reversible */

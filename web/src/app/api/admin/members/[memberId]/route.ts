@@ -30,7 +30,11 @@ export async function PATCH(
   { params }: { params: Promise<{ memberId: string }> },
 ) {
   const { memberId } = await params;
-  const body = (await request.json()) as { role?: Role; status?: UserStatus };
+  const body = (await request.json()) as {
+    role?: Role; status?: UserStatus;
+    /* admin renames (0064-era): forwarded verbatim; core owns every rule */
+    display_name?: string; username?: string | null;
+  };
   try {
     return Response.json(
       await coreFetch<User>(`/v1/admin/members/${memberId}`, { method: "PATCH", body }),

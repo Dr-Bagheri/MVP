@@ -58,6 +58,10 @@ export const ADMIN_ACTIONS = [
   "org_updated",
   "member_role_changed",
   "member_status_changed",
+  /** An admin changed a member's display name or username (0064-era: the
+   *  detail panel edits identity fields; FIELD names recorded, never values —
+   *  a name is a person). */
+  "member_renamed",
   "member_accepted",
   "member_deleted",
   "invitation_issued",

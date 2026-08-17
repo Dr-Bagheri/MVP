@@ -554,7 +554,6 @@
       "active": "Active",
       "inactive": "Disabled or pending"
     },
-    "noTrends": "Until status history accumulates, the change figure stays \"—\" — a \"0\" would be a fabricated number reached by correct arithmetic.",
     "searchMembers": "Search name or username",
     "noMatches": "No member matches that.",
     "modelSelectAll": "Select or clear every model",
@@ -576,6 +575,8 @@
     "detailNameEn": "Name in English contexts",
     "detailUsername": "Username",
     "detailNoUsername": "Not chosen",
+    "detailSave": "Save",
+    "detailSaveFailed": "Could not save. Please try again.",
     "inviteEmailed": "The invitation was emailed to {email} — they click the link, set a password and walk straight in.",
     "inviteEmail_already_registered": "That address already has an account; their invitation is accepted automatically on their next sign-in.",
     "inviteEmail_send_failed": "The email could not be sent.",
