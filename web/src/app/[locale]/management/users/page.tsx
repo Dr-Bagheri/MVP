@@ -488,52 +488,49 @@ export default function UsersPage() {
             </button>
           </div>
 
-          {invitations.length === 0 ? (
-            <p className="text-sm text-fg-muted">{t("noInvitations")}</p>
-          ) : (
+          {(() => {
+            /* ONLY the outstanding ones (user verdict): a revoked or
+               redeemed invitation is history, and five dead rows for one
+               address buried the single link that still works. The api
+               keeps the full history; this list is the TO-DO view. */
+            const open = invitations.filter(
+              (inv) =>
+                !inv.redeemed_at && !inv.revoked_at && new Date(inv.expires_at) >= new Date(),
+            );
+            return open.length === 0 ? (
+              <p className="text-sm text-fg-muted">{t("noInvitations")}</p>
+            ) : (
             <ul className="divide-y divide-border">
-              {invitations.map((inv) => {
-                const state = inv.redeemed_at
-                  ? "redeemed"
-                  : inv.revoked_at
-                    ? "revoked"
-                    : new Date(inv.expires_at) < new Date()
-                      ? "expired"
-                      : "open";
-                return (
-                  <li key={inv.id} className="flex flex-wrap items-center gap-3 py-2.5">
-                    <span className="ltr min-w-0 flex-1 truncate text-sm text-fg">{inv.email}</span>
-                    <Chip tone="neutral">
-                      {inv.role === "admin" ? tAdmin("roleAdmin") : tAdmin("roleMember")}
-                    </Chip>
-                    <Chip tone={state === "open" ? "success" : state === "redeemed" ? "accent" : "neutral"}>
-                      {t(`inviteState_${state}`)}
-                    </Chip>
-                    <span className="text-xs text-fg-muted">
-                      {formatDate(inv.expires_at, locale)}
-                    </span>
-                    {state === "open" ? (
-                      <button
-                        className="text-xs text-fg-muted underline-offset-2 hover:underline"
-                        disabled={busy}
-                        onClick={async () => {
-                          setBusy(true);
-                          try {
-                            await api.revokeInvitation(inv.id);
-                            setInvitations(await api.invitations());
-                          } finally {
-                            setBusy(false);
-                          }
-                        }}
-                      >
-                        {t("inviteRevoke")}
-                      </button>
-                    ) : null}
-                  </li>
-                );
-              })}
+              {open.map((inv) => (
+                <li key={inv.id} className="flex flex-wrap items-center gap-3 py-2.5">
+                  <span className="ltr min-w-0 flex-1 truncate text-sm text-fg">{inv.email}</span>
+                  <Chip tone="neutral">
+                    {inv.role === "admin" ? tAdmin("roleAdmin") : tAdmin("roleMember")}
+                  </Chip>
+                  <Chip tone="success">{t("inviteState_open")}</Chip>
+                  <span className="text-xs text-fg-muted">
+                    {formatDate(inv.expires_at, locale)}
+                  </span>
+                  <button
+                    className="text-xs text-fg-muted underline-offset-2 hover:underline"
+                    disabled={busy}
+                    onClick={async () => {
+                      setBusy(true);
+                      try {
+                        await api.revokeInvitation(inv.id);
+                        setInvitations(await api.invitations());
+                      } finally {
+                        setBusy(false);
+                      }
+                    }}
+                  >
+                    {t("inviteRevoke")}
+                  </button>
+                </li>
+              ))}
             </ul>
-          )}
+            );
+          })()}
         </Card>
 
         <Card>

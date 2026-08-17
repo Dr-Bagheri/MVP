@@ -8,7 +8,7 @@ import { EchoAppShell } from "@/components/echo/EchoAppShell";
 import { Link } from "@/i18n/routing";
 import { useCrumbTitle } from "@/components/platform/CrumbTitle";
 import { Card, Chip, PageHeader, StatusChip } from "@/components/ui";
-import { formatClock, formatDate, digits } from "@/lib/format";
+import { formatClock, formatDate, digits, modelLabel } from "@/lib/format";
 
 /**
  * Read view (SPEC "The core loop" #3): player beside the transcript, summary
@@ -231,8 +231,8 @@ export default function CallDetailPage({
         </div>
         {summary ? (
           <>
-            <p className="whitespace-pre-wrap text-sm leading-8 text-fg">{summary.content}</p>
-            <p className="mt-3 text-xs text-fg-muted ltr">{summary.model_id}</p>
+            <p className="whitespace-pre-wrap text-sm leading-8 text-fg">{summary.body}</p>
+            <p className="mt-3 text-xs text-fg-muted ltr">{modelLabel(summary.model)}</p>
           </>
         ) : (
           <p className="text-sm text-fg-muted">

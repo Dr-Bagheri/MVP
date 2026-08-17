@@ -10,7 +10,7 @@ import type {
   Me,
   Org,
   Speaker,
-  SummaryVersion,
+
   TranscriptSegment,
   TranscriptWord,
   User,
@@ -726,36 +726,9 @@ export const TRANSCRIPT: Record<string, TranscriptSegment[]> = Object.fromEntrie
   ]),
 );
 
-export const SUMMARIES: Record<string, SummaryVersion[]> = {
-  "c-1": [
-    {
-      version: 1,
-      content:
-        "گفت‌وگو دربارهٔ تمدید قرارداد شرکت پیشرو بود. طرف مقابل روی سطح خدمات و زمان پاسخ‌گویی تمرکز داشت.",
-      created_at: iso(day - 3_600_000),
-      model_id: "google/gemini-3.1-flash",
-      agent_run_id: "r-1",
-    },
-    {
-      version: 2,
-      content:
-        "این چهارمین گفت‌وگو با شرکت پیشرو دربارهٔ همین قرارداد است. موضوع اصلی، تمدید قرارداد و شرایط سال آینده بود.\n\nطرف مقابل مهم‌ترین دغدغه‌اش را سطح خدمات و زمان پاسخ‌گویی اعلام کرد. پیشنهاد ما کاهش زمان پاسخ بحرانی به دو ساعت در ازای بستن قرارداد دوساله بود؛ نمایندهٔ پیشرو تأیید دوساله را منوط به بررسی با مدیرش کرد و افزود که وجود تخفیف حجمی احتمال تأیید را بالا می‌برد.\n\nقرار شد پیش‌نویس با زمان پاسخ دو ساعته و تخفیف پلکانی تا پایان هفته ارسال شود و بند جریمهٔ تأخیر تا دوشنبه بازبینی و اعلام نظر شود.",
-      created_at: iso(day - 1_800_000),
-      model_id: "google/gemini-3.1-pro",
-      agent_run_id: "r-2",
-    },
-  ],
-  "c-3": [
-    {
-      version: 1,
-      content:
-        "جلسهٔ هم‌ترازی محصول: اولویت‌های سه‌ماههٔ آینده مرور شد و دو اقدام مشخص به تیم سپرده شد.",
-      created_at: iso(5 * day),
-      model_id: "google/gemini-3.1-pro",
-      agent_run_id: "r-3",
-    },
-  ],
-};
+/* SUMMARIES fixture removed with the wire adoption (rule 10): the type
+   now carries the PRODUCER's field names (body/model), and a fixture kept
+   in the old spelling would be a second belief about the same wire. */
 
 /* SKILLS fixture left with the Part-2 swap (M29): the picker and the
    editor both read the live wire, and a fixture beside a live wire is two

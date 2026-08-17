@@ -345,14 +345,22 @@ export interface TranscriptResponse {
 
 // ---- summaries (versioned; a new one never destroys the old) ----------------
 
+/**
+ * THE PRODUCER'S names (core/transcripts.ts): `body` and `model`. This type
+ * said `content`/`model_id` — two hand-written beliefs about one wire, and
+ * the live symptom was surgical: the Version chip rendered (version
+ * matched) beside an EMPTY summary (content read undefined). Rule 10's
+ * shape, caught by reading the row and the SELECT side by side.
+ */
 export interface SummaryVersion {
+  id: string;
   version: number;
   /** summaries are always Persian (M6 ruling) */
-  content: string;
+  body: string;
   created_at: string;
   /** provenance: what produced it */
-  model_id: string;
-  agent_run_id: string;
+  model: string;
+  agent_run_id: string | null;
 }
 
 // ---- speakers & directory ---------------------------------------------------
