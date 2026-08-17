@@ -598,15 +598,17 @@ export default function UsersPage() {
                       />
                     </th>
                     <th className="table-head py-2 pe-3">{t("colName")}</th>
+                    <th className="table-head py-2 pe-3">{t("colEmail")}</th>
                     <th className="table-head py-2 pe-3">{t("colUsername")}</th>
                     <th className="table-head py-2 pe-3">{t("colStatus")}</th>
                     <th className="table-head py-2 pe-3">{t("colRole")}</th>
                     <th className="table-head py-2 pe-3">{t("colAdded")}</th>
                     {lastSeenServed ? (
-                      <th className="table-head py-2" title={t("lastActionMeaning")}>
+                      <th className="table-head py-2 pe-3" title={t("lastActionMeaning")}>
                         {t("colLastAction")}
                       </th>
                     ) : null}
+                    <th className="table-head py-2">{t("colMemberActions")}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -634,26 +636,41 @@ export default function UsersPage() {
                         </button>
                       </td>
                       <td className="py-3 pe-3 align-top text-xs text-fg-muted">
+                        <span className="ltr">{u.email}</span>
+                      </td>
+                      <td className="py-3 pe-3 align-top text-xs text-fg-muted">
                         {/* a column keeps its placeholder so the rows stay
                             aligned; "@" with nothing after it is not a handle */}
                         {u.username ? `@${u.username}` : "—"}
                       </td>
                       <td className="py-3 pe-3 align-top">
                         <div className="flex items-center gap-2">
-                          <Chip tone={statusTone(u.status)}>{statusLabel(u.status)}</Chip>
-                          {/* the page's own description promises "disable
-                              members" — a promise with no control is FE3's
-                              "row that cannot be filled". Not on the owner
-                              (M23) and not on yourself (core 409s it). */}
+                          {/* an ON/OFF switch (user directive) — on = active,
+                              off = disabled; the chip stays for the WORD.
+                              Not on the owner (M23), not on yourself (core
+                              409s it). */}
                           {u.role !== "owner" && u.id !== me?.id ? (
                             <button
-                              className="text-xs text-fg-muted underline-offset-2 hover:underline"
+                              type="button"
+                              role="switch"
+                              aria-checked={u.status === "active"}
+                              aria-label={tAdmin(u.status === "disabled" ? "enable" : "disable")}
                               disabled={busy}
+                              className={`tap flex h-5 w-9 shrink-0 items-center rounded-full px-0.5 transition-colors ${
+                                u.status === "active"
+                                  ? "justify-end bg-accent"
+                                  : "justify-start border border-border-strong bg-surface-2"
+                              }`}
                               onClick={() => void toggleStatusFor(u)}
                             >
-                              {tAdmin(u.status === "disabled" ? "enable" : "disable")}
+                              <span
+                                className={`h-3.5 w-3.5 rounded-full ${
+                                  u.status === "active" ? "bg-on-accent" : "bg-fg-muted"
+                                }`}
+                              />
                             </button>
                           ) : null}
+                          <Chip tone={statusTone(u.status)}>{statusLabel(u.status)}</Chip>
                         </div>
                       </td>
                       <td className="py-3 pe-3 align-top">
@@ -695,6 +712,37 @@ export default function UsersPage() {
                           )}
                         </td>
                       ) : null}
+                      <td className="py-3 align-top">
+                        <span className="flex items-center gap-3 text-xs">
+                          {/* Edit = the detail panel, where every editable
+                              fact lives — one editing surface, not two */}
+                          <button
+                            className="text-fg-muted underline-offset-2 hover:underline"
+                            onClick={() => setDetailId(u.id)}
+                          >
+                            {t("memberEdit")}
+                          </button>
+                          {me?.role === "owner" && u.role !== "owner" && u.id !== me?.id ? (
+                            <button
+                              className="text-danger/80 underline-offset-2 hover:text-danger hover:underline"
+                              disabled={busy}
+                              onClick={() => {
+                                void (async () => {
+                                  setBusy(true);
+                                  try {
+                                    await api.rejectMember(u.id);
+                                    await load();
+                                  } finally {
+                                    setBusy(false);
+                                  }
+                                })();
+                              }}
+                            >
+                              {t("deleteMember")}
+                            </button>
+                          ) : null}
+                        </span>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

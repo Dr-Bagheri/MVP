@@ -576,8 +576,10 @@ export function Hub() {
             </button>
             {toolsOpen ? (
               /* the assistant's REAL reach, from the server's own registry —
-                 facts about what a question can trigger, not switches */
-              <div className="absolute bottom-10 z-30 w-72 rounded-xl border border-border bg-surface p-3 text-start shadow-lg">
+                 facts about what a question can trigger, not switches.
+                 Opens DOWNWARD (user directive): upward covered the greeting
+                 and read as a menu escaping the screen. */
+              <div className="absolute top-full z-30 mt-2 w-72 rounded-xl border border-border bg-surface p-3 text-start shadow-lg">
                 <p className="mb-2 text-xs font-semibold text-fg">{t("toolsTitle")}</p>
                 <ul className="space-y-1.5">
                   {toolNames.map((name) => (

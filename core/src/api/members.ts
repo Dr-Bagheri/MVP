@@ -266,10 +266,13 @@ export function createMembersRepo(db: Db) {
       const redeemed = await db.withoutIdentity((tx: SqlTx) =>
         tx.unsafe<Record<string, unknown>>(
           // a NULL composite comes back as one all-null row — the filter
-          // turns "no invitation" into zero rows instead of a ghost member
-          `select * from echo.redeem_invitation_for_email($1::uuid, $2::citext) r
+          // turns "no invitation" into zero rows instead of a ghost member.
+          // The display name travels (0064): the first live arrival was a
+          // nameless row in every roster.
+          `select * from echo.redeem_invitation_for_email($1::uuid, $2::citext, $3::text) r
             where r.id is not null`,
-          [input.userId, email],
+          [input.userId, email,
+           input.displayName.trim() || email.split("@")[0] || ""],
         ),
       );
       if (redeemed[0]) {

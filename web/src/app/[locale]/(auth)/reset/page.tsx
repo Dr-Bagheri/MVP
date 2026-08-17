@@ -63,10 +63,20 @@ export default function ResetPasswordPage() {
     setError(null);
     try {
       await api.resetPassword(tokenHash, next, linkType);
+      if (linkType === "invite") {
+        /*
+         * The INVITED arrival registers RIGHT HERE, before any navigation:
+         * pushing "/" first bounced them through the shell's identity guard
+         * to the sign-in gate they had no business seeing (found live —
+         * "it landed at the login gate"). The register redeems their
+         * invitation (db/0060); failures fall through to the identity
+         * guard, which routes honestly either way. Core derives the name
+         * from the verified email when none is given (0064).
+         */
+        await api.register({ display_name: "" }).catch(() => undefined);
+      }
       // signed in by the reset itself — sending them to a login form seconds
-      // after they proved they own the address is a step with no purpose.
-      // "/" so an invited arrival lands on the hub, where the shell's
-      // register-on-first-sign-in flow redeems their invitation (db/0060).
+      // after they proved they own the address is a step with no purpose
       router.push("/");
     } catch (cause) {
       if (cause instanceof BffError && cause.kind === "invalid_token") {

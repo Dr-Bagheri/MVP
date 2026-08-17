@@ -30,11 +30,20 @@ select t.ok(
      '74000000-0000-4000-8000-000000000002', 'stranger@example.com')) is null,
   'an uninvited address gets NULL — absence is the normal answer, not a fault');
 
--- the invited address arrives ACTIVE with the granted role
+-- the invited address arrives ACTIVE with the granted role — AND a name
+-- (0064: the first live arrival was a nameless row, because the door
+-- hardcoded '')
 select t.ok(
   (select (echo.redeem_invitation_for_email(
-     '74000000-0000-4000-8000-000000000001', 'emailed@example.com')).status) = 'active',
+     '74000000-0000-4000-8000-000000000001', 'emailed@example.com', 'کاربر دعوتی')).status) = 'active',
   'the emailed invitation redeems on the verified address alone — active on arrival');
+
+select set_config('echo.actor_id', '01000000-0000-4000-8000-000000000001', true);
+select t.ok(
+  (select display_name from echo.app_user
+    where id = '74000000-0000-4000-8000-000000000001') = 'کاربر دعوتی',
+  'and the arrival carries the display name the door was handed (0064)');
+select set_config('echo.actor_id', '', true);
 
 select set_config('echo.actor_id', '01000000-0000-4000-8000-000000000001', true);  -- alice, owner
 select t.ok(

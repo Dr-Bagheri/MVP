@@ -117,7 +117,18 @@ export default function SignInPage() {
         try {
           await api.register({ display_name: email.split("@")[0] ?? email });
           await routeByIdentity();
-        } catch {
+        } catch (cause) {
+          /*
+           * 409 = ALREADY REGISTERED — they are a member and the org form
+           * would be a dead end (found live: an invited arrival whose
+           * invitation had redeemed on a previous attempt was handed the
+           * org form, filled it, and got 409 — "the app got stuck"). Ask
+           * the server who they are instead of asking them anything.
+           */
+          if (cause instanceof BffError && cause.status === 409) {
+            await routeByIdentity();
+            return;
+          }
           setNeedsOrg(true);
         }
         return;
