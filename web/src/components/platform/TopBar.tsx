@@ -8,7 +8,7 @@ import { AvatarMenu } from "./AvatarMenu";
 import { formatDate } from "@/lib/format";
 import { useTimezonePreference } from "@/lib/usePreferences";
 import { Breadcrumbs } from "./Breadcrumbs";
-import { HistoryIcon, SearchIcon } from "./icons";
+import { SearchIcon } from "./icons";
 
 /**
  * The platform top bar (M22): en/fa switcher · global search · avatar.
@@ -78,20 +78,8 @@ export function TopBar({ me }: { me: User | null }) {
           start on exactly the screen whose layout the user signed off */}
       <div className="flex-1" />
 
-      {/*
-        Conversations is a SURFACE now (user directive, 2026-08-17), not a
-        popover: the records list with the thread beside it, on the sub-page
-        anatomy. This button just goes there — a list in a bubble had no
-        room for reading and closed the moment you looked away.
-      */}
-      <button
-        type="button"
-        onClick={() => router.push("/conversations")}
-        className="tap flex h-9 items-center gap-2 rounded-lg border border-border bg-surface px-3 text-sm text-fg-muted transition-colors hover:text-fg"
-      >
-        <HistoryIcon width={17} height={17} />
-        <span className="hidden md:inline">{t("conversations")}</span>
-      </button>
+      {/* Conversations moved UNDER the hub's prompt box (user directive,
+          round 2) — the bar carries no twin of it. */}
 
       <Clock />
 

@@ -47,10 +47,10 @@
        mirrors design-system/neurai-platform/verify-pairs.mjs — edit THERE
        first, run it, then copy; a hex that exists only here is a fifth
        place for the numbers to disagree. */
-    --bg: 13 12 66;               /* #0D0C42 — deep blue-violet ground */
-    --surface: 22 20 79;          /* #16144F */
-    --surface-2: 32 29 98;        /* #201D62 */
-    --border: 50 47 120;          /* #322F78 — hairline, decorative */
+    --bg: 10 9 48;                /* #0A0930 — the WEBSITE's own ground */
+    --surface: 20 17 76;          /* #14114C */
+    --surface-2: 30 27 96;        /* #1E1B60 */
+    --border: 48 45 118;          /* #302D76 — hairline, decorative */
     --border-strong: 122 118 212; /* #7A76D4 — control edges, 3.48:1 */
     --fg: 237 238 255;            /* #EDEEFF — blue-tinted, not neutral */
     --fg-muted: 176 176 224;      /* #B0B0E0 */
@@ -64,19 +64,19 @@
      * in this theme, not an ink. This token is why the active rail tile and
      * the send button are legible.
      */
-    --on-accent: 13 12 66;        /* #0D0C42 */
-    --accent-soft: 38 34 100;     /* #262264 — computed 12% tint over surface */
+    --on-accent: 10 9 48;         /* #0A0930 */
+    --accent-soft: 36 31 97;      /* #241F61 — computed 12% tint over surface */
     --success: 74 222 128;
     --warning: 251 191 36;
     --danger: 251 113 133;
     --info: 125 211 252;
     /* `.btn-primary` follows the one accent family (M22) */
     --primary: 155 133 255;
-    --on-primary: 13 12 66;
+    --on-primary: 10 9 48;
     --secondary: 176 176 224;
-    --muted: 32 29 98;
+    --muted: 30 27 96;
     /* retained for the Echo shell until its interior re-derives */
-    --sidebar: 22 20 79;
+    --sidebar: 20 17 76;
     --sidebar-fg: 237 238 255;
   }
 

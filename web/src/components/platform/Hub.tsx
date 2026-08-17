@@ -11,8 +11,7 @@ import { personName, modelLabel } from "@/lib/format";
 import { useDictation } from "@/lib/dictation";
 import { useSkillName } from "@/lib/skillName";
 import { ConversationThread } from "./ConversationThread";
-import { HistoryPanel } from "./HistoryPanel";
-import { EchoMark, MicIcon, PlusIcon, SendIcon, ToolsIcon } from "./icons";
+import { EchoMark, HistoryIcon, MicIcon, PlusIcon, SendIcon, ToolsIcon } from "./icons";
 
 /**
  * The AI-assistant hub — NeurAI's first page (M22, user-approved).
@@ -42,13 +41,13 @@ import { EchoMark, MicIcon, PlusIcon, SendIcon, ToolsIcon } from "./icons";
  */
 export function Hub() {
   const t = useTranslations("platform");
+  
   const locale = useLocale();
   const router = useRouter();
   const [me, setMe] = useState<User | null>(null);
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
   const [feedback, setFeedback] = useState<Record<string, string>>({});
   const [shared, setShared] = useState(false);
   const [models, setModels] = useState<ModelInfo[]>([]);
@@ -175,7 +174,7 @@ export function Hub() {
     else sessionStorage.removeItem(key);
   }, [input, resumeId]);
 
-  const idle = messages.length === 0 && !showHistory;
+  const idle = messages.length === 0;
 
   /** One reducer for ask and regenerate — same events, same thread. */
   async function consume(stream: AsyncGenerator<AgentEvent>, replyId: string) {
@@ -265,7 +264,6 @@ export function Hub() {
     const typed = input.trim();
     if (typed === "" || streaming) return;
     setInput("");
-    setShowHistory(false);
     setAskError(null);
 
     /*
@@ -355,17 +353,11 @@ export function Hub() {
     URL.revokeObjectURL(url);
   }
 
-  function openConversation(id: string) {
-    setShowHistory(false);
-    router.push({ pathname: "/", query: { c: id } });
-  }
-
   function newConversation() {
     sessionId.current = undefined;
     setMessages([]);
     setFeedback({});
     setShared(false);
-    setShowHistory(false);
     router.push("/");
   }
 
@@ -381,9 +373,9 @@ export function Hub() {
       {/* the conversation controls — visible whenever we are not idle */}
       {!idle ? (
         <div className="mb-4 flex flex-wrap items-center gap-2">
-          <button type="button" className={headerBtn} onClick={() => setShowHistory((v) => !v)}>
-            {t("history")}
-          </button>
+          <Link href="/conversations" className={headerBtn}>
+            {t("conversations")}
+          </Link>
           <button type="button" className={headerBtn} onClick={newConversation}>
             {t("newConversation")}
           </button>
@@ -402,16 +394,6 @@ export function Hub() {
               </button>
             </>
           ) : null}
-        </div>
-      ) : null}
-
-      {showHistory ? (
-        <div className={idle ? "w-full" : "mb-4"}>
-          <HistoryPanel
-            activeId={sessionId.current}
-            onOpen={openConversation}
-            onClose={() => setShowHistory(false)}
-          />
         </div>
       ) : null}
 
@@ -457,7 +439,7 @@ export function Hub() {
             ) : null;
           })()}
         </>
-      ) : !showHistory ? (
+      ) : (
         <div className="mb-4 flex-1">
           <ConversationThread
             messages={messages}
@@ -473,7 +455,7 @@ export function Hub() {
           ) : null}
           <div ref={threadEnd} />
         </div>
-      ) : null}
+      )}
 
       <div
         /* focus-within: the PANEL is the control, so the panel carries the
@@ -652,13 +634,15 @@ export function Hub() {
         </div>
       </div>
 
-      {/* History sits BELOW the chat box, at inline-start (user directive) —
-          outside the composer so the panel stays about composing */}
+      {/* Conversations sits BELOW the chat box (user directive, round 2):
+          the inline history panel is retired — the button goes to the real
+          surface, and the top bar no longer carries a twin. */}
       {idle ? (
         <div className="mt-3 flex w-full max-w-[660px] justify-start">
-          <button type="button" className={headerBtn} onClick={() => setShowHistory(true)}>
-            {t("history")}
-          </button>
+          <Link href="/conversations" className={headerBtn}>
+            <HistoryIcon width={14} height={14} />
+            {t("conversations")}
+          </Link>
         </div>
       ) : null}
 

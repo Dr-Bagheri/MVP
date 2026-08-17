@@ -6,7 +6,7 @@ import { api } from "@/api/client";
 import type { AssistantSession } from "@/api/types";
 import { AssistantPane } from "@/components/AssistantPane";
 import { PlatformShell } from "@/components/platform/PlatformShell";
-import { formatDate } from "@/lib/format";
+import { digits, formatDate } from "@/lib/format";
 
 /**
  * Conversation history as a REAL surface (user directive, 2026-08-17: "fix
@@ -93,13 +93,75 @@ export default function ConversationsPage() {
           )}
         </nav>
 
-        {/* the reading hint fills the middle only while nothing is open */}
-        <div className="hidden min-w-0 flex-1 items-center justify-center p-8 md:flex">
-          {selected === null ? (
-            <p className="max-w-sm text-center text-sm leading-7 text-fg-muted">
-              {t("hint")}
-            </p>
-          ) : null}
+        {/* the records as a TABLE in the middle (user directive, round 2) —
+            the same card-table anatomy every other sub-page uses, with the
+            delete beside each row. Clicking a row opens it in the pane. */}
+        <div className="hidden min-w-0 flex-1 overflow-y-auto md:block">
+          <div className="mx-auto w-full max-w-content px-5 pb-16 pt-8 md:px-10">
+            <h2 className="mb-1 text-xl font-bold text-fg">{t("title")}</h2>
+            <p className="mb-5 text-sm text-fg-muted">{t("hint")}</p>
+            <div className="rounded-lg border border-border bg-surface">
+              {sessions === null ? null : shown.length === 0 ? (
+                <p className="p-4 text-sm text-fg-muted">{t("empty")}</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[28rem] border-collapse text-sm">
+                    <thead>
+                      <tr className="border-b border-border">
+                        <th className="table-head px-4 py-3 text-start">{t("colTitle")}</th>
+                        <th className="table-head px-4 py-3 text-start">{t("colDate")}</th>
+                        <th className="table-head px-4 py-3 text-start">{t("colMessages")}</th>
+                        <th className="table-head px-4 py-3 text-start">{t("colActions")}</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {shown.map((s) => (
+                        <tr
+                          key={s.id}
+                          className={`cursor-pointer transition-colors hover:bg-surface-2 ${
+                            s.id === selected ? "bg-surface-2" : ""
+                          }`}
+                          onClick={() => setSelected(s.id)}
+                        >
+                          <td className="px-4 py-2.5 font-medium text-fg">
+                            {s.title ?? t("untitled")}
+                          </td>
+                          <td className="px-4 py-2.5 text-fg-muted">
+                            {formatDate(s.updated_at ?? s.created_at, locale)}
+                          </td>
+                          <td className="px-4 py-2.5 text-fg-muted">
+                            {digits(s.message_count, locale)}
+                          </td>
+                          <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              type="button"
+                              className="text-xs text-danger/80 underline-offset-2 hover:text-danger hover:underline"
+                              onClick={() => {
+                                /* removal = archive under the hood: nothing
+                                   in the product may DELETE a conversation
+                                   row (the audit survives), but an archived
+                                   one never returns to any list */
+                                void api
+                                  .archiveSession(s.id, true)
+                                  .then(() => api.agentSessions())
+                                  .then((rows) => {
+                                    setSessions(rows);
+                                    setSelected((cur) => (cur === s.id ? (rows[0]?.id ?? null) : cur));
+                                  })
+                                  .catch(() => undefined);
+                              }}
+                            >
+                              {t("delete")}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         {/*

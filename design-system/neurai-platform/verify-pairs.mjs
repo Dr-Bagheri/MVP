@@ -58,16 +58,19 @@ export const TINT = 0.12;
  * ever reverts.
  */
 export const DARK = {
-  bg: "#0D0C42",            // deep blue-violet ground
-  surface: "#16144F",
-  surface2: "#201D62",
-  border: "#322F78",        // hairline, decorative
+  // GROUND MATCHES THE WEBSITE (user directive, 2026-08-17 round 2): the
+  // marketing site sits on #0A0930 and the app now shares it — one product,
+  // one night sky. Surfaces re-stepped from the deeper base.
+  bg: "#0A0930",
+  surface: "#14114C",
+  surface2: "#1E1B60",
+  border: "#302D76",        // hairline, decorative
   borderStrong: "#7A76D4",  // control boundaries — clears 3:1
   fg: "#EDEEFF",
   fgMuted: "#B0B0E0",
   fgSubtle: "#8F8FCC",     // group labels — recedes toward the surface
   accent: "#9B85FF",        // violet with the blue lean — purple stays in charge
-  onAccent: "#0D0C42",      // DARK on violet: white fails here, as before
+  onAccent: "#0A0930",      // DARK on violet: white fails here, as before
   success: "#4ADE80", warning: "#FBBF24", danger: "#FB7185", info: "#7DD3FC",
 };
 
