@@ -637,7 +637,8 @@ export function createMembersRepo(db: Db) {
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<Record<string, unknown>>(
           `select ${MEMBER_COLUMNS} from echo.app_user
-            where ($1::text is null
+            where tombstoned_at is null
+              and ($1::text is null
                    or display_name ilike $1 escape '\\'
                    or coalesce(display_name_en, '') ilike $1 escape '\\'
                    or coalesce(username, '') ilike $1 escape '\\'
@@ -685,7 +686,8 @@ export function createMembersRepo(db: Db) {
                   count(*) filter (where status = 'active')::int   as active,
                   count(*) filter (where status = 'disabled')::int as disabled,
                   count(*)::int as total
-             from echo.app_user`,
+             from echo.app_user
+            where tombstoned_at is null`,
         );
         const [movement] = await tx.unsafe<Record<string, unknown>>(
           `select count(*) filter (where new_status = 'active')::int   as activated,
@@ -870,7 +872,10 @@ export function createMembersRepo(db: Db) {
                   status       = coalesce($3::echo.user_status, status),
                   display_name = coalesce($4, display_name),
                   username     = case when $5 then $6::citext else username end
-            where id = $1 and status <> 'pending'
+            /* tombstoned rows persist for handle reservation and audit, but
+               they are NOT members: without this guard a tombstone (status
+               'disabled') could be renamed or quietly re-enabled by PATCH */
+            where id = $1 and status <> 'pending' and tombstoned_at is null
             returning ${MEMBER_COLUMNS}`,
           [id, patch.role ?? null, patch.status ?? null,
            patch.displayName?.trim() ?? null, setUsername, username ?? null],

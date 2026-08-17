@@ -131,6 +131,29 @@ export function bridgeAgentEvent(
   }
 }
 
+/**
+ * The loop's input, in one place so a test can hold it against Pi's own
+ * combination rule. `runAgentLoop(prompts, context, …)` APPENDS the prompts
+ * to `context.messages` (agent-loop.js: `[...context.messages, ...prompts]`),
+ * so the user turn must live in exactly ONE of the two. It lived in both:
+ * every model saw every question twice, and the translator — whose task is
+ * to echo its input in another language — was the first surface honest
+ * enough to show it (a doubled transcript, joined mid-line).
+ */
+export function loopInput(userText: string, systemPrompt: string, tools: unknown[]): {
+  prompts: { role: "user"; content: { type: "text"; text: string }[]; timestamp: string }[];
+  context: { systemPrompt: string; messages: never[]; tools: unknown[] };
+} {
+  return {
+    prompts: [{
+      role: "user" as const,
+      content: [{ type: "text" as const, text: userText }],
+      timestamp: new Date().toISOString(),
+    }],
+    context: { systemPrompt, messages: [], tools },
+  };
+}
+
 export async function runPi(options: PiRunOptions): Promise<PiRunResult> {
   const { model, reasoningRequired } = resolveModel(options.model);
   const models = builtinModels();
@@ -140,15 +163,7 @@ export async function runPi(options: PiRunOptions): Promise<PiRunResult> {
   let tokensIn: number | null = null;
   let tokensOut: number | null = null;
 
-  const context = {
-    systemPrompt: options.systemPrompt,
-    messages: [{
-      role: "user" as const,
-      content: [{ type: "text" as const, text: options.userText }],
-      timestamp: new Date().toISOString(),
-    }],
-    tools: options.tools,
-  };
+  const { prompts, context } = loopInput(options.userText, options.systemPrompt, options.tools);
 
   const config = {
     model,
@@ -172,7 +187,7 @@ export async function runPi(options: PiRunOptions): Promise<PiRunResult> {
     });
 
   const messages = await runAgentLoop(
-    context.messages as never,
+    prompts as never,
     context as never,
     config as never,
     onEvent as never,

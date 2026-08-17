@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { bridgeAgentEvent } from "../src/agent/pi.ts";
+import { bridgeAgentEvent, loopInput } from "../src/agent/pi.ts";
 
 /**
  * The Pi event bridge — the seam that silently ate every assistant answer.
@@ -66,5 +66,34 @@ describe("bridgeAgentEvent", () => {
       { onText: vi.fn(), onError: vi.fn(), onUsage },
     );
     expect(onUsage).toHaveBeenCalledWith(677, 100);
+  });
+});
+
+/**
+ * The loop's input seam — the doubled-transcript bug.
+ *
+ * Pi's `runAgentLoop(prompts, context, …)` APPENDS the prompts to the
+ * context (agent-loop.js: `messages: [...context.messages, ...prompts]` —
+ * the combination below is transcribed from that line, rule 10). runPi
+ * passed `context.messages` as the prompts with the user turn already
+ * inside, so every model received every question TWICE. Question-shaped
+ * tasks absorbed it silently; the translator echoed its input back and
+ * shipped a transcript translated twice, joined mid-line.
+ */
+describe("loopInput", () => {
+  it("yields exactly ONE user turn after Pi's own append", () => {
+    const { prompts, context } = loopInput("سلام", "system", []);
+    // the producer's combination, verbatim
+    const wire = [...context.messages, ...prompts] as { role: string }[];
+    expect(wire.filter((m) => m.role === "user")).toHaveLength(1);
+  });
+
+  it("keeps the text intact on the single turn", () => {
+    const { prompts, context } = loopInput("[0:01] متن", "system", []);
+    const wire = [...context.messages, ...prompts] as {
+      role: string; content: { type: string; text: string }[];
+    }[];
+    const texts = wire.flatMap((m) => m.content.map((c) => c.text));
+    expect(texts).toEqual(["[0:01] متن"]);
   });
 });
