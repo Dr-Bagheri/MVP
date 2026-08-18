@@ -381,13 +381,17 @@ export function AssistantPane({
         {/* The controls live beneath the composer, matching the hub: the
             question is the primary action and the two choices are compact
             pills, not a label-and-select form competing with it. */}
-        <div className="mt-2 flex min-w-0 items-center justify-start gap-2" dir="ltr">
+        {/* At the pane's 15% minimum width this row deliberately owns 70% of
+            the sidebar. Both controls receive the same fixed share, so a
+            long model name truncates inside its pill instead of widening the
+            assistant pane or pushing the model picker off-screen. */}
+        <div className="mt-2 flex w-[70%] min-w-0 items-center justify-start gap-2" dir="ltr">
           <PickerMenu
             open={skillMenuOpen}
             onOpen={() => setSkillMenuOpen(true)}
             onClose={() => setSkillMenuOpen(false)}
             side="up"
-            className="w-36 shrink-0"
+            className="min-w-0 flex-1"
             panelClass="w-56 p-1.5"
             button={
               <button
@@ -435,7 +439,7 @@ export function AssistantPane({
             onOpen={() => setModelMenuOpen(true)}
             onClose={() => setModelMenuOpen(false)}
             side="up"
-            className="w-52 shrink-0"
+            className="min-w-0 flex-1"
             panelClass="w-64 p-1.5"
             button={
               <button
