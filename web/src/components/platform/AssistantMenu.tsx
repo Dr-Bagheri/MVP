@@ -11,9 +11,10 @@ import { useAssistantConversation } from "./AssistantConversationState";
  * platform's two-pane anatomy read as a different product.
  *
  * Same skeleton as Echo's menu: a heading, grouped entries, active pill.
- * "New conversation" points at the hub only before a turn begins. Once a
- * conversation exists, it is deliberately disabled: resetting a live thread
- * from the navigation makes the record disappear while the server retains it.
+ * "New conversation" shows the blank hub when there is no turn, without
+ * reloading that current page. Once a conversation exists, it is deliberately
+ * disabled: resetting a live thread from the navigation makes the record
+ * disappear while the server retains it.
  */
 export function AssistantMenu({ activeSlug }: { activeSlug: "new" | "history" | "search" | "workflows" | "prompts" }) {
   const t = useTranslations("platform");
@@ -27,7 +28,13 @@ export function AssistantMenu({ activeSlug }: { activeSlug: "new" | "history" | 
           key: "conversation",
           title: t("assistantMenuConversation"),
           items: [
-            { slug: "new", href: "/", label: t("newConversation"), disabled: started },
+            {
+              slug: "new",
+              href: "/",
+              label: t("newConversation"),
+              disabled: started,
+              preventNavigation: !started,
+            },
             { slug: "history", href: "/conversations", label: t("history") },
           ],
         },

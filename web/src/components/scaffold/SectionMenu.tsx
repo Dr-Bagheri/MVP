@@ -24,6 +24,8 @@ export interface MenuItem {
   label: string;
   /** A currently unavailable destination remains visible but cannot be opened. */
   disabled?: boolean;
+  /** The current destination is shown, but selecting it again must not reload it. */
+  preventNavigation?: boolean;
   /**
    * Short chip beside the label — for a section that is named but not yet
    * usable. Marked IN the menu, not after you click: finding out a section
@@ -85,7 +87,13 @@ export function SectionMenu({
                       ) : null}
                     </button>
                   ) : (
-                    <Link href={item.href} aria-current={active ? "page" : undefined} className={itemClass}>
+                    <Link
+                      href={item.href}
+                      aria-current={active ? "page" : undefined}
+                      aria-disabled={item.preventNavigation || undefined}
+                      className={itemClass}
+                      onClick={item.preventNavigation ? (event) => event.preventDefault() : undefined}
+                    >
                       <span className="truncate">{item.label}</span>
                       {item.badge ? (
                         <span className="chip bg-surface-2 text-[10px] text-fg-muted">{item.badge}</span>

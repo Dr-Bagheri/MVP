@@ -372,6 +372,11 @@ export function Hub() {
   async function send() {
     const typed = input.trim();
     if (typed === "" || streaming) return;
+    // The first submitted turn makes this a live conversation immediately.
+    // Do not wait for React's message effect or the provider response: the
+    // sibling menu and the skill picker must lock in the same interaction.
+    setStarted(true);
+    setSkillOpen(false);
     setInput("");
     setAskError(null);
 
@@ -872,6 +877,7 @@ export function Hub() {
             "let the server resolve", rendered as the saved-choice line.
           */}
           {skills.length > 0 ? (
+            idle ? (
             /* the Sources anatomy on the skill picker (user directive):
                hover opens, leaving closes, the active row says so */
             <HoverMenu
@@ -920,6 +926,19 @@ export function Hub() {
                 )}
               </div>
             </HoverMenu>
+            ) : (
+              <button
+                type="button"
+                className={`${headerBtn} cursor-not-allowed opacity-55`}
+                disabled
+                aria-label={t("skillPicker")}
+              >
+                <span className="max-w-[9rem] truncate">
+                  {skill ? skillName(skills.find((s) => s.slug === skill) ?? skills[0]!) : t("skillDefault")}
+                </span>
+                <Chevron />
+              </button>
+            )
           ) : null}
           {models.length > 0 ? (
             <HoverMenu

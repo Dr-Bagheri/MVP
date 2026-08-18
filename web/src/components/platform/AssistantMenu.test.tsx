@@ -18,7 +18,7 @@ function StateControl() {
 }
 
 describe("AssistantMenu — New conversation", () => {
-  it("is a fresh-hub link before a conversation starts, then becomes disabled", () => {
+  it("does not reload the blank hub, then becomes disabled after a conversation starts", () => {
     render(
       <AssistantConversationProvider>
         <StateControl />
@@ -26,7 +26,13 @@ describe("AssistantMenu — New conversation", () => {
       </AssistantConversationProvider>,
     );
 
-    expect(screen.getByRole("link", { name: "newConversation" }).getAttribute("href")).toBe("/");
+    const fresh = screen.getByRole("link", { name: "newConversation" });
+    expect(fresh.getAttribute("href")).toBe("/");
+    expect(fresh.getAttribute("aria-disabled")).toBe("true");
+    const click = new MouseEvent("click", { bubbles: true, cancelable: true });
+    fresh.dispatchEvent(click);
+    expect(click.defaultPrevented).toBe(true);
+
     fireEvent.click(screen.getByRole("button", { name: "start" }));
     expect(screen.getByRole("button", { name: "newConversation" })).toBeDisabled();
   });
