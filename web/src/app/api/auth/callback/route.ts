@@ -8,11 +8,18 @@ import { writeSession } from "@/server/session";
  * it becomes a session — exchanged server-side, stored in the session
  * cookie, never shown to the browser (M1).
  *
- * Success routes to the sign-in page with `?confirmed=1`, which — already
- * holding a session — immediately routes by identity: a first-time OAuth
- * user is `unregistered` and gets the org-choice step (register-on-first-
- * sign-in absorbs OAuth arrivals with zero extra machinery); a returning
- * one goes straight into the app.
+ * Success routes to the sign-in page with `?oauth=ok` — its OWN marker,
+ * deliberately distinct from the email-confirmation `?confirmed=1`. The page
+ * routes by identity either way (a returning OAuth user goes straight in),
+ * but a FIRST-TIME OAuth arrival needs a completion step the email path does
+ * not: they name their organization AND set a password (user directive,
+ * 2026-08-18 — an OAuth account with no password can only ever come back
+ * through the provider, and the login form's password box would be a door
+ * they can never use). The marker is how the page knows to ask.
+ *
+ * The redirect keeps the visitor's locale — next-intl's NEXT_LOCALE cookie
+ * is set on every page visit; `/en/` hardcoded here sent Persian users to an
+ * English gate mid-flow.
  */
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -22,7 +29,8 @@ export async function GET(request: Request) {
   const verifier = store.get("echo_pkce")?.value;
   store.delete("echo_pkce"); // one round trip per verifier, success or not
 
-  const to = (q: string) => Response.redirect(new URL(`/en/sign-in?${q}`, url.origin), 303);
+  const locale = store.get("NEXT_LOCALE")?.value === "en" ? "en" : "fa";
+  const to = (q: string) => Response.redirect(new URL(`/${locale}/sign-in?${q}`, url.origin), 303);
 
   if (!code || !verifier) return to("oauth=failed");
 
@@ -33,7 +41,7 @@ export async function GET(request: Request) {
       refreshToken: tokens.refresh_token,
       expiresAt: Date.now() + tokens.expires_in * 1000,
     });
-    return to("confirmed=1");
+    return to("oauth=ok");
   } catch {
     // expired code, replayed code, provider mismatch — all one honest answer
     return to("oauth=failed");

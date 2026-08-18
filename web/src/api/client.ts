@@ -338,6 +338,21 @@ export const api = {
   },
 
   /**
+   * **LIVE** — `POST /api/auth/set-password`: the FIRST password on an
+   * OAuth-born account, part of the Google/GitHub completion step. No current
+   * password exists to verify; the seconds-old provider session is the proof
+   * of ownership. Deliberately a different route from changePassword — see
+   * the route header for why the two must not share one.
+   */
+  async setPassword(newPassword: string): Promise<void> {
+    await bff<{ ok: true }>("/api/auth/set-password", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ new_password: newPassword }),
+    });
+  },
+
+  /**
    * **LIVE** — `POST /api/auth/change-password`. Requires the current one; see
    * the route for why GoTrue's not requiring it is a hole rather than a
    * convenience.

@@ -189,6 +189,24 @@ export function changePassword(accessToken: string, password: string): Promise<v
 }
 
 /**
+ * Revoke the session upstream — GoTrue `POST /logout`.
+ *
+ * Sign-out that only deletes our cookie leaves the REFRESH TOKEN alive on
+ * Supabase's side: anyone who captured the cookie value could mint fresh
+ * access tokens indefinitely after the person "signed out". Revoking makes
+ * sign-out mean what it says — the session is terminated, not merely
+ * forgotten by this browser (the user's gate requirement: "when they
+ * finished, the session terminated and it cannot go in anymore").
+ *
+ * `scope=local` revokes this session's refresh-token family and leaves the
+ * person's other devices signed in — sign-out here is not "sign me out
+ * everywhere".
+ */
+export function revokeSession(accessToken: string): Promise<void> {
+  return gotrueVoid("/logout?scope=local", { method: "POST", body: {}, accessToken });
+}
+
+/**
  * Send the recovery email — GoTrue `POST /recover`.
  *
  * **Always resolves for a well-formed address, whether or not an account

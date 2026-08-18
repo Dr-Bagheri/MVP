@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import { verifySignupToken } from "@/server/supabase";
 import { writeSession } from "@/server/session";
 
@@ -23,8 +24,10 @@ export async function GET(request: Request) {
   const tokenHash = url.searchParams.get("token_hash");
   const type = url.searchParams.get("type");
 
+  // keep the visitor's locale — next-intl stamps NEXT_LOCALE on every visit
+  const locale = (await cookies()).get("NEXT_LOCALE")?.value === "en" ? "en" : "fa";
   const to = (q: string) => {
-    const dest = new URL(`/en/sign-in?confirmed=${q}`, url.origin);
+    const dest = new URL(`/${locale}/sign-in?confirmed=${q}`, url.origin);
     return Response.redirect(dest, 303);
   };
 
