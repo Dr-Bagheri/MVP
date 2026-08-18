@@ -47,7 +47,13 @@ export function personName(
  * that routes; this is display only, one rule for every picker.
  */
 export function modelLabel(name: string): string {
-  return name.replace(/^[^:]+:\s*/, "");
+  const display = name.replace(/^[^:]+:\s*/, "");
+  /* Provider catalogue suffixes describe availability tiers, not the model
+     names we present in NeurAI. Keep the provider id unchanged for routing;
+     this is deliberately display-only. */
+  if (display === "Gemini 3.1 Pro Preview") return "Gemini 3.1 Pro";
+  if (display === "Gemini 3.1 Flash Lite") return "Gemini 3.1 Flash";
+  return display;
 }
 
 const JALALI_MONTHS = [
