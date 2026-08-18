@@ -2,6 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { SectionMenu } from "@/components/scaffold";
+import { useAssistantConversation } from "./AssistantConversationState";
 
 /**
  * The assistant domain's section menu (user directive, 2026-08-18: "add the
@@ -10,11 +11,13 @@ import { SectionMenu } from "@/components/scaffold";
  * platform's two-pane anatomy read as a different product.
  *
  * Same skeleton as Echo's menu: a heading, grouped entries, active pill.
- * "New conversation" points at the hub because a fresh "/" IS a fresh
- * conversation — the entry is a door, not a duplicate mechanism.
+ * "New conversation" points at the hub only before a turn begins. Once a
+ * conversation exists, it is deliberately disabled: resetting a live thread
+ * from the navigation makes the record disappear while the server retains it.
  */
-export function AssistantMenu({ activeSlug }: { activeSlug: "new" | "history" | "search" }) {
+export function AssistantMenu({ activeSlug }: { activeSlug: "new" | "history" | "search" | "workflows" | "prompts" }) {
   const t = useTranslations("platform");
+  const { started } = useAssistantConversation();
   return (
     <SectionMenu
       navLabel={t("assistantMenuLabel")}
@@ -24,7 +27,7 @@ export function AssistantMenu({ activeSlug }: { activeSlug: "new" | "history" | 
           key: "conversation",
           title: t("assistantMenuConversation"),
           items: [
-            { slug: "new", href: "/", label: t("newConversation") },
+            { slug: "new", href: "/", label: t("newConversation"), disabled: started },
             { slug: "history", href: "/conversations", label: t("history") },
           ],
         },
@@ -40,7 +43,8 @@ export function AssistantMenu({ activeSlug }: { activeSlug: "new" | "history" | 
           key: "setup",
           title: t("assistantMenuSetup"),
           items: [
-            { slug: "agents", href: "/management/skills", label: t("agents") },
+            { slug: "workflows", href: "/workflows", label: t("workflows") },
+            { slug: "prompts", href: "/management/skills", label: t("prompts") },
             { slug: "integrations", href: "/management/connectors", label: t("integrations") },
           ],
         },

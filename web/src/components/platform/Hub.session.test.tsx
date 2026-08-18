@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgentEvent } from "@/api/types";
 
@@ -45,6 +45,7 @@ vi.mock("next/navigation", () => ({
 
 /** Every `ask` call's third argument, in order. */
 const askCalls: (string | undefined)[] = [];
+const sourceSearches: string[] = [];
 const SESSION_ID = "sess-fixed-1";
 
 /**
@@ -85,6 +86,10 @@ vi.mock("@/api/client", () => ({
     // (session continuity) unchanged
     models: async () => ({ models: [], preferred_model: null, curated: false, tool_capability_filtered: false }),
     skills: async () => [],
+    search: async (query: string) => {
+      sourceSearches.push(query);
+      return [];
+    },
     assistantTools: async () => [],
     sessionFeedback: async () => ({}),
     shareState: async () => false,
@@ -92,6 +97,8 @@ vi.mock("@/api/client", () => ({
 }));
 
 const { Hub } = await import("./Hub");
+const { AssistantMenu } = await import("./AssistantMenu");
+const { AssistantConversationProvider } = await import("./AssistantConversationState");
 
 async function ask(text: string) {
   const box = screen.getByPlaceholderText(/بپرسید/);
@@ -106,6 +113,7 @@ async function ask(text: string) {
 describe("Hub — session continuity", () => {
   beforeEach(() => {
     askCalls.length = 0;
+    sourceSearches.length = 0;
     persisted.length = 0;
   });
 
@@ -139,5 +147,30 @@ describe("Hub — session continuity", () => {
     await waitFor(() => expect(askCalls.length).toBe(3));
     // a ref that is written but never re-read would still pass a two-turn test
     expect(askCalls.slice(1)).toEqual([SESSION_ID, SESSION_ID]);
+  });
+
+  it("disables the left-menu new-conversation control as soon as the first turn starts", async () => {
+    render(
+      <AssistantConversationProvider>
+        <AssistantMenu activeSlug="new" />
+        <Hub />
+      </AssistantConversationProvider>,
+    );
+
+    expect(screen.getByRole("link", { name: "گفتگوی تازه" })).toBeTruthy();
+    await ask("شروع گفتگو");
+    await waitFor(() => expect(screen.getByRole("button", { name: "گفتگوی تازه" })).toBeDisabled());
+  });
+
+  it("searches Sources from the first character, without an instruction or Echo shortcut", async () => {
+    render(<Hub />);
+
+    fireEvent.mouseEnter(screen.getByRole("button", { name: "منابع" }));
+    const search = screen.getByPlaceholderText("جست‌وجو در تماس‌ها و جلسه‌ها…");
+    fireEvent.change(search, { target: { value: "ا" } });
+
+    await waitFor(() => expect(sourceSearches).toEqual(["ا"]));
+    expect(screen.queryByText("برای جست‌وجو در رونوشت‌ها و خلاصه‌ها دست‌کم دو نویسه بنویسید.")).toBeNull();
+    expect(screen.queryByText("جلسه‌ها — بازکردن اکو")).toBeNull();
   });
 });

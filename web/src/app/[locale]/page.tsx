@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { AssistantMenu } from "@/components/platform/AssistantMenu";
+import { AssistantConversationProvider } from "@/components/platform/AssistantConversationState";
 import { Hub } from "@/components/platform/Hub";
 import { PlatformShell } from "@/components/platform/PlatformShell";
 import { MenuLayout } from "@/components/scaffold";
@@ -33,12 +34,14 @@ export default function HubPage() {
       */}
       <Suspense fallback={null}>
         {/* The hub's own sub-menu (user directive, 2026-08-18, round 2):
-            History, Search, Agents, Integrations and New conversation left
+            History, Search, Workflows, Prompts, Integrations and New conversation left
             the rail for this menu — the assistant page carries the
             assistant's destinations, exactly as Echo's page carries Echo's. */}
-        <MenuLayout menu={<AssistantMenu activeSlug="new" />}>
-          <Hub />
-        </MenuLayout>
+        <AssistantConversationProvider>
+          <MenuLayout menu={<AssistantMenu activeSlug="new" />}>
+            <Hub />
+          </MenuLayout>
+        </AssistantConversationProvider>
       </Suspense>
     </PlatformShell>
   );

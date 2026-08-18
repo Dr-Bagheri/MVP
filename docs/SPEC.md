@@ -1,8 +1,10 @@
-# Echo (اکو) — Product Specification (source of truth for WHAT we build)
+# Echo (اکو) — Product Specification (NeurAI Platform's first app)
 
-> Cleaned and structured from the founding spec (2026-08-10). ARCHITECTURE.md
-> holds the HOW. Where this document and ARCHITECTURE.md conflict, this one
-> wins on product behavior, ARCHITECTURE.md wins on technical shape.
+> Echo is the first app inside **NeurAI Platform**, which will host additional
+> apps. This document is the source of truth for Echo's product behavior;
+> [ARCHITECTURE.md](../ARCHITECTURE.md) holds the shared and technical shape.
+> Where they conflict, this document wins on Echo behavior and ARCHITECTURE.md
+> wins on technical shape.
 
 ## What it is
 
