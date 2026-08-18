@@ -901,7 +901,6 @@ export function Hub() {
                 aria-expanded={toolsOpen}
                 onClick={() => setToolsOpen((v) => !v)}
               >
-                <ToolsIcon width={14} height={14} />
                 {t("tools")}
               </button>
             }

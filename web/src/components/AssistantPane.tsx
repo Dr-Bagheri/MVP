@@ -8,6 +8,7 @@ import { modelLabel } from "@/lib/format";
 import { useSkillName } from "@/lib/skillName";
 import { ASSISTANT_PANEL, ResizablePanel } from "@/components/scaffold/Resizable";
 import { ProposalCard } from "./ProposalCard";
+import { SendIcon } from "./platform/icons";
 
 /**
  * The dockable assistant (SPEC): on every screen, knows the page it's on,
@@ -351,10 +352,11 @@ export function AssistantPane({
       </div>
 
       <div className="border-t border-border p-3">
-        <div className="flex gap-2">
-          <input
-            className="input h-12 min-h-0 flex-1"
+        <div className="flex items-end gap-2">
+          <textarea
+            className="input min-h-[6.75rem] flex-1 resize-none py-3"
             dir={composerDir}
+            rows={3}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
@@ -365,23 +367,33 @@ export function AssistantPane({
             }}
             placeholder={t("placeholder")}
           />
-          <button className="btn-primary px-4" disabled={busy || !input.trim()} onClick={() => void send()}>
-            {t("send")}
+          <button
+            type="button"
+            className="btn-primary grid h-12 min-h-0 w-12 shrink-0 place-items-center px-0"
+            aria-label={t("send")}
+            title={t("send")}
+            disabled={busy || !input.trim()}
+            onClick={() => void send()}
+          >
+            <SendIcon width={18} height={18} />
           </button>
         </div>
         {/* The controls live beneath the composer, matching the hub: the
             question is the primary action and the two choices are compact
             pills, not a label-and-select form competing with it. */}
-        <div className="mt-2 flex min-w-0 items-center gap-2">
+        <div className="mt-2 flex min-w-0 items-center justify-start gap-2" dir="ltr">
           <PickerMenu
             open={skillMenuOpen}
             onOpen={() => setSkillMenuOpen(true)}
             onClose={() => setSkillMenuOpen(false)}
+            side="up"
+            className="w-36 shrink-0"
             panelClass="w-56 p-1.5"
             button={
               <button
                 type="button"
-                className="tap flex h-8 min-w-0 flex-1 items-center justify-between gap-1.5 rounded-full border border-border px-3 text-xs text-fg-muted hover:border-border-strong hover:text-fg"
+                className="tap flex h-8 w-full min-w-0 items-center justify-between gap-1.5 rounded-full border border-border px-3 text-xs text-fg-muted hover:border-border-strong hover:text-fg"
+                dir={composerDir}
                 aria-haspopup="menu"
                 aria-expanded={skillMenuOpen}
                 onClick={() => setSkillMenuOpen((value) => !value)}
@@ -422,12 +434,13 @@ export function AssistantPane({
             open={modelMenuOpen}
             onOpen={() => setModelMenuOpen(true)}
             onClose={() => setModelMenuOpen(false)}
-            align="end"
+            side="up"
+            className="w-52 shrink-0"
             panelClass="w-64 p-1.5"
             button={
               <button
                 type="button"
-                className="tap flex h-8 min-w-0 flex-1 items-center justify-between gap-1.5 rounded-full border border-border px-3 text-xs text-fg-muted hover:border-border-strong hover:text-fg"
+                className="tap flex h-8 w-full min-w-0 items-center justify-between gap-1.5 rounded-full border border-border px-3 text-xs text-fg-muted hover:border-border-strong hover:text-fg"
                 aria-haspopup="menu"
                 aria-expanded={modelMenuOpen}
                 onClick={() => setModelMenuOpen((value) => !value)}
@@ -495,6 +508,8 @@ function PickerMenu({
   onOpen,
   onClose,
   align = "start",
+  side = "down",
+  className = "",
   button,
   panelClass,
   children,
@@ -503,15 +518,17 @@ function PickerMenu({
   onOpen: () => void;
   onClose: () => void;
   align?: "start" | "end";
+  side?: "up" | "down";
+  className?: string;
   button: ReactNode;
   panelClass: string;
   children: ReactNode;
 }) {
   return (
-    <div className="relative min-w-0 flex-1" onMouseEnter={onOpen} onMouseLeave={onClose}>
+    <div className={`relative min-w-0 ${className}`} onMouseEnter={onOpen} onMouseLeave={onClose}>
       {button}
       {open ? (
-        <div className={`absolute ${align === "start" ? "start-0" : "end-0"} top-full z-30 pt-2`}>
+        <div className={`absolute ${align === "start" ? "start-0" : "end-0"} ${side === "up" ? "bottom-full pb-2" : "top-full pt-2"} z-30`}>
           <div className={`rounded-xl border border-border bg-surface text-start shadow-lg ${panelClass}`}>
             {children}
           </div>
