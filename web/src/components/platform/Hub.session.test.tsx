@@ -100,8 +100,6 @@ vi.mock("@/api/client", () => ({
 }));
 
 const { Hub } = await import("./Hub");
-const { AssistantMenu } = await import("./AssistantMenu");
-const { AssistantConversationProvider } = await import("./AssistantConversationState");
 
 async function ask(text: string) {
   const box = screen.getByPlaceholderText(/بپرسید/);
@@ -152,19 +150,6 @@ describe("Hub — session continuity", () => {
     await waitFor(() => expect(askCalls.length).toBe(3));
     // a ref that is written but never re-read would still pass a two-turn test
     expect(askCalls.slice(1)).toEqual([SESSION_ID, SESSION_ID]);
-  });
-
-  it("disables the left-menu new-conversation control as soon as the first turn starts", async () => {
-    render(
-      <AssistantConversationProvider>
-        <AssistantMenu activeSlug="new" lockNewConversation />
-        <Hub />
-      </AssistantConversationProvider>,
-    );
-
-    expect(screen.getByRole("link", { name: "گفتگوی تازه" })).toBeTruthy();
-    await ask("شروع گفتگو");
-    await waitFor(() => expect(screen.getByRole("button", { name: "گفتگوی تازه" })).toBeDisabled());
   });
 
   it("searches Sources from the first character, without an instruction or Echo shortcut", async () => {

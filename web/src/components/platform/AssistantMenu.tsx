@@ -2,7 +2,6 @@
 
 import { useTranslations } from "next-intl";
 import { SectionMenu } from "@/components/scaffold";
-import { useAssistantConversation } from "./AssistantConversationState";
 
 /**
  * The assistant domain's section menu (user directive, 2026-08-18: "add the
@@ -11,21 +10,15 @@ import { useAssistantConversation } from "./AssistantConversationState";
  * platform's two-pane anatomy read as a different product.
  *
  * Same skeleton as Echo's menu: a heading, grouped entries, active pill.
- * "New conversation" shows the blank hub when there is no turn, without
- * reloading that current page. Once a conversation exists, it is deliberately
- * disabled: resetting a live thread from the navigation makes the record
- * disappear while the server retains it.
+ * The hub itself is the conversation surface, so this menu contains only
+ * destinations that remain useful while a conversation is in progress.
  */
 export function AssistantMenu({
   activeSlug,
-  lockNewConversation = false,
 }: {
-  activeSlug: "new" | "history" | "search" | "workflows" | "prompts";
-  /** Only the Home hub owns live-conversation state; sibling pages link home. */
-  lockNewConversation?: boolean;
+  activeSlug: "hub" | "history" | "search" | "workflows" | "prompts";
 }) {
   const t = useTranslations("platform");
-  const { started } = useAssistantConversation();
   return (
     <SectionMenu
       navLabel={t("assistantMenuLabel")}
@@ -35,13 +28,6 @@ export function AssistantMenu({
           key: "conversation",
           title: t("assistantMenuConversation"),
           items: [
-            {
-              slug: "new",
-              href: "/",
-              label: t("newConversation"),
-              disabled: lockNewConversation && started,
-              preventNavigation: lockNewConversation && !started,
-            },
             { slug: "history", href: "/conversations", label: t("history") },
           ],
         },

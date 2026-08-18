@@ -10,7 +10,6 @@ import { personName, modelLabel } from "@/lib/format";
 import { useDictation } from "@/lib/dictation";
 import { useSkillName, useSkillStarters } from "@/lib/skillName";
 import { ConversationThread } from "./ConversationThread";
-import { useAssistantConversation } from "./AssistantConversationState";
 import { DocumentIcon, EchoMark, MicIcon, PlusIcon, SendIcon, ToolsIcon } from "./icons";
 
 type CreateKind = "doc" | "pdf";
@@ -56,7 +55,6 @@ export function Hub() {
   
   const locale = useLocale();
   const router = useRouter();
-  const { setStarted } = useAssistantConversation();
   const [me, setMe] = useState<User | null>(null);
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [input, setInput] = useState("");
@@ -291,14 +289,6 @@ export function Hub() {
 
   const idle = messages.length === 0;
 
-  /* A draft is not a conversation. The first submitted turn is; this update
-     reaches the sibling sub-menu immediately, including while its answer is
-     streaming. A resumed conversation is already a record even if its
-     messages have not finished loading. */
-  useEffect(() => {
-    setStarted(Boolean(resumeId) || messages.length > 0);
-  }, [messages.length, resumeId, setStarted]);
-
   /** One reducer for ask and regenerate — same events, same thread. */
   async function consume(stream: AsyncGenerator<AgentEvent>, replyId: string) {
     for await (const event of stream) {
@@ -386,10 +376,6 @@ export function Hub() {
   async function send() {
     const typed = input.trim();
     if (typed === "" || streaming) return;
-    // The first submitted turn makes this a live conversation immediately.
-    // Do not wait for React's message effect or the provider response: the
-    // sibling menu and the skill picker must lock in the same interaction.
-    setStarted(true);
     setSkillOpen(false);
     setInput("");
     setAskError(null);

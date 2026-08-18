@@ -1,6 +1,5 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { AssistantConversationProvider, useAssistantConversation } from "./AssistantConversationState";
 
 vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => key,
@@ -12,36 +11,11 @@ vi.mock("@/i18n/routing", () => ({
 
 const { AssistantMenu } = await import("./AssistantMenu");
 
-function StateControl() {
-  const { setStarted } = useAssistantConversation();
-  return <button type="button" onClick={() => setStarted(true)}>start</button>;
-}
+describe("AssistantMenu", () => {
+  it("keeps only usable conversation destinations in the left menu", () => {
+    render(<AssistantMenu activeSlug="hub" />);
 
-describe("AssistantMenu — New conversation", () => {
-  it("does not reload the blank hub, then becomes disabled after a conversation starts", () => {
-    render(
-      <AssistantConversationProvider>
-        <StateControl />
-        <AssistantMenu activeSlug="new" lockNewConversation />
-      </AssistantConversationProvider>,
-    );
-
-    const fresh = screen.getByRole("link", { name: "newConversation" });
-    expect(fresh.getAttribute("href")).toBe("/");
-    expect(fresh.getAttribute("aria-disabled")).toBe("true");
-    const click = new MouseEvent("click", { bubbles: true, cancelable: true });
-    fresh.dispatchEvent(click);
-    expect(click.defaultPrevented).toBe(true);
-
-    fireEvent.click(screen.getByRole("button", { name: "start" }));
-    expect(screen.getByRole("button", { name: "newConversation" })).toBeDisabled();
-  });
-
-  it("keeps New conversation as a normal link from an assistant subpage", () => {
-    render(<AssistantMenu activeSlug="history" />);
-
-    const fresh = screen.getByRole("link", { name: "newConversation" });
-    expect(fresh.getAttribute("href")).toBe("/");
-    expect(fresh.getAttribute("aria-disabled")).toBeNull();
+    expect(screen.queryByRole("link", { name: "newConversation" })).toBeNull();
+    expect(screen.getByRole("link", { name: "history" }).getAttribute("href")).toBe("/conversations");
   });
 });
