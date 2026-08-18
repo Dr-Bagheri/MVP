@@ -11,7 +11,7 @@ import { useDictation } from "@/lib/dictation";
 import { useSkillName, useSkillStarters } from "@/lib/skillName";
 import { ConversationThread } from "./ConversationThread";
 import { useAssistantConversation } from "./AssistantConversationState";
-import { EchoMark, MicIcon, PlusIcon, SendIcon, ToolsIcon } from "./icons";
+import { DocumentIcon, EchoMark, MicIcon, PlusIcon, SendIcon, ToolsIcon } from "./icons";
 
 /**
  * The AI-assistant hub — NeurAI's first page (M22, user-approved).
@@ -683,8 +683,9 @@ export function Hub() {
               if (file) void attach(file);
             }}
           />
-          {/* CREATE — the reference hub's first pill, every row a real act.
-              Hover-driven like every composer menu (user directive). */}
+          {/* CREATE — compact document cards, matching the reference's
+              left-aligned anatomy. Each fills (but never sends) a real
+              authoring request, so the person retains the final instruction. */}
           <HoverMenu
             open={createOpen}
             onOpen={() => {
@@ -692,7 +693,7 @@ export function Hub() {
               setSourcesOpen(false);
             }}
             onClose={() => setCreateOpen(false)}
-            panelClass="w-60 p-1.5"
+            panelClass="w-[19rem] p-2"
             button={
               <button
                 type="button"
@@ -706,31 +707,31 @@ export function Hub() {
               </button>
             }
           >
-            <div role="menu">
+            <div role="menu" aria-label={t("create")} className="space-y-1.5">
+              {([
+                { key: "doc", title: t("createDoc"), description: t("createDocDescription"), prompt: t("createDocPrompt") },
+                { key: "pdf", title: t("createPdf"), description: t("createPdfDescription"), prompt: t("createPdfPrompt") },
+              ] as const).map((item) => (
                 <button
+                  key={item.key}
                   type="button"
                   role="menuitem"
-                  className="tap flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg hover:bg-surface-2"
-                  onClick={() => router.push("/echo")}
+                  className="tap flex w-full items-center gap-3 rounded-2xl bg-surface-2 px-3 py-3 text-start transition-colors hover:bg-accent-soft"
+                  onClick={() => {
+                    setInput(item.prompt);
+                    setCreateOpen(false);
+                    requestAnimationFrame(() => promptRef.current?.focus());
+                  }}
                 >
-                  {t("createRecord")}
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-surface text-fg-muted">
+                    <DocumentIcon width={19} height={19} />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold text-fg">{item.title}</span>
+                    <span className="mt-0.5 block text-xs leading-5 text-fg-muted">{item.description}</span>
+                  </span>
                 </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="tap flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg hover:bg-surface-2"
-                  onClick={() => router.push("/echo")}
-                >
-                  {t("createUpload")}
-                </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="tap flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg hover:bg-surface-2"
-                  onClick={() => router.push("/management/skills")}
-                >
-                  {t("createSkill")}
-                </button>
+              ))}
             </div>
           </HoverMenu>
 

@@ -173,4 +173,19 @@ describe("Hub — session continuity", () => {
     expect(screen.queryByText("برای جست‌وجو در رونوشت‌ها و خلاصه‌ها دست‌کم دو نویسه بنویسید.")).toBeNull();
     expect(screen.queryByText("جلسه‌ها — بازکردن اکو")).toBeNull();
   });
+
+  it("shows only Doc and PDF authoring cards in Create", async () => {
+    render(<Hub />);
+
+    fireEvent.mouseEnter(screen.getByRole("button", { name: "ساختن" }));
+    const doc = screen.getByRole("menuitem", { name: /^سند/ });
+    expect(doc).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: /^PDF/ })).toBeTruthy();
+    expect(screen.queryByText("ضبط تماس")).toBeNull();
+    expect(screen.queryByText("بارگذاری صدا")).toBeNull();
+    expect(screen.queryByText("پرامپت تازه")).toBeNull();
+
+    fireEvent.click(doc);
+    await waitFor(() => expect(screen.getByPlaceholderText(/بپرسید/)).toHaveValue("برای نوشتن یک سند کمکم کن. ابتدا هدف، مخاطب و بخش‌های لازم را از من بپرس."));
+  });
 });
