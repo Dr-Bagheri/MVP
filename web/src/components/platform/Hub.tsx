@@ -84,6 +84,14 @@ export function Hub() {
   const [sourceQuery, setSourceQuery] = useState("");
   const [sourceHits, setSourceHits] = useState<SearchHit[]>([]);
   const [sourceBusy, setSourceBusy] = useState(false);
+  /**
+   * Web search (2026-08-18): REAL — the ask rides the provider's `:online`
+   * variant, so the model searches the live web before answering. Off by
+   * default: the scope promise («در محدودهٔ دسترسی خودتان») is the hub's
+   * caption, and reaching outside it is a choice the person makes per
+   * conversation, never a silent ambient behaviour.
+   */
+  const [webSearch, setWebSearch] = useState(false);
   const promptRef = useRef<HTMLInputElement>(null);
   /** The mic dictates into the composer (it is NOT Echo's recorder). */
   const dictation = useDictation(locale === "fa" ? "fa-IR" : "en-US", (text) =>
@@ -375,6 +383,7 @@ export function Hub() {
         api.ask(question, { page: "hub", callIds: contextCalls.map((c) => c.id) }, sessionId.current, {
           model: model || undefined,
           skill: skill || undefined,
+          web: webSearch,
           signal,
         }),
       replyId,
@@ -791,6 +800,31 @@ export function Hub() {
                   <EchoMark size={16} />
                   {t("sourcesMeetings")}
                 </Link>
+                <hr className="my-1.5 border-border" />
+                {/* REAL web search — the ask dispatches the model's :online
+                    variant. A switch, because it is a per-conversation stance,
+                    not an act. */}
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={webSearch}
+                  className="tap flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-sm text-fg hover:bg-surface-2"
+                  onClick={() => setWebSearch((v) => !v)}
+                >
+                  <span>{t("searchWeb")}</span>
+                  <span
+                    aria-hidden
+                    className={`relative h-5 w-9 rounded-full transition-colors ${
+                      webSearch ? "bg-success" : "bg-surface-2 border border-border"
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-0.5 h-4 w-4 rounded-full bg-bg transition-all ${
+                        webSearch ? "end-0.5" : "start-0.5"
+                      }`}
+                    />
+                  </span>
+                </button>
               </div>
             ) : null}
           </div>

@@ -337,3 +337,21 @@ describe("members and the pending queue (M15)", () => {
     expect(log).toHaveLength(0);
   });
 });
+
+describe("assertAskable — the choose-by-name wall on the ask wire (2026-08-18)", () => {
+  const repo = () => createModelsRepo(fakeDb(() => []).db);
+
+  it("a catalogue model passes", () => {
+    expect(() => repo().assertAskable("google/gemini-3.6-flash")).not.toThrow();
+  });
+
+  it("a BARRED model is refused by name — M5's 'never selectable by name', now on ask too", () => {
+    // the ask route took body.model as free text: preferred() validated at
+    // write time, and naming a model here walked straight past the wall
+    expect(() => repo().assertAskable("anthropic/claude-opus-5")).toThrow(ValidationError);
+  });
+
+  it("an invented model is refused — a typo fails at the mistake, not at generation time", () => {
+    expect(() => repo().assertAskable("google/gemini-999")).toThrow(ValidationError);
+  });
+});

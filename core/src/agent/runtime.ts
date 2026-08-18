@@ -33,11 +33,26 @@ export interface RunRequest<TDeps> {
   callerModel?: string | undefined;
   /** Provider for the catalogue lookup. */
   provider?: string | undefined;
+  /**
+   * Web search for this run (user directive, 2026-08-18: the hub's "Search
+   * web" toggle must be real or absent). OpenRouter's `:online` variant
+   * attaches its web plugin to any model — the suffix is applied HERE, after
+   * M5's catalogue/exclusion checks validated the BASE id, so the toggle is
+   * a transport feature and never a second door past the model wall.
+   */
+  web?: boolean | undefined;
   /** The question or instruction. Content must already be quoted by the caller. */
   input: string;
   tools: DomainTool<TDeps, never>[];
   deps: TDeps;
   callId?: string | null | undefined;
+  /**
+   * Plural context (Sources, 2026-08-18). The singular `callId` stays for
+   * the summarizer and older callers; when this list is present it wins.
+   * The client's chips previously sent one id and silently dropped the rest
+   * — a control that read as wired and did nothing past the first chip.
+   */
+  callIds?: string[] | undefined;
   adminOnlyTools?: ReadonlySet<string> | undefined;
   /** Overrides the skill's pin and the default (rarely needed). */
   maxToolCalls?: number | undefined;
@@ -82,7 +97,27 @@ export function createAgentRuntime({ runs }: AgentRuntimeOptions) {
       }
 
       const modelId = modelForRun(skill, request.callerModel);
-      const modelRef: PiModelRef = { provider: request.provider ?? "openrouter", id: modelId };
+      /*
+       * `:online` = OpenRouter's web-search plugin riding the SAME model.
+       * Applied to the DISPATCHED id only after modelForRun resolved and the
+       * api validated the base id — the record then shows the suffixed id,
+       * because the record's job is what was actually called. Other
+       * providers get no suffix: a transport feature one provider spells
+       * must not be sent to another as part of a model name.
+       */
+      const provider = request.provider ?? "openrouter";
+      const dispatchedModelId =
+        request.web === true && provider === "openrouter" && !modelId.endsWith(":online")
+          ? `${modelId}:online`
+          : modelId;
+      const modelRef: PiModelRef = { provider, id: dispatchedModelId };
+      /* plural context wins; the singular stays for the summarizer's caller */
+      const contextCallIds =
+        request.callIds && request.callIds.length > 0
+          ? request.callIds
+          : request.callId
+            ? [request.callId]
+            : [];
       /*
        * The context call joins the PROMPT, not just the record. `callId` was
        * stamped on the run row and never shown to the model — so a person
@@ -93,18 +128,26 @@ export function createAgentRuntime({ runs }: AgentRuntimeOptions) {
        * what the model actually saw.
        */
       const systemPrompt = (skill?.prompt ?? DEFAULT_ASSISTANT_PROMPT)
-        + (request.callId
-          ? `\n\nشناسهٔ تماسِ در حال بحث: ${request.callId} — هرجا کاربر به «این تماس» اشاره می‌کند، در ابزارها همین شناسه را به کار ببرید.`
-          : "");
+        + (contextCallIds.length === 1
+          ? `\n\nشناسهٔ تماسِ در حال بحث: ${contextCallIds[0]} — هرجا کاربر به «این تماس» اشاره می‌کند، در ابزارها همین شناسه را به کار ببرید.`
+          : contextCallIds.length > 1
+            ? `\n\nشناسه‌های تماس‌های در حال بحث: ${contextCallIds.join("، ")} — هرجا کاربر به «این تماس‌ها» اشاره می‌کند، در ابزارها همین شناسه‌ها را به کار ببرید.`
+            : "");
 
       // (3) the run exists in the record BEFORE any provider or tool contact
       const runId = await runs.begin({
         orgId: identity.orgId,
         actorId: identity.userId,
-        callId: request.callId ?? null,
+        /*
+         * The row's call_id stays SINGULAR — it is a composite FK with purge
+         * semantics, not a list. The first attached call is the row's link;
+         * the full context list is in `request` below and in the recorded
+         * systemPrompt, which is the record of what the model saw.
+         */
+        callId: contextCallIds[0] ?? null,
         skillId: skill?.id ?? null,
         kind,
-        model: modelId,
+        model: dispatchedModelId,
         request: {
           systemPrompt,
           input,
@@ -112,6 +155,8 @@ export function createAgentRuntime({ runs }: AgentRuntimeOptions) {
           // replay reconstructs the same surface
           tools: filterDeclaredTools(request.tools, skill?.tools).map((t) => t.name),
           skill: skill ? { id: skill.id, slug: skill.slug, level: skill.level } : null,
+          ...(contextCallIds.length > 1 ? { callIds: contextCallIds } : {}),
+          ...(request.web === true ? { web: true } : {}),
         },
       });
 
@@ -237,7 +282,7 @@ export function createAgentRuntime({ runs }: AgentRuntimeOptions) {
         const message = error instanceof Error ? error.message : "agent run failed";
         await runs.finish(runId, { status: "error", error: message });
         return {
-          runId, text: "", model: modelId, steps,
+          runId, text: "", model: dispatchedModelId, steps,
           failed: true, error: message,
         };
       }

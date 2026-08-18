@@ -34,6 +34,8 @@ export async function POST(request: Request) {
     model?: string;
     skill?: string;
     call_id?: string;
+    call_ids?: string[];
+    web?: boolean;
   };
 
   try {
@@ -43,6 +45,8 @@ export async function POST(request: Request) {
       model: body.model,
       skill: body.skill,
       call_id: body.call_id,
+      call_ids: body.call_ids,
+      web: body.web,
     });
     return new Response(upstream.body, {
       headers: {

@@ -446,6 +446,7 @@
     "sourcesHint": "Type at least two characters to search transcripts and summaries.",
     "sourcesAttached": "attached",
     "sourcesMeetings": "Meetings — open Echo",
+    "searchWeb": "Search web",
     "removeContext": "Remove {name} from context",
     "suggestions": "Suggestions",
     "quickAccess": "Quick access",

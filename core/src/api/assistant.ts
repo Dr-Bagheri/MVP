@@ -26,6 +26,10 @@ export interface AskRequest {
   /** The caller's model choice (M5: no default is imposed). */
   model?: string | undefined;
   callId?: string | null | undefined;
+  /** Plural context — the Sources chips. Wins over `callId` when present. */
+  callIds?: string[] | undefined;
+  /** Web search via the provider's online variant (validated base model). */
+  web?: boolean | undefined;
   signal?: AbortSignal | undefined;
   /** The conversation this turn belongs to (M4, db/0018). */
   sessionId?: string | undefined;
@@ -105,6 +109,8 @@ export function createAssistant<TDeps>(config: AssistantDeps<TDeps>) {
           tools: config.tools,
           deps: config.deps,
           callId: request.callId ?? null,
+          callIds: request.callIds,
+          web: request.web,
           adminOnlyTools: config.adminOnlyTools,
           signal: request.signal,
           apiKey: config.apiKey,

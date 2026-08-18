@@ -1296,6 +1296,8 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     if (!chosenModel) {
       throw new ValidationError("no model selected — choose one in settings, or pass `model`");
     }
+    // choose-by-name wall — same hole as ask's, same fix (M5)
+    models.assertAskable(chosenModel);
 
     reply.raw.writeHead(200, {
       "Content-Type": "text/event-stream",
@@ -1343,10 +1345,27 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     const identity = await auth.requireActive(request);
     const body = (request.body ?? {}) as {
       question?: unknown; model?: unknown; call_id?: unknown; skill?: unknown;
-      session_id?: unknown;
+      session_id?: unknown; call_ids?: unknown; web?: unknown;
     };
     if (typeof body.question !== "string" || body.question.trim() === "") {
       throw new ValidationError("question is required");
+    }
+    /**
+     * Plural context (Sources). Validated hard: strings, non-empty, capped —
+     * a context list is a prompt ingredient, and an unbounded one is a token
+     * budget handed to whoever crafts the request. The singular `call_id`
+     * stays as the compat spelling; the list wins when both arrive.
+     */
+    let callIds: string[] | undefined;
+    if (body.call_ids !== undefined) {
+      if (
+        !Array.isArray(body.call_ids) ||
+        body.call_ids.length > 5 ||
+        body.call_ids.some((id) => typeof id !== "string" || id.trim() === "")
+      ) {
+        throw new ValidationError("call_ids must be up to 5 non-empty strings");
+      }
+      callIds = body.call_ids as string[];
     }
     // M17 amendment (db/0022): a gateway key reaches the assistant only if an
     // admin opened it. Checked BEFORE the stream is opened — once headers are
@@ -1391,6 +1410,16 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       throw new ValidationError("no model selected — choose one in settings, or pass `model`");
     }
 
+    /*
+     * The choose-by-name wall, on the ask wire too (M5: "never selectable by
+     * name, never re-admittable"). `preferred` validated at WRITE time; an
+     * explicit `body.model` reached the runtime as free text, and a STORED
+     * preference from before the exclusion existed would ride through
+     * forever. Both sources validate here — the wall does not care where the
+     * name came from. Skill pins are org configuration and stay the org's.
+     */
+    if (chosenModel) models.assertAskable(chosenModel);
+
     /**
      * Resolve the conversation and record the human's turn BEFORE the stream
      * opens — same reasoning as the model and gateway checks above. A bad
@@ -1429,6 +1458,8 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       skill,
       model: chosenModel ?? undefined,
       callId: typeof body.call_id === "string" ? body.call_id : null,
+      callIds,
+      web: body.web === true,
       signal: controller.signal,
       sessionId: conversation.id,
       sessionCreated: conversation.created,

@@ -223,3 +223,71 @@ describe("agent runtime — recording and failure surfacing", () => {
     expect(second.tools).toHaveLength(0);
   });
 });
+
+describe("web search and plural context (2026-08-18)", () => {
+  it("web:true dispatches the :online variant — and records the id it actually called", async () => {
+    const { store, begun } = fakeStore();
+    runPiMock.mockReset();
+    runPiMock.mockResolvedValue({ text: "answer", model: "m", tokensIn: 1, tokensOut: 1 });
+
+    await createAgentRuntime({ runs: store }).run({
+      ...baseRequest, tools: [okTool as never], web: true,
+    });
+
+    const dispatched = (runPiMock.mock.calls[0]![0] as { model: { id: string } }).model.id;
+    expect(dispatched).toBe("google/gemini-3.6-flash:online");
+    // the record's job is what was actually called (invariant 4)
+    expect(begun[0]).toMatchObject({ model: "google/gemini-3.6-flash:online" });
+    expect((begun[0] as { request: { web?: boolean } }).request.web).toBe(true);
+  });
+
+  it("without the flag, NO suffix — a toggle nobody pressed must change nothing", async () => {
+    const { store, begun } = fakeStore();
+    runPiMock.mockReset();
+    runPiMock.mockResolvedValue({ text: "answer", model: "m", tokensIn: 1, tokensOut: 1 });
+
+    await createAgentRuntime({ runs: store }).run({
+      ...baseRequest, tools: [okTool as never],
+    });
+
+    const dispatched = (runPiMock.mock.calls[0]![0] as { model: { id: string } }).model.id;
+    expect(dispatched).toBe("google/gemini-3.6-flash");
+    expect((begun[0] as { request: { web?: boolean } }).request.web).toBeUndefined();
+  });
+
+  it("every attached call reaches the prompt — the wire used to truncate to the first", async () => {
+    const { store, begun } = fakeStore();
+    runPiMock.mockReset();
+    runPiMock.mockResolvedValue({ text: "answer", model: "m", tokensIn: 1, tokensOut: 1 });
+
+    await createAgentRuntime({ runs: store }).run({
+      ...baseRequest, tools: [okTool as never], callIds: ["call-a", "call-b"],
+    });
+
+    const prompt = (runPiMock.mock.calls[0]![0] as { systemPrompt: string }).systemPrompt;
+    expect(prompt).toContain("call-a");
+    expect(prompt).toContain("call-b");
+    // the row's link stays singular (composite FK, purge semantics): first id
+    expect(begun[0]).toMatchObject({ callId: "call-a" });
+    // the full list is in the replayable record
+    expect((begun[0] as { request: { callIds?: string[] } }).request.callIds).toEqual([
+      "call-a", "call-b",
+    ]);
+  });
+
+  it("a single attached call keeps the exact singular sentence — no plural drift", async () => {
+    const { store, begun } = fakeStore();
+    runPiMock.mockReset();
+    runPiMock.mockResolvedValue({ text: "answer", model: "m", tokensIn: 1, tokensOut: 1 });
+
+    await createAgentRuntime({ runs: store }).run({
+      ...baseRequest, tools: [okTool as never], callIds: ["call-a"],
+    });
+
+    const prompt = (runPiMock.mock.calls[0]![0] as { systemPrompt: string }).systemPrompt;
+    expect(prompt).toContain("شناسهٔ تماسِ در حال بحث: call-a");
+    // one call = no callIds list in the record; the row's call_id carries it
+    expect((begun[0] as { request: { callIds?: string[] } }).request.callIds).toBeUndefined();
+    expect(begun[0]).toMatchObject({ callId: "call-a" });
+  });
+});

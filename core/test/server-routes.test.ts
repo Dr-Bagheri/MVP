@@ -10,6 +10,13 @@ import { describe, expect, it, vi } from "vitest";
 const runPiMock = vi.fn();
 vi.mock("../src/agent/pi.ts", () => ({
   runPi: (...args: unknown[]) => runPiMock(...args),
+  // The ask route now validates an explicit body.model against the catalogue
+  // (choose-by-name wall). The barred entry is here ON PURPOSE: the refusal
+  // test needs the upstream to contain what the product must refuse.
+  catalogue: () => [
+    { id: "google/gemini-3.6-flash", name: "Gemini 3.6 Flash", reasoning: true },
+    { id: "anthropic/claude-opus-5", name: "Claude Opus 5", reasoning: false },
+  ],
   Type: {},
 }));
 
@@ -760,13 +767,61 @@ describe("assistant SSE route", () => {
     // account instead of a fixture that always passed a model.
     runPiMock.mockReset();
     runPiMock.mockResolvedValue({ text: "پاسخ", model: "m", tokensIn: 1, tokensOut: 1 });
-    const db = fakeDb({ preferredModel: "anthropic/claude-opus-5" });
+    const db = fakeDb({ preferredModel: "google/gemini-3.6-flash" });
     const res = await server(db).inject({
       method: "POST", url: "/v1/assistant/ask", headers: authed, payload: { question: "چه شد؟" },
     });
     expect(res.headers["content-type"]).toContain("text/event-stream");
     const call = runPiMock.mock.calls[0]![0] as { model: { id: string } };
-    expect(call.model.id).toBe("anthropic/claude-opus-5");
+    expect(call.model.id).toBe("google/gemini-3.6-flash");
+  });
+
+  it("refuses a BARRED model by name, before the stream — from the body OR a stored preference", async () => {
+    // M5: never selectable by name, never re-admittable. The wall must not
+    // care where the name came from: a legacy preference stored before the
+    // exclusion existed is as refused as a typed one.
+    for (const payload of [
+      { question: "چه شد؟", model: "anthropic/claude-opus-5" },
+      { question: "چه شد؟" }, // falls back to the stored preference below
+    ]) {
+      const db = fakeDb({ preferredModel: "anthropic/claude-opus-5" });
+      const res = await server(db).inject({
+        method: "POST", url: "/v1/assistant/ask", headers: authed, payload,
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error).toMatch(/not available/);
+    }
+  });
+
+  it("carries every attached call and the web flag onto the run", async () => {
+    runPiMock.mockReset();
+    runPiMock.mockResolvedValue({ text: "پاسخ", model: "m", tokensIn: 1, tokensOut: 1 });
+    const res = await server().inject({
+      method: "POST", url: "/v1/assistant/ask", headers: authed,
+      payload: {
+        question: "چه شد؟", model: "google/gemini-3.6-flash",
+        call_ids: [CALL, RUN], web: true,
+      },
+    });
+    expect(res.headers["content-type"]).toContain("text/event-stream");
+    const call = runPiMock.mock.calls[0]![0] as { model: { id: string }; systemPrompt: string };
+    // web:true → the provider's online variant is what is dispatched
+    expect(call.model.id).toBe("google/gemini-3.6-flash:online");
+    // BOTH ids reach the prompt — the wire used to truncate to the first
+    expect(call.systemPrompt).toContain(CALL);
+    expect(call.systemPrompt).toContain(RUN);
+  });
+
+  it("400s an oversized or malformed call_ids list before the stream", async () => {
+    const res = await server().inject({
+      method: "POST", url: "/v1/assistant/ask", headers: authed,
+      payload: {
+        question: "چه شد؟", model: "google/gemini-3.6-flash",
+        call_ids: ["a", "b", "c", "d", "e", "f"],
+      },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/call_ids/);
   });
 
   it("400s BEFORE the stream when no model is chosen anywhere", async () => {

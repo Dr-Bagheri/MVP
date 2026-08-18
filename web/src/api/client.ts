@@ -1392,20 +1392,27 @@ export const api = {
     question: string,
     ctx: { page: string; callIds: string[] },
     sessionId?: string,
-    opts?: { model?: string; skill?: string; signal?: AbortSignal },
+    opts?: { model?: string; skill?: string; web?: boolean; signal?: AbortSignal },
   ): AsyncGenerator<AgentEvent> {
     /* **LIVE** — the real stream, through the BFF's SSE passthrough. The
        vocabulary is core/'s SseEvent union verbatim (session first, then
        deltas/tools/proposals, done always last), so this swap was
-       transport-only — exactly what the mock's contract promised. */
+       transport-only — exactly what the mock's contract promised.
+
+       `call_ids` carries EVERY attached source; `call_id` stays beside it
+       for a core that predates the plural wire (it truncated to the first
+       chip — a control that read as wired and dropped the rest). `web`
+       rides only when true, so an older core sees nothing new. */
     yield* streamAssistant(
       '/api/assistant/ask',
       {
         question,
         session_id: sessionId,
         call_id: ctx.callIds[0],
+        ...(ctx.callIds.length > 1 ? { call_ids: ctx.callIds } : {}),
         model: opts?.model,
         skill: opts?.skill,
+        ...(opts?.web ? { web: true } : {}),
       },
       opts?.signal,
     );

@@ -151,6 +151,23 @@ function bySuggestion<T extends { id: string }>(models: T[]): T[] {
 export function createModelsRepo(db: Db, options: ModelsOptions = {}) {
   const capabilityOf = options.capability ?? toolCapability;
   return {
+    /**
+     * The choose-by-name wall, for the ASK wire (found 2026-08-18): the ask
+     * route took `body.model` as free text, so a barred or invented model was
+     * selectable by anyone who typed its id — the exact hole the no-Claude
+     * finding closed on `preferred`, reopened one route over. Catalogue and
+     * exclusion only, deliberately no capability probe: this runs on every
+     * ask, and refusing a legitimate model during a capability-check outage
+     * would take conversations down for someone else's downtime.
+     */
+    assertAskable(modelId: string): void {
+      if (!catalogue().some((m) => m.id === modelId)) {
+        throw new ValidationError(`unknown model: ${modelId}`);
+      }
+      if (isExcluded(modelId)) {
+        throw new ValidationError(`model is not available on this product: ${modelId}`);
+      }
+    },
     async list(identity: Identity): Promise<ModelCatalogue> {
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<{ allowed_models: string[] | null; preferred_model: string | null }>(
