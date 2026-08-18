@@ -1026,7 +1026,7 @@ export function Hub() {
           press selects the skill AND fills the composer; sending stays the
           person's act (the shipped rule, unchanged). */}
       {idle && skills.some((s) => s.starter_questions.length > 0) ? (
-        <section className="mt-7 w-full max-w-[660px] text-start" aria-label={t("suggestions")}>
+        <section className="mt-7 w-full max-w-[660px] self-start text-start" aria-label={t("suggestions")}>
           <p className="mb-1 px-1 text-group-label font-medium text-fg-subtle">
             {t("suggestions")}
           </p>

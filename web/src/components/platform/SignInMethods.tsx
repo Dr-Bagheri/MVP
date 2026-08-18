@@ -7,20 +7,15 @@ import { Chip } from "@/components/ui";
  * Settings · Sign-in methods (Part 3) — the section that used to be
  * "Single sign-on (SSO) · Not in v1".
  *
- * Renamed to what it truthfully is: the live inventory of how people enter
- * THIS deployment. All three methods below are wired and live-proven
- * (email+password with confirmation-as-acceptance; Google and GitHub via
- * PKCE with server-side code exchange — the browser never holds a token).
- * These are FACTS rendered as facts: no toggles that pretend the page can
- * switch a provider off, because provider configuration lives in the auth
- * service, not in an org setting — a control here would be a decoration
- * wearing authority.
+ * It lists only the external providers requested for this surface. Their
+ * availability remains a deployment-level setting in the authentication
+ * provider; an organisation page must not pretend it can disable OAuth for
+ * every visitor.
  */
 export function SignInMethods() {
   const t = useTranslations("signin");
 
   const methods = [
-    { key: "password", live: true },
     { key: "google", live: true },
     { key: "github", live: true },
   ] as const;
