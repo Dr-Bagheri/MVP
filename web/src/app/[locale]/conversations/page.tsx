@@ -98,7 +98,7 @@ export default function ConversationsPage() {
             delete beside each row. Clicking a row opens it in the pane. */}
         <div className="hidden min-w-0 flex-1 overflow-y-auto md:block">
           <div className="mx-auto w-full max-w-content px-5 pb-16 pt-8 md:px-10">
-            <h2 className="mb-1 text-xl font-bold text-fg">{t("title")}</h2>
+            <h2 className="h-page mb-1">{t("title")}</h2>
             <p className="mb-5 text-sm text-fg-muted">{t("hint")}</p>
             <div className="rounded-lg border border-border bg-surface">
               {sessions === null ? null : shown.length === 0 ? (

@@ -44,21 +44,29 @@ describe("the Tailwind theme derives from the scaffold constants", () => {
     expect(theme.borderRadius["2xl"]).toBe(`${SCAFFOLD.radius.modal}px`);
   });
 
+  /*
+   * Since the responsive-scaling directive (2026-08-18) the theme emits REM
+   * derived from the blueprint's px (÷16), so every role tracks the
+   * viewport-scaled root font-size. The assertion still pins DERIVATION —
+   * a hand-typed value on either side goes red.
+   */
+  const rem = (px: number) => `${px / 16}rem`;
+
   it("type roles: pane title / menu item / detail / group label", () => {
-    expect(theme.fontSize["pane-title"][0]).toBe(`${SCAFFOLD.fontSize.paneTitle}px`);
-    expect(theme.fontSize["menu-item"][0]).toBe(`${SCAFFOLD.fontSize.menuItem}px`);
-    expect(theme.fontSize.detail[0]).toBe(`${SCAFFOLD.fontSize.detail}px`);
-    expect(theme.fontSize["group-label"][0]).toBe(`${SCAFFOLD.fontSize.groupLabel}px`);
+    expect(theme.fontSize["pane-title"][0]).toBe(rem(SCAFFOLD.fontSize.paneTitle));
+    expect(theme.fontSize["menu-item"][0]).toBe(rem(SCAFFOLD.fontSize.menuItem));
+    expect(theme.fontSize.detail[0]).toBe(rem(SCAFFOLD.fontSize.detail));
+    expect(theme.fontSize["group-label"][0]).toBe(rem(SCAFFOLD.fontSize.groupLabel));
   });
 
   it("dimensions: menu, rail, content columns, controls, top bar", () => {
-    expect(theme.width.menu).toBe(`${SCAFFOLD.menuWidth}px`);
-    expect(theme.width.rail).toBe(`${SCAFFOLD.railWidth}px`);
-    expect(theme.maxWidth.content).toBe(`${SCAFFOLD.contentMaxWidth}px`);
-    expect(theme.maxWidth["content-wide"]).toBe(`${SCAFFOLD.contentMaxWidthWide}px`);
-    expect(theme.height.control).toBe(`${SCAFFOLD.controlHeight}px`);
-    expect(theme.minHeight.control).toBe(`${SCAFFOLD.controlHeight}px`);
-    expect(theme.height.topbar).toBe(`${SCAFFOLD.topBarHeight}px`);
+    expect(theme.width.menu).toBe(rem(SCAFFOLD.menuWidth));
+    expect(theme.width.rail).toBe(rem(SCAFFOLD.railWidth));
+    expect(theme.maxWidth.content).toBe(rem(SCAFFOLD.contentMaxWidth));
+    expect(theme.maxWidth["content-wide"]).toBe(rem(SCAFFOLD.contentMaxWidthWide));
+    expect(theme.height.control).toBe(rem(SCAFFOLD.controlHeight));
+    expect(theme.minHeight.control).toBe(rem(SCAFFOLD.controlHeight));
+    expect(theme.height.topbar).toBe(rem(SCAFFOLD.topBarHeight));
   });
 
   it("the page/section title sizes ride Tailwind defaults — pinned so a future theme edit cannot silently shrink them", () => {

@@ -152,7 +152,7 @@ export default function SkillsPage() {
       <div>
         <div className="mb-5 flex items-start justify-between gap-4">
           <div>
-            <h1 className="mb-1 text-xl font-bold text-fg">{t("title")}</h1>
+            <h1 className="h-page mb-1">{t("title")}</h1>
             <p className="text-sm text-fg-muted">{t("levelNote")}</p>
           </div>
           <button

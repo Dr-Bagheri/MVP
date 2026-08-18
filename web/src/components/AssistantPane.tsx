@@ -6,6 +6,7 @@ import { api } from "@/api/client";
 import type { AgentMessage, Call, ModelInfo, Skill } from "@/api/types";
 import { modelLabel } from "@/lib/format";
 import { useSkillName } from "@/lib/skillName";
+import { ASSISTANT_PANEL, ResizablePanel } from "@/components/scaffold/Resizable";
 import { ProposalCard } from "./ProposalCard";
 
 /**
@@ -231,9 +232,13 @@ export function AssistantPane({
      * of breakage that a horizontal-scroll check can't see.
      *
      * `fixed inset-0 z-40` lifts it out of the row so main keeps the full
-     * width underneath; from md up it returns to being a docked column.
+     * width underneath; from md up it returns to being a docked column —
+     * RESIZABLE since 2026-08-18 (user directive): 15% default, 40% max,
+     * dragged at its inner edge. The wrapper owns the width; below md it has
+     * no size and the fixed overlay inside ignores it entirely.
      */
-    <aside className="fixed inset-0 z-40 flex h-full w-full flex-col border-border bg-surface md:static md:z-auto md:w-[380px] md:shrink-0 md:border-s">
+    <ResizablePanel side="end" spec={ASSISTANT_PANEL} label={t("resize")}>
+      <aside className="fixed inset-0 z-40 flex h-full w-full flex-col border-border bg-surface md:static md:z-auto md:h-full md:w-full md:border-s">
       <header className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="flex items-center gap-2">
           <span className="text-sm font-semibold text-fg">{t("title")}</span>
@@ -408,6 +413,7 @@ export function AssistantPane({
             stays in the message files for whenever the fact has a real
             source; it must not be rendered until then. */}
       </div>
-    </aside>
+      </aside>
+    </ResizablePanel>
   );
 }

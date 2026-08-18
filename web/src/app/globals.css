@@ -113,6 +113,20 @@
 
   html {
     color-scheme: dark;
+    /*
+     * Viewport-scaled root (user directive, 2026-08-18: "in different
+     * monitor sizes the whole platform becomes messy"). Every Tailwind
+     * size, the scaffold's type roles, the menu/rail widths and the content
+     * columns are rem — so this ONE declaration scales the entire interface
+     * with the monitor instead of leaving 16px-era proportions frozen on a
+     * 4K panel and cramped on a 13" one.
+     *
+     * Calibration: 16px at 1920w (the design baseline — nothing changes
+     * there), ~14px at 1280, ~18px at 2560, clamped both ways so a phone
+     * never shrinks below legible and a wall display never balloons.
+     * 10px + 0.3125vw crosses exactly those points.
+     */
+    font-size: clamp(13px, 10px + 0.3125vw, 19px);
   }
   html[data-theme="light"] {
     color-scheme: light;
@@ -335,12 +349,18 @@
   }
 
   /* Weight hierarchy carries the headings — Vazirmatn stays for BOTH locales
-     (ruled), so hierarchy comes from weight and size, never a second family. */
+     (ruled), so hierarchy comes from weight and size, never a second family.
+     Re-tiered to the M26 blueprint scale (user directive, 2026-08-18: "titles
+     and details must be separated properly, different sizes, structured"):
+     page 24 bold → panel 17 semibold → body 14 → detail 13. `.h-section` sat
+     at BODY size (14px semibold) — a heading you could only find by weight,
+     which is exactly the flat hierarchy the directive names. NO tracking:
+     letter-spacing breaks joined Persian script. */
   .h-section {
-    @apply text-sm font-semibold text-fg;
+    @apply text-pane-title font-semibold text-fg;
   }
   .h-page {
-    @apply text-xl font-bold tracking-tight text-fg;
+    @apply text-2xl font-bold text-fg;
   }
 
   /* Anything clickable says so. */

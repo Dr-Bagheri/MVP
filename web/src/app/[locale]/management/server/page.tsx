@@ -148,7 +148,7 @@ export default function ServerManagementPage() {
       /* the refusal keeps the pane — losing the menu would strand a member on
          a dead end beside sections they may open */
       <ManagementPane activeSlug="server">
-        <h1 className="mb-1 text-xl font-bold text-fg">{t("section.server")}</h1>
+        <h1 className="h-page mb-1">{t("section.server")}</h1>
         <Card className="mt-4">
           <h2 className="h-section">{tAdmin("adminOnly")}</h2>
           <p className="mt-1 text-sm leading-7 text-fg-muted">{tAdmin("adminOnlyNote")}</p>
@@ -160,7 +160,7 @@ export default function ServerManagementPage() {
   return (
     <ManagementPane activeSlug="server">
       <div>
-        <h1 className="mb-1 text-xl font-bold text-fg">{t("section.server")}</h1>
+        <h1 className="h-page mb-1">{t("section.server")}</h1>
         <p className="mb-5 text-sm leading-7 text-fg-muted">{t("desc.server")}</p>
 
         {failed ? (

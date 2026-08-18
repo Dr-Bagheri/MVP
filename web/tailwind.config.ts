@@ -9,6 +9,17 @@ import { SCAFFOLD } from "./src/components/scaffold/constants";
  * blueprint's numbers) — scaffold.test.tsx asserts this file and constants.ts
  * agree, so neither can be hand-edited into a fork of the other.
  */
+/**
+ * Blueprint px → rem (÷16). The scaffold's numbers stay recorded in px — the
+ * form the approved blueprint uses — but the THEME emits rem so every role
+ * tracks the root font-size, which globals.css now scales with the viewport
+ * (user directive, 2026-08-18: the platform must not fall apart across
+ * monitor sizes). One 4K monitor and one 13" laptop render the same
+ * PROPORTIONS; px-emitting entries would keep the menus and titles frozen
+ * while the text around them scaled.
+ */
+const rem = (px: number) => `${px / 16}rem`;
+
 const config: Config = {
   content: ["./src/**/*.{ts,tsx}"],
   theme: {
@@ -58,25 +69,25 @@ const config: Config = {
         "2xl": `${SCAFFOLD.radius.modal}px`,
       },
       fontSize: {
-        "pane-title": [`${SCAFFOLD.fontSize.paneTitle}px`, "1.6"],
-        "menu-item": [`${SCAFFOLD.fontSize.menuItem}px`, "1.7"],
-        detail: [`${SCAFFOLD.fontSize.detail}px`, "1.7"],
-        "group-label": [`${SCAFFOLD.fontSize.groupLabel}px`, "1.5"],
+        "pane-title": [rem(SCAFFOLD.fontSize.paneTitle), "1.6"],
+        "menu-item": [rem(SCAFFOLD.fontSize.menuItem), "1.7"],
+        detail: [rem(SCAFFOLD.fontSize.detail), "1.7"],
+        "group-label": [rem(SCAFFOLD.fontSize.groupLabel), "1.5"],
       },
       width: {
-        menu: `${SCAFFOLD.menuWidth}px`,
-        rail: `${SCAFFOLD.railWidth}px`,
+        menu: rem(SCAFFOLD.menuWidth),
+        rail: rem(SCAFFOLD.railWidth),
       },
       maxWidth: {
-        content: `${SCAFFOLD.contentMaxWidth}px`,
-        "content-wide": `${SCAFFOLD.contentMaxWidthWide}px`,
+        content: rem(SCAFFOLD.contentMaxWidth),
+        "content-wide": rem(SCAFFOLD.contentMaxWidthWide),
       },
       height: {
-        control: `${SCAFFOLD.controlHeight}px`,
-        topbar: `${SCAFFOLD.topBarHeight}px`,
+        control: rem(SCAFFOLD.controlHeight),
+        topbar: rem(SCAFFOLD.topBarHeight),
       },
       minHeight: {
-        control: `${SCAFFOLD.controlHeight}px`,
+        control: rem(SCAFFOLD.controlHeight),
       },
       boxShadow: {
         // soft depth: two-layer, never heavy

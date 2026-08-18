@@ -1,7 +1,9 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
+import { MENU_PANEL, ResizablePanel } from "./Resizable";
 
 /**
  * M26 scaffold — the section menu: 256px at inline-start of the content,
@@ -46,7 +48,14 @@ export function SectionMenu({
   activeSlug: string;
 }) {
   return (
-    <nav aria-label={navLabel} className="w-full shrink-0 px-3 pb-4 md:w-menu md:border-e md:border-border">
+    /*
+     * `w-full`, not `md:w-menu` — since the panels became resizable
+     * (2026-08-18) the WIDTH belongs to MenuLayout's ResizablePanel wrapper,
+     * and this nav fills whatever the wrapper grants. `w-menu` (16rem) stays
+     * in the theme as the fixed fallback for menus rendered outside a
+     * resizable row.
+     */
+    <nav aria-label={navLabel} className="h-full w-full px-3 pb-4 md:border-e md:border-border">
       <h1 className="px-3 pb-2 pt-4 text-pane-title font-semibold text-fg">{heading}</h1>
       {groups.map((group, i) => (
         <div key={group.key}>
@@ -87,11 +96,19 @@ export function SectionMenu({
  * The two-column body a menu-bearing surface renders inside the shell:
  * SectionMenu at inline-start, the page's content column filling the rest.
  * (The rail and top bar come from PlatformShell around this.)
+ *
+ * The menu column is RESIZABLE from md up (user directive, 2026-08-18):
+ * 15% of the row by default and at minimum, 30% at most — the middle column
+ * takes everything the sides give up. Below md the stacked mobile layout is
+ * untouched.
  */
 export function MenuLayout({ menu, children }: { menu: ReactNode; children: ReactNode }) {
+  const t = useTranslations("nav");
   return (
     <div className="flex w-full flex-col md:flex-row">
-      {menu}
+      <ResizablePanel side="start" spec={MENU_PANEL} label={t("resizeMenu")} className="w-full">
+        {menu}
+      </ResizablePanel>
       <div className="min-w-0 flex-1">{children}</div>
     </div>
   );

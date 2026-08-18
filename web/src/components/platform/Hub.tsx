@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { useLocale, useTranslations } from "next-intl";
 import { api, BffError } from "@/api/client";
-import type { AgentEvent, AgentMessage, ModelInfo, Skill, User } from "@/api/types";
+import type { AgentEvent, AgentMessage, ModelInfo, SearchHit, Skill, User } from "@/api/types";
 import { Link, useRouter } from "@/i18n/routing";
 import { useSearchParams } from "next/navigation";
 import { personName, modelLabel } from "@/lib/format";
@@ -67,6 +67,24 @@ export function Hub() {
   const [toolsOpen, setToolsOpen] = useState(false);
   const [toolNames, setToolNames] = useState<string[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
+  /**
+   * The Create and Sources menus (user directive, 2026-08-18, from the
+   * reference hub): every entry is a REAL destination or a real act — the
+   * no-dead-buttons law binds a menu item exactly as it binds a button.
+   */
+  const [createOpen, setCreateOpen] = useState(false);
+  const [sourcesOpen, setSourcesOpen] = useState(false);
+  /**
+   * Meetings attached as context. These ride the ask as `callIds` — the same
+   * context mechanic the Echo pane's @mention uses, reached here through
+   * Sources → search. The agent still re-checks visibility server-side;
+   * attaching is scoping, never authority.
+   */
+  const [contextCalls, setContextCalls] = useState<{ id: string; title: string }[]>([]);
+  const [sourceQuery, setSourceQuery] = useState("");
+  const [sourceHits, setSourceHits] = useState<SearchHit[]>([]);
+  const [sourceBusy, setSourceBusy] = useState(false);
+  const promptRef = useRef<HTMLInputElement>(null);
   /** The mic dictates into the composer (it is NOT Echo's recorder). */
   const dictation = useDictation(locale === "fa" ? "fa-IR" : "en-US", (text) =>
     setInput((v) => (v.trim() === "" ? text : `${v} ${text}`)),
@@ -106,6 +124,62 @@ export function Hub() {
     void api.skills().then(setSkills);
     void api.assistantTools().then(setToolNames).catch(() => setToolNames([]));
   }, []);
+
+  /**
+   * The Sources search — live, debounced, against the real index. Results
+   * are calls the caller can already see (RLS filters the index by
+   * construction); attaching one adds it to the ask's context.
+   */
+  useEffect(() => {
+    const q = sourceQuery.trim();
+    if (q.length < 2) {
+      setSourceHits([]);
+      return;
+    }
+    setSourceBusy(true);
+    const timer = setTimeout(() => {
+      void api
+        .search(q)
+        .then(setSourceHits)
+        .catch(() => setSourceHits([]))
+        .finally(() => setSourceBusy(false));
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [sourceQuery]);
+
+  /**
+   * Keyboard shortcuts (the reference hub's, mapped to surfaces that exist):
+   * Ctrl+Shift+A → skills (our agents), Ctrl+Shift+I → integrations,
+   * `/` → focus the prompt. Registered on the hub only — a global map is the
+   * platform shell's decision, not this page's to make.
+   */
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      const inField =
+        event.target instanceof HTMLElement &&
+        ["INPUT", "TEXTAREA", "SELECT"].includes(event.target.tagName);
+      if (event.ctrlKey && event.shiftKey && event.code === "KeyA") {
+        event.preventDefault();
+        router.push("/management/skills");
+      } else if (event.ctrlKey && event.shiftKey && event.code === "KeyI") {
+        event.preventDefault();
+        router.push("/management/connectors");
+      } else if (event.key === "/" && !inField && !event.ctrlKey && !event.metaKey) {
+        event.preventDefault();
+        promptRef.current?.focus();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [router]);
+
+  function attachCall(hit: SearchHit) {
+    setContextCalls((prev) =>
+      prev.some((c) => c.id === hit.call_id)
+        ? prev
+        : [...prev, { id: hit.call_id, title: hit.call_title }],
+    );
+  }
 
   const ATTACH_MAX_BYTES = 50_000;
   const ATTACH_MAX_COUNT = 3;
@@ -296,7 +370,9 @@ export function Hub() {
 
     await run(
       (signal) =>
-        api.ask(question, { page: "hub", callIds: [] }, sessionId.current, {
+        /* the attached meetings ARE the context — Sources made them chips,
+           and this is where the chips become real scoping on the wire */
+        api.ask(question, { page: "hub", callIds: contextCalls.map((c) => c.id) }, sessionId.current, {
           model: model || undefined,
           skill: skill || undefined,
           signal,
@@ -371,10 +447,12 @@ export function Hub() {
          nothing — not even an open popover — can grow the page. The active
          conversation keeps min-h-full: a thread is exactly the content
          that must be allowed to scroll. */
+      /* idle WAS pinned to the viewport; the 2026-08-18 directive put real
+         sections under the composer (suggestions, quick access), so the
+         landing page scrolls again WHEN it must: min-h-full centers it on a
+         tall screen and lets a short one scroll instead of clipping. */
       className={`mx-auto flex w-full max-w-3xl flex-col px-5 ${
-        idle
-          ? "h-full items-center justify-center overflow-hidden py-6 text-center"
-          : "min-h-full py-6"
+        idle ? "min-h-full items-center justify-center py-6 text-center" : "min-h-full py-6"
       }`}
     >
       {/* the conversation controls — visible whenever we are not idle */}
@@ -474,6 +552,7 @@ export function Hub() {
       >
         <div className="flex items-center gap-2">
           <input
+            ref={promptRef}
             className="min-h-[38px] flex-1 bg-transparent text-sm text-fg outline-none placeholder:text-fg-muted focus-visible:ring-0 focus-visible:ring-offset-0"
             placeholder={t("promptPlaceholder")}
             aria-label={t("promptPlaceholder")}
@@ -529,6 +608,24 @@ export function Hub() {
             {dictation.status === "unsupported" ? t("voiceUnsupported") : t("voiceDenied")}
           </p>
         ) : null}
+        {contextCalls.length > 0 ? (
+          /* the attached meetings — the visible half of the callIds wire */
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {contextCalls.map((c) => (
+              <span key={c.id} className="chip bg-accent-soft text-xs text-accent">
+                @{c.title.slice(0, 24)}
+                <button
+                  type="button"
+                  aria-label={t("removeContext", { name: c.title })}
+                  className="ms-1 text-accent/70 hover:text-accent"
+                  onClick={() => setContextCalls((prev) => prev.filter((x) => x.id !== c.id))}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        ) : null}
         {attachments.length > 0 ? (
           <div className="mt-2 flex flex-wrap gap-1.5">
             {attachments.map((a) => (
@@ -560,10 +657,143 @@ export function Hub() {
               if (file) void attach(file);
             }}
           />
-          <button type="button" className={headerBtn} onClick={() => fileRef.current?.click()}>
-            <PlusIcon width={14} height={14} />
-            {t("addFile")}
-          </button>
+          {/* CREATE — the reference hub's first pill, every row a real act */}
+          <div className="relative">
+            <button
+              type="button"
+              className={headerBtn}
+              aria-expanded={createOpen}
+              aria-haspopup="menu"
+              onClick={() => {
+                setCreateOpen((v) => !v);
+                setSourcesOpen(false);
+              }}
+            >
+              <PlusIcon width={14} height={14} />
+              {t("create")}
+            </button>
+            {createOpen ? (
+              <div
+                role="menu"
+                className="absolute start-0 top-full z-30 mt-2 w-60 rounded-xl border border-border bg-surface p-1.5 text-start shadow-lg"
+              >
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="tap flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg hover:bg-surface-2"
+                  onClick={() => {
+                    setCreateOpen(false);
+                    newConversation();
+                  }}
+                >
+                  {t("newConversation")}
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="tap flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg hover:bg-surface-2"
+                  onClick={() => router.push("/echo")}
+                >
+                  {t("createRecord")}
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="tap flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg hover:bg-surface-2"
+                  onClick={() => router.push("/echo")}
+                >
+                  {t("createUpload")}
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="tap flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg hover:bg-surface-2"
+                  onClick={() => router.push("/management/skills")}
+                >
+                  {t("createSkill")}
+                </button>
+              </div>
+            ) : null}
+          </div>
+
+          {/* SOURCES — attach real context: search meetings, add a text file.
+              What the reference fakes as toggles, this menu does as acts. */}
+          <div className="relative">
+            <button
+              type="button"
+              className={headerBtn}
+              aria-expanded={sourcesOpen}
+              aria-haspopup="menu"
+              onClick={() => {
+                setSourcesOpen((v) => !v);
+                setCreateOpen(false);
+              }}
+            >
+              {t("sources")}
+              {contextCalls.length > 0 ? (
+                <span className="rounded-full bg-accent-soft px-1.5 text-[10px] font-semibold text-accent">
+                  {contextCalls.length}
+                </span>
+              ) : null}
+            </button>
+            {sourcesOpen ? (
+              <div className="absolute start-0 top-full z-30 mt-2 w-[19rem] rounded-xl border border-border bg-surface p-2 text-start shadow-lg">
+                <input
+                  autoFocus
+                  className="input mb-1.5 h-9 w-full text-sm"
+                  placeholder={t("sourcesSearch")}
+                  value={sourceQuery}
+                  onChange={(e) => setSourceQuery(e.target.value)}
+                />
+                {sourceBusy ? (
+                  <p className="px-2 py-1.5 text-xs text-fg-muted">{t("sourcesSearching")}</p>
+                ) : sourceHits.length > 0 ? (
+                  <ul className="max-h-44 overflow-y-auto">
+                    {[...new Map(sourceHits.map((h) => [h.call_id, h])).values()].map((hit) => {
+                      const attached = contextCalls.some((c) => c.id === hit.call_id);
+                      return (
+                        <li key={hit.call_id}>
+                          <button
+                            type="button"
+                            className="tap flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-sm text-fg hover:bg-surface-2"
+                            onClick={() => attachCall(hit)}
+                          >
+                            <span className="truncate">{hit.call_title}</span>
+                            {attached ? (
+                              <span className="text-[10px] text-accent">{t("sourcesAttached")}</span>
+                            ) : null}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : sourceQuery.trim().length >= 2 ? (
+                  <p className="px-2 py-1.5 text-xs text-fg-muted">{t("sourcesNoHits")}</p>
+                ) : (
+                  <p className="px-2 py-1.5 text-xs text-fg-muted">{t("sourcesHint")}</p>
+                )}
+                <hr className="my-1.5 border-border" />
+                <button
+                  type="button"
+                  className="tap flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-fg hover:bg-surface-2"
+                  onClick={() => {
+                    setSourcesOpen(false);
+                    fileRef.current?.click();
+                  }}
+                >
+                  <PlusIcon width={14} height={14} />
+                  {t("addFile")}
+                </button>
+                <Link
+                  href="/echo"
+                  className="tap flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-fg hover:bg-surface-2"
+                >
+                  <EchoMark size={16} />
+                  {t("sourcesMeetings")}
+                </Link>
+              </div>
+            ) : null}
+          </div>
           <div
             className="relative"
             /* hover-driven (user directive): the list appears while the
@@ -656,6 +886,79 @@ export function Hub() {
             {t("conversations")}
           </Link>
         </div>
+      ) : null}
+
+      {/* SUGGESTIONS (user directive, 2026-08-18): one row per skill that
+          ships starter questions — the reference hub's suggestion list, fed
+          by the product's own skills rather than an invented catalogue. A
+          press selects the skill AND fills the composer; sending stays the
+          person's act (the shipped rule, unchanged). */}
+      {idle && skills.some((s) => s.starter_questions.length > 0) ? (
+        <section className="mt-7 w-full max-w-[660px] text-start" aria-label={t("suggestions")}>
+          <p className="mb-1 px-1 text-group-label font-medium text-fg-subtle">
+            {t("suggestions")}
+          </p>
+          <ul>
+            {skills
+              .filter((s) => s.starter_questions.length > 0)
+              .slice(0, 6)
+              .map((s) => (
+                <li key={s.id} className="border-t border-border first:border-t-0">
+                  <button
+                    type="button"
+                    className="tap flex w-full items-center gap-3 px-1 py-3 text-start text-sm text-fg-muted transition-colors hover:text-fg"
+                    onClick={() => {
+                      setSkill(s.slug);
+                      setInput(s.starter_questions[0] ?? "");
+                      promptRef.current?.focus();
+                    }}
+                  >
+                    <ToolsIcon width={15} height={15} className="shrink-0 text-fg-subtle" />
+                    <span className="min-w-0 truncate">
+                      {s.starter_questions[0]}
+                      <span className="ms-2 text-xs text-fg-subtle">{skillName(s)}</span>
+                    </span>
+                  </button>
+                </li>
+              ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {/* QUICK ACCESS — the reference sidebar's entries, mapped to surfaces
+          that exist: agents = our skills, integrations = the gateway. The
+          two shortcuts are REAL (registered above); rows that would point at
+          nothing (workflows, docs, web search) are absent, not disabled. */}
+      {idle ? (
+        <section className="mt-6 w-full max-w-[660px] text-start" aria-label={t("quickAccess")}>
+          <p className="mb-1.5 px-1 text-group-label font-medium text-fg-subtle">
+            {t("quickAccess")}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className={headerBtn} onClick={newConversation}>
+              <PlusIcon width={14} height={14} />
+              {t("newConversation")}
+            </button>
+            <Link href="/search" className={headerBtn}>
+              {t("quickSearch")}
+            </Link>
+            <Link href="/echo" className={headerBtn}>
+              {t("quickMeetings")}
+            </Link>
+            <Link href="/management/skills" className={headerBtn}>
+              {t("quickAgents")}
+              <kbd className="rounded bg-surface-2 px-1 text-[10px] text-fg-subtle ltr">
+                Ctrl+⇧+A
+              </kbd>
+            </Link>
+            <Link href="/management/connectors" className={headerBtn}>
+              {t("quickIntegrations")}
+              <kbd className="rounded bg-surface-2 px-1 text-[10px] text-fg-subtle ltr">
+                Ctrl+⇧+I
+              </kbd>
+            </Link>
+          </div>
+        </section>
       ) : null}
 
       {idle ? (

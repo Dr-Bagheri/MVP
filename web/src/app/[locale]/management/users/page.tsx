@@ -270,7 +270,7 @@ export default function UsersPage() {
       /* the refusal keeps the pane: losing the menu would strand a member on a
          dead end, when every other section beside it is one they may open */
       <ManagementPane activeSlug="users">
-        <h1 className="mb-1 text-xl font-bold text-fg">{t("section.users")}</h1>
+        <h1 className="h-page mb-1">{t("section.users")}</h1>
         <Card className="mt-4">
           <h2 className="h-section">{tAdmin("adminOnly")}</h2>
           <p className="mt-1 text-sm leading-7 text-fg-muted">{tAdmin("adminOnlyNote")}</p>
@@ -282,7 +282,7 @@ export default function UsersPage() {
   return (
     <ManagementPane activeSlug="users">
       <div>
-        <h1 className="mb-1 text-xl font-bold text-fg">{t("section.users")}</h1>
+        <h1 className="h-page mb-1">{t("section.users")}</h1>
         <p className="mb-5 text-sm text-fg-muted">{t("desc.users")}</p>
 
         <div className="mb-4 grid gap-3 sm:grid-cols-3">

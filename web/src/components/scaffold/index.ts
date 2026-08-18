@@ -7,3 +7,5 @@ export { PageContainer, PageHeader, Section } from "./Page";
 export { FormPanel, FormRow, PanelFooter } from "./FormPanel";
 export { SectionMenu, MenuLayout } from "./SectionMenu";
 export type { MenuItem, MenuGroup } from "./SectionMenu";
+export { ResizablePanel, MENU_PANEL, ASSISTANT_PANEL } from "./Resizable";
+export type { PanelSpec } from "./Resizable";
