@@ -1075,7 +1075,7 @@ export function Hub() {
                 <li key={s.id} className="border-t border-border first:border-t-0">
                   <button
                     type="button"
-                    className="tap flex w-full items-center gap-3 px-1 py-3 text-start text-sm text-fg-muted transition-colors hover:text-fg"
+                    className="tap flex w-full items-center justify-start gap-3 px-1 py-3 text-start text-sm text-fg-muted transition-colors hover:text-fg"
                     onClick={() => {
                       setSkill(s.slug);
                       setInput(skillStarters(s)[0] ?? "");
