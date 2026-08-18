@@ -163,13 +163,11 @@
   button,
   [role="button"],
   [role="tab"] {
-    align-items: center;
-    display: inline-flex;
-    justify-content: center;
-    /* `vertical-align` on ::first-line only changes the line fragment in
-       some engines and did not move Vazirmatn's rendered glyphs. A compact,
-       theme-owned control line box is stable across themes and works for
-       direct text nodes as well as icon-and-text buttons. */
+    /* This deliberately owns ONLY the label's baseline. A global `display:
+       flex` / `justify-content: center` rule overrode every component's
+       layout, including left-aligned menus and suggestion rows. Individual
+       controls choose their own icon/text layout; direct-text buttons retain
+       a centered label by default. */
     line-height: 1;
     text-align: center;
   }
