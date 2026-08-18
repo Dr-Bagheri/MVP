@@ -46,6 +46,8 @@ vi.mock("next/navigation", () => ({
 /** Every `ask` call's third argument, in order. */
 const askCalls: (string | undefined)[] = [];
 const sourceSearches: string[] = [];
+const visibleTools: string[] = [];
+const askedQuestions: string[] = [];
 const SESSION_ID = "sess-fixed-1";
 
 /**
@@ -63,6 +65,7 @@ async function* scriptedAsk(
   sessionId?: string,
 ): AsyncGenerator<AgentEvent> {
   askCalls.push(sessionId);
+  askedQuestions.push(q);
   // mirrors the wire: `session` first, `created` false when continuing
   yield { type: "session", id: sessionId ?? SESSION_ID, created: sessionId === undefined };
   persisted.push({ id: `m-${persisted.length}`, role: "user", content: q });
@@ -90,7 +93,7 @@ vi.mock("@/api/client", () => ({
       sourceSearches.push(query);
       return [];
     },
-    assistantTools: async () => [],
+    assistantTools: async () => visibleTools,
     sessionFeedback: async () => ({}),
     shareState: async () => false,
   },
@@ -114,6 +117,8 @@ describe("Hub — session continuity", () => {
   beforeEach(() => {
     askCalls.length = 0;
     sourceSearches.length = 0;
+    visibleTools.length = 0;
+    askedQuestions.length = 0;
     persisted.length = 0;
   });
 
@@ -174,7 +179,7 @@ describe("Hub — session continuity", () => {
     expect(screen.queryByText("جلسه‌ها — بازکردن اکو")).toBeNull();
   });
 
-  it("shows only Doc and PDF authoring cards in Create", async () => {
+  it("selects Doc without putting an instruction inside the composer", async () => {
     render(<Hub />);
 
     fireEvent.mouseEnter(screen.getByRole("button", { name: "ساختن" }));
@@ -186,6 +191,20 @@ describe("Hub — session continuity", () => {
     expect(screen.queryByText("پرامپت تازه")).toBeNull();
 
     fireEvent.click(doc);
-    await waitFor(() => expect(screen.getByPlaceholderText(/بپرسید/)).toHaveValue("برای نوشتن یک سند کمکم کن. ابتدا هدف، مخاطب و بخش‌های لازم را از من بپرس."));
+    await waitFor(() => expect(screen.getByRole("button", { name: "حذف سند" })).toBeTruthy());
+    expect(screen.getByPlaceholderText(/بپرسید/)).toHaveValue("");
+
+    await ask("گزارش جلسه");
+    await waitFor(() => expect(askedQuestions).toContain("بر اساس این درخواست یک سند بساز:\n\nگزارش جلسه"));
+  });
+
+  it("shows Persian command names in the Persian tools menu", async () => {
+    visibleTools.push("search_transcripts", "replace_summary");
+    render(<Hub />);
+
+    fireEvent.mouseEnter(screen.getByRole("button", { name: "ابزارها" }));
+    expect(await screen.findByText("جست‌وجوی رونوشت‌ها")).toBeTruthy();
+    expect(screen.getByText("جایگزینی خلاصه")).toBeTruthy();
+    expect(screen.queryByText("search_transcripts")).toBeNull();
   });
 });

@@ -13,6 +13,18 @@ import { ConversationThread } from "./ConversationThread";
 import { useAssistantConversation } from "./AssistantConversationState";
 import { DocumentIcon, EchoMark, MicIcon, PlusIcon, SendIcon, ToolsIcon } from "./icons";
 
+type CreateKind = "doc" | "pdf";
+
+const TOOL_COMMAND_KEYS: Readonly<Record<string, string>> = {
+  search_transcripts: "toolCommandSearchTranscripts",
+  read_window: "toolCommandReadWindow",
+  get_call: "toolCommandGetCall",
+  list_related_calls: "toolCommandListRelatedCalls",
+  correct_transcript: "toolCommandCorrectTranscript",
+  edit_speaker_roster: "toolCommandEditSpeakerRoster",
+  replace_summary: "toolCommandReplaceSummary",
+};
+
 /**
  * The AI-assistant hub — NeurAI's first page (M22, user-approved).
  *
@@ -74,6 +86,9 @@ export function Hub() {
    * no-dead-buttons law binds a menu item exactly as it binds a button.
    */
   const [createOpen, setCreateOpen] = useState(false);
+  /** A document format is a visible, removable part of the request — never
+   * hidden text placed into the editor on the person's behalf. */
+  const [createKind, setCreateKind] = useState<CreateKind | null>(null);
   const [sourcesOpen, setSourcesOpen] = useState(false);
   /**
    * Meetings attached as context. These ride the ask as `callIds` — the same
@@ -385,12 +400,18 @@ export function Hub() {
      * (the thread refetch renders it, deliberately: an invisible context
      * would be a prompt the record can't explain).
      */
+    const authoredRequest =
+      createKind === "doc"
+        ? `${t("createDocRequest")}\n\n${typed}`
+        : createKind === "pdf"
+          ? `${t("createPdfRequest")}\n\n${typed}`
+          : typed;
     const question =
       attachments.length === 0
-        ? typed
+        ? authoredRequest
         : attachments
             .map((a) => `[${t("attachmentTag")}: ${a.name}]\n${a.text}`)
-            .join("\n\n") + `\n\n${typed}`;
+            .join("\n\n") + `\n\n${authoredRequest}`;
     setAttachments([]);
 
     const userMsg: AgentMessage = {
@@ -683,57 +704,71 @@ export function Hub() {
               if (file) void attach(file);
             }}
           />
-          {/* CREATE — compact document cards, matching the reference's
-              left-aligned anatomy. Each fills (but never sends) a real
-              authoring request, so the person retains the final instruction. */}
-          <HoverMenu
-            open={createOpen}
-            onOpen={() => {
-              setCreateOpen(true);
-              setSourcesOpen(false);
-            }}
-            onClose={() => setCreateOpen(false)}
-            panelClass="w-[19rem] p-2"
-            button={
+          {/* CREATE — choosing a format makes it a visible chip beside the
+              real request. It never pre-fills the editor. */}
+          {createKind ? (
+            <span className="flex h-8 items-center gap-1.5 rounded-full bg-accent-soft px-3 text-xs font-medium text-accent">
+              <DocumentIcon width={14} height={14} />
+              {createKind === "doc" ? t("createDoc") : t("createPdf")}
               <button
                 type="button"
-                className={headerBtn}
-                aria-expanded={createOpen}
-                aria-haspopup="menu"
-                onClick={() => setCreateOpen((v) => !v)}
+                className="tap -me-1 ms-0.5 grid h-5 w-5 place-items-center rounded-full text-accent/80 hover:bg-accent/10 hover:text-accent"
+                aria-label={t("removeCreate", { name: createKind === "doc" ? t("createDoc") : t("createPdf") })}
+                onClick={() => setCreateKind(null)}
               >
-                <PlusIcon width={14} height={14} />
-                {t("create")}
+                ×
               </button>
-            }
-          >
-            <div role="menu" aria-label={t("create")} className="space-y-1.5">
-              {([
-                { key: "doc", title: t("createDoc"), description: t("createDocDescription"), prompt: t("createDocPrompt") },
-                { key: "pdf", title: t("createPdf"), description: t("createPdfDescription"), prompt: t("createPdfPrompt") },
-              ] as const).map((item) => (
+            </span>
+          ) : (
+            <HoverMenu
+              open={createOpen}
+              onOpen={() => {
+                setCreateOpen(true);
+                setSourcesOpen(false);
+              }}
+              onClose={() => setCreateOpen(false)}
+              panelClass="w-[19rem] p-2"
+              button={
                 <button
-                  key={item.key}
                   type="button"
-                  role="menuitem"
-                  className="tap flex w-full items-center gap-3 rounded-2xl bg-surface-2 px-3 py-3 text-start transition-colors hover:bg-accent-soft"
-                  onClick={() => {
-                    setInput(item.prompt);
-                    setCreateOpen(false);
-                    requestAnimationFrame(() => promptRef.current?.focus());
-                  }}
+                  className={headerBtn}
+                  aria-expanded={createOpen}
+                  aria-haspopup="menu"
+                  onClick={() => setCreateOpen((v) => !v)}
                 >
-                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-surface text-fg-muted">
-                    <DocumentIcon width={19} height={19} />
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block text-sm font-semibold text-fg">{item.title}</span>
-                    <span className="mt-0.5 block text-xs leading-5 text-fg-muted">{item.description}</span>
-                  </span>
+                  <PlusIcon width={14} height={14} />
+                  {t("create")}
                 </button>
-              ))}
-            </div>
-          </HoverMenu>
+              }
+            >
+              <div role="menu" aria-label={t("create")} className="space-y-1.5">
+                {([
+                  { key: "doc", title: t("createDoc"), description: t("createDocDescription") },
+                  { key: "pdf", title: t("createPdf"), description: t("createPdfDescription") },
+                ] as const).map((item) => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    role="menuitem"
+                    className="tap flex w-full items-center justify-start gap-3 rounded-2xl bg-surface-2 px-3 py-3 text-start transition-colors hover:bg-accent-soft"
+                    onClick={() => {
+                      setCreateKind(item.key);
+                      setCreateOpen(false);
+                      requestAnimationFrame(() => promptRef.current?.focus());
+                    }}
+                  >
+                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-surface text-fg-muted">
+                      <DocumentIcon width={19} height={19} />
+                    </span>
+                    <span className="min-w-0 text-start">
+                      <span className="block text-sm font-semibold text-fg">{item.title}</span>
+                      <span className="mt-0.5 block text-xs leading-5 text-fg-muted">{item.description}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </HoverMenu>
+          )}
 
           {/* SOURCES — attach real context: search meetings, add a text file.
               What the reference fakes as toggles, this menu does as acts. */}
@@ -860,7 +895,9 @@ export function Hub() {
             <ul className="grid grid-flow-col grid-rows-4 gap-x-8 gap-y-1.5">
               {toolNames.map((name) => (
                 <li key={name} className="w-52 text-xs leading-5">
-                  <span className="ltr font-mono text-fg">{name}</span>
+                  <span className={locale === "fa" ? "font-medium text-fg" : "ltr font-mono text-fg"}>
+                    {locale === "fa" && TOOL_COMMAND_KEYS[name] ? t(TOOL_COMMAND_KEYS[name]) : name}
+                  </span>
                   <span className="block text-fg-muted">{t(`tool_${name}`)}</span>
                 </li>
               ))}
