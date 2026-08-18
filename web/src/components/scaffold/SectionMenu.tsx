@@ -105,7 +105,9 @@ export function SectionMenu({
 export function MenuLayout({ menu, children }: { menu: ReactNode; children: ReactNode }) {
   const t = useTranslations("nav");
   return (
-    <div className="flex w-full flex-col md:flex-row">
+    /* min-h-full so a content child may center itself vertically (the hub);
+       pages taller than the viewport are unaffected */
+    <div className="flex min-h-full w-full flex-col md:flex-row">
       <ResizablePanel side="start" spec={MENU_PANEL} label={t("resizeMenu")} className="w-full">
         {menu}
       </ResizablePanel>

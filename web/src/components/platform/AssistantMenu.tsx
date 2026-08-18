@@ -13,7 +13,7 @@ import { SectionMenu } from "@/components/scaffold";
  * "New conversation" points at the hub because a fresh "/" IS a fresh
  * conversation — the entry is a door, not a duplicate mechanism.
  */
-export function AssistantMenu({ activeSlug }: { activeSlug: "history" | "search" }) {
+export function AssistantMenu({ activeSlug }: { activeSlug: "new" | "history" | "search" }) {
   const t = useTranslations("platform");
   return (
     <SectionMenu
@@ -32,6 +32,17 @@ export function AssistantMenu({ activeSlug }: { activeSlug: "history" | "search"
           key: "explore",
           title: t("assistantMenuExplore"),
           items: [{ slug: "search", href: "/search", label: t("search") }],
+        },
+        {
+          /* the assistant's setup doors (user directive, round 2: they left
+             the rail for this menu) — links into Management's own surfaces,
+             not copies of them */
+          key: "setup",
+          title: t("assistantMenuSetup"),
+          items: [
+            { slug: "agents", href: "/management/skills", label: t("agents") },
+            { slug: "integrations", href: "/management/connectors", label: t("integrations") },
+          ],
         },
       ]}
       activeSlug={activeSlug}

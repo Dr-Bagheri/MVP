@@ -45,11 +45,11 @@ describe("calendar preference", () => {
 
   it("renders a Jalali date in fa by default", () => {
     // 2026-06-14 → 24 خرداد 1405
-    expect(formatDate("2026-06-14T09:00:00Z", "fa")).toBe("۲۴ خرداد ۱۴۰۵");
+    expect(formatDate("2026-06-14T09:00:00Z", "fa")).toBe("⁨۲۴ خرداد ۱۴۰۵⁩");
   });
 
   it("renders a Gregorian date in en by default", () => {
-    expect(formatDate("2026-06-14T09:00:00Z", "en")).toBe("14 Jun 2026");
+    expect(formatDate("2026-06-14T09:00:00Z", "en")).toBe("⁨14 Jun 2026⁩");
   });
 
   it("keeps DIGITS with the language when the calendar is overridden", () => {
@@ -59,7 +59,7 @@ describe("calendar preference", () => {
      * A Persian UI showing a Gregorian date still counts in Persian digits.
      */
     setCalendarPreference("gregorian");
-    expect(formatDate("2026-06-14T09:00:00Z", "fa")).toBe("۱۴ Jun ۲۰۲۶");
+    expect(formatDate("2026-06-14T09:00:00Z", "fa")).toBe("⁨۱۴ Jun ۲۰۲۶⁩");
   });
 });
 
@@ -76,9 +76,9 @@ describe("timezone preference", () => {
      * assertion that fails if the preference is quietly unused.
      */
     const instant = "2026-06-14T22:30:00Z";
-    expect(formatDate(instant, "en")).toBe("14 Jun 2026");
+    expect(formatDate(instant, "en")).toBe("⁨14 Jun 2026⁩");
     setTimezonePreference("Asia/Tehran");
-    expect(formatDate(instant, "en")).toBe("15 Jun 2026");
+    expect(formatDate(instant, "en")).toBe("⁨15 Jun 2026⁩");
   });
 
   it("changes the clock time too", () => {
@@ -96,7 +96,7 @@ describe("timezone preference", () => {
      * the kind that catches the case nobody predicted.
      */
     setTimezonePreference("Mars/Olympus_Mons");
-    expect(formatDate("2026-06-14T09:00:00Z", "en")).toMatch(/^1[45] Jun 2026$/);
+    expect(formatDate("2026-06-14T09:00:00Z", "en")).toMatch(/^⁨1[45] Jun 2026⁩$/);
   });
 });
 

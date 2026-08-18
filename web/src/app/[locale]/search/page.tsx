@@ -103,26 +103,27 @@ export default function SearchPage() {
             {t("results", { count: digits(hits.length, locale) })}
           </p>
           <div className="space-y-2">
+            {/* the WHOLE row is the link (user directive, 2026-08-18 — the
+                theme's row-link default): only the title used to navigate,
+                and a result you can only press on one word reads as broken.
+                The Link wraps the card, so no nested anchor exists. */}
             {hits.map((hit, i) => (
-              <Card key={i}>
-                <div className="mb-1 flex flex-wrap items-center gap-2">
-                  <Link
-                    href={`/calls/${hit.call_id}`}
-                    className="text-sm font-medium text-fg hover:text-accent"
-                  >
-                    {hit.call_title}
-                  </Link>
-                  <Chip tone={hit.kind === "summary" ? "accent" : "neutral"}>
-                    {hit.kind === "summary" ? t("inSummary") : t("inTranscript")}
-                  </Chip>
-                  {hit.start_ms !== null ? (
-                    <span className="text-xs text-fg-muted ltr">
-                      {formatClock(hit.start_ms / 1000, locale)}
-                    </span>
-                  ) : null}
-                </div>
-                <Snippet text={hit.snippet} />
-              </Card>
+              <Link key={i} href={`/calls/${hit.call_id}`} className="block">
+                <Card className="row-link">
+                  <div className="mb-1 flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-medium text-fg">{hit.call_title}</span>
+                    <Chip tone={hit.kind === "summary" ? "accent" : "neutral"}>
+                      {hit.kind === "summary" ? t("inSummary") : t("inTranscript")}
+                    </Chip>
+                    {hit.start_ms !== null ? (
+                      <span className="text-xs text-fg-muted ltr">
+                        {formatClock(hit.start_ms / 1000, locale)}
+                      </span>
+                    ) : null}
+                  </div>
+                  <Snippet text={hit.snippet} />
+                </Card>
+              </Link>
             ))}
           </div>
         </>

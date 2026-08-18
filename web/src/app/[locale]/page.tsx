@@ -1,6 +1,8 @@
 import { Suspense } from "react";
+import { AssistantMenu } from "@/components/platform/AssistantMenu";
 import { Hub } from "@/components/platform/Hub";
 import { PlatformShell } from "@/components/platform/PlatformShell";
+import { MenuLayout } from "@/components/scaffold";
 
 /**
  * NeurAI's first page IS the assistant hub (M22) — this route used to redirect
@@ -30,7 +32,13 @@ export default function HubPage() {
         user signed off.
       */}
       <Suspense fallback={null}>
-        <Hub />
+        {/* The hub's own sub-menu (user directive, 2026-08-18, round 2):
+            History, Search, Agents, Integrations and New conversation left
+            the rail for this menu — the assistant page carries the
+            assistant's destinations, exactly as Echo's page carries Echo's. */}
+        <MenuLayout menu={<AssistantMenu activeSlug="new" />}>
+          <Hub />
+        </MenuLayout>
       </Suspense>
     </PlatformShell>
   );

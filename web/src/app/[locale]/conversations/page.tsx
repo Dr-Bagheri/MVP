@@ -85,7 +85,7 @@ export default function ConversationsPage() {
                       {shown.map((s) => (
                         <tr
                           key={s.id}
-                          className={`cursor-pointer transition-colors hover:bg-surface-2 ${
+                          className={`row-link ${
                             s.id === selected ? "bg-surface-2" : ""
                           }`}
                           onClick={() => setSelected(s.id)}

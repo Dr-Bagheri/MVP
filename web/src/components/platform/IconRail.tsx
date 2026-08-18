@@ -37,14 +37,11 @@ export function IconRail() {
   const activeHref = candidates.sort((a, b) => b.length - a.length)[0];
   const isActive = (href: string) => href === activeHref;
 
-  /* the hub's shortcuts, surfaced where the destinations now live */
-  const SHORTCUT: Record<string, string> = { agents: "Ctrl+⇧+A", integrations: "Ctrl+⇧+I" };
-
   const item = (nav: NavItem) => {
     const Icon = NAV_ICON[nav.key];
     const active = isActive(nav.href);
     const external = nav.href.startsWith("http") || nav.href === "#";
-    const label = SHORTCUT[nav.key] ? `${t(nav.key)} (${SHORTCUT[nav.key]})` : t(nav.key);
+    const label = t(nav.key);
     const content = (
       <>
         {nav.key === "echo" ? <EchoMark size={20} /> : Icon ? <Icon width={18} height={18} /> : null}

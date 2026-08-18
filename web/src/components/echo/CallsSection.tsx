@@ -148,7 +148,7 @@ export function CallsSection({ view = "live" }: { view?: "live" | "archive" }) {
                     /* the whole ROW is the way in (user directive) — the
                        interactive cells stop the bubble so a toggle is never
                        also a navigation */
-                    className="cursor-pointer border-b border-border transition-colors last:border-0 hover:bg-surface-2"
+                    className="row-link border-b border-border last:border-0"
                     onClick={() => router.push(`/calls/${call.id}`)}
                   >
                     <td

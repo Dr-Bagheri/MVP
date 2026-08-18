@@ -141,6 +141,20 @@ function jalaliFromParts(gy: number, gm: number, gd: number): {
  * in a Persian UI reads «۱۴ Jun ۲۰۲۶», because the digits belong to the
  * language and the months to the calendar.
  */
+/**
+ * FIRST-STRONG ISOLATE (U+2068 … U+2069) around every formatted date.
+ *
+ * The fix for the year standing on the wrong side (user report, 2026-08-18:
+ * the English top bar read «27 1405 مرداد»). A Jalali date in an LTR
+ * paragraph is a Persian month between two runs of digits, and the bidi
+ * algorithm reorders exactly that shape; a Gregorian date in the Persian UI
+ * is the same trap mirrored. The isolate makes the date its own little
+ * paragraph whose direction comes from its own first strong character —
+ * the month — so «۲۷ مرداد ۱۴۰۵» and "18 Aug 2026" each hold their order
+ * in EITHER surrounding direction, with no per-consumer <bdi> to forget.
+ */
+const bidiIsolate = (formatted: string) => `⁨${formatted}⁩`;
+
 export function formatDate(iso: string, locale: string): string {
   const date = new Date(iso);
   const zone = resolvedTimezone();
@@ -149,11 +163,11 @@ export function formatDate(iso: string, locale: string): string {
     const month = new Intl.DateTimeFormat("en-GB", { month: "short", timeZone: "UTC" }).format(
       new Date(Date.UTC(y, m - 1, d)),
     );
-    return `${digits(d, locale)} ${month} ${digits(y, locale)}`;
+    return bidiIsolate(`${digits(d, locale)} ${month} ${digits(y, locale)}`);
   }
   const { y, m, d } = partsIn(date, zone);
   const { jy, jm, jd } = jalaliFromParts(y, m, d);
-  return `${digits(jd, locale)} ${JALALI_MONTHS[jm - 1]} ${digits(jy, locale)}`;
+  return bidiIsolate(`${digits(jd, locale)} ${JALALI_MONTHS[jm - 1]} ${digits(jy, locale)}`);
 }
 
 export function formatTime(iso: string, locale: string): string {
