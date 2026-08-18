@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import Image from "next/image";
 import { useLocale, useTranslations } from "next-intl";
 import { api, BffError } from "@/api/client";
 import type { AgentEvent, AgentMessage, ModelInfo, SearchHit, Skill, User } from "@/api/types";
@@ -484,7 +483,7 @@ export function Hub() {
          sections under the composer (suggestions, quick access), so the
          landing page scrolls again WHEN it must: min-h-full centers it on a
          tall screen and lets a short one scroll instead of clipping. */
-      className={`mx-auto flex w-full max-w-3xl flex-col px-5 ${
+      className={`relative isolate mx-auto flex w-full max-w-3xl flex-col px-5 ${
         idle ? "min-h-full items-center justify-center py-6 text-center" : "min-h-full py-6"
       }`}
     >
@@ -514,13 +513,10 @@ export function Hub() {
 
       {idle ? (
         <>
-          <Image
-            src="/brand/neurai-mark.png"
-            alt="NeurAI"
-            width={76}
-            height={76}
-            priority
-            className="neurai-glow mb-5 h-[56px] w-[56px] md:h-[76px] md:w-[76px]"
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 -z-10 bg-center bg-no-repeat opacity-[0.035] [background-size:min(68vw,680px)]"
+            style={{ backgroundImage: 'url("/brand/neurai-mark.png")' }}
           />
           <p className="min-h-[1.25rem] text-sm text-fg-muted">
             {me ? t("greeting", { name: personName(me, locale) }) : ""}

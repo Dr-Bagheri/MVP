@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useTranslations } from "next-intl";
 import { Link, usePathname } from "@/i18n/routing";
 import { NAV_PRIMARY, NAV_UTILITY, type NavItem } from "./nav";
@@ -89,7 +90,17 @@ export function IconRail() {
       // present-reads-as-satisfied-does-nothing bug from the audit's §6.
       className="hidden w-[60px] shrink-0 flex-col items-center justify-between border-e border-border bg-surface py-3.5 md:flex"
     >
-      <div className="flex flex-col gap-2">{NAV_PRIMARY.map(item)}</div>
+      <div className="flex flex-col items-center gap-2">
+        <Image
+          src="/brand/neurai-mark.png"
+          alt="NeurAI"
+          width={24}
+          height={24}
+          priority
+          className="mb-1 h-6 w-6 object-contain"
+        />
+        {NAV_PRIMARY.map(item)}
+      </div>
       <div className="flex flex-col gap-2">{NAV_UTILITY.map(item)}</div>
     </nav>
   );
