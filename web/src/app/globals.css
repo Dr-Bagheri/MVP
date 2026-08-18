@@ -168,7 +168,7 @@
        layout, including left-aligned menus and suggestion rows. Individual
        controls choose their own icon/text layout; direct-text buttons retain
        a centered label by default. */
-    line-height: 1;
+    line-height: 1.25;
     text-align: center;
   }
 
@@ -293,7 +293,7 @@
    */
   .btn {
     @apply tap inline-flex min-h-control cursor-pointer items-center justify-center gap-2
-           rounded-md px-4 text-center text-sm font-semibold leading-none transition-colors duration-150
+           rounded-md px-4 text-center text-sm font-semibold leading-control transition-colors duration-150
            disabled:pointer-events-none disabled:opacity-50;
   }
   /* Primary action = navy. The accent stays for links and inline emphasis, so

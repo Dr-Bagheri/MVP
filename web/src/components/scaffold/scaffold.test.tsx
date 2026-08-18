@@ -59,8 +59,8 @@ describe("the Tailwind theme derives from the scaffold constants", () => {
     expect(theme.fontSize["group-label"][0]).toBe(rem(SCAFFOLD.fontSize.groupLabel));
   });
 
-  it("keeps one compact, theme-owned line box for centered control labels", () => {
-    expect(theme.lineHeight.control).toBe("1");
+  it("keeps one optical, theme-owned line box for centered control labels", () => {
+    expect(theme.lineHeight.control).toBe("1.25");
   });
 
   it("dimensions: menu, rail, content columns, controls, top bar", () => {
