@@ -74,6 +74,12 @@ const config: Config = {
         detail: [rem(SCAFFOLD.fontSize.detail), "1.7"],
         "group-label": [rem(SCAFFOLD.fontSize.groupLabel), "1.5"],
       },
+      /* One compact line box for text inside controls. This is a theme token,
+         not an AvatarMenu exception: centered controls need the same glyph
+         metrics in both light and dark themes. */
+      lineHeight: {
+        control: "1",
+      },
       width: {
         menu: rem(SCAFFOLD.menuWidth),
         rail: rem(SCAFFOLD.railWidth),

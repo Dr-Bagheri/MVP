@@ -153,7 +153,6 @@
    * axes. Component classes below inherit this instead of each screen trying
    * to compensate with one-off padding.
    */
-  button,
   input,
   select,
   textarea {
@@ -167,16 +166,12 @@
     align-items: center;
     display: inline-flex;
     justify-content: center;
+    /* `vertical-align` on ::first-line only changes the line fragment in
+       some engines and did not move Vazirmatn's rendered glyphs. A compact,
+       theme-owned control line box is stable across themes and works for
+       direct text nodes as well as icon-and-text buttons. */
+    line-height: 1;
     text-align: center;
-  }
-
-  /* Vazirmatn's glyphs sit slightly above the mathematical center of its
-     line box. Lower the first rendered line by one optical pixel without
-     moving the control's fill, border, focus ring, or hit target. */
-  button::first-line,
-  [role="button"]::first-line,
-  [role="tab"]::first-line {
-    vertical-align: -0.07em;
   }
 
   /*
