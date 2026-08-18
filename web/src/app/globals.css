@@ -293,7 +293,7 @@
    */
   .btn {
     @apply tap inline-flex min-h-control cursor-pointer items-center justify-center gap-2
-           rounded-md px-4 text-sm font-semibold leading-none transition-colors duration-150
+           rounded-md px-4 text-center text-sm font-semibold leading-none transition-colors duration-150
            disabled:pointer-events-none disabled:opacity-50;
   }
   /* Primary action = navy. The accent stays for links and inline emphasis, so

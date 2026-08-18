@@ -80,7 +80,7 @@ export function BottomBar() {
               key={nav.key}
               href={nav.href}
               aria-current={active ? "page" : undefined}
-              className={`flex min-h-[56px] flex-1 flex-col items-center justify-center gap-1 text-[11px] transition-colors ${
+              className={`flex min-h-[56px] flex-1 flex-col items-center justify-center gap-1 text-center text-[11px] leading-control transition-colors ${
                 active ? "text-accent" : "text-fg-muted"
               }`}
             >
@@ -93,7 +93,7 @@ export function BottomBar() {
           type="button"
           onClick={() => setMoreOpen(true)}
           aria-expanded={moreOpen}
-          className="flex min-h-[56px] flex-1 flex-col items-center justify-center gap-1 text-[11px] text-fg-muted"
+          className="flex min-h-[56px] flex-1 flex-col items-center justify-center gap-1 text-center text-[11px] leading-control text-fg-muted"
         >
           <MoreIcon width={19} height={19} />
           <span>{t("more")}</span>

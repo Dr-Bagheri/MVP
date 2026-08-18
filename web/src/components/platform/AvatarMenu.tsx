@@ -173,7 +173,7 @@ export function AvatarMenu({ me }: { me: User | null }) {
                   role="menuitemradio"
                   aria-checked={theme === option}
                   onClick={() => storeTheme(option as Theme)}
-                  className={`tap flex-1 rounded-lg py-1.5 text-xs leading-control transition-colors ${
+                  className={`tap flex flex-1 items-center justify-center rounded-lg py-1.5 text-center text-xs leading-control transition-colors ${
                     theme === option
                       ? "bg-accent-soft font-semibold text-accent"
                       : "text-fg-muted hover:bg-surface-2 hover:text-fg"
