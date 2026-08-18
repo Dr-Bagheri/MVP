@@ -38,7 +38,7 @@ export default function HubPage() {
             the rail for this menu — the assistant page carries the
             assistant's destinations, exactly as Echo's page carries Echo's. */}
         <AssistantConversationProvider>
-          <MenuLayout menu={<AssistantMenu activeSlug="new" />}>
+          <MenuLayout menu={<AssistantMenu activeSlug="new" lockNewConversation />}>
             <Hub />
           </MenuLayout>
         </AssistantConversationProvider>

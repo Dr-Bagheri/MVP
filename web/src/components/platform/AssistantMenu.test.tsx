@@ -22,7 +22,7 @@ describe("AssistantMenu — New conversation", () => {
     render(
       <AssistantConversationProvider>
         <StateControl />
-        <AssistantMenu activeSlug="new" />
+        <AssistantMenu activeSlug="new" lockNewConversation />
       </AssistantConversationProvider>,
     );
 
@@ -35,5 +35,13 @@ describe("AssistantMenu — New conversation", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "start" }));
     expect(screen.getByRole("button", { name: "newConversation" })).toBeDisabled();
+  });
+
+  it("keeps New conversation as a normal link from an assistant subpage", () => {
+    render(<AssistantMenu activeSlug="history" />);
+
+    const fresh = screen.getByRole("link", { name: "newConversation" });
+    expect(fresh.getAttribute("href")).toBe("/");
+    expect(fresh.getAttribute("aria-disabled")).toBeNull();
   });
 });

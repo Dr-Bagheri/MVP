@@ -170,6 +170,15 @@
     text-align: center;
   }
 
+  /* Vazirmatn's glyphs sit slightly above the mathematical center of its
+     line box. Lower the first rendered line by one optical pixel without
+     moving the control's fill, border, focus ring, or hit target. */
+  button::first-line,
+  [role="button"]::first-line,
+  [role="tab"]::first-line {
+    vertical-align: -0.07em;
+  }
+
   /*
    * Focus is never removed — only restyled (accessibility rule #1).
    *

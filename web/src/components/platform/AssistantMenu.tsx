@@ -16,7 +16,14 @@ import { useAssistantConversation } from "./AssistantConversationState";
  * disabled: resetting a live thread from the navigation makes the record
  * disappear while the server retains it.
  */
-export function AssistantMenu({ activeSlug }: { activeSlug: "new" | "history" | "search" | "workflows" | "prompts" }) {
+export function AssistantMenu({
+  activeSlug,
+  lockNewConversation = false,
+}: {
+  activeSlug: "new" | "history" | "search" | "workflows" | "prompts";
+  /** Only the Home hub owns live-conversation state; sibling pages link home. */
+  lockNewConversation?: boolean;
+}) {
   const t = useTranslations("platform");
   const { started } = useAssistantConversation();
   return (
@@ -32,8 +39,8 @@ export function AssistantMenu({ activeSlug }: { activeSlug: "new" | "history" | 
               slug: "new",
               href: "/",
               label: t("newConversation"),
-              disabled: started,
-              preventNavigation: !started,
+              disabled: lockNewConversation && started,
+              preventNavigation: lockNewConversation && !started,
             },
             { slug: "history", href: "/conversations", label: t("history") },
           ],

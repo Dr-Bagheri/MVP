@@ -152,7 +152,7 @@ describe("Hub — session continuity", () => {
   it("disables the left-menu new-conversation control as soon as the first turn starts", async () => {
     render(
       <AssistantConversationProvider>
-        <AssistantMenu activeSlug="new" />
+        <AssistantMenu activeSlug="new" lockNewConversation />
         <Hub />
       </AssistantConversationProvider>,
     );
