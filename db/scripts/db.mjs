@@ -253,6 +253,7 @@ const FIXTURE_ORGS = [
 // about foreign keys, not about visibility.
 const FIXTURE_TABLES = [
   'agent_message', 'agent_session', 'summary', 'agent_run',
+  'connector_secret', 'connector_connection', 'assistant_agent',
   'transcript_segment', 'call_speaker', 'call_part', 'person', 'call',
   'proposal_decision', 'api_key', 'webhook_delivery', 'webhook', 'admin_action', 'skill',
   'app_user', 'org',

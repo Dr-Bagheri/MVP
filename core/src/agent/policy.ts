@@ -34,7 +34,7 @@ export interface PolicyDecision {
 
 export interface PolicyOptions {
   identity: Identity;
-  /** Tools the resolved skill declared. Empty/undefined = no restriction. */
+  /** Tools the resolved skill/agent declared. Undefined = no restriction; [] = no tools. */
   allowedTools?: string[] | undefined;
   /** Tools only an admin may call. */
   adminOnlyTools?: ReadonlySet<string> | undefined;
@@ -58,7 +58,10 @@ export function createPolicy({
 }: PolicyOptions) {
   let attempts = 0;
   let blocked = 0;
-  const declared = allowedTools && allowedTools.length > 0 ? new Set(allowedTools) : null;
+  // `undefined` is the ad-hoc assistant's normal broad toolset; `[]` is an
+  // explicit declaration of no tools. Treating both as unrestricted made a
+  // no-tool translator/agent silently inherit every domain tool.
+  const declared = allowedTools === undefined ? null : new Set(allowedTools);
 
   return async function beforeToolCall(
     ctx: { toolCall: { name: string }; args: unknown },
@@ -109,7 +112,7 @@ export function filterDeclaredTools<T extends { name: string }>(
   tools: T[],
   allowedTools: string[] | undefined,
 ): T[] {
-  if (!allowedTools || allowedTools.length === 0) return tools;
+  if (allowedTools === undefined) return tools;
   const declared = new Set(allowedTools);
   return tools.filter((tool) => declared.has(tool.name));
 }

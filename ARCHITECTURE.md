@@ -1218,6 +1218,47 @@ org rows admin-writable under RLS; user rows owner-private. New columns:
 starter_questions, allowed_tools (vocabulary-checked subset of the M4
 registry). Management·Skills becomes full CRUD.
 
+## M30 — Persistent agents, manual workflows, and work connectors [user-approved 2026-08-18]
+
+This replaces M17's **catalogue-preview-only** constraint for the first two
+named work connectors. Echo ships persistent, selectable agents and two
+manual workflow templates — **Prepare me for meetings** and **Draft email
+replies** — backed by Google and Microsoft calendar/email connections when a
+person has connected one. This is a product capability, not a visual preview.
+
+- An **agent** is distinct from a Skill: it is a persisted persona (name,
+  handle, description, instructions, appearance, selected model/skills and
+  bounded source scope). It is visible as system, organization, or private
+  user configuration. Selecting an agent starts the normal assistant under
+  that saved configuration — the browser never sends the trusted
+  instructions, and the runtime resolves the agent again under the caller's
+  identity on every turn.
+- A **workflow** is a named, parameterised, *manual* guided run. Its source
+  selectors and inputs are explicit; it may prepare a meeting brief from a
+  connected calendar, or draft a reply from a connected mailbox. The initial
+  release does not claim unattended schedules, incoming-mail triggers, or
+  automatic sending. They are separate future decisions because a background
+  run needs an explicit actor and a durable consent model.
+- Google and Microsoft connections use OAuth 2.0 authorization-code flow with
+  PKCE, a per-user/per-org connection record, and least-privilege calendar
+  read / email read scopes. Provider tokens are encrypted before persistence,
+  never returned to the browser, never placed in an agent prompt, and never
+  logged. Server OAuth application credentials use only `echo_platform_…`
+  secret names. A provider missing its server configuration reports **not
+  configured**; it never impersonates a connection.
+- External and inferred writes retain M4's approval posture. A workflow may
+  compose text locally, but creating a provider-side draft or sending email is
+  an explicit confirmed action by the connected user. No agent or scheduled
+  job gains a send/delete capability merely because it was selected.
+- Source scope is an authorization bound, not a prompt instruction. Internal
+  call access remains the existing RLS wall. Connected mailbox/calendar data
+  is read only through the connection belonging to the active caller, and
+  tool wrappers enforce the selected source identifier before provider access.
+  An agent configuration therefore cannot widen a caller's access.
+
+The existing public API gateway and webhooks from M17 remain unchanged. Other
+connector catalogue entries remain previews until separately implemented.
+
 ---
 
 ## Invariants (locked)

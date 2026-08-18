@@ -41,6 +41,7 @@ vi.mock("@/api/client", () => ({
     agentMessages: async () => REGENERATED,
     models: async () => ({ models: [{ id: "google/gemini-3.1-pro-preview", name: "Google: Gemini 3.1 Pro Preview" }], preferred_model: null, curated: true, tool_capability_filtered: false }),
     skills: async () => [],
+    agents: async () => [],
     assistantTools: async () => [],
     sessionFeedback: async () => ({}),
     shareState: async () => false,

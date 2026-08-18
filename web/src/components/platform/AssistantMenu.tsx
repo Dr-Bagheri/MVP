@@ -18,7 +18,7 @@ export function AssistantMenu({
   activeSlug,
   showNewConversation = false,
 }: {
-  activeSlug: "new" | "hub" | "history" | "search" | "workflows" | "prompts";
+  activeSlug: "new" | "hub" | "history" | "search" | "workflows" | "agents";
   showNewConversation?: boolean;
 }) {
   const t = useTranslations("platform");
@@ -56,8 +56,7 @@ export function AssistantMenu({
           title: t("assistantMenuSetup"),
           items: [
             { slug: "workflows", href: "/workflows", label: t("workflows") },
-            { slug: "prompts", href: "/management/skills", label: t("prompts") },
-            { slug: "integrations", href: "/management/connectors", label: t("integrations") },
+            { slug: "agents", href: "/agents", label: t("agents") },
           ],
         },
       ]}

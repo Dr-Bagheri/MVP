@@ -29,6 +29,19 @@ export interface RunRequest<TDeps> {
   kind: AgentRunKind;
   /** Resolved skill (skills.ts). Undefined = ad-hoc assistant turn. */
   skill?: Skill | undefined;
+  /** Trusted, server-resolved agent/workflow instruction text (M30). */
+  systemInstructions?: string | undefined;
+  /** Complete, recorded server prompt for a regenerate replay (M30). */
+  systemPromptOverride?: string | undefined;
+  /** A saved agent may pin a model just as a skill can; skills still win. */
+  agentModel?: string | null | undefined;
+  /**
+   * Additional tool ceiling from an agent configuration. This can only narrow
+   * the normal/saved skill set; it never adds a tool the selected skill denied.
+   */
+  allowedTools?: string[] | undefined;
+  /** Secret-free agent/workflow/source metadata kept with the replay record. */
+  provenance?: Record<string, unknown> | undefined;
   /** The caller's model choice; used when the skill pins none (M5). */
   callerModel?: string | undefined;
   /** Provider for the catalogue lookup. */
@@ -80,6 +93,25 @@ export function noToolCallMarker(offeredCount: number): string {
   return `${NO_TOOL_CALL_MARKER} ${offeredCount} were available`;
 }
 
+/**
+ * A selected agent is a narrowing layer, never an extra source of authority.
+ *
+ * `undefined` means that layer made no statement; `[]` means it deliberately
+ * offers no tools. When both a skill and agent specify tools, only their
+ * intersection reaches Pi *and* the central policy. Keeping the exact same
+ * set at both layers is intentional: the model cannot discover a tool that
+ * the policy will refuse, while policy remains the enforceable backstop.
+ */
+function combinedAllowedTools(
+  skillTools: string[] | undefined,
+  agentTools: string[] | undefined,
+): string[] | undefined {
+  if (skillTools === undefined) return agentTools;
+  if (agentTools === undefined) return skillTools;
+  const agentSet = new Set(agentTools);
+  return skillTools.filter((tool) => agentSet.has(tool));
+}
+
 export class InactiveActorError extends Error {}
 
 export interface AgentRuntimeOptions {
@@ -96,7 +128,7 @@ export function createAgentRuntime({ runs }: AgentRuntimeOptions) {
         throw new InactiveActorError("actor is not active");
       }
 
-      const modelId = modelForRun(skill, request.callerModel);
+      const modelId = modelForRun(skill, request.agentModel ?? request.callerModel);
       /*
        * `:online` = OpenRouter's web-search plugin riding the SAME model.
        * Applied to the DISPATCHED id only after modelForRun resolved and the
@@ -127,12 +159,15 @@ export function createAgentRuntime({ runs }: AgentRuntimeOptions) {
        * recorded systemPrompt includes the line, because the record's job is
        * what the model actually saw.
        */
-      const systemPrompt = (skill?.prompt ?? DEFAULT_ASSISTANT_PROMPT)
-        + (contextCallIds.length === 1
-          ? `\n\nشناسهٔ تماسِ در حال بحث: ${contextCallIds[0]} — هرجا کاربر به «این تماس» اشاره می‌کند، در ابزارها همین شناسه را به کار ببرید.`
-          : contextCallIds.length > 1
-            ? `\n\nشناسه‌های تماس‌های در حال بحث: ${contextCallIds.join("، ")} — هرجا کاربر به «این تماس‌ها» اشاره می‌کند، در ابزارها همین شناسه‌ها را به کار ببرید.`
-            : "");
+      const systemPrompt = request.systemPromptOverride ?? (
+        (skill?.prompt ?? DEFAULT_ASSISTANT_PROMPT)
+          + (request.systemInstructions ? `\n\n${request.systemInstructions}` : "")
+          + (contextCallIds.length === 1
+            ? `\n\nشناسهٔ تماسِ در حال بحث: ${contextCallIds[0]} — هرجا کاربر به «این تماس» اشاره می‌کند، در ابزارها همین شناسه را به کار ببرید.`
+            : contextCallIds.length > 1
+              ? `\n\nشناسه‌های تماس‌های در حال بحث: ${contextCallIds.join("، ")} — هرجا کاربر به «این تماس‌ها» اشاره می‌کند، در ابزارها همین شناسه‌ها را به کار ببرید.`
+              : "")
+      );
 
       // (3) the run exists in the record BEFORE any provider or tool contact
       const runId = await runs.begin({
@@ -153,8 +188,9 @@ export function createAgentRuntime({ runs }: AgentRuntimeOptions) {
           input,
           // what the model was actually offered (post skill-filter), so a
           // replay reconstructs the same surface
-          tools: filterDeclaredTools(request.tools, skill?.tools).map((t) => t.name),
+          tools: filterDeclaredTools(request.tools, combinedAllowedTools(skill?.tools, request.allowedTools)).map((t) => t.name),
           skill: skill ? { id: skill.id, slug: skill.slug, level: skill.level } : null,
+          ...(request.provenance ? { provenance: request.provenance } : {}),
           ...(contextCallIds.length > 1 ? { callIds: contextCallIds } : {}),
           ...(request.web === true ? { web: true } : {}),
         },
@@ -173,7 +209,8 @@ export function createAgentRuntime({ runs }: AgentRuntimeOptions) {
         // The pre-filter is token economy only: the model isn't offered tools
         // the skill didn't declare, but the veto below still enforces it, so
         // nothing depends on this filter having run.
-        const offered = filterDeclaredTools(request.tools, skill?.tools);
+        const allowedTools = combinedAllowedTools(skill?.tools, request.allowedTools);
+        const offered = filterDeclaredTools(request.tools, allowedTools);
         const tools = wrapTools(offered, {
           identity, deps: request.deps, onStep,
           onStart: request.onToolStart,
@@ -181,7 +218,7 @@ export function createAgentRuntime({ runs }: AgentRuntimeOptions) {
         });
         const beforeToolCall = createPolicy({
           identity,
-          allowedTools: skill?.tools,
+          allowedTools,
           adminOnlyTools: request.adminOnlyTools,
           // precedence: explicit request > per-skill pin > default
           maxToolCalls: request.maxToolCalls ?? skill?.maxToolCalls ?? DEFAULT_MAX_TOOL_CALLS,
@@ -267,7 +304,7 @@ export function createAgentRuntime({ runs }: AgentRuntimeOptions) {
          * which is what a consumer renders, is set only when a skill asked
          * for tools and got no use out of them.
          */
-        const skillWantsTools = (skill?.tools?.length ?? 0) > 0;
+        const skillWantsTools = (allowedTools?.length ?? 0) > 0;
         await runs.finish(runId, {
           status: "ok",
           tokensIn: result.tokensIn,

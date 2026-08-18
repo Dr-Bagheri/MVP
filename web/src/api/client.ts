@@ -15,6 +15,7 @@ import {
 import type {
   AgentEvent,
   AgentMessage,
+  AgentCard,
   AssistantSession,
   AuthoredSkill,
   AuditCursor,
@@ -23,6 +24,9 @@ import type {
   CalendarPreference,
   Call,
   CallScope,
+  ConnectorItem,
+  ConnectorProvider,
+  ConnectorStatus,
   Person,
   GatewayDelivery,
   GatewayEvent,
@@ -47,6 +51,7 @@ import type {
   TranscriptSegment,
   User,
   UserStatus,
+  WorkflowCard,
 } from "./types";
 /**
  * The producer's own shape for `GET /v1/me`, imported rather than described.
@@ -920,6 +925,45 @@ export const api = {
     return available_tools ?? [];
   },
 
+  // ---- persistent agents, workflows & private connectors (M30) -------------
+  async agents(): Promise<AgentCard[]> {
+    const { agents } = await bff<{ agents: AgentCard[] }>("/api/agents");
+    return agents;
+  },
+  async createAgent(input: {
+    level: "org" | "user";
+    name: string;
+    description?: string;
+    instructions: string;
+    model?: string | null;
+    tools?: string[];
+  }): Promise<AgentCard> {
+    return bff<AgentCard>("/api/agents", {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input),
+    });
+  },
+  async workflows(): Promise<WorkflowCard[]> {
+    const { workflows } = await bff<{ workflows: WorkflowCard[] }>("/api/workflows");
+    return workflows;
+  },
+  async connectors(): Promise<ConnectorStatus[]> {
+    const { connectors } = await bff<{ connectors: ConnectorStatus[] }>("/api/connectors");
+    return connectors;
+  },
+  async connectorItems(provider: ConnectorProvider, source: "calendar" | "mail"): Promise<ConnectorItem[]> {
+    const { items } = await bff<{ items: ConnectorItem[] }>(
+      `/api/connectors/${encodeURIComponent(provider)}/${source}`,
+    );
+    return items;
+  },
+  async connectorAuthorization(provider: ConnectorProvider, locale: "fa" | "en"): Promise<string> {
+    const { authorization_url } = await bff<{ authorization_url: string }>(
+      `/api/connectors/${encodeURIComponent(provider)}/authorization`,
+      { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ locale }) },
+    );
+    return authorization_url;
+  },
+
   // ---- skill authoring (M29, Part 2) ----------------------------------------
   /** **LIVE** — the editor's rows (full definitions) + the tool vocabulary. */
   async manageSkills(): Promise<{ skills: AuthoredSkill[]; available_tools: string[] }> {
@@ -1392,7 +1436,10 @@ export const api = {
     question: string,
     ctx: { page: string; callIds: string[] },
     sessionId?: string,
-    opts?: { model?: string; skill?: string; web?: boolean; signal?: AbortSignal },
+    opts?: {
+      model?: string; skill?: string; web?: boolean; signal?: AbortSignal;
+      agent?: string; workflow?: string; connectorProvider?: ConnectorProvider; sourceId?: string;
+    },
   ): AsyncGenerator<AgentEvent> {
     /* **LIVE** — the real stream, through the BFF's SSE passthrough. The
        vocabulary is core/'s SseEvent union verbatim (session first, then
@@ -1412,6 +1459,10 @@ export const api = {
         ...(ctx.callIds.length > 1 ? { call_ids: ctx.callIds } : {}),
         model: opts?.model,
         skill: opts?.skill,
+        agent: opts?.agent,
+        workflow: opts?.workflow,
+        connector_provider: opts?.connectorProvider,
+        source_id: opts?.sourceId,
         ...(opts?.web ? { web: true } : {}),
       },
       opts?.signal,

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api, BffError } from "@/api/client";
-import type { AgentEvent, AgentMessage, ModelInfo, SearchHit, Skill, User } from "@/api/types";
+import type { AgentCard, AgentEvent, AgentMessage, ConnectorProvider, ModelInfo, SearchHit, Skill, User } from "@/api/types";
 import { Link, useRouter } from "@/i18n/routing";
 import { useSearchParams } from "next/navigation";
 import { personName, modelLabel } from "@/lib/format";
@@ -65,6 +65,7 @@ export function Hub() {
   const [shared, setShared] = useState(false);
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [skills, setSkills] = useState<Skill[]>([]);
+  const [agents, setAgents] = useState<AgentCard[]>([]);
   const [model, setModel] = useState<string>("");
   const [skill, setSkill] = useState<string>("");
   /** The SERVER's refusal sentence, when an ask never opened a stream. */
@@ -136,6 +137,14 @@ export function Hub() {
   const params = useSearchParams();
   const resumeId = params.get("c");
   const promptSlug = params.get("prompt");
+  const agentHandle = params.get("agent");
+  const workflowSlug = params.get("workflow");
+  const connectorProviderParam = params.get("connectorProvider");
+  const sourceId = params.get("sourceId");
+  const connectorProvider: ConnectorProvider | undefined = connectorProviderParam === "google" || connectorProviderParam === "microsoft"
+    ? connectorProviderParam
+    : undefined;
+  const selectedAgent = agentHandle ? agents.find((candidate) => candidate.handle === agentHandle) : undefined;
 
   useEffect(() => {
     void api.me().then(setMe);
@@ -155,6 +164,7 @@ export function Hub() {
       setModel(res.preferred_model ?? res.models[0]?.id ?? "");
     });
     void api.skills().then(setSkills);
+    void api.agents().then(setAgents).catch(() => setAgents([]));
     void api.assistantTools().then(setToolNames).catch(() => setToolNames([]));
   }, []);
 
@@ -192,7 +202,7 @@ export function Hub() {
 
   /**
    * Keyboard shortcuts (the reference hub's, mapped to surfaces that exist):
-   * Ctrl+Shift+A → skills (our agents), Ctrl+Shift+I → integrations,
+   * Ctrl+Shift+A → agents, Ctrl+Shift+I → workflows,
    * `/` → focus the prompt. Registered on the hub only — a global map is the
    * platform shell's decision, not this page's to make.
    */
@@ -203,10 +213,10 @@ export function Hub() {
         ["INPUT", "TEXTAREA", "SELECT"].includes(event.target.tagName);
       if (event.ctrlKey && event.shiftKey && event.code === "KeyA") {
         event.preventDefault();
-        router.push("/management/skills");
+        router.push("/agents");
       } else if (event.ctrlKey && event.shiftKey && event.code === "KeyI") {
         event.preventDefault();
-        router.push("/management/connectors");
+        router.push("/workflows");
       } else if (event.key === "/" && !inField && !event.ctrlKey && !event.metaKey) {
         event.preventDefault();
         promptRef.current?.focus();
@@ -455,6 +465,10 @@ export function Hub() {
         api.ask(question, { page: "hub", callIds: contextCalls.map((c) => c.id) }, sessionId.current, {
           model: model || undefined,
           skill: skill || undefined,
+          agent: agentHandle || undefined,
+          workflow: workflowSlug || undefined,
+          connectorProvider,
+          sourceId: sourceId || undefined,
           web: webSearch,
           signal,
         }),
@@ -558,12 +572,29 @@ export function Hub() {
             aria-hidden="true"
             className="neurai-watermark pointer-events-none absolute inset-0 -z-10 bg-center bg-no-repeat opacity-[0.035] [background-size:min(68vw,680px)]"
           />
-          <p className="min-h-[1.25rem] text-sm text-fg-muted">
-            {me ? t("greeting", { name: personName(me, locale) }) : ""}
-          </p>
-          <h1 className="mt-1.5 text-[25px] font-bold leading-snug tracking-tight text-fg md:text-[34px]">
-            {t("ask")}
-          </h1>
+          {selectedAgent ? (
+            <section className="mb-1 flex max-w-[660px] items-center gap-4 rounded-3xl border border-border bg-surface/80 p-4 text-start shadow-sm" aria-label={t("activeAgent")}>
+              <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-accent-soft text-xl text-accent" aria-hidden>✦</span>
+              <span className="min-w-0">
+                <span className="block text-base font-semibold text-fg">{selectedAgent.name}</span>
+                <span className="mt-1 block text-sm leading-5 text-fg-muted">{selectedAgent.description}</span>
+              </span>
+            </section>
+          ) : (
+            <>
+              <p className="min-h-[1.25rem] text-sm text-fg-muted">
+                {me ? t("greeting", { name: personName(me, locale) }) : ""}
+              </p>
+              <h1 className="mt-1.5 text-[25px] font-bold leading-snug tracking-tight text-fg md:text-[34px]">
+                {t("ask")}
+              </h1>
+            </>
+          )}
+          {workflowSlug ? (
+            <p className="mt-3 rounded-full bg-accent-soft px-3 py-1 text-xs font-medium text-accent">
+              {t("activeWorkflow")}
+            </p>
+          ) : null}
           {/* wide enough for the EN sentence in ONE line (55ch); if a longer
               translation ever wraps, text-wrap:balance splits it evenly
               instead of orphaning the last word */}
@@ -575,7 +606,7 @@ export function Hub() {
           {(() => {
             const active = skills.find((s) => s.slug === skill);
             const activeStarters = active ? skillStarters(active) : [];
-            return active && activeStarters.length > 0 ? (
+            return !selectedAgent && !workflowSlug && active && activeStarters.length > 0 ? (
               <div className="mt-4 flex w-full max-w-[660px] flex-wrap justify-center gap-2">
                 {activeStarters.map((q) => (
                   <button
@@ -1081,7 +1112,7 @@ export function Hub() {
           by the product's own skills rather than an invented catalogue. A
           press selects the skill AND fills the composer; sending stays the
           person's act (the shipped rule, unchanged). */}
-      {idle && skills.some((s) => s.starter_questions.length > 0) ? (
+      {idle && !selectedAgent && !workflowSlug && skills.some((s) => s.starter_questions.length > 0) ? (
         <section className="mt-7 w-full max-w-[660px] self-start text-start" aria-label={t("suggestions")}>
           <p className="mb-1 px-1 text-group-label font-medium text-fg-subtle">
             {t("suggestions")}

@@ -103,9 +103,17 @@ describe("tool pre-filter (token economy, never enforcement)", () => {
     expect(filterDeclaredTools(tools, ["read_call"]).map((t) => t.name)).toEqual(["read_call"]);
   });
 
-  it("offers everything when the skill declares nothing", () => {
-    expect(filterDeclaredTools(tools, [])).toHaveLength(3);
+  it("distinguishes no declared tools from no declared ceiling", async () => {
+    // [] is an explicit safety ceiling: it must not silently inherit the
+    // assistant's complete toolset. Undefined is the ad-hoc assistant case.
+    expect(filterDeclaredTools(tools, [])).toHaveLength(0);
     expect(filterDeclaredTools(tools, undefined)).toHaveLength(3);
+
+    const { onStep } = collect();
+    const noTools = createPolicy({ identity: ACTIVE, allowedTools: [], onStep });
+    const blocked = await noTools({ toolCall: { name: "read_call" }, args: {} });
+    expect(blocked?.block).toBe(true);
+    expect(blocked?.reason).toContain("not in this skill's tool list");
   });
 
   it("the veto still blocks an undeclared tool even if the filter was bypassed", async () => {

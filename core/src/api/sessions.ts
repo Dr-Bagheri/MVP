@@ -90,6 +90,18 @@ export interface MessageRecord {
 }
 
 /**
+ * The server-recorded execution surface for an append-only regeneration.
+ * It is intentionally private to core: browser callers can ask to regenerate
+ * but never submit trusted instructions, tools, or a provider-source body.
+ */
+export interface RegenerationReplay {
+  input: string;
+  systemPrompt: string;
+  tools: string[];
+  web: boolean;
+}
+
+/**
  * The thread read, exported so the live harness can execute the EXACT string
  * this repo runs.
  *
@@ -504,6 +516,48 @@ export function createSessionsRepo(db: Db) {
       );
       if (!rows[0]) throw new NotFoundError("nothing to regenerate");
       return rows[0].content;
+    },
+
+    /**
+     * Return the recorded model surface for the latest answered question.
+     *
+     * A saved-agent or workflow run is resolved server-side at ask time. A
+     * conversation opened later from History has no `?agent=` URL parameter,
+     * so rebuilding from the browser would silently drop that persona or the
+     * selected provider source. Replay the server's own recorded input/prompt
+     * instead. A failed unanswered question has no assistant run; callers
+     * deliberately fall back to the ordinary standing-question behaviour.
+     */
+    async regenerationReplay(identity: Identity, sessionId: string): Promise<RegenerationReplay | undefined> {
+      const id = assertUuid(sessionId, "session id");
+      const rows = await db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe<{ request: unknown }>(
+          `select r.request
+             from echo.agent_message m
+             join echo.agent_run r on r.id = m.agent_run_id
+            where m.session_id = $1
+              and m.role = 'assistant'
+              and m.seq > coalesce((
+                select max(u.seq) from echo.agent_message u
+                 where u.session_id = $1 and u.role = 'user'
+              ), -1)
+            order by m.seq desc
+            limit 1`,
+          [id],
+        ),
+      );
+      const request = rows[0]?.request;
+      if (request === null || typeof request !== "object" || Array.isArray(request)) return undefined;
+      const record = request as Record<string, unknown>;
+      if (typeof record.input !== "string" || typeof record.systemPrompt !== "string") return undefined;
+      return {
+        input: record.input,
+        systemPrompt: record.systemPrompt,
+        tools: Array.isArray(record.tools)
+          ? record.tools.filter((tool): tool is string => typeof tool === "string")
+          : [],
+        web: record.web === true,
+      };
     },
   };
 }

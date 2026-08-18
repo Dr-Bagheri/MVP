@@ -67,6 +67,7 @@ vi.mock("@/api/client", () => ({
     // the Part-1 surface the hub now touches on mount / after done
     models: async () => ({ models: [], preferred_model: null, curated: false, tool_capability_filtered: false }),
     skills: async () => [],
+    agents: async () => [],
     assistantTools: async () => [],
     sessionFeedback: async () => ({}),
     shareState: async () => false,

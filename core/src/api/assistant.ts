@@ -23,6 +23,16 @@ export interface AskRequest {
   question: string;
   /** Resolved skill, when the caller invoked one (/slug). */
   skill?: Skill | undefined;
+  /** Trusted configuration resolved server-side from the selected M30 agent/workflow. */
+  systemInstructions?: string | undefined;
+  /**
+   * The complete server-recorded prompt used only to regenerate an existing
+   * run. Browser clients can never provide this field.
+   */
+  systemPromptOverride?: string | undefined;
+  agentModel?: string | null | undefined;
+  allowedTools?: string[] | undefined;
+  provenance?: Record<string, unknown> | undefined;
   /** The caller's model choice (M5: no default is imposed). */
   model?: string | undefined;
   callId?: string | null | undefined;
@@ -104,6 +114,11 @@ export function createAssistant<TDeps>(config: AssistantDeps<TDeps>) {
           identity: request.identity,
           kind: "assistant",
           skill: request.skill,
+          systemInstructions: request.systemInstructions,
+          systemPromptOverride: request.systemPromptOverride,
+          agentModel: request.agentModel,
+          allowedTools: request.allowedTools,
+          provenance: request.provenance,
           callerModel: request.model,
           input: request.question,
           tools: config.tools,

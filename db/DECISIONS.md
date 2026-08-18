@@ -693,6 +693,22 @@ code provides. That is the Drizzle lesson applied before it costs anyone: a
 document asserting a capability the system does not have is worse than a
 document that admits the gap, because only one of them can be believed.
 
+**D29 — A connector token is a credential, while its connection row is
+product metadata.** *(M30, `0065`.)* A connection row may reveal provider,
+capability, account label, expiry and connection state to its owner; it may
+never reveal an OAuth access or refresh token. The encrypted credential stays
+in a separate table, is readable only by the server path that acts as the
+same connected user, and has no agent grant. This keeps the normal product UI
+from accidentally becoming a credential API, while still making a disconnected
+or expired state observable and actionable.
+
+The record is scoped by `(owner_id, org_id)` and provider. A connector is not
+an organization-wide back door: a member chooses the connection that supplies
+their own calendar/mail context, and RLS refuses another member's row even to
+an administrator. This follows the assistant-session privacy posture (D11):
+admin visibility of operational data is not a reason to expose another
+person's conversational or external-account data.
+
 ---
 
 ## Questions the schema could not settle

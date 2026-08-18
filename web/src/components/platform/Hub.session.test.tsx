@@ -89,6 +89,7 @@ vi.mock("@/api/client", () => ({
     // (session continuity) unchanged
     models: async () => ({ models: [], preferred_model: null, curated: false, tool_capability_filtered: false }),
     skills: async () => [],
+    agents: async () => [],
     search: async (query: string) => {
       sourceSearches.push(query);
       return [];

@@ -152,6 +152,27 @@ export async function main(): Promise<void> {
      */
     toolDeps: {},
     openrouterKey: process.env.OPENROUTER_API_KEY,
+    /*
+     * M30 first-party work connectors. These are deliberately optional at
+     * boot: an unset OAuth app leaves Google/Microsoft visibly "not
+     * configured" rather than taking the entire assistant offline. Values
+     * use the Echo-platform secret namespace; no provider credential is ever
+     * read from a generic supabase_/echo_supabase_ DPAPI name.
+     */
+    connectorOAuth: {
+      publicWebUrl: process.env.echo_platform_web_url,
+      encryptionKey: process.env.echo_platform_connector_encryption_key,
+      providers: {
+        google: {
+          clientId: process.env.echo_platform_google_oauth_client_id,
+          clientSecret: process.env.echo_platform_google_oauth_client_secret,
+        },
+        microsoft: {
+          clientId: process.env.echo_platform_microsoft_oauth_client_id,
+          clientSecret: process.env.echo_platform_microsoft_oauth_client_secret,
+        },
+      },
+    },
     /**
      * ON, and it was off.
      *

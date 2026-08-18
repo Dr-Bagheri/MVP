@@ -34,6 +34,9 @@ Only these two roles. Only two scopes: a call belongs either to its **owner
 | **Summary** | Agent-written prose about the call. **Versioned** — a new one never destroys the old. |
 | **Speaker** | A voice in a recording. Can be linked to a person in the organization's directory, so the name follows them across calls. |
 | **Skill** | A named thing the agent knows how to do: a prompt, the tools it may use, and a model. **Stored as data.** |
+| **Agent** | A saved assistant persona: instructions, permitted skills/model, source scope, and appearance. Selecting one does not grant access beyond the active user. |
+| **Workflow** | A named, manual guided task with explicit inputs and source selectors. It runs through the normal assistant and records normal agent-run provenance. |
+| **Connector connection** | One person's OAuth connection to a provider, scoped to their organization and encrypted at rest. |
 | **Agent run** | The record of one agent execution: prompt, model, every tool call, tokens, outcome. |
 
 ## How work gets done
@@ -116,6 +119,20 @@ saves. Most specific wins. Catalogue entries like: Call recap, Action items,
 Objection finder, Pricing mentions, Talk ratio, Pre-call brief. Invocable as
 `/skill-name`.
 
+### Agents & workflows
+Agents are saved, selectable assistants. Echo includes Sales, Customer support,
+HR, IT support, Legal, Marketing and Product information starting agents, and
+an organization/user can create agents they are allowed to manage. An agent's
+instructions, selected skills and source scope are resolved on the server for
+each turn; choosing an agent never bypasses call privacy or a provider
+connection boundary.
+
+Workflows are manual guided tasks, not disguised scheduled jobs. The initial
+catalogue contains **Prepare me for meetings** and **Draft email replies**.
+They ask the user to choose the calendar event or email source first, then
+open the assistant with the relevant bounded context. The result is a brief or
+draft for review; nothing is sent automatically.
+
 ### Sign-up & access
 Anyone can create an account — username + password, or one-click Google
 sign-up — but the account is **pending until an admin accepts it**; nothing is
@@ -127,10 +144,18 @@ Profile: display name, avatar, interface language. Admins: members list
 settings.
 
 ### Connectors & API gateway
-A catalogue screen for future integrations (chat, CRM, documents, calendar,
-storage) — preview in v1. **Wired in v1: the public API gateway** — per-org
-API keys and webhooks so any platform can push audio in and pull results out,
-under the same permission wall.
+The public API gateway remains available: per-org API keys and webhooks let
+any platform push audio in and pull results out, under the same permission
+wall. Google and Microsoft calendar/email can now be connected by an
+individual through OAuth with PKCE. The provider's tokens are encrypted
+server-side, never returned to the browser or placed in prompts. A missing
+provider configuration is clearly reported as unavailable; the UI never
+pretends that mail or calendar data is connected.
+
+The initial provider capability is read-only calendar/email context for the
+two manual workflows. A provider-side email draft or send is a separate,
+explicit confirmation by the connected user; workflows do not send email on
+their own. Other catalogue entries remain previews.
 
 ## What the agent may and may not change
 
@@ -154,7 +179,8 @@ summary. Limits enforced by the **system**, not by prompts:
   updates after; humans can read and correct.
 - **Retrieval across everything** a user is exposed to (documents, notes),
   under the same permission boundary.
-- **Connectors** wired for real.
+- Connector-triggered and scheduled workflows (a future explicit consent and
+  background-identity decision).
 
 ## Explicitly not built (v1)
 

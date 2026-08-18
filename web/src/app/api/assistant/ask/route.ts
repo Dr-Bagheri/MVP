@@ -36,6 +36,10 @@ export async function POST(request: Request) {
     call_id?: string;
     call_ids?: string[];
     web?: boolean;
+    agent?: string;
+    workflow?: string;
+    connector_provider?: "google" | "microsoft";
+    source_id?: string;
   };
 
   try {
@@ -47,6 +51,10 @@ export async function POST(request: Request) {
       call_id: body.call_id,
       call_ids: body.call_ids,
       web: body.web,
+      agent: body.agent,
+      workflow: body.workflow,
+      connector_provider: body.connector_provider,
+      source_id: body.source_id,
     });
     return new Response(upstream.body, {
       headers: {
