@@ -5,8 +5,10 @@ import { useLocale, useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
 import { api } from "@/api/client";
 import type { SearchHit } from "@/api/types";
-import { EchoAppShell } from "@/components/echo/EchoAppShell";
-import { Card, Chip, EmptyState, PageHeader } from "@/components/ui";
+import { AssistantMenu } from "@/components/platform/AssistantMenu";
+import { PlatformShell } from "@/components/platform/PlatformShell";
+import { MenuLayout, PageContainer, PageHeader } from "@/components/scaffold";
+import { Card, Chip, EmptyState } from "@/components/ui";
 import { formatClock, digits } from "@/lib/format";
 
 /**
@@ -59,7 +61,12 @@ export default function SearchPage() {
   }
 
   return (
-    <EchoAppShell page={t("title")}>
+    /* the assistant domain's two-pane (user directive, 2026-08-18): Search
+       joined the rail beside History, and both wear the platform's standard
+       sub-menu — the Echo shell it rode before belonged to a different app */
+    <PlatformShell>
+      <MenuLayout menu={<AssistantMenu activeSlug="search" />}>
+        <PageContainer>
       <PageHeader title={t("title")} subtitle={t("scopeNote")} />
 
       {/* the CARD carries the focus affordance (focus-within border); the
@@ -120,6 +127,8 @@ export default function SearchPage() {
           </div>
         </>
       )}
-    </EchoAppShell>
+        </PageContainer>
+      </MenuLayout>
+    </PlatformShell>
   );
 }

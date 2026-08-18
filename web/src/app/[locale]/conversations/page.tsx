@@ -5,7 +5,9 @@ import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { AssistantSession } from "@/api/types";
 import { AssistantPane } from "@/components/AssistantPane";
+import { AssistantMenu } from "@/components/platform/AssistantMenu";
 import { PlatformShell } from "@/components/platform/PlatformShell";
+import { MenuLayout, PageHeader } from "@/components/scaffold";
 import { digits, formatDate } from "@/lib/format";
 
 /**
@@ -45,61 +47,26 @@ export default function ConversationsPage() {
   return (
     <PlatformShell>
       <div className="flex h-full min-h-0">
-        {/* the records — menu-shaped, like every sub-page's section list */}
-        <nav
-          aria-label={t("title")}
-          className="w-full shrink-0 overflow-y-auto px-3 pb-4 md:w-menu md:border-e md:border-border"
-        >
-          <h1 className="px-3 pb-2 pt-4 text-pane-title font-semibold text-fg">
-            {t("title")}
-          </h1>
-          <div className="px-3 pb-2">
-            <input
-              className="input h-9 min-h-0 text-xs focus-visible:ring-0 focus-visible:ring-offset-0"
-              placeholder={t("searchPlaceholder")}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-          {sessions === null ? null : shown.length === 0 ? (
-            <p className="px-3 py-2 text-sm text-fg-muted">{t("empty")}</p>
-          ) : (
-            <ul>
-              {shown.map((s) => {
-                const active = s.id === selected;
-                return (
-                  <li key={s.id}>
-                    <button
-                      type="button"
-                      aria-current={active ? "true" : undefined}
-                      onClick={() => setSelected(s.id)}
-                      className={`tap my-px block w-full rounded-lg px-3 py-2 text-start transition-colors ${
-                        active
-                          ? "bg-surface-2 text-fg"
-                          : "text-fg-muted hover:bg-surface-2 hover:text-fg"
-                      }`}
-                    >
-                      <span className={`block truncate text-menu-item ${active ? "font-semibold" : ""}`}>
-                        {s.title ?? t("untitled")}
-                      </span>
-                      <span className="block text-[11px] text-fg-subtle">
-                        {formatDate(s.updated_at ?? s.created_at, locale)}
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </nav>
+        {/* the standard left sub-menu (user directive, 2026-08-18) — the
+            records themselves moved fully into the middle table; a page
+            whose menu slot holds data reads as a different product than
+            the pages beside it */}
+        <div className="min-w-0 flex-1 overflow-y-auto">
+        <MenuLayout menu={<AssistantMenu activeSlug="history" />}>
 
-        {/* the records as a TABLE in the middle (user directive, round 2) —
-            the same card-table anatomy every other sub-page uses, with the
-            delete beside each row. Clicking a row opens it in the pane. */}
-        <div className="hidden min-w-0 flex-1 overflow-y-auto md:block">
-          <div className="mx-auto w-full max-w-content px-5 pb-16 pt-8 md:px-10">
-            <h2 className="h-page mb-1">{t("title")}</h2>
-            <p className="mb-5 text-sm text-fg-muted">{t("hint")}</p>
+        {/* the records as a TABLE — the same card-table anatomy every other
+            sub-page uses, at every width now that the menu slot holds the
+            menu. Clicking a row opens it in the pane. */}
+          <div className="mx-auto w-full max-w-content px-5 pb-16 pt-5 md:px-10 md:pt-4">
+            <PageHeader title={t("title")} subtitle={t("hint")} />
+            <div className="mb-4 max-w-xs">
+              <input
+                className="input h-9 min-h-0 text-xs focus-visible:ring-0 focus-visible:ring-offset-0"
+                placeholder={t("searchPlaceholder")}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
             <div className="rounded-lg border border-border bg-surface">
               {sessions === null ? null : shown.length === 0 ? (
                 <p className="p-4 text-sm text-fg-muted">{t("empty")}</p>
@@ -162,6 +129,7 @@ export default function ConversationsPage() {
               )}
             </div>
           </div>
+        </MenuLayout>
         </div>
 
         {/*

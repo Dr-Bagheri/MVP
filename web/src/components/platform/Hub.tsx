@@ -9,7 +9,7 @@ import { Link, useRouter } from "@/i18n/routing";
 import { useSearchParams } from "next/navigation";
 import { personName, modelLabel } from "@/lib/format";
 import { useDictation } from "@/lib/dictation";
-import { useSkillName } from "@/lib/skillName";
+import { useSkillName, useSkillStarters } from "@/lib/skillName";
 import { ConversationThread } from "./ConversationThread";
 import { EchoMark, MicIcon, PlusIcon, SendIcon, ToolsIcon } from "./icons";
 
@@ -103,6 +103,8 @@ export function Hub() {
   );
   /* system skills localize (shipped product content); authored names never do */
   const skillName = useSkillName();
+  /* starters localize by the same shipped-content line as system names */
+  const skillStarters = useSkillStarters();
   /** Held in a ref, not state: it is read inside the stream loop, where a
    *  stale closure over state would silently start a second conversation. */
   const sessionId = useRef<string | undefined>(undefined);
@@ -521,9 +523,10 @@ export function Hub() {
               the composer; sending stays the person's act */}
           {(() => {
             const active = skills.find((s) => s.slug === skill);
-            return active && active.starter_questions.length > 0 ? (
+            const activeStarters = active ? skillStarters(active) : [];
+            return active && activeStarters.length > 0 ? (
               <div className="mt-4 flex w-full max-w-[660px] flex-wrap justify-center gap-2">
-                {active.starter_questions.map((q) => (
+                {activeStarters.map((q) => (
                   <button
                     key={q}
                     type="button"
@@ -1033,13 +1036,13 @@ export function Hub() {
                     className="tap flex w-full items-center gap-3 px-1 py-3 text-start text-sm text-fg-muted transition-colors hover:text-fg"
                     onClick={() => {
                       setSkill(s.slug);
-                      setInput(s.starter_questions[0] ?? "");
+                      setInput(skillStarters(s)[0] ?? "");
                       promptRef.current?.focus();
                     }}
                   >
                     <ToolsIcon width={15} height={15} className="shrink-0 text-fg-subtle" />
                     <span className="min-w-0 truncate">
-                      {s.starter_questions[0]}
+                      {skillStarters(s)[0]}
                       <span className="ms-2 text-xs text-fg-subtle">{skillName(s)}</span>
                     </span>
                   </button>

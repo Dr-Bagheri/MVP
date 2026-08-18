@@ -67,6 +67,24 @@ vi.mock("next-intl", () => ({
           )
         : raw;
     };
+    /**
+     * `t.raw` mirrors next-intl's: the message VALUE untouched, whatever its
+     * type — it is how array-valued messages (starter questions) are read.
+     * Without it here, the starters localizer's try/catch swallowed the
+     * stub's TypeError and every test quietly exercised only the fallback:
+     * a suite testing the code's absence while reporting on its presence.
+     * Throws on a miss exactly as the real one does, so the fallback branch
+     * is REACHED by a missing key, never by a missing stub method.
+     */
+    t.raw = (key: string): unknown => {
+      const value = key.split(".").reduce<unknown>(
+        (node, part) =>
+          node && typeof node === "object" ? (node as Record<string, unknown>)[part] : undefined,
+        table,
+      );
+      if (value === undefined) throw new Error(`missing message: ${namespace}.${key}`);
+      return value;
+    };
     return t;
   },
   useLocale: () => "fa",
