@@ -93,11 +93,19 @@ export function IconRail() {
       <div className="flex flex-col items-center gap-2">
         <Image
           src="/brand/neurai-mark.png"
-          alt="NeurAI"
+          alt=""
           width={24}
           height={24}
           priority
-          className="mb-1 h-6 w-6 object-contain"
+          className="neurai-mark-dark mb-1 h-6 w-6 object-contain"
+        />
+        <Image
+          src="/brand/neurai-mark-light.png"
+          alt=""
+          width={24}
+          height={24}
+          priority
+          className="neurai-mark-light mb-1 h-6 w-6 object-contain"
         />
         {NAV_PRIMARY.map(item)}
       </div>

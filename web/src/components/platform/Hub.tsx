@@ -515,8 +515,7 @@ export function Hub() {
         <>
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-0 -z-10 bg-center bg-no-repeat opacity-[0.035] [background-size:min(68vw,680px)]"
-            style={{ backgroundImage: 'url("/brand/neurai-mark.png")' }}
+            className="neurai-watermark pointer-events-none absolute inset-0 -z-10 bg-center bg-no-repeat opacity-[0.035] [background-size:min(68vw,680px)]"
           />
           <p className="min-h-[1.25rem] text-sm text-fg-muted">
             {me ? t("greeting", { name: personName(me, locale) }) : ""}

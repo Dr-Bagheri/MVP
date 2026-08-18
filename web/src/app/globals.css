@@ -78,6 +78,7 @@
     /* retained for the Echo shell until its interior re-derives */
     --sidebar: 20 17 76;
     --sidebar-fg: 237 238 255;
+    --brand-mark-image: url("/brand/neurai-mark.png");
   }
 
   [data-theme="light"] {
@@ -109,6 +110,7 @@
     --muted: 227 237 253;
     --sidebar: 255 255 255;
     --sidebar-fg: 18 26 64;
+    --brand-mark-image: url("/brand/neurai-mark-light.png");
   }
 
   html {
@@ -379,6 +381,23 @@
 
   .chip {
     @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium leading-none;
+  }
+
+  /* The dark mark's white stroke disappears into the derived light surface.
+     The light-theme variant retains the same violet family but replaces that
+     stroke with deep indigo. Both images remain in the DOM in the rail so a
+     preference applied before hydration never flashes the wrong identity. */
+  .neurai-mark-light {
+    display: none;
+  }
+  [data-theme="light"] .neurai-mark-dark {
+    display: none;
+  }
+  [data-theme="light"] .neurai-mark-light {
+    display: block;
+  }
+  .neurai-watermark {
+    background-image: var(--brand-mark-image);
   }
 
   /* Card titles are still start-aligned for scanability, but their line box
