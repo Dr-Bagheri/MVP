@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import { useSkillName } from "@/lib/skillName";
@@ -60,6 +60,18 @@ const fromAuthored = (s: AuthoredSkill): Draft => ({
 });
 
 export default function SkillsPage() {
+  return (
+    <Suspense fallback={<SkillsPageFallback />}>
+      <SkillsPageContent />
+    </Suspense>
+  );
+}
+
+function SkillsPageFallback() {
+  return <div className="min-h-40" aria-busy="true" />;
+}
+
+function SkillsPageContent() {
   const t = useTranslations("skills");
   const searchParams = useSearchParams();
   /* system skills localize (shipped product content); authored names never do */
