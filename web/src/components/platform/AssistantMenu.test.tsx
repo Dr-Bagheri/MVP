@@ -1,5 +1,6 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { AssistantConversationProvider, useAssistantConversation } from "./AssistantConversationState";
 
 vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => key,
@@ -12,10 +13,35 @@ vi.mock("@/i18n/routing", () => ({
 const { AssistantMenu } = await import("./AssistantMenu");
 
 describe("AssistantMenu", () => {
-  it("keeps only usable conversation destinations in the left menu", () => {
-    render(<AssistantMenu activeSlug="hub" />);
+  it("keeps New conversation enabled, idle on a blank hub, and resettable after a turn", () => {
+    function StateProbe() {
+      const { started, setStarted, resetVersion } = useAssistantConversation();
+      return <>
+        <button type="button" onClick={() => setStarted(true)}>start</button>
+        <output>{`${started}:${resetVersion}`}</output>
+      </>;
+    }
+    render(
+      <AssistantConversationProvider>
+        <StateProbe />
+        <AssistantMenu activeSlug="new" showNewConversation />
+      </AssistantConversationProvider>,
+    );
 
-    expect(screen.queryByRole("link", { name: "newConversation" })).toBeNull();
+    const fresh = screen.getByRole("link", { name: "newConversation" });
+    expect(fresh.getAttribute("aria-disabled")).toBeNull();
+    expect(screen.getByText("false:0")).toBeTruthy();
+    fireEvent.click(fresh);
+    expect(screen.getByText("false:0")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "start" }));
+    fireEvent.click(fresh);
+    expect(screen.getByText("false:1")).toBeTruthy();
     expect(screen.getByRole("link", { name: "history" }).getAttribute("href")).toBe("/conversations");
+  });
+
+  it("does not show New conversation from assistant subpages", () => {
+    render(<AssistantMenu activeSlug="history" />);
+    expect(screen.queryByRole("link", { name: "newConversation" })).toBeNull();
   });
 });

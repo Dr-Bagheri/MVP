@@ -26,6 +26,8 @@ export interface MenuItem {
   disabled?: boolean;
   /** The current destination is shown, but selecting it again must not reload it. */
   preventNavigation?: boolean;
+  /** An enabled current-page item may perform an in-place action instead. */
+  onSelect?: () => void;
   /**
    * Short chip beside the label — for a section that is named but not yet
    * usable. Marked IN the menu, not after you click: finding out a section
@@ -90,9 +92,11 @@ export function SectionMenu({
                     <Link
                       href={item.href}
                       aria-current={active ? "page" : undefined}
-                      aria-disabled={item.preventNavigation || undefined}
                       className={itemClass}
-                      onClick={item.preventNavigation ? (event) => event.preventDefault() : undefined}
+                      onClick={item.preventNavigation || item.onSelect ? (event) => {
+                        if (item.preventNavigation) event.preventDefault();
+                        item.onSelect?.();
+                      } : undefined}
                     >
                       <span className="truncate">{item.label}</span>
                       {item.badge ? (

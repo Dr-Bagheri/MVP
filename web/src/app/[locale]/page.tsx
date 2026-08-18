@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { AssistantMenu } from "@/components/platform/AssistantMenu";
+import { AssistantConversationProvider } from "@/components/platform/AssistantConversationState";
 import { Hub } from "@/components/platform/Hub";
 import { PlatformShell } from "@/components/platform/PlatformShell";
 import { MenuLayout } from "@/components/scaffold";
@@ -32,11 +33,13 @@ export default function HubPage() {
         user signed off.
       */}
       <Suspense fallback={null}>
-        {/* The hub's own sub-menu carries usable assistant destinations;
-            the live conversation stays on this page. */}
-        <MenuLayout menu={<AssistantMenu activeSlug="hub" />}>
-          <Hub />
-        </MenuLayout>
+        <AssistantConversationProvider>
+          {/* New conversation belongs only to the Home hub: it clears a live
+              hub but remains an enabled no-op when the hub is already blank. */}
+          <MenuLayout menu={<AssistantMenu activeSlug="new" showNewConversation />}>
+            <Hub />
+          </MenuLayout>
+        </AssistantConversationProvider>
       </Suspense>
     </PlatformShell>
   );

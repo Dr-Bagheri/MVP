@@ -27,8 +27,8 @@ vi.mock("@/components/platform/PlatformShell", () => ({
  * unmocked fails the suite for a reason unrelated to session continuity.
  */
 vi.mock("@/i18n/routing", () => ({
-  Link: ({ href, children }: { href: string; children: React.ReactNode }) => (
-    <a href={href}>{children}</a>
+  Link: ({ href, children, ...props }: { href: string; children: React.ReactNode }) => (
+    <a href={href} {...props}>{children}</a>
   ),
   usePathname: () => "/",
   useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
@@ -100,6 +100,8 @@ vi.mock("@/api/client", () => ({
 }));
 
 const { Hub } = await import("./Hub");
+const { AssistantMenu } = await import("./AssistantMenu");
+const { AssistantConversationProvider } = await import("./AssistantConversationState");
 
 async function ask(text: string) {
   const box = screen.getByPlaceholderText(/بپرسید/);
@@ -150,6 +152,24 @@ describe("Hub — session continuity", () => {
     await waitFor(() => expect(askCalls.length).toBe(3));
     // a ref that is written but never re-read would still pass a two-turn test
     expect(askCalls.slice(1)).toEqual([SESSION_ID, SESSION_ID]);
+  });
+
+  it("starts a fresh Home conversation from the enabled left-menu item", async () => {
+    render(
+      <AssistantConversationProvider>
+        <AssistantMenu activeSlug="new" showNewConversation />
+        <Hub />
+      </AssistantConversationProvider>,
+    );
+
+    await ask("شروع گفتگو");
+    await waitFor(() => expect(screen.getByText("پاسخ")).toBeTruthy());
+
+    const fresh = screen.getByRole("link", { name: "گفتگوی تازه" });
+    expect(fresh.getAttribute("aria-disabled")).toBeNull();
+    fireEvent.click(fresh);
+
+    await waitFor(() => expect(screen.queryByText("پاسخ")).toBeNull());
   });
 
   it("searches Sources from the first character, without an instruction or Echo shortcut", async () => {

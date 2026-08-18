@@ -2,6 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { SectionMenu } from "@/components/scaffold";
+import { useAssistantConversation } from "./AssistantConversationState";
 
 /**
  * The assistant domain's section menu (user directive, 2026-08-18: "add the
@@ -10,15 +11,18 @@ import { SectionMenu } from "@/components/scaffold";
  * platform's two-pane anatomy read as a different product.
  *
  * Same skeleton as Echo's menu: a heading, grouped entries, active pill.
- * The hub itself is the conversation surface, so this menu contains only
- * destinations that remain useful while a conversation is in progress.
+ * New conversation is only a Home-hub action. It stays visually enabled:
+ * selecting it on the blank hub simply leaves the blank hub in place.
  */
 export function AssistantMenu({
   activeSlug,
+  showNewConversation = false,
 }: {
-  activeSlug: "hub" | "history" | "search" | "workflows" | "prompts";
+  activeSlug: "new" | "hub" | "history" | "search" | "workflows" | "prompts";
+  showNewConversation?: boolean;
 }) {
   const t = useTranslations("platform");
+  const { started, startNewConversation } = useAssistantConversation();
   return (
     <SectionMenu
       navLabel={t("assistantMenuLabel")}
@@ -28,6 +32,14 @@ export function AssistantMenu({
           key: "conversation",
           title: t("assistantMenuConversation"),
           items: [
+            ...(showNewConversation ? [{
+              slug: "new",
+              href: "/",
+              label: t("newConversation"),
+              /* It is the current hub either way; never navigate/reload it. */
+              preventNavigation: true,
+              onSelect: started ? startNewConversation : undefined,
+            }] : []),
             { slug: "history", href: "/conversations", label: t("history") },
           ],
         },

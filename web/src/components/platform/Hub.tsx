@@ -10,6 +10,7 @@ import { personName, modelLabel } from "@/lib/format";
 import { useDictation } from "@/lib/dictation";
 import { useSkillName, useSkillStarters } from "@/lib/skillName";
 import { ConversationThread } from "./ConversationThread";
+import { useAssistantConversation } from "./AssistantConversationState";
 import { DocumentIcon, EchoMark, MicIcon, PlusIcon, SendIcon, ToolsIcon } from "./icons";
 
 type CreateKind = "doc" | "pdf";
@@ -55,6 +56,7 @@ export function Hub() {
   
   const locale = useLocale();
   const router = useRouter();
+  const { resetVersion, setStarted } = useAssistantConversation();
   const [me, setMe] = useState<User | null>(null);
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [input, setInput] = useState("");
@@ -111,6 +113,8 @@ export function Hub() {
   const [modelOpen, setModelOpen] = useState(false);
   const [modelFilter, setModelFilter] = useState("");
   const promptRef = useRef<HTMLInputElement>(null);
+  const resetVersionRef = useRef(resetVersion);
+  const appliedResetVersionRef = useRef(resetVersion);
   /** The mic dictates into the composer (it is NOT Echo's recorder). */
   const dictation = useDictation(locale === "fa" ? "fa-IR" : "en-US", (text) =>
     setInput((v) => (v.trim() === "" ? text : `${v} ${text}`)),
@@ -244,15 +248,23 @@ export function Hub() {
   }
 
   const adoptThread = useCallback(async (id: string) => {
+    const versionAtStart = resetVersionRef.current;
     const [thread, verdicts] = await Promise.all([
       api.agentMessages(id),
       api.sessionFeedback(id).catch(() => ({}) as Record<string, string>),
     ]);
+    /* A just-cleared hub must not be repopulated by an older in-flight fetch. */
+    if (versionAtStart !== resetVersionRef.current) return;
     setMessages(thread);
     setFeedback(verdicts);
     sessionId.current = id;
+    setStarted(true);
     void api.shareState(id).then(setShared).catch(() => setShared(false));
-  }, []);
+  }, [setStarted]);
+
+  useEffect(() => {
+    resetVersionRef.current = resetVersion;
+  }, [resetVersion]);
 
   useEffect(() => {
     if (!resumeId) return;
@@ -264,6 +276,27 @@ export function Hub() {
       cancelled = true;
     };
   }, [resumeId, adoptThread]);
+
+  useEffect(() => {
+    if (resetVersion === 0 || appliedResetVersionRef.current === resetVersion) return;
+    appliedResetVersionRef.current = resetVersion;
+    /* Starting fresh also stops a live response. Otherwise its completion
+       could put content back into the just-cleared hub. */
+    abortRef.current?.abort();
+    abortRef.current = null;
+    sessionId.current = undefined;
+    setMessages([]);
+    setInput("");
+    setFeedback({});
+    setShared(false);
+    setAttachments([]);
+    setContextCalls([]);
+    setCreateKind(null);
+    setWebSearch(false);
+    setAskError(null);
+    setStreaming(false);
+    if (resumeId) router.replace("/");
+  }, [resetVersion, resumeId, router]);
 
   useEffect(() => {
     threadEnd.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -376,6 +409,7 @@ export function Hub() {
   async function send() {
     const typed = input.trim();
     if (typed === "" || streaming) return;
+    setStarted(true);
     setSkillOpen(false);
     setInput("");
     setAskError(null);
