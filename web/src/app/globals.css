@@ -110,7 +110,7 @@
     --muted: 227 237 253;
     --sidebar: 255 255 255;
     --sidebar-fg: 18 26 64;
-    --brand-mark-image: url("/brand/neurai-mark-light.png");
+    --brand-mark-image: url("/brand/neurai-mark-light-transparent.png");
   }
 
   html {

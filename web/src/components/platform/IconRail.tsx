@@ -100,7 +100,7 @@ export function IconRail() {
           className="neurai-mark-dark mb-1 h-6 w-6 object-contain"
         />
         <Image
-          src="/brand/neurai-mark-light.png"
+          src="/brand/neurai-mark-light-transparent.png"
           alt=""
           width={24}
           height={24}
