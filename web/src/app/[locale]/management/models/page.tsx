@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { AdminModelRow, User } from "@/api/types";
 import { ManagementPane } from "@/components/platform/ManagementPane";
+import { PageHeader } from "@/components/scaffold";
 import { modelLabel } from "@/lib/format";
 import { Card, Chip } from "@/components/ui";
 
@@ -42,8 +43,8 @@ export default function ModelsPage() {
   if (me !== null && !isAdmin) {
     return (
       <ManagementPane activeSlug="models">
-        <h1 className="h-page mb-1">{tAdmin("modelAllowList")}</h1>
-        <Card className="mt-4">
+        <PageHeader title={tAdmin("modelAllowList")} />
+        <Card>
           <h2 className="h-section">{tAdmin("adminOnly")}</h2>
           <p className="mt-1 text-sm leading-7 text-fg-muted">{tAdmin("adminOnlyNote")}</p>
         </Card>
@@ -54,8 +55,7 @@ export default function ModelsPage() {
   return (
     <ManagementPane activeSlug="models">
       <div>
-        <h1 className="h-page mb-1">{tAdmin("modelAllowList")}</h1>
-        <p className="mb-4 text-sm text-fg-muted">{tAdmin("modelAllowNote")}</p>
+        <PageHeader title={tAdmin("modelAllowList")} subtitle={tAdmin("modelAllowNote")} />
 
         {failed ? (
           <Card className="mb-4">

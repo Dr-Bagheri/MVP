@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { Link, usePathname } from "@/i18n/routing";
-import { NAV_BAR, NAV_UTILITY } from "./nav";
+import { NAV_BAR, NAV_PRIMARY, NAV_UTILITY } from "./nav";
 import { EchoMark, MoreIcon, NAV_ICON } from "./icons";
 
 /**
@@ -41,7 +41,9 @@ export function BottomBar() {
             className="fixed inset-x-0 bottom-0 z-50 rounded-t-2xl border-t border-border bg-surface p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] md:hidden"
           >
             <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-border-strong" aria-hidden />
-            {NAV_UTILITY.map((nav) => {
+            {/* every non-bar destination, not just the utility group — a rail
+                entry the More sheet omits is unreachable on a phone */}
+            {[...NAV_PRIMARY.filter((i) => !i.inBar), ...NAV_UTILITY].map((nav) => {
               const Icon = NAV_ICON[nav.key];
               const external = nav.href.startsWith("http") || nav.href === "#";
               const inner = (

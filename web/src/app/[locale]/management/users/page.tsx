@@ -13,6 +13,7 @@ import type {
   UserStatus,
 } from "@/api/types";
 import { ManagementPane } from "@/components/platform/ManagementPane";
+import { PageHeader } from "@/components/scaffold";
 import { MemberDetail } from "@/components/platform/MemberDetail";
 import { Card, Chip, EmptyState } from "@/components/ui";
 import { digits, formatDate, personName } from "@/lib/format";
@@ -270,8 +271,8 @@ export default function UsersPage() {
       /* the refusal keeps the pane: losing the menu would strand a member on a
          dead end, when every other section beside it is one they may open */
       <ManagementPane activeSlug="users">
-        <h1 className="h-page mb-1">{t("section.users")}</h1>
-        <Card className="mt-4">
+        <PageHeader title={t("section.users")} />
+        <Card>
           <h2 className="h-section">{tAdmin("adminOnly")}</h2>
           <p className="mt-1 text-sm leading-7 text-fg-muted">{tAdmin("adminOnlyNote")}</p>
         </Card>
@@ -282,8 +283,7 @@ export default function UsersPage() {
   return (
     <ManagementPane activeSlug="users">
       <div>
-        <h1 className="h-page mb-1">{t("section.users")}</h1>
-        <p className="mb-5 text-sm text-fg-muted">{t("desc.users")}</p>
+        <PageHeader title={t("section.users")} subtitle={t("desc.users")} />
 
         <div className="mb-4 grid gap-3 sm:grid-cols-3">
           {(["total", "active", "inactive"] as const).map((k) => {

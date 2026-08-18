@@ -6,7 +6,7 @@ import { useSkillName } from "@/lib/skillName";
 import { api, BffError } from "@/api/client";
 import type { AuthoredSkill, ModelInfo, Skill, User } from "@/api/types";
 import { ManagementPane } from "@/components/platform/ManagementPane";
-import { FormPanel, FormRow, PanelFooter, Section } from "@/components/scaffold";
+import { FormPanel, FormRow, PageHeader, PanelFooter, Section } from "@/components/scaffold";
 import { Card, Chip } from "@/components/ui";
 
 /**
@@ -150,12 +150,10 @@ export default function SkillsPage() {
   return (
     <ManagementPane activeSlug="skills">
       <div>
-        <div className="mb-5 flex items-start justify-between gap-4">
-          <div>
-            <h1 className="h-page mb-1">{t("title")}</h1>
-            <p className="text-sm text-fg-muted">{t("levelNote")}</p>
-          </div>
-          <button
+        <PageHeader
+          title={t("title")}
+          subtitle={t("levelNote")}
+          actions={<button
             className="btn-primary h-10 min-h-0 shrink-0 px-4 text-sm"
             onClick={() => {
               setError(null);
@@ -163,8 +161,8 @@ export default function SkillsPage() {
             }}
           >
             {t("newSkill")}
-          </button>
-        </div>
+          </button>}
+        />
 
         {error ? (
           <p role="alert" className="mb-4 text-sm text-danger">

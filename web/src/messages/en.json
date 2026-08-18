@@ -94,7 +94,7 @@
     "failed": "Failed"
   },
   "conversations": {
-    "title": "Conversations",
+    "title": "History",
     "searchPlaceholder": "Search conversations",
     "empty": "No conversations yet — ask something on the home page.",
     "untitled": "Untitled",

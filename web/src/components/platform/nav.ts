@@ -29,6 +29,13 @@ export const GITHUB_HREF = process.env.NEXT_PUBLIC_GITHUB_URL ?? "https://github
 export const NAV_PRIMARY: readonly NavItem[] = [
   { href: "/", key: "hub", inBar: true },
   { href: "/echo", key: "echo", inBar: true },
+  /*
+   * History (user directive, 2026-08-18): the conversation list moves off the
+   * hub's face and into the left menu, renamed. `inBar: false` keeps M22's
+   * four-slot bar; the More sheet carries it on a phone (it lists every
+   * non-bar item — a rail entry a phone cannot reach is the /fa/echo class).
+   */
+  { href: "/conversations", key: "history", inBar: false },
   { href: "/management", key: "management", inBar: true },
 ];
 

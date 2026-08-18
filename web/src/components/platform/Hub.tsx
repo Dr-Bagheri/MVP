@@ -11,7 +11,7 @@ import { personName, modelLabel } from "@/lib/format";
 import { useDictation } from "@/lib/dictation";
 import { useSkillName } from "@/lib/skillName";
 import { ConversationThread } from "./ConversationThread";
-import { EchoMark, HistoryIcon, MicIcon, PlusIcon, SendIcon, ToolsIcon } from "./icons";
+import { EchoMark, MicIcon, PlusIcon, SendIcon, ToolsIcon } from "./icons";
 
 /**
  * The AI-assistant hub — NeurAI's first page (M22, user-approved).
@@ -468,7 +468,7 @@ export function Hub() {
       {!idle ? (
         <div className="mb-4 flex flex-wrap items-center gap-2">
           <Link href="/conversations" className={headerBtn}>
-            {t("conversations")}
+            {t("history")}
           </Link>
           <button type="button" className={headerBtn} onClick={newConversation}>
             {t("newConversation")}
@@ -910,14 +910,24 @@ export function Hub() {
         </div>
       </div>
 
-      {/* Conversations sits BELOW the chat box (user directive, round 2):
-          the inline history panel is retired — the button goes to the real
-          surface, and the top bar no longer carries a twin. */}
+      {/* The Echo card sits DIRECTLY under the prompt box (user directive,
+          2026-08-18 — it replaces the Conversations pill, which is renamed
+          History and lives in the left rail with the platform's other
+          destinations). The apps are the hub's second sentence: ask above,
+          open an app below. */}
       {idle ? (
-        <div className="mt-3 flex w-full max-w-[660px] justify-start">
-          <Link href="/conversations" className={headerBtn}>
-            <HistoryIcon width={14} height={14} />
-            {t("conversations")}
+        <div className="mt-4 grid w-full max-w-[660px] grid-cols-[repeat(auto-fill,minmax(226px,1fr))] gap-3">
+          <Link
+            href="/echo"
+            className="flex items-center gap-3 rounded-2xl border border-border bg-surface p-3.5 text-start transition-colors hover:border-border-strong"
+          >
+            <span className="grid h-[42px] w-[42px] shrink-0 place-items-center rounded-xl bg-surface-2">
+              <EchoMark size={28} />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-sm font-semibold text-fg">{t("echo")}</span>
+              <span className="block text-xs text-fg-muted">{t("echoDesc")}</span>
+            </span>
           </Link>
         </div>
       ) : null}
@@ -995,22 +1005,6 @@ export function Hub() {
         </section>
       ) : null}
 
-      {idle ? (
-        <div className="mt-7 grid w-full max-w-[660px] grid-cols-[repeat(auto-fill,minmax(226px,1fr))] gap-3">
-          <Link
-            href="/echo"
-            className="flex items-center gap-3 rounded-2xl border border-border bg-surface p-3.5 text-start transition-colors hover:border-border-strong"
-          >
-            <span className="grid h-[42px] w-[42px] shrink-0 place-items-center rounded-xl bg-surface-2">
-              <EchoMark size={28} />
-            </span>
-            <span className="min-w-0">
-              <span className="block text-sm font-semibold text-fg">{t("echo")}</span>
-              <span className="block text-xs text-fg-muted">{t("echoDesc")}</span>
-            </span>
-          </Link>
-        </div>
-      ) : null}
     </div>
   );
 }

@@ -23,7 +23,15 @@ export function PageContainer({
 }) {
   const max =
     width === "default" ? "max-w-content" : width === "wide" ? "max-w-content-wide" : "max-w-none";
-  return <div className={`mx-auto w-full ${max} px-5 pb-16 pt-8 md:px-10 md:pt-12`}>{children}</div>;
+  /*
+   * `md:pt-4` matches the SectionMenu heading's own top padding, so a page
+   * title and the menu's pane title start on THE SAME LINE (user directive,
+   * 2026-08-18: "they all seem out of place — align them, consider the left
+   * menu text start point"). One shared offset, not two guesses: the old
+   * pt-12 dropped every page title two lines below the menu heading beside
+   * it, and each surface read as its own layout.
+   */
+  return <div className={`mx-auto w-full ${max} px-5 pb-16 pt-5 md:px-10 md:pt-4`}>{children}</div>;
 }
 
 /**
@@ -41,7 +49,14 @@ export function PageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <header className="flex items-start justify-between gap-4">
+    /*
+     * ONE header structure for every sub page (user directive, 2026-08-18):
+     * 24px title, muted subtitle 4px under it, and a full-width hairline
+     * closing the block. The divider is part of the HEADER, not something
+     * pages draw when they remember to — which is how half the platform had
+     * one and half did not, and every surface read as out of place.
+     */
+    <header className="mb-6 flex items-start justify-between gap-4 border-b border-border pb-5">
       <div>
         <h1 className="text-2xl font-bold text-fg">{title}</h1>
         {subtitle ? <p className="mt-1 text-sm text-fg-muted">{subtitle}</p> : null}
@@ -68,7 +83,10 @@ export function Section({
   children: ReactNode;
 }) {
   return (
-    <section className={`py-6 first-of-type:pt-8 ${divided ? "border-t border-border" : ""}`}>
+    /* first-of-type:pt-0 — the header's own mb-6 (or the container's aligned
+       top) carries the space; pt-8 on top of it read as a hole under every
+       divider */
+    <section className={`py-6 first-of-type:pt-0 ${divided ? "border-t border-border" : ""}`}>
       {title ? <h2 className="text-xl font-semibold text-fg">{title}</h2> : null}
       {description ? <p className="mt-0.5 text-sm text-fg-muted">{description}</p> : null}
       <div className={title || description ? "mt-4" : ""}>{children}</div>
