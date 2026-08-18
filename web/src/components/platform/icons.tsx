@@ -94,7 +94,10 @@ export const DocumentIcon = (p: SVGProps<SVGSVGElement>) => (
 );
 
 export const ToolsIcon = (p: SVGProps<SVGSVGElement>) => (
-  <svg {...base(p)}><path d="M14.5 6.5a4 4 0 0 0 5 5L21 10v4l-9 9-3-3 9-9-3.5-4.5z" /></svg>
+  <svg {...base(p)}>
+    <path d="m5 19 8-8 3 3-8 8z" />
+    <path d="M17 3v4M15 5h4" />
+  </svg>
 );
 
 export const HistoryIcon = (p: SVGProps<SVGSVGElement>) => (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { AgentMessage, Call, ModelInfo, Skill } from "@/api/types";
@@ -56,6 +56,9 @@ export function AssistantPane({
   const [calls, setCalls] = useState<Call[]>([]);
   const [skills, setSkills] = useState<Skill[]>([]);
   const [skill, setSkill] = useState<string>("");
+  const [skillMenuOpen, setSkillMenuOpen] = useState(false);
+  const [modelMenuOpen, setModelMenuOpen] = useState(false);
+  const [modelFilter, setModelFilter] = useState("");
   const [contextIds, setContextIds] = useState<string[]>(
     presetCallId ? [presetCallId] : [],
   );
@@ -348,49 +351,9 @@ export function AssistantPane({
       </div>
 
       <div className="border-t border-border p-3">
-        <div className="mb-2 flex items-center gap-2">
-          <label className="text-xs text-fg-muted" htmlFor="assistant-skill">
-            {t("skill")}
-          </label>
-          <select
-            id="assistant-skill"
-            className="input h-9 min-h-0 flex-1 py-0 text-xs"
-            value={skill}
-            onChange={(e) => setSkill(e.target.value)}
-          >
-            <option value="">{t("skillDefault")}</option>
-            {/* value = SLUG: core's resolver takes /slug, not an id */}
-            {skills.map((s) => (
-              <option key={s.id} value={s.slug}>
-                {skillName(s)}
-              </option>
-            ))}
-          </select>
-          <label className="text-xs text-fg-muted" htmlFor="assistant-model">
-            {t("model")}
-          </label>
-          <select
-            id="assistant-model"
-            className="input h-9 min-h-0 flex-1 py-0 text-xs"
-            value={modelId}
-            onChange={(e) => {
-              setModelId(e.target.value);
-              // its own call, not a field on the profile patch: the model
-              // preference lives on `PUT /v1/models/preferred`, and riding
-              // along in `PATCH /v1/me` would have been dropped in silence
-              void api.setPreferredModel(e.target.value);
-            }}
-          >
-            {models.map((model) => (
-              <option key={model.id} value={model.id}>
-                {modelLabel(model.name)}
-              </option>
-            ))}
-          </select>
-        </div>
         <div className="flex gap-2">
           <input
-            className="input"
+            className="input h-12 min-h-0 flex-1"
             dir={composerDir}
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -406,6 +369,114 @@ export function AssistantPane({
             {t("send")}
           </button>
         </div>
+        {/* The controls live beneath the composer, matching the hub: the
+            question is the primary action and the two choices are compact
+            pills, not a label-and-select form competing with it. */}
+        <div className="mt-2 flex min-w-0 items-center gap-2">
+          <PickerMenu
+            open={skillMenuOpen}
+            onOpen={() => setSkillMenuOpen(true)}
+            onClose={() => setSkillMenuOpen(false)}
+            panelClass="w-56 p-1.5"
+            button={
+              <button
+                type="button"
+                className="tap flex h-8 min-w-0 flex-1 items-center justify-between gap-1.5 rounded-full border border-border px-3 text-xs text-fg-muted hover:border-border-strong hover:text-fg"
+                aria-haspopup="menu"
+                aria-expanded={skillMenuOpen}
+                onClick={() => setSkillMenuOpen((value) => !value)}
+              >
+                <span className="truncate">
+                  {skill ? skillName(skills.find((item) => item.slug === skill) ?? skills[0]!) : t("skillDefault")}
+                </span>
+                <PickerChevron />
+              </button>
+            }
+          >
+            <div role="menu" aria-label={t("skill")}>
+              {[{ slug: "", label: t("skillDefault") }, ...skills.map((item) => ({ slug: item.slug, label: skillName(item) }))].map(
+                (item) => (
+                  <button
+                    key={item.slug || "@default"}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={skill === item.slug}
+                    className={`tap flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm hover:bg-surface-2 ${
+                      skill === item.slug ? "font-semibold text-accent" : "text-fg"
+                    }`}
+                    onClick={() => {
+                      // value = SLUG: core's resolver takes /slug, not an id.
+                      setSkill(item.slug);
+                      setSkillMenuOpen(false);
+                    }}
+                  >
+                    <span className="truncate">{item.label}</span>
+                    {skill === item.slug ? <span aria-hidden>✓</span> : null}
+                  </button>
+                ),
+              )}
+            </div>
+          </PickerMenu>
+
+          <PickerMenu
+            open={modelMenuOpen}
+            onOpen={() => setModelMenuOpen(true)}
+            onClose={() => setModelMenuOpen(false)}
+            align="end"
+            panelClass="w-64 p-1.5"
+            button={
+              <button
+                type="button"
+                className="tap flex h-8 min-w-0 flex-1 items-center justify-between gap-1.5 rounded-full border border-border px-3 text-xs text-fg-muted hover:border-border-strong hover:text-fg"
+                aria-haspopup="menu"
+                aria-expanded={modelMenuOpen}
+                onClick={() => setModelMenuOpen((value) => !value)}
+              >
+                <span className="truncate ltr">
+                  {modelLabel(models.find((item) => item.id === modelId)?.name ?? modelId) || t("modelPicker")}
+                </span>
+                <PickerChevron />
+              </button>
+            }
+          >
+            {models.length > 12 ? (
+              <input
+                className="input mb-1.5 h-9 min-h-0 w-full text-sm"
+                placeholder={t("modelFilter")}
+                value={modelFilter}
+                onChange={(e) => setModelFilter(e.target.value)}
+              />
+            ) : null}
+            <div role="menu" aria-label={t("model")} className="max-h-64 overflow-y-auto">
+              {models
+                .filter((item) => {
+                  const filter = modelFilter.trim().toLowerCase();
+                  return filter === "" || item.id.toLowerCase().includes(filter) || modelLabel(item.name).toLowerCase().includes(filter);
+                })
+                .map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={modelId === item.id}
+                    className={`tap flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm hover:bg-surface-2 ${
+                      modelId === item.id ? "font-semibold text-accent" : "text-fg"
+                    }`}
+                    onClick={() => {
+                      setModelId(item.id);
+                      setModelMenuOpen(false);
+                      // Its own call: model preference does not belong in
+                      // the profile patch and would otherwise be dropped.
+                      void api.setPreferredModel(item.id);
+                    }}
+                  >
+                    <span className="truncate ltr">{modelLabel(item.name)}</span>
+                    {modelId === item.id ? <span aria-hidden>✓</span> : null}
+                  </button>
+                ))}
+            </div>
+          </PickerMenu>
+        </div>
         {/* "Only tool-capable models are listed" REMOVED — it was false.
             Nothing filters on tool support: the catalogue carries no such
             field and core/ reports `tool_capability_filtered: false` rather
@@ -415,5 +486,45 @@ export function AssistantPane({
       </div>
       </aside>
     </ResizablePanel>
+  );
+}
+
+/** The same hover/click picker geometry used by the landing-page assistant. */
+function PickerMenu({
+  open,
+  onOpen,
+  onClose,
+  align = "start",
+  button,
+  panelClass,
+  children,
+}: {
+  open: boolean;
+  onOpen: () => void;
+  onClose: () => void;
+  align?: "start" | "end";
+  button: ReactNode;
+  panelClass: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="relative min-w-0 flex-1" onMouseEnter={onOpen} onMouseLeave={onClose}>
+      {button}
+      {open ? (
+        <div className={`absolute ${align === "start" ? "start-0" : "end-0"} top-full z-30 pt-2`}>
+          <div className={`rounded-xl border border-border bg-surface text-start shadow-lg ${panelClass}`}>
+            {children}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function PickerChevron() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="m6 9 6 6 6-6" />
+    </svg>
   );
 }

@@ -314,6 +314,7 @@
     "skillDefault": "Default skill",
     "model": "Model",
     "modelPicker": "Choose model",
+    "modelFilter": "Filter models…",
     "toolCapableOnly": "Only tool-capable models are listed.",
     "dock": "Dock",
     "undock": "Undock",
