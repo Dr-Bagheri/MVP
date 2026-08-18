@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
+import { useSearchParams } from "next/navigation";
 import { useSkillName } from "@/lib/skillName";
 import { api, BffError } from "@/api/client";
 import type { AuthoredSkill, ModelInfo, Skill, User } from "@/api/types";
@@ -59,7 +60,20 @@ const fromAuthored = (s: AuthoredSkill): Draft => ({
 });
 
 export default function SkillsPage() {
+  return (
+    <Suspense fallback={<SkillsPageFallback />}>
+      <SkillsPageContent />
+    </Suspense>
+  );
+}
+
+function SkillsPageFallback() {
+  return <div className="min-h-40" aria-busy="true" />;
+}
+
+function SkillsPageContent() {
   const t = useTranslations("skills");
+  const searchParams = useSearchParams();
   /* system skills localize (shipped product content); authored names never do */
   const skillName = useSkillName();
   const [me, setMe] = useState<User | null>(null);
@@ -70,8 +84,10 @@ export default function SkillsPage() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const consumedCreateRequest = useRef(false);
 
   const isAdmin = me?.role === "admin" || me?.role === "owner";
+  const createRequested = searchParams.get("new") === "1";
 
   async function load() {
     const [picker, manage] = await Promise.all([api.skills(), api.manageSkills()]);
@@ -85,6 +101,17 @@ export default function SkillsPage() {
     void api.models().then((res) => setModels(res.models));
     void load();
   }, []);
+
+  /* The Workflows launcher delegates creation to this real prompt editor.
+     Wait for identity: otherwise an admin who followed the link could be
+     given a personal draft before their organization-writing ability arrives. */
+  useEffect(() => {
+    if (createRequested && me && !consumedCreateRequest.current) {
+      consumedCreateRequest.current = true;
+      setError(null);
+      setDraft({ ...EMPTY, level: isAdmin ? "org" : "user" });
+    }
+  }, [createRequested, isAdmin, me]);
 
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) =>
     setDraft((d) => (d ? { ...d, [key]: value } : d));

@@ -138,7 +138,6 @@ export const NAV_ICON: Record<string, (p: SVGProps<SVGSVGElement>) => ReactEleme
   hub: HomeIcon,
   history: HistoryIcon,
   search: SearchIcon,
-  agents: ToolsIcon,
   integrations: PlugIcon,
   management: UsersIcon,
   settings: CogIcon,

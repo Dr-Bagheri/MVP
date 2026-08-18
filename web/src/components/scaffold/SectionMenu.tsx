@@ -22,6 +22,10 @@ export interface MenuItem {
   slug: string;
   href: string;
   label: string;
+  /** A currently unavailable destination remains visible but cannot be opened. */
+  disabled?: boolean;
+  /** The current destination is shown, but selecting it again must not reload it. */
+  preventNavigation?: boolean;
   /**
    * Short chip beside the label — for a section that is named but not yet
    * usable. Marked IN the menu, not after you click: finding out a section
@@ -66,22 +70,36 @@ export function SectionMenu({
           <ul>
             {group.items.map((item) => {
               const active = item.slug === activeSlug;
+              const itemClass = `tap my-px flex w-full items-center justify-between rounded-lg px-3 py-[5px] text-menu-item transition-colors ${
+                item.disabled
+                  ? "cursor-not-allowed bg-surface-2 text-fg-muted opacity-55"
+                  : active
+                    ? "bg-surface-2 font-semibold text-fg"
+                    : "text-fg-muted hover:bg-surface-2 hover:text-fg"
+              }`;
               return (
                 <li key={item.slug}>
-                  <Link
-                    href={item.href}
-                    aria-current={active ? "page" : undefined}
-                    className={`tap my-px flex items-center justify-between rounded-lg px-3 py-[5px] text-menu-item transition-colors ${
-                      active
-                        ? "bg-surface-2 font-semibold text-fg"
-                        : "text-fg-muted hover:bg-surface-2 hover:text-fg"
-                    }`}
-                  >
-                    <span className="truncate">{item.label}</span>
-                    {item.badge ? (
-                      <span className="chip bg-surface-2 text-[10px] text-fg-muted">{item.badge}</span>
-                    ) : null}
-                  </Link>
+                  {item.disabled ? (
+                    <button type="button" disabled className={itemClass}>
+                      <span className="truncate">{item.label}</span>
+                      {item.badge ? (
+                        <span className="chip bg-surface-2 text-[10px] text-fg-muted">{item.badge}</span>
+                      ) : null}
+                    </button>
+                  ) : (
+                    <Link
+                      href={item.href}
+                      aria-current={active ? "page" : undefined}
+                      aria-disabled={item.preventNavigation || undefined}
+                      className={itemClass}
+                      onClick={item.preventNavigation ? (event) => event.preventDefault() : undefined}
+                    >
+                      <span className="truncate">{item.label}</span>
+                      {item.badge ? (
+                        <span className="chip bg-surface-2 text-[10px] text-fg-muted">{item.badge}</span>
+                      ) : null}
+                    </Link>
+                  )}
                 </li>
               );
             })}

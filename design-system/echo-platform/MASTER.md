@@ -32,7 +32,7 @@ gradients, no ornate decoration.
 
 ---
 
-**Project:** Echo Platform
+**Project:** Echo — NeurAI Platform app
 **Generated:** 2026-08-12 21:37:00
 **Category:** Analytics Dashboard
 **Design Dials:** Variance 3/10 (Centered / Minimal) | Motion 3/10 (Subtle) | Density 8/10 (Dense / Dashboard)

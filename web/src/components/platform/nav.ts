@@ -28,7 +28,7 @@ export const GITHUB_HREF = process.env.NEXT_PUBLIC_GITHUB_URL ?? "https://github
 /** Primary destinations — the top of the rail. */
 /*
  * The rail is back to the three primaries (user directive, 2026-08-18,
- * second round): History, Search, Agents and Integrations lived here for a
+ * second round): History, Search, Workflows, Prompts and Integrations lived here for a
  * morning and left the same day — they are the HUB's section menu now
  * (AssistantMenu), where the assistant's own destinations belong. The rail
  * names apps and surfaces; the sub-menu names what you do inside one.

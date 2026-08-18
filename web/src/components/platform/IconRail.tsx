@@ -27,7 +27,7 @@ export function IconRail() {
    * "/" would prefix-match every route, so the hub is compared exactly while
    * the rest match by prefix (so /settings/security still lights Settings).
    *
-   * LONGEST match wins, and only it: /management/skills is Agents' entry AND
+   * LONGEST match wins, and only it: /management/skills is Prompts' entry AND
    * Management's prefix — naive per-item matching lit both tiles at once the
    * day the quick-access destinations joined the rail.
    */

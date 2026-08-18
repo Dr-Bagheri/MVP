@@ -1,13 +1,14 @@
-# Echo Platform — Architecture (v1.0 — LOCKED 2026-08-12)
+# NeurAI Platform — Architecture (v1.0 — LOCKED 2026-08-12)
 
-> **Echo (اکو)** — the conversation-intelligence platform: calls and meetings
-> become a searchable organizational memory with an agent that answers, built
-> to be sold. Product behavior: [docs/SPEC.md](docs/SPEC.md). Decisions are
+> **NeurAI Platform** — a Persian-first AI-assistant platform that will host
+> multiple apps. **Echo (اکو)** is its first app: calls and meetings become a
+> searchable organizational memory with an agent that answers, built to be
+> sold. Echo product behavior: [docs/SPEC.md](docs/SPEC.md). Decisions are
 > numbered **M1…** and are **LOCKED (user, 2026-08-12)** — binding on every
 > session; deviations go to the steward and are amended here BEFORE code. Repo:
 > github.com/Dr-Bagheri/MVP (private). Brand family: the existing
 > [Neurai Echo](https://github.com/Dr-Bagheri/Neurai-Echo) Android recorder
-> shares the name; future path unifies it as Echo's mobile capture client.
+> shares the Echo name; future path unifies it as Echo's mobile capture client.
 > Predecessor lessons cited as (neurai-mvp: …) / (Echo app: …).
 
 ---
@@ -621,11 +622,14 @@ transport for agent-side connectors when they arrive.
   route code — declined because it moves an authorization rule out of RLS,
   against M3's premise.
 
-## M18 — Name: Echo (اکو) [user decision]
+## M18 — Name: Echo (اکو) [user decision; revised by M22]
 
-One brand family with the Android recorder — which is referred to as **Echo Mobile** everywhere (docs, conversation, UI copy) so that plain **Echo** always means this platform. Steward flag on record: global
-trademark adjacency (Amazon Echo) — irrelevant to the current market, revisit
-only if Western registration ever matters.
+Echo is one brand family with the Android recorder, which is referred to as
+**Echo Mobile** everywhere (docs, conversation, UI copy). **M22 revises this
+decision's original product scope: NeurAI Platform is the platform and plain
+Echo means its call-intelligence app.** Trademark adjacency (Amazon Echo) is
+irrelevant to the current market; revisit only if Western registration ever
+matters.
 
 ## M19 — Database decisions ratified [steward, 2026-08-12, post-lock amendment]
 

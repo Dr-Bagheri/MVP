@@ -1,18 +1,21 @@
-# Echo Platform (repo: MVP) — session guide
+# NeurAI Platform (repo: MVP) — session guide
 
-The commercial rebuild: calls/meetings → transcripts → versioned summaries →
-an org-scoped AI agent, built to be **sold** — completeness and correctness
-over speed. TypeScript everywhere. Persian-first UI.
+NeurAI is the commercial, Persian-first AI-assistant platform. It will host
+multiple apps; **Echo** is the first: calls/meetings → transcripts → versioned
+summaries → an org-scoped AI agent. Completeness and correctness over speed.
+TypeScript everywhere.
 
-**Naming convention (user-set, use everywhere):** plain **Echo** always means
-THIS platform; the Android recorder app (Desktop/Neurai-Echo repo) is always
-called **Echo Mobile** — in conversation, docs, commits, and UI copy.
+**Naming convention (user-set, use everywhere):** **NeurAI Platform** means
+the platform and its shared shell/surfaces; plain **Echo** means the
+call-intelligence app inside it. The Android recorder app
+(Desktop/Neurai-Echo repo) is always **Echo Mobile** — in conversation, docs,
+commits, and UI copy.
 
 ## Sources of truth
 
-1. **[docs/SPEC.md](docs/SPEC.md)** — WHAT the product does. Product behavior
-   conflicts resolve here.
-2. **[ARCHITECTURE.md](ARCHITECTURE.md)** — HOW it's built; decisions M1–M18,
+1. **[docs/SPEC.md](docs/SPEC.md)** — WHAT Echo, NeurAI Platform's first app,
+   does. Product behavior conflicts resolve here.
+2. **[ARCHITECTURE.md](ARCHITECTURE.md)** — HOW it's built; decisions M1–M29,
    **LOCKED (user, 2026-08-12)** — binding on every session. Deviations go to
    the steward first and are amended in the document BEFORE code.
 

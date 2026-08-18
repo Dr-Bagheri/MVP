@@ -11,6 +11,7 @@ import { personName, modelLabel } from "@/lib/format";
 import { useDictation } from "@/lib/dictation";
 import { useSkillName, useSkillStarters } from "@/lib/skillName";
 import { ConversationThread } from "./ConversationThread";
+import { useAssistantConversation } from "./AssistantConversationState";
 import { EchoMark, MicIcon, PlusIcon, SendIcon, ToolsIcon } from "./icons";
 
 /**
@@ -44,6 +45,7 @@ export function Hub() {
   
   const locale = useLocale();
   const router = useRouter();
+  const { setStarted } = useAssistantConversation();
   const [me, setMe] = useState<User | null>(null);
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [input, setInput] = useState("");
@@ -117,6 +119,7 @@ export function Hub() {
    */
   const params = useSearchParams();
   const resumeId = params.get("c");
+  const promptSlug = params.get("prompt");
 
   useEffect(() => {
     void api.me().then(setMe);
@@ -139,6 +142,15 @@ export function Hub() {
     void api.assistantTools().then(setToolNames).catch(() => setToolNames([]));
   }, []);
 
+  /* A workflow launcher supplies the prompt by its server-owned slug. Never
+     accept an invented value: an unknown slug would turn a selected card into
+     a later 400 when the user sends their question. */
+  useEffect(() => {
+    if (promptSlug && skills.some((candidate) => candidate.slug === promptSlug)) {
+      setSkill(promptSlug);
+    }
+  }, [promptSlug, skills]);
+
   /**
    * The Sources search — live, debounced, against the real index. Results
    * are calls the caller can already see (RLS filters the index by
@@ -146,8 +158,9 @@ export function Hub() {
    */
   useEffect(() => {
     const q = sourceQuery.trim();
-    if (q.length < 2) {
+    if (q.length === 0) {
       setSourceHits([]);
+      setSourceBusy(false);
       return;
     }
     setSourceBusy(true);
@@ -264,6 +277,14 @@ export function Hub() {
 
   const idle = messages.length === 0;
 
+  /* A draft is not a conversation. The first submitted turn is; this update
+     reaches the sibling sub-menu immediately, including while its answer is
+     streaming. A resumed conversation is already a record even if its
+     messages have not finished loading. */
+  useEffect(() => {
+    setStarted(Boolean(resumeId) || messages.length > 0);
+  }, [messages.length, resumeId, setStarted]);
+
   /** One reducer for ask and regenerate — same events, same thread. */
   async function consume(stream: AsyncGenerator<AgentEvent>, replyId: string) {
     for await (const event of stream) {
@@ -351,6 +372,11 @@ export function Hub() {
   async function send() {
     const typed = input.trim();
     if (typed === "" || streaming) return;
+    // The first submitted turn makes this a live conversation immediately.
+    // Do not wait for React's message effect or the provider response: the
+    // sibling menu and the skill picker must lock in the same interaction.
+    setStarted(true);
+    setSkillOpen(false);
     setInput("");
     setAskError(null);
 
@@ -444,14 +470,6 @@ export function Hub() {
     URL.revokeObjectURL(url);
   }
 
-  function newConversation() {
-    sessionId.current = undefined;
-    setMessages([]);
-    setFeedback({});
-    setShared(false);
-    router.push("/");
-  }
-
   const headerBtn =
     "tap flex h-8 items-center gap-1.5 rounded-full border border-border px-3 text-xs text-fg-muted hover:border-border-strong hover:text-fg";
 
@@ -476,9 +494,6 @@ export function Hub() {
           <Link href="/conversations" className={headerBtn}>
             {t("history")}
           </Link>
-          <button type="button" className={headerBtn} onClick={newConversation}>
-            {t("newConversation")}
-          </button>
           {messages.length > 0 && sessionId.current ? (
             <>
               <button
@@ -701,17 +716,6 @@ export function Hub() {
                   type="button"
                   role="menuitem"
                   className="tap flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg hover:bg-surface-2"
-                  onClick={() => {
-                    setCreateOpen(false);
-                    newConversation();
-                  }}
-                >
-                  {t("newConversation")}
-                </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="tap flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg hover:bg-surface-2"
                   onClick={() => router.push("/echo")}
                 >
                   {t("createRecord")}
@@ -792,11 +796,9 @@ export function Hub() {
                       );
                     })}
                   </ul>
-                ) : sourceQuery.trim().length >= 2 ? (
+                ) : sourceQuery.trim().length > 0 ? (
                   <p className="px-2 py-1.5 text-xs text-fg-muted">{t("sourcesNoHits")}</p>
-                ) : (
-                  <p className="px-2 py-1.5 text-xs text-fg-muted">{t("sourcesHint")}</p>
-                )}
+                ) : null}
                 <hr className="my-1.5 border-border" />
                 <button
                   type="button"
@@ -809,13 +811,6 @@ export function Hub() {
                   <PlusIcon width={14} height={14} />
                   {t("addFile")}
                 </button>
-                <Link
-                  href="/echo"
-                  className="tap flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-fg hover:bg-surface-2"
-                >
-                  <EchoMark size={16} />
-                  {t("sourcesMeetings")}
-                </Link>
                 <hr className="my-1.5 border-border" />
                 {/* REAL web search — the ask dispatches the model's :online
                     variant. A switch, because it is a per-conversation stance,
@@ -882,6 +877,7 @@ export function Hub() {
             "let the server resolve", rendered as the saved-choice line.
           */}
           {skills.length > 0 ? (
+            idle ? (
             /* the Sources anatomy on the skill picker (user directive):
                hover opens, leaving closes, the active row says so */
             <HoverMenu
@@ -930,6 +926,19 @@ export function Hub() {
                 )}
               </div>
             </HoverMenu>
+            ) : (
+              <button
+                type="button"
+                className={`${headerBtn} cursor-not-allowed opacity-55`}
+                disabled
+                aria-label={t("skillPicker")}
+              >
+                <span className="max-w-[9rem] truncate">
+                  {skill ? skillName(skills.find((s) => s.slug === skill) ?? skills[0]!) : t("skillDefault")}
+                </span>
+                <Chevron />
+              </button>
+            )
           ) : null}
           {models.length > 0 ? (
             <HoverMenu
