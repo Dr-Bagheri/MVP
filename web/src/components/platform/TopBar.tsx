@@ -1,14 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useLocale, useTranslations } from "next-intl";
+import { useLocale } from "next-intl";
 import { usePathname, useRouter } from "@/i18n/routing";
 import type { User } from "@/api/types";
 import { AvatarMenu } from "./AvatarMenu";
 import { formatDate } from "@/lib/format";
 import { useTimezonePreference } from "@/lib/usePreferences";
 import { Breadcrumbs } from "./Breadcrumbs";
-import { SearchIcon } from "./icons";
 
 /**
  * The platform top bar (M22): en/fa switcher · global search · avatar.
@@ -55,7 +54,6 @@ function Clock() {
 }
 
 export function TopBar({ me }: { me: User | null }) {
-  const t = useTranslations("platform");
   const locale = useLocale();
   const router = useRouter();
   const pathname = usePathname();
@@ -85,16 +83,9 @@ export function TopBar({ me }: { me: User | null }) {
 
       <Clock />
 
-      <button
-        type="button"
-        /* it LOOKED like a search box and did nothing — the missing onClick
-           was the whole "search does not work" report */
-        onClick={() => router.push("/search")}
-        className="tap flex h-9 items-center gap-2 rounded-lg border border-border bg-surface px-3 text-sm text-fg-muted transition-colors hover:text-fg"
-      >
-        <SearchIcon width={17} height={17} />
-        <span className="hidden md:inline">{t("search")}</span>
-      </button>
+      {/* Search LEFT the top bar (user directive, 2026-08-18) — it lives in
+          the left rail with the other destinations now. This reverses the
+          earlier move INTO the bar, by the same authority that made it. */}
 
       <div className="hidden overflow-hidden rounded-lg border border-border md:flex">
         {(["fa", "en"] as const).map((l) => (

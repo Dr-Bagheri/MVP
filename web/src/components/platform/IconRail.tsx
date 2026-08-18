@@ -26,14 +26,25 @@ export function IconRail() {
   /*
    * "/" would prefix-match every route, so the hub is compared exactly while
    * the rest match by prefix (so /settings/security still lights Settings).
+   *
+   * LONGEST match wins, and only it: /management/skills is Agents' entry AND
+   * Management's prefix — naive per-item matching lit both tiles at once the
+   * day the quick-access destinations joined the rail.
    */
-  const isActive = (href: string) =>
-    href === "/" ? pathname === "/" : pathname.startsWith(href);
+  const candidates = [...NAV_PRIMARY, ...NAV_UTILITY]
+    .map((n) => n.href)
+    .filter((href) => (href === "/" ? pathname === "/" : pathname.startsWith(href)));
+  const activeHref = candidates.sort((a, b) => b.length - a.length)[0];
+  const isActive = (href: string) => href === activeHref;
+
+  /* the hub's shortcuts, surfaced where the destinations now live */
+  const SHORTCUT: Record<string, string> = { agents: "Ctrl+⇧+A", integrations: "Ctrl+⇧+I" };
 
   const item = (nav: NavItem) => {
     const Icon = NAV_ICON[nav.key];
     const active = isActive(nav.href);
     const external = nav.href.startsWith("http") || nav.href === "#";
+    const label = SHORTCUT[nav.key] ? `${t(nav.key)} (${SHORTCUT[nav.key]})` : t(nav.key);
     const content = (
       <>
         {nav.key === "echo" ? <EchoMark size={20} /> : Icon ? <Icon width={18} height={18} /> : null}
@@ -54,7 +65,7 @@ export function IconRail() {
         href={nav.href}
         target="_blank"
         rel="noreferrer noopener"
-        title={t(nav.key)}
+        title={label}
         className={className}
       >
         {content}
@@ -64,7 +75,7 @@ export function IconRail() {
         key={nav.key}
         href={nav.href}
         aria-current={active ? "page" : undefined}
-        title={t(nav.key)}
+        title={label}
         className={className}
       >
         {content}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import Image from "next/image";
 import { useLocale, useTranslations } from "next-intl";
 import { api, BffError } from "@/api/client";
@@ -92,6 +92,10 @@ export function Hub() {
    * conversation, never a silent ambient behaviour.
    */
   const [webSearch, setWebSearch] = useState(false);
+  /** The skill and model pickers — Sources-style hover menus, not selects. */
+  const [skillOpen, setSkillOpen] = useState(false);
+  const [modelOpen, setModelOpen] = useState(false);
+  const [modelFilter, setModelFilter] = useState("");
   const promptRef = useRef<HTMLInputElement>(null);
   /** The mic dictates into the composer (it is NOT Echo's recorder). */
   const dictation = useDictation(locale === "fa" ? "fa-IR" : "en-US", (text) =>
@@ -666,26 +670,30 @@ export function Hub() {
               if (file) void attach(file);
             }}
           />
-          {/* CREATE — the reference hub's first pill, every row a real act */}
-          <div className="relative">
-            <button
-              type="button"
-              className={headerBtn}
-              aria-expanded={createOpen}
-              aria-haspopup="menu"
-              onClick={() => {
-                setCreateOpen((v) => !v);
-                setSourcesOpen(false);
-              }}
-            >
-              <PlusIcon width={14} height={14} />
-              {t("create")}
-            </button>
-            {createOpen ? (
-              <div
-                role="menu"
-                className="absolute start-0 top-full z-30 mt-2 w-60 rounded-xl border border-border bg-surface p-1.5 text-start shadow-lg"
+          {/* CREATE — the reference hub's first pill, every row a real act.
+              Hover-driven like every composer menu (user directive). */}
+          <HoverMenu
+            open={createOpen}
+            onOpen={() => {
+              setCreateOpen(true);
+              setSourcesOpen(false);
+            }}
+            onClose={() => setCreateOpen(false)}
+            panelClass="w-60 p-1.5"
+            button={
+              <button
+                type="button"
+                className={headerBtn}
+                aria-expanded={createOpen}
+                aria-haspopup="menu"
+                onClick={() => setCreateOpen((v) => !v)}
               >
+                <PlusIcon width={14} height={14} />
+                {t("create")}
+              </button>
+            }
+          >
+            <div role="menu">
                 <button
                   type="button"
                   role="menuitem"
@@ -721,32 +729,37 @@ export function Hub() {
                 >
                   {t("createSkill")}
                 </button>
-              </div>
-            ) : null}
-          </div>
+            </div>
+          </HoverMenu>
 
           {/* SOURCES — attach real context: search meetings, add a text file.
               What the reference fakes as toggles, this menu does as acts. */}
-          <div className="relative">
-            <button
-              type="button"
-              className={headerBtn}
-              aria-expanded={sourcesOpen}
-              aria-haspopup="menu"
-              onClick={() => {
-                setSourcesOpen((v) => !v);
-                setCreateOpen(false);
-              }}
-            >
-              {t("sources")}
-              {contextCalls.length > 0 ? (
-                <span className="rounded-full bg-accent-soft px-1.5 text-[10px] font-semibold text-accent">
-                  {contextCalls.length}
-                </span>
-              ) : null}
-            </button>
-            {sourcesOpen ? (
-              <div className="absolute start-0 top-full z-30 mt-2 w-[19rem] rounded-xl border border-border bg-surface p-2 text-start shadow-lg">
+          <HoverMenu
+            open={sourcesOpen}
+            onOpen={() => {
+              setSourcesOpen(true);
+              setCreateOpen(false);
+            }}
+            onClose={() => setSourcesOpen(false)}
+            panelClass="w-[19rem] p-2"
+            button={
+              <button
+                type="button"
+                className={headerBtn}
+                aria-expanded={sourcesOpen}
+                aria-haspopup="menu"
+                onClick={() => setSourcesOpen((v) => !v)}
+              >
+                {t("sources")}
+                {contextCalls.length > 0 ? (
+                  <span className="rounded-full bg-accent-soft px-1.5 text-[10px] font-semibold text-accent">
+                    {contextCalls.length}
+                  </span>
+                ) : null}
+              </button>
+            }
+          >
+            <div>
                 <input
                   autoFocus
                   className="input mb-1.5 h-9 w-full text-sm"
@@ -825,47 +838,40 @@ export function Hub() {
                     />
                   </span>
                 </button>
-              </div>
-            ) : null}
-          </div>
-          <div
-            className="relative"
-            /* hover-driven (user directive): the list appears while the
-               mouse is over the button or the panel, and leaves with it.
-               Click still toggles, which is what a touch screen has. */
-            onMouseEnter={() => setToolsOpen(true)}
-            onMouseLeave={() => setToolsOpen(false)}
+            </div>
+          </HoverMenu>
+          <HoverMenu
+            open={toolsOpen}
+            onOpen={() => setToolsOpen(true)}
+            onClose={() => setToolsOpen(false)}
+            panelClass="w-max max-w-[min(88vw,52rem)] overflow-x-auto p-3"
+            button={
+              <button
+                type="button"
+                className={headerBtn}
+                aria-expanded={toolsOpen}
+                onClick={() => setToolsOpen((v) => !v)}
+              >
+                <ToolsIcon width={14} height={14} />
+                {t("tools")}
+              </button>
+            }
           >
-            <button
-              type="button"
-              className={headerBtn}
-              aria-expanded={toolsOpen}
-              onClick={() => setToolsOpen((v) => !v)}
-            >
-              <ToolsIcon width={14} height={14} />
-              {t("tools")}
-            </button>
-            {toolsOpen ? (
-              /* the assistant's REAL reach, from the server's own registry —
-                 facts about what a question can trigger, not switches.
-                 Opens DOWNWARD (user directive): upward covered the greeting
-                 and read as a menu escaping the screen. */
-              <div className="absolute start-0 top-full z-30 mt-2 w-max max-w-[min(88vw,52rem)] overflow-x-auto rounded-xl border border-border bg-surface p-3 text-start shadow-lg">
-                <p className="mb-2 text-xs font-semibold text-fg">{t("toolsTitle")}</p>
-                {/* grows SIDEWAYS, never down (user directive): four rows,
-                    then a new column per four tools — a growing registry must
-                    widen the panel, not push it past the viewport */}
-                <ul className="grid grid-flow-col grid-rows-4 gap-x-8 gap-y-1.5">
-                  {toolNames.map((name) => (
-                    <li key={name} className="w-52 text-xs leading-5">
-                      <span className="ltr font-mono text-fg">{name}</span>
-                      <span className="block text-fg-muted">{t(`tool_${name}`)}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-          </div>
+            {/* the assistant's REAL reach, from the server's own registry —
+                facts about what a question can trigger, not switches. Opens
+                DOWNWARD; grows SIDEWAYS, never down (user directives): four
+                rows, then a new column per four tools — a growing registry
+                must widen the panel, not push it past the viewport */}
+            <p className="mb-2 text-xs font-semibold text-fg">{t("toolsTitle")}</p>
+            <ul className="grid grid-flow-col grid-rows-4 gap-x-8 gap-y-1.5">
+              {toolNames.map((name) => (
+                <li key={name} className="w-52 text-xs leading-5">
+                  <span className="ltr font-mono text-fg">{name}</span>
+                  <span className="block text-fg-muted">{t(`tool_${name}`)}</span>
+                </li>
+              ))}
+            </ul>
+          </HoverMenu>
           <span className="flex-1" />
           {/*
             The model choice (M5 precedence: skill pin → this explicit choice
@@ -873,39 +879,113 @@ export function Hub() {
             "let the server resolve", rendered as the saved-choice line.
           */}
           {skills.length > 0 ? (
-            <label className="flex items-center gap-1">
-              <span className="sr-only">{t("skillPicker")}</span>
-              <select
-                className="select-pill max-w-[10rem]"
-                value={skill}
-                onChange={(e) => setSkill(e.target.value)}
-              >
-                <option value="">{t("skillDefault")}</option>
-                {/* value = SLUG: core's resolver takes /slug, not an id —
-                    an id here would 400 as "unknown skill" on every ask */}
-                {skills.map((s) => (
-                  <option key={s.id} value={s.slug}>
-                    {skillName(s)}
-                  </option>
-                ))}
-              </select>
-            </label>
+            /* the Sources anatomy on the skill picker (user directive):
+               hover opens, leaving closes, the active row says so */
+            <HoverMenu
+              open={skillOpen}
+              onOpen={() => setSkillOpen(true)}
+              onClose={() => setSkillOpen(false)}
+              align="end"
+              panelClass="w-56 p-1.5"
+              button={
+                <button
+                  type="button"
+                  className={headerBtn}
+                  aria-haspopup="menu"
+                  aria-expanded={skillOpen}
+                  onClick={() => setSkillOpen((v) => !v)}
+                >
+                  <span className="max-w-[9rem] truncate">
+                    {skill ? skillName(skills.find((s) => s.slug === skill) ?? skills[0]!) : t("skillDefault")}
+                  </span>
+                  <Chevron />
+                </button>
+              }
+            >
+              <div role="menu" aria-label={t("skillPicker")}>
+                {[{ slug: "", label: t("skillDefault") }, ...skills.map((s) => ({ slug: s.slug, label: skillName(s) }))].map(
+                  (row) => (
+                    <button
+                      key={row.slug || "@default"}
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={skill === row.slug}
+                      className={`tap flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm hover:bg-surface-2 ${
+                        skill === row.slug ? "font-semibold text-accent" : "text-fg"
+                      }`}
+                      /* value = SLUG: core's resolver takes /slug, not an id —
+                         an id here would 400 as "unknown skill" on every ask */
+                      onClick={() => {
+                        setSkill(row.slug);
+                        setSkillOpen(false);
+                      }}
+                    >
+                      <span className="truncate">{row.label}</span>
+                      {skill === row.slug ? <span aria-hidden>✓</span> : null}
+                    </button>
+                  ),
+                )}
+              </div>
+            </HoverMenu>
           ) : null}
           {models.length > 0 ? (
-            <label className="flex items-center gap-1">
-              <span className="sr-only">{t("modelPicker")}</span>
-              <select
-                className="select-pill max-w-[11rem]"
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-              >
-                {models.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {modelLabel(m.name)}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <HoverMenu
+              open={modelOpen}
+              onOpen={() => setModelOpen(true)}
+              onClose={() => setModelOpen(false)}
+              align="end"
+              panelClass="w-72 p-1.5"
+              button={
+                <button
+                  type="button"
+                  className={headerBtn}
+                  aria-haspopup="menu"
+                  aria-expanded={modelOpen}
+                  onClick={() => setModelOpen((v) => !v)}
+                >
+                  <span className="max-w-[10rem] truncate ltr">
+                    {modelLabel(models.find((m) => m.id === model)?.name ?? model)}
+                  </span>
+                  <Chevron />
+                </button>
+              }
+            >
+              {models.length > 12 ? (
+                /* the catalogue is hundreds of rows — a picker without a
+                   filter is a scroll test, not a choice */
+                <input
+                  className="input mb-1.5 h-9 w-full text-sm"
+                  placeholder={t("modelFilter")}
+                  value={modelFilter}
+                  onChange={(e) => setModelFilter(e.target.value)}
+                />
+              ) : null}
+              <div role="menu" aria-label={t("modelPicker")} className="max-h-64 overflow-y-auto">
+                {models
+                  .filter((m) => {
+                    const f = modelFilter.trim().toLowerCase();
+                    return f === "" || m.id.toLowerCase().includes(f) || modelLabel(m.name).toLowerCase().includes(f);
+                  })
+                  .map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={model === m.id}
+                      className={`tap flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm hover:bg-surface-2 ${
+                        model === m.id ? "font-semibold text-accent" : "text-fg"
+                      }`}
+                      onClick={() => {
+                        setModel(m.id);
+                        setModelOpen(false);
+                      }}
+                    >
+                      <span className="truncate ltr">{modelLabel(m.name)}</span>
+                      {model === m.id ? <span aria-hidden>✓</span> : null}
+                    </button>
+                  ))}
+              </div>
+            </HoverMenu>
           ) : null}
         </div>
       </div>
@@ -969,42 +1049,62 @@ export function Hub() {
         </section>
       ) : null}
 
-      {/* QUICK ACCESS — the reference sidebar's entries, mapped to surfaces
-          that exist: agents = our skills, integrations = the gateway. The
-          two shortcuts are REAL (registered above); rows that would point at
-          nothing (workflows, docs, web search) are absent, not disabled. */}
-      {idle ? (
-        <section className="mt-6 w-full max-w-[660px] text-start" aria-label={t("quickAccess")}>
-          <p className="mb-1.5 px-1 text-group-label font-medium text-fg-subtle">
-            {t("quickAccess")}
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <button type="button" className={headerBtn} onClick={newConversation}>
-              <PlusIcon width={14} height={14} />
-              {t("newConversation")}
-            </button>
-            <Link href="/search" className={headerBtn}>
-              {t("quickSearch")}
-            </Link>
-            <Link href="/echo" className={headerBtn}>
-              {t("quickMeetings")}
-            </Link>
-            <Link href="/management/skills" className={headerBtn}>
-              {t("quickAgents")}
-              <kbd className="rounded bg-surface-2 px-1 text-[10px] text-fg-subtle ltr">
-                Ctrl+⇧+A
-              </kbd>
-            </Link>
-            <Link href="/management/connectors" className={headerBtn}>
-              {t("quickIntegrations")}
-              <kbd className="rounded bg-surface-2 px-1 text-[10px] text-fg-subtle ltr">
-                Ctrl+⇧+I
-              </kbd>
-            </Link>
-          </div>
-        </section>
-      ) : null}
-
+      {/* Quick access LEFT the hub's face (user directive, 2026-08-18): its
+          destinations live in the left rail beside History now. The
+          Ctrl+⇧+A / Ctrl+⇧+I shortcuts stay registered above, and the rail
+          tooltips carry them. */}
     </div>
+  );
+}
+
+/**
+ * A hover-driven menu in the Sources panel's clothes (user directive,
+ * 2026-08-18: every composer menu opens when the mouse arrives and leaves
+ * with it; the skill and model pickers stop being native selects).
+ *
+ * The `pt-2` wrapper is the load-bearing part: the visual gap between pill
+ * and panel belongs to the PANEL's box, so crossing it never fires
+ * mouseleave. A margin there instead closes the menu halfway to the first
+ * row. Click still toggles, which is what a touch screen has.
+ */
+function HoverMenu({
+  open,
+  onOpen,
+  onClose,
+  align = "start",
+  button,
+  panelClass,
+  children,
+}: {
+  open: boolean;
+  onOpen: () => void;
+  onClose: () => void;
+  align?: "start" | "end";
+  button: ReactNode;
+  panelClass: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="relative" onMouseEnter={onOpen} onMouseLeave={onClose}>
+      {button}
+      {open ? (
+        <div className={`absolute ${align === "start" ? "start-0" : "end-0"} top-full z-30 pt-2`}>
+          <div
+            className={`rounded-xl border border-border bg-surface text-start shadow-lg ${panelClass}`}
+          >
+            {children}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** The pickers' chevron — the one visual the native select used to provide. */
+function Chevron() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="m6 9 6 6 6-6" />
+    </svg>
   );
 }

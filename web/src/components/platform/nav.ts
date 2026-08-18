@@ -30,12 +30,20 @@ export const NAV_PRIMARY: readonly NavItem[] = [
   { href: "/", key: "hub", inBar: true },
   { href: "/echo", key: "echo", inBar: true },
   /*
-   * History (user directive, 2026-08-18): the conversation list moves off the
-   * hub's face and into the left menu, renamed. `inBar: false` keeps M22's
-   * four-slot bar; the More sheet carries it on a phone (it lists every
-   * non-bar item — a rail entry a phone cannot reach is the /fa/echo class).
+   * History + the former quick-access destinations (user directives,
+   * 2026-08-18): the hub's face empties into the left menu. `inBar: false`
+   * keeps M22's four-slot bar; the More sheet carries every non-bar item on
+   * a phone (a rail entry a phone cannot reach is the /fa/echo class).
+   *
+   * Deliberately NOT here from the quick-access row: "New conversation"
+   * (that is the Hub entry — a fresh "/" is a fresh conversation) and
+   * "Meetings" (that is the Echo entry). A second entry to the same href
+   * is the duplicate the distinct-href test refuses.
    */
   { href: "/conversations", key: "history", inBar: false },
+  { href: "/search", key: "search", inBar: false },
+  { href: "/management/skills", key: "agents", inBar: false },
+  { href: "/management/connectors", key: "integrations", inBar: false },
   { href: "/management", key: "management", inBar: true },
 ];
 

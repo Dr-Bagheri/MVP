@@ -126,9 +126,20 @@ export const EchoMark = ({ size = 22 }: { size?: number }) => (
 );
 
 /** Maps a nav key to its glyph. Echo is the mark, not an icon. */
+export const PlugIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden {...p}>
+    <path d="M9 7V3M15 7V3" />
+    <path d="M6 7h12v4a6 6 0 0 1-6 6 6 6 0 0 1-6-6V7z" />
+    <path d="M12 17v4" />
+  </svg>
+);
+
 export const NAV_ICON: Record<string, (p: SVGProps<SVGSVGElement>) => ReactElement> = {
   hub: HomeIcon,
   history: HistoryIcon,
+  search: SearchIcon,
+  agents: ToolsIcon,
+  integrations: PlugIcon,
   management: UsersIcon,
   settings: CogIcon,
   help: HelpIcon,
