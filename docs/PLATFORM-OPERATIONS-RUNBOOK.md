@@ -226,6 +226,42 @@ for Production → then Deployments → Redeploy (or push to `main`).
 
 ---
 
+## 7b. Deployment record — 2026-08-20 (console edit + soft-delete/restore)
+
+Feature commit **`c26344a`** ("Add edit + soft-delete/restore to the
+platform-root console"). Shipped a metadata edit + 7-day soft-delete/restore
+for orgs and users, entirely inside the M32 content wall.
+
+- Applied migrations **0068** (soft-delete columns on `echo.org`/`echo.app_user`
+  + six new `platform_audit_action` enum values) and **0069** (six
+  `security definer` functions: `platform_update_org`, `platform_update_user`,
+  `platform_soft_delete_org`, `platform_restore_org`, `platform_soft_delete_user`,
+  `platform_restore_user`; executable to `echo_app` only). Ledger now at `0069`.
+  Migration run by the user with the Session/owner connection (LF-normalize +
+  `check_function_bodies=off` per §4). **Verified** against the production
+  catalogue as the `echo_app` role: 6/6 columns and 6/6 functions present.
+- Deployed core `c26344a` (git-archive → `/opt/neurai/app`, `chown`,
+  `--experimental-strip-types --check` on `main.ts`). **No `pnpm install`**:
+  no dependency/lockfile change in the range, so `node_modules` was untouched;
+  only `neurai-api` restarted (`platform.ts`/`server.ts` are api-only).
+  **Verified:** `/health` 200; the four new routes (`DELETE`/`POST …/restore`
+  on org + user) return **401** (wired behind auth) not 404, on localhost and
+  publicly via `api.neurai.pt`.
+- Pushed `c26344a` to `main`. **Web did NOT come up:** the production alias
+  `mvp-web-beta.vercel.app` returned **`DEPLOYMENT_NOT_FOUND`** before and after
+  the push (polled ~6 min, never recovered). A `git push` cannot take a site
+  down, so the alias was already detached from a live deployment. Resolve in the
+  Vercel dashboard: confirm the GitHub→Vercel auto-deploy of `main` produced a
+  production deployment from `c26344a`, then ensure `mvp-web-beta.vercel.app` is
+  assigned to it (Project → Domains), or use whatever URL the project shows as
+  **Production**. No Vercel CLI/token exists on the operator machine — this step
+  is dashboard-only.
+- The backend feature is fully live regardless of the web alias; once web serves
+  again, hard-refresh `/fa/platform` to see Edit / Delete (7-day) / Recently
+  deleted + Restore on both tabs.
+
+---
+
 ## 8. What never goes in this file (or any log)
 
 Connection strings, DB passwords, API keys, service keys, JWT secrets, the
