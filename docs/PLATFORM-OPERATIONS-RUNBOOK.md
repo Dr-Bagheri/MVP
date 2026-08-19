@@ -211,8 +211,15 @@ for Production → then Deployments → Redeploy (or push to `main`).
   `neurai-api` + `neurai-worker`.
 - Verified: `https://api.neurai.pt/health` → 200; `/v1/platform/access` →
   401 (route exists, was 404 pre-deploy); an invented route → 404 (control).
-- **Pending (operator/user actions):** set `CORE_API_URL` on Vercel + redeploy
-  (§6); claim root at `/fa/platform`; then remove the bootstrap selector (§5).
+- **Root claimed** by `neurai.git.acc@gmail.com`; the bootstrap selector was
+  then **removed** from `core.env` and `neurai-api` restarted
+  (`/v1/platform/bootstrap` now returns 404 — the door is closed; the operator
+  row persists in the DB). `CORE_API_URL=https://api.neurai.pt` was set on
+  Vercel and the web redeployed.
+- **Console made fully operable** (commit `8267b18`): every control (org
+  suspend/reactivate, user disable/reactivate, grant/revoke root) has its own
+  confirm-and-reason dialog; tabbed Organizations/Users/Audit; overview,
+  filters, humanized metadata-only audit log. Privacy boundary unchanged.
 - **Follow-up owed:** apply `0067` to the **dev** database too (its `0066`
   bootstrap function has the same latent citext bug); consider a `.gitattributes`
   LF pin for `db/migrations/*.sql` to end the CRLF checksum friction.
