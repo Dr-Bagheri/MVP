@@ -84,6 +84,8 @@ export const TRAIL: Readonly<Record<string, TrailEntry>> = {
   "/conversations": { label: "conversations.title", parent: "/" },
   "/agents": { label: "platform.agents", parent: "/" },
   "/workflows": { label: "platform.workflows", parent: "/" },
+  /** M32's separate metadata-only operator console. */
+  "/platform": { label: "platformRoot.title", parent: "/" },
   "/profile": { label: "profile.title", parent: "/" },
   "/help": { label: "platform.help", parent: "/" },
   /** Help's guide sections (2026-08-16) — same anatomy as Settings/Echo. */

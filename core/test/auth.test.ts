@@ -136,4 +136,22 @@ describe("auth — token proves who, the DB decides what", () => {
     const admin = createAuth({ db: dbReturning(activeRow({ role: "admin" })), jwtSecret: SECRET });
     expect((await admin.requireAdmin(request)).role).toBe("admin");
   });
+
+  it("platform-root is a separate database check and can recover a suspended organization", async () => {
+    const request = { headers: { authorization: `Bearer ${sign({ sub: ALICE, exp: future() })}` } };
+    const root = createAuth({
+      db: dbReturning(activeRow({ org_status: "suspended" })),
+      jwtSecret: SECRET,
+      // The real callback runs echo.actor_is_platform_root() under RLS. A
+      // function here keeps this unit test about the auth boundary rather than
+      // pretending a hand-written row is the policy composition.
+      isPlatformRoot: async () => true,
+    });
+    await expect(root.requirePlatformRoot(request)).resolves.toMatchObject({ userId: ALICE });
+
+    const nonRoot = createAuth({
+      db: dbReturning(activeRow()), jwtSecret: SECRET, isPlatformRoot: async () => false,
+    });
+    await expect(nonRoot.requirePlatformRoot(request)).rejects.toBeInstanceOf(NotActivatedError);
+  });
 });

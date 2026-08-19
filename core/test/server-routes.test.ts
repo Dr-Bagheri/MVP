@@ -70,6 +70,8 @@ const apiKeyRow = {
 
 interface DbShape {
   userStatus?: string; userRole?: string; orgStatus?: string;
+  /** M32: result of the database-owned platform-root predicate. */
+  platformRoot?: boolean;
   callVisible?: boolean; summaryVisible?: boolean;
   keyValid?: boolean; keyAllowsAssistant?: boolean;
   preferredModel?: string | null;
@@ -84,6 +86,7 @@ interface DbShape {
 
 function fakeDb({
   userStatus = "active", userRole = "member", orgStatus = "active",
+  platformRoot = false,
   callVisible = true, summaryVisible = true,
   keyValid = true, keyAllowsAssistant = false, preferredModel = null,
   registerFails = false, userMissing = false,
@@ -100,6 +103,16 @@ function fakeDb({
       const answer = (rows: unknown[]): never[] =>
         Object.assign([...rows], { count: rows.length || 1 }) as unknown as never[];
       (tx as unknown as { unsafe: SqlTx["unsafe"] }).unsafe = (async (sql: string) => {
+        if (sql.includes("actor_is_platform_root")) {
+          return [{ is_platform_root: platformRoot }];
+        }
+        if (sql.includes("organization_total")) {
+          return [{
+            current_user_id: ALICE,
+            organization_total: "2", organization_active: "1", organization_suspended: "1",
+            user_total: "3", user_active: "2", user_pending: "0", user_disabled: "1", platform_roots: "1",
+          }];
+        }
         if (sql.includes("resolve_api_key")) {
           return keyValid ? [{ actor_id: ALICE, allow_assistant: keyAllowsAssistant }] : [];
         }
@@ -178,6 +191,27 @@ const server = (db = fakeDb()) =>
   buildServer({ db, jwtSecret: SECRET, tools: [], toolDeps: {} });
 
 const authed = { authorization: `Bearer ${token()}` };
+
+describe("M32 platform-root routes", () => {
+  it("denies an ordinary active member and exposes only metadata to a root", async () => {
+    const denied = await server(fakeDb()).inject({
+      method: "GET", url: "/v1/platform/overview", headers: authed,
+    });
+    expect(denied.statusCode).toBe(403);
+    expect(denied.json()).toEqual({ error: "forbidden", kind: "forbidden" });
+
+    const granted = await server(fakeDb({ platformRoot: true, orgStatus: "suspended" })).inject({
+      method: "GET", url: "/v1/platform/overview", headers: authed,
+    });
+    expect(granted.statusCode).toBe(200);
+    expect(granted.json()).toEqual({
+      current_user_id: ALICE,
+      organizations: { total: 2, active: 1, suspended: 1 },
+      users: { total: 3, active: 2, pending: 0, disabled: 1 },
+      platform_roots: 1,
+    });
+  });
+});
 
 /**
  * Registration (M15).

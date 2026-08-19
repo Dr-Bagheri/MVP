@@ -134,6 +134,12 @@ export async function main(): Promise<void> {
     storageUrl: process.env.SUPABASE_URL,
     storageServiceKey: process.env.SUPABASE_SERVICE_KEY,
     /**
+     * M32's one-time root claim. This is an email selector, not a password or
+     * a browser-visible token; the matching person still authenticates through
+     * the normal email/password or OAuth flow.
+     */
+    platformBootstrapEmail: process.env.PLATFORM_ROOT_BOOTSTRAP_EMAIL,
+    /**
      * `tools` and `toolDeps` are OMITTED so the server builds the shipped set
      * — the four read tools and the three write tools.
      *

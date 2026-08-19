@@ -38,6 +38,14 @@ export interface AuthOptions {
   jwksUrl?: string | undefined;
   /** Optional issuer/audience pinning. */
   issuer?: string | undefined;
+  /**
+   * M32's separate, database-owned platform control-plane authority.
+   *
+   * It is injected rather than read from the JWT: a platform root remains
+   * able to reactivate its own suspended organisation, while a disabled root
+   * loses this authority immediately. Both facts require the current DB row.
+   */
+  isPlatformRoot?: ((identity: Identity) => Promise<boolean>) | undefined;
 }
 
 export interface AuthedRequest {
@@ -54,7 +62,7 @@ export interface AuthedRequest {
  */
 const LAST_SEEN_STALE_SECONDS = 300;
 
-export function createAuth({ db, jwtSecret, jwksUrl, issuer }: AuthOptions) {
+export function createAuth({ db, jwtSecret, jwksUrl, issuer, isPlatformRoot }: AuthOptions) {
   const verify = createVerifier({ secret: jwtSecret, jwksUrl, issuer });
 
   /** Skip the round trip entirely for callers we stamped recently. */
@@ -243,7 +251,25 @@ export function createAuth({ db, jwtSecret, jwksUrl, issuer }: AuthOptions) {
     return identity;
   }
 
-  return { identify, requireActive, requireAdmin, requireOwner, verifiedClaims };
+  /**
+   * Platform-root routes deliberately do not use requireActive().
+   *
+   * `requireActive()` correctly closes ordinary product routes when an
+   * organisation is suspended. Applying it here would make the only route
+   * that can reactivate that organisation unreachable from inside the product
+   * — the same one-way door db/0052 eliminated. `isPlatformRoot` checks the
+   * root's own user status freshly, so disabling that person still closes the
+   * control plane immediately.
+   */
+  async function requirePlatformRoot(request: AuthedRequest): Promise<Identity> {
+    const identity = await identify(request);
+    if (!isPlatformRoot || !(await isPlatformRoot(identity))) {
+      throw new NotActivatedError("not permitted");
+    }
+    return identity;
+  }
+
+  return { identify, requireActive, requireAdmin, requireOwner, requirePlatformRoot, verifiedClaims };
 }
 
 export type Auth = ReturnType<typeof createAuth>;

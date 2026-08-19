@@ -27,6 +27,7 @@ import { createCallsRepo, type CallsRepo } from "./calls.ts";
 import { mapError, NotActivatedError, NotFoundError, pgErrorFields, ValidationError } from "./errors.ts";
 import { createMembersRepo, type MembersRepo } from "./members.ts";
 import { createModelsRepo, type ModelsRepo } from "./models.ts";
+import { createPlatformRepo, type PlatformRepo } from "./platform.ts";
 import { createTranscriptsRepo, type TranscriptsRepo } from "./transcripts.ts";
 import { createDomainTools } from "../agent/domain-tools.ts";
 import { createAgentRunStore } from "../agent/run-store.ts";
@@ -60,14 +61,18 @@ export interface ServerOptions<TDeps> {
   /** Storage config for the upload surface (Part 5). Absent = uploads refuse with a named reason. */
   storageUrl?: string | undefined;
   storageServiceKey?: string | undefined;
+  /** M32: only this verified email may claim the first platform-root record. */
+  platformBootstrapEmail?: string | undefined;
   logger?: boolean;
 }
 
 export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstance {
   const app = Fastify({ logger: options.logger ?? false });
+  const platform: PlatformRepo = createPlatformRepo(options.db);
   const auth: Auth = createAuth({
     db: options.db, jwtSecret: options.jwtSecret,
     jwksUrl: options.jwksUrl, issuer: options.issuer,
+    isPlatformRoot: platform.isRoot,
   });
   const calls: CallsRepo = createCallsRepo(options.db);
   const transcripts: TranscriptsRepo = createTranscriptsRepo(options.db);
@@ -567,6 +572,101 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     // waiting-for-approval screen without a second round trip that would
     // 403 anyway.
     return reply.code(201).send(member);
+  });
+
+  // ---- NeurAI Platform control plane (M32) -------------------------------
+
+  /**
+   * The one-time root bootstrap has no browser-provided target or email. The
+   * deployment's server-only configured email and the verified session are
+   * the two inputs; the database refuses every later claim.
+   */
+  app.post("/v1/platform/bootstrap", async (request, reply) => {
+    if (!options.platformBootstrapEmail) throw new NotFoundError();
+    const identity = await auth.requireActive(request);
+    return reply.send({
+      claimed: await platform.bootstrap(identity, options.platformBootstrapEmail),
+    });
+  });
+
+  /** Safe to ask about yourself. It reveals no other account or root. */
+  app.get("/v1/platform/access", async (request, reply) => {
+    const identity = await auth.identify(request);
+    return reply.send({ platform_root: await platform.isRoot(identity) });
+  });
+
+  app.get("/v1/platform/overview", async (request, reply) => {
+    const identity = await auth.requirePlatformRoot(request);
+    return reply.send(await platform.overview(identity));
+  });
+
+  app.get("/v1/platform/organizations", async (request, reply) => {
+    const identity = await auth.requirePlatformRoot(request);
+    const query = request.query as { search?: string; offset?: string; limit?: string };
+    return reply.send(await platform.organizations(identity, {
+      search: query.search,
+      offset: query.offset === undefined ? undefined : Number(query.offset),
+      limit: query.limit === undefined ? undefined : Number(query.limit),
+    }));
+  });
+
+  app.get("/v1/platform/users", async (request, reply) => {
+    const identity = await auth.requirePlatformRoot(request);
+    const query = request.query as { search?: string; offset?: string; limit?: string };
+    return reply.send(await platform.users(identity, {
+      search: query.search,
+      offset: query.offset === undefined ? undefined : Number(query.offset),
+      limit: query.limit === undefined ? undefined : Number(query.limit),
+    }));
+  });
+
+  app.get("/v1/platform/audit", async (request, reply) => {
+    const identity = await auth.requirePlatformRoot(request);
+    const query = request.query as { offset?: string; limit?: string };
+    return reply.send(await platform.audit(identity, {
+      offset: query.offset === undefined ? undefined : Number(query.offset),
+      limit: query.limit === undefined ? undefined : Number(query.limit),
+    }));
+  });
+
+  app.patch("/v1/platform/organizations/:id", async (request, reply) => {
+    const identity = await auth.requirePlatformRoot(request);
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { status?: unknown; reason?: unknown };
+    if (body.status !== "active" && body.status !== "suspended") {
+      throw new ValidationError("status must be active or suspended");
+    }
+    if (typeof body.reason !== "string") throw new ValidationError("reason is required");
+    return reply.send({
+      changed: await platform.setOrganizationStatus(identity, id, body.status, body.reason),
+    });
+  });
+
+  app.patch("/v1/platform/users/:id", async (request, reply) => {
+    const identity = await auth.requirePlatformRoot(request);
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { status?: unknown; reason?: unknown };
+    if (body.status !== "active" && body.status !== "disabled") {
+      throw new ValidationError("status must be active or disabled");
+    }
+    if (typeof body.reason !== "string") throw new ValidationError("reason is required");
+    return reply.send({ changed: await platform.setUserStatus(identity, id, body.status, body.reason) });
+  });
+
+  app.post("/v1/platform/roots", async (request, reply) => {
+    const identity = await auth.requirePlatformRoot(request);
+    const body = (request.body ?? {}) as { user_id?: unknown; reason?: unknown };
+    if (typeof body.user_id !== "string") throw new ValidationError("user_id is required");
+    if (typeof body.reason !== "string") throw new ValidationError("reason is required");
+    return reply.code(201).send({ changed: await platform.grantRoot(identity, body.user_id, body.reason) });
+  });
+
+  app.delete("/v1/platform/roots/:id", async (request, reply) => {
+    const identity = await auth.requirePlatformRoot(request);
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { reason?: unknown };
+    if (typeof body.reason !== "string") throw new ValidationError("reason is required");
+    return reply.send({ changed: await platform.revokeRoot(identity, id, body.reason) });
   });
 
   // ---- transcripts, summaries, search ------------------------------------

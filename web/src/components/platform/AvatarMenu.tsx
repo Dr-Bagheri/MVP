@@ -34,8 +34,9 @@ import { useTheme } from "@/lib/useTheme";
  * The identity header is not a link: it says who you are, and making it
  * clickable would give the same destination two entries in a five-entry menu.
  */
-export function AvatarMenu({ me }: { me: User | null }) {
+export function AvatarMenu({ me, isPlatformRoot = false }: { me: User | null; isPlatformRoot?: boolean }) {
   const t = useTranslations("platform");
+  const tPlatformRoot = useTranslations("platformRoot");
   const tSettings = useTranslations("settings");
   const locale = useLocale();
   const router = useRouter();
@@ -159,6 +160,17 @@ export function AvatarMenu({ me }: { me: User | null }) {
           >
             {t("settings")}
           </Link>
+
+          {isPlatformRoot ? (
+            <Link
+              href="/platform"
+              role="menuitem"
+              className="block rounded-lg px-3 py-2 text-sm text-fg hover:bg-surface-2"
+              onClick={() => setOpen(false)}
+            >
+              {tPlatformRoot("menu")}
+            </Link>
+          ) : null}
 
           {/* Theme — the same state Settings · General edits */}
           <div className="mt-1 border-t border-border px-3 pb-1 pt-2">

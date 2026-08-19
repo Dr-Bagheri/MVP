@@ -16,10 +16,12 @@
 import type {
   AgentCard, CalendarPreference, CallPart, CallSummary, ConnectorItem,
   ConnectorProvider, ConnectorSourceKind, ConnectorStatus, OrgRecord, WorkflowCard,
+  PlatformAuditEntry, PlatformOrganization, PlatformOverview, PlatformPage, PlatformUser,
 } from "@echo/core/wire";
 
 /** Core-owned M30 wires: these names are aliases, not browser-side copies. */
 export type { AgentCard, ConnectorItem, ConnectorProvider, ConnectorSourceKind, ConnectorStatus, WorkflowCard };
+export type { PlatformAuditEntry, PlatformOrganization, PlatformOverview, PlatformPage, PlatformUser };
 
 // ---- org & people (M2, M15) -------------------------------------------------
 

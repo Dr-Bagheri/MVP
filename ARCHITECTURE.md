@@ -1271,6 +1271,32 @@ show the setup screen; they are never authorization inputs. The first-password
 route refuses existing email/password identities; an ordinary password change
 continues to require the current password.
 
+## M32 — Platform-root control plane [user-approved 2026-08-19]
+
+`platform_root` is a platform-wide operational role, **separate from** an
+organization's `owner` / `admin` / `member` membership roles. It may list
+organization and user *metadata*, suspend or reactivate organizations,
+disable or reactivate non-root users, and appoint or remove another platform
+root. It does not gain a general organization membership and it does not
+bypass the data wall: calls, transcripts, summaries, assistant conversations,
+connector credentials, OAuth tokens, API-key material, and other customer
+content remain unreachable through the platform control plane.
+
+The role lives in a database-owned `platform_operator` relation, never in a
+JWT or user-editable metadata. Every control-plane mutation is a named,
+security-definer database operation that verifies the acting session's user
+id, requires a non-empty reason, and appends a metadata-only immutable audit
+event. Direct table writes remain unavailable. There must always be at least
+one platform root; a root cannot disable or remove itself or another root.
+
+The first root is claimed only once by an active account whose email matches
+the server-only `PLATFORM_ROOT_BOOTSTRAP_EMAIL` deployment setting.
+The person chooses their own normal NeurAI Platform email/password through
+the regular sign-up flow; no bootstrap password, token, or root credential is
+stored in source control or returned by an API. A root may still operate when
+their own organization is suspended, so the path that reactivates an
+organization never becomes a one-way door.
+
 ---
 
 ## Invariants (locked)

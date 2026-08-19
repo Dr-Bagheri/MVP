@@ -53,7 +53,7 @@ function Clock() {
   );
 }
 
-export function TopBar({ me }: { me: User | null }) {
+export function TopBar({ me, isPlatformRoot = false }: { me: User | null; isPlatformRoot?: boolean }) {
   const locale = useLocale();
   const router = useRouter();
   const pathname = usePathname();
@@ -66,7 +66,7 @@ export function TopBar({ me }: { me: User | null }) {
 
   return (
     <header className="flex items-center gap-2 border-b border-border bg-surface px-4 py-2.5">
-      <AvatarMenu me={me} />
+      <AvatarMenu me={me} isPlatformRoot={isPlatformRoot} />
 
       {/* the trail takes the free space rather than a fixed slot: it is the
           only element here whose width is content, and it must be able to

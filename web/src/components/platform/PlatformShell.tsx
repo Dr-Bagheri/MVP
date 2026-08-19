@@ -37,6 +37,7 @@ import { TopBar } from "./TopBar";
  */
 export function PlatformShell({ children }: { children: ReactNode }) {
   const [me, setMe] = useState<Me | null>(null);
+  const [platformRoot, setPlatformRoot] = useState(false);
   const calendar = useCalendarPreference();
   const timezone = useTimezonePreference();
 
@@ -56,7 +57,40 @@ export function PlatformShell({ children }: { children: ReactNode }) {
        * somewhere else entirely — vitest caught exactly that.
        */
       if (identity) hydratePreferences(identity);
+    }).catch(() => {
+      /* A root can intentionally arrive here while their own organization is
+         suspended. The ordinary identity endpoint correctly refuses in that
+         state; it must not turn the metadata-only recovery console into an
+         unhandled shell error. */
+      setMe(null);
     });
+  }, []);
+
+  useEffect(() => {
+    /* M32 is deliberately a separate, caller-owned decision. `me.role` is an
+       organization role and must never grow a magic global meaning. A failed
+       read stays hidden rather than making the platform-control entry appear
+       optimistically. */
+    let live = true;
+    const refreshPlatformRoot = () => {
+      void api.platformAccess()
+        .then(({ platform_root }) => {
+          if (live) setPlatformRoot(platform_root);
+        })
+        .catch(() => {
+          if (live) setPlatformRoot(false);
+        });
+    };
+    refreshPlatformRoot();
+    // The first claim happens inside this shell. A page-local result is not a
+    // second source of truth for the navigation — it notifies the shell to
+    // re-read the database-owned decision, then the newly available menu item
+    // appears without requiring a reload.
+    window.addEventListener("neurai:platform-root-changed", refreshPlatformRoot);
+    return () => {
+      live = false;
+      window.removeEventListener("neurai:platform-root-changed", refreshPlatformRoot);
+    };
   }, []);
 
   useEffect(() => {
@@ -92,7 +126,7 @@ export function PlatformShell({ children }: { children: ReactNode }) {
           {/* the whole person, not an initial: the avatar menu's identity
               header needs the name and email, and resolving the initial here
               would have left the menu re-fetching what the shell already has */}
-          <TopBar me={me} />
+          <TopBar me={me} isPlatformRoot={platformRoot} />
           {/*
             **The key is load-bearing, not a tidiness flourish.**
 

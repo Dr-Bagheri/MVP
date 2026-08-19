@@ -198,8 +198,9 @@ so, rather than being lost (the timing ladder, M20).
 
 | Path | Contents |
 |---|---|
-| [`ARCHITECTURE.md`](ARCHITECTURE.md) | The source of truth — decisions M1–M25 with rationale |
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | The source of truth — locked M-decisions with rationale |
 | [`docs/SPEC.md`](docs/SPEC.md) | Product behaviour |
+| [`docs/PLATFORM-ROOT.md`](docs/PLATFORM-ROOT.md) | Privacy-preserving platform-root bootstrap and operations |
 | [`db/`](db/) | Numbered SQL migrations, RLS/grant policies, and the suite that proves them |
 | [`core/`](core/) | API, agent runtime, worker, gateway |
 | [`ml/`](ml/) | The speech facade — audio in, words + speakers out |

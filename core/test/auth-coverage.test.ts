@@ -52,21 +52,24 @@ describe("auth coverage: no /v1 route answers without an identity", () => {
     const end = i + 1 < regs.length ? regs[i + 1]!.at : SRC.length;
     const handler = SRC.slice(reg.at, end);
     /*
-     * Two doors count: `auth.require*` (verified + membership) and
-     * `auth.verifiedClaims` (verified token, membership not yet required —
+     * Three doors count: `auth.require*` (verified + membership),
+     * `auth.identify` (the same verified membership identity without an
+     * activation requirement — M32 uses it so a root can reactivate its own
+     * suspended organization), and `auth.verifiedClaims` (verified token,
+     * membership not yet required —
      * the shape of /v1/signup and /v1/invitations/redeem, the two routes
      * that exist FOR authenticated non-members). The checker's first run
      * flagged both; per the first-red rule they were verified before being
      * believed, and the checker was the wrong one — both routes verify the
      * token's signature, which is the wall this test is about.
      */
-    const resolves = /await auth\.(require\w+|verifiedClaims)\(/.test(handler);
+    const resolves = /await auth\.(require\w+|identify|verifiedClaims)\(/.test(handler);
     if (PUBLIC[key]) {
       // the negative control: a listed-public route must genuinely lack it,
       // or the allow-list is hiding a route that grew auth it doesn't need
       expect(resolves, `${key} is listed public but resolves an identity`).toBe(false);
     } else {
-      expect(resolves, `${key} has no auth.require* — either add one or list it in PUBLIC with a reason`).toBe(true);
+      expect(resolves, `${key} has no identity resolution — either add one or list it in PUBLIC with a reason`).toBe(true);
     }
   });
 });

@@ -51,6 +51,9 @@ export type { ErrorBody, RefusalKind, UnauthenticatedKind } from "./errors.ts";
 export type { AgentCard } from "../agent/agent-store.ts";
 export type { WorkflowCard } from "./workflows.ts";
 export type { ConnectorStatus, ConnectorItem, ConnectorProvider, ConnectorSourceKind } from "./connectors.ts";
+export type {
+  PlatformAuditEntry, PlatformOrganization, PlatformOverview, PlatformPage, PlatformUser,
+} from "./platform.ts";
 
 // Re-exported so one import covers a response and the vocabularies inside it.
 export type {

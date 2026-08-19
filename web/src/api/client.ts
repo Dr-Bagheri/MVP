@@ -28,6 +28,11 @@ import type {
   ConnectorProvider,
   ConnectorStatus,
   Person,
+  PlatformAuditEntry,
+  PlatformOrganization,
+  PlatformOverview,
+  PlatformPage,
+  PlatformUser,
   GatewayDelivery,
   GatewayEvent,
   GatewayKey,
@@ -475,6 +480,63 @@ export const api = {
         if (error instanceof BffError && error.status === 401) return null;
         throw error;
       }
+    });
+  },
+  /** M32: caller-owned platform-root status, safe for shell navigation. */
+  async platformAccess(): Promise<{ platform_root: boolean }> {
+    return cachedRead("platform-access", () => bff<{ platform_root: boolean }>("/api/platform/access"));
+  },
+  /** One-time root claim. The target email lives only in the core deployment config. */
+  async bootstrapPlatformRoot(): Promise<{ claimed: boolean }> {
+    return bff<{ claimed: boolean }>("/api/platform/bootstrap", { method: "POST" });
+  },
+  async platformOverview(): Promise<PlatformOverview> {
+    return bff<PlatformOverview>("/api/platform/overview");
+  },
+  async platformOrganizations(query: { search?: string; offset?: number; limit?: number } = {})
+    : Promise<PlatformPage<PlatformOrganization>> {
+    const params = new URLSearchParams();
+    if (query.search?.trim()) params.set("search", query.search.trim());
+    if (query.offset !== undefined) params.set("offset", String(query.offset));
+    if (query.limit !== undefined) params.set("limit", String(query.limit));
+    const suffix = params.size ? `?${params}` : "";
+    return bff<PlatformPage<PlatformOrganization>>(`/api/platform/organizations${suffix}`);
+  },
+  async platformUsers(query: { search?: string; offset?: number; limit?: number } = {})
+    : Promise<PlatformPage<PlatformUser>> {
+    const params = new URLSearchParams();
+    if (query.search?.trim()) params.set("search", query.search.trim());
+    if (query.offset !== undefined) params.set("offset", String(query.offset));
+    if (query.limit !== undefined) params.set("limit", String(query.limit));
+    const suffix = params.size ? `?${params}` : "";
+    return bff<PlatformPage<PlatformUser>>(`/api/platform/users${suffix}`);
+  },
+  async platformAudit(query: { offset?: number; limit?: number } = {})
+    : Promise<PlatformPage<PlatformAuditEntry>> {
+    const params = new URLSearchParams();
+    if (query.offset !== undefined) params.set("offset", String(query.offset));
+    if (query.limit !== undefined) params.set("limit", String(query.limit));
+    const suffix = params.size ? `?${params}` : "";
+    return bff<PlatformPage<PlatformAuditEntry>>(`/api/platform/audit${suffix}`);
+  },
+  async setPlatformOrganizationStatus(id: string, status: "active" | "suspended", reason: string) {
+    return bff<{ changed: boolean }>(`/api/platform/organizations/${id}`, {
+      method: "PATCH", body: JSON.stringify({ status, reason }), headers: { "content-type": "application/json" },
+    });
+  },
+  async setPlatformUserStatus(id: string, status: "active" | "disabled", reason: string) {
+    return bff<{ changed: boolean }>(`/api/platform/users/${id}`, {
+      method: "PATCH", body: JSON.stringify({ status, reason }), headers: { "content-type": "application/json" },
+    });
+  },
+  async grantPlatformRoot(userId: string, reason: string) {
+    return bff<{ changed: boolean }>("/api/platform/roots", {
+      method: "POST", body: JSON.stringify({ user_id: userId, reason }), headers: { "content-type": "application/json" },
+    });
+  },
+  async revokePlatformRoot(userId: string, reason: string) {
+    return bff<{ changed: boolean }>(`/api/platform/roots/${userId}`, {
+      method: "DELETE", body: JSON.stringify({ reason }), headers: { "content-type": "application/json" },
     });
   },
   async org(): Promise<Org> {
