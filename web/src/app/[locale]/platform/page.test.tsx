@@ -120,17 +120,20 @@ describe("Platform-root console", () => {
     expect(platformAudit).not.toHaveBeenCalled();
   });
 
-  it("shows the content privacy boundary, and an ACTABLE (not disabled) control", async () => {
+  it("loads only metadata for a root, and exposes an ACTABLE (not disabled) control", async () => {
     platformAccess.mockResolvedValue({ platform_root: true });
     render(<PlatformControlPage />);
 
     await screen.findByText("Northwind");
-    expect(screen.getByText(/این کنسول تنها فرادادهٔ سازمان و کاربر را می‌بیند/)).toBeTruthy();
     expect(platformOrganizations).toHaveBeenCalledWith({ search: "", limit: 50, deleted: false });
 
     // The whole point of the redesign: the action is a live button, not a
     // permanently-disabled one gated behind a hidden textarea.
     expect(screen.getByRole("button", { name: "تعلیق سازمان" })).not.toBeDisabled();
+
+    // The black title and the privacy banner were removed by request; guard
+    // against either quietly returning (the banner text is unique to it).
+    expect(screen.queryByText(/این کنسول تنها فرادادهٔ سازمان/)).toBeNull();
 
     // Negative control: no content view exists, and none can be conjured.
     expect(screen.queryByText("Customer transcript that must stay private")).toBeNull();

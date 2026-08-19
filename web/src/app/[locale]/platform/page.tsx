@@ -386,7 +386,6 @@ export default function PlatformControlPage() {
           <span className="rounded-md bg-accent-soft px-2 py-1 text-xs font-bold uppercase tracking-wide text-accent">
             {t("menu")}
           </span>
-          <h1 className="text-lg font-semibold text-fg">{t("title")}</h1>
           <span className="ms-auto flex items-center gap-2">
             <button
               type="button"
@@ -407,10 +406,6 @@ export default function PlatformControlPage() {
       </header>
 
       <main className="mx-auto max-w-6xl px-5 py-6">
-        <p className="rounded-lg border border-accent/25 bg-accent-soft px-4 py-3 text-sm leading-6 text-fg">
-          {t("privacy")}
-        </p>
-
         {error === "load" ? (
           <p role="alert" className="mt-4 text-sm text-danger">
             {t("loadFailed")}
