@@ -158,7 +158,7 @@ describe("Hub — session continuity", () => {
   it("starts a fresh Home conversation from the enabled left-menu item", async () => {
     render(
       <AssistantConversationProvider>
-        <AssistantMenu activeSlug="new" showNewConversation />
+        <AssistantMenu activeSlug="new" />
         <Hub />
       </AssistantConversationProvider>,
     );

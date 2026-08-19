@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { createEvent, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { AssistantConversationProvider, useAssistantConversation } from "./AssistantConversationState";
 
@@ -24,7 +24,7 @@ describe("AssistantMenu", () => {
     render(
       <AssistantConversationProvider>
         <StateProbe />
-        <AssistantMenu activeSlug="new" showNewConversation />
+        <AssistantMenu activeSlug="new" />
       </AssistantConversationProvider>,
     );
 
@@ -40,8 +40,13 @@ describe("AssistantMenu", () => {
     expect(screen.getByRole("link", { name: "history" }).getAttribute("href")).toBe("/conversations");
   });
 
-  it("does not show New conversation from assistant subpages", () => {
+  it("keeps New conversation on assistant subpages and lets it navigate Home", () => {
     render(<AssistantMenu activeSlug="history" />);
-    expect(screen.queryByRole("link", { name: "newConversation" })).toBeNull();
+    const fresh = screen.getByRole("link", { name: "newConversation" });
+    expect(fresh.getAttribute("href")).toBe("/");
+
+    const click = createEvent.click(fresh);
+    fireEvent(fresh, click);
+    expect(click.defaultPrevented).toBe(false);
   });
 });

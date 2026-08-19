@@ -34,9 +34,9 @@ export default function HubPage() {
       */}
       <Suspense fallback={null}>
         <AssistantConversationProvider>
-          {/* New conversation belongs only to the Home hub: it clears a live
-              hub but remains an enabled no-op when the hub is already blank. */}
-          <MenuLayout menu={<AssistantMenu activeSlug="new" showNewConversation />}>
+          {/* New conversation stays in the Assistant submenu everywhere. On
+              Home it clears a live hub and remains an enabled no-op when blank. */}
+          <MenuLayout menu={<AssistantMenu activeSlug="new" />}>
             <Hub />
           </MenuLayout>
         </AssistantConversationProvider>

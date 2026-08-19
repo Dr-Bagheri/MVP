@@ -11,18 +11,18 @@ import { useAssistantConversation } from "./AssistantConversationState";
  * platform's two-pane anatomy read as a different product.
  *
  * Same skeleton as Echo's menu: a heading, grouped entries, active pill.
- * New conversation is only a Home-hub action. It stays visually enabled:
- * selecting it on the blank hub simply leaves the blank hub in place.
+ * New conversation is present across the entire Assistant domain. On Home it
+ * resets an already-started thread (and is a harmless no-op when blank); from
+ * every other Assistant page it is an ordinary link back to that blank Home.
  */
 export function AssistantMenu({
   activeSlug,
-  showNewConversation = false,
 }: {
   activeSlug: "new" | "hub" | "history" | "search" | "workflows" | "agents";
-  showNewConversation?: boolean;
 }) {
   const t = useTranslations("platform");
   const { started, startNewConversation } = useAssistantConversation();
+  const isHub = activeSlug === "new" || activeSlug === "hub";
   return (
     <SectionMenu
       navLabel={t("assistantMenuLabel")}
@@ -32,14 +32,14 @@ export function AssistantMenu({
           key: "conversation",
           title: t("assistantMenuConversation"),
           items: [
-            ...(showNewConversation ? [{
+            {
               slug: "new",
               href: "/",
               label: t("newConversation"),
-              /* It is the current hub either way; never navigate/reload it. */
-              preventNavigation: true,
-              onSelect: started ? startNewConversation : undefined,
-            }] : []),
+              /* On Home this stays put; on every subpage it returns to Home. */
+              preventNavigation: isHub,
+              onSelect: isHub && started ? startNewConversation : undefined,
+            },
             { slug: "history", href: "/conversations", label: t("history") },
           ],
         },
