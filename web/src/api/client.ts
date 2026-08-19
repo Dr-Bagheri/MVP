@@ -493,21 +493,23 @@ export const api = {
   async platformOverview(): Promise<PlatformOverview> {
     return bff<PlatformOverview>("/api/platform/overview");
   },
-  async platformOrganizations(query: { search?: string; offset?: number; limit?: number } = {})
+  async platformOrganizations(query: { search?: string; offset?: number; limit?: number; deleted?: boolean } = {})
     : Promise<PlatformPage<PlatformOrganization>> {
     const params = new URLSearchParams();
     if (query.search?.trim()) params.set("search", query.search.trim());
     if (query.offset !== undefined) params.set("offset", String(query.offset));
     if (query.limit !== undefined) params.set("limit", String(query.limit));
+    if (query.deleted) params.set("deleted", "true");
     const suffix = params.size ? `?${params}` : "";
     return bff<PlatformPage<PlatformOrganization>>(`/api/platform/organizations${suffix}`);
   },
-  async platformUsers(query: { search?: string; offset?: number; limit?: number } = {})
+  async platformUsers(query: { search?: string; offset?: number; limit?: number; deleted?: boolean } = {})
     : Promise<PlatformPage<PlatformUser>> {
     const params = new URLSearchParams();
     if (query.search?.trim()) params.set("search", query.search.trim());
     if (query.offset !== undefined) params.set("offset", String(query.offset));
     if (query.limit !== undefined) params.set("limit", String(query.limit));
+    if (query.deleted) params.set("deleted", "true");
     const suffix = params.size ? `?${params}` : "";
     return bff<PlatformPage<PlatformUser>>(`/api/platform/users${suffix}`);
   },
@@ -527,6 +529,44 @@ export const api = {
   async setPlatformUserStatus(id: string, status: "active" | "disabled", reason: string) {
     return bff<{ changed: boolean }>(`/api/platform/users/${id}`, {
       method: "PATCH", body: JSON.stringify({ status, reason }), headers: { "content-type": "application/json" },
+    });
+  },
+  /** M32 edit: organisation metadata (name, interface locale). */
+  async updatePlatformOrganization(id: string, patch: { name?: string; locale?: string | null }, reason: string) {
+    return bff<{ changed: boolean }>(`/api/platform/organizations/${id}`, {
+      method: "PATCH", body: JSON.stringify({ ...patch, reason }), headers: { "content-type": "application/json" },
+    });
+  },
+  /** M32 edit: user identity metadata (names, handle, locale, org role) — email is auth-owned, never here. */
+  async updatePlatformUser(
+    id: string,
+    patch: { display_name?: string; display_name_en?: string | null; username?: string | null; locale?: string | null; role?: string },
+    reason: string,
+  ) {
+    return bff<{ changed: boolean }>(`/api/platform/users/${id}`, {
+      method: "PATCH", body: JSON.stringify({ ...patch, reason }), headers: { "content-type": "application/json" },
+    });
+  },
+  /** M32 soft-delete: organisation (7-day recovery window). */
+  async softDeletePlatformOrganization(id: string, reason: string) {
+    return bff<{ changed: boolean }>(`/api/platform/organizations/${id}`, {
+      method: "DELETE", body: JSON.stringify({ reason }), headers: { "content-type": "application/json" },
+    });
+  },
+  async restorePlatformOrganization(id: string, reason: string) {
+    return bff<{ changed: boolean }>(`/api/platform/organizations/${id}/restore`, {
+      method: "POST", body: JSON.stringify({ reason }), headers: { "content-type": "application/json" },
+    });
+  },
+  /** M32 soft-delete: user (7-day recovery window). */
+  async softDeletePlatformUser(id: string, reason: string) {
+    return bff<{ changed: boolean }>(`/api/platform/users/${id}`, {
+      method: "DELETE", body: JSON.stringify({ reason }), headers: { "content-type": "application/json" },
+    });
+  },
+  async restorePlatformUser(id: string, reason: string) {
+    return bff<{ changed: boolean }>(`/api/platform/users/${id}/restore`, {
+      method: "POST", body: JSON.stringify({ reason }), headers: { "content-type": "application/json" },
     });
   },
   async grantPlatformRoot(userId: string, reason: string) {

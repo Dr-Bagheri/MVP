@@ -9,7 +9,7 @@
  */
 import type { Identity } from "../agent/types.ts";
 import { NotFoundError, ValidationError } from "./errors.ts";
-import type { UserStatus } from "./vocabulary.ts";
+import { MEMBER_ROLES, type MemberRole, type UserStatus } from "./vocabulary.ts";
 import { assertUuid, type Db, type SqlTx } from "../db/identity.ts";
 
 export interface PlatformOverview {
@@ -27,6 +27,9 @@ export interface PlatformOrganization {
   locale: string;
   created_at: string;
   member_count: number;
+  /** Soft-delete bookkeeping (0068). Null unless the org is in the purge window. */
+  deleted_at: string | null;
+  purge_after: string | null;
 }
 
 export interface PlatformUser {
@@ -35,12 +38,16 @@ export interface PlatformUser {
   org_name: string;
   email: string;
   display_name: string;
+  display_name_en: string | null;
   username: string | null;
+  locale: string;
   role: string;
   status: UserStatus;
   created_at: string;
   last_seen_at: string | null;
   is_platform_root: boolean;
+  deleted_at: string | null;
+  purge_after: string | null;
 }
 
 export interface PlatformAuditEntry {
@@ -77,6 +84,8 @@ interface OrganizationRow {
   locale: string;
   created_at: Date | string;
   member_count: string | number;
+  deleted_at: Date | string | null;
+  purge_after: Date | string | null;
 }
 
 interface UserRow {
@@ -85,12 +94,16 @@ interface UserRow {
   org_name: string;
   email: string;
   display_name: string;
+  display_name_en: string | null;
   username: string | null;
+  locale: string;
   role: string;
   status: UserStatus;
   created_at: Date | string;
   last_seen_at: Date | string | null;
   is_platform_root: boolean;
+  deleted_at: Date | string | null;
+  purge_after: Date | string | null;
 }
 
 interface AuditRow {
@@ -215,15 +228,24 @@ export function createPlatformRepo(db: Db) {
 
     async organizations(
       identity: Identity,
-      input: { search?: string | undefined; offset?: number | undefined; limit?: number | undefined } = {},
+      input: {
+        search?: string | undefined;
+        offset?: number | undefined;
+        limit?: number | undefined;
+        deleted?: boolean | undefined;
+      } = {},
     ): Promise<PlatformPage<PlatformOrganization>> {
       const { offset, limit } = pageOptions(input);
       const search = searchTerm(input.search);
+      // A boolean, never user text — safe to branch the SQL fragment on.
+      const deletedClause = input.deleted ? "o.deleted_at is not null" : "o.deleted_at is null";
       const rows = await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe<OrganizationRow>(`
-        select o.id, o.name, o.status, o.locale, o.created_at, count(u.id) as member_count
+        select o.id, o.name, o.status, o.locale, o.created_at, o.deleted_at, o.purge_after,
+               count(u.id) as member_count
           from echo.org o
           left join echo.app_user u on u.org_id = o.id
-         where ($1::text is null or o.name ilike ('%' || $1 || '%'))
+         where ${deletedClause}
+           and ($1::text is null or o.name ilike ('%' || $1 || '%'))
          group by o.id
          order by o.created_at desc, o.id desc
          offset $2 limit $3
@@ -235,24 +257,34 @@ export function createPlatformRepo(db: Db) {
         locale: row.locale,
         created_at: iso(row.created_at),
         member_count: number(row.member_count),
+        deleted_at: row.deleted_at ? iso(row.deleted_at) : null,
+        purge_after: row.purge_after ? iso(row.purge_after) : null,
       })), offset, limit);
     },
 
     async users(
       identity: Identity,
-      input: { search?: string | undefined; offset?: number | undefined; limit?: number | undefined } = {},
+      input: {
+        search?: string | undefined;
+        offset?: number | undefined;
+        limit?: number | undefined;
+        deleted?: boolean | undefined;
+      } = {},
     ): Promise<PlatformPage<PlatformUser>> {
       const { offset, limit } = pageOptions(input);
       const search = searchTerm(input.search);
+      const deletedClause = input.deleted ? "u.deleted_at is not null" : "u.deleted_at is null";
       const rows = await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe<UserRow>(`
         select u.id, u.org_id, o.name as org_name, u.email::text as email,
-               u.display_name, u.username, u.role::text as role, u.status,
-               u.created_at, u.last_seen_at,
+               u.display_name, u.display_name_en, u.username, u.locale,
+               u.role::text as role, u.status,
+               u.created_at, u.last_seen_at, u.deleted_at, u.purge_after,
                exists (select 1 from echo.platform_operator p where p.user_id = u.id)
                  as is_platform_root
           from echo.app_user u
           join echo.org o on o.id = u.org_id
-         where ($1::text is null
+         where ${deletedClause}
+           and ($1::text is null
                 or u.email::text ilike ('%' || $1 || '%')
                 or u.display_name ilike ('%' || $1 || '%')
                 or coalesce(u.username, '') ilike ('%' || $1 || '%')
@@ -266,12 +298,16 @@ export function createPlatformRepo(db: Db) {
         org_name: row.org_name,
         email: row.email,
         display_name: row.display_name,
+        display_name_en: row.display_name_en,
         username: row.username,
+        locale: row.locale,
         role: row.role,
         status: row.status,
         created_at: iso(row.created_at),
         last_seen_at: row.last_seen_at === null ? null : iso(row.last_seen_at),
         is_platform_root: row.is_platform_root === true,
+        deleted_at: row.deleted_at ? iso(row.deleted_at) : null,
+        purge_after: row.purge_after ? iso(row.purge_after) : null,
       })), offset, limit);
     },
 
@@ -339,6 +375,99 @@ export function createPlatformRepo(db: Db) {
       const validReason = reason(actionReason);
       const rows = await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe<{ changed: boolean }>(
         "select echo.platform_revoke_root($1, $2, $3) as changed",
+        [identity.userId, target, validReason],
+      ));
+      return rows[0]?.changed === true;
+    },
+
+    // ── edit + soft-delete/restore (0068/0069) ────────────────────────────
+    // Every one is a named definer function; this layer validates shape and
+    // forwards. citext (email) is not editable here by design.
+
+    async updateOrganization(
+      identity: Identity, orgId: string, name: string, locale: string, actionReason: string,
+    ): Promise<boolean> {
+      const org = uuid(orgId, "organization id");
+      if (typeof name !== "string" || name.trim() === "") {
+        throw new ValidationError("organization name is required");
+      }
+      const validReason = reason(actionReason);
+      const rows = await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe<{ changed: boolean }>(
+        "select echo.platform_update_org($1, $2, $3, $4, $5) as changed",
+        [identity.userId, org, name.trim(), typeof locale === "string" ? locale.trim() : "", validReason],
+      ));
+      return rows[0]?.changed === true;
+    },
+
+    async updateUser(
+      identity: Identity,
+      userId: string,
+      fields: {
+        display_name?: string | undefined;
+        display_name_en?: string | null | undefined;
+        username?: string | null | undefined;
+        locale?: string | undefined;
+        role?: string | undefined;
+      },
+      actionReason: string,
+    ): Promise<boolean> {
+      const target = uuid(userId, "user id");
+      const validReason = reason(actionReason);
+      let role: MemberRole | null = null;
+      if (fields.role !== undefined) {
+        if (!(MEMBER_ROLES as readonly string[]).includes(fields.role)) {
+          throw new ValidationError(`role must be one of: ${MEMBER_ROLES.join(", ")}`);
+        }
+        role = fields.role as MemberRole;
+      }
+      const text = (v: string | null | undefined): string | null =>
+        v === undefined || v === null ? null : v;
+      const rows = await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe<{ changed: boolean }>(
+        "select echo.platform_update_user($1, $2, $3, $4, $5, $6, $7::echo.member_role, $8) as changed",
+        [
+          identity.userId, target,
+          text(fields.display_name), text(fields.display_name_en),
+          text(fields.username), text(fields.locale), role, validReason,
+        ],
+      ));
+      return rows[0]?.changed === true;
+    },
+
+    async softDeleteOrganization(identity: Identity, orgId: string, actionReason: string): Promise<boolean> {
+      const org = uuid(orgId, "organization id");
+      const validReason = reason(actionReason);
+      const rows = await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe<{ changed: boolean }>(
+        "select echo.platform_soft_delete_org($1, $2, $3) as changed",
+        [identity.userId, org, validReason],
+      ));
+      return rows[0]?.changed === true;
+    },
+
+    async restoreOrganization(identity: Identity, orgId: string, actionReason: string): Promise<boolean> {
+      const org = uuid(orgId, "organization id");
+      const validReason = reason(actionReason);
+      const rows = await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe<{ changed: boolean }>(
+        "select echo.platform_restore_org($1, $2, $3) as changed",
+        [identity.userId, org, validReason],
+      ));
+      return rows[0]?.changed === true;
+    },
+
+    async softDeleteUser(identity: Identity, userId: string, actionReason: string): Promise<boolean> {
+      const target = uuid(userId, "user id");
+      const validReason = reason(actionReason);
+      const rows = await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe<{ changed: boolean }>(
+        "select echo.platform_soft_delete_user($1, $2, $3) as changed",
+        [identity.userId, target, validReason],
+      ));
+      return rows[0]?.changed === true;
+    },
+
+    async restoreUser(identity: Identity, userId: string, actionReason: string): Promise<boolean> {
+      const target = uuid(userId, "user id");
+      const validReason = reason(actionReason);
+      const rows = await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe<{ changed: boolean }>(
+        "select echo.platform_restore_user($1, $2, $3) as changed",
         [identity.userId, target, validReason],
       ));
       return rows[0]?.changed === true;

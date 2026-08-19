@@ -10,3 +10,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ or
     return errorResponse(error);
   }
 }
+
+export async function DELETE(request: Request, { params }: { params: Promise<{ orgId: string }> }) {
+  const { orgId } = await params;
+  try {
+    return Response.json(await coreFetch<{ changed: boolean }>(`/v1/platform/organizations/${orgId}`, {
+      method: "DELETE", body: await request.json(),
+    }));
+  } catch (error) {
+    return errorResponse(error);
+  }
+}

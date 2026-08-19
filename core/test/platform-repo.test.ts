@@ -39,7 +39,11 @@ function fakeDb(root = true) {
           id: "7", actor_id: ROOT.userId, actor_email: "root@example.com", action: "org_status_changed",
           target_user_id: null, target_org_id: "org-2", reason: "Billing hold", created_at: new Date("2026-08-03"),
         }];
-        if (sql.includes("platform_set_") || sql.includes("platform_grant_root") || sql.includes("platform_revoke_root")) {
+        if (
+          sql.includes("platform_set_") || sql.includes("platform_grant_root") ||
+          sql.includes("platform_revoke_root") || sql.includes("platform_update_") ||
+          sql.includes("platform_soft_delete_") || sql.includes("platform_restore_")
+        ) {
           return [{ changed: true }];
         }
         if (sql.includes("bootstrap_platform_root")) return [{ created: true }];
@@ -107,5 +111,45 @@ describe("platform-root authority", () => {
     await expect(repo.setUserStatus(ROOT, TARGET, "disabled", "x"))
       .rejects.toBeInstanceOf(ValidationError);
     expect(log.filter((entry) => entry.sql.includes("platform_set_user_status"))).toHaveLength(0);
+  });
+
+  it("edit + soft-delete/restore also go through named operations, never direct SQL", async () => {
+    const { db, log } = fakeDb();
+    const repo = createPlatformRepo(db);
+    await repo.updateOrganization(ROOT, TARGET, "Acme Renamed", "en", "corrected legal name");
+    await repo.updateUser(ROOT, TARGET, { display_name: "New Name", role: "admin" }, "role change approved");
+    await repo.softDeleteOrganization(ROOT, TARGET, "offboarding the account");
+    await repo.restoreOrganization(ROOT, TARGET, "reinstated after review");
+    await repo.softDeleteUser(ROOT, TARGET, "account removed on request");
+    await repo.restoreUser(ROOT, TARGET, "account reinstated");
+
+    const sql = log.map((entry) => entry.sql).join("\n");
+    expect(sql).toContain("echo.platform_update_org");
+    expect(sql).toContain("echo.platform_update_user");
+    expect(sql).toContain("echo.platform_soft_delete_org");
+    expect(sql).toContain("echo.platform_restore_org");
+    expect(sql).toContain("echo.platform_soft_delete_user");
+    expect(sql).toContain("echo.platform_restore_user");
+    // Same negative property as the status mutations: no direct table write.
+    expect(sql).not.toMatch(/update\s+echo\.(org|app_user|platform_operator)/i);
+  });
+
+  it("rejects an unknown organization role at the edit boundary before any SQL", async () => {
+    const { db, log } = fakeDb();
+    const repo = createPlatformRepo(db);
+    await expect(repo.updateUser(ROOT, TARGET, { role: "superuser" }, "a valid enough reason"))
+      .rejects.toBeInstanceOf(ValidationError);
+    expect(log.filter((entry) => entry.sql.includes("platform_update_user"))).toHaveLength(0);
+  });
+
+  it("never sends an email in a user edit — the login identity is auth-owned", async () => {
+    const { db, log } = fakeDb();
+    const repo = createPlatformRepo(db);
+    await repo.updateUser(ROOT, TARGET, { display_name: "New Name" }, "display name correction");
+    const call = log.find((entry) => entry.sql.includes("platform_update_user"));
+    expect(call).toBeTruthy();
+    // actor, target, display_name, display_name_en, username, locale, role, reason — eight, no email.
+    expect(call?.params).toHaveLength(8);
+    expect(call?.params).not.toContain("person@example.com");
   });
 });

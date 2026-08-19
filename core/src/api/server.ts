@@ -602,21 +602,23 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
 
   app.get("/v1/platform/organizations", async (request, reply) => {
     const identity = await auth.requirePlatformRoot(request);
-    const query = request.query as { search?: string; offset?: string; limit?: string };
+    const query = request.query as { search?: string; offset?: string; limit?: string; deleted?: string };
     return reply.send(await platform.organizations(identity, {
       search: query.search,
       offset: query.offset === undefined ? undefined : Number(query.offset),
       limit: query.limit === undefined ? undefined : Number(query.limit),
+      deleted: query.deleted === "true",
     }));
   });
 
   app.get("/v1/platform/users", async (request, reply) => {
     const identity = await auth.requirePlatformRoot(request);
-    const query = request.query as { search?: string; offset?: string; limit?: string };
+    const query = request.query as { search?: string; offset?: string; limit?: string; deleted?: string };
     return reply.send(await platform.users(identity, {
       search: query.search,
       offset: query.offset === undefined ? undefined : Number(query.offset),
       limit: query.limit === undefined ? undefined : Number(query.limit),
+      deleted: query.deleted === "true",
     }));
   });
 
@@ -629,28 +631,105 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     }));
   });
 
+  /**
+   * One PATCH handles either a lifecycle status change OR a metadata edit
+   * (name/locale). The UI sends whichever the operator chose; both may ride
+   * one request. reason is always required and always audited.
+   */
   app.patch("/v1/platform/organizations/:id", async (request, reply) => {
     const identity = await auth.requirePlatformRoot(request);
     const { id } = request.params as { id: string };
-    const body = (request.body ?? {}) as { status?: unknown; reason?: unknown };
-    if (body.status !== "active" && body.status !== "suspended") {
-      throw new ValidationError("status must be active or suspended");
-    }
+    const body = (request.body ?? {}) as {
+      status?: unknown; name?: unknown; locale?: unknown; reason?: unknown;
+    };
     if (typeof body.reason !== "string") throw new ValidationError("reason is required");
-    return reply.send({
-      changed: await platform.setOrganizationStatus(identity, id, body.status, body.reason),
-    });
+    let changed = false;
+    if (body.name !== undefined || body.locale !== undefined) {
+      if (typeof body.name !== "string") throw new ValidationError("name must be a string");
+      changed =
+        (await platform.updateOrganization(
+          identity, id, body.name, typeof body.locale === "string" ? body.locale : "", body.reason,
+        )) || changed;
+    }
+    if (body.status !== undefined) {
+      if (body.status !== "active" && body.status !== "suspended") {
+        throw new ValidationError("status must be active or suspended");
+      }
+      changed = (await platform.setOrganizationStatus(identity, id, body.status, body.reason)) || changed;
+    }
+    return reply.send({ changed });
+  });
+
+  /** Soft delete: a 7-day recovery window, then purge (M32 extension, 0069). */
+  app.delete("/v1/platform/organizations/:id", async (request, reply) => {
+    const identity = await auth.requirePlatformRoot(request);
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { reason?: unknown };
+    if (typeof body.reason !== "string") throw new ValidationError("reason is required");
+    return reply.send({ changed: await platform.softDeleteOrganization(identity, id, body.reason) });
+  });
+
+  app.post("/v1/platform/organizations/:id/restore", async (request, reply) => {
+    const identity = await auth.requirePlatformRoot(request);
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { reason?: unknown };
+    if (typeof body.reason !== "string") throw new ValidationError("reason is required");
+    return reply.send({ changed: await platform.restoreOrganization(identity, id, body.reason) });
   });
 
   app.patch("/v1/platform/users/:id", async (request, reply) => {
     const identity = await auth.requirePlatformRoot(request);
     const { id } = request.params as { id: string };
-    const body = (request.body ?? {}) as { status?: unknown; reason?: unknown };
-    if (body.status !== "active" && body.status !== "disabled") {
-      throw new ValidationError("status must be active or disabled");
-    }
+    const body = (request.body ?? {}) as {
+      status?: unknown; reason?: unknown;
+      display_name?: unknown; display_name_en?: unknown; username?: unknown;
+      locale?: unknown; role?: unknown;
+    };
     if (typeof body.reason !== "string") throw new ValidationError("reason is required");
-    return reply.send({ changed: await platform.setUserStatus(identity, id, body.status, body.reason) });
+    let changed = false;
+    const editing =
+      body.display_name !== undefined || body.display_name_en !== undefined ||
+      body.username !== undefined || body.locale !== undefined || body.role !== undefined;
+    if (editing) {
+      const str = (v: unknown): string | undefined => (typeof v === "string" ? v : undefined);
+      const nullable = (v: unknown): string | null | undefined =>
+        v === null ? null : typeof v === "string" ? v : undefined;
+      changed =
+        (await platform.updateUser(
+          identity, id,
+          {
+            display_name: str(body.display_name),
+            display_name_en: nullable(body.display_name_en),
+            username: nullable(body.username),
+            locale: str(body.locale),
+            role: str(body.role),
+          },
+          body.reason,
+        )) || changed;
+    }
+    if (body.status !== undefined) {
+      if (body.status !== "active" && body.status !== "disabled") {
+        throw new ValidationError("status must be active or disabled");
+      }
+      changed = (await platform.setUserStatus(identity, id, body.status, body.reason)) || changed;
+    }
+    return reply.send({ changed });
+  });
+
+  app.delete("/v1/platform/users/:id", async (request, reply) => {
+    const identity = await auth.requirePlatformRoot(request);
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { reason?: unknown };
+    if (typeof body.reason !== "string") throw new ValidationError("reason is required");
+    return reply.send({ changed: await platform.softDeleteUser(identity, id, body.reason) });
+  });
+
+  app.post("/v1/platform/users/:id/restore", async (request, reply) => {
+    const identity = await auth.requirePlatformRoot(request);
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { reason?: unknown };
+    if (typeof body.reason !== "string") throw new ValidationError("reason is required");
+    return reply.send({ changed: await platform.restoreUser(identity, id, body.reason) });
   });
 
   app.post("/v1/platform/roots", async (request, reply) => {

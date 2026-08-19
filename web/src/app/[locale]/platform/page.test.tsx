@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const platformAccess = vi.fn();
@@ -11,6 +11,12 @@ const setPlatformOrganizationStatus = vi.fn();
 const setPlatformUserStatus = vi.fn();
 const grantPlatformRoot = vi.fn();
 const revokePlatformRoot = vi.fn();
+const updatePlatformOrganization = vi.fn();
+const updatePlatformUser = vi.fn();
+const softDeletePlatformOrganization = vi.fn();
+const restorePlatformOrganization = vi.fn();
+const softDeletePlatformUser = vi.fn();
+const restorePlatformUser = vi.fn();
 
 vi.mock("@/api/client", () => ({
   api: {
@@ -24,6 +30,12 @@ vi.mock("@/api/client", () => ({
     setPlatformUserStatus: (...a: unknown[]) => setPlatformUserStatus(...a),
     grantPlatformRoot: (...a: unknown[]) => grantPlatformRoot(...a),
     revokePlatformRoot: (...a: unknown[]) => revokePlatformRoot(...a),
+    updatePlatformOrganization: (...a: unknown[]) => updatePlatformOrganization(...a),
+    updatePlatformUser: (...a: unknown[]) => updatePlatformUser(...a),
+    softDeletePlatformOrganization: (...a: unknown[]) => softDeletePlatformOrganization(...a),
+    restorePlatformOrganization: (...a: unknown[]) => restorePlatformOrganization(...a),
+    softDeletePlatformUser: (...a: unknown[]) => softDeletePlatformUser(...a),
+    restorePlatformUser: (...a: unknown[]) => restorePlatformUser(...a),
     // Deliberately NO call / transcript / summary / conversation method: the
     // console must not be able to reach content even if a future edit tries.
   },
@@ -32,7 +44,9 @@ vi.mock("@/api/client", () => ({
 const { default: PlatformControlPage } = await import("./page");
 
 const SELF = "22222222-2222-4222-8222-222222222222";
+const MEMBER = "33333333-3333-4333-8333-333333333333";
 const ORG = "11111111-1111-4111-8111-111111111111";
+const DEL_ORG = "44444444-4444-4444-8444-444444444444";
 
 const overview = {
   current_user_id: SELF,
@@ -41,23 +55,37 @@ const overview = {
   platform_roots: 1,
 };
 
+const liveOrg = {
+  id: ORG, name: "Northwind", status: "active", locale: "en",
+  created_at: "2026-08-01T00:00:00.000Z", member_count: 2,
+  deleted_at: null, purge_after: null,
+};
+const deletedOrg = {
+  id: DEL_ORG, name: "Oldco", status: "suspended", locale: "en",
+  created_at: "2026-07-01T00:00:00.000Z", member_count: 0,
+  deleted_at: "2026-08-18T00:00:00.000Z", purge_after: "2026-08-25T00:00:00.000Z",
+};
+const selfUser = {
+  id: SELF, org_id: ORG, org_name: "Northwind", email: "operator@example.test",
+  display_name: "Operator", display_name_en: null, username: null, locale: "fa",
+  role: "owner", status: "active", created_at: "2026-08-01T00:00:00.000Z",
+  last_seen_at: null, is_platform_root: true, deleted_at: null, purge_after: null,
+};
+const memberUser = {
+  id: MEMBER, org_id: ORG, org_name: "Northwind", email: "member@example.test",
+  display_name: "Member One", display_name_en: null, username: "m1", locale: "fa",
+  role: "member", status: "active", created_at: "2026-08-02T00:00:00.000Z",
+  last_seen_at: null, is_platform_root: false, deleted_at: null, purge_after: null,
+};
+
 function rootData() {
   platformOverview.mockResolvedValue(overview);
-  platformOrganizations.mockResolvedValue({
-    items: [{
-      id: ORG, name: "Northwind", status: "active", locale: "en",
-      created_at: "2026-08-01T00:00:00.000Z", member_count: 2,
-    }],
-    next_offset: null,
-  });
-  platformUsers.mockResolvedValue({
-    items: [{
-      id: SELF, org_id: ORG, org_name: "Northwind", email: "operator@example.test",
-      display_name: "Operator", username: null, role: "owner", status: "active",
-      created_at: "2026-08-01T00:00:00.000Z", last_seen_at: null, is_platform_root: true,
-    }],
-    next_offset: null,
-  });
+  platformOrganizations.mockImplementation((q: { deleted?: boolean }) =>
+    Promise.resolve({ items: q?.deleted ? [deletedOrg] : [liveOrg], next_offset: null }),
+  );
+  platformUsers.mockImplementation((q: { deleted?: boolean }) =>
+    Promise.resolve({ items: q?.deleted ? [] : [selfUser, memberUser], next_offset: null }),
+  );
   platformAudit.mockResolvedValue({
     items: [{
       id: "audit-1", actor_id: SELF, actor_email: "operator@example.test",
@@ -66,6 +94,14 @@ function rootData() {
     }],
     next_offset: null,
   });
+}
+
+/** Find the user row that contains a given email. */
+function userRow(email: string): HTMLElement {
+  const cell = screen.getByText(email);
+  const row = cell.closest("div.flex.flex-wrap");
+  if (!row) throw new Error(`row for ${email} not found`);
+  return row as HTMLElement;
 }
 
 describe("Platform-root console", () => {
@@ -90,7 +126,7 @@ describe("Platform-root console", () => {
 
     await screen.findByText("Northwind");
     expect(screen.getByText(/این کنسول تنها فرادادهٔ سازمان و کاربر را می‌بیند/)).toBeTruthy();
-    expect(platformOrganizations).toHaveBeenCalledWith({ search: "", limit: 50 });
+    expect(platformOrganizations).toHaveBeenCalledWith({ search: "", limit: 50, deleted: false });
 
     // The whole point of the redesign: the action is a live button, not a
     // permanently-disabled one gated behind a hidden textarea.
@@ -121,15 +157,83 @@ describe("Platform-root console", () => {
     );
   });
 
-  it("protects the signed-in root: cannot disable or remove-root themselves", async () => {
+  it("protects the signed-in root: cannot disable, delete, or remove-root themselves", async () => {
     platformAccess.mockResolvedValue({ platform_root: true });
     render(<PlatformControlPage />);
     await screen.findByText("Northwind");
 
     fireEvent.click(screen.getByRole("tab", { name: /کاربران/ }));
-    expect(await screen.findByText("operator@example.test")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "غیرفعال‌کردن کاربر" })).toBeDisabled(); // disable self
-    expect(screen.getByRole("button", { name: "برداشتن ریشهٔ پلتفرم" })).toBeDisabled(); // remove own root
+    await screen.findByText("operator@example.test");
+    const self = userRow("operator@example.test");
+    expect(within(self).getByRole("button", { name: "غیرفعال‌کردن کاربر" })).toBeDisabled();
+    expect(within(self).getByRole("button", { name: "برداشتن ریشهٔ پلتفرم" })).toBeDisabled();
+    expect(within(self).getByRole("button", { name: "حذف کاربر" })).toBeDisabled();
+  });
+
+  it("edits organization metadata with a reason; sends name + locale, never content", async () => {
+    platformAccess.mockResolvedValue({ platform_root: true });
+    updatePlatformOrganization.mockResolvedValue({ changed: true });
+    render(<PlatformControlPage />);
+    await screen.findByText("Northwind");
+
+    fireEvent.click(screen.getByRole("button", { name: "ویرایش" }));
+
+    const name = await screen.findByLabelText("نام سازمان");
+    expect((name as HTMLInputElement).value).toBe("Northwind"); // prefilled from the record
+    fireEvent.change(name, { target: { value: "Northwind Ltd" } });
+    fireEvent.change(screen.getByLabelText(/دلیل/), { target: { value: "rename requested by owner" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "ذخیرهٔ تغییرات" }));
+    await waitFor(() =>
+      expect(updatePlatformOrganization).toHaveBeenCalledWith(
+        ORG, { name: "Northwind Ltd", locale: "en" }, "rename requested by owner",
+      ),
+    );
+  });
+
+  it("the user edit form has no email field — email is auth-owned and immutable", async () => {
+    platformAccess.mockResolvedValue({ platform_root: true });
+    render(<PlatformControlPage />);
+    await screen.findByText("Northwind");
+
+    fireEvent.click(screen.getByRole("tab", { name: /کاربران/ }));
+    await screen.findByText("member@example.test");
+    fireEvent.click(within(userRow("member@example.test")).getByRole("button", { name: "ویرایش" }));
+
+    // The immutability note is shown; the email is nowhere editable.
+    expect(await screen.findByText("ایمیل، هویتِ ورود است و اینجا قابل تغییر نیست.")).toBeTruthy();
+    expect(screen.queryByDisplayValue("member@example.test")).toBeNull();
+  });
+
+  it("soft-deletes an organization through the reason dialog", async () => {
+    platformAccess.mockResolvedValue({ platform_root: true });
+    softDeletePlatformOrganization.mockResolvedValue({ changed: true });
+    render(<PlatformControlPage />);
+    await screen.findByText("Northwind");
+
+    fireEvent.click(screen.getByRole("button", { name: "حذف سازمان" }));
+    fireEvent.change(await screen.findByLabelText(/دلیل/), { target: { value: "offboarding the account" } });
+    fireEvent.click(screen.getByRole("button", { name: "تأیید" }));
+
+    await waitFor(() =>
+      expect(softDeletePlatformOrganization).toHaveBeenCalledWith(ORG, "offboarding the account"),
+    );
+  });
+
+  it("the Recently-deleted view queries the deleted set and offers Restore", async () => {
+    platformAccess.mockResolvedValue({ platform_root: true });
+    render(<PlatformControlPage />);
+    await screen.findByText("Northwind");
+
+    fireEvent.click(screen.getByRole("button", { name: "حذف‌شده‌های اخیر" }));
+
+    await waitFor(() =>
+      expect(platformOrganizations).toHaveBeenCalledWith({ search: "", limit: 50, deleted: true }),
+    );
+    expect(await screen.findByText("Oldco")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "بازیابی سازمان" })).toBeTruthy();
+    // In trash view the destructive suspend/delete controls are not present.
+    expect(screen.queryByRole("button", { name: "حذف سازمان" })).toBeNull();
   });
 
   it("claims only the signed-in account; no target email or password is sent", async () => {
