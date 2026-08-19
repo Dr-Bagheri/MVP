@@ -11,9 +11,6 @@
  * of every Supabase app); it is an identifier, not a secret. The service key
  * must never appear in web/ at all — core/ holds its own credentials.
  */
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-
 export class AuthError extends Error {
   constructor(
     readonly status: number,
@@ -29,8 +26,15 @@ export interface TokenSet {
   expires_in: number;
 }
 
+interface AuthUser {
+  identities?: Array<{ provider?: unknown }>;
+  user_metadata?: Record<string, unknown>;
+}
+
 function config(): { url: string; key: string } {
-  if (!SUPABASE_URL || !PUBLISHABLE_KEY) {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  if (!url || !key) {
     /*
      * Fail loudly and specifically. A missing env var here would otherwise
      * surface as a confusing 401 from Supabase — "your credentials are
@@ -39,7 +43,7 @@ function config(): { url: string; key: string } {
      */
     throw new AuthError(500, "Supabase is not configured (URL or publishable key missing)");
   }
-  return { url: SUPABASE_URL, key: PUBLISHABLE_KEY };
+  return { url, key };
 }
 
 async function gotrue(path: string, body: unknown): Promise<TokenSet> {
@@ -171,6 +175,76 @@ async function gotrueVoid(
     };
     throw new AuthError(response.status, data.error_description ?? data.msg ?? "auth request failed");
   }
+}
+
+/** The authenticated user's provider identities and profile metadata. */
+async function currentUser(accessToken: string): Promise<AuthUser> {
+  const { url, key } = config();
+  let response: Response;
+  try {
+    response = await fetch(`${url}/auth/v1/user`, {
+      headers: { apikey: key, authorization: `Bearer ${accessToken}` },
+      cache: "no-store",
+    });
+  } catch (cause) {
+    throw new AuthError(
+      502,
+      `auth provider unreachable: ${cause instanceof Error ? cause.message : "fetch failed"}`,
+    );
+  }
+
+  const data = (await response.json().catch(() => ({}))) as AuthUser & {
+    error_description?: string;
+    msg?: string;
+  };
+  if (!response.ok) {
+    throw new AuthError(response.status, data.error_description ?? data.msg ?? "auth request failed");
+  }
+  return data;
+}
+
+const OAUTH_IDENTITY_PROVIDERS = new Set(["google", "github"]);
+
+function hasEmailPasswordIdentity(user: AuthUser): boolean {
+  return user.identities?.some((identity) => identity.provider === "email") ?? false;
+}
+
+function hasOAuthIdentity(user: AuthUser): boolean {
+  return user.identities?.some(
+    (identity) => typeof identity.provider === "string" && OAUTH_IDENTITY_PROVIDERS.has(identity.provider),
+  ) ?? false;
+}
+
+/**
+ * First-provider-arrival is a setup step, not an authorization decision.
+ *
+ * Supabase's `email` identity is the durable fact that a password identity
+ * already exists. Older OAuth-only accounts receive the small metadata marker
+ * when this platform creates their first password. The marker only prevents
+ * unnecessary setup UI; RLS and access control never consult it.
+ */
+export async function oauthPasswordEnrollmentRequired(accessToken: string): Promise<boolean> {
+  const user = await currentUser(accessToken);
+  const enrolled = user.user_metadata?.neurai_password_enrolled === true;
+  return hasOAuthIdentity(user) && !hasEmailPasswordIdentity(user) && !enrolled;
+}
+
+/**
+ * Set the first password after a Google/GitHub proof of account ownership.
+ * This route is deliberately narrower than a general password change: an
+ * email/password identity must use the current-password route instead.
+ */
+export async function setInitialOAuthPassword(accessToken: string, password: string): Promise<void> {
+  const user = await currentUser(accessToken);
+  const enrolled = user.user_metadata?.neurai_password_enrolled === true;
+  if (!hasOAuthIdentity(user) || hasEmailPasswordIdentity(user) || enrolled) {
+    throw new AuthError(409, "password is already configured");
+  }
+  return gotrueVoid("/user", {
+    method: "PUT",
+    body: { password, data: { neurai_password_enrolled: true } },
+    accessToken,
+  });
 }
 
 /**

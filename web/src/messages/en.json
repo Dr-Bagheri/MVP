@@ -25,7 +25,7 @@
     "working": "Working…",
     "finish": "Finish setting up",
     "finishSetup": "Your account exists but is not attached to an organization yet. Enter a name to finish.",
-    "finishSetupOauth": "Almost there. Name your organization and choose a password — you will be able to sign in with your email and this password, or with the same external account.",
+    "finishPasswordOauth": "Choose a password before entering NeurAI Platform. You can use it with your email as well as Google or GitHub.",
     "choosePassword": "Choose a password",
     "confirmPassword": "Confirm the password",
     "sessionLost": "The session was not established; please sign in again.",

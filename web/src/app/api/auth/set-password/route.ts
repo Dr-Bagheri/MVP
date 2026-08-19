@@ -1,10 +1,9 @@
-import { AuthError, changePassword, signInWithPassword } from "@/server/supabase";
+import { AuthError, setInitialOAuthPassword, signInWithPassword } from "@/server/supabase";
 import { readSession, writeSession } from "@/server/session";
 
 /**
- * Set the FIRST password on an OAuth-born account (user directive,
- * 2026-08-18: a Google/GitHub arrival names their organization AND sets a
- * password before they are in).
+ * Set the FIRST password on an OAuth-born account before any NeurAI Platform
+ * routing. Organization setup, if still needed, follows afterwards.
  *
  * Why this exists beside `/api/auth/change-password`: that route verifies the
  * CURRENT password before changing anything — the guard that stops a stolen
@@ -48,7 +47,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    await changePassword(session.accessToken, new_password);
+    await setInitialOAuthPassword(session.accessToken, new_password);
   } catch (error) {
     if (error instanceof AuthError) {
       // GoTrue's own sentence — length, complexity, leaked-password checks

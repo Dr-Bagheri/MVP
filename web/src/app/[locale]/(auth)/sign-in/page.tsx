@@ -46,13 +46,11 @@ export default function SignInPage() {
   /** Set when the server says this token has no membership yet (M15 recovery). */
   const [needsOrg, setNeedsOrg] = useState(false);
   /**
-   * An OAuth arrival (Google/GitHub) completing setup must ALSO set a
-   * password (user directive, 2026-08-18): without one, the login form's
-   * password box is a door they can never use, and losing provider access
-   * would mean losing the account. Email-confirmed arrivals typed a password
-   * two minutes ago and are not asked again.
+   * A first Google/GitHub arrival must choose a password before ANY route into
+   * the product. The server, not membership status, tells us whether that
+   * password identity already exists.
    */
-  const [oauthArrival, setOauthArrival] = useState(false);
+  const [needsOAuthPassword, setNeedsOAuthPassword] = useState(false);
   const [newPassword, setNewPassword] = useState("");
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
   /** The invitation probe runs ONCE. Without the bound, register-succeeds
@@ -92,12 +90,11 @@ export default function SignInPage() {
     } else if (confirmed === "failed") {
       setError(t("confirmFailed"));
     } else if (oauth === "ok") {
-      // The callback already holds a session. Route by identity exactly as
-      // the confirm path does — but remember HOW they arrived, because a
-      // first-timer's completion step asks for a password only on this path.
-      setOauthArrival(true);
+      // Do not route an OAuth arrival directly to a membership. A prior
+      // invitation/registration may already make them a member, but the first
+      // password still belongs before the platform is reachable.
       setBusy(true);
-      void routeByIdentity().finally(() => setBusy(false));
+      void startOAuthArrival().finally(() => setBusy(false));
     } else if (oauth === "failed") {
       // the provider round trip died (expired code, denied consent, replay)
       setError(t("oauthFailed"));
@@ -157,6 +154,35 @@ export default function SignInPage() {
     }
   }
 
+  async function startOAuthArrival() {
+    const enrollment = await api.oauthPasswordEnrollment();
+    if (enrollment.required) {
+      setNeedsOAuthPassword(true);
+      return;
+    }
+    await routeByIdentity();
+  }
+
+  async function enrollOAuthPassword(event: React.FormEvent) {
+    event.preventDefault();
+    if (busy) return;
+    if (newPassword !== confirmNewPassword) {
+      setError(tPassword("mismatch"));
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await api.setPassword(newPassword);
+      setNeedsOAuthPassword(false);
+      await routeByIdentity();
+    } catch (cause) {
+      setError(refusalText(cause, t));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function signIn(event: React.FormEvent) {
     event.preventDefault();
     if (busy) return;
@@ -175,25 +201,9 @@ export default function SignInPage() {
   async function register(event: React.FormEvent) {
     event.preventDefault();
     if (busy) return;
-    if (oauthArrival) {
-      // client-side mismatch check — the only validation the server cannot do,
-      // because the server only ever sees one of the two boxes
-      if (newPassword !== confirmNewPassword) {
-        setError(tPassword("mismatch"));
-        return;
-      }
-    }
     setBusy(true);
     setError(null);
     try {
-      /*
-       * PASSWORD FIRST, org second (OAuth arrivals only). If the org name is
-       * refused, the password has already landed and the retry asks only for
-       * the org; the reverse order could register someone into the product
-       * and then fail the password — leaving an account whose only door is
-       * the provider, which is the state this step exists to prevent.
-       */
-      if (oauthArrival) await api.setPassword(newPassword);
       // display_name defaults to the local part of the address: the token
       // carries the email, and asking again for something we already know is
       // friction. They rename themselves on the profile screen.
@@ -228,55 +238,46 @@ export default function SignInPage() {
         </p>
       ) : null}
 
-      {needsOrg ? (
+      {needsOAuthPassword ? (
+        <form className="space-y-4" onSubmit={enrollOAuthPassword}>
+          <p className="text-sm leading-7 text-fg-muted">{t("finishPasswordOauth")}</p>
+          <Field label={t("choosePassword")}>
+            <input
+              className="input"
+              dir="ltr"
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              autoComplete="new-password"
+            />
+          </Field>
+          <Field label={t("confirmPassword")}>
+            <input
+              className="input"
+              dir="ltr"
+              type="password"
+              value={confirmNewPassword}
+              onChange={(e) => setConfirmNewPassword(e.target.value)}
+              autoComplete="new-password"
+            />
+          </Field>
+          {error ? <p role="alert" className="text-sm text-danger">{error}</p> : null}
+          <button className="btn-primary w-full" disabled={busy || !newPassword || !confirmNewPassword}>
+            {busy ? t("working") : tPassword("setPassword")}
+          </button>
+        </form>
+      ) : needsOrg ? (
         <form className="space-y-4" onSubmit={register}>
-          <p className="text-sm leading-7 text-fg-muted">
-            {oauthArrival ? t("finishSetupOauth") : t("finishSetup")}
-          </p>
+          <p className="text-sm leading-7 text-fg-muted">{t("finishSetup")}</p>
           <Field label={t("orgName")} hint={t("orgNameHint")}>
             <input className="input" value={orgName} onChange={(e) => setOrgName(e.target.value)} />
           </Field>
-          {oauthArrival ? (
-            /*
-             * The provider proved the address; the password is what makes the
-             * ordinary login form a second door to this account. Asked HERE,
-             * inside the completion step, so an OAuth account never exists in
-             * the password-less state (user directive, 2026-08-18).
-             */
-            <>
-              <Field label={t("choosePassword")}>
-                <input
-                  className="input"
-                  dir="ltr"
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  autoComplete="new-password"
-                />
-              </Field>
-              <Field label={t("confirmPassword")}>
-                <input
-                  className="input"
-                  dir="ltr"
-                  type="password"
-                  value={confirmNewPassword}
-                  onChange={(e) => setConfirmNewPassword(e.target.value)}
-                  autoComplete="new-password"
-                />
-              </Field>
-            </>
-          ) : null}
           {error ? (
             <p role="alert" className="text-sm text-danger">
               {error}
             </p>
           ) : null}
-          <button
-            className="btn-primary w-full"
-            disabled={
-              busy || !orgName.trim() || (oauthArrival && (!newPassword || !confirmNewPassword))
-            }
-          >
+          <button className="btn-primary w-full" disabled={busy || !orgName.trim()}>
             {busy ? t("working") : t("finish")}
           </button>
         </form>

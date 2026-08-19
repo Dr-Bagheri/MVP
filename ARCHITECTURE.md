@@ -1259,6 +1259,18 @@ person has connected one. This is a product capability, not a visual preview.
 The existing public API gateway and webhooks from M17 remain unchanged. Other
 connector catalogue entries remain previews until separately implemented.
 
+## M31 — OAuth first-password enrollment [user-approved 2026-08-19]
+
+A successful Google or GitHub callback does not by itself route a person into
+NeurAI Platform. An OAuth-only account without an email/password identity
+must choose and confirm its first password before membership, invitation, or
+organization routing resumes. This makes email/password a second recovery
+door without prompting on later OAuth sign-ins. Supabase's provider identity
+and a platform-owned `user_metadata` enrollment marker decide only whether to
+show the setup screen; they are never authorization inputs. The first-password
+route refuses existing email/password identities; an ordinary password change
+continues to require the current password.
+
 ---
 
 ## Invariants (locked)

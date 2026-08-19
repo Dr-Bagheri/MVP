@@ -357,6 +357,11 @@ export const api = {
     });
   },
 
+  /** Whether this just-authenticated Google/GitHub account needs its first password. */
+  async oauthPasswordEnrollment(): Promise<{ required: boolean }> {
+    return bff<{ required: boolean }>("/api/auth/oauth-password-status");
+  },
+
   /**
    * **LIVE** — `POST /api/auth/change-password`. Requires the current one; see
    * the route for why GoTrue's not requiring it is a hole rather than a

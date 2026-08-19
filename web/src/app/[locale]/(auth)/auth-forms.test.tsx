@@ -31,6 +31,8 @@ const signIn = vi.fn();
 const signUp = vi.fn();
 const register = vi.fn();
 const identityState = vi.fn();
+const setPassword = vi.fn();
+const oauthPasswordEnrollment = vi.fn();
 
 vi.mock("@/api/client", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/api/client")>();
@@ -41,6 +43,8 @@ vi.mock("@/api/client", async (importOriginal) => {
       signUp: (...args: unknown[]) => signUp(...args),
       register: (...args: unknown[]) => register(...args),
       identityState: () => identityState(),
+      setPassword: (...args: unknown[]) => setPassword(...args),
+      oauthPasswordEnrollment: () => oauthPasswordEnrollment(),
     },
   };
 });
@@ -58,8 +62,12 @@ beforeEach(() => {
   signUp.mockReset();
   register.mockReset();
   identityState.mockReset();
+  setPassword.mockReset();
+  oauthPasswordEnrollment.mockReset();
   signIn.mockResolvedValue(undefined);
   identityState.mockResolvedValue({ state: "member", me: {} });
+  setPassword.mockResolvedValue(undefined);
+  oauthPasswordEnrollment.mockResolvedValue({ required: false });
 });
 
 describe("sign-in actually signs in", () => {
@@ -208,6 +216,39 @@ describe("the confirm-email landing (?confirmed=…)", () => {
     window.history.replaceState(null, "", "/?oauth=failed");
     render(<SignInPage />);
     expect(await screen.findByRole("alert")).toHaveTextContent(/حساب بیرونی/);
+  });
+});
+
+describe("the OAuth arrival (?oauth=ok)", () => {
+  afterEach(() => window.history.replaceState(null, "", "/"));
+
+  it("requires a first password before routing even an already registered member", async () => {
+    window.history.replaceState(null, "", "/?oauth=ok");
+    oauthPasswordEnrollment.mockResolvedValue({ required: true });
+    identityState.mockResolvedValue({ state: "member", me: {} });
+    render(<SignInPage />);
+
+    expect(await screen.findByLabelText(/^انتخاب گذرواژه/)).toBeTruthy();
+    expect(push).not.toHaveBeenCalled();
+    expect(identityState).not.toHaveBeenCalled();
+
+    type(/^انتخاب گذرواژه/, "password-one");
+    type(/^تکرار گذرواژه/, "password-one");
+    fireEvent.click(screen.getByRole("button", { name: "ثبت گذرواژه" }));
+
+    await waitFor(() => expect(setPassword).toHaveBeenCalledWith("password-one"));
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/"));
+  });
+
+  it("does not interrupt a later OAuth arrival once its password exists", async () => {
+    window.history.replaceState(null, "", "/?oauth=ok");
+    oauthPasswordEnrollment.mockResolvedValue({ required: false });
+    identityState.mockResolvedValue({ state: "member", me: {} });
+    render(<SignInPage />);
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/"));
+    expect(screen.queryByLabelText(/^انتخاب گذرواژه/)).toBeNull();
+    expect(setPassword).not.toHaveBeenCalled();
   });
 });
 
