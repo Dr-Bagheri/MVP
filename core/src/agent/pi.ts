@@ -154,6 +154,37 @@ export function loopInput(userText: string, systemPrompt: string, tools: unknown
   };
 }
 
+/**
+ * Output ceiling per model call, sent EXPLICITLY.
+ *
+ * Unset, Pi's adapter falls back to the model's own maximum
+ * (`params.max_tokens ?? model.maxTokens` — 65,536 for gemini-3.1-pro), and
+ * OpenRouter's affordability precheck runs against that worst case: with a
+ * thin credit balance every ask died in ~800ms with 402 "requested up to
+ * 65536 tokens, but can only afford …" while nothing had been generated at
+ * all (found live, 2026-08-20). 8192 tokens ≈ six thousand words — generous
+ * for an answer or a summary — and it caps the worst-case spend of any
+ * single run instead of letting the model's spec sheet do it.
+ */
+export const MAX_OUTPUT_TOKENS = 8192;
+
+/** The loop config, extracted so a test can hold the ceiling in place. */
+export function loopConfig(
+  options: PiRunOptions, model: unknown, reasoningRequired: boolean,
+): Record<string, unknown> {
+  return {
+    model,
+    reasoning: reasoningFor(reasoningRequired),
+    maxTokens: MAX_OUTPUT_TOKENS,
+    convertToLlm: (messages: unknown[]) => messages as never,
+    beforeToolCall: options.beforeToolCall
+      ? async (ctx: { toolCall: { name: string }; args: unknown }) => options.beforeToolCall!(ctx)
+      : undefined,
+    toolExecutionMode: "sequential" as const,
+    ...(options.apiKey ? { getApiKey: () => options.apiKey } : {}),
+  };
+}
+
 export async function runPi(options: PiRunOptions): Promise<PiRunResult> {
   const { model, reasoningRequired } = resolveModel(options.model);
   const models = builtinModels();
@@ -165,16 +196,7 @@ export async function runPi(options: PiRunOptions): Promise<PiRunResult> {
 
   const { prompts, context } = loopInput(options.userText, options.systemPrompt, options.tools);
 
-  const config = {
-    model,
-    reasoning: reasoningFor(reasoningRequired),
-    convertToLlm: (messages: unknown[]) => messages as never,
-    beforeToolCall: options.beforeToolCall
-      ? async (ctx: { toolCall: { name: string }; args: unknown }) => options.beforeToolCall!(ctx)
-      : undefined,
-    toolExecutionMode: "sequential" as const,
-    ...(options.apiKey ? { getApiKey: () => options.apiKey } : {}),
-  };
+  const config = loopConfig(options, model, reasoningRequired);
 
   const onEvent = (raw: unknown): void =>
     bridgeAgentEvent(raw, {

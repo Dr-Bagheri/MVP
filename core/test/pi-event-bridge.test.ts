@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { bridgeAgentEvent, loopInput } from "../src/agent/pi.ts";
+import { bridgeAgentEvent, loopConfig, loopInput, MAX_OUTPUT_TOKENS } from "../src/agent/pi.ts";
 
 /**
  * The Pi event bridge — the seam that silently ate every assistant answer.
@@ -95,5 +95,26 @@ describe("loopInput", () => {
     }[];
     const texts = wire.flatMap((m) => m.content.map((c) => c.text));
     expect(texts).toEqual(["[0:01] متن"]);
+  });
+});
+
+/**
+ * The output ceiling travels on EVERY loop config. Left unset, Pi's adapter
+ * substitutes the model's own maximum (65,536 for gemini-3.1-pro) and
+ * OpenRouter's affordability precheck runs against that worst case — with a
+ * thin credit balance, every ask died in ~800ms with 402 while generating
+ * nothing (live, 2026-08-20). This holds the field itself in place: deleting
+ * it from loopConfig reverts to the model's spec sheet, silently.
+ */
+describe("loopConfig", () => {
+  it("always carries an explicit finite maxTokens", () => {
+    const cfg = loopConfig(
+      { model: { provider: "openrouter", id: "m" }, systemPrompt: "s", userText: "u", tools: [] },
+      { id: "m" },
+      false,
+    );
+    expect(cfg.maxTokens).toBe(MAX_OUTPUT_TOKENS);
+    expect(Number.isFinite(cfg.maxTokens)).toBe(true);
+    expect(cfg.maxTokens as number).toBeGreaterThan(0);
   });
 });
