@@ -295,6 +295,32 @@ Supabase dashboard work (custom SMTP + Site URL), tracked separately.
 
 ---
 
+## 7d. Deployment record — 2026-08-20 (auth flow, history, org workflows)
+
+Commits `f3b234b` + `1c8a81c`. Migration **0072** applied (org-authored
+workflows: org_id/created_by on workflow_template, tenant-scoped read
+policy, admin-gated insert). Reset/invite completion now ends at the
+SIGN-IN form (no auto-session — user ruling); invited arrivals register
+server-side during reset. History delete works (the archive BFF hop
+existed nowhere); session lists carry message_count. Hub composer's Tools
+menu removed. Create-workflow shipped end to end.
+
+Test residue erased: both test identities (amirrezabagheri77777@…,
+amirrezabagheript@…) removed product-side via `db/scripts/erase-user.mjs`
+(owner-run; savepoint-per-delete catalogue walk; accepts emails or raw
+UUIDs — an email lookup misses TOMBSTONED rows) and then auth-side via the
+admin API (verified 0 matches). Note: the walk deletes RESTRICT-referencing
+rows, so two platform_audit lines about the test users went with them —
+acceptable for test residue, would not be for a real account.
+
+Supabase dashboard config the flows depend on (user-side): Auth → Email
+Templates must link Invite → `{{ .SiteURL }}/fa/reset?token_hash={{ .TokenHash }}&type=invite`,
+Reset → same with `type=recovery`, Confirm signup →
+`{{ .SiteURL }}/api/auth/confirm?token_hash={{ .TokenHash }}&type=signup`;
+Site URL = `https://app.neurai.pt`. Custom SMTP still pending for volume.
+
+---
+
 ## 8. What never goes in this file (or any log)
 
 Connection strings, DB passwords, API keys, service keys, JWT secrets, the
