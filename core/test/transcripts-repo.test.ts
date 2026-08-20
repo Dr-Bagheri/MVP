@@ -239,7 +239,31 @@ describe("search", () => {
     const { db, log } = fakeDb(() => hitRows());
     await createTranscriptsRepo(db).search(IDENTITY, "بودجه");
     const sql = queries(log)[0]!.sql;
-    expect(sql.match(/c\.deleted_at is null/g)).toHaveLength(2);   // both branches
+    expect(sql.match(/c\.deleted_at is null/g)).toHaveLength(3);   // all three branches
+  });
+
+  it("matches call TITLES too — a call is findable by name before it has words", async () => {
+    // 2026-08-20: a call named "call2" with no transcript yet was invisible
+    // to search AND to the assistant's Sources picker — the index only ever
+    // covered transcript text and summaries, so an empty call could not be
+    // found at all. Titles match folded (Arabic-keyboard spellings) and by
+    // ILIKE, not tsquery — a name lookup must prefix-match while typing.
+    const { db, log } = fakeDb(() => [
+      { call_id: CALL, call_title: "call2", kind: "call", start_ms: null, end_ms: null, snippet: "call2" },
+    ]);
+    const hits = await createTranscriptsRepo(db).search(IDENTITY, "call2");
+    expect(hits[0]!.kind).toBe("call");
+    expect(hits[0]!.start_ms).toBeNull();
+    const sql = queries(log)[0]!.sql;
+    expect(sql).toContain("echo.fa_fold(c.title) ilike ('%' || echo.fa_fold($4) || '%') escape '\\'");
+  });
+
+  it("escapes ILIKE wildcards in the title pattern — `%` must not disable the filter", async () => {
+    // The members-directory lesson, applied here: an unescaped % in the
+    // query would match EVERY title, and an unescaped _ every character.
+    const { db, log } = fakeDb(() => []);
+    await createTranscriptsRepo(db).search(IDENTITY, "100%_\\done");
+    expect(queries(log)[0]!.params?.[3]).toBe("100\\%\\_\\\\done");
   });
 
   it("clamps the hit count", async () => {

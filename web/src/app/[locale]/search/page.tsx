@@ -112,8 +112,12 @@ export default function SearchPage() {
                 <Card className="row-link">
                   <div className="mb-1 flex flex-wrap items-center gap-2">
                     <span className="text-sm font-medium text-fg">{hit.call_title}</span>
-                    <Chip tone={hit.kind === "summary" ? "accent" : "neutral"}>
-                      {hit.kind === "summary" ? t("inSummary") : t("inTranscript")}
+                    <Chip tone={hit.kind === "transcript" ? "neutral" : "accent"}>
+                      {hit.kind === "summary"
+                        ? t("inSummary")
+                        : hit.kind === "call"
+                          ? t("inTitle")
+                          : t("inTranscript")}
                     </Chip>
                     {hit.start_ms !== null ? (
                       <span className="text-xs text-fg-muted ltr">

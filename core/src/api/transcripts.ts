@@ -116,7 +116,8 @@ export interface SummaryVersion {
 export interface SearchHit {
   call_id: string;
   call_title: string;
-  kind: "transcript" | "summary";
+  /** "call" = the TITLE matched — the call itself, findable before it has words. */
+  kind: "transcript" | "summary" | "call";
   /** Present for transcript hits so the client can seek to the moment. */
   start_ms: number | null;
   end_ms: number | null;
@@ -266,6 +267,16 @@ export function createTranscriptsRepo(db: Db) {
       if (text.length < 2) throw new ValidationError("query must be at least 2 characters");
       const limit = Math.min(Math.max(options.limit ?? 20, 1), MAX_HITS);
       const callId = options.callId ? assertUuid(options.callId, "call id") : null;
+      /**
+       * Titles match by escaped ILIKE, not tsquery — the members-directory
+       * precedent: a NAME lookup is expected to prefix-match («call2» while
+       * typing «call»), and websearch_to_tsquery would refuse exactly that.
+       * Escaping is what keeps `%`/`_` in a query from silently turning the
+       * filter off (2026-08-20: a call named "call2" was invisible to the
+       * Sources picker because search only ever indexed transcript text and
+       * summaries — a call with no words yet could not be found AT ALL).
+       */
+      const titlePattern = text.replace(/[\\%_]/g, (c) => `\\${c}`);
 
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<Record<string, unknown>>(
@@ -294,16 +305,26 @@ export function createTranscriptsRepo(db: Db) {
               where m.search @@ q.tsq
                 and c.deleted_at is null
                 and ($2::uuid is null or m.call_id = $2::uuid)
+             union all
+             select c.id, c.title, 'call',
+                    null::int, null::int,
+                    c.title,
+                    1.0::real
+               from echo.call c
+              where c.deleted_at is null
+                and c.title is not null
+                and ($2::uuid is null or c.id = $2::uuid)
+                and echo.fa_fold(c.title) ilike ('%' || echo.fa_fold($4) || '%') escape '\\'
            ) hits
            order by rank desc, start_ms nulls last
            limit $3`,
-          [text, callId, limit],
+          [text, callId, limit, titlePattern],
         ),
       );
       return rows.map((row) => ({
         call_id: row.call_id as string,
         call_title: row.call_title as string,
-        kind: row.kind as "transcript" | "summary",
+        kind: row.kind as "transcript" | "summary" | "call",
         start_ms: (row.start_ms as number | null) ?? null,
         end_ms: (row.end_ms as number | null) ?? null,
         snippet: row.snippet as string,

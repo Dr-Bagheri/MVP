@@ -714,7 +714,8 @@ export interface AgentRun {
 export interface SearchHit {
   call_id: string;
   call_title: string;
-  kind: "transcript" | "summary";
+  /** "call" = the TITLE matched — a call is findable by name before it has words. */
+  kind: "transcript" | "summary" | "call";
   /**
    * null for SUMMARY hits — a summary is about the whole call, and inventing
    * a timestamp for it would be a lie. Drive the seek affordance off
