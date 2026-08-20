@@ -271,6 +271,21 @@ export function CallsSection({ view = "live" }: { view?: "live" | "archive" }) {
                     <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                       {mayEdit(call) ? (
                         <span className="flex items-center gap-3 text-xs">
+                          {/* An unfinished take continues where its audio
+                              ends (user directive, 2026-08-20). OWNER-only,
+                              stricter than mayEdit: resuming records through
+                              the resumer's OWN microphone into the take —
+                              an admin "resuming" a colleague's call would
+                              splice their voice into someone else's
+                              recording. */}
+                          {call.status === "recording" && call.owner_id === me?.id ? (
+                            <Link
+                              href={`/echo/record?resume=${call.id}`}
+                              className="font-semibold text-accent underline-offset-2 hover:underline"
+                            >
+                              {t("resumeCall")}
+                            </Link>
+                          ) : null}
                           <button
                             className="text-fg-muted underline-offset-2 hover:underline"
                             disabled={busy}

@@ -86,10 +86,11 @@
     "rename": "تغییر عنوان",
     "translate": "ترجمه",
     "confirmDelete": "حذف شود؟",
-    "untitled": "بدون عنوان"
+    "untitled": "بدون عنوان",
+    "resumeCall": "ادامه"
   },
   "status": {
-    "recording": "در حال ضبط",
+    "recording": "متوقف‌شده",
     "processing": "در حال پردازش",
     "linking": "تطبیق گویندگان",
     "summarizing": "در حال خلاصه‌سازی",
@@ -264,7 +265,13 @@
     "uploadFileFailed": "بارگذاری کامل نشد. فایل نزد شماست — دوباره تلاش کنید.",
     "nothingRecorded": "صدایی ضبط نشد — میکروفون را بررسی کنید و دوباره ضبط کنید.",
     "accepted": "پذیرفته شد — در صف پردازش",
-    "titleField": "عنوان تماس"
+    "titleField": "عنوان تماس",
+    "resumeLoading": "در حال بارگذاری تماس متوقف‌شده…",
+    "resumeGone": "این تماس دیگر قابل ادامه نیست — شاید پردازش آن تمام شده باشد.",
+    "resumeBackToCalls": "بازگشت به تماس‌ها",
+    "resumeBanner": "ادامهٔ «{title}» — تاکنون {clock} ضبط شده. میکروفون و بلندگو را بررسی کنید و ادامه دهید.",
+    "resumeStart": "ادامهٔ ضبط",
+    "untitledCall": "تماس بی‌عنوان"
   },
   "call": {
     "summary": "خلاصه",

@@ -79,3 +79,27 @@ export function readDurationSeconds(file: File): Promise<number | null> {
     audio.src = url;
   });
 }
+
+/**
+ * Where a paused (unfinished) call continues from — the resume feature's one
+ * calculation, kept pure so it can be verified against the two ways it is
+ * easy to get wrong:
+ *  - `nextIdx` is max(idx)+1, NEVER parts.length: a failed part leaves a GAP
+ *    in the indices, and reusing an index collides with the worker's
+ *    deterministic seq ranging (idx × 100_000 — a duplicate trips UNIQUE).
+ *  - `offsetMs` is the furthest part END (max of offset+duration), NEVER the
+ *    sum of durations: the duration_ms lesson — with a gap, sum under-reports
+ *    and the resumed audio would overlap the tail of what exists.
+ */
+export function resumePoint(
+  parts: readonly { idx: number; offset_ms: number; duration_ms: number | null }[],
+): { nextIdx: number; offsetMs: number } {
+  let nextIdx = 0;
+  let offsetMs = 0;
+  for (const part of parts) {
+    if (part.idx + 1 > nextIdx) nextIdx = part.idx + 1;
+    const end = part.offset_ms + (part.duration_ms ?? 0);
+    if (end > offsetMs) offsetMs = end;
+  }
+  return { nextIdx, offsetMs };
+}

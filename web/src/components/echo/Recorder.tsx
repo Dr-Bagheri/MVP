@@ -7,7 +7,7 @@ import { PartUploader, type UploaderProgress } from "@/lib/callUpload";
 import { Card, Chip, Field, Progress } from "@/components/ui";
 import { Link } from "@/i18n/routing";
 import { digits, formatClock } from "@/lib/format";
-import { PART_MS } from "./uploadRules";
+import { PART_MS, resumePoint } from "./uploadRules";
 
 /**
  * The browser recorder — Part 5's centrepiece, and the first REAL producer
@@ -59,6 +59,21 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
   const [progress, setProgress] = useState<UploaderProgress>({ done: 0, pending: 0, failed: 0 });
   const [error, setError] = useState<string | null>(null);
   const [previews, setPreviews] = useState<{ idx: number; url: string }[]>([]);
+  /**
+   * RESUME mode (user directive, 2026-08-20): a call left unfinished — the
+   * person navigated away, closed the tab, or paused and left — shows as
+   * paused in the Calls table, and its Resume action lands here with
+   * `?resume=<id>`. Recording then CONTINUES on the same call: same id, the
+   * next part index, the offset where the audio actually ends. `null` =
+   * fresh-recording mode; "loading" while the call is fetched; "gone" when
+   * the id can no longer be resumed (finished meanwhile, or not theirs).
+   */
+  const [resumeTarget, setResumeTarget] = useState<
+    | null
+    | "loading"
+    | "gone"
+    | { callId: string; title: string | null; nextIdx: number; offsetMs: number }
+  >(null);
 
   const stream = useRef<MediaStream | null>(null);
   const recorder = useRef<MediaRecorder | null>(null);
@@ -77,6 +92,9 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
   const flushDone = useRef<(() => void) | null>(null);
   /** Parts actually handed to the uploader — zero means nothing to finish. */
   const partsEnqueued = useRef<number>(0);
+  /** Resume adopts a call that already HAS parts: finishing with zero NEW
+   *  parts is then legitimate (they came back just to press finish). */
+  const priorParts = useRef<boolean>(false);
 
   /** Refresh the device lists. Before a grant, labels are blank by the
    *  browser's privacy rule — the picker names them generically then. */
@@ -118,21 +136,19 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
   );
 
   /**
-   * A live recording must not keep rolling while nobody is looking (user
-   * directive, 2026-08-20): leaving the tab, closing it, or navigating to
-   * another section PAUSES the take instead of silently recording a wall.
-   *
-   * Three doors, three guards:
-   *  - tab hidden (switch/minimize) → pause. No auto-resume: coming back
-   *    and pressing resume is a decision, and an automatic one would splice
-   *    an absence into the take without anyone choosing it.
-   *  - tab close / hard reload → the browser's own leave prompt (and a
-   *    best-effort pause, so cancelling the leave lands on a paused take).
-   *  - IN-APP navigation → the first click on any link pauses and stays
-   *    (App Router has no cancellable route event, so the guard is a
-   *    capture-phase click listener). While PAUSED the guard is off: the
-   *    second, deliberate click leaves — the unmount teardown stops the
-   *    recorder, which flushes and uploads everything captured so far.
+   * Leaving does not lose a take — it PAUSES it (user directive, 2026-08-20,
+   * revised same day from a stay-on-page guard to the resume model): an
+   * unfinished call shows as paused in the Calls table and continues from
+   * where the audio ends via its Resume action. So navigation is free —
+   * the unmount teardown stops the recorder, which flushes and uploads the
+   * current part. Two listeners remain:
+   *  - tab hidden (switch/minimize) → pause: the mic must not keep rolling
+   *    while nobody is looking. No auto-resume — splicing an absence into a
+   *    take is a decision, not a default.
+   *  - tab close / hard reload → the browser's leave prompt: unlike in-app
+   *    navigation, a closing tab cannot flush the current part, so up to
+   *    the current part's audio would be lost silently. The prompt is the
+   *    honest cost sentence; everything already uploaded stays resumable.
    */
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
@@ -147,23 +163,40 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
       // older Chrome shows the prompt only when returnValue is set
       e.returnValue = "";
     };
-    const onClickCapture = (e: MouseEvent) => {
-      if (phaseRef.current !== "recording") return;
-      const anchor = (e.target as Element | null)?.closest?.("a[href]");
-      if (!anchor) return;
-      e.preventDefault();
-      e.stopPropagation();
-      pause();
-    };
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("beforeunload", onBeforeUnload);
-    document.addEventListener("click", onClickCapture, true);
     return () => {
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("beforeunload", onBeforeUnload);
-      document.removeEventListener("click", onClickCapture, true);
     };
   }, [phase]);
+
+  /**
+   * Adopt the resume target from the URL. Read from `location.search` in an
+   * effect, deliberately NOT `useSearchParams()` — that hook forces a
+   * prerender bailout that broke the production build once already (the
+   * hub's Suspense failure). Guarded: only a call still in `recording`
+   * status is resumable — anything else gets the honest "gone" screen
+   * rather than a recorder that would upload into a finished call.
+   */
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("resume");
+    if (!id) return;
+    setResumeTarget("loading");
+    void api
+      .getCall(id)
+      .then((call) => {
+        // null and non-recording are one answer here: nothing to resume
+        if (!call || call.status !== "recording") {
+          setResumeTarget("gone");
+          return;
+        }
+        const { nextIdx, offsetMs } = resumePoint(call.parts ?? []);
+        setResumeTarget({ callId: call.id, title: call.title, nextIdx, offsetMs });
+        setTitle(call.title ?? "");
+      })
+      .catch(() => setResumeTarget("gone"));
+  }, []);
 
   /**
    * One complete part-recorder on the shared stream. `idx`/`offsetMs` and
@@ -258,28 +291,39 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
       return;
     }
     await refreshDevices(); // labels exist now that permission does
-    try {
-      const created = await api.createCall({
-        title: title.trim() || undefined,
-        source: "web",
-      });
-      callId.current = created.id;
-    } catch {
-      stream.current?.getTracks().forEach((track) => track.stop());
-      stream.current = null;
-      setPhase("idle");
-      setError(t("createFailed"));
-      return;
+    const resuming = typeof resumeTarget === "object" && resumeTarget !== null;
+    if (resuming) {
+      // RESUME: the call exists — adopt it and continue after its last audio
+      callId.current = resumeTarget.callId;
+    } else {
+      try {
+        const created = await api.createCall({
+          title: title.trim() || undefined,
+          source: "web",
+        });
+        callId.current = created.id;
+      } catch {
+        stream.current?.getTracks().forEach((track) => track.stop());
+        stream.current = null;
+        setPhase("idle");
+        setError(t("createFailed"));
+        return;
+      }
     }
     uploader.current = new PartUploader(api, callId.current, setProgress);
-    recordedRef.current = 0;
-    partStartMs.current = 0;
-    partIdx.current = 0;
+    /* on resume the clock and part math START at the existing audio's end,
+       so the person sees the take's TOTAL time and the next part lands with
+       the next index at the right offset — resumePoint's two guarantees */
+    const base = resuming ? resumeTarget : { nextIdx: 0, offsetMs: 0 };
+    priorParts.current = resuming && base.nextIdx > 0;
+    recordedRef.current = base.offsetMs;
+    partStartMs.current = base.offsetMs;
+    partIdx.current = base.nextIdx;
     partsEnqueued.current = 0;
-    setRecordedMs(0);
+    setRecordedMs(base.offsetMs);
     setPreviews([]);
     startMeter();
-    startPartRecorder(0, 0);
+    startPartRecorder(base.nextIdx, base.offsetMs);
     lastTick.current = Date.now();
     timer.current = setInterval(() => {
       // the clock counts RECORDED time: it advances only while recording
@@ -338,7 +382,7 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
     void audioCtx.current?.close();
     audioCtx.current = null;
 
-    if (partsEnqueued.current === 0) {
+    if (partsEnqueued.current === 0 && !priorParts.current) {
       // no audio ever reached the uploader — finishing would create a call
       // stuck at "processing" forever, with nothing for the pipeline to do
       setPhase("failed");
@@ -401,16 +445,53 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
   const inPartMs = recordedMs - partStartMs.current;
   const partNo = partIdx.current + 1;
 
+  const resuming = typeof resumeTarget === "object" && resumeTarget !== null;
+
+  if (resumeTarget === "loading") {
+    return (
+      <Card className="max-w-2xl">
+        <p className="text-sm text-fg-muted">{t("resumeLoading")}</p>
+      </Card>
+    );
+  }
+  if (resumeTarget === "gone") {
+    return (
+      <Card className="max-w-2xl">
+        <p className="text-sm text-fg-muted">{t("resumeGone")}</p>
+        <Link href="/echo/calls" className="btn-secondary mt-4 inline-flex px-4">
+          {t("resumeBackToCalls")}
+        </Link>
+      </Card>
+    );
+  }
+
   return (
     <Card className="max-w-2xl">
       {phase === "idle" || phase === "starting" ? (
         <>
+          {resuming ? (
+            /* the resume banner: WHICH take, and how much of it exists —
+               the person is re-checking devices, not starting a new call */
+            <p
+              role="status"
+              className="mb-4 rounded-lg border border-accent/25 bg-accent-soft px-3 py-2 text-sm leading-6 text-fg"
+            >
+              {t("resumeBanner", {
+                title: resumeTarget.title ?? t("untitledCall"),
+                clock: formatClock(Math.floor(resumeTarget.offsetMs / 1000), locale),
+              })}
+            </p>
+          ) : null}
           <Field label={t("titleField")}>
             <input
               className="input"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder={t("titlePlaceholder")}
+              /* on resume the call already has its name — renames live in the
+                 Calls table, and a silently-ignored edit here would be a
+                 control that reads as wired and does nothing */
+              disabled={resuming}
             />
           </Field>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -444,7 +525,7 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
             disabled={phase === "starting"}
             onClick={() => void start()}
           >
-            {phase === "starting" ? t("starting") : t("start")}
+            {phase === "starting" ? t("starting") : resuming ? t("resumeStart") : t("start")}
           </button>
         </>
       ) : null}

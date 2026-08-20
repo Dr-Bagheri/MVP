@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { audioContentType, uploadRejection } from "./uploadRules";
+import { audioContentType, resumePoint, uploadRejection } from "./uploadRules";
 
 const MB = 1024 * 1024;
 const minutes = (n: number) => n * 60;
@@ -76,5 +76,34 @@ describe("audioContentType", () => {
 
   it("answers null for something that is not audio, so the screen can refuse by NAME", () => {
     expect(audioContentType({ name: "notes.pdf", type: "application/pdf" })).toBeNull();
+  });
+});
+
+describe("resumePoint", () => {
+  it("continues after the furthest part END — max, never sum (the duration_ms lesson)", () => {
+    // a gap: part 1 failed and is absent; sum of durations would say 120000
+    const parts = [
+      { idx: 0, offset_ms: 0, duration_ms: 60_000 },
+      { idx: 2, offset_ms: 600_000, duration_ms: 60_000 },
+    ];
+    expect(resumePoint(parts)).toEqual({ nextIdx: 3, offsetMs: 660_000 });
+  });
+
+  it("never reuses a gapped index — the worker's seq ranging would collide", () => {
+    // parts.length here is 2, but idx 2 exists: length-based nextIdx would be 2 — a duplicate
+    const parts = [
+      { idx: 0, offset_ms: 0, duration_ms: 10_000 },
+      { idx: 2, offset_ms: 20_000, duration_ms: 10_000 },
+    ];
+    expect(resumePoint(parts).nextIdx).toBe(3);
+  });
+
+  it("an unfinished call with no parts yet resumes from zero", () => {
+    expect(resumePoint([])).toEqual({ nextIdx: 0, offsetMs: 0 });
+  });
+
+  it("a null duration counts as zero length, not as unknown-forever", () => {
+    const parts = [{ idx: 0, offset_ms: 5_000, duration_ms: null }];
+    expect(resumePoint(parts)).toEqual({ nextIdx: 1, offsetMs: 5_000 });
   });
 });

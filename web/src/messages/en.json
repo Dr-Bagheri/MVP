@@ -86,10 +86,11 @@
     "rename": "Rename",
     "translate": "Translate",
     "confirmDelete": "Delete?",
-    "untitled": "Untitled"
+    "untitled": "Untitled",
+    "resumeCall": "Resume"
   },
   "status": {
-    "recording": "Recording",
+    "recording": "Paused",
     "processing": "Processing",
     "linking": "Matching speakers",
     "summarizing": "Summarizing",
@@ -264,7 +265,13 @@
     "uploadFileFailed": "The upload did not complete. The file is still yours — try again.",
     "nothingRecorded": "No audio was recorded — check the microphone and record again.",
     "accepted": "Accepted — queued for processing",
-    "titleField": "Call title"
+    "titleField": "Call title",
+    "resumeLoading": "Loading the paused call…",
+    "resumeGone": "This call can no longer be resumed — it may have finished processing.",
+    "resumeBackToCalls": "Back to calls",
+    "resumeBanner": "Resuming “{title}” — {clock} recorded so far. Check your microphone and speaker, then continue.",
+    "resumeStart": "Resume recording",
+    "untitledCall": "Untitled call"
   },
   "call": {
     "summary": "Summary",
