@@ -64,6 +64,24 @@ describe("ConversationThread", () => {
     expect(screen.getByText(/ناتمام|unfinished/i)).toBeTruthy();
   });
 
+  it("shows the server's failure REASON inside the annotation — never as a bubble", () => {
+    /*
+     * 2026-08-20: two live runs failed in ~800ms and the person saw only "the
+     * run did not finish" — the server had SENT the reason on `done` and the
+     * client discarded it, so diagnosing meant an operator reading the
+     * database. The reason renders as part of the annotation (no role, no
+     * bubble), so it can never later read as something the assistant said.
+     */
+    render(
+      <ConversationThread
+        messages={[user("m1", "سؤال", ), { ...user("m1b", "سؤال دوم"), failed: true, error: "model refused: example_code" } as AgentMessage]}
+      />,
+    );
+    expect(screen.getByText(/model refused: example_code/)).toBeTruthy();
+    // still exactly the bubbles the messages account for — the reason adds none
+    expect(screen.queryAllByText(/./, { selector: ".rounded-2xl" }).length).toBe(2);
+  });
+
   /**
    * **Shape B — the dangerous one.** A run that failed AFTER producing text
    * leaves a partial answer persisted, and on reload it reads exactly like a

@@ -214,6 +214,17 @@ export function createAssistant<TDeps>(config: AssistantDeps<TDeps>) {
           }
         }
 
+        /**
+         * A FINISHED run that failed gets a log line too (2026-08-20: two
+         * live asks died in ~800ms and the journal held nothing — the reason
+         * sat only in agent_run.error and the SSE `done` event, i.e. below
+         * owner altitude and inside one browser tab; the operator watching
+         * the logs saw two clean 200s). Codes only: the run id ties the
+         * moment to the audit row that holds the full error.
+         */
+        if (result.failed) {
+          config.log?.({ event: "assistant_run_failed", runId: result.runId });
+        }
         stream.finish({
           runId: result.runId,
           failed: result.failed,

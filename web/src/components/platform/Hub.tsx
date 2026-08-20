@@ -360,17 +360,34 @@ export function Hub() {
           );
           break;
         case "done":
-          setMessages((prev) =>
-            prev
-              .map((m) =>
-                m.id === replyId
-                  ? { ...m, streaming: false, run_id: event.runId, failed: event.failed }
-                  : m,
-              )
+          setMessages((prev) => {
+            const idx = prev.findIndex((m) => m.id === replyId);
+            const emptyFailure =
+              event.failed && (prev[idx]?.content ?? "") === "";
+            return prev
+              .map((m, i) => {
+                if (m.id === replyId) {
+                  return {
+                    ...m,
+                    streaming: false,
+                    run_id: event.runId,
+                    failed: event.failed,
+                    error: event.error,
+                  };
+                }
+                /* Shape A drops the empty reply below — so the server's
+                   failure REASON (sent on `done`, previously discarded here)
+                   moves onto the question it annotates. Client state only;
+                   a reload re-derives the honest record from the server. */
+                if (emptyFailure && i === idx - 1 && m.role === "user") {
+                  return { ...m, failed: true, error: event.error };
+                }
+                return m;
+              })
               /* a failed run with nothing said is no turn at all — the
                  question stands, which is what the server persisted */
-              .filter((m) => !(m.id === replyId && event.failed && m.content === "")),
-          );
+              .filter((m) => !(m.id === replyId && emptyFailure));
+          });
           break;
         // no default: unknown event types are ignorable by contract
       }

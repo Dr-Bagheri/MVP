@@ -102,7 +102,15 @@ export function ConversationThread({
                 assistant said.
               */}
               {(unanswered || m.failed) ? (
-                <p className="mt-1.5 text-xs leading-6 text-warning">{t("runUnfinished")}</p>
+                <p className="mt-1.5 text-xs leading-6 text-warning">
+                  {t("runUnfinished")}
+                  {/* The server's own failure sentence, when the live stream
+                      carried one — the reason was always SENT on `done` and
+                      previously discarded, leaving the person (and whoever
+                      they ask for help) diagnosing a blank. English prose is
+                      the honest fallback; still an annotation, never a bubble. */}
+                  {m.error ? <span className="ms-1 text-fg-muted ltr">{m.error}</span> : null}
+                </p>
               ) : null}
 
               {/*
