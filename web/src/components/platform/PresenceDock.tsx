@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { usePathname } from "next/navigation";
 import { api } from "@/api/client";
-import type { AgentEvent } from "@/api/types";
+import type { AgentCardItem, AgentEvent } from "@/api/types";
 import { useRouter } from "@/i18n/routing";
 import { executeClientTool, SURFACE_TOOLS } from "@/lib/agentSurface";
 
@@ -62,6 +62,9 @@ export function PresenceDock() {
   >(null);
   const [autonomy, setAutonomyState] = useState<"watch" | "assist">("assist");
   const [autonomyNote, setAutonomyNote] = useState<string | null>(null);
+  /** M35: the proactivity channel — refreshed whenever the panel opens */
+  const [cards, setCards] = useState<AgentCardItem[]>([]);
+  const [digest, setDigest] = useState<{ enabled: boolean; available: boolean } | null>(null);
   const sessionId = useRef<string | undefined>(undefined);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
@@ -101,6 +104,31 @@ export function PresenceDock() {
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: "end" });
   }, [messages]);
+
+  /** cards + digest state ride the panel's open (and once for the orb dot) */
+  useEffect(() => {
+    if (!member) return;
+    void api.cards().then((res) => setCards(res.cards)).catch(() => undefined);
+    if (open) {
+      void api.weeklyDigest().then(setDigest).catch(() => undefined);
+    }
+  }, [member, open]);
+
+  function openCard(card: AgentCardItem) {
+    if (!card.read) {
+      setCards((prev) => prev.map((c) => (c.id === card.id ? { ...c, read: true } : c)));
+      void api.markCardRead(card.id).catch(() => undefined);
+    }
+    // the card's content LIVES in its conversation — adopt it as the dock's
+    // thread so "ask about it" is one keystroke away
+    if (card.session_id) {
+      sessionId.current = card.session_id;
+      try { localStorage.setItem(todayKey(), card.session_id); } catch { /* fine */ }
+    }
+    router.push("/conversations");
+  }
+
+  const unread = cards.filter((c) => !c.read).length;
 
   const askConsent = useCallback((label: string): Promise<boolean> => {
     return new Promise<boolean>((resolve) => {
@@ -228,6 +256,40 @@ export function PresenceDock() {
           ) : null}
 
           <div className="min-h-24 flex-1 space-y-3 overflow-y-auto px-3 py-3">
+            {cards.length > 0 ? (
+              <div className="space-y-1.5">
+                {cards.slice(0, 4).map((card) => (
+                  <button
+                    key={card.id}
+                    type="button"
+                    className={`tap block w-full rounded-lg border px-2.5 py-1.5 text-start text-xs transition-colors ${
+                      card.read
+                        ? "border-border text-fg-muted hover:text-fg"
+                        : "border-accent/40 bg-accent-soft text-fg"
+                    }`}
+                    onClick={() => openCard(card)}
+                  >
+                    {!card.read ? <span className="me-1.5 inline-block h-1.5 w-1.5 rounded-full bg-accent align-middle" aria-hidden /> : null}
+                    {card.title}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            {digest?.available ? (
+              <label className="flex items-center gap-2 text-xs text-fg-muted">
+                <input
+                  type="checkbox"
+                  checked={digest.enabled}
+                  onChange={(e) => {
+                    const enabled = e.target.checked;
+                    setDigest({ available: true, enabled });
+                    void api.setWeeklyDigest(enabled).catch(() =>
+                      setDigest({ available: true, enabled: !enabled }));
+                  }}
+                />
+                {t("digestToggle")}
+              </label>
+            ) : null}
             {messages.length === 0 ? (
               <p className="text-sm leading-6 text-fg-muted">{t("empty")}</p>
             ) : (
@@ -326,6 +388,14 @@ export function PresenceDock() {
       >
         {/* the idle glow does the orb's job (the hub-mock ruling), literally */}
         <span className={`h-3 w-3 rounded-full ${open ? "bg-on-accent" : "animate-pulse bg-accent"}`} aria-hidden />
+        {unread > 0 && !open ? (
+          <span
+            className="absolute -end-0.5 -top-0.5 grid h-5 min-w-5 place-items-center rounded-full bg-danger px-1 text-[10px] font-bold text-white"
+            aria-label={t("unread", { count: unread })}
+          >
+            {unread}
+          </span>
+        ) : null}
       </button>
     </>
   );

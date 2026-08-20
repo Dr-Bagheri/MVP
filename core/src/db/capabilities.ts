@@ -45,6 +45,29 @@ export function resetCapabilityCache(): void {
   cache.clear();
 }
 
+async function hasTable(db: Db, table: string): Promise<boolean> {
+  const key = `table:${table}`;
+  const cached = cache.get(key);
+  if (cached !== undefined) return cached;
+  try {
+    const rows = await db.withoutIdentity((tx: SqlTx) => tx.unsafe(
+      `select 1 from information_schema.tables
+        where table_schema = 'echo' and table_name = $1`,
+      [table],
+    ));
+    const present = rows.length > 0;
+    cache.set(key, present);
+    return present;
+  } catch {
+    return false;
+  }
+}
+
+/** M35 (db/0074): the signals feature's tables — cards + rules together. */
+export async function hasSignalTables(db: Db): Promise<boolean> {
+  return (await hasTable(db, "agent_card")) && (await hasTable(db, "agent_rule"));
+}
+
 export type Autonomy = "watch" | "assist" | "act";
 
 export async function hasAutonomyColumn(db: Db): Promise<boolean> {

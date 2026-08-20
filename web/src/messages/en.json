@@ -1207,6 +1207,8 @@
     "dialWatch": "Watch",
     "dialAssist": "Assist",
     "dialNotReady": "This setting is not available on this deployment yet.",
-    "dialFailed": "The setting was not saved."
+    "dialFailed": "The setting was not saved.",
+    "digestToggle": "Weekly digest",
+    "unread": "{count} unread"
   }
 }

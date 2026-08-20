@@ -1207,6 +1207,8 @@
     "dialWatch": "فقط تماشا",
     "dialAssist": "همیار",
     "dialNotReady": "این تنظیم هنوز روی این استقرار فعال نیست.",
-    "dialFailed": "تنظیم ذخیره نشد."
+    "dialFailed": "تنظیم ذخیره نشد.",
+    "digestToggle": "گزارش هفتگی",
+    "unread": "{count} خوانده‌نشده"
   }
 }

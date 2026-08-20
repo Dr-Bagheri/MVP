@@ -17,6 +17,7 @@ import type { Db } from "../db/identity.ts";
 import { allPartsMissing, partsSettled, type Lifecycle } from "./lifecycle.ts";
 import {
   isDeliveryPayload,
+  isSignalPayload,
   PART_QUEUES,
   Q_LINK_SPEAKERS,
   type JobPayload,
@@ -49,6 +50,17 @@ export function createDeadLetterSink({ db, lifecycle, queue, log }: DeadLetterOp
           { queue: queueName, delivery_id: body.deliveryId, webhook_id: body.webhookId,
             org_id: body.orgId, error_type: info.errorType, exhausted: info.exhausted },
           "webhook delivery dead-lettered",
+        );
+        return;
+      }
+      if (isSignalPayload(body)) {
+        // M35: a dead signal costs one brief/digest, never anyone's data —
+        // identifiers only, and the archived message is the replay handle.
+        log.error(
+          { queue: queueName, signal: body.event, owner_id: body.ownerId,
+            org_id: body.orgId, rule_id: body.ruleId ?? null, call_id: body.callId ?? null,
+            error_type: info.errorType, exhausted: info.exhausted },
+          "agent signal dead-lettered",
         );
         return;
       }

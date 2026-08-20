@@ -12,6 +12,8 @@ do $$
 declare
   found    text[];
   expected text[] := array[
+    -- M35 signals: rule firings, run as the owner (0074)
+    'echo_agent_rules',
     -- outbound: one message per delivery attempt (M17)
     'echo_deliver_webhook',
     -- per-call: genuinely one step per message

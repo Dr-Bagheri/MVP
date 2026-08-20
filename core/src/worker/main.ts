@@ -14,12 +14,14 @@ import { loadWorkerConfig } from "./config.ts";
 import { createDeadLetterSink } from "./dead-letter.ts";
 import { createLifecycle } from "./lifecycle.ts";
 import { createMlClient } from "./ml-client.ts";
-import { createQueue } from "./queue.ts";
+import { Q_AGENT_RULES, createQueue } from "./queue.ts";
 import { createRunner } from "./runner.ts";
 import { createPartStep, type StorageSigner } from "./steps.ts";
 import { storageSignerFromEnv } from "../storage/signer.ts";
 import { createLinkSpeakersStep, createSummarizeStep } from "./call-steps.ts";
 import { createSummarizer } from "./summarizer.ts";
+import { createSignalStep } from "./signal-step.ts";
+import { hasSignalTables } from "../db/capabilities.ts";
 import { createDomainTools } from "../agent/domain-tools.ts";
 import { createSummarizerResolver } from "../agent/skill-store.ts";
 
@@ -116,11 +118,46 @@ export async function main(): Promise<void> {
       createPartStep({ db, ml, queue, lifecycle, storage }),
       createLinkSpeakersStep({ db, queue, lifecycle }),
       createSummarizeStep({ db, lifecycle, summarizer, queue }),
+      // M35: signals — briefs and digests, each run AS the owner
+      createSignalStep({ db }),
     ],
     config,
     sink: createDeadLetterSink({ db, lifecycle, queue, log }),
     log,
   });
+
+  /*
+   * M35: the cron tick. Every 5 minutes, ask the 0074 definer door which
+   * rules are due (metadata: ids only — the run itself executes under the
+   * owner's identity via the queue), enqueue each firing, and stamp it
+   * fired BEFORE anything else can tick — the stamp is the idempotency
+   * guard, so a crash between stamp and handling costs one digest and
+   * never duplicates one. Capability-gated and quiet when 0074 is pending.
+   */
+  const cronTick = async (): Promise<void> => {
+    if (!(await hasSignalTables(db))) return;
+    try {
+      const due = await db.withoutIdentity((tx) =>
+        tx.unsafe<{ id: string; owner_id: string; org_id: string; event: string }>(
+          "select id, owner_id, org_id, event from echo.due_agent_rules()",
+        ));
+      for (const rule of due) {
+        await db.withoutIdentity((tx) =>
+          tx.unsafe("select echo.mark_agent_rule_fired($1)", [rule.id]));
+        await queue.send(Q_AGENT_RULES, {
+          event: "cron.weekly",
+          ruleId: rule.id,
+          ownerId: rule.owner_id,
+          orgId: rule.org_id,
+        });
+      }
+      if (due.length > 0) log.info({ fired: due.length }, "cron rules fired");
+    } catch (error) {
+      log.warn({ event: "cron_tick_failed", detail: (error as Error).name }, "cron tick failed");
+    }
+  };
+  const cronTimer = setInterval(() => { void cronTick(); }, 5 * 60_000);
+  cronTimer.unref();
 
   let running = true;
   for (const signal of ["SIGINT", "SIGTERM"] as const) {

@@ -14,7 +14,8 @@ import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest }
 import { assistantAllowed, createApiKeysRepo, type ApiKeysRepo } from "./apikeys.ts";
 import { createAssistant, languageInstruction } from "./assistant.ts";
 import { CLIENT_TOOL_NAMES, deliverClientToolResult } from "../agent/client-tools.ts";
-import { actorAutonomy, hasAutonomyColumn } from "../db/capabilities.ts";
+import { actorAutonomy, hasAutonomyColumn, hasSignalTables } from "../db/capabilities.ts";
+import { iso } from "./vocabulary.ts";
 import { createAuditRepo, type AuditRepo } from "./audit.ts";
 import { createOrgRepo, type OrgRepo } from "./org.ts";
 import { createSessionsRepo, type SessionsRepo } from "./sessions.ts";
@@ -495,6 +496,79 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
    * two are distinguished all the way down, or "remove my Latin name" has no
    * expression.
    */
+  /**
+   * M35: the proactivity channel — agent-INITIATED cards, owner-scoped by
+   * RLS. Capability-gated: before db/0074, an honest empty-with-reason,
+   * never a 500 (the client renders "not available" instead of "no news").
+   */
+  app.get("/v1/cards", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    if (!(await hasSignalTables(options.db))) {
+      return reply.send({ cards: [], unavailable: "not_migrated" });
+    }
+    const rows = await options.db.withIdentity(identity, (tx) =>
+      tx.unsafe<Record<string, unknown>>(
+        `select id, kind, title, session_id, created_at, read_at
+           from echo.agent_card
+          order by (read_at is null) desc, created_at desc
+          limit 30`,
+      ));
+    return reply.send({
+      cards: rows.map((row) => ({
+        id: row.id,
+        kind: row.kind,
+        title: row.title,
+        session_id: row.session_id,
+        created_at: iso(row.created_at as Date | string),
+        read: row.read_at !== null,
+      })),
+    });
+  });
+
+  app.post("/v1/cards/:id/read", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id } = request.params as { id: string };
+    if (!(await hasSignalTables(options.db))) throw new NotFoundError("no such card");
+    await options.db.withIdentity(identity, (tx) =>
+      tx.unsafe(
+        "update echo.agent_card set read_at = now() where id = $1 and read_at is null",
+        [id],
+      ));
+    return reply.send({ read: true });
+  });
+
+  /** M35: the weekly-digest subscription — one row per person, self-owned. */
+  app.get("/v1/rules/weekly-digest", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    if (!(await hasSignalTables(options.db))) {
+      return reply.send({ enabled: false, available: false });
+    }
+    const rows = await options.db.withIdentity(identity, (tx) =>
+      tx.unsafe<{ enabled: boolean }>(
+        "select enabled from echo.agent_rule where event = 'cron.weekly'",
+      ));
+    return reply.send({ enabled: rows[0]?.enabled === true, available: true });
+  });
+
+  app.put("/v1/rules/weekly-digest", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const body = (request.body ?? {}) as { enabled?: unknown };
+    if (typeof body.enabled !== "boolean") throw new ValidationError("enabled must be a boolean");
+    if (!(await hasSignalTables(options.db))) {
+      throw new ValidationError("signals are not available yet on this deployment", {
+        code: "not_migrated",
+      });
+    }
+    await options.db.withIdentity(identity, (tx) =>
+      tx.unsafe(
+        `insert into echo.agent_rule (org_id, owner_id, event, enabled)
+         values ($1, $2, 'cron.weekly', $3)
+         on conflict (owner_id, event) do update set enabled = excluded.enabled`,
+        [identity.orgId, identity.userId, body.enabled],
+      ));
+    return reply.send({ enabled: body.enabled });
+  });
+
   /**
    * M33: the surface's answer to a `client_tool_call`. The waiter was
    * registered under the ASKER's user id; unknown, expired and

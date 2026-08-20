@@ -26,9 +26,12 @@ export const Q_SUMMARIZE = "echo_summarize";
 /** Webhook fan-out (db/0026). One message per delivery, not per event. */
 export const Q_DELIVER_WEBHOOK = "echo_deliver_webhook";
 
+/** M35 signals: rule firings, each run AS the owner (db/0074). */
+export const Q_AGENT_RULES = "echo_agent_rules";
+
 export const PART_QUEUES = [Q_PROCESS_PART] as const;
 export const CALL_QUEUES = [Q_LINK_SPEAKERS, Q_SUMMARIZE] as const;
-export const ALL_QUEUES = [...PART_QUEUES, ...CALL_QUEUES, Q_DELIVER_WEBHOOK] as const;
+export const ALL_QUEUES = [...PART_QUEUES, ...CALL_QUEUES, Q_DELIVER_WEBHOOK, Q_AGENT_RULES] as const;
 
 export type QueueName = (typeof ALL_QUEUES)[number];
 
@@ -64,10 +67,29 @@ export interface DeliveryPayload {
   actorId: string;
 }
 
-export type QueuePayload = JobPayload | DeliveryPayload;
+/**
+ * M35: a signal firing. `event` names WHY (the signal), the owner names WHO
+ * the run executes as — written at enqueue time exactly like a pipeline
+ * job's owner. `call.processed` carries its call; `cron.weekly` carries its
+ * rule (stamped fired at enqueue, so a crash between enqueue and handling
+ * costs one digest, never duplicates one).
+ */
+export interface SignalPayload {
+  event: "call.processed" | "cron.weekly";
+  ownerId: string;
+  orgId: string;
+  callId?: string;
+  ruleId?: string;
+}
+
+export type QueuePayload = JobPayload | DeliveryPayload | SignalPayload;
 
 export function isDeliveryPayload(body: QueuePayload): body is DeliveryPayload {
   return typeof (body as DeliveryPayload).deliveryId === "string";
+}
+
+export function isSignalPayload(body: QueuePayload): body is SignalPayload {
+  return typeof (body as SignalPayload).event === "string";
 }
 
 export interface QueueMessage<T = QueuePayload> {

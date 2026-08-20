@@ -632,6 +632,16 @@ export interface AgentProposalPayload {
  * in-band). A stream that ends without `done` is a TRANSPORT failure and must
  * not be read as success.
  */
+/** M35: an agent-INITIATED card in the proactivity channel (dock). */
+export interface AgentCardItem {
+  id: string;
+  kind: "post_call_brief" | "weekly_digest";
+  title: string;
+  session_id: string | null;
+  created_at: string;
+  read: boolean;
+}
+
 export type AgentEvent =
   | { type: "text_delta"; delta: string }
   | { type: "tool_call"; id: string; name: string; label: string; state: ToolCallState; ms?: number }

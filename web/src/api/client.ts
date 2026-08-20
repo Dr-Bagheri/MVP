@@ -8,6 +8,7 @@
 // swapped to the wire or deleted by the 2026-08-20 tenancy audit — see the
 // notes at their former sites.)
 import type {
+  AgentCardItem,
   AgentEvent,
   AgentMessage,
   AgentCard,
@@ -1606,6 +1607,24 @@ export const api = {
     await bff("/api/me/autonomy", {
       method: "PUT",
       body: JSON.stringify({ autonomy }),
+      headers: { "content-type": "application/json" },
+    });
+  },
+
+  /** M35: agent-initiated cards. `unavailable` = db/0074 pending, not "no news". */
+  async cards(): Promise<{ cards: AgentCardItem[]; unavailable?: string }> {
+    return bff<{ cards: AgentCardItem[]; unavailable?: string }>("/api/cards");
+  },
+  async markCardRead(cardId: string): Promise<void> {
+    await bff(`/api/cards/${cardId}/read`, { method: "POST" });
+  },
+  async weeklyDigest(): Promise<{ enabled: boolean; available: boolean }> {
+    return bff<{ enabled: boolean; available: boolean }>("/api/rules/weekly-digest");
+  },
+  async setWeeklyDigest(enabled: boolean): Promise<void> {
+    await bff("/api/rules/weekly-digest", {
+      method: "PUT",
+      body: JSON.stringify({ enabled }),
       headers: { "content-type": "application/json" },
     });
   },

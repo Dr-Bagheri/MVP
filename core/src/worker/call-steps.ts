@@ -8,7 +8,7 @@ import type { Identity, Skill } from "../agent/types.ts";
 import { resolveJobIdentity } from "./job-identity.ts";
 import type { Db, SqlTx } from "../db/identity.ts";
 import type { Lifecycle } from "./lifecycle.ts";
-import { Q_LINK_SPEAKERS, Q_SUMMARIZE, type JobPayload, type Queue } from "./queue.ts";
+import { Q_AGENT_RULES, Q_LINK_SPEAKERS, Q_SUMMARIZE, type JobPayload, type Queue } from "./queue.ts";
 import { StepError, type StepHandler } from "./runner.ts";
 import { enqueueWebhooks } from "./webhook-enqueue.ts";
 
@@ -215,6 +215,22 @@ export function createSummarizeStep({
       await lifecycle.setCallStatus(identity, payload.callId, "ready");
       log.info({ call_id: payload.callId, run_id: result.runId }, "call ready");
       await enqueueWebhooks(db, identity, "call.summarized", payload.callId, queue, log);
+      /*
+       * M35: announce call.processed on the signals queue — the post-call
+       * brief's trigger. Best-effort BY DESIGN: the queue may not exist yet
+       * (db/0074 pending), and a missing brief must never fail a call that
+       * just finished processing; the warn is the forfeit said out loud.
+       */
+      try {
+        await queue.send(Q_AGENT_RULES, {
+          event: "call.processed",
+          callId: payload.callId,
+          ownerId: identity.userId,
+          orgId: identity.orgId,
+        });
+      } catch (error) {
+        log.warn({ event: "signal_enqueue_failed", detail: (error as Error).name }, "call.processed signal not enqueued (db/0074 pending?)");
+      }
     },
   };
 }
