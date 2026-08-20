@@ -8,6 +8,7 @@ import { Link, useRouter } from "@/i18n/routing";
 import { useSearchParams } from "next/navigation";
 import { personName, modelLabel } from "@/lib/format";
 import { useDictation } from "@/lib/dictation";
+import { deliverDoc } from "@/lib/deliver";
 import { useSkillName, useSkillStarters } from "@/lib/skillName";
 import { ConversationThread } from "./ConversationThread";
 import { useAssistantConversation } from "./AssistantConversationState";
@@ -311,6 +312,27 @@ export function Hub() {
   useEffect(() => {
     threadEnd.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages]);
+
+  /**
+   * Create → Doc delivers ITSELF: a download needs no click gesture, so the
+   * moment a doc-tagged answer settles, the file lands ("fully works" means
+   * nobody hunts for a button — it stays in the toolbar for re-downloading).
+   * PDF cannot do this: print dialogs require a user gesture, so it remains
+   * the prominent toolbar button. The ref makes each answer deliver ONCE —
+   * every later render of the same settled message is a no-op.
+   */
+  const deliveredDocs = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    for (const m of messages) {
+      if (
+        m.created === "doc" && !m.streaming && m.content &&
+        m.failed !== true && !deliveredDocs.current.has(m.id)
+      ) {
+        deliveredDocs.current.add(m.id);
+        deliverDoc(m.content, t("createDoc"));
+      }
+    }
+  }, [messages, t]);
 
   /**
    * Draft autosave, per conversation (Onyx's composer habit): a half-typed

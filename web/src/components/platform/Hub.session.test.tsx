@@ -201,7 +201,11 @@ describe("Hub — session continuity", () => {
     expect(screen.getByPlaceholderText(/بپرسید/)).toHaveValue("");
 
     await ask("گزارش جلسه");
-    await waitFor(() => expect(askedQuestions).toContain("بر اساس این درخواست یک سند بساز:\n\nگزارش جلسه"));
+    // The prefix from the CATALOG, not a hand-pinned copy: the first version
+    // of this line quoted the sentence and broke the day the wording
+    // improved — two hand-written beliefs about one wire, in a test.
+    const docPrefix = (await import("@/messages/fa.json")).default.platform.createDocRequest;
+    await waitFor(() => expect(askedQuestions).toContain(`${docPrefix}\n\nگزارش جلسه`));
   });
 
   it("shows Persian command names in the Persian tools menu", async () => {

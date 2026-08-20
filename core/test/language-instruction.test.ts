@@ -1,28 +1,33 @@
 /**
- * The assistant answers in the INTERFACE language (user directive,
- * 2026-08-20): the shipped skill's prompt is Persian-first, and an
- * English-interface user was getting Persian answers. The helper is the
- * single producer of the instruction; both ask and regenerate consume it.
+ * The answer's language MIRRORS the conversation (user directive,
+ * 2026-08-20): reply in the language of the user's latest message, switching
+ * when they switch. The interface locale is only the tiebreaker for
+ * language-less messages. This helper is the single producer; ask and
+ * regenerate both consume it.
  */
 import { describe, expect, it } from "vitest";
 import { languageInstruction } from "../src/api/assistant.ts";
 
 describe("languageInstruction", () => {
-  it("names Persian for fa and English for en — each in its own language", () => {
-    expect(languageInstruction("fa")).toContain("فارسی");
-    expect(languageInstruction("en")).toContain("English");
-    // and they are different instructions, not one string reused
-    expect(languageInstruction("fa")).not.toBe(languageInstruction("en"));
+  it("always states the mirror rule — even for a client that sent no locale", () => {
+    // An older client sends no locale; the conversation-mirroring behavior
+    // must not depend on the newest bundle being deployed.
+    for (const locale of [undefined, null, "", "de", 42]) {
+      const line = languageInstruction(locale);
+      expect(line).toContain("most recent message");
+      expect(line).toContain("switch");
+    }
   });
 
-  it("returns undefined for anything else — additive wire, never a 400", () => {
-    // an older client sends no locale; a future one may send a new code.
-    // Both must degrade to "no instruction", never to an error or to a
-    // default language the caller did not choose.
-    expect(languageInstruction(undefined)).toBeUndefined();
-    expect(languageInstruction("")).toBeUndefined();
-    expect(languageInstruction("de")).toBeUndefined();
-    expect(languageInstruction(42)).toBeUndefined();
-    expect(languageInstruction(null)).toBeUndefined();
+  it("adds the interface tiebreaker only when the locale is known", () => {
+    expect(languageInstruction("fa")).toContain("answer in Persian");
+    expect(languageInstruction("en")).toContain("answer in English");
+    // no invented tiebreaker for a locale we don't recognize
+    expect(languageInstruction("de")).not.toContain("no clear language");
+    expect(languageInstruction(undefined)).not.toContain("no clear language");
+  });
+
+  it("fa and en produce different instructions — the tiebreaker is real, not decorative", () => {
+    expect(languageInstruction("fa")).not.toBe(languageInstruction("en"));
   });
 });

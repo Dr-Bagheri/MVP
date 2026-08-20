@@ -72,22 +72,31 @@ export interface AssistantDeps<TDeps> {
 }
 
 /**
- * The interface language rides the ask (user directive, 2026-08-20): the
- * assistant answers in the language the person is READING the product in —
- * the en interface answers in English, fa in Persian. The shipped skill's
- * prompt is Persian-first, so without this an English-interface user gets
- * Persian answers. Appended after agent/workflow instructions so the
- * interface fact wins on LANGUAGE while everything else stands. Unknown
- * values return undefined — additive wire, never a 400.
+ * The answer's language MIRRORS the conversation (user directive,
+ * 2026-08-20, superseding the same-day interface-language rule): reply in
+ * the language of the user's MOST RECENT message — start in English, get
+ * English; switch to Persian mid-conversation, it switches with you. The
+ * interface locale is only the TIEBREAKER for messages with no readable
+ * language ("ok", a bare number, an emoji). The shipped skill's prompt is
+ * Persian-first, so without this instruction every conversation drifted to
+ * Persian regardless of how the person was talking.
+ *
+ * The mirror rule is returned even with NO locale — an older client that
+ * sends none still gets the right behavior; only the tiebreaker sentence
+ * needs the locale.
  */
-export function languageInstruction(locale: unknown): string | undefined {
+export function languageInstruction(locale: unknown): string {
+  const mirror =
+    "Always reply in the language of the user's most recent message: an English"
+    + " message gets an English answer, a Persian message gets a Persian answer —"
+    + " and when the user switches language mid-conversation, switch with them.";
   if (locale === "fa") {
-    return "پاسخ را به زبان فارسی بنویس — زبان رابط کاربریِ کاربر فارسی است.";
+    return `${mirror} If the message has no clear language, answer in Persian.`;
   }
   if (locale === "en") {
-    return "Write your answer in English — the user's interface language is English.";
+    return `${mirror} If the message has no clear language, answer in English.`;
   }
-  return undefined;
+  return mirror;
 }
 
 export function createAssistant<TDeps>(config: AssistantDeps<TDeps>) {
