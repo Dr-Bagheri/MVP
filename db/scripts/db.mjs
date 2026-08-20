@@ -170,12 +170,30 @@ function down() {
   console.log('postgres removed')
 }
 
+// The ledger is hardened at creation, not only by migration 0071: on a FRESH
+// Supabase database the default privileges hand anon/authenticated access to
+// new public tables the moment this create runs, and the linter's CRITICAL
+// (2026-08-20) was exactly that window. ENABLE not FORCE — the runner itself
+// is the owner and the ledger's only legitimate client; FORCE with zero
+// policies would lock it out of its own table. Revokes are role-conditional
+// because anon/authenticated exist on Supabase, not on the local container.
 const LEDGER = `
   create table if not exists public.echo_migration (
     version    text primary key,
     checksum   text not null,
     applied_at timestamptz not null default now()
-  )`
+  );
+  revoke all on table public.echo_migration from public;
+  do $$
+  begin
+    if exists (select 1 from pg_roles where rolname = 'anon') then
+      revoke all on table public.echo_migration from anon;
+    end if;
+    if exists (select 1 from pg_roles where rolname = 'authenticated') then
+      revoke all on table public.echo_migration from authenticated;
+    end if;
+  end $$;
+  alter table public.echo_migration enable row level security;`
 
 function migrationFiles() {
   return readdirSync(MIGRATIONS)
