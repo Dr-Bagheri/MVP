@@ -39,7 +39,7 @@ import { createAssistantAgent, listAssistantAgents, resolveAssistantAgent } from
 import { createConnectorsRepo, type ConnectorOAuthOptions, type ConnectorProvider } from "./connectors.ts";
 import { listWorkflows, resolveWorkflow } from "./workflows.ts";
 import type { DomainTool } from "../agent/tools.ts";
-import type { Db } from "../db/identity.ts";
+import { agentToolsDb, type Db } from "../db/identity.ts";
 import { isAdmin, type Identity, type Skill } from "../agent/types.ts";
 
 export interface ServerOptions<TDeps> {
@@ -119,8 +119,13 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
   const domainTools = options.tools === undefined
     ? ([...createDomainTools(), ...createWriteTools()] as unknown as DomainTool<TDeps, never>[])
     : options.tools;
+  // agentToolsDb, not the raw db: every DB call a tool makes runs on
+  // echo_agent (M3's "the agent borrows the caller's authority and never
+  // more" as a grant set, not a code-review promise). The write tools only
+  // propose here — the confirmed write path picks the agent role explicitly
+  // on its own connection (proposals.ts).
   const domainDeps = options.tools === undefined
-    ? ({ db: options.db } as unknown as TDeps)
+    ? ({ db: agentToolsDb(options.db) } as unknown as TDeps)
     : options.toolDeps;
 
   const assistant = createAssistant({

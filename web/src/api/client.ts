@@ -4,14 +4,9 @@
  * the BFF route (web/ holds the session — the browser never sees a token, M1).
  * Signatures and types do not change.
  */
-import {
-  AGENT_RUNS,
-
-  ME,
-
-  TRANSCRIPT,
-  USERS,
-} from "./mock-data";
+// (the mock-data import is gone: the last fixture bodies in this file were
+// swapped to the wire or deleted by the 2026-08-20 tenancy audit — see the
+// notes at their former sites.)
 import type {
   AgentEvent,
   AgentMessage,
@@ -74,12 +69,11 @@ const LATENCY = 180;
 const wait = <T,>(value: T, ms = LATENCY): Promise<T> =>
   new Promise((resolve) => setTimeout(() => resolve(value), ms));
 
-// mutable session copies so Phase-A interactions persist while the tab lives.
-// (`calls` and `summaries` left with the last fixture bodies that read them —
-// call CRUD and search are on the wire now.)
-let users: User[] = structuredClone(USERS);
-let me: Me = structuredClone(ME);
-const transcripts: Record<string, TranscriptSegment[]> = structuredClone(TRANSCRIPT);
+// The last mutable Phase-A session copies (`users`, `me`, `transcripts`) left
+// with their final readers — setPreferredModel went to the wire, and
+// agentRuns/correctLine were deleted as caller-less fixtures (2026-08-20
+// tenancy audit). Fixture state that survives an account switch in the JS
+// heap is a cross-tenant residue; none remains in this file.
 
 
 /**
@@ -644,15 +638,20 @@ export const api = {
   },
 
   /**
-   * The model preference (M5). Still a fixture: its real home is
-   * `PUT /v1/models/preferred`, a different route from the profile patch —
-   * core/ added it precisely because `preferred_model` was being written by
-   * something that no longer had a caller.
+   * The model preference (M5). **LIVE** — `PUT /api/models` → core's
+   * `PUT /v1/models/preferred`, its own route deliberately separate from the
+   * profile patch. `null` is a real value ("no choice") and survives the hop
+   * as null. Returns the server's stored value, not an optimistic echo —
+   * the last fixture body in this family, swapped by the 2026-08-20 tenancy
+   * audit (a fixture write is a save that reports success while the setting
+   * never moves, identically for every tenant).
    */
-  async setPreferredModel(modelId: string | null): Promise<User> {
-    me = { ...me, model_id: modelId };
-    users = users.map((u) => (u.id === me.id ? me : u));
-    return wait(me);
+  async setPreferredModel(modelId: string | null): Promise<{ preferred_model: string | null }> {
+    return bff<{ preferred_model: string | null }>("/api/models", {
+      method: "PUT",
+      body: JSON.stringify({ model: modelId }),
+      headers: { "content-type": "application/json" },
+    });
   },
 
   /**
@@ -894,13 +893,12 @@ export const api = {
     );
     return segments;
   },
-  async correctLine(callId: string, rowId: string, text: string) {
-    const rows = transcripts[callId] ?? [];
-    transcripts[callId] = rows.map((r) =>
-      r.id === rowId ? { ...r, text, edited: true, edited_by: me.id } : r,
-    );
-    return wait(true);
-  },
+  // correctLine was DELETED here (2026-08-20 tenancy audit), not swapped: it
+  // had zero callers and no server wire — a fixture that mutated a local copy
+  // and returned `true`, i.e. a user's correction reported as saved and lost
+  // on reload. Direct transcript correction re-enters through the agent's
+  // propose→confirm path (write-tools correct_transcript) when a screen needs
+  // it; a silent-success stub must not be the thing it finds waiting.
   /** **LIVE** — `GET /api/calls/{id}/speakers` (the BFF unwraps the envelope). */
   async getSpeakers(callId: string): Promise<Speaker[]> {
     return bff<Speaker[]>(`/api/calls/${callId}/speakers`);
@@ -1519,9 +1517,9 @@ export const api = {
   },
 
   // ---- agent ------------------------------------------------------------------------
-  async agentRuns() {
-    return wait(AGENT_RUNS);
-  },
+  // agentRuns was DELETED here (2026-08-20 tenancy audit): zero callers, no
+  // server wire, and the fixture served the SAME fabricated runs to every
+  // tenant. A runs surface returns when core exposes one to read.
   /**
    * Emits the EXACT SSE vocabulary core/ will send (backend-specified):
    * text_delta · tool_call (started → one terminal state per id) · proposal ·

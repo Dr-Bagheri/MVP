@@ -31,6 +31,7 @@
  * unavailable with a reason rather than guessing or returning zero.
  */
 import { iso } from "./vocabulary.ts";
+import { isPlatformRoot } from "./platform.ts";
 import { type Db, type SqlTx } from "../db/identity.ts";
 import type { Identity } from "../agent/types.ts";
 
@@ -89,31 +90,44 @@ export function createHealthRepo(db: Db) {
       };
 
       // Queues. Each metric is attempted independently — see the header.
+      //
+      // Platform-root only (2026-08-20 tenancy audit): pgmq queues are not
+      // org-scoped, so these counts are DEPLOYMENT-WIDE — an org admin reading
+      // them learns how busy every other tenant is. Counts-only, no content,
+      // but activity volume is still a cross-tenant signal. The keys metric
+      // below stays for every admin because RLS scopes echo.api_key to their
+      // org; this one cannot be scoped, so it is gated instead — and it says
+      // so, rather than rendering an empty list that reads as "no queues".
       try {
-        await db.withIdentity(identity, async (tx: SqlTx) => {
-          const queues = await tx.unsafe<{ queue_name: string }>(
-            `select queue_name from pgmq.list_queues() order by queue_name`,
-          );
-          for (const { queue_name: name } of queues) {
-            if (!SAFE_QUEUE_NAME.test(name)) continue;
-            const [depth] = await tx.unsafe<{ n: number; retrying: number }>(
-              `select count(*)::int as n,
-                      count(*) filter (where read_ct >= $1)::int as retrying
-                 from pgmq.q_${name}`,
-              [RETRY_ALARM],
+        if (!(await isPlatformRoot(db, identity))) {
+          health.queues.unavailable =
+            "queue depths are platform-wide and visible to platform operators only";
+        } else {
+          await db.withIdentity(identity, async (tx: SqlTx) => {
+            const queues = await tx.unsafe<{ queue_name: string }>(
+              `select queue_name from pgmq.list_queues() order by queue_name`,
             );
-            const [archived] = await tx.unsafe<{ n: number }>(
-              `select count(*)::int as n from pgmq.a_${name}`,
-            );
-            health.queues.items.push({
-              name,
-              depth: Number(depth?.n ?? 0),
-              retrying: Number(depth?.retrying ?? 0),
-              archived: Number(archived?.n ?? 0),
-            });
-          }
-        });
-        health.queues.measured_at = now;
+            for (const { queue_name: name } of queues) {
+              if (!SAFE_QUEUE_NAME.test(name)) continue;
+              const [depth] = await tx.unsafe<{ n: number; retrying: number }>(
+                `select count(*)::int as n,
+                        count(*) filter (where read_ct >= $1)::int as retrying
+                   from pgmq.q_${name}`,
+                [RETRY_ALARM],
+              );
+              const [archived] = await tx.unsafe<{ n: number }>(
+                `select count(*)::int as n from pgmq.a_${name}`,
+              );
+              health.queues.items.push({
+                name,
+                depth: Number(depth?.n ?? 0),
+                retrying: Number(depth?.retrying ?? 0),
+                archived: Number(archived?.n ?? 0),
+              });
+            }
+          });
+          health.queues.measured_at = now;
+        }
       } catch (error) {
         health.queues.items = [];
         health.queues.unavailable = describe(error);

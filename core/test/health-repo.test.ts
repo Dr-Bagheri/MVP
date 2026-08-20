@@ -38,6 +38,10 @@ function fakeDb(answer: (sql: string) => unknown[]) {
 }
 
 const healthy = (sql: string): unknown[] => {
+  // The queue block is gated on the platform-root predicate (2026-08-20
+  // tenancy audit) — the baseline caller here is a root so the metric tests
+  // keep exercising the counting; the gate itself is pinned both ways below.
+  if (sql.includes("actor_is_platform_root")) return [{ is_platform_root: true }];
   if (sql.includes("list_queues")) return [{ queue_name: "echo_summarize" }];
   if (sql.includes("pgmq.q_")) return [{ n: 4, retrying: 1 }];
   if (sql.includes("pgmq.a_")) return [{ n: 22 }];
@@ -128,6 +132,35 @@ describe("the numbers are named for what they actually count", () => {
     const health = await createHealthRepo(db).read(IDENTITY);
     expect(health.queues.items).toEqual([]);
     expect(log.some((sql) => sql.includes("drop table"))).toBe(false);
+  });
+});
+
+describe("queue depths are a platform fact, never an org fact (2026-08-20)", () => {
+  it("an org admin who is not a platform root gets a NAMED refusal, not numbers", async () => {
+    // pgmq queues are not org-scoped, so their counts are deployment-wide —
+    // an org admin reading them learns how busy every other tenant is. The
+    // refusal names itself so the screen shows a reason, never an empty list
+    // that reads as "no queues".
+    const { db, log } = fakeDb((sql) => {
+      if (sql.includes("actor_is_platform_root")) return [{ is_platform_root: false }];
+      return healthy(sql);
+    });
+    const health = await createHealthRepo(db).read(IDENTITY);
+    expect(health.queues.items).toEqual([]);
+    expect(health.queues.measured_at).toBeNull();
+    expect(health.queues.unavailable).toMatch(/platform/);
+    // The discriminating half: the counting queries were never even issued.
+    expect(log.some((sql) => sql.includes("pgmq"))).toBe(false);
+    // And the org-scoped metric beside it still answers — the gate is on the
+    // cross-tenant number, not on the page.
+    expect(health.keys.active).toBe(2);
+  });
+
+  it("a platform root gets the numbers", async () => {
+    const { db } = fakeDb(healthy);
+    const health = await createHealthRepo(db).read(IDENTITY);
+    expect(health.queues.items).toHaveLength(1);
+    expect(health.queues.measured_at).not.toBeNull();
   });
 });
 

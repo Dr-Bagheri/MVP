@@ -9,7 +9,7 @@ import { pathToFileURL } from "node:url";
 import pino from "pino";
 import postgres from "postgres";
 
-import { createDb, type SqlClient } from "../db/identity.ts";
+import { agentToolsDb, createDb, type SqlClient } from "../db/identity.ts";
 import { loadWorkerConfig } from "./config.ts";
 import { createDeadLetterSink } from "./dead-letter.ts";
 import { createLifecycle } from "./lifecycle.ts";
@@ -62,7 +62,12 @@ export async function main(): Promise<void> {
   const config = loadWorkerConfig();
 
   const appUrl = normalizeDbUrl(requireEnv("DATABASE_URL_APP"));
-  const agentUrl = normalizeDbUrl(process.env.DATABASE_URL_AGENT || appUrl);
+  // Required, no fallback — the api's posture (api/main.ts), adopted here by
+  // the 2026-08-20 tenancy audit. `|| appUrl` silently turned the agent pool
+  // into echo_app when the variable went missing; SET LOCAL ROLE would still
+  // fail closed (42501) at the first agent-role transaction, but "refuses to
+  // boot with the reason in one line" beats "boots and fails at first use".
+  const agentUrl = normalizeDbUrl(requireEnv("DATABASE_URL_AGENT"));
 
   const pools = {
     app: postgres(appUrl, { max: config.concurrency + 2 }) as unknown as SqlClient,
@@ -98,7 +103,9 @@ export async function main(): Promise<void> {
     // caller's identity — so it reaches exactly what the call owner could reach
     // by hand and nothing more.
     tools: createDomainTools(),
-    deps: { db },
+    // The agent-role handle, same as the api's tool wiring: the summarizer's
+    // reads run under echo_agent's grant set, not echo_app's.
+    deps: { db: agentToolsDb(db) },
     apiKey: process.env.OPENROUTER_API_KEY,
     fallbackModel: process.env.WORKER_SUMMARY_MODEL,
   });

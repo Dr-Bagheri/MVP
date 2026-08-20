@@ -68,6 +68,19 @@ schema, no special case.** Target scale v1: multiple orgs × dozens of users.
 Single-tenant per-customer deployment (their own Supabase) is the same schema
 with one org — a deployment choice, not a fork.
 
+**[RE-AFFIRMED by the user, 2026-08-20 — tenancy audit ruling]** One user
+belongs to exactly ONE org. Multi-org membership per account (a membership
+table, per-request org selection, an org switcher) was presented as the
+largest structural option of the full-tenancy audit and **explicitly
+declined for v1**: a person joining a second org uses a second account.
+Revisiting this is its own project and re-opens this decision by name.
+The audit itself (db/RLS, core, web, docs — four independent passes) found
+**no cross-org data path at any layer**; its fixes were hardening:
+FORCE RLS on the two platform tables (db/0070), agent tools moved onto the
+echo_agent role (`agentToolsDb`, proven against the production catalogue),
+queue depths gated to platform roots, the worker's agent-pool fallback
+removed, caller-less client fixtures deleted, drafts swept at sign-out.
+
 ## M3 — The permission stack (defense in depth)
 
 | Layer | Catches |

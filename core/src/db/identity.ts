@@ -155,3 +155,40 @@ export function assertAgentRole(role: DbRole): void {
     throw new WrongRoleError("agent tools must run on the echo_agent role");
   }
 }
+
+/**
+ * The Db the agent's tools are handed (2026-08-20 tenancy audit).
+ *
+ * The architecture says the agent runtime's tool calls run on echo_agent —
+ * "the agent deletes nothing is a grant, not a prompt instruction" — but the
+ * tools reach the DB through the SAME repos the REST api uses, and those call
+ * `withIdentity` with no role option, which defaults to echo_app. So the
+ * documented floor was only half-enforced: reads were RLS-scoped either way
+ * (no cross-org exposure), but a future agent-reachable write would have run
+ * with echo_app's unrestricted UPDATE instead of echo_agent's column-scoped
+ * grants, and `assertAgentRole` — written for exactly that miswiring — was
+ * never called by anything.
+ *
+ * This wrapper closes both: every call through it runs `role: "agent"`
+ * (db/0013's read policies already name echo_agent on every table the tools
+ * touch, and db/0014 grants it SELECT there, so nothing silently returns
+ * empty), an explicit `role: "app"` from a future caller fails loudly through
+ * assertAgentRole instead of quietly widening, and the actor-less door does
+ * not exist on this handle at all — a tool has a caller by definition.
+ */
+export function agentToolsDb(db: Db): Db {
+  const force = (options: ScopeOptions = {}): ScopeOptions => {
+    const role: DbRole = options.role ?? "agent";
+    assertAgentRole(role);
+    return { ...options, role };
+  };
+  // async, deliberately: force() throws, and a Promise-returning method that
+  // sometimes throws synchronously is a refusal a caller's .catch never sees.
+  return {
+    withActor: async (actorId, fn, options) => db.withActor(actorId, fn, force(options)),
+    withIdentity: async (identity, fn, options) => db.withIdentity(identity, fn, force(options)),
+    withoutIdentity: () => {
+      throw new WrongRoleError("agent tools have no actor-less database door");
+    },
+  };
+}

@@ -262,6 +262,39 @@ for orgs and users, entirely inside the M32 content wall.
 
 ---
 
+## 7c. Deployment record — 2026-08-20 (tenancy-audit hardening)
+
+Four-pass multi-tenancy audit (db/RLS, core, web, docs): **no cross-org data
+path found at any layer**; the user re-affirmed one-org-per-user (recorded in
+ARCHITECTURE.md M2). Hardening shipped:
+
+- **db/0070** — `FORCE ROW LEVEL SECURITY` on `echo.platform_operator` +
+  `echo.platform_audit` (the only two tables missing it; db/test/50's
+  every-table tripwire demands it and had not been run since 0066 landed).
+  Owner-connection migration — apply per §4.
+- **core** — agent tools now run on `echo_agent` via `agentToolsDb`
+  (identity.ts; explicit app-role requests fail loudly, no actor-less door);
+  **proven against the production catalogue**: every tool-path table +
+  `fa_fold` OK as echo_agent, `connector_secret` refused (42501) as the
+  negative control. `/v1/admin/server` queue depths are platform-root-gated
+  (deployment-wide counts are a cross-tenant activity signal; org admins get
+  a named refusal). Worker now REQUIRES `DATABASE_URL_AGENT` (fallback to the
+  app URL removed — the api's refuse-to-boot posture, adopted).
+- **web** — `setPreferredModel` swapped to the live `PUT /api/models`;
+  caller-less fixtures `agentRuns`/`correctLine` DELETED (tenant-identical
+  fabrications; correctLine reported a correction saved that no server ever
+  received); the client's last mutable fixture state (`me`/`users`/
+  `transcripts`) removed with them; sign-out sweeps `neurai-draft-*` from
+  sessionStorage so a half-typed question can't reach the next account on
+  the same tab.
+
+Remaining from the audit, deliberately NOT built (user's scope ruling):
+multi-org membership (declined for v1), per-org quotas/usage view, billing,
+custom domains, compliance-grade deletion. Self-serve signup unblock =
+Supabase dashboard work (custom SMTP + Site URL), tracked separately.
+
+---
+
 ## 8. What never goes in this file (or any log)
 
 Connection strings, DB passwords, API keys, service keys, JWT secrets, the
