@@ -1544,6 +1544,8 @@ export const api = {
     opts?: {
       model?: string; skill?: string; web?: boolean; signal?: AbortSignal;
       agent?: string; workflow?: string; connectorProvider?: ConnectorProvider; sourceId?: string;
+      /** the UI locale — the assistant answers in the interface language */
+      locale?: string;
     },
   ): AsyncGenerator<AgentEvent> {
     /* **LIVE** — the real stream, through the BFF's SSE passthrough. The
@@ -1569,6 +1571,7 @@ export const api = {
         connector_provider: opts?.connectorProvider,
         source_id: opts?.sourceId,
         ...(opts?.web ? { web: true } : {}),
+        ...(opts?.locale ? { locale: opts.locale } : {}),
       },
       opts?.signal,
     );
@@ -1581,11 +1584,11 @@ export const api = {
    */
   async *regenerate(
     sessionId: string,
-    opts?: { model?: string; signal?: AbortSignal },
+    opts?: { model?: string; signal?: AbortSignal; locale?: string },
   ): AsyncGenerator<AgentEvent> {
     yield* streamAssistant(
       `/api/assistant/sessions/${sessionId}/regenerate`,
-      { model: opts?.model },
+      { model: opts?.model, ...(opts?.locale ? { locale: opts.locale } : {}) },
       opts?.signal,
     );
   },

@@ -472,7 +472,15 @@ export function Hub() {
     setMessages((prev) => [
       ...prev,
       userMsg,
-      { id: replyId, role: "assistant", content: "", tool_calls: [], proposal: null, streaming: true },
+      {
+        id: replyId, role: "assistant", content: "", tool_calls: [], proposal: null,
+        streaming: true,
+        /* client-only tag: when this answer lands, the toolbar offers the
+           promised deliverable (Save as PDF / download) — the Create chip
+           used to only PREFIX the prompt, and the person got prose with no
+           file (user report, 2026-08-20) */
+        ...(createKind ? { created: createKind } : {}),
+      },
     ]);
 
     await run(
@@ -487,6 +495,7 @@ export function Hub() {
           connectorProvider,
           sourceId: sourceId || undefined,
           web: webSearch,
+          locale,
           signal,
         }),
       replyId,
@@ -501,7 +510,7 @@ export function Hub() {
       { id: replyId, role: "assistant", content: "", tool_calls: [], proposal: null, streaming: true },
     ]);
     await run(
-      (signal) => api.regenerate(sessionId.current!, { model: model || undefined, signal }),
+      (signal) => api.regenerate(sessionId.current!, { model: model || undefined, locale, signal }),
       replyId,
     );
   }

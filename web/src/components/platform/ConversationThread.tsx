@@ -173,6 +173,51 @@ export function ConversationThread({
  * offered (it needs nothing from the server); the other two appear only
  * when their handlers do — the shared read-only view passes none.
  */
+/**
+ * The Create chip's promise, kept. "Create → PDF" used to only PREFIX the
+ * question; the person got document-shaped prose and no document (user
+ * report, 2026-08-20). A deliverable needs a file: PDF via a print-ready
+ * window (the browser's own Save-as-PDF — no library, works everywhere),
+ * doc via a Markdown download. Opened from a CLICK, so no popup blocker.
+ */
+function deliverPdf(text: string, title: string): void {
+  const w = window.open("", "_blank", "width=820,height=1000");
+  if (!w) return;
+  const esc = (s: string) =>
+    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  // escape FIRST, then the few markdown forms the assistant actually emits —
+  // order matters: transforming first would let content smuggle markup in.
+  const html = esc(text)
+    .replace(/^### (.*)$/gm, "<h3>$1</h3>")
+    .replace(/^## (.*)$/gm, "<h2>$1</h2>")
+    .replace(/^# (.*)$/gm, "<h1>$1</h1>")
+    .replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/^[-•] (.*)$/gm, "<li>$1</li>")
+    .replace(/\n/g, "<br>\n");
+  const rtl = /[؀-ۿ]/.test(text);
+  w.document.write(
+    `<!doctype html><html dir="${rtl ? "rtl" : "ltr"}"><head><meta charset="utf-8">`
+    + `<title>${esc(title)}</title>`
+    + `<style>body{font-family:Vazirmatn,system-ui,sans-serif;max-width:720px;`
+    + `margin:2rem auto;padding:0 1.5rem;line-height:2;color:#111}`
+    + `h1,h2,h3{line-height:1.5}li{margin-inline-start:1rem}</style>`
+    + `</head><body>${html}</body></html>`,
+  );
+  w.document.close();
+  w.focus();
+  w.print();
+}
+
+function deliverDoc(text: string, filename: string): void {
+  const blob = new Blob([text + "\n"], { type: "text/markdown" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function MessageToolbar({
   message,
   verdict,
@@ -192,6 +237,26 @@ function MessageToolbar({
 
   return (
     <div className="mt-1 flex items-center gap-0.5">
+      {message.created === "pdf" ? (
+        <button
+          type="button"
+          className="tap me-1 flex h-7 items-center gap-1 rounded-md bg-accent-soft px-2 text-xs font-semibold text-accent"
+          onClick={() => deliverPdf(message.content, t("createPdf"))}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="M7 10l5 5 5-5" /><path d="M12 15V3" /></svg>
+          {t("savePdf")}
+        </button>
+      ) : null}
+      {message.created === "doc" ? (
+        <button
+          type="button"
+          className="tap me-1 flex h-7 items-center gap-1 rounded-md bg-accent-soft px-2 text-xs font-semibold text-accent"
+          onClick={() => deliverDoc(message.content, "document.md")}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="M7 10l5 5 5-5" /><path d="M12 15V3" /></svg>
+          {t("saveDoc")}
+        </button>
+      ) : null}
       <button
         type="button"
         className={btn}

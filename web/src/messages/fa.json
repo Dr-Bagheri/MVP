@@ -540,7 +540,9 @@
     "toolCommandListRelatedCalls": "فهرست تماس‌های مرتبط",
     "toolCommandCorrectTranscript": "اصلاح رونوشت",
     "toolCommandEditSpeakerRoster": "ویرایش گویندگان",
-    "toolCommandReplaceSummary": "جایگزینی خلاصه"
+    "toolCommandReplaceSummary": "جایگزینی خلاصه",
+    "savePdf": "ذخیره به‌صورت PDF",
+    "saveDoc": "دانلود سند"
   },
   "platformRoot": {
     "menu": "کنترل پلتفرم",

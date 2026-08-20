@@ -40,6 +40,7 @@ export async function POST(request: Request) {
     workflow?: string;
     connector_provider?: "google" | "microsoft";
     source_id?: string;
+    locale?: string;
   };
 
   try {
@@ -55,6 +56,7 @@ export async function POST(request: Request) {
       workflow: body.workflow,
       connector_provider: body.connector_provider,
       source_id: body.source_id,
+      locale: body.locale,
     });
     return new Response(upstream.body, {
       headers: {

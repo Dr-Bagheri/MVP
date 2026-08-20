@@ -71,6 +71,25 @@ export interface AssistantDeps<TDeps> {
   log?: ((fields: Record<string, unknown>) => void) | undefined;
 }
 
+/**
+ * The interface language rides the ask (user directive, 2026-08-20): the
+ * assistant answers in the language the person is READING the product in —
+ * the en interface answers in English, fa in Persian. The shipped skill's
+ * prompt is Persian-first, so without this an English-interface user gets
+ * Persian answers. Appended after agent/workflow instructions so the
+ * interface fact wins on LANGUAGE while everything else stands. Unknown
+ * values return undefined — additive wire, never a 400.
+ */
+export function languageInstruction(locale: unknown): string | undefined {
+  if (locale === "fa") {
+    return "پاسخ را به زبان فارسی بنویس — زبان رابط کاربریِ کاربر فارسی است.";
+  }
+  if (locale === "en") {
+    return "Write your answer in English — the user's interface language is English.";
+  }
+  return undefined;
+}
+
 export function createAssistant<TDeps>(config: AssistantDeps<TDeps>) {
   return {
     /**

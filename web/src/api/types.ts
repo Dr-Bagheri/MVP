@@ -697,6 +697,12 @@ export interface AgentMessage {
   /** run ended with failed:true, or the stream died without `done` */
   failed?: boolean;
   error?: string;
+  /**
+   * CLIENT-ONLY (never on the wire): the Create chip active when this answer
+   * was requested. The toolbar turns it into the promised deliverable —
+   * Save as PDF / download — once the answer lands.
+   */
+  created?: "doc" | "pdf";
 }
 
 export interface AgentRun {

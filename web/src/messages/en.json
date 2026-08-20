@@ -540,7 +540,9 @@
     "toolCommandListRelatedCalls": "List related calls",
     "toolCommandCorrectTranscript": "Correct transcript",
     "toolCommandEditSpeakerRoster": "Edit speakers",
-    "toolCommandReplaceSummary": "Replace summary"
+    "toolCommandReplaceSummary": "Replace summary",
+    "savePdf": "Save as PDF",
+    "saveDoc": "Download document"
   },
   "platformRoot": {
     "menu": "Platform control",

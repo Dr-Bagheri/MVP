@@ -13,10 +13,11 @@ export const dynamic = "force-dynamic";
 
 export async function POST(request: Request, { params }: { params: Promise<{ sessionId: string }> }) {
   const { sessionId } = await params;
-  const body = (await request.json()) as { model?: string };
+  const body = (await request.json()) as { model?: string; locale?: string };
   try {
     const upstream = await coreStream(`/v1/assistant/sessions/${sessionId}/regenerate`, {
       model: body.model,
+      locale: body.locale,
     });
     return new Response(upstream.body, {
       headers: {

@@ -64,6 +64,26 @@ describe("ConversationThread", () => {
     expect(screen.getByText(/ناتمام|unfinished/i)).toBeTruthy();
   });
 
+  it("offers the promised deliverable on a Create-tagged answer — and ONLY there", () => {
+    /*
+     * Create → PDF used to only prefix the prompt: the person got
+     * document-shaped prose and no document. The toolbar now keeps the
+     * promise; an untagged answer must NOT offer it (the button would claim
+     * every answer is a document).
+     */
+    render(
+      <ConversationThread
+        messages={[
+          user("m1", "سؤال"),
+          assistant("m2", "متن سند", { created: "pdf" }),
+          user("m3", "سؤال دوم"),
+          assistant("m4", "پاسخ عادی"),
+        ]}
+      />,
+    );
+    expect(screen.getAllByText(/ذخیره به‌صورت PDF|Save as PDF/)).toHaveLength(1);
+  });
+
   it("shows the server's failure REASON inside the annotation — never as a bubble", () => {
     /*
      * 2026-08-20: two live runs failed in ~800ms and the person saw only "the
