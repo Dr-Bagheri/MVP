@@ -1191,5 +1191,22 @@
     "securityBody": "Sessions are httpOnly cookies; tokens never transit the browser. Content never appears in logs. Outbound webhooks carry identifiers and status only, signed with your secret.",
     "changesTitle": "6. Changes",
     "changesBody": "A revision of these terms changes the version date above. The text never changes silently."
+  },
+  "presence": {
+    "title": "NeurAI Assistant",
+    "openLabel": "Open the assistant",
+    "close": "Close",
+    "send": "Send",
+    "placeholder": "Ask, or tell it what to do…",
+    "empty": "Ask about anything you can see, or tell me what to do — for example: start a recording named call 1.",
+    "failed": "That did not finish.",
+    "consentAsk": "The assistant wants to: {action}",
+    "allow": "Allow",
+    "decline": "Decline",
+    "dialLabel": "Autonomy",
+    "dialWatch": "Watch",
+    "dialAssist": "Assist",
+    "dialNotReady": "This setting is not available on this deployment yet.",
+    "dialFailed": "The setting was not saved."
   }
 }

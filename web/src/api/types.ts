@@ -635,6 +635,15 @@ export interface AgentProposalPayload {
 export type AgentEvent =
   | { type: "text_delta"; delta: string }
   | { type: "tool_call"; id: string; name: string; label: string; state: ToolCallState; ms?: number }
+  /**
+   * M33: the runtime asks THIS surface to perform an action (client-executed
+   * tool) — the browser performs it under the user's own session, via the
+   * same code path as the human control, and answers through
+   * POST /api/assistant/tool-result. `requires_consent` = ask the person
+   * first. `args` are model-authored: validate them exactly like human input.
+   */
+  | { type: "client_tool_call"; id: string; tool: string; label: string;
+      args: unknown; effect: "ui" | "write"; requires_consent: boolean }
   | {
       type: "proposal";
       id: string;

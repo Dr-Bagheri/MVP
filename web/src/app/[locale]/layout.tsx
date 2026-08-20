@@ -6,6 +6,7 @@ import { getMessages, setRequestLocale } from "next-intl/server";
 import { notFound } from "next/navigation";
 import { routing, dirFor } from "@/i18n/routing";
 import { CrumbTitleProvider } from "@/components/platform/CrumbTitle";
+import { PresenceDock } from "@/components/platform/PresenceDock";
 import { themeBootScript } from "@/lib/theme";
 import "../globals.css";
 
@@ -74,6 +75,10 @@ export default async function LocaleLayout({
             and the top bar the page renders.
           */}
           <CrumbTitleProvider>{children}</CrumbTitleProvider>
+          {/* M34: the agent's presence — every route, one continuous thread.
+              Renders nothing for signed-out visitors and on the hub (the hub
+              IS the maximized presence). */}
+          <PresenceDock />
         </NextIntlClientProvider>
       </body>
     </html>

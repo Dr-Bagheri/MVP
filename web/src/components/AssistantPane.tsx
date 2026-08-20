@@ -200,8 +200,13 @@ export function AssistantPane({
                   // proposal arrived mid-stream, before this id existed
                   run_id: event.runId,
                   failed: event.failed,
-                  error: event.error,
                 };
+              default:
+                // this pane advertises no client tools, so client_tool_call
+                // never arrives here — but a union member the switch doesn't
+                // know must pass the message through, not drop it to
+                // undefined (the wire's unknown-ignorable contract, typed)
+                return m;
             }
           }),
         );
@@ -215,7 +220,7 @@ export function AssistantPane({
       setMessages((prev) =>
         prev.map((m) =>
           m.id === draft.id
-            ? { ...m, streaming: false, failed: true, error: t("streamLost") }
+            ? { ...m, streaming: false, failed: true }
             : m,
         ),
       );

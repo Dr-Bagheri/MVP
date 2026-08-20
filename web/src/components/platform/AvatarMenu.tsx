@@ -93,6 +93,11 @@ export function AvatarMenu({ me, isPlatformRoot = false }: { me: User | null; is
         for (const key of Object.keys(sessionStorage)) {
           if (key.startsWith("neurai-draft-")) sessionStorage.removeItem(key);
         }
+        // the presence dock's continuous thread must not follow the NEXT
+        // account on a shared machine (M34) — same reasoning as the drafts
+        for (const key of Object.keys(localStorage)) {
+          if (key.startsWith("neurai-presence-session")) localStorage.removeItem(key);
+        }
       } catch {
         // storage can be unavailable (privacy mode); sign-out proceeds anyway.
       }

@@ -57,6 +57,14 @@ export interface RunRequest<TDeps> {
   /** The question or instruction. Content must already be quoted by the caller. */
   input: string;
   tools: DomainTool<TDeps, never>[];
+  /**
+   * M33 client-executed tools for THIS request (already closed over the
+   * stream's emitter). They sit OUTSIDE skill declarations — a skill governs
+   * content reach; the surface's controls are governed by the autonomy dial
+   * plus what the surface advertised — so they are appended AFTER the
+   * declared-tools filter and their names join the policy allowance.
+   */
+  clientTools?: DomainTool<TDeps, never>[] | undefined;
   deps: TDeps;
   callId?: string | null | undefined;
   /**
@@ -188,7 +196,10 @@ export function createAgentRuntime({ runs }: AgentRuntimeOptions) {
           input,
           // what the model was actually offered (post skill-filter), so a
           // replay reconstructs the same surface
-          tools: filterDeclaredTools(request.tools, combinedAllowedTools(skill?.tools, request.allowedTools)).map((t) => t.name),
+          tools: [
+            ...filterDeclaredTools(request.tools, combinedAllowedTools(skill?.tools, request.allowedTools)).map((t) => t.name),
+            ...(request.clientTools ?? []).map((t) => t.name),
+          ],
           skill: skill ? { id: skill.id, slug: skill.slug, level: skill.level } : null,
           ...(request.provenance ? { provenance: request.provenance } : {}),
           ...(contextCallIds.length > 1 ? { callIds: contextCallIds } : {}),
@@ -210,7 +221,11 @@ export function createAgentRuntime({ runs }: AgentRuntimeOptions) {
         // the skill didn't declare, but the veto below still enforces it, so
         // nothing depends on this filter having run.
         const allowedTools = combinedAllowedTools(skill?.tools, request.allowedTools);
-        const offered = filterDeclaredTools(request.tools, allowedTools);
+        const clientTools = request.clientTools ?? [];
+        // Client tools join AFTER the declared filter and their names join
+        // the allowance — through the SAME wrapper, so every attempt lands
+        // in agent_run.steps and the audit sees one run (M33).
+        const offered = [...filterDeclaredTools(request.tools, allowedTools), ...clientTools];
         const tools = wrapTools(offered, {
           identity, deps: request.deps, onStep,
           onStart: request.onToolStart,
@@ -218,7 +233,9 @@ export function createAgentRuntime({ runs }: AgentRuntimeOptions) {
         });
         const beforeToolCall = createPolicy({
           identity,
-          allowedTools,
+          allowedTools: allowedTools === undefined
+            ? undefined
+            : [...allowedTools, ...clientTools.map((t) => t.name)],
           adminOnlyTools: request.adminOnlyTools,
           // precedence: explicit request > per-skill pin > default
           maxToolCalls: request.maxToolCalls ?? skill?.maxToolCalls ?? DEFAULT_MAX_TOOL_CALLS,

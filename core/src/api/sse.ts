@@ -40,6 +40,16 @@ export type SseEvent =
   | { type: "tool_call"; id: string; name: string; label: string;
       state: "started" | "ok" | "denied" | "blocked" | "error"; ms?: number }
   | { type: "proposal"; id: string; kind: string; summary: string; payload: unknown }
+  /**
+   * M33: the runtime asks the SURFACE to perform an action (client-executed
+   * tool). The browser performs it under the user's own session — via the
+   * same code path as the human control — and answers through
+   * POST /v1/assistant/tool-result. `requires_consent` means the surface
+   * must ask the person before performing. `args` are model-authored and
+   * the surface validates them exactly as it validates human input.
+   */
+  | { type: "client_tool_call"; id: string; tool: string; label: string;
+      args: unknown; effect: "ui" | "write"; requires_consent: boolean }
   | { type: "done"; runId: string; failed: boolean; error?: string };
 
 /** Minimal sink so this is testable without a live socket. */

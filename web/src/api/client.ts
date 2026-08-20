@@ -1555,6 +1555,10 @@ export const api = {
       agent?: string; workflow?: string; connectorProvider?: ConnectorProvider; sourceId?: string;
       /** the UI locale — the assistant answers in the interface language */
       locale?: string;
+      /** M33: client tools THIS surface can perform (validated server-side). */
+      clientTools?: string[];
+      /** M34: where the user is — route + optional entity, IDs only. */
+      surface?: { route: string; entity?: { kind: string; id: string } };
     },
   ): AsyncGenerator<AgentEvent> {
     /* **LIVE** — the real stream, through the BFF's SSE passthrough. The
@@ -1581,9 +1585,29 @@ export const api = {
         source_id: opts?.sourceId,
         ...(opts?.web ? { web: true } : {}),
         ...(opts?.locale ? { locale: opts.locale } : {}),
+        ...(opts?.clientTools?.length ? { client_tools: opts.clientTools } : {}),
+        ...(opts?.surface ? { context: opts.surface } : {}),
       },
       opts?.signal,
     );
+  },
+
+  /** M33: answer a `client_tool_call` — performed, declined, or failed. */
+  async deliverToolResult(callId: string, ok: boolean, detail: string): Promise<void> {
+    await bff("/api/assistant/tool-result", {
+      method: "POST",
+      body: JSON.stringify({ call_id: callId, ok, detail }),
+      headers: { "content-type": "application/json" },
+    });
+  },
+
+  /** M36: the autonomy dial. 409 code `not_migrated` until db/0073 lands. */
+  async setAutonomy(autonomy: "watch" | "assist" | "act"): Promise<void> {
+    await bff("/api/me/autonomy", {
+      method: "PUT",
+      body: JSON.stringify({ autonomy }),
+      headers: { "content-type": "application/json" },
+    });
   },
 
   /**

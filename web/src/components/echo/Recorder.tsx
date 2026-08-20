@@ -8,6 +8,7 @@ import { Card, Chip, Field, Progress } from "@/components/ui";
 import { Link } from "@/i18n/routing";
 import { digits, formatClock } from "@/lib/format";
 import { PART_MS, resumePoint } from "./uploadRules";
+import { recorderControls } from "./recorderControls";
 
 /**
  * The browser recorder — Part 5's centrepiece, and the first REAL producer
@@ -172,6 +173,45 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
   }, [phase]);
 
   /**
+   * M33: publish the live controls for the agent surface — the SAME
+   * functions the buttons call — while a take is live; clear on change.
+   * The agent's pause/resume tools reach these or get an honest refusal.
+   */
+  useEffect(() => {
+    if (phase === "recording" || phase === "paused") {
+      recorderControls.current = {
+        phase: () => (phaseRef.current === "recording" ? "recording"
+          : phaseRef.current === "paused" ? "paused" : "other"),
+        pause,
+        resume,
+      };
+      return () => { recorderControls.current = null; };
+    }
+    return undefined;
+  }, [phase]);
+
+  /**
+   * M33: `?agentStart=<title>` — the agent's start_recording lands here and
+   * the recorder starts itself through its OWN start() (the human path,
+   * M33 rule 2: no parallel implementation). Once only (the ref): React
+   * StrictMode double-fires effects in dev, and two starts would race
+   * getUserMedia against itself.
+   */
+  const agentStarted = useRef(false);
+  useEffect(() => {
+    if (agentStarted.current) return;
+    const params = new URLSearchParams(window.location.search);
+    const agentTitle = params.get("agentStart");
+    if (agentTitle === null || params.get("resume")) return;
+    agentStarted.current = true;
+    setTitle(agentTitle);
+    // the title rides as an argument — reading it back from state here would
+    // be the stale-closure trap (this render's `title` is still empty)
+    void start(agentTitle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot adoption
+  }, []);
+
+  /**
    * Adopt the resume target from the URL. Read from `location.search` in an
    * effect, deliberately NOT `useSearchParams()` — that hook forces a
    * prerender bailout that broke the production build once already (the
@@ -274,7 +314,7 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
     meterRaf.current = requestAnimationFrame(loop);
   }
 
-  async function start(): Promise<void> {
+  async function start(titleOverride?: string): Promise<void> {
     setError(null);
     setPhase("starting");
     try {
@@ -298,7 +338,7 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
     } else {
       try {
         const created = await api.createCall({
-          title: title.trim() || undefined,
+          title: (titleOverride ?? title).trim() || undefined,
           source: "web",
         });
         callId.current = created.id;

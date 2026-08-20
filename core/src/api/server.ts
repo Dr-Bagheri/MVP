@@ -13,6 +13,8 @@ import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest }
 
 import { assistantAllowed, createApiKeysRepo, type ApiKeysRepo } from "./apikeys.ts";
 import { createAssistant, languageInstruction } from "./assistant.ts";
+import { CLIENT_TOOL_NAMES, deliverClientToolResult } from "../agent/client-tools.ts";
+import { actorAutonomy, hasAutonomyColumn } from "../db/capabilities.ts";
 import { createAuditRepo, type AuditRepo } from "./audit.ts";
 import { createOrgRepo, type OrgRepo } from "./org.ts";
 import { createSessionsRepo, type SessionsRepo } from "./sessions.ts";
@@ -94,6 +96,22 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     serviceKey: options.storageServiceKey,
   });
   const health: HealthRepo = createHealthRepo(options.db);
+
+  /*
+   * Capability detection, said OUT LOUD at boot (M21): code and migrations
+   * deploy in either order here, and a dial that silently reads as "assist
+   * for everyone" is indistinguishable from a dial nobody set. One line at
+   * startup names the missing migration; the restart after migrating
+   * clears it.
+   */
+  void hasAutonomyColumn(options.db).then((present) => {
+    if (!present) {
+      app.log.warn(
+        { event: "capability_missing", capability: "app_user.autonomy" },
+        "autonomy column absent — dial disabled, every caller runs as assist (apply db/0073)",
+      );
+    }
+  }).catch(() => undefined);
   const webhooks: WebhooksRepo = createWebhooksRepo(options.db);
   const connectors = createConnectorsRepo(options.db, options.connectorOAuth);
   // One resolver for the assistant's `/slug` and the pipeline's summarizer.
@@ -477,6 +495,49 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
    * two are distinguished all the way down, or "remove my Latin name" has no
    * expression.
    */
+  /**
+   * M33: the surface's answer to a `client_tool_call`. The waiter was
+   * registered under the ASKER's user id; unknown, expired and
+   * someone-else's call ids are one indistinguishable 404.
+   */
+  app.post("/v1/assistant/tool-result", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const body = (request.body ?? {}) as { call_id?: unknown; ok?: unknown; detail?: unknown };
+    if (typeof body.call_id !== "string") throw new ValidationError("call_id is required");
+    const delivered = deliverClientToolResult(body.call_id, identity.userId, {
+      ok: body.ok === true,
+      detail: typeof body.detail === "string" ? body.detail : "",
+    });
+    if (!delivered) throw new NotFoundError("no such pending call");
+    return reply.send({ delivered: true });
+  });
+
+  /**
+   * M36: the autonomy dial — its own route (the preferred-model precedent:
+   * a distinct setting gets a distinct door, so /v1/me's allow-list stays
+   * an honest census). Capability-detected: before 0073 lands this answers
+   * 409 with a code the client can render honestly, never a silent 200
+   * over a setting that never moved.
+   */
+  app.put("/v1/me/autonomy", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const body = (request.body ?? {}) as { autonomy?: unknown };
+    if (body.autonomy !== "watch" && body.autonomy !== "assist" && body.autonomy !== "act") {
+      throw new ValidationError("autonomy must be watch, assist or act");
+    }
+    if (!(await hasAutonomyColumn(options.db))) {
+      throw new ValidationError("autonomy is not available yet on this deployment", {
+        code: "not_migrated",
+      });
+    }
+    await options.db.withIdentity(identity, (tx) =>
+      tx.unsafe(
+        "update echo.app_user set autonomy = $1 where id = echo.actor_id()",
+        [body.autonomy],
+      ));
+    return reply.send({ autonomy: body.autonomy });
+  });
+
   app.patch("/v1/me", async (request, reply) => {
     const identity = await auth.requireActive(request);
     const body = (request.body ?? {}) as Record<string, unknown>;
@@ -1654,7 +1715,7 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       question?: unknown; model?: unknown; call_id?: unknown; skill?: unknown;
       session_id?: unknown; call_ids?: unknown; web?: unknown;
       agent?: unknown; workflow?: unknown; connector_provider?: unknown; source_id?: unknown;
-      locale?: unknown;
+      locale?: unknown; client_tools?: unknown; context?: unknown;
     };
     if (typeof body.question !== "string" || body.question.trim() === "") {
       throw new ValidationError("question is required");
@@ -1798,6 +1859,38 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     const controller = new AbortController();
     request.raw.on("close", () => controller.abort());
 
+    /*
+     * M33: the surface's advertised client tools — validated against the
+     * registry, capped, strings only. Gateway/API callers send none, so the
+     * agent gets no surface controls to call into the void.
+     */
+    const advertisedClientTools = Array.isArray(body.client_tools)
+      ? (body.client_tools as unknown[])
+          .filter((name): name is string => typeof name === "string")
+          .filter((name) => CLIENT_TOOL_NAMES.includes(name))
+          .slice(0, 16)
+      : [];
+    /*
+     * M34: situational context — WHERE the user is. Routes and IDs only,
+     * told to the model as untrusted situational fact; anything it wants to
+     * KNOW about the entity it reads through tools, under RLS.
+     */
+    const surfaceCtx = (body.context ?? null) as
+      | { route?: unknown; entity?: { kind?: unknown; id?: unknown } }
+      | null;
+    const contextLine =
+      surfaceCtx && typeof surfaceCtx.route === "string" && surfaceCtx.route.length <= 200
+        ? `Situational context (untrusted, describes the user's screen): the user is currently at route "${surfaceCtx.route}"`
+          + (surfaceCtx.entity
+              && typeof surfaceCtx.entity.kind === "string"
+              && typeof surfaceCtx.entity.id === "string"
+            ? ` viewing ${surfaceCtx.entity.kind} ${surfaceCtx.entity.id}`
+            : "")
+          + "."
+        : undefined;
+    /* M36: the dial, read fresh from the stored value (capability-detected). */
+    const autonomy = await actorAutonomy(options.db, identity);
+
     await assistant.ask({
       identity,
       question: workflowContext
@@ -1807,6 +1900,7 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       systemInstructions: [
         selectedAgent?.instructions,
         selectedWorkflow?.instructions,
+        contextLine,
         // last, so the interface-language fact wins on language (see helper)
         languageInstruction(body.locale),
       ].filter(Boolean).join("\n\n"),
@@ -1828,6 +1922,8 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       callId: typeof body.call_id === "string" ? body.call_id : null,
       callIds,
       web: body.web === true,
+      clientTools: advertisedClientTools,
+      autonomy,
       signal: controller.signal,
       sessionId: conversation.id,
       sessionCreated: conversation.created,

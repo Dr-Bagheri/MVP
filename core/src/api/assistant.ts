@@ -16,6 +16,7 @@ import { createSseStream, stepToEvent, type SseSink } from "./sse.ts";
 import type { DomainTool } from "../agent/tools.ts";
 import type { Db } from "../db/identity.ts";
 import type { Identity, Skill } from "../agent/types.ts";
+import { createClientTools } from "../agent/client-tools.ts";
 
 export interface AskRequest {
   identity: Identity;
@@ -40,6 +41,14 @@ export interface AskRequest {
   callIds?: string[] | undefined;
   /** Web search via the provider's online variant (validated base model). */
   web?: boolean | undefined;
+  /**
+   * M33: client tools THIS surface advertised (validated names). The gateway
+   * and API callers advertise none and get none — a UI tool must never be
+   * offered into a surface that cannot perform it.
+   */
+  clientTools?: readonly string[] | undefined;
+  /** M36: the caller's stored autonomy, resolved server-side by the route. */
+  autonomy?: "watch" | "assist" | "act" | undefined;
   signal?: AbortSignal | undefined;
   /** The conversation this turn belongs to (M4, db/0018). */
   sessionId?: string | undefined;
@@ -137,6 +146,16 @@ export function createAssistant<TDeps>(config: AssistantDeps<TDeps>) {
           created: request.sessionCreated === true,
         });
       }
+      /*
+       * M33: build this request's client tools, closed over THIS stream's
+       * sender. Empty for watch mode and for surfaces that advertised none.
+       */
+      const clientTools = createClientTools(request.clientTools ?? [], {
+        userId: request.identity.userId,
+        autonomy: request.autonomy ?? "assist",
+        emit: (event) => stream.send(event),
+      });
+
       try {
         const result = await runtime.run({
           identity: request.identity,
@@ -150,6 +169,7 @@ export function createAssistant<TDeps>(config: AssistantDeps<TDeps>) {
           callerModel: request.model,
           input: request.question,
           tools: config.tools,
+          clientTools: clientTools as never,
           deps: config.deps,
           callId: request.callId ?? null,
           callIds: request.callIds,
