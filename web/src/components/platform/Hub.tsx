@@ -381,15 +381,15 @@ export function Hub() {
                     streaming: false,
                     run_id: event.runId,
                     failed: event.failed,
-                    error: event.error,
                   };
                 }
-                /* Shape A drops the empty reply below — so the server's
-                   failure REASON (sent on `done`, previously discarded here)
-                   moves onto the question it annotates. Client state only;
-                   a reload re-derives the honest record from the server. */
+                /* Shape A drops the empty reply below — the failed flag moves
+                   onto the question it annotates. The raw failure SENTENCE is
+                   deliberately not carried (user directive, 2026-08-20): a
+                   provider's JSON under a chat reads as debug output; the
+                   reason lives on the audit surface and in the server log. */
                 if (emptyFailure && i === idx - 1 && m.role === "user") {
-                  return { ...m, failed: true, error: event.error };
+                  return { ...m, failed: true };
                 }
                 return m;
               })

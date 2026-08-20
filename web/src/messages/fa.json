@@ -14,7 +14,9 @@
     "signOut": "خروج",
     "theme": "پوسته",
     "assistant": "دستیار",
-    "resizeMenu": "تغییر اندازهٔ منو"
+    "resizeMenu": "تغییر اندازهٔ منو",
+    "closeMenu": "بستن منو",
+    "openMenu": "بازکردن منو"
   },
   "auth": {
     "signInTitle": "ورود به پلتفرم نورای",

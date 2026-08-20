@@ -84,22 +84,24 @@ describe("ConversationThread", () => {
     expect(screen.getAllByText(/ذخیره به‌صورت PDF|Save as PDF/)).toHaveLength(1);
   });
 
-  it("shows the server's failure REASON inside the annotation — never as a bubble", () => {
+  it("shows ONLY the human annotation on a failed run — never a raw provider error", () => {
     /*
-     * 2026-08-20: two live runs failed in ~800ms and the person saw only "the
-     * run did not finish" — the server had SENT the reason on `done` and the
-     * client discarded it, so diagnosing meant an operator reading the
-     * database. The reason renders as part of the annotation (no role, no
-     * bubble), so it can never later read as something the assistant said.
+     * The server's failure sentence was briefly rendered here and REMOVED by
+     * user directive (2026-08-20, "remove the log"): a provider's JSON under
+     * a chat message reads as debug output, not as product. The reason still
+     * reaches the operator (audit surface + server log). This is the absence
+     * half: it fails if the raw sentence quietly returns.
      */
     render(
       <ConversationThread
-        messages={[user("m1", "سؤال", ), { ...user("m1b", "سؤال دوم"), failed: true, error: "model refused: example_code" } as AgentMessage]}
+        messages={[
+          user("m1", "سؤال"),
+          { ...user("m1b", "سؤال دوم"), failed: true, error: "model refused: example_code" } as AgentMessage,
+        ]}
       />,
     );
-    expect(screen.getByText(/model refused: example_code/)).toBeTruthy();
-    // still exactly the bubbles the messages account for — the reason adds none
-    expect(screen.queryAllByText(/./, { selector: ".rounded-2xl" }).length).toBe(2);
+    expect(screen.getByText("این پرسش بی‌پاسخ ماند؛ اجرا ناتمام ماند.")).toBeTruthy();
+    expect(screen.queryByText(/model refused/)).toBeNull();
   });
 
   /**

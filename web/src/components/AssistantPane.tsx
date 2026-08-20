@@ -340,8 +340,10 @@ export function AssistantPane({
               </ul>
             ) : null}
 
+            {/* the human sentence only — the raw provider error was removed
+                everywhere by user directive (2026-08-20, "remove the log") */}
             {message.failed ? (
-              <p className="mt-2 text-xs text-danger">{message.error ?? t("runFailed")}</p>
+              <p className="mt-2 text-xs text-danger">{t("runFailed")}</p>
             ) : null}
 
             {message.proposal ? (

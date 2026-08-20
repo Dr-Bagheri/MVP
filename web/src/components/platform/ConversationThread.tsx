@@ -102,16 +102,14 @@ export function ConversationThread({
                 the record, so it can never be mistaken later for something the
                 assistant said.
               */}
+              {/* The raw server failure sentence was BRIEFLY shown here and
+                  removed by user directive (2026-08-20, "remove the log"):
+                  a provider's JSON error under a chat message reads as debug
+                  output, not as product. The reason still reaches the
+                  operator through the audit surface and the server log —
+                  the thread keeps only the human sentence. */}
               {(unanswered || m.failed) ? (
-                <p className="mt-1.5 text-xs leading-6 text-warning">
-                  {t("runUnfinished")}
-                  {/* The server's own failure sentence, when the live stream
-                      carried one — the reason was always SENT on `done` and
-                      previously discarded, leaving the person (and whoever
-                      they ask for help) diagnosing a blank. English prose is
-                      the honest fallback; still an annotation, never a bubble. */}
-                  {m.error ? <span className="ms-1 text-fg-muted ltr">{m.error}</span> : null}
-                </p>
+                <p className="mt-1.5 text-xs leading-6 text-warning">{t("runUnfinished")}</p>
               ) : null}
 
               {/*

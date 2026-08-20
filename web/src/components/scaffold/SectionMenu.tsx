@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
 import { MENU_PANEL, ResizablePanel } from "./Resizable";
@@ -124,15 +124,66 @@ export function SectionMenu({
  * takes everything the sides give up. Below md the stacked mobile layout is
  * untouched.
  */
+/** One shared key: closing the menu on one section closes it on all — it is
+ *  a workspace preference, not a per-page fact. */
+const MENU_CLOSED_KEY = "neurai-submenu-closed";
+
 export function MenuLayout({ menu, children }: { menu: ReactNode; children: ReactNode }) {
   const t = useTranslations("nav");
+  /**
+   * The close option (user directive, 2026-08-20). Default OPEN, and the
+   * stored preference is adopted in an effect rather than in the initial
+   * state — reading localStorage during render would make the server and
+   * first client render disagree (the hydration flash beats a hydration
+   * ERROR, and the toggle is chrome, not content). md+ only: below md the
+   * menu stacks above the content and scrolls away naturally.
+   */
+  const [closed, setClosed] = useState(false);
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(MENU_CLOSED_KEY) === "1") setClosed(true);
+    } catch { /* storage unavailable (privacy mode) — stay open */ }
+  }, []);
+  function setAndStore(next: boolean) {
+    setClosed(next);
+    try {
+      if (next) localStorage.setItem(MENU_CLOSED_KEY, "1");
+      else localStorage.removeItem(MENU_CLOSED_KEY);
+    } catch { /* preference simply doesn't persist */ }
+  }
+
   return (
     /* min-h-full so a content child may center itself vertically (the hub);
        pages taller than the viewport are unaffected */
     <div className="flex min-h-full w-full flex-col md:flex-row">
-      <ResizablePanel side="start" spec={MENU_PANEL} label={t("resizeMenu")} className="w-full">
-        {menu}
-      </ResizablePanel>
+      {closed ? (
+        /* the reopen affordance holds the menu's edge so the column doesn't
+           read as missing — a slim strip, the full height of the row */
+        <button
+          type="button"
+          className="tap hidden w-6 shrink-0 items-start justify-center border-e border-border bg-surface pt-4 text-fg-muted hover:text-fg md:flex"
+          aria-label={t("openMenu")}
+          title={t("openMenu")}
+          onClick={() => setAndStore(false)}
+        >
+          <span aria-hidden className="text-xs">⟩</span>
+        </button>
+      ) : (
+        <ResizablePanel side="start" spec={MENU_PANEL} label={t("resizeMenu")} className="w-full">
+          <div className="relative h-full">
+            <button
+              type="button"
+              className="tap absolute end-2 top-2 z-10 hidden h-7 w-7 items-center justify-center rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg md:flex"
+              aria-label={t("closeMenu")}
+              title={t("closeMenu")}
+              onClick={() => setAndStore(true)}
+            >
+              <span aria-hidden className="text-xs">⟨</span>
+            </button>
+            {menu}
+          </div>
+        </ResizablePanel>
+      )}
       <div className="min-w-0 flex-1">{children}</div>
     </div>
   );

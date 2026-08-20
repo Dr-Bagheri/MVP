@@ -118,6 +118,54 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
   );
 
   /**
+   * A live recording must not keep rolling while nobody is looking (user
+   * directive, 2026-08-20): leaving the tab, closing it, or navigating to
+   * another section PAUSES the take instead of silently recording a wall.
+   *
+   * Three doors, three guards:
+   *  - tab hidden (switch/minimize) → pause. No auto-resume: coming back
+   *    and pressing resume is a decision, and an automatic one would splice
+   *    an absence into the take without anyone choosing it.
+   *  - tab close / hard reload → the browser's own leave prompt (and a
+   *    best-effort pause, so cancelling the leave lands on a paused take).
+   *  - IN-APP navigation → the first click on any link pauses and stays
+   *    (App Router has no cancellable route event, so the guard is a
+   *    capture-phase click listener). While PAUSED the guard is off: the
+   *    second, deliberate click leaves — the unmount teardown stops the
+   *    recorder, which flushes and uploads everything captured so far.
+   */
+  const phaseRef = useRef(phase);
+  phaseRef.current = phase;
+  useEffect(() => {
+    if (phase !== "recording") return;
+    const onVisibility = () => {
+      if (document.hidden && phaseRef.current === "recording") pause();
+    };
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (phaseRef.current === "recording") pause();
+      e.preventDefault();
+      // older Chrome shows the prompt only when returnValue is set
+      e.returnValue = "";
+    };
+    const onClickCapture = (e: MouseEvent) => {
+      if (phaseRef.current !== "recording") return;
+      const anchor = (e.target as Element | null)?.closest?.("a[href]");
+      if (!anchor) return;
+      e.preventDefault();
+      e.stopPropagation();
+      pause();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("beforeunload", onBeforeUnload);
+    document.addEventListener("click", onClickCapture, true);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("beforeunload", onBeforeUnload);
+      document.removeEventListener("click", onClickCapture, true);
+    };
+  }, [phase]);
+
+  /**
    * One complete part-recorder on the shared stream. `idx`/`offsetMs` and
    * the chunk list are CLOSED OVER, not shared refs: at a part boundary the
    * next recorder starts before the old one's `onstop` has fired, and a

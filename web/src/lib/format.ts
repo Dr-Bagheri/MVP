@@ -194,6 +194,17 @@ export function formatClock(totalSeconds: number, locale = "fa"): string {
 }
 
 export function formatDuration(totalSeconds: number, locale: string): string {
+  /*
+   * Under a minute, minutes lie in both directions: a 13-second test call
+   * rendered "0 min" — a number that reads as "no recording" on a call that
+   * plainly has one (user report, 2026-08-20). Seconds are the honest unit
+   * until a full minute exists.
+   */
+  if (totalSeconds < 60) {
+    const seconds = Math.max(0, Math.round(totalSeconds));
+    if (locale !== "fa") return `${seconds} s`;
+    return `${faDigits(seconds)} ثانیه`;
+  }
   const minutes = Math.round(totalSeconds / 60);
   if (locale !== "fa") return `${minutes} min`;
   return `${faDigits(minutes)} دقیقه`;
