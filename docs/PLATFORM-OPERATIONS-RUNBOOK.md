@@ -321,6 +321,33 @@ Site URL = `https://app.neurai.pt`. Custom SMTP still pending for volume.
 
 ---
 
+## 7e. Deployment record — 2026-08-21 (the AI-native shift, Phases A–D)
+
+Commits `72000d4`→ (Phase A) → `630894f` (B) → `2a23db6` (C) → Phase D.
+M33–M36 ratified in ARCHITECTURE.md; full plan + deferrals in
+docs/AI-NATIVE-PLAN.md. Shipped: client tools (the agent drives the
+surface — start/pause/resume recording, navigate, open, search — under
+the user's own session with consent cards), the presence dock (orb on
+every route, Ctrl/⌘-K, daily continuous thread, page context), the
+autonomy dial (watch/assist/act + org ceiling), signals (post-call brief
++ weekly digest as cards→conversations, run AS the owner), reasoning
+traces, the Assistant-activity governance card, generative answer
+blocks, and read-aloud.
+
+**PENDING MIGRATIONS on production: 0073, 0074, 0075** (owner-run, the
+§4 procedure). Until they land, core capability-detects and degrades
+loudly: dial = assist for everyone (boot log names 0073), signals
+skipped with a warn per message (0074), ceiling uncapped (0075). After
+migrating, RESTART api + worker — the capability cache clears on boot.
+Verify: the api boot log's `capability_missing` line disappears.
+
+Deferred with reasons (see the plan doc): realtime STT proxy (live
+catch-me-up + translation lane — the Soniox key must never reach the
+browser), wake word (explicit opt-in UI first), Act for server
+proposals, model-composed briefs.
+
+---
+
 ## 8. What never goes in this file (or any log)
 
 Connection strings, DB passwords, API keys, service keys, JWT secrets, the

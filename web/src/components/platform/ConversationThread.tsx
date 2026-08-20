@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { AgentMessage } from "@/api/types";
 import { deliverDoc, deliverPdf } from "@/lib/deliver";
+import { parseAnswerBlocks, type AnswerBlock } from "@/lib/answerBlocks";
 
 /**
  * A persisted assistant conversation, rendered.
@@ -84,7 +85,7 @@ export function ConversationThread({
                     : "rounded-2xl rounded-es-sm border border-border bg-surface px-3.5 py-2.5 text-sm leading-7 text-fg"
                 }
               >
-                {m.content}
+                {isUser ? m.content : <AnswerContent text={m.content} />}
                 {m.streaming ? <span className="ms-1 animate-pulse text-fg-muted">▍</span> : null}
               </div>
 
@@ -303,6 +304,7 @@ function MessageToolbar({
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M3 12a9 9 0 1 1 2.64 6.36M3 22v-6h6" /></svg>
         </button>
       ) : null}
+      <SpeakButton text={message.content} />
       {message.run_id ? (
         <button
           type="button"
@@ -319,5 +321,123 @@ function MessageToolbar({
     </div>
     {traceOpen && message.run_id ? <TraceBlock runId={message.run_id} /> : null}
     </>
+  );
+}
+
+/**
+ * Phase D — generative blocks: an assistant answer renders its structured
+ * islands (table / checklist / timeline) as real components; everything the
+ * parser degrades stays the model's literal words. Whitespace is preserved
+ * on text runs — prose is the default, blocks are the exception.
+ */
+function AnswerContent({ text }: { text: string }) {
+  const segments = parseAnswerBlocks(text);
+  return (
+    <>
+      {segments.map((segment, i) =>
+        segment.type === "text" ? (
+          <span key={i} className="whitespace-pre-wrap">{segment.text}</span>
+        ) : (
+          <BlockView key={i} block={segment.block} />
+        ),
+      )}
+    </>
+  );
+}
+
+function BlockView({ block }: { block: AnswerBlock }) {
+  if (block.kind === "table") {
+    return (
+      <div className="my-2 overflow-x-auto rounded-lg border border-border">
+        <table className="w-full min-w-max text-xs">
+          <thead>
+            <tr className="border-b border-border bg-surface-2/60">
+              {block.columns.map((column, i) => (
+                <th key={i} className="px-3 py-1.5 text-start font-semibold text-fg">{column}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {block.rows.map((row, r) => (
+              <tr key={r} className="border-b border-border last:border-b-0">
+                {row.map((cell, c) => (
+                  <td key={c} className="px-3 py-1.5 text-fg-muted">{cell}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+  if (block.kind === "checklist") {
+    return (
+      <ul className="my-2 space-y-1">
+        {block.items.map((item, i) => (
+          <li key={i} className="flex items-start gap-2 text-sm">
+            <span aria-hidden className={item.done ? "text-success" : "text-fg-subtle"}>
+              {item.done ? "☑" : "☐"}
+            </span>
+            <span className={item.done ? "text-fg-muted line-through" : "text-fg"}>{item.text}</span>
+          </li>
+        ))}
+      </ul>
+    );
+  }
+  return (
+    <ol className="my-2 space-y-1 border-s-2 border-accent/30 ps-3">
+      {block.items.map((item, i) => (
+        <li key={i} className="text-sm">
+          {item.when ? <span className="me-2 text-xs font-semibold text-accent">{item.when}</span> : null}
+          <span className="text-fg">{item.what}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/**
+ * Phase D — speech OUT (item 18, first half): the browser's own synthesis
+ * reads the answer aloud. Honest limits: voice quality and Persian support
+ * depend on the OS's installed voices — this is the zero-dependency floor,
+ * and a vendor TTS lane can replace the engine without touching the button.
+ * Block fences are stripped before speaking; a table read cell-by-cell as
+ * JSON is noise, and the prose around it is the sentence that matters.
+ */
+function SpeakButton({ text }: { text: string }) {
+  const t = useTranslations("platform");
+  const [speaking, setSpeaking] = useState(false);
+
+  function toggle() {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    if (speaking) {
+      window.speechSynthesis.cancel();
+      setSpeaking(false);
+      return;
+    }
+    const prose = text.replace(/```neurai-block[\s\S]*?```/g, " ").trim();
+    if (!prose) return;
+    const utterance = new SpeechSynthesisUtterance(prose);
+    utterance.lang = /[؀-ۿ]/.test(prose) ? "fa-IR" : "en-US";
+    utterance.onend = () => setSpeaking(false);
+    utterance.onerror = () => setSpeaking(false);
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utterance);
+    setSpeaking(true);
+  }
+
+  const btn = "grid h-7 w-7 place-items-center rounded-md text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg";
+  const pressed = "grid h-7 w-7 place-items-center rounded-md bg-accent-soft text-accent";
+  return (
+    <button
+      type="button"
+      className={speaking ? pressed : btn}
+      aria-label={t("speak")}
+      title={t("speak")}
+      aria-pressed={speaking}
+      onClick={toggle}
+    >
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><path d="M15.54 8.46a5 5 0 0 1 0 7.07" /><path d="M19.07 4.93a10 10 0 0 1 0 14.14" /></svg>
+    </button>
   );
 }

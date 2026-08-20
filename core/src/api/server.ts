@@ -2044,6 +2044,21 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
         : undefined;
     /* M36: the dial, read fresh from the stored value (capability-detected). */
     const autonomy = await actorAutonomy(options.db, identity);
+    /*
+     * Phase D: generative blocks — taught ONLY to rich surfaces (the ones
+     * that advertised client tools). Other callers (gateway, older bundles)
+     * would receive raw fences as prose, so they are simply not taught the
+     * syntax. The blocks ride ordinary text: no wire change, and a client
+     * that has never heard of them still shows a legible fenced snippet.
+     */
+    const blocksInstruction = advertisedClientTools.length > 0
+      ? "When a table, checklist, or timeline would show your answer better than"
+        + " prose, emit it as a fenced block: ```neurai-block\\n{JSON}\\n``` where"
+        + " JSON is one of {\"kind\":\"table\",\"columns\":[...],\"rows\":[[...]]},"
+        + " {\"kind\":\"checklist\",\"items\":[{\"text\":\"...\",\"done\":false}]},"
+        + " {\"kind\":\"timeline\",\"items\":[{\"when\":\"...\",\"what\":\"...\"}]}."
+        + " Keep prose around the block; never put the whole answer inside one."
+      : undefined;
 
     await assistant.ask({
       identity,
@@ -2055,6 +2070,7 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
         selectedAgent?.instructions,
         selectedWorkflow?.instructions,
         contextLine,
+        blocksInstruction,
         // last, so the interface-language fact wins on language (see helper)
         languageInstruction(body.locale),
       ].filter(Boolean).join("\n\n"),

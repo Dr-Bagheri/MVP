@@ -129,7 +129,11 @@ describe("ConversationThread", () => {
     expect(screen.getByText("سه موضوع مطرح شد: نخست")).toBeTruthy();
     expect(screen.getByText(/ناتمام ماند؛ ادامه‌اش نوشته نشد/)).toBeTruthy();
     // annotation, not a turn: still exactly two messages in the record
-    expect(screen.getAllByText(/./, { selector: "div.rounded-2xl" })).toHaveLength(2);
+    // counted STRUCTURALLY: the assistant's text now sits in a wrapper
+    // span (generative blocks), so a text-query on the bubble div matches
+    // only bare-text bubbles — the count's meaning is "how many message
+    // bubbles exist", and the DOM is the honest place to ask that
+    expect(document.querySelectorAll("div.rounded-2xl")).toHaveLength(2);
   });
 
   it("does NOT mark a complete answer as truncated", () => {

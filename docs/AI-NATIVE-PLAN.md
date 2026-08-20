@@ -1,7 +1,26 @@
 # NeurAI — the AI-native shift: plan & software architecture
 
-**Status: PROPOSAL (user-selected scope, 2026-08-20). M-decisions proposed
-here become numbered and binding only when ratified.**
+**Status: PHASES A–D BUILT AND SHIPPED (2026-08-21, user directive "start
+all phases, one by one"). M33–M36 are ratified in ARCHITECTURE.md.
+Pending on production: migrations 0073/0074/0075 (owner-run; core
+capability-detects and degrades loudly until they land).**
+
+**Deferred from Phase D, deliberately and on the record (M21 — the
+forfeit said out loud):**
+- **Live catch-me-up + realtime translation lane**: both need a realtime
+  STT/translation PROXY through core (the browser must never hold the
+  Soniox key). That proxy is its own infrastructure piece — a websocket
+  lane with the key server-side — and rushing it as a rider would have
+  put a vendor credential in reach of the client. Next concrete step:
+  `wss://api./v1/live` terminating in core, browser sends audio frames,
+  core relays to Soniox realtime and streams tokens back.
+- **Wake word**: ships only as explicit per-device opt-in with a visible
+  listening indicator (M34's clause). Not built yet; push-to-talk and
+  browser TTS shipped instead.
+- **Act auto-applying SERVER proposals** (org allow-list of kinds):
+  recorded in M36 as a separate future decision.
+- **Model-composed briefs/digests**: v1 signal outputs are model-free
+  (M35); upgrading them to composed briefs is a spend decision.
 
 The user selected items **1–7, 10, 15–20** of the researched twenty, plus two
 overarching directives:

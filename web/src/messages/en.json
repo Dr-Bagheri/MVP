@@ -557,7 +557,8 @@
     "traceLabel": "How this was answered",
     "traceLoading": "Loading the trace…",
     "traceUnavailable": "The trace is not available.",
-    "traceNoTools": "No tools were used — answered directly."
+    "traceNoTools": "No tools were used — answered directly.",
+    "speak": "Read aloud"
   },
   "platformRoot": {
     "menu": "Platform control",

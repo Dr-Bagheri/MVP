@@ -1312,6 +1312,62 @@ organization never becomes a one-way door.
 
 ---
 
+## M33 — Client tools: the agent's hands on the surface [user-approved 2026-08-21 — "start all phases"]
+
+The agent may drive the product THROUGH THE SURFACE: tools whose executor
+is the web client, performed in the user's browser under the user's own
+session via the same code path as the human control (`client_tool_call`
+SSE → browser executes → `POST /v1/assistant/tool-result`). Reach without
+authority — invariant 3 as the mechanism. Clauses: one executor per tool;
+client tools sit OUTSIDE skill declarations (a skill governs content
+reach; surface controls are governed by the dial + what the surface
+advertised per request — gateway/API callers advertise none); every
+attempt passes the same wrapper and lands in `agent_run.steps`; NO
+destructive action in the registry (test-guarded); a silent surface is a
+loud timeout forfeit; a foreign tool-result is indistinguishable from
+no-such-call. The result broker is in-process api state — the seam if the
+api ever scales horizontally.
+
+## M34 — Presence: the agent is always there [user-approved 2026-08-21]
+
+One persistent dock on every route (orb ↔ panel, Ctrl/⌘-K; the hub IS the
+maximized presence and renders no orb). One continuous conversation per
+day (dated client key, swept at sign-out). Every ask carries situational
+context — route + entity IDS ONLY, told to the model as untrusted fact;
+content is only ever reached through tools under RLS. Write-effect client
+calls take LOCAL consent in the dock (Allow/Decline; either way the run
+continues with the truth). Voice: push-to-talk + browser TTS shipped;
+wake word is EXPLICIT per-device opt-in with a visible listening
+indicator, or it does not ship (the recorder's own pause ethics applied
+to ourselves).
+
+## M35 — Signals: the agent acts without being asked [user-approved 2026-08-21]
+
+An event queue (`echo_agent_rules`) + per-owner rules (db/0074). Every
+firing runs AS THE OWNER (the worker's job-identity precedent) — the
+scheduler crosses owners only through two enumerated definer doors that
+return metadata ids (D19's shape). Outputs land as a conversation plus an
+`agent_card` in the proactivity channel — agent-INITIATED items only,
+NEVER a pending-approvals inbox (M4 stands). v1 events: call.processed →
+post-call brief; cron.weekly → digest (self-service toggle). v1 outputs
+are model-free by design (the shipped value is the unasked delivery);
+model-composed briefs are a later upgrade with its own spend decision.
+
+## M36 — The autonomy dial [user-approved 2026-08-21]
+
+Per-user `watch | assist | act` (db/0073), org-cappable
+(`org.autonomy_ceiling`, db/0075; effective = least of the two, read
+fresh per ask). Watch: no client tools at all — a property of the code.
+Assist (default): ui-effect surface actions run; write-effect take
+consent. Act: write-effect surface actions run without the card — and
+governs CLIENT tools ONLY: server-side proposals keep propose→approve at
+every setting; auto-applying those is a separate future decision with
+its own allow-list, deliberately not folded in. The dial widens policy;
+the grant never moves. Schema features arriving after a code deploy are
+CAPABILITY-DETECTED at boot with a loud log line and a safe default —
+code and migrations deploy in either order here, and a silent default is
+the failure mode this repo exists to refuse.
+
 ## Invariants (locked)
 
 1. The transcript is the source of truth; everything else derived + rebuildable.
