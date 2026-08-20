@@ -16,16 +16,6 @@ import { DocumentIcon, EchoMark, MicIcon, PlusIcon, SendIcon, ToolsIcon } from "
 
 type CreateKind = "doc" | "pdf";
 
-const TOOL_COMMAND_KEYS: Readonly<Record<string, string>> = {
-  search_transcripts: "toolCommandSearchTranscripts",
-  read_window: "toolCommandReadWindow",
-  get_call: "toolCommandGetCall",
-  list_related_calls: "toolCommandListRelatedCalls",
-  correct_transcript: "toolCommandCorrectTranscript",
-  edit_speaker_roster: "toolCommandEditSpeakerRoster",
-  replace_summary: "toolCommandReplaceSummary",
-};
-
 /**
  * The AI-assistant hub — NeurAI's first page (M22, user-approved).
  *
@@ -79,8 +69,6 @@ export function Hub() {
    * sentence, never silently dropped.
    */
   const [attachments, setAttachments] = useState<{ name: string; text: string }[]>([]);
-  const [toolsOpen, setToolsOpen] = useState(false);
-  const [toolNames, setToolNames] = useState<string[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
   /**
    * The Create and Sources menus (user directive, 2026-08-18, from the
@@ -166,7 +154,6 @@ export function Hub() {
     });
     void api.skills().then(setSkills);
     void api.agents().then(setAgents).catch(() => setAgents([]));
-    void api.assistantTools().then(setToolNames).catch(() => setToolNames([]));
   }, []);
 
   /* A workflow launcher supplies the prompt by its server-owned slug. Never
@@ -968,39 +955,11 @@ export function Hub() {
                 </button>
             </div>
           </HoverMenu>
-          <HoverMenu
-            open={toolsOpen}
-            onOpen={() => setToolsOpen(true)}
-            onClose={() => setToolsOpen(false)}
-            panelClass="w-max max-w-[min(88vw,52rem)] overflow-x-auto p-3"
-            button={
-              <button
-                type="button"
-                className={headerBtn}
-                aria-expanded={toolsOpen}
-                onClick={() => setToolsOpen((v) => !v)}
-              >
-                {t("tools")}
-              </button>
-            }
-          >
-            {/* the assistant's REAL reach, from the server's own registry —
-                facts about what a question can trigger, not switches. Opens
-                DOWNWARD; grows SIDEWAYS, never down (user directives): four
-                rows, then a new column per four tools — a growing registry
-                must widen the panel, not push it past the viewport */}
-            <p className="mb-2 text-xs font-semibold text-fg">{t("toolsTitle")}</p>
-            <ul className="grid grid-flow-col grid-rows-4 gap-x-8 gap-y-1.5">
-              {toolNames.map((name) => (
-                <li key={name} className="w-52 text-xs leading-5">
-                  <span className={locale === "fa" ? "font-medium text-fg" : "ltr font-mono text-fg"}>
-                    {locale === "fa" && TOOL_COMMAND_KEYS[name] ? t(TOOL_COMMAND_KEYS[name]) : name}
-                  </span>
-                  <span className="block text-fg-muted">{t(`tool_${name}`)}</span>
-                </li>
-              ))}
-            </ul>
-          </HoverMenu>
+          {/* The Tools menu was REMOVED from the composer (user directive,
+              2026-08-20). It listed the assistant's tool registry — facts,
+              not switches — and reads better as documentation than as a
+              composer control. The registry itself (api.assistantTools) still
+              powers the Agents create-modal's tool checkboxes. */}
           <span className="flex-1" />
           {/*
             The model choice (M5 precedence: skill pin → this explicit choice

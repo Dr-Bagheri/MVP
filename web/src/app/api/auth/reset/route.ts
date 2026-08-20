@@ -1,5 +1,4 @@
 import { AuthError, changePassword, verifyRecoveryToken } from "@/server/supabase";
-import { writeSession } from "@/server/session";
 
 /**
  * Consume a recovery link and set the new password — the half that did not
@@ -10,9 +9,10 @@ import { writeSession } from "@/server/session";
  *   1. `POST /verify {type:"recovery", token_hash}` turns the emailed token
  *      into a session **here**, never in the browser (M1);
  *   2. `PUT /user {password}` sets the new password with it;
- *   3. the session is written to the httpOnly cookie, so the person is signed
- *      in on success rather than being bounced to a login form seconds after
- *      proving they own the address.
+ *   3. an INVITED arrival is registered with that token (db/0060's by-email
+ *      door), and then the tokens are DROPPED — no cookie. The person signs
+ *      in with the password they just set (user ruling, 2026-08-20; see the
+ *      comment at the bottom for why the convenience sign-in was the bug).
  *
  * **The token is single-use and short-lived**, which is why the three steps
  * are one route: consuming it in one request and asking for the password in
@@ -65,16 +65,40 @@ export async function POST(request: Request) {
   }
 
   /*
-   * Written only AFTER the password change succeeds. Signing them in on a
-   * verified-but-unchanged token would leave someone holding a session they
-   * reached with a link they may not have requested, having proved nothing
-   * they intended.
+   * NO session cookie is written — deliberately, by user ruling (2026-08-20:
+   * "it must not go in without a session and login"). The first version
+   * signed the person in here "rather than bouncing them to a login form",
+   * and that convenience MASKED the one failure that matters: a password
+   * that never actually took still let them straight into the platform, and
+   * they discovered it only days later at their next sign-in. Ending at the
+   * sign-in form makes every completed reset immediately EXERCISE the new
+   * password — the flow now proves itself every time it runs.
+   *
+   * The INVITED arrival still registers here, server-side with the verified
+   * token (never a cookie): db/0060's by-email door redeems their invitation
+   * so that when they sign in seconds later they are already a member —
+   * without this, the org-choice screen would ask an invitee a question that
+   * was answered when they were invited. Failures are swallowed: the same
+   * door catches them at first sign-in (core's design), so the fallback is
+   * the same behavior, later.
    */
-  await writeSession({
-    accessToken: tokens.access_token,
-    refreshToken: tokens.refresh_token,
-    expiresAt: Date.now() + tokens.expires_in * 1000,
-  });
+  if (verifyType === "invite") {
+    const base = process.env.CORE_API_URL?.replace(/\/+$/, "");
+    if (base) {
+      try {
+        await fetch(`${base}/v1/signup`, {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${tokens.access_token}`,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({ display_name: "" }),
+        });
+      } catch {
+        /* the by-email door catches them at first sign-in */
+      }
+    }
+  }
 
   return Response.json({ ok: true });
 }

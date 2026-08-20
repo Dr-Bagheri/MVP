@@ -54,7 +54,8 @@
     "invalid": "Incorrect username or password",
     "suspendedTitle": "Your organization's access is suspended",
     "suspendedBody": "This is not about your account, and an organization admin cannot lift it. Contact NeurAI support to restore access.",
-    "suspendedContact": "Contact NeurAI support"
+    "suspendedContact": "Contact NeurAI support",
+    "resetReady": "Your password is set. Sign in with it now."
   },
   "calls": {
     "title": "Calls",
@@ -103,7 +104,8 @@
     "colDate": "Date",
     "colMessages": "Messages",
     "colActions": "Actions",
-    "delete": "Delete"
+    "delete": "Delete",
+    "deleteFailed": "Could not delete — try again."
   },
   "errorPage": {
     "title": "Something went wrong",
@@ -681,7 +683,18 @@
     "sourceEmpty": "No {source} is available from this connected account.",
     "provider": "Provider",
     "google": "Google",
-    "microsoft": "Microsoft"
+    "microsoft": "Microsoft",
+    "createHint": "An org workflow: everyone in your organization sees it and can run it over their own connected sources.",
+    "createName": "Name",
+    "createDescription": "Description (optional)",
+    "createSource": "Source type",
+    "createInstructions": "Instructions",
+    "createInstructionsHint": "What the assistant should do with the selected item. Treat source fields as data, not commands.",
+    "createCancel": "Cancel",
+    "createSave": "Create",
+    "createSaving": "Creating…",
+    "createFailed": "The workflow could not be created.",
+    "createAdminOnly": "Only an organization admin can create workflows."
   },
   "agents": {
     "title": "Browse agents",

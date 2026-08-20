@@ -8,3 +8,18 @@ export async function GET() {
     return errorResponse(error);
   }
 }
+
+/** Org-authored workflow (0072) — admin-gated in core, forwarded verbatim. */
+export async function POST(request: Request) {
+  try {
+    return Response.json(
+      await coreFetch<WorkflowCard>("/v1/workflows", {
+        method: "POST",
+        body: await request.json(),
+      }),
+      { status: 201 },
+    );
+  } catch (error) {
+    return errorResponse(error);
+  }
+}

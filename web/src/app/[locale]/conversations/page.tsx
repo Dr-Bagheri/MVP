@@ -30,6 +30,8 @@ export default function ConversationsPage() {
   const [sessions, setSessions] = useState<AssistantSession[] | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  /** the row whose removal failed — shown beside its button, never swallowed */
+  const [deleteFailed, setDeleteFailed] = useState<string | null>(null);
 
   useEffect(() => {
     void api.agentSessions().then((rows) => {
@@ -94,7 +96,7 @@ export default function ConversationsPage() {
                             {s.title ?? t("untitled")}
                           </td>
                           <td className="px-4 py-2.5 text-fg-muted">
-                            {formatDate(s.updated_at ?? s.created_at, locale)}
+                            {formatDate(s.last_message_at ?? s.created_at, locale)}
                           </td>
                           <td className="px-4 py-2.5 text-fg-muted">
                             {digits(s.message_count, locale)}
@@ -107,7 +109,14 @@ export default function ConversationsPage() {
                                 /* removal = archive under the hood: nothing
                                    in the product may DELETE a conversation
                                    row (the audit survives), but an archived
-                                   one never returns to any list */
+                                   one never returns to any list.
+
+                                   The failure is SHOWN, never swallowed: the
+                                   first version .catch(() => undefined)'d a
+                                   404 from a BFF route that did not exist,
+                                   and the button "worked" by doing nothing
+                                   (user report, 2026-08-20). */
+                                setDeleteFailed(null);
                                 void api
                                   .archiveSession(s.id, true)
                                   .then(() => api.agentSessions())
@@ -115,11 +124,16 @@ export default function ConversationsPage() {
                                     setSessions(rows);
                                     setSelected((cur) => (cur === s.id ? (rows[0]?.id ?? null) : cur));
                                   })
-                                  .catch(() => undefined);
+                                  .catch(() => setDeleteFailed(s.id));
                               }}
                             >
                               {t("delete")}
                             </button>
+                            {deleteFailed === s.id ? (
+                              <span role="alert" className="ms-2 text-xs text-danger">
+                                {t("deleteFailed")}
+                              </span>
+                            ) : null}
                           </td>
                         </tr>
                       ))}

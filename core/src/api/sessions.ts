@@ -59,6 +59,14 @@ export interface SessionRecord {
   last_message_at: string | null;
   archived_at: string | null;
   created_at: string;
+  /**
+   * Counted in the LIST query; 0 on rows returned by create/rename, which is
+   * also true (a session exists before its first message). The History table
+   * rendered the literal string "undefined" because the web type declared
+   * this field and nothing ever produced it (2026-08-20) — the hand-copied
+   * wire-type trap, caught by a person instead of the compiler.
+   */
+  message_count: number;
 }
 
 export interface MessageRecord {
@@ -144,6 +152,7 @@ const toSession = (row: Record<string, unknown>): SessionRecord => ({
   last_message_at: isoOrNull(row.last_message_at),
   archived_at: isoOrNull(row.archived_at),
   created_at: iso(row.created_at),
+  message_count: Number(row.message_count ?? 0),
 });
 
 const toMessage = (row: Record<string, unknown>): MessageRecord => ({
@@ -172,7 +181,10 @@ export function createSessionsRepo(db: Db) {
     async list(identity: Identity, options: { archived?: boolean } = {}): Promise<SessionRecord[]> {
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<Record<string, unknown>>(
-          `select ${SESSION_COLUMNS} from echo.agent_session
+          `select ${SESSION_COLUMNS},
+                  (select count(*)::int from echo.agent_message m
+                    where m.session_id = agent_session.id) as message_count
+             from echo.agent_session
             where ($1::boolean is true) = (archived_at is not null)
             order by last_message_at desc nulls last, created_at desc`,
           [options.archived === true],

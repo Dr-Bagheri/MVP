@@ -1051,6 +1051,15 @@ export const api = {
     const { workflows } = await bff<{ workflows: WorkflowCard[] }>("/api/workflows");
     return workflows;
   },
+  /** Org-authored workflow (0072) — admin-gated server-side. */
+  async createWorkflow(input: {
+    name: string; description?: string;
+    source_kind: "calendar_event" | "mail_message"; instructions: string;
+  }): Promise<WorkflowCard> {
+    return bff<WorkflowCard>("/api/workflows", {
+      method: "POST", body: JSON.stringify(input), headers: { "content-type": "application/json" },
+    });
+  },
   async connectors(): Promise<ConnectorStatus[]> {
     const { connectors } = await bff<{ connectors: ConnectorStatus[] }>("/api/connectors");
     return connectors;

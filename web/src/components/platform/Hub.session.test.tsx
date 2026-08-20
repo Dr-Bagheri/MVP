@@ -208,13 +208,11 @@ describe("Hub — session continuity", () => {
     await waitFor(() => expect(askedQuestions).toContain(`${docPrefix}\n\nگزارش جلسه`));
   });
 
-  it("shows Persian command names in the Persian tools menu", async () => {
-    visibleTools.push("search_transcripts", "replace_summary");
+  it("offers NO Tools menu in the composer — removed by directive, guarded against return", () => {
+    // The Tools registry menu was removed from the composer (user directive,
+    // 2026-08-20). This is the absence half: the directive holds only while
+    // something fails when the menu quietly comes back.
     render(<Hub />);
-
-    fireEvent.mouseEnter(screen.getByRole("button", { name: "ابزارها" }));
-    expect(await screen.findByText("جست‌وجوی رونوشت‌ها")).toBeTruthy();
-    expect(screen.getByText("جایگزینی خلاصه")).toBeTruthy();
-    expect(screen.queryByText("search_transcripts")).toBeNull();
+    expect(screen.queryByRole("button", { name: "ابزارها" })).toBeNull();
   });
 });

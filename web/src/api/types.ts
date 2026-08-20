@@ -656,11 +656,19 @@ export type AgentEvent =
   | { type: "done"; runId: string; failed: boolean; error?: string };
 
 /** A persisted conversation. */
+/**
+ * MIRRORS core's SessionRecord (sessions.ts) field for field. This type was
+ * once hand-written with an invented `updated_at` and a `message_count`
+ * nothing produced — the History table rendered the literal string
+ * "undefined" (2026-08-20). If core renames a field, change it HERE too;
+ * inventing one here is how the last bug happened.
+ */
 export interface AssistantSession {
   id: string;
   title: string | null;
+  last_message_at: string | null;
+  archived_at: string | null;
   created_at: string;
-  updated_at: string;
   message_count: number;
 }
 

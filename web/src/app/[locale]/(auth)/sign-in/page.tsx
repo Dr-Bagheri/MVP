@@ -61,6 +61,8 @@ export default function SignInPage() {
   const [error, setError] = useState<string | null>(null);
   /** Arrived from a successful email confirmation — say so while routing. */
   const [confirmedNote, setConfirmedNote] = useState(false);
+  /** Arrived from a completed password reset — the password works HERE. */
+  const [resetNote, setResetNote] = useState(false);
 
   /*
    * The confirm-email landing (`/api/auth/confirm` redirects here).
@@ -80,6 +82,11 @@ export default function SignInPage() {
     const params = new URLSearchParams(window.location.search);
     const confirmed = params.get("confirmed");
     const oauth = params.get("oauth");
+    // A completed reset lands here WITHOUT a session (user ruling,
+    // 2026-08-20) — the green line says the password is set and this form
+    // is where it gets used, so the arrival reads as the next step rather
+    // than as being bounced.
+    if (params.get("reset") === "1") setResetNote(true);
     if (confirmed === "1") {
       // Say what just happened while the routing runs — a silent redirect
       // reads as "nothing happened" for the two seconds it takes (user
@@ -225,6 +232,12 @@ export default function SignInPage() {
     <Card>
       {/* no logo on the gate (user ruling): the title carries the identity */}
       <h1 className="mb-5 text-xl font-bold text-fg">{t("signInTitle")}</h1>
+
+      {resetNote ? (
+        <p role="status" className="mb-4 rounded-lg border border-success/40 bg-success/10 px-3 py-2 text-sm text-success">
+          {t("resetReady")}
+        </p>
+      ) : null}
 
       {confirmedNote ? (
         /*

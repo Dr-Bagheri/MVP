@@ -37,7 +37,7 @@ import { applyProposal, createWriteTools } from "../agent/write-tools.ts";
 import { createNamedSkillResolver, listResolvedSkills } from "../agent/skill-store.ts";
 import { createAssistantAgent, listAssistantAgents, resolveAssistantAgent } from "../agent/agent-store.ts";
 import { createConnectorsRepo, type ConnectorOAuthOptions, type ConnectorProvider } from "./connectors.ts";
-import { listWorkflows, resolveWorkflow } from "./workflows.ts";
+import { createWorkflow, listWorkflows, resolveWorkflow } from "./workflows.ts";
 import type { DomainTool } from "../agent/tools.ts";
 import { agentToolsDb, type Db } from "../db/identity.ts";
 import { isAdmin, type Identity, type Skill } from "../agent/types.ts";
@@ -955,6 +955,24 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
   app.get("/v1/workflows", async (request, reply) => {
     const identity = await auth.requireActive(request);
     return reply.send({ workflows: await listWorkflows(options.db, identity) });
+  });
+
+  /**
+   * Org-authored workflow (0072). ADMIN-gated: a workflow's instructions are
+   * prompt content for everyone in the org who runs it — org-wide prompt
+   * surface is org configuration (M29's org-skill precedent). The RLS insert
+   * policy re-asserts the same fact at the wall.
+   */
+  app.post("/v1/workflows", async (request, reply) => {
+    const identity = await auth.requireAdmin(request);
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    const workflow = await createWorkflow(options.db, identity, {
+      name: body.name,
+      description: body.description,
+      source_kind: body.source_kind,
+      instructions: body.instructions,
+    });
+    return reply.code(201).send(workflow);
   });
 
   app.get("/v1/connectors", async (request, reply) => {
