@@ -16,6 +16,7 @@ import { createAssistant, languageInstruction } from "./assistant.ts";
 import { CLIENT_TOOL_NAMES, deliverClientToolResult } from "../agent/client-tools.ts";
 import { actorAutonomy, hasAutonomyColumn, hasSignalTables } from "../db/capabilities.ts";
 import { iso } from "./vocabulary.ts";
+import { assertUuid } from "../db/identity.ts";
 import { createAuditRepo, type AuditRepo } from "./audit.ts";
 import { createOrgRepo, type OrgRepo } from "./org.ts";
 import { createSessionsRepo, type SessionsRepo } from "./sessions.ts";
@@ -496,6 +497,85 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
    * two are distinguished all the way down, or "remove my Latin name" has no
    * expression.
    */
+  /**
+   * Phase C: show-the-reasoning. One run's trace, for whoever can SEE the
+   * run under RLS (their own; org runs per policy). CODES ONLY — tool
+   * names, outcomes, durations, the wrapper's short detail line. Arguments
+   * are deliberately absent: they quote transcripts, and the full trace
+   * already lives on the narrower admin audit surface (M27's codes-only
+   * ruling, applied to the self-trace).
+   */
+  app.get("/v1/assistant/runs/:id/trace", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id } = request.params as { id: string };
+    const rows = await options.db.withIdentity(identity, (tx) =>
+      tx.unsafe<Record<string, unknown>>(
+        `select model, status::text as status, tokens_in, tokens_out, steps
+           from echo.agent_run where id = $1`,
+        [assertUuid(id, "run id")],
+      ));
+    const run = rows[0];
+    if (!run) throw new NotFoundError("no such run");
+    const steps = Array.isArray(run.steps) ? (run.steps as Record<string, unknown>[]) : [];
+    return reply.send({
+      model: run.model,
+      status: run.status,
+      tokens_in: run.tokens_in,
+      tokens_out: run.tokens_out,
+      steps: steps.map((step) => ({
+        tool: step.tool,
+        outcome: step.outcome,
+        detail: typeof step.detail === "string" ? step.detail.slice(0, 200) : "",
+        ms: step.ms,
+      })),
+    });
+  });
+
+  /**
+   * Phase C: the governance view (M36/M35) — org-scoped aggregates over
+   * agent activity, admin-gated. Counts and sums only, from rows the
+   * admin's RLS already reaches; the ROI numbers are the same table
+   * phrased as outcomes. Signals blocks are capability-gated.
+   */
+  app.get("/v1/admin/agent-stats", async (request, reply) => {
+    const identity = await auth.requireAdmin(request);
+    const [runs] = await options.db.withIdentity(identity, (tx) =>
+      tx.unsafe<Record<string, unknown>>(
+        `select count(*)::int as total,
+                count(*) filter (where status = 'error')::int as failed,
+                coalesce(sum(tokens_in), 0)::bigint::text as tokens_in,
+                coalesce(sum(tokens_out), 0)::bigint::text as tokens_out,
+                count(distinct actor_id)::int as people
+           from echo.agent_run
+          where started_at > now() - interval '30 days'`,
+      ));
+    const [decisions] = await options.db.withIdentity(identity, (tx) =>
+      tx.unsafe<Record<string, unknown>>(
+        `select count(*) filter (where decision = 'approve')::int as approved,
+                count(*) filter (where decision = 'reject')::int as rejected
+           from echo.proposal_decision
+          where decided_at > now() - interval '30 days'`,
+      ));
+    let cards: Record<string, unknown> | null = null;
+    if (await hasSignalTables(options.db)) {
+      const rows = await options.db.withIdentity(identity, (tx) =>
+        tx.unsafe<Record<string, unknown>>(
+          `select count(*)::int as delivered,
+                  count(*) filter (where read_at is not null)::int as read
+             from echo.agent_card
+            where created_at > now() - interval '30 days'`,
+        ));
+      cards = rows[0] ?? null;
+    }
+    return reply.send({
+      window_days: 30,
+      runs: runs ?? { total: 0, failed: 0, tokens_in: "0", tokens_out: "0", people: 0 },
+      decisions: decisions ?? { approved: 0, rejected: 0 },
+      /** null = signals not migrated — "not measured", never zero */
+      cards,
+    });
+  });
+
   /**
    * M35: the proactivity channel — agent-INITIATED cards, owner-scoped by
    * RLS. Capability-gated: before db/0074, an honest empty-with-reason,

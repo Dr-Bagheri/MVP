@@ -553,7 +553,11 @@
     "toolCommandEditSpeakerRoster": "ویرایش گویندگان",
     "toolCommandReplaceSummary": "جایگزینی خلاصه",
     "savePdf": "ذخیره به‌صورت PDF",
-    "saveDoc": "دانلود سند"
+    "saveDoc": "دانلود سند",
+    "traceLabel": "این پاسخ چطور ساخته شد",
+    "traceLoading": "در حال بارگذاری ردپا…",
+    "traceUnavailable": "ردپا در دسترس نیست.",
+    "traceNoTools": "ابزاری به کار نرفت — مستقیم پاسخ داده شد."
   },
   "platformRoot": {
     "menu": "کنترل پلتفرم",
@@ -775,7 +779,18 @@
       "measuredAt": "اندازه‌گیری در {time}",
       "failed": "خواندن وضعیت سرویس ممکن نشد.",
       "retry": "تلاش دوباره",
-      "loading": "در حال خواندن…"
+      "loading": "در حال خواندن…",
+      "agentTitle": "فعالیت دستیار (۳۰ روز)",
+      "agentUnavailable": "فعالیت دستیار بارگذاری نشد.",
+      "agentRuns": "اجراها",
+      "agentFailed": "{count} ناموفق",
+      "agentTokens": "توکن خروجی",
+      "agentPeople": "{count} نفر استفاده کردند",
+      "agentApprovals": "تأییدها",
+      "agentRejected": "{count} رد شد",
+      "agentBriefs": "خلاصه‌های ارسال‌شده",
+      "agentBriefsRead": "{count} خوانده شد",
+      "agentBriefsUnmeasured": "اندازه‌گیری نشده — db/0074 لازم است"
     },
     "serverNotWiredTitle": "این صفحه هنوز به داده وصل نیست",
     "serverNotWiredBody": "همهٔ اعدادی که این‌جا نمایش داده می‌شوند خواندنی‌های واقعی سرویس‌اند و هنوز آماده نشده‌اند. تا آن زمان هیچ عددی نشان نمی‌دهیم — عدد ساختگی در صفحهٔ وضعیت، عددی است که کسی بر پایه‌اش تصمیم می‌گیرد.",
@@ -1209,6 +1224,7 @@
     "dialNotReady": "این تنظیم هنوز روی این استقرار فعال نیست.",
     "dialFailed": "تنظیم ذخیره نشد.",
     "digestToggle": "گزارش هفتگی",
-    "unread": "{count} خوانده‌نشده"
+    "unread": "{count} خوانده‌نشده",
+    "dialAct": "خوداجرا"
   }
 }

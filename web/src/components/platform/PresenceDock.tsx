@@ -60,7 +60,7 @@ export function PresenceDock() {
     | null
     | { label: string; resolve: (allowed: boolean) => void }
   >(null);
-  const [autonomy, setAutonomyState] = useState<"watch" | "assist">("assist");
+  const [autonomy, setAutonomyState] = useState<"watch" | "assist" | "act">("assist");
   const [autonomyNote, setAutonomyNote] = useState<string | null>(null);
   /** M35: the proactivity channel — refreshed whenever the panel opens */
   const [cards, setCards] = useState<AgentCardItem[]>([]);
@@ -206,7 +206,7 @@ export function PresenceDock() {
     }
   }
 
-  async function changeAutonomy(next: "watch" | "assist") {
+  async function changeAutonomy(next: "watch" | "assist" | "act") {
     setAutonomyNote(null);
     const prev = autonomy;
     setAutonomyState(next);
@@ -234,10 +234,15 @@ export function PresenceDock() {
               aria-label={t("dialLabel")}
               className="ms-auto h-7 rounded-md border border-border bg-surface px-1.5 text-xs text-fg-muted"
               value={autonomy}
-              onChange={(e) => void changeAutonomy(e.target.value as "watch" | "assist")}
+              onChange={(e) => void changeAutonomy(e.target.value as "watch" | "assist" | "act")}
             >
               <option value="watch">{t("dialWatch")}</option>
               <option value="assist">{t("dialAssist")}</option>
+              {/* Act: write-effect surface actions run without the consent
+                  card. The org's ceiling (0075) still caps the EFFECT
+                  server-side — choosing act under a lower ceiling behaves
+                  as the ceiling. */}
+              <option value="act">{t("dialAct")}</option>
             </select>
             <button
               type="button"

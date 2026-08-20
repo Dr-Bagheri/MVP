@@ -56,7 +56,18 @@ vi.mock("@/components/platform/ManagementPane", () => ({
 const me = vi.fn();
 const serverHealth = vi.fn();
 vi.mock("@/api/client", () => ({
-  api: { me: () => me(), serverHealth: () => serverHealth() },
+  api: {
+    me: () => me(),
+    serverHealth: () => serverHealth(),
+    // Phase C: a separate source with a separate failure — `cards: null`
+    // here is the honest "signals not migrated" state, rendered as "—"
+    agentStats: async () => ({
+      window_days: 30,
+      runs: { total: 0, failed: 0, tokens_in: "0", tokens_out: "0", people: 0 },
+      decisions: { approved: 0, rejected: 0 },
+      cards: null,
+    }),
+  },
 }));
 
 const { default: ServerManagementPage } = await import("./page");

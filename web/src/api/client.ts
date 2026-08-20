@@ -12,6 +12,8 @@ import type {
   AgentEvent,
   AgentMessage,
   AgentCard,
+  AgentStats,
+  RunTrace,
   AssistantSession,
   AuthoredSkill,
   AuditCursor,
@@ -1627,6 +1629,15 @@ export const api = {
       body: JSON.stringify({ enabled }),
       headers: { "content-type": "application/json" },
     });
+  },
+
+  /** Phase C: one run's reasoning trace — codes only, never arguments. */
+  async runTrace(runId: string): Promise<RunTrace> {
+    return bff<RunTrace>(`/api/assistant/runs/${runId}/trace`);
+  },
+  /** Phase C: org agent-governance aggregates (admin). `cards: null` = not measured. */
+  async agentStats(): Promise<AgentStats> {
+    return bff<AgentStats>("/api/admin/agent-stats");
   },
 
   /**

@@ -79,6 +79,8 @@ export default function ServerManagementPage() {
 
   const [me, setMe] = useState<User | null>(null);
   const [health, setHealth] = useState<ServerHealth | null>(null);
+  /** Phase C: agent governance aggregates — null until loaded, "failed" is its own state */
+  const [agentStats, setAgentStats] = useState<import("@/api/types").AgentStats | null | "failed">(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
 
@@ -106,6 +108,12 @@ export default function ServerManagementPage() {
   useEffect(() => {
     if (!isAdmin) return;
     void load();
+    /* separate source, separate failure: stats breaking must not blank the
+       health cards (this page's own one-broken-source rule), and vice versa */
+    void Promise.resolve()
+      .then(() => api.agentStats())
+      .then(setAgentStats)
+      .catch(() => setAgentStats("failed"));
   }, [isAdmin, load]);
 
   /**
@@ -262,6 +270,43 @@ export default function ServerManagementPage() {
                 </dd>
               </dl>
               {measuredAt(health.storage.measured_at)}
+            </Card>
+
+            {/* Phase C: the governance view — agent activity as numbers an
+                admin can act on. Counts and sums only; briefs render as
+                "—" when signals are not migrated (not measured ≠ zero). */}
+            <Card className="mt-4">
+              <h2 className="h-section">{t("server.agentTitle")}</h2>
+              {agentStats === null || agentStats === "failed" ? (
+                <p className="mt-1 text-sm text-fg-muted">
+                  {agentStats === "failed" ? t("server.agentUnavailable") : "…"}
+                </p>
+              ) : (
+                <div className="mt-2 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+                  <div>
+                    <p className="text-fg-muted">{t("server.agentRuns")}</p>
+                    <p className="text-xl font-bold text-fg">{agentStats.runs.total}</p>
+                    <p className="text-xs text-fg-subtle">{t("server.agentFailed", { count: agentStats.runs.failed })}</p>
+                  </div>
+                  <div>
+                    <p className="text-fg-muted">{t("server.agentTokens")}</p>
+                    <p className="text-xl font-bold text-fg ltr">{agentStats.runs.tokens_out}</p>
+                    <p className="text-xs text-fg-subtle">{t("server.agentPeople", { count: agentStats.runs.people })}</p>
+                  </div>
+                  <div>
+                    <p className="text-fg-muted">{t("server.agentApprovals")}</p>
+                    <p className="text-xl font-bold text-fg">{agentStats.decisions.approved}</p>
+                    <p className="text-xs text-fg-subtle">{t("server.agentRejected", { count: agentStats.decisions.rejected })}</p>
+                  </div>
+                  <div>
+                    <p className="text-fg-muted">{t("server.agentBriefs")}</p>
+                    <p className="text-xl font-bold text-fg">{agentStats.cards ? agentStats.cards.delivered : "—"}</p>
+                    <p className="text-xs text-fg-subtle">
+                      {agentStats.cards ? t("server.agentBriefsRead", { count: agentStats.cards.read }) : t("server.agentBriefsUnmeasured")}
+                    </p>
+                  </div>
+                </div>
+              )}
             </Card>
           </>
         ) : null}

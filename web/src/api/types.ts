@@ -632,6 +632,23 @@ export interface AgentProposalPayload {
  * in-band). A stream that ends without `done` is a TRANSPORT failure and must
  * not be read as success.
  */
+/** Phase C: one run's reasoning trace — codes only, arguments never travel. */
+export interface RunTrace {
+  model: string;
+  status: string;
+  tokens_in: number | null;
+  tokens_out: number | null;
+  steps: { tool: string; outcome: string; detail: string; ms: number | null }[];
+}
+
+/** Phase C: org agent-governance aggregates. `cards: null` = signals not migrated. */
+export interface AgentStats {
+  window_days: number;
+  runs: { total: number; failed: number; tokens_in: string; tokens_out: string; people: number };
+  decisions: { approved: number; rejected: number };
+  cards: { delivered: number; read: number } | null;
+}
+
 /** M35: an agent-INITIATED card in the proactivity channel (dock). */
 export interface AgentCardItem {
   id: string;

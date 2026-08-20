@@ -74,9 +74,16 @@ export async function hasAutonomyColumn(db: Db): Promise<boolean> {
   return hasColumn(db, "app_user", "autonomy");
 }
 
+export async function hasAutonomyCeiling(db: Db): Promise<boolean> {
+  return hasColumn(db, "org", "autonomy_ceiling");
+}
+
+const RANK: Record<Autonomy, number> = { watch: 0, assist: 1, act: 2 };
+
 /**
- * The caller's stored dial position, read fresh per ask (a dial change must
- * take effect on the next question, not the next sign-in). Column absent →
+ * The caller's EFFECTIVE dial position, read fresh per ask (a dial change
+ * must take effect on the next question, not the next sign-in):
+ * min(the person's choice, the org's ceiling — 0075). Columns absent →
  * 'assist', the pre-dial behavior, exactly.
  */
 export async function actorAutonomy(
@@ -85,15 +92,25 @@ export async function actorAutonomy(
 ): Promise<Autonomy> {
   if (!(await hasAutonomyColumn(db))) return "assist";
   try {
+    const withCeiling = await hasAutonomyCeiling(db);
     const rows = await db.withIdentity(
       identity as never,
-      (tx: SqlTx) => tx.unsafe<{ autonomy: string }>(
-        "select autonomy from echo.app_user where id = echo.actor_id()",
+      (tx: SqlTx) => tx.unsafe<{ autonomy: string; ceiling?: string }>(
+        withCeiling
+          ? `select u.autonomy, o.autonomy_ceiling as ceiling
+               from echo.app_user u left join echo.org o on o.id = u.org_id
+              where u.id = echo.actor_id()`
+          : "select autonomy from echo.app_user where id = echo.actor_id()",
       ),
     );
-    const value = rows[0]?.autonomy;
-    return value === "watch" || value === "act" ? value : "assist";
+    const chosen = normalize(rows[0]?.autonomy);
+    const ceiling = normalize(rows[0]?.ceiling ?? "act");
+    return RANK[chosen] <= RANK[ceiling] ? chosen : ceiling;
   } catch {
     return "assist";
   }
+}
+
+function normalize(value: unknown): Autonomy {
+  return value === "watch" || value === "act" ? value : "assist";
 }

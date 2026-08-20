@@ -553,7 +553,11 @@
     "toolCommandEditSpeakerRoster": "Edit speakers",
     "toolCommandReplaceSummary": "Replace summary",
     "savePdf": "Save as PDF",
-    "saveDoc": "Download document"
+    "saveDoc": "Download document",
+    "traceLabel": "How this was answered",
+    "traceLoading": "Loading the trace…",
+    "traceUnavailable": "The trace is not available.",
+    "traceNoTools": "No tools were used — answered directly."
   },
   "platformRoot": {
     "menu": "Platform control",
@@ -775,7 +779,18 @@
       "measuredAt": "Measured at {time}",
       "failed": "Service health could not be read.",
       "retry": "Try again",
-      "loading": "Reading…"
+      "loading": "Reading…",
+      "agentTitle": "Assistant activity (30 days)",
+      "agentUnavailable": "Could not load assistant activity.",
+      "agentRuns": "Runs",
+      "agentFailed": "{count} failed",
+      "agentTokens": "Output tokens",
+      "agentPeople": "{count} people used it",
+      "agentApprovals": "Approvals",
+      "agentRejected": "{count} rejected",
+      "agentBriefs": "Briefs delivered",
+      "agentBriefsRead": "{count} read",
+      "agentBriefsUnmeasured": "not measured — apply db/0074"
     },
     "serverNotWiredTitle": "This page isn't connected to data yet",
     "serverNotWiredBody": "Every number this page will show is a real service reading, and none of them are available yet. Until they are, we show no numbers at all — an invented figure on a health page is a figure someone makes a decision on.",
@@ -1209,6 +1224,7 @@
     "dialNotReady": "This setting is not available on this deployment yet.",
     "dialFailed": "The setting was not saved.",
     "digestToggle": "Weekly digest",
-    "unread": "{count} unread"
+    "unread": "{count} unread",
+    "dialAct": "Act"
   }
 }

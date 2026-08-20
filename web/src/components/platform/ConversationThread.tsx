@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
+import { api } from "@/api/client";
 import type { AgentMessage } from "@/api/types";
 import { deliverDoc, deliverPdf } from "@/lib/deliver";
 
@@ -172,6 +173,51 @@ export function ConversationThread({
  * offered (it needs nothing from the server); the other two appear only
  * when their handlers do — the shared read-only view passes none.
  */
+/**
+ * Phase C — show-the-reasoning: one run's trace, fetched when opened,
+ * rendered as CODES (tool, outcome, duration). Arguments never travel
+ * (M27's ruling, applied to the self-trace); the full trace stays on the
+ * narrower admin audit surface. "How did you get this?" answered in place.
+ */
+function TraceBlock({ runId }: { runId: string }) {
+  const t = useTranslations("platform");
+  const [trace, setTrace] = useState<import("@/api/types").RunTrace | null | "failed">(null);
+
+  useEffect(() => {
+    let live = true;
+    void api.runTrace(runId)
+      .then((result) => { if (live) setTrace(result); })
+      .catch(() => { if (live) setTrace("failed"); });
+    return () => { live = false; };
+  }, [runId]);
+
+  if (trace === null) return <p className="mt-1 text-xs text-fg-subtle">{t("traceLoading")}</p>;
+  if (trace === "failed") return <p className="mt-1 text-xs text-fg-subtle">{t("traceUnavailable")}</p>;
+  return (
+    <div className="mt-1 rounded-lg border border-border bg-surface-2/50 px-3 py-2 text-xs leading-6 text-fg-muted">
+      <p>
+        <span className="ltr font-mono">{trace.model}</span>
+        {" · "}
+        {trace.status}
+        {trace.tokens_out != null ? <> · {trace.tokens_out}t</> : null}
+      </p>
+      {trace.steps.length === 0 ? (
+        <p>{t("traceNoTools")}</p>
+      ) : (
+        <ol className="mt-1 space-y-0.5">
+          {trace.steps.map((step, i) => (
+            <li key={i}>
+              <span className="ltr font-mono">{step.tool}</span>
+              {" — "}{step.outcome}
+              {step.ms != null ? <span className="ltr"> ({step.ms}ms)</span> : null}
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
+  );
+}
+
 function MessageToolbar({
   message,
   verdict,
@@ -185,11 +231,13 @@ function MessageToolbar({
 }) {
   const t = useTranslations("platform");
   const [copied, setCopied] = useState(false);
+  const [traceOpen, setTraceOpen] = useState(false);
 
   const btn = "grid h-7 w-7 place-items-center rounded-md text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg";
   const pressed = "grid h-7 w-7 place-items-center rounded-md bg-accent-soft text-accent";
 
   return (
+    <>
     <div className="mt-1 flex items-center gap-0.5">
       {message.created === "pdf" ? (
         <button
@@ -255,6 +303,21 @@ function MessageToolbar({
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M3 12a9 9 0 1 1 2.64 6.36M3 22v-6h6" /></svg>
         </button>
       ) : null}
+      {message.run_id ? (
+        <button
+          type="button"
+          className={traceOpen ? pressed : btn}
+          aria-label={t("traceLabel")}
+          title={t("traceLabel")}
+          aria-expanded={traceOpen}
+          onClick={() => setTraceOpen((v) => !v)}
+        >
+          {/* the "how" glyph — a route between points */}
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><circle cx="6" cy="19" r="3" /><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15" /><circle cx="18" cy="5" r="3" /></svg>
+        </button>
+      ) : null}
     </div>
+    {traceOpen && message.run_id ? <TraceBlock runId={message.run_id} /> : null}
+    </>
   );
 }
