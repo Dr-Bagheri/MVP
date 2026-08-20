@@ -57,15 +57,28 @@ async function referencing(constraint) {
   return rows[0]
 }
 
-/** delete from `table` where `column` = value, clearing referencing rows first. */
+/**
+ * delete from `table` where `column` = value, clearing referencing rows first.
+ *
+ * Every attempt runs inside a SAVEPOINT: a refused DELETE aborts the whole
+ * transaction otherwise (25P02 — "commands ignored until end of transaction
+ * block"), and the first live run died exactly there, one constraint into
+ * the walk. ROLLBACK TO restores the transaction to just before the failed
+ * attempt while keeping everything already deleted.
+ */
+let savepointSeq = 0
 async function eraseRows(table, column, value, depth = 0) {
   if (depth > 12) throw new Error(`FK chain deeper than 12 at ${table}.${column} — refusing`)
   for (let attempt = 0; attempt < 20; attempt++) {
+    const sp = `erase_sp_${savepointSeq++}`
+    await client.query(`savepoint ${sp}`)
     try {
       const res = await client.query(`delete from ${table} where ${column} = $1`, [value])
+      await client.query(`release savepoint ${sp}`)
       if (res.rowCount > 0) console.log(`  ${table} (${column}): ${res.rowCount} row(s)`)
       return
     } catch (err) {
+      await client.query(`rollback to savepoint ${sp}`)
       if (err.code !== '23503' || !err.constraint) throw err
       const ref = await referencing(err.constraint)
       if (!ref) throw err
@@ -79,12 +92,23 @@ async function eraseRows(table, column, value, depth = 0) {
   throw new Error(`could not clear references for ${table}.${column} in 20 passes`)
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 for (const email of emails) {
   console.log(`\n=== ${email} ===`)
   await client.query('begin')
   try {
-    const { rows: users } = await client.query(
-      'select id, org_id, role, status from echo.app_user where email = $1::public.citext', [email])
+    /*
+     * By email OR by raw id. The email lookup alone missed a TOMBSTONED test
+     * row (tombstoning replaces the email with @tombstone.invalid) — "no row
+     * with this email" is not "no row for this person", and the auth-side
+     * delete kept refusing on a row this script had just declared absent.
+     */
+    const { rows: users } = UUID_RE.test(email)
+      ? await client.query(
+          'select id, org_id, role, status from echo.app_user where id = $1', [email])
+      : await client.query(
+          'select id, org_id, role, status from echo.app_user where email = $1::public.citext', [email])
     if (users.length === 0) {
       console.log('  no app_user row (nothing product-side)')
       await client.query('rollback')

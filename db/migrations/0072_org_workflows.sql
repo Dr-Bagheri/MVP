@@ -34,10 +34,15 @@ create policy workflow_template_read on echo.workflow_template for select to ech
 -- Admins create org workflows. Platform rows (org_id null) are NOT mintable
 -- through the app role — with check refuses them, so the seeded namespace
 -- stays the migration's alone.
+-- actor_is_admin(), the zero-arg actor predicate — NOT role_is_admin(role),
+-- which grades a role you hand it. The first cut of this file named the
+-- latter without its argument, from a status-log paraphrase instead of the
+-- catalogue; the migration failed atomically on the missing signature and
+-- was never recorded, which is why this file could be corrected in place.
 create policy workflow_template_admin_insert on echo.workflow_template
   for insert to echo_app
   with check (
-    echo.actor_is_active() and echo.role_is_admin()
+    echo.actor_is_active() and echo.actor_is_admin()
     and org_id = echo.actor_org_id()
     and created_by = echo.actor_id()
   );
