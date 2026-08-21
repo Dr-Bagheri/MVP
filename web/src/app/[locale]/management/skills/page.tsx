@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import { useSkillName } from "@/lib/skillName";
 import { api, BffError } from "@/api/client";
+import { useRefreshEpoch } from "@/lib/refreshBus";
 import type { AuthoredSkill, ModelInfo, Skill, User } from "@/api/types";
 import { ManagementPane } from "@/components/platform/ManagementPane";
 import { FormPanel, FormRow, PageHeader, PanelFooter, Section } from "@/components/scaffold";
@@ -96,11 +97,13 @@ function SkillsPageContent() {
     setVocabulary(manage.available_tools);
   }
 
+  const skillsEpoch = useRefreshEpoch("skills");
   useEffect(() => {
     void api.me().then(setMe);
     void api.models().then((res) => setModels(res.models));
     void load();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load is stable per mount
+  }, [skillsEpoch]);
 
   /* The Workflows launcher delegates creation to this real prompt editor.
      Wait for identity: otherwise an admin who followed the link could be

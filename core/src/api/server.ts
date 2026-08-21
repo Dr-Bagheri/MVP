@@ -2111,7 +2111,9 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       ? (body.client_tools as unknown[])
           .filter((name): name is string => typeof name === "string")
           .filter((name) => CLIENT_TOOL_NAMES.includes(name))
-          .slice(0, 16)
+          // cap ABOVE the registry size: a cap below it would silently drop
+          // advertised tools — the "advertisement lied" class
+          .slice(0, 32)
       : [];
     /*
      * M34: situational context — WHERE the user is. Routes and IDs only,

@@ -62,6 +62,7 @@ import type {
  * basis as the `Call`/`Org` migrations.
  */
 import type { MeRecord } from "@echo/core/wire";
+import { announceWrite } from "@/lib/refreshBus";
 
 /*
  * The AGENT_SESSIONS/AGENT_THREADS fixtures left with the ask() mock (Part 1,
@@ -145,7 +146,13 @@ async function bff<T>(path: string, init?: RequestInit): Promise<T> {
   }
   // ANY successful write invalidates the read cache — one rule, one place,
   // no per-mutation bookkeeping to forget (sign-in included: it is a POST)
-  if (init?.method && init.method !== "GET") readCache.clear();
+  // — and ANNOUNCES on the refresh bus, so every table showing this data
+  // refetches whether the human pressed the button or the agent did
+  // (user directive, 2026-08-21).
+  if (init?.method && init.method !== "GET") {
+    readCache.clear();
+    announceWrite(path);
+  }
   // a 204 has no body by definition — json() on it would turn a clean
   // delete into a parse crash
   if (response.status === 204) return undefined as T;

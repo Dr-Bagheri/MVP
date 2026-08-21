@@ -8,6 +8,7 @@ import { AssistantMenu } from "@/components/platform/AssistantMenu";
 import { PlatformShell } from "@/components/platform/PlatformShell";
 import { MenuLayout, PageHeader } from "@/components/scaffold";
 import { openAssistant } from "@/lib/assistantBus";
+import { useRefreshEpoch } from "@/lib/refreshBus";
 import { digits, formatDate } from "@/lib/format";
 
 /**
@@ -29,9 +30,11 @@ export default function ConversationsPage() {
   /** the row whose removal failed — shown beside its button, never swallowed */
   const [deleteFailed, setDeleteFailed] = useState<string | null>(null);
 
+  /* refresh bus: archiving from anywhere (this table, the dock's agent) */
+  const sessionsEpoch = useRefreshEpoch("sessions");
   useEffect(() => {
     void api.agentSessions().then(setSessions);
-  }, []);
+  }, [sessionsEpoch]);
 
   const shown = (sessions ?? []).filter(
     (s) => search.trim() === "" || (s.title ?? "").includes(search.trim()),

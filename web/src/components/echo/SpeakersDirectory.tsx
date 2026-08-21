@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { api } from "@/api/client";
+import { useRefreshEpoch } from "@/lib/refreshBus";
 import type { Person } from "@/api/types";
 import { Card, EmptyState } from "@/components/ui";
 
@@ -30,9 +31,10 @@ export function SpeakersDirectory() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const speakersEpoch = useRefreshEpoch("speakers");
   useEffect(() => {
     void api.directory().then(setPeople).catch(() => setPeople([]));
-  }, []);
+  }, [speakersEpoch]);
 
 
   async function add(): Promise<void> {

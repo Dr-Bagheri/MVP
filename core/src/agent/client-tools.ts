@@ -176,6 +176,87 @@ export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
     }, ["member", "status"]),
     effect: "write",
   },
+  /*
+   * The record-row actions (user directive, 2026-08-21 round 2: "for any
+   * action in tables — rename, delete, edit, any button we have").
+   * `record` = a title or an id; the surface resolves it against the same
+   * list the table shows and REFUSES ambiguity. delete here is M11's soft
+   * delete — hidden at once, restorable for 30 days; the purge that
+   * destroys remains nobody's tool.
+   */
+  {
+    name: "rename_record",
+    label: { fa: "تغییر نام ضبط", en: "Renaming a record" },
+    description:
+      "Rename a record (recorded call). Identify it by its current title or id.",
+    parameters: obj({
+      record: str("Current title or id of the record."),
+      title: str("The new title."),
+    }, ["record", "title"]),
+    effect: "write",
+  },
+  {
+    name: "set_record_scope",
+    label: { fa: "تغییر محدودهٔ ضبط", en: "Changing a record's scope" },
+    description:
+      "Set a record private or shared with the organization — the row's own "
+      + "scope toggle.",
+    parameters: obj({
+      record: str("Title or id of the record."),
+      scope: strEnum(["private", "org"], "private = only the owner; org = the organization."),
+    }, ["record", "scope"]),
+    effect: "write",
+  },
+  {
+    name: "archive_record",
+    label: { fa: "بایگانی ضبط", en: "Archiving a record" },
+    description: "Move a record to the archive (reversible).",
+    parameters: obj({ record: str("Title or id of the record.") }, ["record"]),
+    effect: "write",
+  },
+  {
+    name: "unarchive_record",
+    label: { fa: "خروج از بایگانی", en: "Unarchiving a record" },
+    description: "Bring a record back from the archive to the records list.",
+    parameters: obj({ record: str("Title or id of the record.") }, ["record"]),
+    effect: "write",
+  },
+  {
+    name: "delete_record",
+    label: { fa: "حذف ضبط", en: "Deleting a record" },
+    description:
+      "Soft-delete a record: hidden immediately, restorable for 30 days "
+      + "(the table's own Delete button). Never a permanent purge.",
+    parameters: obj({ record: str("Title or id of the record.") }, ["record"]),
+    effect: "write",
+  },
+  {
+    name: "restore_record",
+    label: { fa: "بازگردانی ضبط", en: "Restoring a record" },
+    description: "Restore a soft-deleted record within its 30-day window.",
+    parameters: obj({ record: str("Title or id of the record.") }, ["record"]),
+    effect: "write",
+  },
+  {
+    name: "delete_conversation",
+    label: { fa: "حذف گفتگو", en: "Removing a conversation" },
+    description:
+      "Remove a conversation from the assistant history (archived under the "
+      + "hood — the audit record survives). Identify it by its title.",
+    parameters: obj({ conversation: str("Title of the conversation.") }, ["conversation"]),
+    effect: "write",
+  },
+  {
+    name: "add_speaker_person",
+    label: { fa: "افزودن گوینده", en: "Adding a person" },
+    description:
+      "Add a person to the speakers directory, with an optional role title.",
+    parameters: obj({
+      name: str("The person's display name."),
+      title: str("Their role title (optional)."),
+    }, ["name"]),
+    effect: "write",
+  },
   {
     name: "set_member_role",
     label: { fa: "تغییر نقش عضو", en: "Changing a member's role" },

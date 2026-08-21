@@ -21,6 +21,14 @@ export const SURFACE_TOOLS: readonly string[] = [
   "finish_recording",
   "set_member_status",
   "set_member_role",
+  "rename_record",
+  "set_record_scope",
+  "archive_record",
+  "unarchive_record",
+  "delete_record",
+  "restore_record",
+  "delete_conversation",
+  "add_speaker_person",
 ];
 
 /** Routes the agent may navigate to — the same set a human can click to. */
@@ -66,6 +74,58 @@ function refusalDetail(cause: unknown, fallback: string): string {
   const { status, detail } = cause as { status?: number; detail?: string };
   if (status === 403) return "the server refused: this needs an admin role";
   return detail ?? fallback;
+}
+
+/**
+ * The record-row tools identify a record the way a person would — by its
+ * title (or id) — resolved against the SAME list the table shows,
+ * archived included. Ambiguity refuses: "delete call 1" with two rows
+ * titled "call 1" must not pick one.
+ */
+async function resolveRecord(handle: string): Promise<
+  { ok: true; id: string } | { ok: false; detail: string }
+> {
+  const trimmed = handle.trim();
+  if (UUID_RE.test(trimmed)) return { ok: true, id: trimmed };
+  const { api } = await import("@/api/client");
+  const rows = await api.listCalls({ includeArchived: true });
+  const lowered = trimmed.toLowerCase();
+  const matched = rows.filter((row) => (row.title ?? "").toLowerCase() === lowered);
+  if (matched.length === 1) return { ok: true, id: matched[0]!.id };
+  if (matched.length === 0) return { ok: false, detail: "no record matched that title" };
+  return { ok: false, detail: `${matched.length} records share that title — ask the user which one (by date or id)` };
+}
+
+async function resolveConversation(handle: string): Promise<
+  { ok: true; id: string } | { ok: false; detail: string }
+> {
+  const { api } = await import("@/api/client");
+  const rows = await api.agentSessions();
+  const lowered = handle.trim().toLowerCase();
+  const matched = rows.filter((row) => (row.title ?? "").toLowerCase() === lowered);
+  if (matched.length === 1) return { ok: true, id: matched[0]!.id };
+  if (matched.length === 0) return { ok: false, detail: "no conversation matched that title" };
+  return { ok: false, detail: `${matched.length} conversations share that title — ask the user which one` };
+}
+
+/** shared shape for the six record-row mutations */
+async function recordAction(
+  handle: unknown,
+  act: (id: string, api: typeof import("@/api/client").api) => Promise<void>,
+  doneDetail: string,
+  failDetail: string,
+): Promise<SurfaceResult> {
+  const name = typeof handle === "string" ? handle.trim() : "";
+  if (!name) return { ok: false, detail: "record is required" };
+  const who = await resolveRecord(name);
+  if (!who.ok) return { ok: false, detail: who.detail };
+  try {
+    const { api } = await import("@/api/client");
+    await act(who.id, api);
+    return { ok: true, detail: doneDetail };
+  } catch (cause) {
+    return { ok: false, detail: refusalDetail(cause, failDetail) };
+  }
 }
 
 export async function executeClientTool(
@@ -156,6 +216,62 @@ export async function executeClientTool(
         return { ok: true, detail: `the role is now ${role}` };
       } catch (cause) {
         return { ok: false, detail: refusalDetail(cause, "the role change was refused") };
+      }
+    }
+    case "rename_record": {
+      const title = typeof a.title === "string" ? a.title.trim().slice(0, 120) : "";
+      if (!title) return { ok: false, detail: "title is required" };
+      return recordAction(a.record,
+        (id, api) => api.setCallTitle(id, title).then(() => undefined),
+        "the record was renamed", "the rename was refused");
+    }
+    case "set_record_scope": {
+      const scope = a.scope === "private" || a.scope === "org" ? a.scope : null;
+      if (!scope) return { ok: false, detail: "scope must be private or org" };
+      return recordAction(a.record,
+        (id, api) => api.setScope(id, scope).then(() => undefined),
+        scope === "org" ? "the record is shared with the organization" : "the record is private now",
+        "the scope change was refused");
+    }
+    case "archive_record":
+      return recordAction(a.record,
+        (id, api) => api.setArchived(id, true),
+        "the record was archived", "archiving was refused");
+    case "unarchive_record":
+      return recordAction(a.record,
+        (id, api) => api.setArchived(id, false),
+        "the record is back from the archive", "unarchiving was refused");
+    case "delete_record":
+      return recordAction(a.record,
+        (id, api) => api.deleteCall(id),
+        "the record was deleted — restorable for 30 days", "deleting was refused");
+    case "restore_record":
+      return recordAction(a.record,
+        (id, api) => api.restoreCall(id),
+        "the record was restored", "restoring was refused");
+    case "delete_conversation": {
+      const handle = typeof a.conversation === "string" ? a.conversation.trim() : "";
+      if (!handle) return { ok: false, detail: "conversation is required" };
+      const who = await resolveConversation(handle);
+      if (!who.ok) return { ok: false, detail: who.detail };
+      try {
+        const { api } = await import("@/api/client");
+        await api.archiveSession(who.id, true);
+        return { ok: true, detail: "the conversation was removed from history" };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "removing the conversation was refused") };
+      }
+    }
+    case "add_speaker_person": {
+      const name = typeof a.name === "string" ? a.name.trim().slice(0, 120) : "";
+      if (!name) return { ok: false, detail: "name is required" };
+      const title = typeof a.title === "string" ? a.title.trim().slice(0, 120) : "";
+      try {
+        const { api } = await import("@/api/client");
+        await api.createPerson(name, title);
+        return { ok: true, detail: "the person was added to the directory" };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "adding the person was refused") };
       }
     }
     default:

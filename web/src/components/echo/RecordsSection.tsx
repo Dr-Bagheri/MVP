@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/routing";
 import { api } from "@/api/client";
+import { useRefreshEpoch } from "@/lib/refreshBus";
 import type { Call, Me, User } from "@/api/types";
 import { Card, EmptyState, StatusChip } from "@/components/ui";
 // `purgeDaysLeft` is deliberately NOT imported: the purge countdown belongs to
@@ -47,6 +48,9 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
    *  (user report, on precisely that symptom). */
   const [actionError, setActionError] = useState<string | null>(null);
 
+  /* refresh bus: a record mutation anywhere — button or agent — bumps this */
+  const callsEpoch = useRefreshEpoch("calls");
+
   async function load() {
     setCalls(await api.listCalls({ includeArchived: view === "archive" }));
   }
@@ -57,7 +61,7 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
     void api.members().then(setMembers).catch(() => setMembers([]));
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- view is fixed per mount
-  }, [view]);
+  }, [view, callsEpoch]);
 
   /** id → display name, falling back to the id rather than to `undefined`. */
   function ownerName(id: string): string {

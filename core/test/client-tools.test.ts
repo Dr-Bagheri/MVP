@@ -94,18 +94,24 @@ describe("createClientTools", () => {
 });
 
 describe("the registry", () => {
-  it("contains NO data-destroying action — delete/purge are never the agent's to press", () => {
-    // The absence half of an M33 clause, NARROWED by user directive
-    // (2026-08-21: "anything the user can do it must be able to do"):
-    // finish_recording and the member-admin tools joined — reversible, and
-    // role-walled by the server through the person's own session. What can
-    // DESTROY data stays the person's, at every dial setting.
+  it("contains NO data-destroying action — purge/erase are never the agent's to press", () => {
+    // The absence half of an M33 clause, twice narrowed by user directive
+    // (2026-08-21: "any button we have on platform, make it possible"):
+    // delete_record is M11's SOFT delete (restorable 30 days) and
+    // delete_conversation is an archive — both reversible, both consented
+    // below Act, both role-walled server-side. What actually DESTROYS
+    // (purge, erasure, tombstoning a person) stays out at every dial
+    // setting — the line is reversibility, not the verb.
     const names = CLIENT_TOOLS.map((t) => t.name).join(" ");
-    expect(names).not.toMatch(/delete|purge|erase|tombstone/);
+    expect(names).not.toMatch(/purge|erase|tombstone/);
   });
 
-  it("finish_recording and the member tools are write-effect — consent below Act", () => {
-    for (const name of ["finish_recording", "set_member_status", "set_member_role"]) {
+  it("every table-action tool is write-effect — consent below Act", () => {
+    for (const name of [
+      "finish_recording", "set_member_status", "set_member_role",
+      "rename_record", "set_record_scope", "archive_record", "unarchive_record",
+      "delete_record", "restore_record", "delete_conversation", "add_speaker_person",
+    ]) {
       const tool = CLIENT_TOOLS.find((t) => t.name === name);
       expect(tool, name).toBeDefined();
       expect(tool!.effect, name).toBe("write");
@@ -123,5 +129,10 @@ describe("the registry", () => {
     for (const tool of CLIENT_TOOLS) {
       expect(["ui", "write"]).toContain(tool.effect);
     }
+  });
+
+  it("stays under the ask route's advertisement cap — a cap below the registry silently drops tools", () => {
+    // server.ts slices advertised names at 32; growth past it must fail HERE
+    expect(CLIENT_TOOLS.length).toBeLessThanOrEqual(32);
   });
 });

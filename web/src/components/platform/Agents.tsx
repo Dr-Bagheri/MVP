@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { api } from "@/api/client";
+import { useRefreshEpoch } from "@/lib/refreshBus";
 import type { AgentCard, ModelInfo } from "@/api/types";
 import { Link } from "@/i18n/routing";
 import { AssistantMenu } from "./AssistantMenu";
@@ -31,11 +32,12 @@ export function Agents() {
   const [availableTools, setAvailableTools] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
 
+  const agentsEpoch = useRefreshEpoch("agents");
   useEffect(() => {
     void api.agents().then(setAgents).catch(() => setAgents([]));
     void api.models().then((result) => setModels(result.models)).catch(() => setModels([]));
     void api.assistantTools().then(setAvailableTools).catch(() => setAvailableTools([]));
-  }, []);
+  }, [agentsEpoch]);
 
   async function create() {
     if (!name.trim() || !instructions.trim() || saving) return;

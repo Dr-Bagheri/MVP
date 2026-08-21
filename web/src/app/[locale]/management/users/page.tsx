@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api, BffError } from "@/api/client";
+import { useRefreshEpoch } from "@/lib/refreshBus";
 import type {
   Invitation,
   MemberSort,
@@ -107,6 +108,11 @@ export default function UsersPage() {
     setStats(counts);
   }, [search, status, role, sort]);
 
+  /* any write to members/invitations — the person's click OR the agent's
+     hand — bumps these and the table refetches (refresh bus) */
+  const membersEpoch = useRefreshEpoch("members");
+  const invitationsEpoch = useRefreshEpoch("invitations");
+
   useEffect(() => {
     void api.me().then(setMe);
   }, []);
@@ -114,7 +120,7 @@ export default function UsersPage() {
   useEffect(() => {
     if (!isAdmin) return;
     void api.invitations().then(setInvitations).catch(() => undefined);
-  }, [isAdmin]);
+  }, [isAdmin, invitationsEpoch]);
 
   async function issueInvitation() {
     const email = inviteEmail.trim();
@@ -146,7 +152,7 @@ export default function UsersPage() {
      */
     const timer = setTimeout(() => void load(), 250);
     return () => clearTimeout(timer);
-  }, [isAdmin, load]);
+  }, [isAdmin, load, membersEpoch]);
 
   /**
    * `history_since: null` means the status-history log was not recording, so

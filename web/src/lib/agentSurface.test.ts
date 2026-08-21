@@ -10,11 +10,21 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const members = vi.fn();
 const setUserStatus = vi.fn();
 const setUserRole = vi.fn();
+const listCalls = vi.fn();
+const setCallTitle = vi.fn();
+const deleteCall = vi.fn();
+const agentSessions = vi.fn();
+const archiveSession = vi.fn();
 vi.mock("@/api/client", () => ({
   api: {
     members: (...args: unknown[]) => members(...args),
     setUserStatus: (...args: unknown[]) => setUserStatus(...args),
     setUserRole: (...args: unknown[]) => setUserRole(...args),
+    listCalls: (...args: unknown[]) => listCalls(...args),
+    setCallTitle: (...args: unknown[]) => setCallTitle(...args),
+    deleteCall: (...args: unknown[]) => deleteCall(...args),
+    agentSessions: (...args: unknown[]) => agentSessions(...args),
+    archiveSession: (...args: unknown[]) => archiveSession(...args),
   },
 }));
 
@@ -42,6 +52,11 @@ beforeEach(() => {
   members.mockReset();
   setUserStatus.mockReset();
   setUserRole.mockReset();
+  listCalls.mockReset();
+  setCallTitle.mockReset();
+  deleteCall.mockReset();
+  agentSessions.mockReset();
+  archiveSession.mockReset();
   recorderControls.current = null;
 });
 
@@ -121,6 +136,51 @@ describe("executeClientTool", () => {
     setUserRole.mockRejectedValue({ status: 403, detail: "forbidden" });
     const result = await executeClientTool("set_member_role", { member: "amir", role: "admin" }, ctx);
     expect(result).toEqual({ ok: false, detail: "the server refused: this needs an admin role" });
+  });
+
+  it("rename_record resolves a TITLE against the table's own list", async () => {
+    const { ctx } = surface();
+    listCalls.mockResolvedValue([
+      { id: "c-1", title: "call 3" },
+      { id: "c-2", title: "call2" },
+    ]);
+    setCallTitle.mockResolvedValue({});
+    const result = await executeClientTool("rename_record", { record: "call 3", title: "kickoff" }, ctx);
+    expect(result.ok).toBe(true);
+    expect(listCalls).toHaveBeenCalledWith({ includeArchived: true });
+    expect(setCallTitle).toHaveBeenCalledWith("c-1", "kickoff");
+  });
+
+  it("two records with one title: nobody gets renamed", async () => {
+    const { ctx } = surface();
+    listCalls.mockResolvedValue([
+      { id: "c-1", title: "call" },
+      { id: "c-2", title: "call" },
+    ]);
+    const result = await executeClientTool("rename_record", { record: "call", title: "x" }, ctx);
+    expect(result.ok).toBe(false);
+    expect(setCallTitle).not.toHaveBeenCalled();
+  });
+
+  it("delete_record is the SOFT delete and says so out loud", async () => {
+    const { ctx } = surface();
+    listCalls.mockResolvedValue([{ id: "c-1", title: "call 3" }]);
+    deleteCall.mockResolvedValue(undefined);
+    const result = await executeClientTool("delete_record", { record: "call 3" }, ctx);
+    expect(result.ok).toBe(true);
+    expect(result.detail).toContain("restorable");
+    expect(deleteCall).toHaveBeenCalledWith("c-1");
+  });
+
+  it("delete_conversation archives — resolved by title, refused when unknown", async () => {
+    const { ctx } = surface();
+    agentSessions.mockResolvedValue([{ id: "s-1", title: "گزارش هفته" }]);
+    archiveSession.mockResolvedValue(undefined);
+    const result = await executeClientTool("delete_conversation", { conversation: "گزارش هفته" }, ctx);
+    expect(result.ok).toBe(true);
+    expect(archiveSession).toHaveBeenCalledWith("s-1", true);
+    const missing = await executeClientTool("delete_conversation", { conversation: "نیست" }, ctx);
+    expect(missing.ok).toBe(false);
   });
 
   it("open_call demands a real id — a model cannot navigate by prose", async () => {

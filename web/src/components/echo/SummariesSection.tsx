@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
+import { useRefreshEpoch } from "@/lib/refreshBus";
 import type { Call, SummaryVersion } from "@/api/types";
 import { Link } from "@/i18n/routing";
 import { Card } from "@/components/ui";
@@ -28,6 +29,7 @@ export function SummariesSection() {
   const [versions, setVersions] = useState<SummaryVersion[] | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
 
+  const callsEpoch = useRefreshEpoch("calls");
   useEffect(() => {
     void api.listCalls().then((rows) => {
       // only records whose pipeline produced a summary have one to show
@@ -35,7 +37,7 @@ export function SummariesSection() {
       setRecords(withSummaries);
       setSelected((current) => current ?? withSummaries[0]?.id ?? null);
     }).catch(() => setRecords([]));
-  }, []);
+  }, [callsEpoch]);
 
   useEffect(() => {
     if (!selected) return;

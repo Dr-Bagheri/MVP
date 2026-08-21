@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
+import { useRefreshEpoch } from "@/lib/refreshBus";
 import type { ConnectorItem, ConnectorProvider, ConnectorStatus, WorkflowCard } from "@/api/types";
 import { useRouter } from "@/i18n/routing";
 import { AssistantMenu } from "./AssistantMenu";
@@ -34,6 +35,7 @@ export function Workflows() {
   const [createBusy, setCreateBusy] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
+  const workflowsEpoch = useRefreshEpoch("workflows");
   useEffect(() => {
     void Promise.all([api.workflows(), api.connectors()])
       .then(([nextWorkflows, nextConnections]) => {
@@ -44,7 +46,7 @@ export function Workflows() {
         setWorkflows([]);
         setConnections([]);
       });
-  }, []);
+  }, [workflowsEpoch]);
 
   const connected = useMemo(
     () => (connections ?? []).filter((connection) => connection.status === "connected"),
