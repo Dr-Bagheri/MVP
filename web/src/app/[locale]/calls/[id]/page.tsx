@@ -234,10 +234,10 @@ export default function CallDetailPage({
 
   const summary = versions.find((v) => v.version === shownVersion) ?? null;
 
-  if (!call) return <EchoAppShell page={t("transcript")}>{null}</EchoAppShell>;
+  if (!call) return <EchoAppShell>{null}</EchoAppShell>;
 
   return (
-    <EchoAppShell page={call.title} presetCallId={call.id}>
+    <EchoAppShell>
       <PageHeader
         title={call.title}
         subtitle={

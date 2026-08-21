@@ -5,8 +5,9 @@ import { useLocale, useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
 import { api } from "@/api/client";
 import type { SearchHit } from "@/api/types";
+import { AssistantMenu } from "@/components/platform/AssistantMenu";
 import { PlatformShell } from "@/components/platform/PlatformShell";
-import { PageContainer, PageHeader } from "@/components/scaffold";
+import { MenuLayout, PageContainer, PageHeader } from "@/components/scaffold";
 import { Card, Chip, EmptyState } from "@/components/ui";
 import { formatClock, digits } from "@/lib/format";
 
@@ -64,7 +65,7 @@ export default function SearchPage() {
        joined the rail beside History, and both wear the platform's standard
        sub-menu — the Echo shell it rode before belonged to a different app */
     <PlatformShell>
-      <div className="w-full">
+      <MenuLayout menu={<AssistantMenu activeSlug="search" />}>
         <PageContainer>
       <PageHeader title={t("title")} subtitle={t("scopeNote")} />
 
@@ -132,7 +133,7 @@ export default function SearchPage() {
         </>
       )}
         </PageContainer>
-      </div>
+      </MenuLayout>
     </PlatformShell>
   );
 }

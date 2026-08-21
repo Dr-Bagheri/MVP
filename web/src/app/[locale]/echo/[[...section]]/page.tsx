@@ -67,7 +67,6 @@ export default function EchoPage({
 
   return (
     <EchoAppShell
-      page={t("echo")}
       menu={
         <SectionMenu
           navLabel={t("echo")}

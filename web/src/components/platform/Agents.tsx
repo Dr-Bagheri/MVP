@@ -5,8 +5,9 @@ import { useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { AgentCard, ModelInfo } from "@/api/types";
 import { Link } from "@/i18n/routing";
+import { AssistantMenu } from "./AssistantMenu";
 import { PlatformShell } from "./PlatformShell";
-import { PageHeader, Section } from "@/components/scaffold";
+import { MenuLayout, PageHeader, Section } from "@/components/scaffold";
 import { Card, Chip } from "@/components/ui";
 
 const glyphs: Record<string, string> = {
@@ -62,7 +63,7 @@ export function Agents() {
 
   return (
     <PlatformShell>
-      <div className="w-full">
+      <MenuLayout menu={<AssistantMenu activeSlug="agents" />}>
         <div className="mx-auto w-full max-w-content px-5 pb-16 pt-5 md:px-10 md:pt-4">
           <PageHeader
             title={t("title")}
@@ -160,7 +161,7 @@ export function Agents() {
             </div>
           ) : null}
         </div>
-      </div>
+      </MenuLayout>
     </PlatformShell>
   );
 }

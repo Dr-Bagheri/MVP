@@ -5,8 +5,9 @@ import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { ConnectorItem, ConnectorProvider, ConnectorStatus, WorkflowCard } from "@/api/types";
 import { useRouter } from "@/i18n/routing";
+import { AssistantMenu } from "./AssistantMenu";
 import { PlatformShell } from "./PlatformShell";
-import { PageHeader, Section } from "@/components/scaffold";
+import { MenuLayout, PageHeader, Section } from "@/components/scaffold";
 import { Card } from "@/components/ui";
 
 type ItemSource = "calendar" | "mail";
@@ -115,7 +116,7 @@ export function Workflows() {
 
   return (
     <PlatformShell>
-      <div className="w-full">
+      <MenuLayout menu={<AssistantMenu activeSlug="workflows" />}>
         <div className="mx-auto w-full max-w-content px-5 pb-16 pt-5 md:px-10 md:pt-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <PageHeader title={t("title")} subtitle={t("subtitle")} />
@@ -232,7 +233,7 @@ export function Workflows() {
             {error ? <p role="status" className="mt-4 text-sm text-danger">{error}</p> : null}
           </Section>
         </div>
-      </div>
+      </MenuLayout>
 
       {creating ? (
         <div
