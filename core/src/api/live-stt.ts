@@ -36,6 +36,11 @@ export type LiveEvent =
 interface LiveSession {
   id: string;
   userId: string;
+  /** a per-session CAPABILITY: lets the browser stream audio/read captions
+      for THIS session directly (skipping the BFF hop that cost seconds of
+      transcript lag) without ever holding the user's token — it grants
+      nothing beyond this one ephemeral transcription stream */
+  ticket: string;
   ws: WsLike;
   /** events queued while no reader is attached; a reader drains then follows */
   queue: LiveEvent[];
@@ -97,10 +102,43 @@ export function createLiveStt(options: LiveSttOptions = {}) {
     return session && session.userId === userId && !session.closed ? session : null;
   }
 
+  /** the ticket path: same one-answer discipline — wrong ticket = no session */
+  function byTicket(id: string, ticket: string): LiveSession | null {
+    const session = sessions.get(id);
+    return session && ticket !== "" && session.ticket === ticket && !session.closed
+      ? session : null;
+  }
+
+  function doPush(session: LiveSession | null, bytes: Uint8Array): boolean {
+    if (!session) return false;
+    touch(session);
+    if (session.ws.readyState === 0 /* CONNECTING */) {
+      // the socket is still opening — a first chunk racing the handshake
+      // waits for open rather than being dropped on the floor
+      session.ws.addEventListener("open", (() => {
+        try { session.ws.send(bytes); } catch { /* closed in between */ }
+      }) as never);
+      return true;
+    }
+    try { session.ws.send(bytes); } catch { return false; }
+    return true;
+  }
+
+  function doSubscribe(
+    session: LiveSession | null,
+    reader: (event: LiveEvent) => void,
+  ): (() => void) | null {
+    if (!session) return null;
+    touch(session);
+    for (const event of session.queue.splice(0)) reader(event);
+    session.reader = reader;
+    return () => { if (session.reader === reader) session.reader = null; };
+  }
+
   return {
     available: () => Boolean(apiKey),
 
-    start(userId: string): { session_id: string } {
+    start(userId: string): { session_id: string; ticket: string } {
       if (!apiKey) throw new Error("live stt unavailable — no provider key");
       const mine = [...sessions.values()].filter((s) => s.userId === userId);
       if (mine.length >= maxPerUser) {
@@ -112,6 +150,7 @@ export function createLiveStt(options: LiveSttOptions = {}) {
       const session: LiveSession = {
         id: randomUUID(),
         userId,
+        ticket: randomUUID(),
         ws,
         queue: [],
         reader: null,
@@ -163,34 +202,24 @@ export function createLiveStt(options: LiveSttOptions = {}) {
         reap(session);
       }) as never);
       sessions.set(session.id, session);
-      return { session_id: session.id };
+      return { session_id: session.id, ticket: session.ticket };
     },
 
     /** binary audio straight through; false = no such session (one answer) */
     pushAudio(id: string, userId: string, bytes: Uint8Array): boolean {
-      const session = owned(id, userId);
-      if (!session) return false;
-      touch(session);
-      if (session.ws.readyState === 0 /* CONNECTING */) {
-        // the socket is still opening — a first chunk racing the handshake
-        // waits for open rather than being dropped on the floor
-        session.ws.addEventListener("open", (() => {
-          try { session.ws.send(bytes); } catch { /* closed in between */ }
-        }) as never);
-        return true;
-      }
-      try { session.ws.send(bytes); } catch { return false; }
-      return true;
+      return doPush(owned(id, userId), bytes);
+    },
+    /** the browser's DIRECT lane — the ticket is the whole authority */
+    pushAudioByTicket(id: string, ticket: string, bytes: Uint8Array): boolean {
+      return doPush(byTicket(id, ticket), bytes);
     },
 
     /** attach ONE reader; queued events drain first. Returns detach. */
     subscribe(id: string, userId: string, reader: (event: LiveEvent) => void): (() => void) | null {
-      const session = owned(id, userId);
-      if (!session) return null;
-      touch(session);
-      for (const event of session.queue.splice(0)) reader(event);
-      session.reader = reader;
-      return () => { if (session.reader === reader) session.reader = null; };
+      return doSubscribe(owned(id, userId), reader);
+    },
+    subscribeByTicket(id: string, ticket: string, reader: (event: LiveEvent) => void): (() => void) | null {
+      return doSubscribe(byTicket(id, ticket), reader);
     },
 
     stop(id: string, userId: string): boolean {

@@ -1638,9 +1638,12 @@ export const api = {
     });
   },
 
-  /** M38: open a live-transcription relay session (503 = lane not configured). */
-  async liveSttStart(): Promise<{ session_id: string }> {
-    return bff<{ session_id: string }>("/api/live-stt/start", { method: "POST" });
+  /** M38: open a live-transcription relay session (503 = lane not configured).
+      `ticket` + `direct_url` let the browser stream to core WITHOUT the
+      serverless hop — the lag fix; both nullable for an older core. */
+  async liveSttStart(): Promise<{ session_id: string; ticket?: string; direct_url?: string | null }> {
+    return bff<{ session_id: string; ticket?: string; direct_url?: string | null }>(
+      "/api/live-stt/start", { method: "POST" });
   },
   /** M38: one audio chunk to the relay — binary, so raw fetch. Fire-and-forget. */
   async liveSttAudio(sessionId: string, chunk: Blob): Promise<void> {

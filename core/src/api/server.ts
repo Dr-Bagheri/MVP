@@ -712,29 +712,62 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     return reply.send(liveStt.start(identity.userId));
   });
 
+  /*
+   * The audio/caption legs accept EITHER the BFF's bearer path or the
+   * session TICKET — the capability start() minted, which lets the browser
+   * talk to core DIRECTLY (the per-chunk serverless hop cost seconds of
+   * transcript lag; the fix is removing the hop, not tuning it). CORS is
+   * open on these two routes only: the ticket is the wall (a random
+   * per-session capability), no cookies ride the requests, and the
+   * payloads are the caller's own audio and captions.
+   */
+  const liveSttCors = (reply: { header: (k: string, v: string) => unknown }) => {
+    reply.header("access-control-allow-origin", "*");
+    reply.header("access-control-allow-methods", "POST, GET, OPTIONS");
+    reply.header("access-control-allow-headers", "content-type");
+  };
+  app.options("/v1/live-stt/:id/audio", async (_request, reply) => {
+    liveSttCors(reply);
+    return reply.code(204).send();
+  });
+
   app.post("/v1/live-stt/:id/audio", async (request, reply) => {
-    const identity = await auth.requireActive(request);
+    liveSttCors(reply);
     const { id } = request.params as { id: string };
+    const { ticket } = request.query as { ticket?: string };
     const body = request.body;
     if (!Buffer.isBuffer(body) || body.length === 0) {
       throw new ValidationError("audio bytes required");
     }
     if (body.length > 1_000_000) throw new ValidationError("chunk too large");
-    if (!liveStt.pushAudio(id, identity.userId, body)) {
-      throw new NotFoundError("no such live session");
+    let accepted: boolean;
+    if (typeof ticket === "string" && ticket !== "") {
+      accepted = liveStt.pushAudioByTicket(id, ticket, body);
+    } else {
+      const identity = await auth.requireActive(request);
+      accepted = liveStt.pushAudio(id, identity.userId, body);
     }
+    if (!accepted) throw new NotFoundError("no such live session");
     return reply.send({ accepted: true });
   });
 
   app.get("/v1/live-stt/:id/events", async (request, reply) => {
-    const identity = await auth.requireActive(request);
     const { id } = request.params as { id: string };
+    const { ticket } = request.query as { ticket?: string };
+    let attach: (reader: (event: import("./live-stt.ts").LiveEvent) => void) => (() => void) | null;
+    if (typeof ticket === "string" && ticket !== "") {
+      attach = (reader) => liveStt.subscribeByTicket(id, ticket, reader);
+    } else {
+      const identity = await auth.requireActive(request);
+      attach = (reader) => liveStt.subscribe(id, identity.userId, reader);
+    }
     reply.raw.writeHead(200, {
       "content-type": "text/event-stream",
       "cache-control": "no-cache",
       connection: "keep-alive",
+      "access-control-allow-origin": "*",
     });
-    const detach = liveStt.subscribe(id, identity.userId, (event) => {
+    const detach = attach((event) => {
       reply.raw.write(`data: ${JSON.stringify(event)}\n\n`);
       if (event.type === "closed") reply.raw.end();
     });

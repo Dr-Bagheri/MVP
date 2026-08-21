@@ -432,6 +432,7 @@ let warnedNoPersian = false;
 
 /** exported for the dock's LOCAL stop: cut whatever voice is playing NOW */
 export function stopSpeaking(): void {
+  speechQueue.length = 0; // whatever was waiting to be said is unsaid
   if (typeof window !== "undefined" && "speechSynthesis" in window) {
     window.speechSynthesis.cancel();
   }
@@ -439,8 +440,97 @@ export function stopSpeaking(): void {
     serverAudio.pause();
     serverAudio = null;
   }
-  playbackToken += 1; // orphan any in-flight done() callbacks
+  playbackToken += 1; // orphan any in-flight done() callbacks and pumps
   publishPlayback(false);
+}
+
+/* ── the SENTENCE QUEUE (2026-08-21 latency rework): the reply is spoken
+   sentence-by-sentence AS IT STREAMS, instead of one long synthesis after
+   the whole answer arrived — the first sentence is audible while the rest
+   is still being written. speakQueued() appends; one pump plays the queue
+   in order; stopSpeaking() empties it mid-word. ──────────────────────── */
+const speechQueue: string[] = [];
+let queuePumping = false;
+
+export function speakQueued(text: string): void {
+  if (typeof window === "undefined") return;
+  const cleaned = text
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/[`*_#]/g, " ") // md residue reads terribly aloud
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!cleaned) return;
+  spokenHistory = `${spokenHistory} ${cleaned}`.slice(-2000);
+  speechQueue.push(cleaned);
+  void pumpSpeechQueue();
+}
+
+async function pumpSpeechQueue(): Promise<void> {
+  if (queuePumping) return;
+  queuePumping = true;
+  const token = ++playbackToken;
+  publishPlayback(true);
+  try {
+    while (speechQueue.length > 0 && token === playbackToken) {
+      const next = speechQueue.shift()!;
+      await speakOne(next);
+    }
+  } finally {
+    queuePumping = false;
+    if (token === playbackToken) publishPlayback(false);
+    // a sentence that arrived while we were closing down starts a new pump
+    if (speechQueue.length > 0) void pumpSpeechQueue();
+  }
+}
+
+/** one utterance, AWAITED to its end — sequential, never cancelling */
+async function speakOne(cleaned: string): Promise<void> {
+  const persian = PERSIAN_RE.test(cleaned);
+  const synthAvailable = "speechSynthesis" in window;
+  if (!persian) {
+    if (!synthAvailable) return;
+    const utterance = new SpeechSynthesisUtterance(cleaned);
+    utterance.lang = "en-US";
+    await new Promise<void>((resolve) => {
+      utterance.onend = () => resolve();
+      utterance.onerror = () => resolve();
+      window.speechSynthesis.speak(utterance);
+    });
+    return;
+  }
+  const voices = synthAvailable ? await loadVoices() : [];
+  const faVoices = voices.filter((v) => v.lang.toLowerCase().startsWith("fa"));
+  const faVoice = faVoices.find((v) => /dilara|female/i.test(v.name)) ?? faVoices[0];
+  if (faVoice) {
+    const utterance = new SpeechSynthesisUtterance(cleaned);
+    utterance.voice = faVoice;
+    utterance.lang = faVoice.lang;
+    await new Promise<void>((resolve) => {
+      utterance.onend = () => resolve();
+      utterance.onerror = () => resolve();
+      window.speechSynthesis.speak(utterance);
+    });
+    return;
+  }
+  try {
+    const { api } = await import("@/api/client");
+    const blob = await api.tts(cleaned.slice(0, 1200));
+    const audio = new Audio(URL.createObjectURL(blob));
+    serverAudio = audio; // the orb's level meter taps the CURRENT element
+    await new Promise<void>((resolve) => {
+      audio.onended = () => { URL.revokeObjectURL(audio.src); resolve(); };
+      audio.onerror = () => resolve();
+      audio.onpause = () => resolve(); // stopSpeaking() pauses mid-word
+      void audio.play().catch(() => resolve());
+    });
+    if (serverAudio === audio) serverAudio = null;
+  } catch {
+    if (!warnedNoPersian) {
+      warnedNoPersian = true;
+      const { notify } = await import("@/lib/notify");
+      notify("صدای فارسی در دسترس نیست — سرویس گفتار پاسخ نداد.", "warn");
+    }
+  }
 }
 
 /**

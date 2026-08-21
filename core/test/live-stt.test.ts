@@ -117,6 +117,19 @@ describe("the live-stt relay (M38)", () => {
     expect(JSON.stringify(seen)).not.toContain("secret detail");
   });
 
+  it("the TICKET is a whole authority: right one works, wrong/empty are no-session", () => {
+    const stt = relay();
+    const { session_id, ticket } = stt.start(OWNER);
+    FakeWs.instances[0]!.open();
+    expect(ticket.length).toBeGreaterThan(10);
+    expect(stt.pushAudioByTicket(session_id, ticket, new Uint8Array([1]))).toBe(true);
+    expect(stt.pushAudioByTicket(session_id, "wrong", new Uint8Array([1]))).toBe(false);
+    // empty must NEVER match — a session with an empty ticket would be open
+    expect(stt.pushAudioByTicket(session_id, "", new Uint8Array([1]))).toBe(false);
+    expect(stt.subscribeByTicket(session_id, ticket, () => undefined)).not.toBeNull();
+    expect(stt.subscribeByTicket(session_id, "wrong", () => undefined)).toBeNull();
+  });
+
   it("a fourth session reaps the caller's OLDEST — a refresh cannot brick the lane", () => {
     const stt = relay();
     const first = stt.start(OWNER);

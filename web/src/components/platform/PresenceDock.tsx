@@ -9,10 +9,11 @@ import { useRouter } from "@/i18n/routing";
 import { executeClientTool, SURFACE_TOOLS } from "@/lib/agentSurface";
 import { subscribeAssistantOpen } from "@/lib/assistantBus";
 import { notify, subscribeNotify, type PlatformNotice } from "@/lib/notify";
-import { useAudioLevel, useSyntheticPulse } from "@/lib/useAudioLevel";
+import { computeRms, useAudioLevel, useSyntheticPulse } from "@/lib/useAudioLevel";
 import {
-  currentSpeechAudio, isEchoOf, isStopCommand, listenOnce, recentSpokenText, speak, startVoiceControl,
-  stopSpeaking, subscribeSpeechPlayback, voiceInputSupported, type WakeListenerHandle,
+  currentSpeechAudio, isEchoOf, isStopCommand, listenOnce, recentSpokenText, speak,
+  speakQueued, startVoiceControl, stopSpeaking, subscribeSpeechPlayback,
+  voiceInputSupported, type WakeListenerHandle,
 } from "@/lib/voice";
 import { AuroraOrb, type AuroraState } from "./AuroraOrb";
 
@@ -177,15 +178,29 @@ export function PresenceDock() {
     finals: string;
     interim: string;
     silence: ReturnType<typeof setTimeout> | null;
+    /** local VAD (the FAST endpoint): when the mic's own energy has been
+        quiet this long, the person stopped — no waiting on network tokens */
+    lastVoiceAt: number;
+    vadInterval: ReturnType<typeof setInterval> | null;
+    fastSettle: ReturnType<typeof setTimeout> | null;
+    audioCtx: AudioContext | null;
     done: boolean;
   }
   const captureRef = useRef<RelayCapture | null>(null);
   const relayDownRef = useRef(false);
+  /** token-silence FALLBACK clock (network-dependent, hence generous) */
   const CAPTURE_SILENCE_MS = 2500;
+  /** the mic's own quiet time that means "I'm done talking" */
+  const VAD_QUIET_MS = 1100;
+  /** after the VAD endpoint, this long for late tokens to catch up */
+  const VAD_CATCHUP_MS = 600;
 
   function teardownCapture(cap: RelayCapture): void {
     cap.done = true;
     if (cap.silence) clearTimeout(cap.silence);
+    if (cap.fastSettle) clearTimeout(cap.fastSettle);
+    if (cap.vadInterval) clearInterval(cap.vadInterval);
+    if (cap.audioCtx) void cap.audioCtx.close().catch(() => undefined);
     try { if (cap.rec.state !== "inactive") cap.rec.stop(); } catch { /* fine */ }
     cap.stream.getTracks().forEach((track) => track.stop());
     cap.es.close();
@@ -198,6 +213,9 @@ export function PresenceDock() {
     if (cap.done) return;
     if (cap.silence) clearTimeout(cap.silence);
     cap.silence = null;
+    if (cap.fastSettle) clearTimeout(cap.fastSettle);
+    cap.fastSettle = null;
+    cap.lastVoiceAt = 0;
     const text = `${cap.finals} ${cap.interim}`.trim();
     cap.finals = "";
     cap.interim = "";
@@ -207,8 +225,16 @@ export function PresenceDock() {
   async function beginCapture(): Promise<void> {
     if (captureRef.current || relayDownRef.current) return;
     let sessionId: string;
+    let direct: { base: string; ticket: string } | null = null;
     try {
-      ({ session_id: sessionId } = await api.liveSttStart());
+      const started = await api.liveSttStart();
+      sessionId = started.session_id;
+      /* the DIRECT lane: with a ticket and a public core url the browser
+         streams straight to core — the per-chunk serverless hop was the
+         seconds of transcript lag the user measured */
+      if (started.ticket && started.direct_url) {
+        direct = { base: started.direct_url.replace(/\/$/, ""), ticket: started.ticket };
+      }
     } catch {
       relayDownRef.current = true; // machine fallback takes over, quietly
       return;
@@ -229,15 +255,62 @@ export function PresenceDock() {
       void api.liveSttStop(sessionId).catch(() => undefined);
       return;
     }
+    const sendChunk = (chunk: Blob): void => {
+      if (direct) {
+        void fetch(`${direct.base}/v1/live-stt/${encodeURIComponent(sessionId)}/audio?ticket=${direct.ticket}`, {
+          method: "POST",
+          headers: { "content-type": "application/octet-stream" },
+          body: chunk,
+        }).catch(() => undefined);
+      } else {
+        void api.liveSttAudio(sessionId, chunk).catch(() => undefined);
+      }
+    };
     const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
       ? "audio/webm;codecs=opus" : "audio/webm";
     const rec = new MediaRecorder(stream, { mimeType: mime });
     rec.ondataavailable = (event) => {
-      if (event.data.size > 0) void api.liveSttAudio(sessionId, event.data).catch(() => undefined);
+      if (event.data.size > 0) sendChunk(event.data);
     };
-    rec.start(400);
-    const es = new EventSource(`/api/live-stt/${encodeURIComponent(sessionId)}/events`);
-    const cap: RelayCapture = { id: sessionId, stream, rec, es, finals: "", interim: "", silence: null, done: false };
+    rec.start(300);
+    const es = new EventSource(direct
+      ? `${direct.base}/v1/live-stt/${encodeURIComponent(sessionId)}/events?ticket=${direct.ticket}`
+      : `/api/live-stt/${encodeURIComponent(sessionId)}/events`);
+    const cap: RelayCapture = {
+      id: sessionId, stream, rec, es, finals: "", interim: "", silence: null,
+      lastVoiceAt: 0, vadInterval: null, fastSettle: null, audioCtx: null, done: false,
+    };
+    /*
+     * LOCAL VAD — the fast endpoint. The mic's own RMS says when the
+     * person stopped: after VAD_QUIET_MS of quiet (with something already
+     * transcribed), a short catch-up window lets late tokens land, then
+     * the utterance settles. End-of-speech → answer starts in ~1.7s
+     * instead of network-token silence stacking on transcript lag.
+     */
+    try {
+      const audioCtx = new AudioContext();
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 512;
+      audioCtx.createMediaStreamSource(stream).connect(analyser);
+      const vadBuffer = new Uint8Array(analyser.fftSize);
+      cap.audioCtx = audioCtx;
+      cap.vadInterval = setInterval(() => {
+        if (cap.done) return;
+        analyser.getByteTimeDomainData(vadBuffer);
+        const level = computeRms(vadBuffer);
+        const now = Date.now();
+        if (level > 0.05) {
+          cap.lastVoiceAt = now;
+          if (cap.fastSettle) { clearTimeout(cap.fastSettle); cap.fastSettle = null; }
+          return;
+        }
+        const heard = `${cap.finals} ${cap.interim}`.trim();
+        if (!heard || cap.lastVoiceAt === 0 || cap.fastSettle) return;
+        if (now - cap.lastVoiceAt >= VAD_QUIET_MS) {
+          cap.fastSettle = setTimeout(() => settleUtterance(cap), VAD_CATCHUP_MS);
+        }
+      }, 100);
+    } catch { /* no AudioContext — the token-silence fallback still ends turns */ }
     const armSilence = () => {
       if (cap.silence) clearTimeout(cap.silence);
       cap.silence = setTimeout(() => settleUtterance(cap), CAPTURE_SILENCE_MS);
@@ -264,8 +337,15 @@ export function PresenceDock() {
               cap.finals = "";
               cap.interim = "";
               if (cap.silence) clearTimeout(cap.silence);
+              if (cap.fastSettle) { clearTimeout(cap.fastSettle); cap.fastSettle = null; }
               localStop();
               return;
+            }
+            // tokens landing during the VAD catch-up push it out a touch —
+            // the transcript is still arriving
+            if (cap.fastSettle) {
+              clearTimeout(cap.fastSettle);
+              cap.fastSettle = setTimeout(() => settleUtterance(cap), 400);
             }
             armSilence();
           }
@@ -538,14 +618,40 @@ export function PresenceDock() {
         surface: { route: pathname.replace(/^\/(fa|en)(?=\/|$)/, "") || "/" },
         signal: controller.signal,
       });
+      /*
+       * SENTENCE-STREAMED SPEECH (latency rework): a voice reply starts
+       * SPEAKING at the first finished sentence, while the rest still
+       * streams — not after the whole answer landed and synthesized.
+       */
+      let spokenIdx = 0;
+      const speakNewSentences = (finalFlush: boolean) => {
+        if (!speakReplyRef.current || silentRef.current) return;
+        const text = replyTextRef.current;
+        if (finalFlush) {
+          const tail = text.slice(spokenIdx).trim();
+          spokenIdx = text.length;
+          if (tail) speakQueued(tail);
+          return;
+        }
+        let lastEnd = -1;
+        const boundary = /[.!?؟…]\s|\n/g;
+        boundary.lastIndex = spokenIdx;
+        for (let m = boundary.exec(text); m; m = boundary.exec(text)) {
+          lastEnd = m.index + m[0].length;
+        }
+        // tiny fragments wait for company — per-sentence synthesis is a
+        // request each, and "Yes." alone is not worth one
+        if (lastEnd > spokenIdx && lastEnd - spokenIdx >= 25) {
+          const chunk = text.slice(spokenIdx, lastEnd).trim();
+          spokenIdx = lastEnd;
+          if (chunk) speakQueued(chunk);
+        }
+      };
       for await (const event of stream) {
         await handleEvent(event, replyId);
+        if (event.type === "text_delta") speakNewSentences(false);
       }
-      // the reply to a spoken question is spoken — in ITS language —
-      // unless silent mode says text only
-      if (speakReplyRef.current && replyTextRef.current && !silentRef.current) {
-        speak(replyTextRef.current);
-      }
+      speakNewSentences(true);
     } catch (cause) {
       if (controller.signal.aborted) {
         // the person said STOP — keep whatever was already said, drop an
