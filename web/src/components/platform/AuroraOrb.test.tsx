@@ -48,11 +48,23 @@ describe("AuroraOrb", () => {
   it("uses exactly 300 GPU points spanning a true 1x to 5x size range", () => {
     const geometry = createOrbParticleGeometry();
     const positions = geometry.getAttribute("position");
+    const directions = geometry.getAttribute("aDirection");
+    const impacts = geometry.getAttribute("aImpact");
     const sizes = Array.from(geometry.getAttribute("aBaseSize").array as Float32Array);
     expect(positions.count).toBe(300);
+    expect(directions.count).toBe(300);
+    expect(directions.itemSize).toBe(2);
+    expect(impacts.count).toBe(300);
     expect(sizes).toHaveLength(300);
     expect(Math.min(...sizes)).toBe(1);
     expect(Math.max(...sizes)).toBe(5);
+
+    const directionValues = directions.array as Float32Array;
+    for (let index = 0; index < directions.count; index += 1) {
+      const x = directionValues[index * 2]!;
+      const y = directionValues[index * 2 + 1]!;
+      expect(Math.hypot(x, y)).toBeCloseTo(1, 5);
+    }
     geometry.dispose();
   });
 });

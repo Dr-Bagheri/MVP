@@ -18,34 +18,37 @@ const PARTICLE_COUNT = 300;
 
 const vertexShader = /* glsl */ `
   precision highp float;
-  attribute float aAngle;
+  attribute vec2 aDirection;
+  attribute float aImpact;
   attribute float aPhase;
   attribute float aSpeed;
   attribute float aBaseSize;
   attribute float aHue;
 
   uniform float uPixelRatio;
-  uniform float uSpread;
+  uniform float uBoundary;
   uniform float uTime;
-  uniform float uVoiceTravel;
+  uniform float uMotion;
   uniform float uLevel;
 
   varying float vAlpha;
   varying float vHue;
 
   void main() {
-    float phase = fract(aPhase + uVoiceTravel * aSpeed);
-    float radius = mix(0.025, uSpread, phase);
-    float drift = sin(uTime * 0.16 + aPhase * 18.0) * 0.025;
-    float angle = aAngle + drift + uTime * (aPhase - 0.5) * 0.018;
-    vec2 position = vec2(cos(angle), sin(angle)) * radius;
+    vec2 direction = normalize(aDirection);
+    vec2 perpendicular = vec2(-direction.y, direction.x);
+    float offset = aImpact * uBoundary;
+    float halfChord = sqrt(max(0.0001, uBoundary * uBoundary - offset * offset));
+    float phase = fract(aPhase + uMotion * aSpeed);
+    float bounce = 1.0 - 4.0 * abs(phase - 0.5);
+    vec2 position = perpendicular * offset + direction * (bounce * halfChord);
+    float voicePulse = 0.975 + sin(uTime * (3.0 + uLevel * 8.0) + aPhase * 19.0) * uLevel * 0.018;
+    position *= voicePulse;
 
     gl_Position = vec4(position, 0.0, 1.0);
     gl_PointSize = aBaseSize * (0.82 + uLevel * 0.18) * uPixelRatio;
 
-    float outerFade = smoothstep(1.0, 0.70, phase);
-    float innerFade = smoothstep(0.0, 0.09, phase);
-    vAlpha = (0.32 + uLevel * 0.62) * outerFade * innerFade;
+    vAlpha = (0.30 + uLevel * 0.64) * (0.90 + 0.10 * sin(aPhase * 31.0 + uTime));
     vHue = aHue;
   }
 `;
@@ -82,9 +85,9 @@ const seeded = (value: number) => {
 
 /**
  * The selected production identity: 300 transparent GPU particles.
- * Idle points travel slowly inside a tight field. Speaking accelerates their
- * outward travel and expands the field, with the visible edge capped below
- * 85% of the available circular footprint.
+ * Idle points bounce slowly along differently angled chords inside a tight
+ * field. Speaking accelerates every direction and expands the boundary, with
+ * the visible edge capped below 85% of the circular footprint.
  */
 export function EchoEOrb({ state, level = 0 }: { state: AuroraState; level?: number }) {
   const clamped = clamp(level);
@@ -126,9 +129,9 @@ function ParticleField({ state, level }: { state: AuroraState; level: number }) 
     const geometry = createOrbParticleGeometry();
     const uniforms = {
       uPixelRatio: { value: 1 },
-      uSpread: { value: 0.36 },
+      uBoundary: { value: 0.36 },
       uTime: { value: 0 },
-      uVoiceTravel: { value: 0 },
+      uMotion: { value: 0 },
       uLevel: { value: 0 },
     };
     const material = new ShaderMaterial({
@@ -157,8 +160,8 @@ function ParticleField({ state, level }: { state: AuroraState; level: number }) 
     const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
     let previous = performance.now();
     let motionTime = 0;
-    let voiceTravel = 0;
-    let spread = 0.36;
+    let motion = 0;
+    let boundary = 0.36;
     let frame = 0;
 
     const render = (now: number) => {
@@ -170,18 +173,18 @@ function ParticleField({ state, level }: { state: AuroraState; level: number }) 
       const muted = currentState === "muted";
 
       // Close and calm when idle/listening; speaking expands only modestly.
-      const targetSpread = muted ? 0.29 : speaking ? 0.54 + currentLevel * 0.16 : 0.36;
-      spread += (targetSpread - spread) * Math.min(1, delta * 4.8);
+      const targetBoundary = muted ? 0.29 : speaking ? 0.52 + currentLevel * 0.18 : 0.36;
+      boundary += (targetBoundary - boundary) * Math.min(1, delta * 4.8);
 
       if (!reducedMotion && !muted) {
         motionTime += delta;
-        const travelRate = muted ? 0 : speaking ? 0.12 + currentLevel * 0.40 : 0.014;
-        voiceTravel += delta * travelRate;
+        const motionRate = speaking ? 0.18 + currentLevel * 0.55 : 0.035;
+        motion += delta * motionRate;
       }
 
-      uniforms.uSpread.value = Math.min(0.70, spread);
+      uniforms.uBoundary.value = Math.min(0.70, boundary);
       uniforms.uTime.value = motionTime;
-      uniforms.uVoiceTravel.value = voiceTravel;
+      uniforms.uMotion.value = motion;
       uniforms.uLevel.value = muted ? 0.08 : speaking ? 0.35 + currentLevel * 0.65 : 0.24;
       renderer.render(scene, camera);
       canvas.dataset.gpuStatus = "active";
@@ -214,14 +217,18 @@ function ParticleField({ state, level }: { state: AuroraState; level: number }) 
 
 export function createOrbParticleGeometry() {
   const positions = new Float32Array(PARTICLE_COUNT * 3);
-  const angles = new Float32Array(PARTICLE_COUNT);
+  const directions = new Float32Array(PARTICLE_COUNT * 2);
+  const impacts = new Float32Array(PARTICLE_COUNT);
   const phases = new Float32Array(PARTICLE_COUNT);
   const speeds = new Float32Array(PARTICLE_COUNT);
   const sizes = new Float32Array(PARTICLE_COUNT);
   const hues = new Float32Array(PARTICLE_COUNT);
 
   for (let index = 0; index < PARTICLE_COUNT; index += 1) {
-    angles[index] = seeded(index) * Math.PI * 2;
+    const angle = seeded(index) * Math.PI * 2;
+    directions[index * 2] = Math.cos(angle);
+    directions[index * 2 + 1] = Math.sin(angle);
+    impacts[index] = (seeded(index + 555) * 2 - 1) * 0.78;
     phases[index] = seeded(index + 111);
     speeds[index] = 0.45 + seeded(index + 222) * 0.55;
     // Coprime stepping covers every size bucket, including exact 1x and 5x.
@@ -231,7 +238,8 @@ export function createOrbParticleGeometry() {
 
   const geometry = new BufferGeometry();
   geometry.setAttribute("position", new BufferAttribute(positions, 3));
-  geometry.setAttribute("aAngle", new BufferAttribute(angles, 1));
+  geometry.setAttribute("aDirection", new BufferAttribute(directions, 2));
+  geometry.setAttribute("aImpact", new BufferAttribute(impacts, 1));
   geometry.setAttribute("aPhase", new BufferAttribute(phases, 1));
   geometry.setAttribute("aSpeed", new BufferAttribute(speeds, 1));
   geometry.setAttribute("aBaseSize", new BufferAttribute(sizes, 1));
