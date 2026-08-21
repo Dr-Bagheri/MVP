@@ -85,9 +85,9 @@ const seeded = (value: number) => {
 
 /**
  * The selected production identity: 300 transparent GPU particles.
- * Idle points bounce slowly along differently angled chords inside a tight
- * field. Speaking accelerates every direction and expands the boundary, with
- * the visible edge capped below 85% of the circular footprint.
+ * Particles keep one constant footprint in every state. Speaking changes
+ * their speed, brightness and pulse without resizing the field; the visible
+ * edge remains capped below 85% of the circular footprint.
  */
 export function EchoEOrb({ state, level = 0 }: { state: AuroraState; level?: number }) {
   const clamped = clamp(level);
@@ -129,7 +129,7 @@ function ParticleField({ state, level }: { state: AuroraState; level: number }) 
     const geometry = createOrbParticleGeometry();
     const uniforms = {
       uPixelRatio: { value: 1 },
-      uBoundary: { value: 0.36 },
+      uBoundary: { value: 0.70 },
       uTime: { value: 0 },
       uMotion: { value: 0 },
       uLevel: { value: 0 },
@@ -161,7 +161,6 @@ function ParticleField({ state, level }: { state: AuroraState; level: number }) 
     let previous = performance.now();
     let motionTime = 0;
     let motion = 0;
-    let boundary = 0.36;
     let frame = 0;
 
     const render = (now: number) => {
@@ -172,17 +171,13 @@ function ParticleField({ state, level }: { state: AuroraState; level: number }) 
       const speaking = currentState === "speaking";
       const muted = currentState === "muted";
 
-      // Close and calm when idle/listening; speaking expands only modestly.
-      const targetBoundary = muted ? 0.29 : speaking ? 0.52 + currentLevel * 0.18 : 0.36;
-      boundary += (targetBoundary - boundary) * Math.min(1, delta * 4.8);
-
       if (!reducedMotion && !muted) {
         motionTime += delta;
         const motionRate = speaking ? 0.18 + currentLevel * 0.55 : 0.035;
         motion += delta * motionRate;
       }
 
-      uniforms.uBoundary.value = Math.min(0.70, boundary);
+      uniforms.uBoundary.value = 0.70;
       uniforms.uTime.value = motionTime;
       uniforms.uMotion.value = motion;
       uniforms.uLevel.value = muted ? 0.08 : speaking ? 0.35 + currentLevel * 0.65 : 0.24;
