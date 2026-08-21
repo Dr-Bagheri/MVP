@@ -2,6 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Org, User } from "@/api/types";
+import { notifyHistory, resetNotifications } from "@/lib/notify";
 
 /**
  * The org form — and the assertions are about the PATCH, not the pixels.
@@ -43,6 +44,7 @@ const { OrgFields } = await import("./OrgFields");
 const saveButton = () => screen.getByRole("button", { name: /ذخیرهٔ تغییرات/ });
 
 beforeEach(() => {
+  resetNotifications();
   me.mockReset();
   org.mockReset();
   updateOrg.mockReset();
@@ -116,7 +118,9 @@ describe("the patch carries only what changed", () => {
     await userEvent.type(input, "شرکت تازه");
     await userEvent.click(saveButton());
 
-    expect(await screen.findByText(/ذخیره شد/)).toBeTruthy();
+    // the saved notice rides the notification bus now (orb + bell) — the
+    // form itself stays quiet (user directive, 2026-08-21)
+    await waitFor(() => expect(notifyHistory()[0]?.text).toMatch(/ذخیره شد/));
     /*
      * The saved row becomes the new comparison baseline. Without that, the
      * form still thinks it differs from the original and a second click sends

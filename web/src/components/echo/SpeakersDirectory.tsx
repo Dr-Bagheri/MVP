@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { api } from "@/api/client";
+import { notify } from "@/lib/notify";
 import { useRefreshEpoch } from "@/lib/refreshBus";
 import type { Person } from "@/api/types";
 import { Card, EmptyState } from "@/components/ui";
@@ -29,7 +30,6 @@ export function SpeakersDirectory() {
   const [name, setName] = useState("");
   const [title, setTitle] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const speakersEpoch = useRefreshEpoch("speakers");
   useEffect(() => {
@@ -40,14 +40,13 @@ export function SpeakersDirectory() {
   async function add(): Promise<void> {
     if (busy || !name.trim()) return;
     setBusy(true);
-    setError(null);
     try {
       await api.createPerson(name.trim(), title);
       setName("");
       setTitle("");
       setPeople(await api.directory());
     } catch {
-      setError(t("addFailed"));
+      notify(t("addFailed"), "warn");
     } finally {
       setBusy(false);
     }
@@ -55,12 +54,11 @@ export function SpeakersDirectory() {
 
   async function retitle(person: Person, nextTitle: string): Promise<void> {
     setBusy(true);
-    setError(null);
     try {
       await api.updatePerson(person.id, { title: nextTitle });
       setPeople(await api.directory());
     } catch {
-      setError(t("addFailed"));
+      notify(t("addFailed"), "warn");
     } finally {
       setBusy(false);
     }
@@ -99,11 +97,7 @@ export function SpeakersDirectory() {
             {t("add")}
           </button>
         </div>
-        {error ? (
-          <p role="alert" className="mt-2 text-sm text-danger">
-            {error}
-          </p>
-        ) : null}
+        {/* failures announce on the notification system now (orb + bell) */}
       </Card>
 
       <Card className="!p-0">

@@ -8,6 +8,7 @@ import { AssistantMenu } from "@/components/platform/AssistantMenu";
 import { PlatformShell } from "@/components/platform/PlatformShell";
 import { MenuLayout, PageHeader } from "@/components/scaffold";
 import { openAssistant } from "@/lib/assistantBus";
+import { notify } from "@/lib/notify";
 import { useRefreshEpoch } from "@/lib/refreshBus";
 import { digits, formatDate } from "@/lib/format";
 
@@ -27,8 +28,8 @@ export default function ConversationsPage() {
   /** `null` = not fetched; `[]` = genuinely none. */
   const [sessions, setSessions] = useState<AssistantSession[] | null>(null);
   const [search, setSearch] = useState("");
-  /** the row whose removal failed — shown beside its button, never swallowed */
-  const [deleteFailed, setDeleteFailed] = useState<string | null>(null);
+  /* a removal's failure is still never swallowed — it goes to the
+     notification system (orb toast + bell), not an inline span */
 
   /* refresh bus: archiving from anywhere (this table, the dock's agent) */
   const sessionsEpoch = useRefreshEpoch("sessions");
@@ -98,21 +99,15 @@ export default function ConversationsPage() {
                                  404 from a BFF route that did not exist,
                                  and the button "worked" by doing nothing
                                  (user report, 2026-08-20). */
-                              setDeleteFailed(null);
                               void api
                                 .archiveSession(s.id, true)
                                 .then(() => api.agentSessions())
                                 .then(setSessions)
-                                .catch(() => setDeleteFailed(s.id));
+                                .catch(() => notify(t("deleteFailed"), "warn"));
                             }}
                           >
                             {t("delete")}
                           </button>
-                          {deleteFailed === s.id ? (
-                            <span role="alert" className="ms-2 text-xs text-danger">
-                              {t("deleteFailed")}
-                            </span>
-                          ) : null}
                         </td>
                       </tr>
                     ))}

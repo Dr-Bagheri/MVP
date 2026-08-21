@@ -1248,7 +1248,9 @@
     "bellRecent": "Recent events",
     "silentLabel": "Silent mode",
     "silentOn": "Silent — replies are text only.",
-    "silentOff": "Voice on — spoken questions get spoken replies."
+    "silentOff": "Voice on — spoken questions get spoken replies.",
+    "minimize": "Minimize",
+    "restore": "Restore"
   },
   "summaries": {
     "empty": "No summaries yet — as each recording finishes processing, its summary lands here.",

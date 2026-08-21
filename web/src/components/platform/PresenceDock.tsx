@@ -66,6 +66,9 @@ export function PresenceDock() {
 
   const [member, setMember] = useState(false);
   const [open, setOpen] = useState(false);
+  /** minimized = the conversation stays alive behind a compact pill —
+      distinct from close, which puts everything back into the orb */
+  const [minimized, setMinimized] = useState(false);
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<DockMessage[]>([]);
   const [streaming, setStreaming] = useState(false);
@@ -145,6 +148,7 @@ export function PresenceDock() {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "e") {
         e.preventDefault();
+        setMinimized(false);
         setOpen((v) => {
           const next = !v;
           if (next) setTimeout(() => inputRef.current?.focus(), 0);
@@ -170,6 +174,7 @@ export function PresenceDock() {
   useEffect(() => {
     return subscribeAssistantOpen((request) => {
       setOpen(true);
+      setMinimized(false);
       if (request.sessionId) void loadSession(request.sessionId);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -233,11 +238,13 @@ export function PresenceDock() {
       onWake: () => {
         if (streamingRef.current) return; // one conversation turn at a time
         setOpen(true);
+        setMinimized(false);
         if (!silentRef.current) speak(t("wakeAck"));
       },
       onCommand: (command) => {
         if (streamingRef.current) return;
         setOpen(true);
+        setMinimized(false);
         submitRef.current(command, true);
       },
       onState: (state) => setListening(state === "engaged" ? "command" : null),
@@ -305,6 +312,7 @@ export function PresenceDock() {
     const trimmed = question.trim();
     if (!trimmed || streamingRef.current) return;
     setOpen(true);
+    setMinimized(false);
     setStreaming(true);
     streamingRef.current = true;
     speakReplyRef.current = viaVoice;
@@ -418,7 +426,32 @@ export function PresenceDock() {
 
   return (
     <>
-      {open ? (
+      {open && minimized ? (
+        /* the MINIMIZED pill: the conversation lives, the screen is yours */
+        <div className="fixed bottom-24 end-8 z-40 flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-1.5 shadow-lg">
+          <span className="h-2 w-2 rounded-full bg-accent" aria-hidden />
+          <span className="text-xs font-semibold text-fg">{t("title")}</span>
+          <button
+            type="button"
+            className="tap h-6 w-6 rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg"
+            aria-label={t("restore")}
+            title={t("restore")}
+            onClick={() => setMinimized(false)}
+          >
+            ▣
+          </button>
+          <button
+            type="button"
+            className="tap h-6 w-6 rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg"
+            aria-label={t("close")}
+            onClick={() => { setOpen(false); setMinimized(false); }}
+          >
+            ✕
+          </button>
+        </div>
+      ) : null}
+
+      {open && !minimized ? (
         <div className="fixed bottom-24 end-8 z-40 flex max-h-[70dvh] w-[min(92vw,24rem)] flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-xl">
           <div className="flex items-center gap-2 border-b border-border px-3 py-2">
             <span className="h-2 w-2 rounded-full bg-accent" aria-hidden />
@@ -436,6 +469,15 @@ export function PresenceDock() {
               onClick={toggleSilent}
             >
               {silent ? "🔇" : "🔊"}
+            </button>
+            <button
+              type="button"
+              className="tap h-7 w-7 rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg"
+              aria-label={t("minimize")}
+              title={t("minimize")}
+              onClick={() => setMinimized(true)}
+            >
+              —
             </button>
             <button
               type="button"
@@ -594,12 +636,9 @@ export function PresenceDock() {
         type="button"
         aria-label={t("openLabel")}
         title={`${t("openLabel")} (Ctrl+E)`}
-        className={`tap fixed bottom-8 end-8 z-40 grid h-12 w-12 place-items-center rounded-full border shadow-lg transition-colors ${
-          open
-            ? "border-accent bg-accent text-on-accent"
-            : "border-border bg-surface text-accent hover:border-accent"
-        }`}
+        className="tap orb-float fixed bottom-8 end-8 z-40 grid h-14 w-14 place-items-center rounded-full"
         onClick={() => {
+          setMinimized(false);
           setOpen((v) => {
             const next = !v;
             if (next) setTimeout(() => inputRef.current?.focus(), 0);
@@ -607,8 +646,16 @@ export function PresenceDock() {
           });
         }}
       >
-        {/* the idle glow does the orb's job (the hub-mock ruling), literally */}
-        <span className={`h-3 w-3 rounded-full ${open ? "bg-on-accent" : "animate-pulse bg-accent"}`} aria-hidden />
+        {/* a lit SPHERE, not a dot (user directive: "3D cinematic … like
+            it's in charge"): aura behind, shaded body, a breathing core */}
+        <span className="orb-aura absolute -inset-3 rounded-full" aria-hidden />
+        <span
+          className={`orb-sphere absolute inset-0 rounded-full transition-transform duration-300 ${
+            open ? "scale-90" : ""
+          }`}
+          aria-hidden
+        />
+        <span className="absolute h-2.5 w-2.5 animate-pulse rounded-full bg-white/90 blur-[1px]" aria-hidden />
         {unread > 0 && !open ? (
           <span
             className="absolute -end-0.5 -top-0.5 grid h-5 min-w-5 place-items-center rounded-full bg-danger px-1 text-[10px] font-bold text-white"

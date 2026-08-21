@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api, BffError } from "@/api/client";
+import { notify } from "@/lib/notify";
 import { useRefreshEpoch } from "@/lib/refreshBus";
 import type {
   Invitation,
@@ -83,7 +84,6 @@ export default function UsersPage() {
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [detailId, setDetailId] = useState<string | null>(null);
   /** The last bulk run's honest tally — failures are COUNTED, never swallowed. */
-  const [bulkResult, setBulkResult] = useState<{ done: number; failed: number } | null>(null);
 
   // ---- invitations (D23–D25, Part 4) ----
   const [invitations, setInvitations] = useState<Invitation[]>([]);
@@ -241,7 +241,6 @@ export default function UsersPage() {
   async function bulkSetStatus(target: "active" | "disabled"): Promise<void> {
     if (busy) return;
     setBusy(true);
-    setBulkResult(null);
     let done = 0;
     let failed = 0;
     try {
@@ -258,7 +257,12 @@ export default function UsersPage() {
     } finally {
       setBusy(false);
     }
-    setBulkResult({ done, failed });
+    // the outcome rides the notification system (orb toast + top bell) —
+    // the table itself stays quiet (user directive, 2026-08-21)
+    notify(
+      t("bulkResult", { done: digits(done, locale), failed: digits(failed, locale) }),
+      failed > 0 ? "warn" : "info",
+    );
     setSelected(new Set());
   }
 
@@ -587,17 +591,6 @@ export default function UsersPage() {
                 {t("bulkClear")}
               </button>
             </div>
-          ) : null}
-          {bulkResult ? (
-            <p
-              role="status"
-              className={`mb-3 text-sm ${bulkResult.failed > 0 ? "text-danger" : "text-fg-muted"}`}
-            >
-              {t("bulkResult", {
-                done: digits(bulkResult.done, locale),
-                failed: digits(bulkResult.failed, locale),
-              })}
-            </p>
           ) : null}
 
           {listed.length === 0 ? (

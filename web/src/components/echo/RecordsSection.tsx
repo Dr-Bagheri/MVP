@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/routing";
 import { api } from "@/api/client";
+import { notify } from "@/lib/notify";
 import { useRefreshEpoch } from "@/lib/refreshBus";
 import type { Call, Me, User } from "@/api/types";
 import { Card, EmptyState, StatusChip } from "@/components/ui";
@@ -43,10 +44,9 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
   const [busy, setBusy] = useState(false);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
-  /** A row action's failure, said out loud — `act` used to swallow them,
-   *  and a refused delete looked exactly like "the table did not refresh"
-   *  (user report, on precisely that symptom). */
-  const [actionError, setActionError] = useState<string | null>(null);
+  /* A row action's failure is still said OUT LOUD — `act` used to swallow
+     them — but through the notification system now (orb toast + top bell),
+     not an inline line in the table (user directive, 2026-08-21). */
 
   /* refresh bus: a record mutation anywhere — button or agent — bumps this */
   const callsEpoch = useRefreshEpoch("calls");
@@ -76,14 +76,13 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
   async function act(fn: () => Promise<unknown>): Promise<void> {
     if (busy) return;
     setBusy(true);
-    setActionError(null);
     try {
       await fn();
       await load();
     } catch {
       // the refusal is visible AND the list re-syncs to what the server
       // actually holds — a stale row beats a silently wrong one
-      setActionError(tCommon("actionFailed"));
+      notify(tCommon("actionFailed"), "warn");
       await load().catch(() => undefined);
     } finally {
       setBusy(false);
@@ -110,12 +109,6 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="h-page">{t(view === "archive" ? "archiveTitle" : "title")}</h2>
       </div>
-
-      {actionError ? (
-        <p role="alert" className="text-sm text-danger">
-          {actionError}
-        </p>
-      ) : null}
 
       {calls === null ? null : live.length === 0 ? (
         <Card>

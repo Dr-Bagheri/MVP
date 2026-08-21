@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { api } from "@/api/client";
+import { notify } from "@/lib/notify";
 import type { Org, User } from "@/api/types";
 import { FormPanel, FormRow, PanelFooter } from "@/components/scaffold";
 
@@ -95,8 +96,6 @@ export function OrgFields() {
   const [name, setName] = useState("");
   const [locale, setLocale] = useState("");
   const [busy, setBusy] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [failed, setFailed] = useState(false);
 
   const isAdmin = me?.role === "admin" || me?.role === "owner";
 
@@ -135,16 +134,14 @@ export function OrgFields() {
 
   const save = async () => {
     setBusy(true);
-    setFailed(false);
-    setSaved(false);
     try {
       const updated = await api.updateOrg(changes);
       setOrg(updated);
       setName(updated.name);
       setLocale(updated.locale);
-      setSaved(true);
+      notify(t("orgSaved"));
     } catch {
-      setFailed(true);
+      notify(t("orgSaveFailed"), "warn");
     } finally {
       setBusy(false);
     }
@@ -186,10 +183,7 @@ export function OrgFields() {
           className="input"
           value={name}
           disabled={busy}
-          onChange={(event) => {
-            setName(event.target.value);
-            setSaved(false);
-          }}
+          onChange={(event) => setName(event.target.value)}
         />
       </FormRow>
 
@@ -199,10 +193,7 @@ export function OrgFields() {
           className="input min-h-0 h-11 w-auto py-0 md:h-control"
           value={locale}
           disabled={busy}
-          onChange={(event) => {
-            setLocale(event.target.value);
-            setSaved(false);
-          }}
+          onChange={(event) => setLocale(event.target.value)}
         >
           {localeOptions(org.locale).map((value) => (
             <option key={value} value={value}>
@@ -216,8 +207,8 @@ export function OrgFields() {
       </FormRow>
 
       <PanelFooter>
-        {saved ? <span className="text-detail text-success">{t("orgSaved")}</span> : null}
-        {failed ? <span className="text-detail text-danger">{t("orgSaveFailed")}</span> : null}
+        {/* save outcomes ride the notification system now (orb toast +
+            top bell) — the table/form stays quiet (user directive) */}
         <button
           className="btn-primary"
           /* Disabled when there is nothing to send: core answers an empty

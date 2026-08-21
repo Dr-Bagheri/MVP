@@ -435,3 +435,45 @@
     @apply text-start text-xs font-semibold uppercase tracking-wide text-fg-muted;
   }
 }
+
+/* ── the presence orb (M34) — a sphere, not a dot ──────────────────────────
+   User directive (2026-08-21): "a 3D cinematic look… something that makes it
+   separate from the platform, like it's in charge." Lit sphere from the
+   accent token (never a hand-copied hex — verify-pairs owns the numbers),
+   soft aura, slow float. Reduced-motion turns the theatre off. */
+@keyframes orb-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+@keyframes orb-aura {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 0.9; }
+}
+.orb-float {
+  animation: orb-float 4.5s ease-in-out infinite;
+}
+.orb-sphere {
+  background:
+    radial-gradient(circle at 32% 24%, rgb(255 255 255 / 0.9) 0%, rgb(255 255 255 / 0) 24%),
+    radial-gradient(
+      circle at 36% 32%,
+      color-mix(in srgb, rgb(var(--accent)) 55%, white) 0%,
+      rgb(var(--accent)) 48%,
+      color-mix(in srgb, rgb(var(--accent)) 55%, black) 100%
+    );
+  box-shadow:
+    inset -8px -10px 18px rgb(0 0 0 / 0.38),
+    inset 5px 7px 12px rgb(255 255 255 / 0.22),
+    0 12px 28px rgb(var(--accent) / 0.45),
+    0 0 52px rgb(var(--accent) / 0.3);
+}
+.orb-aura {
+  background: radial-gradient(circle, rgb(var(--accent) / 0.5) 0%, transparent 70%);
+  animation: orb-aura 3s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .orb-float,
+  .orb-aura {
+    animation: none;
+  }
+}

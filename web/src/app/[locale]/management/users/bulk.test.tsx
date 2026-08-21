@@ -2,6 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { MemberStats, User } from "@/api/types";
+import { notifyHistory, resetNotifications } from "@/lib/notify";
 
 /**
  * Part 4 tail — bulk member actions and the detail panel.
@@ -51,7 +52,7 @@ vi.mock("@/api/client", () => ({
 const { default: UsersPage } = await import("./page");
 
 describe("Management · Users — bulk actions", () => {
-  beforeEach(() => setUserStatus.mockClear());
+  beforeEach(() => { setUserStatus.mockClear(); resetNotifications(); });
 
   it("offers no checkbox for the owner or yourself — the refusable rows cannot enter a selection", async () => {
     render(<UsersPage />);
@@ -73,18 +74,23 @@ describe("Management · Users — bulk actions", () => {
 
     await user.click(screen.getByRole("button", { name: "غیرفعال‌سازی انتخاب‌شده‌ها" }));
 
-    await waitFor(() => expect(screen.getByRole("status").textContent).toContain("۱ تغییر"));
+    // the tally rides the NOTIFICATION BUS now (orb toast + top bell) —
+    // the table itself stays quiet (user directive, 2026-08-21)
+    await waitFor(() => {
+      const tally = notifyHistory()[0];
+      expect(tally?.text).toContain("۱ تغییر");
+      // a skip is not a failure
+      expect(tally?.text).toContain("۰ ناموفق");
+    });
     // بهار is already disabled: exactly ONE write proves the skip — a second
     // call would mean idempotence was spelled as a redundant mutation
     expect(setUserStatus).toHaveBeenCalledTimes(1);
     expect(setUserStatus).toHaveBeenCalledWith("u-a", "disabled");
-    // the tally reports no failures — a skip is not a failure
-    expect(screen.getByRole("status").textContent).toContain("۰ ناموفق");
   });
 });
 
 describe("Management · Users — member detail", () => {
-  beforeEach(() => setUserStatus.mockClear());
+  beforeEach(() => { setUserStatus.mockClear(); resetNotifications(); });
 
   it("opens from the name, shows the identity facts, and mutates through the shared path", async () => {
     const user = userEvent.setup();
