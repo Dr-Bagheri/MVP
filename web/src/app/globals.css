@@ -436,14 +436,11 @@
   }
 }
 
-/* ── AURORA PULSE — the presence orb (M34; user-supplied visual identity,
-   2026-08-21): deep galaxy-blue glass core, electric-cyan highlights, thin
-   ultraviolet/pink accents, two luminous orbital ribbons. The cyan/pink
-   values are the Aurora identity's OWN palette from the supplied reference
-   (decorative layers only — never text-bearing UI, so the contrast pairs
-   are not in play); the violet stays the accent token. Motion is driven by
-   `--audio-level` (0–1): glow, halo and a core scale capped at 1.06.
-   Reduced-motion: still orb, state colors kept. ─────────────────────────── */
+/* ── AURORA PULSE — the presence orb (M34; user-supplied visual identity).
+   The supplied artwork owns its galaxy-glass core and orbital ribbons; CSS
+   only provides the live voice states around it. Motion is driven by
+   `--audio-level` (0–1): glow, halo and artwork scale capped at 1.06.
+   Reduced-motion: still orb, state colours kept. ───────────────────────── */
 .aurora-root {
   --audio-level: 0;
   --aurora-cyan: 56 189 248;
@@ -452,12 +449,6 @@
 @keyframes aurora-float {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-4px); }
-}
-@keyframes aurora-spin {
-  to { transform: rotate(360deg); }
-}
-@keyframes aurora-spin-rev {
-  to { transform: rotate(-360deg); }
 }
 @keyframes aurora-ripple {
   0% { transform: scale(0.72); opacity: 0.55; }
@@ -476,48 +467,11 @@
   transition: opacity 0.25s ease;
 }
 .aurora-core {
-  background:
-    radial-gradient(circle at 30% 24%, rgb(255 255 255 / 0.9) 0%, transparent 16%),
-    radial-gradient(circle at 70% 72%, rgb(var(--aurora-pink) / 0.5) 0%, transparent 42%),
-    radial-gradient(circle at 32% 68%, rgb(var(--aurora-cyan) / 0.75) 0%, transparent 55%),
-    radial-gradient(circle at 52% 40%, #232a7c 0%, #0a0e2e 78%);
-  box-shadow:
-    inset -10px -12px 22px rgb(2 6 23 / 0.75),
-    inset 6px 8px 16px rgb(var(--aurora-cyan) / 0.3),
-    0 0 26px rgb(var(--aurora-cyan) / calc(0.3 + var(--audio-level) * 0.45)),
-    0 10px 48px rgb(var(--accent) / 0.35);
   transform: scale(calc(1 + var(--audio-level) * 0.06)); /* cap 1.06 */
   transition: transform 0.12s ease;
 }
-.aurora-swirl {
-  background: conic-gradient(
-    from 20deg,
-    transparent 0deg 30deg,
-    rgb(var(--aurora-cyan) / 0.65) 80deg,
-    transparent 135deg,
-    rgb(var(--aurora-pink) / 0.5) 205deg,
-    transparent 260deg,
-    rgb(var(--accent) / 0.65) 315deg,
-    transparent 360deg
-  );
-  filter: blur(7px);
-  animation: aurora-spin 16s linear infinite;
-}
-/* orbital ribbons: tilted glowing ellipses whose wrappers slowly rotate */
-.aurora-orbit-a { animation: aurora-spin 22s linear infinite; }
-.aurora-orbit-b { animation: aurora-spin-rev 30s linear infinite; }
-.aurora-ribbon {
-  border-radius: 9999px;
-  transform: scaleY(0.34) rotate(18deg);
-}
-.aurora-ribbon-cyan {
-  border: 2px solid rgb(var(--aurora-cyan) / 0.75);
-  box-shadow: 0 0 10px rgb(var(--aurora-cyan) / 0.55), inset 0 0 8px rgb(var(--aurora-cyan) / 0.3);
-}
-.aurora-ribbon-pink {
-  border: 1.5px solid rgb(var(--aurora-pink) / 0.6);
-  box-shadow: 0 0 9px rgb(var(--aurora-pink) / 0.45);
-  transform: scaleY(0.4) rotate(-24deg);
+.aurora-art {
+  filter: drop-shadow(0 0 calc(5px + var(--audio-level) * 6px) rgb(var(--aurora-cyan) / 0.42));
 }
 /* listening: receiving-sound ripples, graceful at low volume */
 .aurora-ripple {
@@ -532,17 +486,9 @@
   opacity: calc(0.45 + var(--audio-level) * 0.5);
   transition: transform 0.1s ease, opacity 0.15s ease;
 }
-.aurora-root[data-state="speaking"] .aurora-orbit-a { animation-duration: 9s; }
-.aurora-root[data-state="speaking"] .aurora-orbit-b { animation-duration: 13s; }
 .aurora-root[data-state="muted"] { opacity: 0.55; }
-.aurora-root[data-state="muted"] .aurora-swirl,
-.aurora-root[data-state="muted"] .aurora-orbit-a,
-.aurora-root[data-state="muted"] .aurora-orbit-b { animation-play-state: paused; }
 @media (prefers-reduced-motion: reduce) {
   .aurora-float,
-  .aurora-swirl,
-  .aurora-orbit-a,
-  .aurora-orbit-b,
   .aurora-ripple {
     animation: none;
   }

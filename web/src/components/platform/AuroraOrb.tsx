@@ -47,17 +47,15 @@ export function AuroraOrb({ state, level = 0 }: { state: AuroraState; level?: nu
         <span aria-hidden className="aurora-halo pointer-events-none absolute inset-0 rounded-full" />
       ) : null}
 
-      {/* orbital ribbons — two tilted luminous ellipses, opposite spins */}
-      <span aria-hidden className="aurora-orbit-a pointer-events-none absolute inset-0">
-        <span className="aurora-ribbon aurora-ribbon-cyan absolute -inset-x-2 inset-y-0 block" />
-      </span>
-      <span aria-hidden className="aurora-orbit-b pointer-events-none absolute inset-0">
-        <span className="aurora-ribbon aurora-ribbon-pink absolute -inset-x-3 inset-y-0 block" />
-      </span>
-
-      {/* the glass core, its galaxy swirl clipped inside */}
-      <span aria-hidden className="aurora-core pointer-events-none absolute inset-0 overflow-hidden rounded-full">
-        <span className="aurora-swirl absolute -inset-1/4 block" />
+      {/* The supplied Aurora Pulse artwork owns the glass core and its two
+          orbital ribbons.  The dock owns behaviour; this remains a wholly
+          decorative image inside its accessible button. */}
+      <span aria-hidden className="aurora-core pointer-events-none absolute inset-0">
+        <img
+          src="/brand/aurora-pulse.png"
+          alt=""
+          className="aurora-art absolute inset-0 h-full w-full object-contain"
+        />
       </span>
     </span>
   );

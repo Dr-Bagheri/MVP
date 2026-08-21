@@ -652,7 +652,7 @@ export function PresenceDock() {
         type="button"
         aria-label={t("openLabel")}
         title={`${t("openLabel")} (Ctrl+E)`}
-        className="tap fixed bottom-4 end-4 z-40 block h-[76px] w-[76px] rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg md:bottom-6 md:end-6 md:h-[104px] md:w-[104px]"
+        className="tap fixed bottom-4 end-4 z-40 block h-[38px] w-[38px] rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg md:bottom-6 md:end-6 md:h-[52px] md:w-[52px]"
         onClick={() => {
           setMinimized(false);
           setOpen((v) => {

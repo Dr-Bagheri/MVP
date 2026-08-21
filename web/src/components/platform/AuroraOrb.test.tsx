@@ -34,6 +34,14 @@ describe("AuroraOrb", () => {
     expect(root.classList.contains("aurora-float")).toBe(false);
     expect(container.querySelector(".aurora-core")).not.toBeNull();
   });
+
+  it("uses the shipped Aurora Pulse artwork without adding another accessible control", () => {
+    const { container } = render(<AuroraOrb state="idle" />);
+    const art = container.querySelector(".aurora-art") as HTMLImageElement;
+    expect(art.getAttribute("src")).toBe("/brand/aurora-pulse.png");
+    expect(art.getAttribute("alt")).toBe("");
+    expect(art.closest("[aria-hidden='true']")).not.toBeNull();
+  });
 });
 
 describe("computeRms", () => {
