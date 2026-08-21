@@ -2183,6 +2183,17 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
         + " {\"kind\":\"timeline\",\"items\":[{\"when\":\"...\",\"what\":\"...\"}]}."
         + " Keep prose around the block; never put the whole answer inside one."
       : undefined;
+    /*
+     * The presence/voice surface (the only one advertising client tools) is
+     * a conversation, often spoken aloud — user rule, 2026-08-21: "all the
+     * answers must be less than 2 sentences". Long-form reading lives on
+     * the Hub, which advertises no client tools and keeps full answers.
+     */
+    const conciseInstruction = advertisedClientTools.length > 0
+      ? "BREVITY RULE for this surface: answer in at most TWO short sentences."
+        + " After performing an action, confirm it in one brief sentence."
+        + " No lists of options, no explanations unless explicitly asked."
+      : undefined;
 
     await assistant.ask({
       identity,
@@ -2195,6 +2206,7 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
         selectedWorkflow?.instructions,
         contextLine,
         blocksInstruction,
+        conciseInstruction,
         // last, so the interface-language fact wins on language (see helper)
         languageInstruction(body.locale),
       ].filter(Boolean).join("\n\n"),

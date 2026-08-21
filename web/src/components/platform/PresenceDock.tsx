@@ -16,6 +16,7 @@ import {
   voiceInputSupported, type WakeListenerHandle,
 } from "@/lib/voice";
 import { AuroraOrb, type AuroraState } from "./AuroraOrb";
+import { recorderControls } from "@/components/echo/recorderControls";
 
 /**
  * PRESENCE (M34) — the agent, always there.
@@ -149,6 +150,11 @@ export function PresenceDock() {
   const abortRef = useRef<AbortController | null>(null);
   /** a barge-in's new question, waiting for the aborted run to unwind */
   const pendingCommandRef = useRef<string | null>(null);
+  /** user rule (2026-08-21): once THIS reply started a recording, the
+      voice stays shut — a spoken confirmation would be recorded into the
+      call and "cause confusion" */
+  const muteReplyRef = useRef(false);
+  const recordingLive = () => recorderControls.current?.phase() === "recording";
 
   /*
    * FULL-DUPLEX CONVERSATION CAPTURE (2026-08-21 rework, after the
@@ -529,7 +535,7 @@ export function PresenceDock() {
         if (streamingRef.current) return; // one conversation turn at a time
         setOpen(true);
         setMinimized(false);
-        if (!silentRef.current) speak(t("wakeAck"));
+        if (!silentRef.current && !recordingLive()) speak(t("wakeAck"));
       },
       onCommand: (command) => {
         // while a relay capture is live, IT is the command channel — the
@@ -611,6 +617,7 @@ export function PresenceDock() {
     setStreaming(true);
     streamingRef.current = true;
     speakReplyRef.current = viaVoice;
+    muteReplyRef.current = false;
     replyTextRef.current = "";
     const replyId = `p-${Date.now()}`;
     setMessages((prev) => [
@@ -637,6 +644,8 @@ export function PresenceDock() {
       let spokenIdx = 0;
       const speakNewSentences = (finalFlush: boolean) => {
         if (!speakReplyRef.current || silentRef.current) return;
+        // a live recording means NO voice — ours would be in the call audio
+        if (muteReplyRef.current || recordingLive()) return;
         const text = replyTextRef.current;
         if (finalFlush) {
           const tail = text.slice(spokenIdx).trim();
@@ -743,6 +752,12 @@ export function PresenceDock() {
         // the surface action announces itself at the orb's head — "it
         // started doing it" must be visible, not inferred
         notify(event.label, result.ok ? "info" : "warn");
+        // starting/resuming a recording SHUTS the voice for this reply —
+        // and cuts anything already being said (user rule, 2026-08-21)
+        if (result.ok && (event.tool === "start_recording" || event.tool === "resume_recording")) {
+          muteReplyRef.current = true;
+          stopSpeaking();
+        }
         await api.deliverToolResult(event.id, result.ok, result.detail).catch(() => undefined);
         break;
       }
