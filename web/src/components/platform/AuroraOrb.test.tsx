@@ -24,7 +24,7 @@ describe("AuroraOrb", () => {
       const canvas = container.querySelector("canvas") as HTMLCanvasElement;
       expect(canvas.dataset.renderState).toBe(state);
       expect(canvas.dataset.renderer).toBe("webgl-particles");
-      expect(canvas.dataset.particleCount).toBe("400");
+      expect(canvas.dataset.particleCount).toBe("300");
     }
   });
 
@@ -45,12 +45,12 @@ describe("AuroraOrb", () => {
     expect(container.querySelectorAll("span > span")).toHaveLength(0);
   });
 
-  it("uses exactly 400 GPU points spanning a true 1x to 5x size range", () => {
+  it("uses exactly 300 GPU points spanning a true 1x to 5x size range", () => {
     const geometry = createOrbParticleGeometry();
     const positions = geometry.getAttribute("position");
     const sizes = Array.from(geometry.getAttribute("aBaseSize").array as Float32Array);
-    expect(positions.count).toBe(400);
-    expect(sizes).toHaveLength(400);
+    expect(positions.count).toBe(300);
+    expect(sizes).toHaveLength(300);
     expect(Math.min(...sizes)).toBe(1);
     expect(Math.max(...sizes)).toBe(5);
     geometry.dispose();

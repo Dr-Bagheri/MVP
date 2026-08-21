@@ -14,7 +14,7 @@ import {
 
 export type AuroraState = "idle" | "listening" | "speaking" | "muted";
 
-const PARTICLE_COUNT = 400;
+const PARTICLE_COUNT = 300;
 
 const vertexShader = /* glsl */ `
   precision highp float;
@@ -81,7 +81,7 @@ const seeded = (value: number) => {
 };
 
 /**
- * The selected production identity: 400 transparent GPU particles.
+ * The selected production identity: 300 transparent GPU particles.
  * Idle points travel slowly inside a tight field. Speaking accelerates their
  * outward travel and expands the field, with the visible edge capped below
  * 85% of the available circular footprint.

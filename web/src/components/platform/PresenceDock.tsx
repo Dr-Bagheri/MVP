@@ -803,7 +803,7 @@ export function PresenceDock() {
     <>
       {open && minimized ? (
         /* the MINIMIZED pill: the conversation lives, the screen is yours */
-        <div className="fixed bottom-[104px] end-4 z-40 flex items-center gap-2 rounded-full md:bottom-[140px] md:end-6 border border-border bg-surface px-3 py-1.5 shadow-lg">
+        <div className="fixed bottom-[142px] end-4 z-40 flex items-center gap-2 rounded-full md:bottom-[192px] md:end-6 border border-border bg-surface px-3 py-1.5 shadow-lg">
           <span className="h-2 w-2 rounded-full bg-accent" aria-hidden />
           <span className="text-xs font-semibold text-fg">{t("title")}</span>
           <button
@@ -827,7 +827,7 @@ export function PresenceDock() {
       ) : null}
 
       {open && !minimized ? (
-        <div className="fixed bottom-[104px] end-4 z-40 flex max-h-[70dvh] md:bottom-[140px] md:end-6 w-[min(92vw,24rem)] flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-xl">
+        <div className="fixed bottom-[142px] end-4 z-40 flex max-h-[70dvh] md:bottom-[192px] md:end-6 w-[min(92vw,24rem)] flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-xl">
           <div className="flex items-center gap-2 border-b border-border px-3 py-2">
             <span className="h-2 w-2 rounded-full bg-accent" aria-hidden />
             <span className="text-sm font-semibold text-fg">{t("title")}</span>
@@ -984,7 +984,7 @@ export function PresenceDock() {
 
       {/* the toasts — every platform notice pops from the orb's head */}
       {toasts.length > 0 ? (
-        <div className="pointer-events-none fixed bottom-[104px] end-4 z-50 flex w-[min(88vw,20rem)] md:bottom-[140px] md:end-6 flex-col items-end gap-1.5">
+        <div className="pointer-events-none fixed bottom-[142px] end-4 z-50 flex w-[min(88vw,20rem)] md:bottom-[192px] md:end-6 flex-col items-end gap-1.5">
           {toasts.map((notice) => (
             <p
               key={notice.id}
@@ -1004,7 +1004,7 @@ export function PresenceDock() {
       {/* ONE turn-state chip, and only while the panel is not showing its
           own header status — the old pair overlapped the composer */}
       {voiceStatus && (!open || minimized) ? (
-        <p className="pointer-events-none fixed bottom-[104px] end-4 z-50 rounded-xl md:bottom-[140px] md:end-6 border border-accent/40 bg-surface px-3 py-1.5 text-xs text-accent shadow-lg">
+        <p className="pointer-events-none fixed bottom-[142px] end-4 z-50 rounded-xl md:bottom-[192px] md:end-6 border border-accent/40 bg-surface px-3 py-1.5 text-xs text-accent shadow-lg">
           {voiceStatus}
         </p>
       ) : null}
@@ -1016,7 +1016,7 @@ export function PresenceDock() {
         type="button"
         aria-label={t("openLabel")}
         title={`${t("openLabel")} (Ctrl+E)`}
-        className="tap fixed bottom-4 end-4 z-40 block h-[38px] w-[38px] rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg md:bottom-6 md:end-6 md:h-[52px] md:w-[52px]"
+        className="tap fixed bottom-4 end-4 z-40 block h-[76px] w-[76px] rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg md:bottom-6 md:end-6 md:h-[104px] md:w-[104px]"
         onClick={() => {
           setMinimized(false);
           setOpen((v) => {
