@@ -1631,6 +1631,21 @@ export const api = {
     });
   },
 
+  /**
+   * M37: the platform's own voice — Persian TTS from the server, for the
+   * browsers that ship no fa voice (Windows Chrome). Binary, so it skips
+   * the JSON-shaped bff() helper deliberately.
+   */
+  async tts(text: string): Promise<Blob> {
+    const response = await fetch("/api/tts", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text }),
+    });
+    if (!response.ok) throw new BffError(response.status, undefined, "tts_failed");
+    return response.blob();
+  },
+
   /** Phase C: one run's reasoning trace — codes only, never arguments. */
   async runTrace(runId: string): Promise<RunTrace> {
     return bff<RunTrace>(`/api/assistant/runs/${runId}/trace`);

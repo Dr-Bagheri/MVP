@@ -1368,6 +1368,26 @@ CAPABILITY-DETECTED at boot with a loud log line and a safe default —
 code and migrations deploy in either order here, and a silent default is
 the failure mode this repo exists to refuse.
 
+## M37 — The platform's own voice (server TTS) [user-directed 2026-08-21]
+
+The assistant answers OUT LOUD in the language it was asked in (voice
+directive), and Persian cannot be delegated to the browser: Windows ships
+no fa voice, so browser-only TTS means a Persian-first product that
+speaks every language except its first. The ladder: a real fa voice in
+the browser where one exists (Edge) → the platform's own lane — piper
+(`fa_IR-amir-medium`) as systemd unit `neurai-tts`, loopback-only on the
+core box, fronted by auth-gated `POST /v1/tts` (text capped at 2000; env
+`TTS_URL`, capability-style: unset → 503 `tts_unavailable`, loudly) → a
+one-time visible "no Persian voice" notice, never a non-Persian voice
+mangling Persian and never silence without a word. The spoken text is
+content: never logged on any hop (invariant 7's outbound-audio flavor);
+the audio is derived and disposable, cached nowhere. English keeps the
+browser voice (always present). Prove-at-acceptance run recorded
+2026-08-21: a full Persian sentence through the live box → 200,
+RIFF/WAV, 174KB — the adapter's positive-detection floor (a header-only
+200 fails) exists because a TTS wired wrong plays as silence, and
+silence is a green nobody investigates.
+
 ## Invariants (locked)
 
 1. The transcript is the source of truth; everything else derived + rebuildable.

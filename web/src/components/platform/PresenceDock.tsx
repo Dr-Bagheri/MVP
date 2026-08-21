@@ -9,7 +9,7 @@ import { useRouter } from "@/i18n/routing";
 import { executeClientTool, SURFACE_TOOLS } from "@/lib/agentSurface";
 import { subscribeAssistantOpen } from "@/lib/assistantBus";
 import { notify, subscribeNotify, type PlatformNotice } from "@/lib/notify";
-import { listenOnce, speak, startWakeListener, voiceInputSupported, type WakeListenerHandle } from "@/lib/voice";
+import { listenOnce, speak, startVoiceControl, voiceInputSupported, type WakeListenerHandle } from "@/lib/voice";
 
 /**
  * PRESENCE (M34) — the agent, always there.
@@ -197,30 +197,26 @@ export function PresenceDock() {
 
   const beginWake = useCallback(() => {
     if (!micGrantedRef.current || wakeRef.current || !voiceInputSupported()) return;
-    wakeRef.current = startWakeListener({
+    /*
+     * One continuous recognizer, one state machine (createWakeMachine).
+     * The old shape — final-results-only plus a stop-the-listener/
+     * listenOnce round-trip after the ack — was the delay the user felt:
+     * the ack now fires on the INTERIM transcript and the command window
+     * reads the same stream, no restart anywhere.
+     */
+    wakeRef.current = startVoiceControl({
       lang: locale === "fa" ? "fa-IR" : "en-US",
-      onWake: (command) => {
+      onWake: () => {
         if (streamingRef.current) return; // one conversation turn at a time
         setOpen(true);
-        if (command) {
-          submitRef.current(command, true);
-          return;
-        }
-        // the name alone: answer out loud, then hold a window for the command
         speak(t("wakeAck"));
-        suspendWake();
-        setListening("command");
-        const capture = listenOnce(locale === "fa" ? "fa-IR" : "en-US");
-        if (!capture) { setListening(null); beginWakeRef.current(); return; }
-        // 10s (user: 8s "finishes too fast")
-        const timeout = setTimeout(() => capture.cancel(), 10000);
-        void capture.done.then((heard) => {
-          clearTimeout(timeout);
-          setListening(null);
-          beginWakeRef.current();
-          if (heard) submitRef.current(heard, true);
-        });
       },
+      onCommand: (command) => {
+        if (streamingRef.current) return;
+        setOpen(true);
+        submitRef.current(command, true);
+      },
+      onState: (state) => setListening(state === "awaiting" ? "command" : null),
       onError: () => {
         wakeRef.current = null;
         notify(t("micDenied"), "warn");

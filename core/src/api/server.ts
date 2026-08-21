@@ -41,6 +41,7 @@ import { applyProposal, createWriteTools } from "../agent/write-tools.ts";
 import { createNamedSkillResolver, listResolvedSkills } from "../agent/skill-store.ts";
 import { createAssistantAgent, listAssistantAgents, resolveAssistantAgent } from "../agent/agent-store.ts";
 import { createConnectorsRepo, type ConnectorOAuthOptions, type ConnectorProvider } from "./connectors.ts";
+import { createTts } from "./tts.ts";
 import { createWorkflow, listWorkflows, resolveWorkflow } from "./workflows.ts";
 import type { DomainTool } from "../agent/tools.ts";
 import { agentToolsDb, type Db } from "../db/identity.ts";
@@ -86,6 +87,7 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
   const audit: AuditRepo = createAuditRepo(options.db);
   const org: OrgRepo = createOrgRepo(options.db);
   const sessions: SessionsRepo = createSessionsRepo(options.db);
+  const tts = createTts();
   const skillAuthoring: SkillAuthoring = createSkillAuthoring(options.db);
   const uploads: UploadsRepo = createUploadsRepo(options.db, {
     storageUrl: options.storageUrl,
@@ -664,6 +666,32 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     });
     if (!delivered) throw new NotFoundError("no such pending call");
     return reply.send({ delivered: true });
+  });
+
+  /**
+   * M37: the platform's own voice. Auth-gated; text capped (a TTS body is
+   * a token budget too); the text is spoken content and never logged; an
+   * unconfigured lane answers 503 `tts_unavailable` — a nameable nothing,
+   * never an empty 200 the client would play as silence.
+   */
+  app.post("/v1/tts", async (request, reply) => {
+    await auth.requireActive(request);
+    const body = (request.body ?? {}) as { text?: unknown };
+    if (typeof body.text !== "string" || body.text.trim() === "") {
+      throw new ValidationError("text is required");
+    }
+    if (body.text.length > 2000) throw new ValidationError("text too long (max 2000)");
+    if (!tts.available()) {
+      return reply.code(503).send({ error: "tts_unavailable" });
+    }
+    try {
+      const audio = await tts.synthesize(body.text);
+      return reply.type("audio/wav").send(Buffer.from(audio));
+    } catch (cause) {
+      // codes only — the failure names itself, the text stays out of logs
+      request.log.warn({ event: "tts_failed", detail: cause instanceof Error ? cause.message : "unknown" });
+      return reply.code(502).send({ error: "tts_failed" });
+    }
   });
 
   /**
