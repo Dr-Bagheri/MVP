@@ -42,6 +42,7 @@ import { createNamedSkillResolver, listResolvedSkills } from "../agent/skill-sto
 import { createAssistantAgent, listAssistantAgents, resolveAssistantAgent } from "../agent/agent-store.ts";
 import { createConnectorsRepo, type ConnectorOAuthOptions, type ConnectorProvider } from "./connectors.ts";
 import { createTts } from "./tts.ts";
+import { createLiveStt } from "./live-stt.ts";
 import { createWorkflow, listWorkflows, resolveWorkflow } from "./workflows.ts";
 import type { DomainTool } from "../agent/tools.ts";
 import { agentToolsDb, type Db } from "../db/identity.ts";
@@ -88,6 +89,9 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
   const org: OrgRepo = createOrgRepo(options.db);
   const sessions: SessionsRepo = createSessionsRepo(options.db);
   const tts = createTts();
+  const liveStt = createLiveStt();
+  // (live-stt audio chunks ride the octet-stream parser the upload lane
+  // already registers below — a second registration is a boot error)
   const skillAuthoring: SkillAuthoring = createSkillAuthoring(options.db);
   const uploads: UploadsRepo = createUploadsRepo(options.db, {
     storageUrl: options.storageUrl,
@@ -692,6 +696,63 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       request.log.warn({ event: "tts_failed", detail: cause instanceof Error ? cause.message : "unknown" });
       return reply.code(502).send({ error: "tts_failed" });
     }
+  });
+
+  /**
+   * M38: the live-transcription relay — the browser never holds the
+   * Soniox key, so the realtime socket lives here. Chunked POST up, SSE
+   * down, both through the BFF (see api/live-stt.ts for why not a browser
+   * WebSocket). Captions are content: never logged.
+   */
+  app.post("/v1/live-stt/start", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    if (!liveStt.available()) {
+      return reply.code(503).send({ error: "live_stt_unavailable" });
+    }
+    return reply.send(liveStt.start(identity.userId));
+  });
+
+  app.post("/v1/live-stt/:id/audio", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id } = request.params as { id: string };
+    const body = request.body;
+    if (!Buffer.isBuffer(body) || body.length === 0) {
+      throw new ValidationError("audio bytes required");
+    }
+    if (body.length > 1_000_000) throw new ValidationError("chunk too large");
+    if (!liveStt.pushAudio(id, identity.userId, body)) {
+      throw new NotFoundError("no such live session");
+    }
+    return reply.send({ accepted: true });
+  });
+
+  app.get("/v1/live-stt/:id/events", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id } = request.params as { id: string };
+    reply.raw.writeHead(200, {
+      "content-type": "text/event-stream",
+      "cache-control": "no-cache",
+      connection: "keep-alive",
+    });
+    const detach = liveStt.subscribe(id, identity.userId, (event) => {
+      reply.raw.write(`data: ${JSON.stringify(event)}\n\n`);
+      if (event.type === "closed") reply.raw.end();
+    });
+    if (!detach) {
+      // same wire shape, honest content — the stream opened before we knew
+      reply.raw.write(`data: ${JSON.stringify({ type: "error", code: "no_such_session" })}\n\n`);
+      reply.raw.end();
+      return reply;
+    }
+    request.raw.on("close", detach);
+    return reply;
+  });
+
+  app.post("/v1/live-stt/:id/stop", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id } = request.params as { id: string };
+    if (!liveStt.stop(id, identity.userId)) throw new NotFoundError("no such live session");
+    return reply.send({ stopping: true });
   });
 
   /**
@@ -2122,6 +2183,7 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       web: body.web === true,
       clientTools: advertisedClientTools,
       autonomy,
+      locale: body.locale === "en" ? "en" : "fa",
       signal: controller.signal,
       sessionId: conversation.id,
       sessionCreated: conversation.created,

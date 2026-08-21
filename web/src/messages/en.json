@@ -273,7 +273,10 @@
     "resumeBackToCalls": "Back to calls",
     "resumeBanner": "Resuming “{title}” — {clock} recorded so far. Check your microphone and speaker, then continue.",
     "resumeStart": "Resume recording",
-    "untitledCall": "Untitled call"
+    "untitledCall": "Untitled call",
+    "liveTitle": "Live transcript",
+    "liveWaiting": "Listening…",
+    "liveUnavailable": "Live transcript is unavailable — recording continues without it."
   },
   "call": {
     "summary": "Summary",

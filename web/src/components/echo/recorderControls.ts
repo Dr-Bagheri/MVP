@@ -12,6 +12,8 @@ export interface RecorderHandle {
   phase: () => "recording" | "paused" | "other";
   pause: () => void;
   resume: () => void;
+  /** the SAME finish the button calls — ends the take, hands to processing */
+  finish: () => Promise<void>;
 }
 
 export const recorderControls: { current: RecorderHandle | null } = { current: null };

@@ -18,8 +18,13 @@
  *    not call a UI tool into a surface that cannot perform it (gateway/API
  *    callers advertise none and get none).
  *  - Effect classes decide consent: "ui" runs directly in assist mode;
- *    "write" carries requires_consent until Act (Phase C). Destructive
- *    surface actions (finish/delete) are deliberately NOT in this registry.
+ *    "write" carries requires_consent until Act (Phase C). DELETE stays
+ *    out of this registry; finish_recording and the member-admin tools
+ *    joined by user directive (2026-08-21: "anything the user can do or
+ *    click it must be able to do as well") — every one still runs through
+ *    the person's own session, so the caller's ROLE is the wall: a
+ *    member's browser asking to disable an account gets the same 403 the
+ *    member's own click would.
  *  - A refusal is a RESULT: mic denied, user declined, tab closed — the
  *    run continues and says so (M21: forfeits are loud, never silent).
  *  - Steps: client tools pass through the same wrapTools() wrapper as every
@@ -54,17 +59,20 @@ export type ClientToolEffect = "ui" | "write";
 
 export interface ClientToolSpec {
   name: string;
-  label: string;
+  /** shown to the person as "what the assistant is doing" — in THEIR
+      language (user directive, 2026-08-21: the chips read Persian on the
+      English UI); the ask's locale picks the side */
+  label: { fa: string; en: string };
   description: string;
   parameters: unknown;
   effect: ClientToolEffect;
 }
 
-/** v1 registry. Labels are Persian-first like the domain tools'. */
+/** v1 registry. */
 export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
   {
     name: "navigate",
-    label: "رفتن به صفحه",
+    label: { fa: "رفتن به صفحه", en: "Navigating" },
     /*
      * The route MAP lives in the description and the enum, deliberately:
      * without it the model guessed — "archive of calls" landed on /echo/calls
@@ -108,7 +116,7 @@ export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
   },
   {
     name: "start_recording",
-    label: "شروع ضبط",
+    label: { fa: "شروع ضبط", en: "Starting a recording" },
     description:
       "Start recording a new call through the user's microphone, optionally "
       + "with a title. The user's surface performs it and may ask them to "
@@ -118,31 +126,69 @@ export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
   },
   {
     name: "pause_recording",
-    label: "توقف موقت ضبط",
+    label: { fa: "توقف موقت ضبط", en: "Pausing the recording" },
     description: "Pause the recording currently in progress on the user's screen.",
     parameters: obj({}),
     effect: "ui",
   },
   {
     name: "resume_recording",
-    label: "ادامهٔ ضبط",
+    label: { fa: "ادامهٔ ضبط", en: "Resuming the recording" },
     description: "Resume the paused recording on the user's screen.",
     parameters: obj({}),
     effect: "ui",
   },
   {
     name: "open_call",
-    label: "بازکردن جلسه",
+    label: { fa: "بازکردن جلسه", en: "Opening a record" },
     description: "Open one call's detail page on the user's screen.",
     parameters: obj({ call_id: str() }, ["call_id"]),
     effect: "ui",
   },
   {
     name: "set_search",
-    label: "جست‌وجو در صفحه",
+    label: { fa: "جست‌وجو در صفحه", en: "Searching" },
     description: "Run a search in the product UI and show the results page.",
     parameters: obj({ query: str() }, ["query"]),
     effect: "ui",
+  },
+  {
+    name: "finish_recording",
+    label: { fa: "پایان ضبط", en: "Finishing the recording" },
+    description:
+      "Finish the recording in progress on the user's screen and hand it to "
+      + "processing (transcription and summary). Use when the user asks to "
+      + "finish, stop or end the recording.",
+    parameters: obj({}),
+    effect: "write",
+  },
+  {
+    name: "set_member_status",
+    label: { fa: "تغییر وضعیت عضو", en: "Changing a member's status" },
+    description:
+      "Enable or disable a member's account, exactly as the management "
+      + "screen's own button would. Identify the member by username, display "
+      + "name or email. The platform enforces the CALLER's role — a "
+      + "non-admin's request is refused by the server, not by you.",
+    parameters: obj({
+      member: str("Username, display name or email of the member."),
+      status: strEnum(["active", "disabled"], "active = enable, disabled = disable."),
+    }, ["member", "status"]),
+    effect: "write",
+  },
+  {
+    name: "set_member_role",
+    label: { fa: "تغییر نقش عضو", en: "Changing a member's role" },
+    description:
+      "Change a member's role between member and admin, exactly as the "
+      + "management screen would. Identify the member by username, display "
+      + "name or email. The platform enforces the CALLER's role — a "
+      + "non-admin's request is refused by the server.",
+    parameters: obj({
+      member: str("Username, display name or email of the member."),
+      role: strEnum(["member", "admin"], "The role to grant."),
+    }, ["member", "role"]),
+    effect: "write",
   },
 ] as const;
 
@@ -212,15 +258,18 @@ export function createClientTools(
     autonomy: "watch" | "assist" | "act";
     emit: (event: ClientToolCallEvent) => void;
     timeoutMs?: number;
+    /** the asker's UI language — the chips must read in it */
+    locale?: "fa" | "en" | undefined;
   },
 ): DomainTool<unknown, never>[] {
   if (options.autonomy === "watch") return [];
   const offered = CLIENT_TOOLS.filter((spec) => advertised.includes(spec.name));
   const timeoutMs = options.timeoutMs ?? CLIENT_TOOL_TIMEOUT_MS;
+  const lang = options.locale === "en" ? "en" : "fa";
 
   return offered.map((spec) => ({
     name: spec.name,
-    label: spec.label,
+    label: spec.label[lang],
     description: spec.description,
     parameters: spec.parameters,
     async run(_ctx, args): Promise<unknown> {
@@ -237,7 +286,7 @@ export function createClientTools(
           type: "client_tool_call",
           id,
           tool: spec.name,
-          label: spec.label,
+          label: spec.label[lang],
           args,
           effect: spec.effect,
           // Act auto-applies org-approved write classes (Phase C); until

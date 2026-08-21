@@ -1631,6 +1631,23 @@ export const api = {
     });
   },
 
+  /** M38: open a live-transcription relay session (503 = lane not configured). */
+  async liveSttStart(): Promise<{ session_id: string }> {
+    return bff<{ session_id: string }>("/api/live-stt/start", { method: "POST" });
+  },
+  /** M38: one audio chunk to the relay — binary, so raw fetch. Fire-and-forget. */
+  async liveSttAudio(sessionId: string, chunk: Blob): Promise<void> {
+    const response = await fetch(`/api/live-stt/${encodeURIComponent(sessionId)}/audio`, {
+      method: "POST",
+      headers: { "content-type": "application/octet-stream" },
+      body: chunk,
+    });
+    if (!response.ok) throw new BffError(response.status, undefined, "live_stt_audio_failed");
+  },
+  async liveSttStop(sessionId: string): Promise<void> {
+    await bff(`/api/live-stt/${encodeURIComponent(sessionId)}/stop`, { method: "POST" });
+  },
+
   /**
    * M37: the platform's own voice — Persian TTS from the server, for the
    * browsers that ship no fa voice (Windows Chrome). Binary, so it skips

@@ -9,7 +9,7 @@
  */
 import { readSession } from "./session";
 
-const CORE_URL = process.env.CORE_API_URL ?? "http://127.0.0.1:8080";
+export const CORE_URL = process.env.CORE_API_URL ?? "http://127.0.0.1:8080";
 
 /** What core/'s auth layer can refuse with, mapped to HTTP for the client. */
 export type CoreErrorKind =

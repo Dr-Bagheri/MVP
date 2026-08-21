@@ -1388,6 +1388,28 @@ RIFF/WAV, 174KB — the adapter's positive-detection floor (a header-only
 200 fails) exists because a TTS wired wrong plays as silence, and
 silence is a green nobody investigates.
 
+## M38 — The live-transcription relay [user-directed 2026-08-21]
+
+The browser never holds the Soniox key (the invariant that deferred this
+lane), so the realtime socket lives in core: the recorder posts 1s audio
+chunks (a SECOND MediaRecorder on the same stream — the 30-minute part
+pipeline never shares a recorder with a best-effort caption lane)
+browser→BFF→`POST /v1/live-stt/:id/audio`; core holds one outbound
+WebSocket per session to Soniox realtime (Node 22 native WebSocket, no new
+dependency); captions return as SSE through the BFF. Chunked-POST-up /
+SSE-down instead of a browser WebSocket, deliberately: Vercel functions
+cannot proxy WS, the BFF already proxies SSE, and the cookie the BFF holds
+would otherwise need a ticket scheme. Sessions are in-memory, owned
+(foreign/unknown ids = one indistinguishable answer), capped 3/user,
+idle-reaped at 120s. Captions are CONTENT: they reach only their owner
+and never enter a log; provider errors surface as CODES (the message can
+quote audio). The lane is best-effort by design: its failure is a visible
+note on the recorder ("recording continues without it"), never a blocked
+take — and its absence (no SONIOX_API_KEY) is a 503 with a name.
+Prove-at-acceptance: `core/scripts/live-stt-probe.mjs` streams a
+piper-generated Persian WAV through the real endpoint and requires
+non-empty finals (the platform speaks, the relay hears it back).
+
 ## Invariants (locked)
 
 1. The transcript is the source of truth; everything else derived + rebuildable.

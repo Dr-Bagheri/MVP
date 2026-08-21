@@ -94,11 +94,29 @@ describe("createClientTools", () => {
 });
 
 describe("the registry", () => {
-  it("contains NO destructive surface action — finish/delete are not the agent's to press", () => {
-    // The absence half of an M33 clause: destructive controls are always the
-    // person's, at every dial setting. This fails the moment someone adds one.
+  it("contains NO data-destroying action — delete/purge are never the agent's to press", () => {
+    // The absence half of an M33 clause, NARROWED by user directive
+    // (2026-08-21: "anything the user can do it must be able to do"):
+    // finish_recording and the member-admin tools joined — reversible, and
+    // role-walled by the server through the person's own session. What can
+    // DESTROY data stays the person's, at every dial setting.
     const names = CLIENT_TOOLS.map((t) => t.name).join(" ");
-    expect(names).not.toMatch(/finish|delete|archive|purge/);
+    expect(names).not.toMatch(/delete|purge|erase|tombstone/);
+  });
+
+  it("finish_recording and the member tools are write-effect — consent below Act", () => {
+    for (const name of ["finish_recording", "set_member_status", "set_member_role"]) {
+      const tool = CLIENT_TOOLS.find((t) => t.name === name);
+      expect(tool, name).toBeDefined();
+      expect(tool!.effect, name).toBe("write");
+    }
+  });
+
+  it("labels carry BOTH languages — the chip reads in the asker's UI language", () => {
+    for (const tool of CLIENT_TOOLS) {
+      expect(tool.label.fa.length, tool.name).toBeGreaterThan(0);
+      expect(tool.label.en.length, tool.name).toBeGreaterThan(0);
+    }
   });
 
   it("every tool declares an effect the consent logic understands", () => {

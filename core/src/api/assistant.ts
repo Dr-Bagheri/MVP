@@ -49,6 +49,8 @@ export interface AskRequest {
   clientTools?: readonly string[] | undefined;
   /** M36: the caller's stored autonomy, resolved server-side by the route. */
   autonomy?: "watch" | "assist" | "act" | undefined;
+  /** the asker's UI language — client-tool labels render in it */
+  locale?: "fa" | "en" | undefined;
   signal?: AbortSignal | undefined;
   /** The conversation this turn belongs to (M4, db/0018). */
   sessionId?: string | undefined;
@@ -154,6 +156,7 @@ export function createAssistant<TDeps>(config: AssistantDeps<TDeps>) {
         userId: request.identity.userId,
         autonomy: request.autonomy ?? "assist",
         emit: (event) => stream.send(event),
+        locale: request.locale,
       });
 
       try {

@@ -80,6 +80,75 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
   const recorder = useRef<MediaRecorder | null>(null);
   const uploader = useRef<PartUploader | null>(null);
   const callId = useRef<string | null>(null);
+  /**
+   * M38 — live captions while recording: a SECOND MediaRecorder taps the
+   * same stream in 1s slices and posts them to the relay; captions ride
+   * back as SSE. Independent of the part recorder on purpose — the upload
+   * pipeline's 30-minute part math must never share a recorder with a
+   * best-effort caption lane. `captions === null` = lane off (unavailable
+   * or not started); "" finals with "" interim = on and listening.
+   */
+  const [captions, setCaptions] = useState<{ finals: string; interim: string } | null>(null);
+  const [captionsDown, setCaptionsDown] = useState(false);
+  const liveId = useRef<string | null>(null);
+  const liveRec = useRef<MediaRecorder | null>(null);
+  const liveEs = useRef<EventSource | null>(null);
+  const liveFinals = useRef("");
+
+  async function startLiveCaptions(mime: string): Promise<void> {
+    try {
+      const { session_id } = await api.liveSttStart();
+      liveId.current = session_id;
+    } catch {
+      // the lane is optional; its ABSENCE is said out loud (M21), once
+      setCaptionsDown(true);
+      return;
+    }
+    liveFinals.current = "";
+    setCaptions({ finals: "", interim: "" });
+    setCaptionsDown(false);
+    const rec = new MediaRecorder(stream.current!, { mimeType: mime });
+    rec.ondataavailable = (event) => {
+      if (event.data.size > 0 && liveId.current) {
+        void api.liveSttAudio(liveId.current, event.data).catch(() => undefined);
+      }
+    };
+    rec.start(1000);
+    liveRec.current = rec;
+    const es = new EventSource(`/api/live-stt/${encodeURIComponent(liveId.current)}/events`);
+    es.onmessage = (event) => {
+      try {
+        const body = JSON.parse(event.data as string) as {
+          type: string;
+          tokens?: { text: string; is_final: boolean }[];
+        };
+        if (body.type === "closed" || body.type === "error") {
+          es.close();
+          if (body.type === "error") setCaptionsDown(true);
+          return;
+        }
+        if (body.type === "tokens" && body.tokens) {
+          const finalText = body.tokens.filter((t) => t.is_final).map((t) => t.text).join("");
+          const interim = body.tokens.filter((t) => !t.is_final).map((t) => t.text).join("");
+          if (finalText) liveFinals.current += finalText;
+          setCaptions({ finals: liveFinals.current, interim });
+        }
+      } catch { /* not a caption frame */ }
+    };
+    liveEs.current = es;
+  }
+
+  function stopLiveCaptions(): void {
+    if (liveRec.current && liveRec.current.state !== "inactive") liveRec.current.stop();
+    liveRec.current = null;
+    if (liveId.current) void api.liveSttStop(liveId.current).catch(() => undefined);
+    liveId.current = null;
+    // leave the EventSource open briefly — the provider flushes finals on
+    // stop; the relay's `closed` event (or its idle reaper) ends it
+    const es = liveEs.current;
+    liveEs.current = null;
+    if (es) setTimeout(() => es.close(), 5000);
+  }
   const audioCtx = useRef<AudioContext | null>(null);
   const meterRaf = useRef<number>(0);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -130,6 +199,9 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
       if (timer.current) clearInterval(timer.current);
       cancelAnimationFrame(meterRaf.current);
       if (recorder.current && recorder.current.state !== "inactive") recorder.current.stop();
+      if (liveRec.current && liveRec.current.state !== "inactive") liveRec.current.stop();
+      liveEs.current?.close();
+      if (liveId.current) void api.liveSttStop(liveId.current).catch(() => undefined);
       stream.current?.getTracks().forEach((track) => track.stop());
       void audioCtx.current?.close();
     },
@@ -184,6 +256,7 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
           : phaseRef.current === "paused" ? "paused" : "other"),
         pause,
         resume,
+        finish,
       };
       return () => { recorderControls.current = null; };
     }
@@ -364,6 +437,13 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
     setPreviews([]);
     startMeter();
     startPartRecorder(base.nextIdx, base.offsetMs);
+    // best-effort live captions on the same stream (M38) — failure is a
+    // visible note, never a blocked recording
+    void startLiveCaptions(
+      MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+        ? "audio/webm;codecs=opus"
+        : "audio/webm",
+    );
     lastTick.current = Date.now();
     timer.current = setInterval(() => {
       // the clock counts RECORDED time: it advances only while recording
@@ -390,6 +470,7 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
   function pause(): void {
     if (recorder.current?.state === "recording") {
       recorder.current.pause();
+      if (liveRec.current?.state === "recording") liveRec.current.pause();
       setPhase("paused");
     }
   }
@@ -397,6 +478,7 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
   function resume(): void {
     if (recorder.current?.state === "paused") {
       recorder.current.resume();
+      if (liveRec.current?.state === "paused") liveRec.current.resume();
       lastTick.current = Date.now();
       setPhase("recording");
     }
@@ -404,6 +486,7 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
 
   async function finish(): Promise<void> {
     setPhase("finishing");
+    stopLiveCaptions();
     if (timer.current) clearInterval(timer.current);
     cancelAnimationFrame(meterRaf.current);
     setLevel(0);
@@ -606,6 +689,26 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
               );
             })}
           </div>
+
+          {/* M38: live captions — the relay's rolling transcript. Interim
+              words render muted; finals accumulate. Absence says so. */}
+          {captions !== null ? (
+            <div className="mt-4 rounded-md border border-border bg-surface p-3">
+              <p className="text-xs font-semibold text-fg-subtle">{t("liveTitle")}</p>
+              <p dir="auto" className="mt-1 max-h-36 overflow-y-auto whitespace-pre-wrap text-sm leading-6 text-fg">
+                {captions.finals === "" && captions.interim === "" ? (
+                  <span className="text-fg-muted">{t("liveWaiting")}</span>
+                ) : (
+                  <>
+                    {captions.finals}
+                    <span className="text-fg-muted">{captions.interim}</span>
+                  </>
+                )}
+              </p>
+            </div>
+          ) : captionsDown ? (
+            <p className="mt-4 text-xs text-fg-muted">{t("liveUnavailable")}</p>
+          ) : null}
 
           {/* 30-minute part indicator (M7) */}
           <div className="mt-4 rounded-md bg-surface-2 p-3">

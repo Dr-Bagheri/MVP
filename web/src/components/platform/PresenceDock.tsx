@@ -395,7 +395,7 @@ export function PresenceDock() {
           await api.deliverToolResult(event.id, false, "the user declined").catch(() => undefined);
           break;
         }
-        const result = executeClientTool(event.tool, event.args, { push: router.push });
+        const result = await executeClientTool(event.tool, event.args, { push: router.push });
         // the surface action announces itself at the orb's head — "it
         // started doing it" must be visible, not inferred
         notify(event.label, result.ok ? "info" : "warn");

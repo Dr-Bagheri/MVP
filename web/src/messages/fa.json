@@ -273,7 +273,10 @@
     "resumeBackToCalls": "بازگشت به تماس‌ها",
     "resumeBanner": "ادامهٔ «{title}» — تاکنون {clock} ضبط شده. میکروفون و بلندگو را بررسی کنید و ادامه دهید.",
     "resumeStart": "ادامهٔ ضبط",
-    "untitledCall": "تماس بی‌عنوان"
+    "untitledCall": "تماس بی‌عنوان",
+    "liveTitle": "رونوشت زنده",
+    "liveWaiting": "در حال شنیدن…",
+    "liveUnavailable": "رونوشت زنده در دسترس نیست — ضبط بدون آن ادامه دارد."
   },
   "call": {
     "summary": "خلاصه",
