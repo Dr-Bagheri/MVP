@@ -3,6 +3,7 @@
 import { use } from "react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
+import { AssistantSettings } from "@/components/platform/AssistantSettings";
 import { AuditLogDrains } from "@/components/platform/AuditLogDrains";
 import { AuditLogs } from "@/components/platform/AuditLogs";
 import { GeneralSettings } from "@/components/platform/GeneralSettings";
@@ -38,6 +39,7 @@ interface SectionDef {
 
 const SECTIONS: readonly SectionDef[] = [
   { slug: "general", group: "configuration", state: "ready" },
+  { slug: "assistant", group: "configuration", state: "ready" },
   { slug: "security", group: "configuration", state: "ready" },
   { slug: "sso", group: "configuration", state: "ready" },
   { slug: "oauth-apps", group: "connections", state: "elsewhere", href: "/connectors" },
@@ -88,6 +90,11 @@ export default function SettingsPage({
       ) : null}
 
       {active.slug === "general" ? <GeneralSettings /> : null}
+      {active.slug === "assistant" ? (
+        <Section>
+          <AssistantSettings />
+        </Section>
+      ) : null}
       {active.slug === "security" ? (
         <Section>
           <SecuritySettings />

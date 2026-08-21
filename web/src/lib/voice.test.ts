@@ -44,4 +44,17 @@ describe("matchWake", () => {
     expect(result.woke).toBe(true);
     expect(result.command).toBe("open my last call");
   });
+
+  it("survives the English recognizer's artifacts for «سلام اکو»", () => {
+    // live transcripts, 2026-08-21: the en-US model heard «سلام اکو» as
+    // "Salon" and "Ecco salon" — both must be a bare wake, never a command
+    expect(matchWake("Salon")).toEqual({ woke: true, command: "" });
+    expect(matchWake("Ecco salon")).toEqual({ woke: true, command: "" });
+    expect(matchWake("ecco record new call").command).toBe("record new call");
+  });
+
+  it("keeps 'salon' as an ordinary word inside real speech", () => {
+    expect(matchWake("book the hair salon for me").woke).toBe(false);
+    expect(matchWake("echo find the salon call").command).toBe("find the salon call");
+  });
 });

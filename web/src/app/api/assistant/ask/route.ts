@@ -41,6 +41,13 @@ export async function POST(request: Request) {
     connector_provider?: "google" | "microsoft";
     source_id?: string;
     locale?: string;
+    /* M33/M34 — the fields THIS route dropped for a day while both ends
+       were correct (user report, 2026-08-21: "I don't have the ability to
+       navigate" — core never saw the tools this surface advertised). The
+       comment above about two hand-written beliefs described this exact
+       failure, and the route still reproduced it when the wire grew. */
+    client_tools?: string[];
+    context?: { route?: string; entity?: { kind?: string; id?: string } };
   };
 
   try {
@@ -57,6 +64,8 @@ export async function POST(request: Request) {
       connector_provider: body.connector_provider,
       source_id: body.source_id,
       locale: body.locale,
+      client_tools: body.client_tools,
+      context: body.context,
     });
     return new Response(upstream.body, {
       headers: {

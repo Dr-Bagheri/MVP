@@ -7,6 +7,7 @@ import { api } from "@/api/client";
 import type { AgentCardItem, AgentEvent } from "@/api/types";
 import { useRouter } from "@/i18n/routing";
 import { executeClientTool, SURFACE_TOOLS } from "@/lib/agentSurface";
+import { subscribeAssistantOpen } from "@/lib/assistantBus";
 import { notify, subscribeNotify, type PlatformNotice } from "@/lib/notify";
 import { listenOnce, speak, startWakeListener, voiceInputSupported, type WakeListenerHandle } from "@/lib/voice";
 
@@ -72,11 +73,10 @@ export function PresenceDock() {
     | null
     | { label: string; resolve: (allowed: boolean) => void }
   >(null);
-  const [autonomy, setAutonomyState] = useState<"watch" | "assist" | "act">("assist");
-  const [autonomyNote, setAutonomyNote] = useState<string | null>(null);
-  /** M35: the proactivity channel — refreshed whenever the panel opens */
+  /** M35: the proactivity channel — refreshed whenever the panel opens.
+      The dial and the digest toggle moved to Settings·Assistant (user
+      directive, 2026-08-21) — the dock carries conversation, not config. */
   const [cards, setCards] = useState<AgentCardItem[]>([]);
-  const [digest, setDigest] = useState<{ enabled: boolean; available: boolean } | null>(null);
   /** voice state: null = idle; "command" = the post-wake / mic-button window */
   const [listening, setListening] = useState<"command" | null>(null);
   const [toasts, setToasts] = useState<PlatformNotice[]>([]);
@@ -136,14 +136,41 @@ export function PresenceDock() {
     endRef.current?.scrollIntoView({ block: "end" });
   }, [messages]);
 
-  /** cards + digest state ride the panel's open (and once for the orb dot) */
+  /** cards ride the panel's open (and once for the orb dot) */
   useEffect(() => {
     if (!member) return;
     void api.cards().then((res) => setCards(res.cards)).catch(() => undefined);
-    if (open) {
-      void api.weeklyDigest().then(setDigest).catch(() => undefined);
-    }
   }, [member, open]);
+
+  /** another surface may hand the dock a conversation (the history table) */
+  useEffect(() => {
+    return subscribeAssistantOpen((request) => {
+      setOpen(true);
+      if (request.sessionId) void loadSession(request.sessionId);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /**
+   * Adopt a STORED conversation as the dock's thread — its messages loaded,
+   * new questions continuing it. This replaced routing to /conversations:
+   * with the docked pane gone everywhere, the dock is the reader.
+   */
+  async function loadSession(id: string) {
+    sessionId.current = id;
+    try { localStorage.setItem(todayKey(), id); } catch { /* fine */ }
+    try {
+      const thread = await api.agentMessages(id);
+      setMessages(thread.map((m) => ({
+        id: m.id,
+        role: m.role,
+        content: m.content,
+        chips: m.tool_calls.map((c) => c.name).filter((n): n is string => typeof n === "string"),
+      })));
+    } catch {
+      notify(t("failed"), "warn");
+    }
+  }
 
   const submitRef = useRef<(question: string, viaVoice: boolean) => void>(() => undefined);
   /** undefined = not fetched yet; null = fetched, nothing usable */
@@ -241,13 +268,9 @@ export function PresenceDock() {
       setCards((prev) => prev.map((c) => (c.id === card.id ? { ...c, read: true } : c)));
       void api.markCardRead(card.id).catch(() => undefined);
     }
-    // the card's content LIVES in its conversation — adopt it as the dock's
-    // thread so "ask about it" is one keystroke away
-    if (card.session_id) {
-      sessionId.current = card.session_id;
-      try { localStorage.setItem(todayKey(), card.session_id); } catch { /* fine */ }
-    }
-    router.push("/conversations");
+    // the card's content LIVES in its conversation — load it right here,
+    // where the person already is, instead of routing them away
+    if (card.session_id) void loadSession(card.session_id);
   }
 
   const unread = cards.filter((c) => !c.read).length;
@@ -370,27 +393,6 @@ export function PresenceDock() {
     }
   }
 
-  async function changeAutonomy(next: "watch" | "assist" | "act") {
-    setAutonomyNote(null);
-    const prev = autonomy;
-    setAutonomyState(next);
-    try {
-      await api.setAutonomy(next);
-      notify(t("savedDial"));
-    } catch (cause) {
-      setAutonomyState(prev);
-      // 409 not_migrated = the deployment hasn't run db/0073 yet — a
-      // different sentence than "the save failed" (kinds of nothing)
-      const { status, detail } = cause as { status?: number; detail?: string };
-      const notReady = status === 409 || detail === "not_migrated";
-      setAutonomyNote(notReady ? t("dialNotReady") : t("dialFailed"));
-      notify(notReady ? t("dialNotReady") : t("dialFailed"), "warn");
-    }
-  }
-
-  // The hub IS the maximized presence — the idle orb hides there, but the
-  // panel (voice/hotkey can open it), the toasts and the wake word stay.
-  const onHub = /^\/(fa|en)?\/?$/.test(pathname);
   if (!member) return null;
 
   return (
@@ -400,35 +402,17 @@ export function PresenceDock() {
           <div className="flex items-center gap-2 border-b border-border px-3 py-2">
             <span className="h-2 w-2 rounded-full bg-accent" aria-hidden />
             <span className="text-sm font-semibold text-fg">{t("title")}</span>
-            <select
-              aria-label={t("dialLabel")}
-              className="ms-auto h-7 rounded-md border border-border bg-surface px-1.5 text-xs text-fg-muted"
-              value={autonomy}
-              onChange={(e) => void changeAutonomy(e.target.value as "watch" | "assist" | "act")}
-            >
-              <option value="watch">{t("dialWatch")}</option>
-              <option value="assist">{t("dialAssist")}</option>
-              {/* Act: write-effect surface actions run without the consent
-                  card. The org's ceiling (0075) still caps the EFFECT
-                  server-side — choosing act under a lower ceiling behaves
-                  as the ceiling. */}
-              <option value="act">{t("dialAct")}</option>
-            </select>
+            {/* the dial and the digest toggle live in Settings·Assistant
+                now (user directive) — the dock carries conversation only */}
             <button
               type="button"
-              className="tap h-7 w-7 rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg"
+              className="tap ms-auto h-7 w-7 rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg"
               aria-label={t("close")}
               onClick={() => setOpen(false)}
             >
               ✕
             </button>
           </div>
-
-          {autonomyNote ? (
-            <p role="status" className="border-b border-border bg-warning/10 px-3 py-1.5 text-xs text-warning">
-              {autonomyNote}
-            </p>
-          ) : null}
 
           <div className="min-h-24 flex-1 space-y-3 overflow-y-auto px-3 py-3">
             {cards.length > 0 ? (
@@ -449,25 +433,6 @@ export function PresenceDock() {
                   </button>
                 ))}
               </div>
-            ) : null}
-            {digest?.available ? (
-              <label className="flex items-center gap-2 text-xs text-fg-muted">
-                <input
-                  type="checkbox"
-                  checked={digest.enabled}
-                  onChange={(e) => {
-                    const enabled = e.target.checked;
-                    setDigest({ available: true, enabled });
-                    void api.setWeeklyDigest(enabled)
-                      .then(() => notify(t("savedDigest")))
-                      .catch(() => {
-                        setDigest({ available: true, enabled: !enabled });
-                        notify(t("dialFailed"), "warn");
-                      });
-                  }}
-                />
-                {t("digestToggle")}
-              </label>
             ) : null}
             {messages.length === 0 ? (
               <p className="text-sm leading-6 text-fg-muted">{t("empty")}</p>
@@ -589,36 +554,37 @@ export function PresenceDock() {
         </p>
       ) : null}
 
-      {!onHub ? (
-        <button
-          type="button"
-          aria-label={t("openLabel")}
-          title={`${t("openLabel")} (Ctrl+E)`}
-          className={`tap fixed bottom-8 end-8 z-40 grid h-12 w-12 place-items-center rounded-full border shadow-lg transition-colors ${
-            open
-              ? "border-accent bg-accent text-on-accent"
-              : "border-border bg-surface text-accent hover:border-accent"
-          }`}
-          onClick={() => {
-            setOpen((v) => {
-              const next = !v;
-              if (next) setTimeout(() => inputRef.current?.focus(), 0);
-              return next;
-            });
-          }}
-        >
-          {/* the idle glow does the orb's job (the hub-mock ruling), literally */}
-          <span className={`h-3 w-3 rounded-full ${open ? "bg-on-accent" : "animate-pulse bg-accent"}`} aria-hidden />
-          {unread > 0 && !open ? (
-            <span
-              className="absolute -end-0.5 -top-0.5 grid h-5 min-w-5 place-items-center rounded-full bg-danger px-1 text-[10px] font-bold text-white"
-              aria-label={t("unread", { count: unread })}
-            >
-              {unread}
-            </span>
-          ) : null}
-        </button>
-      ) : null}
+      {/* the orb, on EVERY route — the hub included (user directive,
+          2026-08-21: "let the orb be present for the landing page as well",
+          superseding the M34 hub-hides-the-orb reading) */}
+      <button
+        type="button"
+        aria-label={t("openLabel")}
+        title={`${t("openLabel")} (Ctrl+E)`}
+        className={`tap fixed bottom-8 end-8 z-40 grid h-12 w-12 place-items-center rounded-full border shadow-lg transition-colors ${
+          open
+            ? "border-accent bg-accent text-on-accent"
+            : "border-border bg-surface text-accent hover:border-accent"
+        }`}
+        onClick={() => {
+          setOpen((v) => {
+            const next = !v;
+            if (next) setTimeout(() => inputRef.current?.focus(), 0);
+            return next;
+          });
+        }}
+      >
+        {/* the idle glow does the orb's job (the hub-mock ruling), literally */}
+        <span className={`h-3 w-3 rounded-full ${open ? "bg-on-accent" : "animate-pulse bg-accent"}`} aria-hidden />
+        {unread > 0 && !open ? (
+          <span
+            className="absolute -end-0.5 -top-0.5 grid h-5 min-w-5 place-items-center rounded-full bg-danger px-1 text-[10px] font-bold text-white"
+            aria-label={t("unread", { count: unread })}
+          >
+            {unread}
+          </span>
+        ) : null}
+      </button>
     </>
   );
 }

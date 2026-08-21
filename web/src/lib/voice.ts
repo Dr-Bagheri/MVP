@@ -47,13 +47,30 @@ export function voiceInputSupported(): boolean {
  * The wake phrase: an optional greeting, then the name — either script.
  * Whatever FOLLOWS the name in the same utterance is the command
  * ("hey echo, record new call" → "record new call").
+ *
+ * `ecco`/`eko` are accepted as the name: the recognizer runs in the UI
+ * language, and an English model spells the spoken name however English
+ * lets it (live transcripts: "Ecco salon" for «سلام اکو»).
  */
-const WAKE_RE = /(?:^|\s)(?:(?:hey|hi|salam|سلام)[\s,،]+)?(?:echo|اکو)(?!\p{L})[\s.,،!?]*/iu;
+const WAKE_RE = /(?:^|\s)(?:(?:hey|hi|salam|سلام)[\s,،]+)?(?:echo|ecco|eko|اکو)(?!\p{L})[\s.,،!?]*/iu;
+
+/**
+ * What the ENGLISH recognizer makes of «سلام اکو» spoken whole: the two
+ * words fuse into the nearest English word ("Salon", live transcript,
+ * 2026-08-21). Only honoured as a COMPLETE utterance — "salon" inside a
+ * sentence is someone's actual word.
+ */
+const SALAM_ARTIFACT_RE = /^\s*(?:salon|salam|salaam|slalom)[\s.,،!?]*$/i;
 
 export function matchWake(transcript: string): { woke: boolean; command: string } {
+  if (SALAM_ARTIFACT_RE.test(transcript)) return { woke: true, command: "" };
   const m = WAKE_RE.exec(transcript);
   if (!m) return { woke: false, command: "" };
-  return { woke: true, command: transcript.slice(m.index + m[0].length).trim() };
+  const command = transcript.slice(m.index + m[0].length).trim();
+  // "Ecco salon": the name matched, and the trailing greeting-artifact is
+  // recognizer residue, not a command — a bare wake, not a question.
+  if (SALAM_ARTIFACT_RE.test(command)) return { woke: true, command: "" };
+  return { woke: true, command };
 }
 
 export interface WakeListenerHandle {

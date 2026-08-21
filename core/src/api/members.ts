@@ -19,6 +19,7 @@ import {
   CALENDAR_PREFERENCES, iso, isoOrNull, MEMBER_ROLES, TIMEZONE_AUTO, USER_STATUSES,
   type CalendarPreference, type MemberRole, type UserStatus,
 } from "./vocabulary.ts";
+import { hasAutonomyColumn } from "../db/capabilities.ts";
 import { assertUuid, type Db, type SqlTx } from "../db/identity.ts";
 import type { Identity } from "../agent/types.ts";
 
@@ -126,6 +127,14 @@ export interface MeRecord extends MemberRecord {
    * is right and is the sort of thing only someone building the screen sees.
    */
   timezone: string;
+  /**
+   * M36's dial — served so the Settings control can show the STORED value
+   * rather than guessing (the locale lesson above, pre-empted: a column
+   * written by PUT /v1/me/autonomy and read only at ask time is "stored and
+   * never served" the day a form wants it). ABSENT before db/0073 — an
+   * omitted field, never a fabricated "assist".
+   */
+  autonomy?: "watch" | "assist" | "act";
 }
 
 /**
@@ -328,6 +337,9 @@ export function createMembersRepo(db: Db) {
      * whose role just changed.
      */
     async me(identity: Identity): Promise<MeRecord> {
+      // Capability-gated column (db/0073): the select must not name a column
+      // an un-migrated deployment does not have.
+      const withAutonomy = await hasAutonomyColumn(db);
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<Record<string, unknown>>(
           // The org join is LEFT for the same reason resolveIdentity's is: an
@@ -344,7 +356,8 @@ export function createMembersRepo(db: Db) {
           `select u.id, u.email, u.display_name, u.display_name_en, u.username,
                   u.avatar_url, u.role, u.status,
                   u.accepted_at, u.last_seen_at, u.created_at,
-                  u.preferred_model, u.locale, u.calendar, u.timezone, o.name as org_name
+                  u.preferred_model, u.locale, u.calendar, u.timezone,
+                  ${withAutonomy ? "u.autonomy," : ""} o.name as org_name
              from echo.app_user u
              left join echo.org o on o.id = u.org_id
             where u.id = $1
@@ -369,6 +382,11 @@ export function createMembersRepo(db: Db) {
         locale: (row.locale as string) ?? "fa",
         calendar: (row.calendar as CalendarPreference) ?? "auto",
         timezone: (row.timezone as string) ?? TIMEZONE_AUTO,
+        // Omitted (not defaulted) when the column is absent: "the dial does
+        // not exist here yet" and "the dial is at assist" are different facts.
+        ...(withAutonomy
+          ? { autonomy: (row.autonomy as MeRecord["autonomy"]) ?? "assist" }
+          : {}),
       };
     },
 

@@ -189,6 +189,11 @@ export interface Me extends User {
   calendar: CalendarPreference;
   /** `"auto"` (follow the device, resolved at render) or an IANA zone name. */
   timezone: string;
+  /**
+   * M36's dial. ABSENT (not "assist") when the deployment predates db/0073 —
+   * the Settings control renders the default but must not claim it is stored.
+   */
+  autonomy?: "watch" | "assist" | "act";
 }
 
 // ---- calls (SPEC "Call") ----------------------------------------------------
