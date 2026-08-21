@@ -7,7 +7,7 @@ import { api } from "@/api/client";
 import type { AgentCardItem, AgentEvent } from "@/api/types";
 import { useRouter } from "@/i18n/routing";
 import { executeClientTool, SURFACE_TOOLS } from "@/lib/agentSurface";
-import { subscribeAssistantOpen } from "@/lib/assistantBus";
+import { subscribeAssistantOpen, subscribeRecordingLive } from "@/lib/assistantBus";
 import { notify, subscribeNotify, type PlatformNotice } from "@/lib/notify";
 import { computeRms, useAudioLevel, useSyntheticPulse } from "@/lib/useAudioLevel";
 import {
@@ -465,6 +465,30 @@ export function PresenceDock() {
     if (!member) return;
     void api.cards().then((res) => setCards(res.cards)).catch(() => undefined);
   }, [member, open]);
+
+  /**
+   * The RECORDING rule (user, 2026-08-21): a rolling take owns the room.
+   * The instant it starts — agent-started or button-started — the
+   * assistant goes deaf (wake recognizer AND relay capture down), quiet
+   * (speech cut), and closed (orb only). Pause/finish brings the ears
+   * back. Without this, the meeting arrived twice: once in the call,
+   * once as assistant commands.
+   */
+  useEffect(() => {
+    return subscribeRecordingLive((live) => {
+      if (live) {
+        stopSpeaking();
+        suspendWake();
+        if (captureRef.current) teardownCapture(captureRef.current);
+        setListening(null);
+        setOpen(false);
+        setMinimized(false);
+      } else {
+        beginWakeRef.current();
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /** another surface may hand the dock a conversation (the history table) */
   useEffect(() => {

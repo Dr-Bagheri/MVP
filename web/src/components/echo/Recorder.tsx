@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
+import { announceRecordingLive } from "@/lib/assistantBus";
 import { PartUploader, type UploaderProgress } from "@/lib/callUpload";
 import { Card, Chip, Field, Progress } from "@/components/ui";
 import { Link } from "@/i18n/routing";
@@ -258,9 +259,16 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
         resume,
         finish,
       };
-      return () => { recorderControls.current = null; };
+      // the assistant's ears follow the take (user rule, 2026-08-21):
+      // rolling = assistant deaf and closed; paused/finished = ears back
+      announceRecordingLive(phase === "recording");
+      return () => {
+        recorderControls.current = null;
+        announceRecordingLive(false);
+      };
     }
     return undefined;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
   /**

@@ -18,11 +18,12 @@ describe("AuroraOrb", () => {
     expect(root.style.getPropertyValue("--audio-level")).toBe("1"); // clamped
   });
 
-  it("hands every state to the live procedural renderer", () => {
+  it("hands every state to the live WebGL E renderer", () => {
     for (const state of ["idle", "listening", "speaking", "muted"] as const) {
       const { container } = render(<AuroraOrb state={state} />);
       const canvas = container.querySelector(".aurora-canvas") as HTMLCanvasElement;
       expect(canvas.dataset.renderState).toBe(state);
+      expect(canvas.dataset.renderer).toBe("webgl-e");
     }
   });
 
