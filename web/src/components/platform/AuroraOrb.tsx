@@ -1,3 +1,3 @@
-/** @deprecated The visual is now the WebGL E renderer in EchoEOrb. */
+/** Compatibility name for the production GPU particle presence. */
 export { EchoEOrb as AuroraOrb } from "./EchoEOrb";
 export type { AuroraState } from "./EchoEOrb";

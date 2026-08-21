@@ -1026,8 +1026,8 @@ export function PresenceDock() {
           });
         }}
       >
-        {/* AURORA PULSE (user-supplied identity): the orb's whole body is
-            decorative layers; this button is the one accessible thing */}
+        {/* The transparent particle field is decorative; this button remains
+            the single accessible and interactive assistant control. */}
         <AuroraOrb
           state={
             (silent

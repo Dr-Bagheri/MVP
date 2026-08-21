@@ -1,49 +1,59 @@
 import { render } from "@testing-library/react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { AuroraOrb } from "./AuroraOrb";
+import { createOrbParticleGeometry } from "./EchoEOrb";
 import { computeRms } from "@/lib/useAudioLevel";
 
 beforeAll(() => {
-  // JSDOM intentionally has no 2D implementation. Browser rendering is
-  // exercised by the production build; unit tests need only assert that the
-  // canvas remains the one decorative renderer.
+  // JSDOM intentionally has no WebGL implementation. Unit tests assert the
+  // renderer contract and geometry; the browser exercises the GPU program.
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
 });
 
 describe("AuroraOrb", () => {
-  it("carries its state and a CLAMPED level on one CSS variable", () => {
+  it("carries its state and a clamped audio level", () => {
     const { container } = render(<AuroraOrb state="speaking" level={3.7} />);
-    const root = container.querySelector(".aurora-root") as HTMLElement;
+    const root = container.firstElementChild as HTMLElement;
     expect(root.dataset.state).toBe("speaking");
-    expect(root.style.getPropertyValue("--audio-level")).toBe("1"); // clamped
+    expect(root.dataset.audioLevel).toBe("1");
   });
 
-  it("hands every state to the live WebGL E renderer", () => {
+  it("hands every state to the live WebGL particle renderer", () => {
     for (const state of ["idle", "listening", "speaking", "muted"] as const) {
       const { container } = render(<AuroraOrb state={state} />);
-      const canvas = container.querySelector(".aurora-canvas") as HTMLCanvasElement;
+      const canvas = container.querySelector("canvas") as HTMLCanvasElement;
       expect(canvas.dataset.renderState).toBe(state);
-      expect(canvas.dataset.renderer).toBe("webgl-e");
+      expect(canvas.dataset.renderer).toBe("webgl-particles");
+      expect(canvas.dataset.particleCount).toBe("400");
     }
   });
 
   it("the renderer is decorative — nothing here competes with the button", () => {
     const { container } = render(<AuroraOrb state="idle" />);
-    expect(container.querySelector(".aurora-canvas")?.getAttribute("aria-hidden")).toBe("true");
+    expect(container.querySelector("canvas")?.getAttribute("aria-hidden")).toBe("true");
   });
 
-  it("muted stops floating but keeps the body (still clickable, still seen)", () => {
+  it("muted keeps the transparent particle canvas mounted", () => {
     const { container } = render(<AuroraOrb state="muted" />);
-    const root = container.querySelector(".aurora-root") as HTMLElement;
-    expect(root.classList.contains("aurora-float")).toBe(false);
-    expect(container.querySelector(".aurora-canvas")).not.toBeNull();
+    expect(container.querySelector("canvas")).not.toBeNull();
   });
 
   it("uses one canvas-rendered identity, not a raster image or static layers", () => {
     const { container } = render(<AuroraOrb state="idle" />);
     expect(container.querySelector("img")).toBeNull();
-    expect(container.querySelectorAll(".aurora-canvas")).toHaveLength(1);
-    expect(container.querySelectorAll(".aurora-root > span")).toHaveLength(0);
+    expect(container.querySelectorAll("canvas")).toHaveLength(1);
+    expect(container.querySelectorAll("span > span")).toHaveLength(0);
+  });
+
+  it("uses exactly 400 GPU points spanning a true 1x to 5x size range", () => {
+    const geometry = createOrbParticleGeometry();
+    const positions = geometry.getAttribute("position");
+    const sizes = Array.from(geometry.getAttribute("aBaseSize").array as Float32Array);
+    expect(positions.count).toBe(400);
+    expect(sizes).toHaveLength(400);
+    expect(Math.min(...sizes)).toBe(1);
+    expect(Math.max(...sizes)).toBe(5);
+    geometry.dispose();
   });
 });
 
