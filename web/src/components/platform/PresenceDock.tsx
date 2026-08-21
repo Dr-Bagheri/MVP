@@ -769,7 +769,7 @@ export function PresenceDock() {
             <p
               key={notice.id}
               role="status"
-              className={`rounded-xl border px-3 py-1.5 text-xs shadow-lg ${
+              className={`toast-from-orb rounded-xl border px-3 py-1.5 text-xs shadow-lg ${
                 notice.kind === "warn"
                   ? "border-warning/40 bg-surface text-warning"
                   : "border-border bg-surface text-fg"

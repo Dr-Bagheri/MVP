@@ -173,7 +173,17 @@ export async function coreFetch<T>(path: string, init: CoreFetchInit = {}): Prom
     throw new CoreError("upstream", response.status, await safeDetail(response));
   }
 
-  return (init.raw ? response : await response.json()) as T;
+  if (init.raw) return response as T;
+  /*
+   * A 204 has no body BY DEFINITION — json() on it throws, and that throw
+   * used to fall into the route's catch and reach the browser as a 500:
+   * the delete succeeded, the table refreshed, and a toast reported "That
+   * didn't go through" about an operation that went through (user report,
+   * 2026-08-21, with the screenshot to prove it). Core answers 204 from
+   * five routes; this one line covers them all.
+   */
+  if (response.status === 204) return null as T;
+  return (await response.json()) as T;
 }
 
 /** Same hop, but returns the raw Response so SSE can be piped through. */

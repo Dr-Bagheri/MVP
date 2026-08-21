@@ -595,3 +595,30 @@
   .aurora-voice-wave,
   .aurora-listen-scan { animation: none; }
 }
+
+/* notifications EMERGE from the orb (user directive, 2026-08-21): each
+   toast pops from the corner the orb lives in — scaled down at the orb,
+   rising into place. Direction-aware: the orb sits at inline-end. */
+@keyframes toast-from-orb {
+  0% { opacity: 0; transform: translate(14px, 20px) scale(0.5); }
+  70% { opacity: 1; }
+  100% { opacity: 1; transform: translate(0, 0) scale(1); }
+}
+@keyframes toast-from-orb-rtl {
+  0% { opacity: 0; transform: translate(-14px, 20px) scale(0.5); }
+  70% { opacity: 1; }
+  100% { opacity: 1; transform: translate(0, 0) scale(1); }
+}
+.toast-from-orb {
+  animation: toast-from-orb 0.3s cubic-bezier(0.2, 0.9, 0.3, 1.15);
+  transform-origin: 100% 140%;
+}
+[dir="rtl"] .toast-from-orb {
+  animation-name: toast-from-orb-rtl;
+  transform-origin: 0% 140%;
+}
+@media (prefers-reduced-motion: reduce) {
+  .toast-from-orb {
+    animation: none;
+  }
+}
