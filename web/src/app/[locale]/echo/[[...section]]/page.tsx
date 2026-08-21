@@ -1,38 +1,42 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { EchoAppShell } from "@/components/echo/EchoAppShell";
-import { CallsSection } from "@/components/echo/CallsSection";
+import { RecordsSection } from "@/components/echo/RecordsSection";
 import { Recorder } from "@/components/echo/Recorder";
 import { SpeakersDirectory } from "@/components/echo/SpeakersDirectory";
+import { SummariesSection } from "@/components/echo/SummariesSection";
 import { UploadPanel } from "@/components/echo/UploadPanel";
 import { SectionMenu, PageContainer, PageHeader } from "@/components/scaffold";
+import { useRouter } from "@/i18n/routing";
 
 /**
  * **Echo on the platform anatomy** (Part 5, user directive): the same
- * two-pane skeleton as Settings — Record in browser, Upload a file and
- * Calls as SECTIONS in a side menu — with Echo's assistant still docked at
- * inline-end, because M22 puts the assistant with the app.
+ * two-pane skeleton as Settings — Record in browser, Upload a file,
+ * Records, Summaries, Archive and Speakers as SECTIONS in a side menu.
  *
- * This replaces the single stacked Record-on-top/Calls-below screen. The
- * merge's original argument ("record, then see what you recorded, one
- * screen") is preserved by navigation rather than stacking: finishing a
- * recording offers the Calls section as its next step, and the menu keeps
- * every sibling one click away.
+ * "Calls" became "Records" (user directive, 2026-08-21 — the section, its
+ * label, its route and its code identifiers; the DOMAIN object stays
+ * `call` end to end: renaming the wire/db vocabulary would touch every
+ * layer for a word the user never sees). `/echo/calls` redirects to
+ * `/echo/records` — a redirect is cheaper than a broken bookmark.
  *
  * `/echo` with no section is the recorder — the app's first verb. `/calls`
  * and `/capture` still redirect here, unchanged.
  */
 
-type Slug = "record" | "upload" | "calls" | "archive" | "speakers";
+type Slug = "record" | "upload" | "records" | "summaries" | "archive" | "speakers";
 
 const SECTIONS: readonly { slug: Slug; group: "capture" | "review" }[] = [
   { slug: "record", group: "capture" },
   { slug: "upload", group: "capture" },
-  { slug: "calls", group: "review" },
-  /* archived calls are a PLACE, not a toggle (user directive): same table,
-     same actions — reached from the menu instead of a mode button */
+  { slug: "records", group: "review" },
+  /* summaries as a place of their own (user directive, 2026-08-21): the
+     same stored versions the record's page shows, gathered for reading */
+  { slug: "summaries", group: "review" },
+  /* archived records are a PLACE, not a toggle (user directive): same
+     table, same actions — reached from the menu instead of a mode button */
   { slug: "archive", group: "review" },
   { slug: "speakers", group: "review" },
 ];
@@ -46,14 +50,24 @@ export default function EchoPage({
 }) {
   const t = useTranslations("platform");
   const tEcho = useTranslations("echo");
+  const router = useRouter();
   const { section } = use(params);
-  const slug: Slug = (SECTIONS.find((s) => s.slug === section?.[0])?.slug ?? "record") as Slug;
+  const requested = section?.[0];
+  /** the old name keeps resolving: /echo/calls IS /echo/records now */
+  const isLegacyCalls = requested === "calls";
+  const effective = isLegacyCalls ? "records" : requested;
+  const slug: Slug = (SECTIONS.find((s) => s.slug === effective)?.slug ?? "record") as Slug;
+
+  useEffect(() => {
+    if (isLegacyCalls) router.replace("/echo/records");
+  }, [isLegacyCalls, router]);
+
   /**
-   * Bumped when a recording/upload finishes so an already-mounted calls
+   * Bumped when a recording/upload finishes so an already-mounted records
    * list refetches — the "see what I started" half of the old merged
    * screen, kept through remount-by-key.
    */
-  const [callsEpoch, setCallsEpoch] = useState(0);
+  const [recordsEpoch, setRecordsEpoch] = useState(0);
 
   const groups = GROUPS.map((group) => ({
     key: group,
@@ -76,16 +90,17 @@ export default function EchoPage({
         />
       }
     >
-      <PageContainer width={slug === "calls" || slug === "archive" ? "wide" : "default"}>
+      <PageContainer width={slug === "records" || slug === "archive" ? "wide" : "default"}>
         <PageHeader title={tEcho(`section.${slug}`)} subtitle={tEcho(`desc.${slug}`)} />
         {slug === "record" ? (
-          <Recorder onFinished={() => setCallsEpoch((n) => n + 1)} />
+          <Recorder onFinished={() => setRecordsEpoch((n) => n + 1)} />
         ) : null}
         {slug === "upload" ? (
-          <UploadPanel onFinished={() => setCallsEpoch((n) => n + 1)} />
+          <UploadPanel onFinished={() => setRecordsEpoch((n) => n + 1)} />
         ) : null}
-        {slug === "calls" ? <CallsSection key={callsEpoch} /> : null}
-        {slug === "archive" ? <CallsSection view="archive" /> : null}
+        {slug === "records" ? <RecordsSection key={recordsEpoch} /> : null}
+        {slug === "summaries" ? <SummariesSection /> : null}
+        {slug === "archive" ? <RecordsSection view="archive" /> : null}
         {slug === "speakers" ? <SpeakersDirectory /> : null}
       </PageContainer>
     </EchoAppShell>

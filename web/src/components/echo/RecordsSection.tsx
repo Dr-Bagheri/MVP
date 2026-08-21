@@ -29,7 +29,7 @@ import { DeletedCallsCard } from "./DeletedCallsCard";
  * (deletion should feel like deletion). The gate is the same one the api
  * enforces; this is not the authority, just the screen agreeing with it.
  */
-export function CallsSection({ view = "live" }: { view?: "live" | "archive" }) {
+export function RecordsSection({ view = "live" }: { view?: "live" | "archive" }) {
   const t = useTranslations("calls");
   const tStatus = useTranslations("status");
   const tCommon = useTranslations("common");

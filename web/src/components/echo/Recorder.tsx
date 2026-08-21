@@ -498,7 +498,7 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
     return (
       <Card className="max-w-2xl">
         <p className="text-sm text-fg-muted">{t("resumeGone")}</p>
-        <Link href="/echo/calls" className="btn-secondary mt-4 inline-flex px-4">
+        <Link href="/echo/records" className="btn-secondary mt-4 inline-flex px-4">
           {t("resumeBackToCalls")}
         </Link>
       </Card>
@@ -665,7 +665,7 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
               <audio ref={previewEl} controls src={previews[0].url} className="w-full" />
             </div>
           ) : null}
-          <Link href="/echo/calls" className="btn-secondary inline-flex">
+          <Link href="/echo/records" className="btn-secondary inline-flex">
             {t("goToCalls")}
           </Link>
           <button

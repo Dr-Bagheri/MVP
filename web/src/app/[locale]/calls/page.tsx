@@ -5,7 +5,7 @@ import { redirect } from "@/i18n/routing";
  * below the recorder on `/echo`.
  *
  * A redirect rather than a deletion: this was the most-linked route in the
- * product. The table moved intact into `components/echo/CallsSection.tsx`, so
+ * product. The table moved intact into `components/echo/RecordsSection.tsx`, so
  * this is a re-home and not a re-implementation — there is no second copy of
  * the list to fall out of step.
  *

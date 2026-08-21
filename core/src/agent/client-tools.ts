@@ -79,8 +79,9 @@ export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
       + "/ = home hub. "
       + "/echo = Echo recording studio (record a call in the browser). "
       + "/echo/upload = upload an audio file. "
-      + "/echo/calls = the list of recorded calls. "
-      + "/echo/archive = ARCHIVED calls (the calls archive). "
+      + "/echo/records = the RECORDS list (recorded calls/meetings — the section formerly named calls). "
+      + "/echo/summaries = summaries of the recordings, gathered for reading. "
+      + "/echo/archive = ARCHIVED records (the archive). "
       + "/echo/speakers = speakers directory. "
       + "/conversations = past assistant conversations (history). "
       + "/search = transcript search. "
@@ -94,7 +95,8 @@ export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
       + "/settings/security = security. /settings/audit-logs = audit logs. ",
     parameters: obj({
       path: strEnum([
-        "/", "/echo", "/echo/upload", "/echo/calls", "/echo/archive", "/echo/speakers",
+        "/", "/echo", "/echo/upload", "/echo/records", "/echo/summaries",
+        "/echo/archive", "/echo/speakers",
         "/conversations", "/search", "/workflows", "/agents",
         "/management/users", "/management/skills", "/management/models",
         "/management/connectors", "/management/server",

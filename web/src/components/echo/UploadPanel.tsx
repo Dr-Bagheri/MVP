@@ -153,7 +153,7 @@ export function UploadPanel({ onFinished }: { onFinished?: () => void }) {
             {fileName ? <span className="ltr text-fg-muted">{fileName}</span> : null}
           </p>
           <p className="text-xs leading-6 text-fg-muted">{t("uploadedBody")}</p>
-          <Link href="/echo/calls" className="btn-secondary inline-flex">
+          <Link href="/echo/records" className="btn-secondary inline-flex">
             {t("goToCalls")}
           </Link>
           <button

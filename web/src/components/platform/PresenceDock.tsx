@@ -79,6 +79,30 @@ export function PresenceDock() {
   const [cards, setCards] = useState<AgentCardItem[]>([]);
   /** voice state: null = idle; "command" = the post-wake / mic-button window */
   const [listening, setListening] = useState<"command" | null>(null);
+  /**
+   * Silent mode (user directive, 2026-08-21): ON = voice questions get
+   * TEXT-only replies (and no spoken "Yes?"); OFF = spoken questions are
+   * answered out loud. Listening is untouched either way — the toggle is
+   * about the assistant's mouth, not its ears.
+   */
+  const [silent, setSilent] = useState(false);
+  const silentRef = useRef(false);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("neurai-voice-silent") === "1";
+      setSilent(stored);
+      silentRef.current = stored;
+    } catch { /* storage unavailable — voice stays on */ }
+  }, []);
+
+  function toggleSilent() {
+    const next = !silentRef.current;
+    silentRef.current = next;
+    setSilent(next);
+    try { localStorage.setItem("neurai-voice-silent", next ? "1" : "0"); } catch { /* fine */ }
+    notify(next ? t("silentOn") : t("silentOff"));
+  }
   const [toasts, setToasts] = useState<PlatformNotice[]>([]);
   const sessionId = useRef<string | undefined>(undefined);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -209,7 +233,7 @@ export function PresenceDock() {
       onWake: () => {
         if (streamingRef.current) return; // one conversation turn at a time
         setOpen(true);
-        speak(t("wakeAck"));
+        if (!silentRef.current) speak(t("wakeAck"));
       },
       onCommand: (command) => {
         if (streamingRef.current) return;
@@ -302,8 +326,9 @@ export function PresenceDock() {
       for await (const event of stream) {
         await handleEvent(event, replyId);
       }
-      // the reply to a spoken question is spoken — in ITS language
-      if (speakReplyRef.current && replyTextRef.current) {
+      // the reply to a spoken question is spoken — in ITS language —
+      // unless silent mode says text only
+      if (speakReplyRef.current && replyTextRef.current && !silentRef.current) {
         speak(replyTextRef.current);
       }
     } catch (cause) {
@@ -402,7 +427,19 @@ export function PresenceDock() {
                 now (user directive) — the dock carries conversation only */}
             <button
               type="button"
-              className="tap ms-auto h-7 w-7 rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg"
+              className={`tap ms-auto h-7 w-7 rounded-md ${
+                silent ? "bg-accent-soft text-accent" : "text-fg-muted hover:bg-surface-2 hover:text-fg"
+              }`}
+              aria-label={t("silentLabel")}
+              aria-pressed={silent}
+              title={t("silentLabel")}
+              onClick={toggleSilent}
+            >
+              {silent ? "🔇" : "🔊"}
+            </button>
+            <button
+              type="button"
+              className="tap h-7 w-7 rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg"
               aria-label={t("close")}
               onClick={() => setOpen(false)}
             >

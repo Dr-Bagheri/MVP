@@ -22,7 +22,7 @@ export const SURFACE_TOOLS: readonly string[] = [
 
 /** Routes the agent may navigate to — the same set a human can click to. */
 /** exported for the seam test: core's navigate enum must stay inside it */
-export const NAVIGABLE = /^\/(echo(\/(record|upload|calls|archive|speakers))?|workflows|agents|conversations|settings(\/[a-z-]+)?|management(\/[a-z-]+)?|search)?$/;
+export const NAVIGABLE = /^\/(echo(\/(record|upload|calls|records|summaries|archive|speakers))?|workflows|agents|conversations|settings(\/[a-z-]+)?|management(\/[a-z-]+)?|search)?$/;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

@@ -60,7 +60,7 @@
     "resetReady": "Your password is set. Sign in with it now."
   },
   "calls": {
-    "title": "Calls",
+    "title": "Records",
     "empty": "No calls yet.",
     "columnTitle": "Title",
     "columnOwner": "Owner",
@@ -184,16 +184,18 @@
     "section": {
       "record": "Record in browser",
       "upload": "Upload a file",
-      "calls": "Calls",
       "archive": "Archive",
-      "speakers": "Speakers"
+      "speakers": "Speakers",
+      "records": "Records",
+      "summaries": "Summaries"
     },
     "desc": {
       "record": "Record a session with your device microphone — 30-minute parts, uploaded as you go.",
       "upload": "Upload a recorded audio file — transcription starts once it lands.",
-      "calls": "Recorded calls, transcripts and summaries.",
       "archive": "Archived calls — same details and actions; unarchive moves one back to Calls.",
-      "speakers": "People and their titles — every call page picks speakers from this list."
+      "speakers": "People and their titles — every call page picks speakers from this list.",
+      "records": "Your recordings, transcripts and summaries.",
+      "summaries": "Each recording's summary, gathered for reading."
     }
   },
   "speakersDir": {
@@ -1240,6 +1242,17 @@
     "bellLabel": "Notifications",
     "bellEmpty": "No notifications.",
     "bellCards": "Assistant messages",
-    "bellRecent": "Recent events"
+    "bellRecent": "Recent events",
+    "silentLabel": "Silent mode",
+    "silentOn": "Silent — replies are text only.",
+    "silentOff": "Voice on — spoken questions get spoken replies."
+  },
+  "summaries": {
+    "empty": "No summaries yet — as each recording finishes processing, its summary lands here.",
+    "untitled": "Untitled",
+    "none": "This recording has no summary.",
+    "loadFailed": "The summary did not load — try again.",
+    "version": "Version {version}",
+    "openRecord": "Open the recording"
   }
 }
