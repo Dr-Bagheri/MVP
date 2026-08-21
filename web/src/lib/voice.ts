@@ -227,6 +227,18 @@ function publishPlayback(speaking: boolean): void {
   for (const listener of playbackListeners) listener(speaking);
 }
 
+/** the orb listens too: it breathes while the assistant's voice plays */
+export function subscribeSpeechPlayback(listener: (speaking: boolean) => void): () => void {
+  playbackListeners.add(listener);
+  return () => playbackListeners.delete(listener);
+}
+
+/** the M37 server-voice element currently playing, if any — the one audio
+    source the level meter can actually tap (speechSynthesis has none) */
+export function currentSpeechAudio(): HTMLAudioElement | null {
+  return serverAudio;
+}
+
 /**
  * Continuous background listening for the wake word. Auto-restarts on end
  * (Chrome stops recognition after silence); stop() ends it for real.

@@ -9,7 +9,12 @@ import { useRouter } from "@/i18n/routing";
 import { executeClientTool, SURFACE_TOOLS } from "@/lib/agentSurface";
 import { subscribeAssistantOpen } from "@/lib/assistantBus";
 import { notify, subscribeNotify, type PlatformNotice } from "@/lib/notify";
-import { listenOnce, speak, startVoiceControl, voiceInputSupported, type WakeListenerHandle } from "@/lib/voice";
+import { useAudioLevel, useSyntheticPulse } from "@/lib/useAudioLevel";
+import {
+  currentSpeechAudio, listenOnce, speak, startVoiceControl, subscribeSpeechPlayback,
+  voiceInputSupported, type WakeListenerHandle,
+} from "@/lib/voice";
+import { AuroraOrb, type AuroraState } from "./AuroraOrb";
 
 /**
  * PRESENCE (M34) — the agent, always there.
@@ -82,6 +87,17 @@ export function PresenceDock() {
   const [cards, setCards] = useState<AgentCardItem[]>([]);
   /** voice state: null = idle; "command" = the post-wake / mic-button window */
   const [listening, setListening] = useState<"command" | null>(null);
+  /** the assistant's own voice is on the speakers (drives the orb's state) */
+  const [speaking, setSpeaking] = useState(false);
+  useEffect(() => subscribeSpeechPlayback(setSpeaking), []);
+  /* the orb's breath: the REAL level when the M37 server voice plays (an
+     analysable element), a graceful synthetic pulse for speechSynthesis
+     and for the listening session (neither has a tappable stream) */
+  const measuredLevel = useAudioLevel(speaking ? currentSpeechAudio() : null);
+  const syntheticLevel = useSyntheticPulse(
+    (speaking && currentSpeechAudio() === null) || listening === "command",
+  );
+  const orbLevel = measuredLevel > 0 ? measuredLevel : syntheticLevel;
   /**
    * Silent mode (user directive, 2026-08-21): ON = voice questions get
    * TEXT-only replies (and no spoken "Yes?"); OFF = spoken questions are
@@ -428,7 +444,7 @@ export function PresenceDock() {
     <>
       {open && minimized ? (
         /* the MINIMIZED pill: the conversation lives, the screen is yours */
-        <div className="fixed bottom-24 end-8 z-40 flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-1.5 shadow-lg">
+        <div className="fixed bottom-[104px] end-4 z-40 flex items-center gap-2 rounded-full md:bottom-[140px] md:end-6 border border-border bg-surface px-3 py-1.5 shadow-lg">
           <span className="h-2 w-2 rounded-full bg-accent" aria-hidden />
           <span className="text-xs font-semibold text-fg">{t("title")}</span>
           <button
@@ -452,7 +468,7 @@ export function PresenceDock() {
       ) : null}
 
       {open && !minimized ? (
-        <div className="fixed bottom-24 end-8 z-40 flex max-h-[70dvh] w-[min(92vw,24rem)] flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-xl">
+        <div className="fixed bottom-[104px] end-4 z-40 flex max-h-[70dvh] md:bottom-[140px] md:end-6 w-[min(92vw,24rem)] flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-xl">
           <div className="flex items-center gap-2 border-b border-border px-3 py-2">
             <span className="h-2 w-2 rounded-full bg-accent" aria-hidden />
             <span className="text-sm font-semibold text-fg">{t("title")}</span>
@@ -606,7 +622,7 @@ export function PresenceDock() {
 
       {/* the toasts — every platform notice pops from the orb's head */}
       {toasts.length > 0 ? (
-        <div className="pointer-events-none fixed bottom-[5.75rem] end-8 z-50 flex w-[min(88vw,20rem)] flex-col items-end gap-1.5">
+        <div className="pointer-events-none fixed bottom-[104px] end-4 z-50 flex w-[min(88vw,20rem)] md:bottom-[140px] md:end-6 flex-col items-end gap-1.5">
           {toasts.map((notice) => (
             <p
               key={notice.id}
@@ -624,7 +640,7 @@ export function PresenceDock() {
       ) : null}
 
       {listening === "command" ? (
-        <p className="pointer-events-none fixed bottom-[5.75rem] end-8 z-50 rounded-xl border border-accent/40 bg-surface px-3 py-1.5 text-xs text-accent shadow-lg">
+        <p className="pointer-events-none fixed bottom-[104px] end-4 z-50 rounded-xl md:bottom-[140px] md:end-6 border border-accent/40 bg-surface px-3 py-1.5 text-xs text-accent shadow-lg">
           {t("listening")}
         </p>
       ) : null}
@@ -636,7 +652,7 @@ export function PresenceDock() {
         type="button"
         aria-label={t("openLabel")}
         title={`${t("openLabel")} (Ctrl+E)`}
-        className="tap orb-float fixed bottom-8 end-8 z-40 grid h-14 w-14 place-items-center rounded-full"
+        className="tap fixed bottom-4 end-4 z-40 block h-[76px] w-[76px] rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg md:bottom-6 md:end-6 md:h-[104px] md:w-[104px]"
         onClick={() => {
           setMinimized(false);
           setOpen((v) => {
@@ -646,19 +662,23 @@ export function PresenceDock() {
           });
         }}
       >
-        {/* a lit SPHERE, not a dot (user directive: "3D cinematic … like
-            it's in charge"): aura behind, shaded body, a breathing core */}
-        <span className="orb-aura absolute -inset-3 rounded-full" aria-hidden />
-        <span
-          className={`orb-sphere absolute inset-0 rounded-full transition-transform duration-300 ${
-            open ? "scale-90" : ""
-          }`}
-          aria-hidden
+        {/* AURORA PULSE (user-supplied identity): the orb's whole body is
+            decorative layers; this button is the one accessible thing */}
+        <AuroraOrb
+          state={
+            (silent
+              ? "muted"
+              : speaking
+                ? "speaking"
+                : listening === "command"
+                  ? "listening"
+                  : "idle") satisfies AuroraState
+          }
+          level={orbLevel}
         />
-        <span className="absolute h-2.5 w-2.5 animate-pulse rounded-full bg-white/90 blur-[1px]" aria-hidden />
         {unread > 0 && !open ? (
           <span
-            className="absolute -end-0.5 -top-0.5 grid h-5 min-w-5 place-items-center rounded-full bg-danger px-1 text-[10px] font-bold text-white"
+            className="absolute -end-0.5 -top-0.5 z-10 grid h-5 min-w-5 place-items-center rounded-full bg-danger px-1 text-[10px] font-bold text-white"
             aria-label={t("unread", { count: unread })}
           >
             {unread}
