@@ -17,8 +17,10 @@ describe("AuroraOrb", () => {
     expect(idle.querySelector(".aurora-halo")).toBeNull();
     const listening = render(<AuroraOrb state="listening" />).container;
     expect(listening.querySelectorAll(".aurora-ripple")).toHaveLength(3);
+    expect(listening.querySelector(".aurora-listen-scan")).not.toBeNull();
     const speaking = render(<AuroraOrb state="speaking" />).container;
     expect(speaking.querySelector(".aurora-halo")).not.toBeNull();
+    expect(speaking.querySelector(".aurora-voice-wave")).not.toBeNull();
   });
 
   it("every layer is decorative — nothing here competes with the button", () => {
@@ -35,12 +37,12 @@ describe("AuroraOrb", () => {
     expect(container.querySelector(".aurora-core")).not.toBeNull();
   });
 
-  it("uses the shipped Aurora Pulse artwork without adding another accessible control", () => {
+  it("builds its identity from decorative procedural layers, not a raster image", () => {
     const { container } = render(<AuroraOrb state="idle" />);
-    const art = container.querySelector(".aurora-art") as HTMLImageElement;
-    expect(art.getAttribute("src")).toBe("/brand/aurora-pulse.png");
-    expect(art.getAttribute("alt")).toBe("");
-    expect(art.closest("[aria-hidden='true']")).not.toBeNull();
+    expect(container.querySelector("img")).toBeNull();
+    expect(container.querySelector(".aurora-nebula")).not.toBeNull();
+    expect(container.querySelectorAll(".aurora-orbit")).toHaveLength(3);
+    expect(container.querySelector(".aurora-voice-wave")).toBeNull();
   });
 });
 

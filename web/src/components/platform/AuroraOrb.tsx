@@ -47,16 +47,33 @@ export function AuroraOrb({ state, level = 0 }: { state: AuroraState; level?: nu
         <span aria-hidden className="aurora-halo pointer-events-none absolute inset-0 rounded-full" />
       ) : null}
 
-      {/* The supplied Aurora Pulse artwork owns the glass core and its two
-          orbital ribbons.  The dock owns behaviour; this remains a wholly
-          decorative image inside its accessible button. */}
+      {/* Fully procedural glass core: every visual responds through the
+          state + audio-level CSS variables; no raster identity is involved. */}
       <span aria-hidden className="aurora-core pointer-events-none absolute inset-0">
-        <img
-          src="/brand/aurora-pulse.png"
-          alt=""
-          className="aurora-art absolute inset-0 h-full w-full object-contain"
-        />
+        <span className="aurora-nebula absolute inset-0 block rounded-full" />
+        <span className="aurora-lens absolute inset-[7%] block rounded-full" />
+        <span className="aurora-specular absolute inset-0 block rounded-full" />
       </span>
+
+      {/* The energy field is generated, not painted: three differently
+          inclined rings and a speaking-only waveform react to live volume. */}
+      <span aria-hidden className="aurora-orbit aurora-orbit-one pointer-events-none absolute inset-0">
+        <span className="aurora-orbit-line absolute inset-x-[-13%] inset-y-[24%] block rounded-full" />
+      </span>
+      <span aria-hidden className="aurora-orbit aurora-orbit-two pointer-events-none absolute inset-0">
+        <span className="aurora-orbit-line absolute inset-x-[-16%] inset-y-[29%] block rounded-full" />
+      </span>
+      <span aria-hidden className="aurora-orbit aurora-orbit-three pointer-events-none absolute inset-0">
+        <span className="aurora-orbit-line absolute inset-x-[-7%] inset-y-[17%] block rounded-full" />
+      </span>
+
+      {state === "speaking" ? (
+        <span aria-hidden className="aurora-voice-wave pointer-events-none absolute inset-x-[-18%] inset-y-[18%]" />
+      ) : null}
+
+      {state === "listening" ? (
+        <span aria-hidden className="aurora-listen-scan pointer-events-none absolute inset-[-10%] rounded-full" />
+      ) : null}
     </span>
   );
 }
