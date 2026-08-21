@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isEchoOf, isStopCommand, matchWake } from "./voice";
+import { isEchoOf, isStopCommand, matchWake, sameUtterance } from "./voice";
 
 /**
  * The wake matcher is the one pure decision in the voice path — everything
@@ -87,5 +87,20 @@ describe("isEchoOf — the full-duplex echo filter", () => {
 
   it("short utterances are not fingerprintable — never swallowed by overlap", () => {
     expect(isEchoOf("pause it", "totally unrelated words here")).toBe(false);
+  });
+});
+
+describe("sameUtterance — the re-finalization dedupe", () => {
+  it("the provider re-spelling the consumed interim is the SAME utterance", () => {
+    expect(sameUtterance("Why are you hearing everything twice?", "why are you hearing everything twice")).toBe(true);
+    expect(sameUtterance("چرا دوبار می‌شنوی؟", "چرا دوبار می‌شنوی")).toBe(true);
+  });
+
+  it("EXTENDED speech is a new utterance — no overlap heuristics here", () => {
+    expect(sameUtterance("why are you hearing everything twice and how do I fix it", "why are you hearing everything twice")).toBe(false);
+  });
+
+  it("empty never matches anything", () => {
+    expect(sameUtterance("", "")).toBe(false);
   });
 });

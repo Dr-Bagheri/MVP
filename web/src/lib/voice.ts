@@ -111,6 +111,20 @@ function canonical(text: string): string {
 }
 
 /**
+ * The same utterance, spelled twice by the provider: the fast VAD
+ * endpoint consumes a sentence from the INTERIM transcript, then the
+ * recognizer finalizes those very words and they arrive again as finals
+ * (user report, 2026-08-21: "it hears everything twice"). Two settles
+ * whose canonical text is identical are ONE utterance. Deliberately
+ * strict equality — an EXTENDED text (the person kept talking) must
+ * pass, so no overlap heuristics here.
+ */
+export function sameUtterance(a: string, b: string): boolean {
+  const ca = canonical(a);
+  return ca !== "" && ca === canonical(b);
+}
+
+/**
  * Self-echo discrimination (the full-duplex requirement): with the mic
  * open WHILE the assistant talks, a transcript may be the assistant's own
  * voice leaking past echo-cancellation. It is an echo when the last

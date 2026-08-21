@@ -11,7 +11,7 @@ import { subscribeAssistantOpen } from "@/lib/assistantBus";
 import { notify, subscribeNotify, type PlatformNotice } from "@/lib/notify";
 import { computeRms, useAudioLevel, useSyntheticPulse } from "@/lib/useAudioLevel";
 import {
-  currentSpeechAudio, isEchoOf, isStopCommand, listenOnce, recentSpokenText, speak,
+  currentSpeechAudio, isEchoOf, isStopCommand, listenOnce, recentSpokenText, sameUtterance, speak,
   speakQueued, startVoiceControl, stopSpeaking, subscribeSpeechPlayback,
   voiceInputSupported, type WakeListenerHandle,
 } from "@/lib/voice";
@@ -184,6 +184,10 @@ export function PresenceDock() {
     vadInterval: ReturnType<typeof setInterval> | null;
     fastSettle: ReturnType<typeof setTimeout> | null;
     audioCtx: AudioContext | null;
+    /** the previous settle's text — the provider re-finalizing the words
+        the VAD already consumed must not become a second command */
+    lastConsumed: string;
+    lastConsumedAt: number;
     done: boolean;
   }
   const captureRef = useRef<RelayCapture | null>(null);
@@ -219,7 +223,13 @@ export function PresenceDock() {
     const text = `${cap.finals} ${cap.interim}`.trim();
     cap.finals = "";
     cap.interim = "";
-    if (text) routeCommand(text);
+    if (!text) return;
+    // the VAD consumed this from the interim; the provider finalizing the
+    // SAME words is not a second utterance ("it hears everything twice")
+    if (sameUtterance(text, cap.lastConsumed) && Date.now() - cap.lastConsumedAt < 8000) return;
+    cap.lastConsumed = text;
+    cap.lastConsumedAt = Date.now();
+    routeCommand(text);
   }
 
   async function beginCapture(): Promise<void> {
@@ -278,7 +288,8 @@ export function PresenceDock() {
       : `/api/live-stt/${encodeURIComponent(sessionId)}/events`);
     const cap: RelayCapture = {
       id: sessionId, stream, rec, es, finals: "", interim: "", silence: null,
-      lastVoiceAt: 0, vadInterval: null, fastSettle: null, audioCtx: null, done: false,
+      lastVoiceAt: 0, vadInterval: null, fastSettle: null, audioCtx: null,
+      lastConsumed: "", lastConsumedAt: 0, done: false,
     };
     /*
      * LOCAL VAD — the fast endpoint. The mic's own RMS says when the
