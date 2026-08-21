@@ -11,8 +11,8 @@ import { subscribeAssistantOpen } from "@/lib/assistantBus";
 import { notify, subscribeNotify, type PlatformNotice } from "@/lib/notify";
 import { useAudioLevel, useSyntheticPulse } from "@/lib/useAudioLevel";
 import {
-  currentSpeechAudio, listenOnce, speak, startVoiceControl, subscribeSpeechPlayback,
-  voiceInputSupported, type WakeListenerHandle,
+  currentSpeechAudio, isStopCommand, listenOnce, speak, startVoiceControl,
+  stopSpeaking, subscribeSpeechPlayback, voiceInputSupported, type WakeListenerHandle,
 } from "@/lib/voice";
 import { AuroraOrb, type AuroraState } from "./AuroraOrb";
 
@@ -132,6 +132,134 @@ export function PresenceDock() {
   const speakReplyRef = useRef(false);
   const replyTextRef = useRef("");
   const streamingRef = useRef(false);
+  /** the running ask, abortable by the spoken/typed STOP intent */
+  const abortRef = useRef<AbortController | null>(null);
+
+  /*
+   * RELAY CAPTURE (2026-08-21): once the wake session is engaged, the
+   * COMMAND is captured through the M38 live-stt relay instead of the
+   * browser recognizer — Soniox hears Persian AND English in the same
+   * sentence regardless of UI language (the browser model is locked to
+   * one), and WE own the endpointing: 3s after the last word, the text
+   * IS the command. The browser recognizer keeps running underneath as
+   * the wake/stop trigger; its command finals are ignored while a relay
+   * capture is active. If the relay is unavailable (503, no key), the
+   * machine's own 3s interim-stability fallback still drives commands.
+   */
+  interface RelayCapture {
+    id: string;
+    stream: MediaStream;
+    rec: MediaRecorder;
+    es: EventSource;
+    finals: string;
+    interim: string;
+    silence: ReturnType<typeof setTimeout> | null;
+    done: boolean;
+  }
+  const captureRef = useRef<RelayCapture | null>(null);
+  const relayDownRef = useRef(false);
+  const CAPTURE_SILENCE_MS = 3000;
+
+  function teardownCapture(cap: RelayCapture): void {
+    if (cap.silence) clearTimeout(cap.silence);
+    try { if (cap.rec.state !== "inactive") cap.rec.stop(); } catch { /* fine */ }
+    cap.stream.getTracks().forEach((track) => track.stop());
+    cap.es.close();
+    void api.liveSttStop(cap.id).catch(() => undefined);
+    if (captureRef.current === cap) captureRef.current = null;
+  }
+
+  function settleCapture(cap: RelayCapture): void {
+    if (cap.done) return;
+    cap.done = true;
+    const text = `${cap.finals}${cap.interim}`.trim();
+    teardownCapture(cap);
+    if (text) routeCommand(text);
+  }
+
+  async function beginCapture(): Promise<void> {
+    if (captureRef.current || relayDownRef.current) return;
+    let sessionId: string;
+    try {
+      ({ session_id: sessionId } = await api.liveSttStart());
+    } catch {
+      relayDownRef.current = true; // machine fallback takes over, quietly
+      return;
+    }
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch {
+      void api.liveSttStop(sessionId).catch(() => undefined);
+      return;
+    }
+    const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+      ? "audio/webm;codecs=opus" : "audio/webm";
+    const rec = new MediaRecorder(stream, { mimeType: mime });
+    rec.ondataavailable = (event) => {
+      if (event.data.size > 0) void api.liveSttAudio(sessionId, event.data).catch(() => undefined);
+    };
+    rec.start(400);
+    const es = new EventSource(`/api/live-stt/${encodeURIComponent(sessionId)}/events`);
+    const cap: RelayCapture = { id: sessionId, stream, rec, es, finals: "", interim: "", silence: null, done: false };
+    /*
+     * The silence clock arms only once SOMETHING was said: pure silence
+     * keeps the window open (the machine's 45s session decides), while a
+     * spoken command settles CAPTURE_SILENCE_MS after its last word —
+     * short commands end fast, long ones get all the room they need.
+     */
+    const armSilence = () => {
+      if (cap.silence) clearTimeout(cap.silence);
+      cap.silence = setTimeout(() => settleCapture(cap), CAPTURE_SILENCE_MS);
+    };
+    es.onmessage = (event) => {
+      try {
+        const body = JSON.parse(event.data as string) as {
+          type: string;
+          tokens?: { text: string; is_final: boolean }[];
+        };
+        if (body.type === "closed" || body.type === "error") { settleCapture(cap); return; }
+        if (body.type === "tokens" && body.tokens) {
+          const finalText = body.tokens.filter((tok) => tok.is_final).map((tok) => tok.text).join("");
+          if (finalText) cap.finals += finalText;
+          cap.interim = body.tokens.filter((tok) => !tok.is_final).map((tok) => tok.text).join("");
+          if (`${cap.finals}${cap.interim}`.trim()) armSilence();
+        }
+      } catch { /* not a caption frame */ }
+    };
+    captureRef.current = cap;
+  }
+
+  /** the universal STOP: cut the voice, abort the run — never a prompt */
+  function localStop(): void {
+    stopSpeaking();
+    abortRef.current?.abort();
+    setListening(null);
+  }
+
+  function routeCommand(text: string): void {
+    if (isStopCommand(text)) { localStop(); return; }
+    if (streamingRef.current) return; // one turn at a time
+    setOpen(true);
+    setMinimized(false);
+    submitRef.current(text, true);
+  }
+
+  /* capture runs whenever the session is engaged and nothing else owns
+     the moment — not while the assistant streams or speaks (it would
+     transcribe the reply), and one capture at a time */
+  useEffect(() => {
+    if (listening === "command" && !streaming && !speaking && !captureRef.current) {
+      void beginCapture();
+    }
+    if (listening !== "command" && captureRef.current) {
+      // session over (stop word, timeout): whatever is mid-air is void
+      const cap = captureRef.current;
+      cap.done = true;
+      teardownCapture(cap);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listening, streaming, speaking]);
 
   /** the dock exists only for signed-in members */
   useEffect(() => {
@@ -258,10 +386,10 @@ export function PresenceDock() {
         if (!silentRef.current) speak(t("wakeAck"));
       },
       onCommand: (command) => {
-        if (streamingRef.current) return;
-        setOpen(true);
-        setMinimized(false);
-        submitRef.current(command, true);
+        // while a relay capture is live, IT is the command channel — the
+        // browser transcript would be a lower-quality duplicate
+        if (captureRef.current) return;
+        routeCommand(command);
       },
       onState: (state) => setListening(state === "engaged" ? "command" : null),
       onError: () => {
@@ -302,8 +430,13 @@ export function PresenceDock() {
     return () => {
       live = false;
       suspendWake();
+      if (captureRef.current) {
+        captureRef.current.done = true;
+        teardownCapture(captureRef.current);
+      }
     };
     // locale change restarts the listener with the right recognition lang
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [member, locale, t]);
 
   function openCard(card: AgentCardItem) {
@@ -339,6 +472,8 @@ export function PresenceDock() {
       { id: `u-${Date.now()}`, role: "user", content: trimmed, chips: [] },
       { id: replyId, role: "assistant", content: "", chips: [] },
     ]);
+    const controller = new AbortController();
+    abortRef.current = controller;
     try {
       const model = await ensureModel();
       const stream = api.ask(trimmed, { page: pathname, callIds: [] }, sessionId.current, {
@@ -346,6 +481,7 @@ export function PresenceDock() {
         locale,
         clientTools: [...SURFACE_TOOLS],
         surface: { route: pathname.replace(/^\/(fa|en)(?=\/|$)/, "") || "/" },
+        signal: controller.signal,
       });
       for await (const event of stream) {
         await handleEvent(event, replyId);
@@ -356,9 +492,15 @@ export function PresenceDock() {
         speak(replyTextRef.current);
       }
     } catch (cause) {
-      const detail = (cause as { detail?: string }).detail;
-      setMessages((prev) =>
-        prev.map((m) => (m.id === replyId ? { ...m, failed: true, failedDetail: detail } : m)));
+      if (controller.signal.aborted) {
+        // the person said STOP — keep whatever was already said, drop an
+        // empty bubble; an interruption is not a failure
+        setMessages((prev) => prev.filter((m) => !(m.id === replyId && m.content === "")));
+      } else {
+        const detail = (cause as { detail?: string }).detail;
+        setMessages((prev) =>
+          prev.map((m) => (m.id === replyId ? { ...m, failed: true, failedDetail: detail } : m)));
+      }
     } finally {
       setStreaming(false);
       streamingRef.current = false;

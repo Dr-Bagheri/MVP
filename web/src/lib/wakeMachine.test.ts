@@ -126,4 +126,31 @@ describe("createWakeMachine", () => {
     expect(onWake).not.toHaveBeenCalled();
     expect(onCommand).not.toHaveBeenCalled();
   });
+
+  it("an interim is not a command WHILE it is still changing", () => {
+    machine.feed("echo", true);
+    machine.feed("record new", false);
+    vi.advanceTimersByTime(2000);
+    machine.feed("record new call", false); // still talking — clock resets
+    vi.advanceTimersByTime(2000);
+    expect(onCommand).not.toHaveBeenCalled();
+  });
+
+  it("3s of SILENCE promotes the interim — the input ends when the person does", () => {
+    machine.feed("echo", true);
+    machine.feed("record new call", false);
+    vi.advanceTimersByTime(3000);
+    expect(onCommand).toHaveBeenCalledWith("record new call");
+    // the recognizer's own late final for that utterance is a duplicate
+    machine.feed("record new call", true);
+    expect(onCommand).toHaveBeenCalledTimes(1);
+  });
+
+  it("a promoted STOP ends the session without becoming a command", () => {
+    machine.feed("echo", true);
+    machine.feed("بسه", false);
+    vi.advanceTimersByTime(3000);
+    expect(onCommand).not.toHaveBeenCalled();
+    expect(states).toEqual(["engaged", "idle"]);
+  });
 });

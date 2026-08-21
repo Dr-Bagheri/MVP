@@ -88,10 +88,18 @@ export interface WakeHandlers {
 }
 
 /**
- * "That's all" in either language — said as a WHOLE utterance while
- * engaged, it ends the conversation session on the spot.
+ * "That's all" in either language — said as a WHOLE utterance, it stops
+ * whatever the assistant is doing: the machine ends its session on it,
+ * and the dock routes it to a LOCAL stop (cut the voice, abort the run)
+ * instead of the model (user report, 2026-08-21: "stop" reached the
+ * model, which mused about recordings instead of stopping).
  */
-const STOP_RE = /^\s*(?:stop|enough|cancel|never mind|thanks,? that'?s all|بسه|بس کن|تمام|کافیه|هیچی|ممنون همین)[\s.,،!?]*$/i;
+const STOP_RE = /^\s*(?:stop|stop it|enough|cancel|never mind|thanks,? that'?s all|بسه|بس|بس کن|تمام|کافیه|هیچی|ساکت|قطع کن|ممنون همین)[\s.,،!?]*$/i;
+
+/** the dock's local-stop gate — exported so "stop" never becomes a prompt */
+export function isStopCommand(text: string): boolean {
+  return STOP_RE.test(text);
+}
 
 /**
  * The wake DECISION machine, separated from the recognizer plumbing so it
@@ -114,7 +122,7 @@ const STOP_RE = /^\s*(?:stop|enough|cancel|never mind|thanks,? that'?s all|بس�
  */
 export function createWakeMachine(
   handlers: WakeHandlers,
-  options: { ackDelayMs?: number; engageMs?: number } = {},
+  options: { ackDelayMs?: number; engageMs?: number; silenceMs?: number } = {},
 ): {
   feed: (transcript: string, isFinal: boolean) => void;
   setMuted: (muted: boolean) => void;
@@ -122,19 +130,35 @@ export function createWakeMachine(
 } {
   const ackDelayMs = options.ackDelayMs ?? 900;
   const engageMs = options.engageMs ?? 45_000;
+  /** a spoken command ENDS on silence (user: "3s of silence = the input"):
+      if the interim transcript stops changing for this long, it IS the
+      command — no waiting on the recognizer's own slow endpointing */
+  const silenceMs = options.silenceMs ?? 3_000;
   let state: "idle" | "primed" | "engaged" = "idle";
   /** while the assistant's own voice is playing, the mic hears IT — a
       machine that listens then would answer itself in a loop */
   let muted = false;
   let ackTimer: ReturnType<typeof setTimeout> | null = null;
   let engageTimer: ReturnType<typeof setTimeout> | null = null;
+  let stabilityTimer: ReturnType<typeof setTimeout> | null = null;
+  let lastInterim = "";
+  /** an interim promoted at 3s-silence makes the recognizer's own final a
+      duplicate — swallow exactly one */
+  let swallowNextFinal = false;
 
   const clearAck = () => { if (ackTimer) clearTimeout(ackTimer); ackTimer = null; };
   const clearEngage = () => { if (engageTimer) clearTimeout(engageTimer); engageTimer = null; };
+  const clearStability = () => {
+    if (stabilityTimer) clearTimeout(stabilityTimer);
+    stabilityTimer = null;
+    lastInterim = "";
+  };
 
   const toIdle = () => {
     clearAck();
     clearEngage();
+    clearStability();
+    swallowNextFinal = false;
     const wasVisible = state === "engaged";
     state = "idle";
     if (wasVisible) handlers.onState?.("idle");
@@ -201,7 +225,35 @@ export function createWakeMachine(
         toIdle();
       } else {
         // engaged: the conversation session
-        if (!isFinal) { renew(); return; } // speech in progress keeps it alive
+        if (!isFinal) {
+          renew(); // speech in progress keeps the session alive
+          /*
+           * DYNAMIC endpointing (user: some commands are short, some long):
+           * when the interim stops CHANGING for silenceMs, that text IS the
+           * command — promoted without waiting for the recognizer's final.
+           * The eventual final for the same utterance is swallowed once.
+           */
+          const text = transcript.trim();
+          if (text && text !== lastInterim) {
+            lastInterim = text;
+            if (stabilityTimer) clearTimeout(stabilityTimer);
+            stabilityTimer = setTimeout(() => {
+              const promoted = lastInterim;
+              clearStability();
+              if (!promoted || state !== "engaged" || muted) return;
+              swallowNextFinal = true;
+              if (STOP_RE.test(promoted)) { toIdle(); return; }
+              const pm = matchWake(promoted);
+              const command = pm.woke ? pm.command : promoted;
+              if (!command) return;
+              renew();
+              handlers.onCommand(command);
+            }, silenceMs);
+          }
+          return;
+        }
+        clearStability();
+        if (swallowNextFinal) { swallowNextFinal = false; renew(); return; }
         if (STOP_RE.test(transcript)) { toIdle(); return; }
         const m = matchWake(transcript);
         // saying the name again mid-session is a re-ack, not a command
@@ -342,7 +394,8 @@ function loadVoices(): Promise<SpeechSynthesisVoice[]> {
 let serverAudio: HTMLAudioElement | null = null;
 let warnedNoPersian = false;
 
-function stopSpeaking(): void {
+/** exported for the dock's LOCAL stop: cut whatever voice is playing NOW */
+export function stopSpeaking(): void {
   if (typeof window !== "undefined" && "speechSynthesis" in window) {
     window.speechSynthesis.cancel();
   }
@@ -350,6 +403,8 @@ function stopSpeaking(): void {
     serverAudio.pause();
     serverAudio = null;
   }
+  playbackToken += 1; // orphan any in-flight done() callbacks
+  publishPlayback(false);
 }
 
 /**
@@ -401,7 +456,10 @@ async function speakAsync(text: string): Promise<void> {
   }
 
   const voices = "speechSynthesis" in window ? await loadVoices() : [];
-  const faVoice = voices.find((v) => v.lang.toLowerCase().startsWith("fa"));
+  // a WOMAN's voice for Persian (user directive, 2026-08-21): Edge ships
+  // fa-IR Dilara (female) beside Farid (male) — prefer her when present
+  const faVoices = voices.filter((v) => v.lang.toLowerCase().startsWith("fa"));
+  const faVoice = faVoices.find((v) => /dilara|female/i.test(v.name)) ?? faVoices[0];
   if (faVoice) {
     const utterance = new SpeechSynthesisUtterance(cleaned);
     utterance.voice = faVoice;

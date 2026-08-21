@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { matchWake } from "./voice";
+import { isStopCommand, matchWake } from "./voice";
 
 /**
  * The wake matcher is the one pure decision in the voice path — everything
@@ -56,5 +56,18 @@ describe("matchWake", () => {
   it("keeps 'salon' as an ordinary word inside real speech", () => {
     expect(matchWake("book the hair salon for me").woke).toBe(false);
     expect(matchWake("echo find the salon call").command).toBe("find the salon call");
+  });
+});
+
+describe("isStopCommand", () => {
+  it("recognizes the stop words in both languages", () => {
+    for (const phrase of ["stop", "Stop.", "cancel", "enough", "بسه", "بس کن", "ساکت", "قطع کن", "کافیه"]) {
+      expect(isStopCommand(phrase), phrase).toBe(true);
+    }
+  });
+
+  it("never eats a real command that merely CONTAINS a stop word", () => {
+    expect(isStopCommand("stop the recording and save it")).toBe(false);
+    expect(isStopCommand("cancel the meeting tomorrow")).toBe(false);
   });
 });
