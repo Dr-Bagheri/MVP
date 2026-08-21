@@ -11,7 +11,7 @@ import { subscribeAssistantOpen } from "@/lib/assistantBus";
 import { notify, subscribeNotify, type PlatformNotice } from "@/lib/notify";
 import { useAudioLevel, useSyntheticPulse } from "@/lib/useAudioLevel";
 import {
-  currentSpeechAudio, isStopCommand, listenOnce, speak, startVoiceControl,
+  currentSpeechAudio, isEchoOf, isStopCommand, listenOnce, recentSpokenText, speak, startVoiceControl,
   stopSpeaking, subscribeSpeechPlayback, voiceInputSupported, type WakeListenerHandle,
 } from "@/lib/voice";
 import { AuroraOrb, type AuroraState } from "./AuroraOrb";
@@ -89,7 +89,11 @@ export function PresenceDock() {
   const [listening, setListening] = useState<"command" | null>(null);
   /** the assistant's own voice is on the speakers (drives the orb's state) */
   const [speaking, setSpeaking] = useState(false);
-  useEffect(() => subscribeSpeechPlayback(setSpeaking), []);
+  const speakingRef = useRef(false);
+  useEffect(() => subscribeSpeechPlayback((next) => {
+    speakingRef.current = next;
+    setSpeaking(next);
+  }), []);
   /* the orb's breath: the REAL level when the M37 server voice plays (an
      analysable element), a graceful synthetic pulse for speechSynthesis
      and for the listening session (neither has a tappable stream) */
@@ -98,6 +102,14 @@ export function PresenceDock() {
     (speaking && currentSpeechAudio() === null) || listening === "command",
   );
   const orbLevel = measuredLevel > 0 ? measuredLevel : syntheticLevel;
+  /** the ONE turn-state line: speaking > thinking > listening */
+  const voiceStatus = speaking
+    ? t("speakingState")
+    : streaming
+      ? t("thinkingState")
+      : listening === "command"
+        ? t("listening")
+        : null;
   /**
    * Silent mode (user directive, 2026-08-21): ON = voice questions get
    * TEXT-only replies (and no spoken "Yes?"); OFF = spoken questions are
@@ -134,17 +146,28 @@ export function PresenceDock() {
   const streamingRef = useRef(false);
   /** the running ask, abortable by the spoken/typed STOP intent */
   const abortRef = useRef<AbortController | null>(null);
+  /** a barge-in's new question, waiting for the aborted run to unwind */
+  const pendingCommandRef = useRef<string | null>(null);
 
   /*
-   * RELAY CAPTURE (2026-08-21): once the wake session is engaged, the
-   * COMMAND is captured through the M38 live-stt relay instead of the
-   * browser recognizer — Soniox hears Persian AND English in the same
-   * sentence regardless of UI language (the browser model is locked to
-   * one), and WE own the endpointing: 3s after the last word, the text
-   * IS the command. The browser recognizer keeps running underneath as
-   * the wake/stop trigger; its command finals are ignored while a relay
-   * capture is active. If the relay is unavailable (503, no key), the
-   * machine's own 3s interim-stability fallback still drives commands.
+   * FULL-DUPLEX CONVERSATION CAPTURE (2026-08-21 rework, after the
+   * half-duplex version transcribed the assistant's own reply into a
+   * command — user screenshot). The shape every production voice agent
+   * uses, applied here:
+   *
+   *  - ONE continuous relay capture for the whole conversation (Soniox
+   *    hears fa+en mixed; no per-command session churn, no gaps for the
+   *    TTS to leak into).
+   *  - The mic runs WITH echo cancellation, and stays open THROUGH
+   *    thinking and speaking — listening and executing at the same time.
+   *  - Utterances are segmented by OUR silence clock (2.5s after the
+   *    last word); each routes by turn state:
+   *      stop word            → instant local stop, any state
+   *      echo of the voice    → dropped (isEchoOf vs what it just said)
+   *      speech over thinking → BARGE-IN: abort the run, ask the new thing
+   *      speech over speaking → BARGE-IN: cut the voice, ask the new thing
+   *      speech while idle-in-session → the next command
+   *  - Stop-intents act from the INTERIM — "بسه" does not wait 2.5s.
    */
   interface RelayCapture {
     id: string;
@@ -158,9 +181,10 @@ export function PresenceDock() {
   }
   const captureRef = useRef<RelayCapture | null>(null);
   const relayDownRef = useRef(false);
-  const CAPTURE_SILENCE_MS = 3000;
+  const CAPTURE_SILENCE_MS = 2500;
 
   function teardownCapture(cap: RelayCapture): void {
+    cap.done = true;
     if (cap.silence) clearTimeout(cap.silence);
     try { if (cap.rec.state !== "inactive") cap.rec.stop(); } catch { /* fine */ }
     cap.stream.getTracks().forEach((track) => track.stop());
@@ -169,11 +193,14 @@ export function PresenceDock() {
     if (captureRef.current === cap) captureRef.current = null;
   }
 
-  function settleCapture(cap: RelayCapture): void {
+  /** one utterance ended — clear the buffers, keep the capture LIVE */
+  function settleUtterance(cap: RelayCapture): void {
     if (cap.done) return;
-    cap.done = true;
-    const text = `${cap.finals}${cap.interim}`.trim();
-    teardownCapture(cap);
+    if (cap.silence) clearTimeout(cap.silence);
+    cap.silence = null;
+    const text = `${cap.finals} ${cap.interim}`.trim();
+    cap.finals = "";
+    cap.interim = "";
     if (text) routeCommand(text);
   }
 
@@ -188,7 +215,16 @@ export function PresenceDock() {
     }
     let stream: MediaStream;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          /* the first defense of full-duplex: the browser's acoustic echo
+             canceller subtracts what the SPEAKERS are playing — most of
+             the assistant's own voice never reaches the transcript */
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
     } catch {
       void api.liveSttStop(sessionId).catch(() => undefined);
       return;
@@ -202,15 +238,9 @@ export function PresenceDock() {
     rec.start(400);
     const es = new EventSource(`/api/live-stt/${encodeURIComponent(sessionId)}/events`);
     const cap: RelayCapture = { id: sessionId, stream, rec, es, finals: "", interim: "", silence: null, done: false };
-    /*
-     * The silence clock arms only once SOMETHING was said: pure silence
-     * keeps the window open (the machine's 45s session decides), while a
-     * spoken command settles CAPTURE_SILENCE_MS after its last word —
-     * short commands end fast, long ones get all the room they need.
-     */
     const armSilence = () => {
       if (cap.silence) clearTimeout(cap.silence);
-      cap.silence = setTimeout(() => settleCapture(cap), CAPTURE_SILENCE_MS);
+      cap.silence = setTimeout(() => settleUtterance(cap), CAPTURE_SILENCE_MS);
     };
     es.onmessage = (event) => {
       try {
@@ -218,12 +248,27 @@ export function PresenceDock() {
           type: string;
           tokens?: { text: string; is_final: boolean }[];
         };
-        if (body.type === "closed" || body.type === "error") { settleCapture(cap); return; }
+        if (body.type === "closed" || body.type === "error") {
+          settleUtterance(cap);
+          teardownCapture(cap);
+          return;
+        }
         if (body.type === "tokens" && body.tokens) {
           const finalText = body.tokens.filter((tok) => tok.is_final).map((tok) => tok.text).join("");
           if (finalText) cap.finals += finalText;
           cap.interim = body.tokens.filter((tok) => !tok.is_final).map((tok) => tok.text).join("");
-          if (`${cap.finals}${cap.interim}`.trim()) armSilence();
+          const heard = `${cap.finals} ${cap.interim}`.trim();
+          if (heard) {
+            // a stop word acts NOW — not 2.5s from now
+            if (isStopCommand(heard)) {
+              cap.finals = "";
+              cap.interim = "";
+              if (cap.silence) clearTimeout(cap.silence);
+              localStop();
+              return;
+            }
+            armSilence();
+          }
         }
       } catch { /* not a caption frame */ }
     };
@@ -239,27 +284,37 @@ export function PresenceDock() {
 
   function routeCommand(text: string): void {
     if (isStopCommand(text)) { localStop(); return; }
-    if (streamingRef.current) return; // one turn at a time
+    /*
+     * The mic was open while the assistant talked — echo cancellation
+     * catches most of its voice; whatever leaks through is recognized by
+     * TEXT (it is a fragment of what was just said) and dropped. A real
+     * interruption brings new words and BARGES IN.
+     */
+    if (isEchoOf(text, recentSpokenText())) return;
+    if (speakingRef.current) stopSpeaking(); // barge-in over speaking
+    if (streamingRef.current) {
+      // barge-in over thinking: abort the run and let its unwind hand the
+      // NEW question in (submit refuses re-entry while streamingRef holds)
+      pendingCommandRef.current = text;
+      abortRef.current?.abort();
+      return;
+    }
     setOpen(true);
     setMinimized(false);
     submitRef.current(text, true);
   }
 
-  /* capture runs whenever the session is engaged and nothing else owns
-     the moment — not while the assistant streams or speaks (it would
-     transcribe the reply), and one capture at a time */
+  /* ONE capture per engaged conversation — through thinking and speaking */
   useEffect(() => {
-    if (listening === "command" && !streaming && !speaking && !captureRef.current) {
+    if (listening === "command" && !captureRef.current) {
       void beginCapture();
     }
     if (listening !== "command" && captureRef.current) {
       // session over (stop word, timeout): whatever is mid-air is void
-      const cap = captureRef.current;
-      cap.done = true;
-      teardownCapture(cap);
+      teardownCapture(captureRef.current);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [listening, streaming, speaking]);
+  }, [listening]);
 
   /** the dock exists only for signed-in members */
   useEffect(() => {
@@ -505,6 +560,12 @@ export function PresenceDock() {
       setStreaming(false);
       streamingRef.current = false;
       setConsent(null);
+      // a barge-in parked its question while this run unwound — ask it now
+      const queued = pendingCommandRef.current;
+      if (queued) {
+        pendingCommandRef.current = null;
+        setTimeout(() => submitRef.current(queued, true), 0);
+      }
     }
   }
   submitRef.current = (question, viaVoice) => { void submit(question, viaVoice); };
@@ -614,6 +675,9 @@ export function PresenceDock() {
           <div className="flex items-center gap-2 border-b border-border px-3 py-2">
             <span className="h-2 w-2 rounded-full bg-accent" aria-hidden />
             <span className="text-sm font-semibold text-fg">{t("title")}</span>
+            {voiceStatus ? (
+              <span className="text-[11px] text-accent">{voiceStatus}</span>
+            ) : null}
             {/* the dial and the digest toggle live in Settings·Assistant
                 now (user directive) — the dock carries conversation only */}
             <button
@@ -781,9 +845,11 @@ export function PresenceDock() {
         </div>
       ) : null}
 
-      {listening === "command" ? (
+      {/* ONE turn-state chip, and only while the panel is not showing its
+          own header status — the old pair overlapped the composer */}
+      {voiceStatus && (!open || minimized) ? (
         <p className="pointer-events-none fixed bottom-[104px] end-4 z-50 rounded-xl md:bottom-[140px] md:end-6 border border-accent/40 bg-surface px-3 py-1.5 text-xs text-accent shadow-lg">
-          {t("listening")}
+          {voiceStatus}
         </p>
       ) : null}
 

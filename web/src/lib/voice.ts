@@ -101,6 +101,34 @@ export function isStopCommand(text: string): boolean {
   return STOP_RE.test(text);
 }
 
+/** language-agnostic canonical form for echo comparison */
+function canonical(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Self-echo discrimination (the full-duplex requirement): with the mic
+ * open WHILE the assistant talks, a transcript may be the assistant's own
+ * voice leaking past echo-cancellation. It is an echo when the last
+ * spoken reply CONTAINS it, or contains nearly all of its words — a real
+ * barge-in brings words the reply never said.
+ */
+export function isEchoOf(utterance: string, spoken: string): boolean {
+  const u = canonical(utterance);
+  const s = canonical(spoken);
+  if (!u || !s) return false;
+  if (s.includes(u)) return true;
+  const words = u.split(" ");
+  if (words.length < 3) return false; // too short to fingerprint — let it through
+  const spokenSet = new Set(s.split(" "));
+  const hits = words.filter((word) => spokenSet.has(word)).length;
+  return hits / words.length >= 0.8;
+}
+
 /**
  * The wake DECISION machine, separated from the recognizer plumbing so it
  * can be tested with fed transcripts and fake timers.
@@ -291,6 +319,14 @@ export function currentSpeechAudio(): HTMLAudioElement | null {
   return serverAudio;
 }
 
+/** everything the assistant has SAID OUT LOUD recently — the echo filter's
+    reference text (acks and replies both; capped so it stays a fingerprint
+    of the recent voice, not a transcript archive) */
+let spokenHistory = "";
+export function recentSpokenText(): string {
+  return spokenHistory;
+}
+
 /**
  * Continuous background listening for the wake word. Auto-restarts on end
  * (Chrome stops recognition after silence); stop() ends it for real.
@@ -429,6 +465,8 @@ async function speakAsync(text: string): Promise<void> {
     .replace(/\s+/g, " ")
     .trim();
   if (!cleaned) return;
+  // remember what the voice is about to say — the echo filter's reference
+  spokenHistory = `${spokenHistory} ${cleaned}`.slice(-2000);
   stopSpeaking();
 
   /*

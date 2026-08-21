@@ -1250,7 +1250,9 @@
     "silentOn": "Silent — replies are text only.",
     "silentOff": "Voice on — spoken questions get spoken replies.",
     "minimize": "Minimize",
-    "restore": "Restore"
+    "restore": "Restore",
+    "thinkingState": "Thinking…",
+    "speakingState": "Speaking…"
   },
   "summaries": {
     "empty": "No summaries yet — as each recording finishes processing, its summary lands here.",

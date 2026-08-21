@@ -88,9 +88,9 @@ function AuroraCanvas({ state, level }: { state: AuroraState; level: number }) {
       context.fillStyle = aura;
       context.fillRect(0, 0, width, height);
 
-      drawMagneticWaves(context, cx, cy, unit, time, energy, false);
+      drawAuroraRibbons(context, cx, cy, unit, time, energy, false);
       drawCore(context, cx, cy, coreRadius, time, voice);
-      drawMagneticWaves(context, cx, cy, unit, time, energy, true);
+      drawAuroraRibbons(context, cx, cy, unit, time, energy, true);
       if (listening) drawListeningScan(context, cx, cy, unit, time, energy);
       if (speaking) drawVoiceRipples(context, cx, cy, unit, time, energy);
 
@@ -144,37 +144,58 @@ function drawCore(ctx: CanvasRenderingContext2D, cx: number, cy: number, radius:
   ctx.restore();
 }
 
-function drawMagneticWaves(ctx: CanvasRenderingContext2D, cx: number, cy: number, unit: number, time: number, energy: number, foreground: boolean) {
-  const waves = foreground ? [
-    { angle: -0.22, phase: 0.2, color: "95, 227, 255", violet: "213, 129, 255" },
-    { angle: 0.48, phase: 2.4, color: "131, 162, 255", violet: "179, 104, 255" },
+function drawAuroraRibbons(ctx: CanvasRenderingContext2D, cx: number, cy: number, unit: number, time: number, energy: number, foreground: boolean) {
+  const ribbons = foreground ? [
+    { tilt: -0.08, y: 0.10, arc: -0.23, phase: 0.5, cyan: "72, 228, 255", violet: "222, 136, 255" },
+    { tilt: 0.38, y: -0.04, arc: 0.16, phase: 2.7, cyan: "122, 177, 255", violet: "192, 105, 255" },
+    { tilt: -0.44, y: 0.02, arc: 0.18, phase: 4.4, cyan: "84, 208, 255", violet: "180, 104, 255" },
   ] : [
-    { angle: 0.18, phase: 0.8, color: "83, 221, 255", violet: "179, 103, 255" },
-    { angle: -0.55, phase: 2.8, color: "119, 163, 255", violet: "212, 126, 255" },
-    { angle: 1.1, phase: 4.6, color: "79, 213, 255", violet: "168, 105, 255" },
+    { tilt: 0.16, y: -0.10, arc: 0.22, phase: 1.2, cyan: "69, 213, 255", violet: "178, 107, 255" },
+    { tilt: -0.34, y: 0.03, arc: -0.18, phase: 3.1, cyan: "105, 164, 255", violet: "217, 124, 255" },
+    { tilt: 0.67, y: 0.01, arc: 0.12, phase: 5.0, cyan: "87, 223, 255", violet: "174, 102, 255" },
   ];
-  for (const [i, wave] of waves.entries()) {
-    const spin = time * (foreground ? 0.58 : -0.35) + wave.phase;
-    const pulse = 1 + Math.sin(time * 2.4 + wave.phase) * 0.035 + energy * 0.1;
-    const rx = unit * (0.34 + i * 0.024) * pulse;
-    const ry = unit * (0.105 + i * 0.012 + energy * 0.028);
+  for (const [index, ribbon] of ribbons.entries()) {
+    const breathing = Math.sin(time * (1.25 + energy) + ribbon.phase);
+    const travel = Math.sin(time * (0.42 + energy * 0.36) + ribbon.phase);
+    const span = unit * (0.58 + index * 0.035);
+    const waveHeight = unit * (ribbon.arc + breathing * (0.026 + energy * 0.042));
+    const line = unit * (0.047 + energy * 0.04 + (foreground ? 0.012 : 0));
     ctx.save();
-    ctx.translate(cx, cy);
-    ctx.rotate(wave.angle + Math.sin(spin) * 0.12);
+    ctx.translate(cx, cy + ribbon.y * unit);
+    ctx.rotate(ribbon.tilt + travel * 0.07);
     ctx.globalCompositeOperation = "screen";
-    ctx.strokeStyle = `rgba(${wave.color}, ${foreground ? 0.72 : 0.44 + energy * 0.28})`;
-    ctx.lineWidth = unit * (0.018 + energy * 0.02);
-    ctx.shadowColor = `rgba(${wave.violet}, ${0.38 + energy * 0.36})`;
-    ctx.shadowBlur = unit * (0.045 + energy * 0.035);
-    ctx.beginPath();
-    const start = foreground ? Math.PI * 0.06 : 0;
-    const end = foreground ? Math.PI * 0.96 : Math.PI * 2;
-    ctx.ellipse(0, 0, rx, ry, 0, start, end);
-    ctx.stroke();
-    ctx.strokeStyle = `rgba(231, 250, 255, ${foreground ? 0.5 : 0.22})`;
-    ctx.lineWidth = Math.max(0.6, unit * 0.009);
+    const gradient = ctx.createLinearGradient(-span, 0, span, 0);
+    gradient.addColorStop(0, `rgba(${ribbon.cyan}, 0.08)`);
+    gradient.addColorStop(0.2, `rgba(${ribbon.cyan}, ${foreground ? 0.45 : 0.24})`);
+    gradient.addColorStop(0.52, `rgba(${ribbon.violet}, ${foreground ? 0.52 : 0.26})`);
+    gradient.addColorStop(0.8, `rgba(${ribbon.cyan}, ${foreground ? 0.42 : 0.22})`);
+    gradient.addColorStop(1, `rgba(${ribbon.violet}, 0.06)`);
+    const path = new Path2D();
+    path.moveTo(-span, unit * travel * 0.025);
+    path.bezierCurveTo(
+      -span * 0.56, waveHeight,
+      -span * 0.12, -waveHeight * 1.15,
+      span * 0.12, waveHeight * 0.52,
+    );
+    path.bezierCurveTo(
+      span * 0.42, waveHeight * 1.08,
+      span * 0.68, -waveHeight * 0.7,
+      span, unit * travel * -0.02,
+    );
+    ctx.strokeStyle = gradient;
+    ctx.lineWidth = line;
+    ctx.lineCap = "round";
+    ctx.shadowColor = `rgba(${ribbon.cyan}, ${0.28 + energy * 0.34})`;
+    ctx.shadowBlur = unit * (0.055 + energy * 0.045);
+    ctx.stroke(path);
+    ctx.lineWidth = line * 0.46;
+    ctx.shadowBlur = unit * 0.022;
+    ctx.strokeStyle = `rgba(212, 248, 255, ${foreground ? 0.44 : 0.22})`;
+    ctx.stroke(path);
+    ctx.lineWidth = Math.max(0.7, line * 0.12);
     ctx.shadowBlur = 0;
-    ctx.stroke();
+    ctx.strokeStyle = `rgba(255, 255, 255, ${foreground ? 0.48 : 0.18})`;
+    ctx.stroke(path);
     ctx.restore();
   }
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isStopCommand, matchWake } from "./voice";
+import { isEchoOf, isStopCommand, matchWake } from "./voice";
 
 /**
  * The wake matcher is the one pure decision in the voice path — everything
@@ -69,5 +69,23 @@ describe("isStopCommand", () => {
   it("never eats a real command that merely CONTAINS a stop word", () => {
     expect(isStopCommand("stop the recording and save it")).toBe(false);
     expect(isStopCommand("cancel the meeting tomorrow")).toBe(false);
+  });
+});
+
+describe("isEchoOf — the full-duplex echo filter", () => {
+  const reply = "I have started the recording for you. Let me know when you're done or if you need to pause it!";
+
+  it("recognizes the assistant's own sentence leaking back (the live screenshot)", () => {
+    expect(isEchoOf("for you let me know when you're done or if you need to pause it", reply)).toBe(true);
+    expect(isEchoOf("let me know when you are done", reply)).toBe(true);
+  });
+
+  it("a real barge-in brings NEW words and passes through", () => {
+    expect(isEchoOf("no wait, open the archive instead", reply)).toBe(false);
+    expect(isEchoOf("برو به بایگانی", reply)).toBe(false);
+  });
+
+  it("short utterances are not fingerprintable — never swallowed by overlap", () => {
+    expect(isEchoOf("pause it", "totally unrelated words here")).toBe(false);
   });
 });
