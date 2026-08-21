@@ -48,6 +48,9 @@ interface DockMessage {
   content: string;
   chips: string[];
   failed?: boolean;
+  /** the server's own refusal sentence, when it gave one — a 400's message
+      is actionable ("no model selected…"); a bare "did not finish" is not */
+  failedDetail?: string;
 }
 
 function todayKey(): string {
@@ -143,6 +146,27 @@ export function PresenceDock() {
   }, [member, open]);
 
   const submitRef = useRef<(question: string, viaVoice: boolean) => void>(() => undefined);
+  /** undefined = not fetched yet; null = fetched, nothing usable */
+  const modelRef = useRef<string | null | undefined>(undefined);
+
+  /**
+   * The dock has no model picker, so it climbs M5's ladder itself: the
+   * person's SAVED choice first, else the catalogue's first entry (the
+   * list arrives suggestion-ranked and already allow-listed by core).
+   * Without this every dock ask from an account that never saved a
+   * preference died as an instant 400 — "no model selected" — rendered
+   * as a generic "did not finish" (found live, user report 2026-08-21).
+   */
+  async function ensureModel(): Promise<string | undefined> {
+    if (modelRef.current !== undefined) return modelRef.current ?? undefined;
+    try {
+      const res = await api.models();
+      modelRef.current = res.preferred_model ?? res.models[0]?.id ?? null;
+    } catch {
+      modelRef.current = null; // core still refuses legibly without one
+    }
+    return modelRef.current ?? undefined;
+  }
 
   const beginWake = useCallback(() => {
     if (!micGrantedRef.current || wakeRef.current || !voiceInputSupported()) return;
@@ -161,7 +185,8 @@ export function PresenceDock() {
         setListening("command");
         const capture = listenOnce(locale === "fa" ? "fa-IR" : "en-US");
         if (!capture) { setListening(null); beginWakeRef.current(); return; }
-        const timeout = setTimeout(() => capture.cancel(), 8000);
+        // 10s (user: 8s "finishes too fast")
+        const timeout = setTimeout(() => capture.cancel(), 10000);
         void capture.done.then((heard) => {
           clearTimeout(timeout);
           setListening(null);
@@ -248,7 +273,9 @@ export function PresenceDock() {
       { id: replyId, role: "assistant", content: "", chips: [] },
     ]);
     try {
+      const model = await ensureModel();
       const stream = api.ask(trimmed, { page: pathname, callIds: [] }, sessionId.current, {
+        model,
         locale,
         clientTools: [...SURFACE_TOOLS],
         surface: { route: pathname.replace(/^\/(fa|en)(?=\/|$)/, "") || "/" },
@@ -260,9 +287,10 @@ export function PresenceDock() {
       if (speakReplyRef.current && replyTextRef.current) {
         speak(replyTextRef.current);
       }
-    } catch {
+    } catch (cause) {
+      const detail = (cause as { detail?: string }).detail;
       setMessages((prev) =>
-        prev.map((m) => (m.id === replyId ? { ...m, failed: true } : m)));
+        prev.map((m) => (m.id === replyId ? { ...m, failed: true, failedDetail: detail } : m)));
     } finally {
       setStreaming(false);
       streamingRef.current = false;
@@ -464,7 +492,10 @@ export function PresenceDock() {
                       </span>
                     ) : null}
                     {m.failed ? (
-                      <span className="mt-1 block text-xs text-warning">{t("failed")}</span>
+                      <span className="mt-1 block text-xs text-warning">
+                        {t("failed")}
+                        {m.failedDetail ? <span className="block" dir="ltr">{m.failedDetail}</span> : null}
+                      </span>
                     ) : null}
                   </div>
                 </div>
