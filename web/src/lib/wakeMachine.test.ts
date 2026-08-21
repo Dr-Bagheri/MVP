@@ -2,10 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createWakeMachine } from "./voice";
 
 /**
- * The wake machine is the SPEED fix (user: "hey echo has a delay — make it
- * faster"): the ack fires on the INTERIM transcript, commands ride the
- * same continuous stream (no recognizer restart), and the waking
- * utterance's own final must not become a phantom command.
+ * The wake machine, v2 — shaped by three live complaints (2026-08-21):
+ * the "Yes?" barged into sentences still being spoken; every command
+ * needed its own "hey echo"; and the assistant's spoken reply must not
+ * be transcribed into a command against itself.
  */
 describe("createWakeMachine", () => {
   let onWake: ReturnType<typeof vi.fn<() => void>>;
@@ -20,57 +20,104 @@ describe("createWakeMachine", () => {
     states = [];
     machine = createWakeMachine(
       { onWake, onCommand, onState: (s) => states.push(s) },
-      10_000,
+      { ackDelayMs: 900, engageMs: 45_000 },
     );
   });
   afterEach(() => vi.useRealTimers());
 
-  it("acks a bare wake on the INTERIM — before end-of-speech", () => {
-    machine.feed("echo", false); // interim: the word just appeared
-    expect(onWake).toHaveBeenCalledTimes(1);
-    expect(states).toEqual(["awaiting"]);
+  it("lets the sentence FINISH: no ack while words keep coming after the name", () => {
+    machine.feed("hey echo", false); // the name appears mid-sentence
+    machine.feed("hey echo go to the", false); // …and the sentence continues
+    vi.advanceTimersByTime(2000); // well past the ack delay
+    expect(onWake).not.toHaveBeenCalled(); // nothing talked over them
+    machine.feed("hey echo go to the archive of calls", true);
+    expect(onCommand).toHaveBeenCalledWith("go to the archive of calls");
   });
 
-  it("the waking utterance's own final is not a command and not a second ack", () => {
+  it("a name that stays alone gets its ack after the short hold", () => {
     machine.feed("echo", false);
-    machine.feed("echo", true); // the same utterance finalizing
+    expect(onWake).not.toHaveBeenCalled(); // not instantly — the hold
+    vi.advanceTimersByTime(900);
     expect(onWake).toHaveBeenCalledTimes(1);
+    expect(states).toEqual(["engaged"]);
+  });
+
+  it("a FINAL bare name acks immediately — the utterance is over, nothing to interrupt", () => {
+    machine.feed("echo", true);
+    expect(onWake).toHaveBeenCalledTimes(1);
+  });
+
+  it("STANDBY: one wake, then several commands with no wake word between", () => {
+    machine.feed("echo", true);
+    machine.feed("go to calls", true);
+    machine.feed("open the archive", true);
+    expect(onCommand.mock.calls.map((c) => c[0])).toEqual(["go to calls", "open the archive"]);
+    expect(states).toEqual(["engaged"]); // one session throughout
+  });
+
+  it("each command RENEWS the session", () => {
+    machine.feed("echo", true);
+    vi.advanceTimersByTime(40_000);
+    machine.feed("go to calls", true); // 5s before expiry — renews
+    vi.advanceTimersByTime(40_000); // 80s after wake, 40s after command
+    machine.feed("open the archive", true);
+    expect(onCommand).toHaveBeenCalledTimes(2);
+  });
+
+  it("the session ends on a stop word, either language", () => {
+    machine.feed("echo", true);
+    machine.feed("بسه", true);
+    expect(states).toEqual(["engaged", "idle"]);
+    machine.feed("go to calls", true);
     expect(onCommand).not.toHaveBeenCalled();
   });
 
-  it("wake + command in one breath runs from the final, not the interim", () => {
-    machine.feed("hey echo record", false); // still being spoken
+  it("the session EXPIRES after silence — speech later is ordinary speech", () => {
+    machine.feed("echo", true);
+    vi.advanceTimersByTime(45_001);
+    expect(states).toEqual(["engaged", "idle"]);
+    machine.feed("record new call", true);
     expect(onCommand).not.toHaveBeenCalled();
+  });
+
+  it("MUTED while the assistant speaks: its own voice is never a command", () => {
+    machine.feed("echo", true);
+    machine.setMuted(true); // the reply starts playing
+    machine.feed("I have navigated you to the calls archive", true);
+    expect(onCommand).not.toHaveBeenCalled();
+    machine.setMuted(false);
+    machine.feed("open the archive", true);
+    expect(onCommand).toHaveBeenCalledWith("open the archive");
+  });
+
+  it("unmute RENEWS the session — a long reply must not silently expire it", () => {
+    machine.feed("echo", true);
+    machine.setMuted(true);
+    vi.advanceTimersByTime(44_000); // almost the whole window spent listening
+    machine.setMuted(false);
+    vi.advanceTimersByTime(10_000); // would have expired without the renew
+    machine.feed("go to calls", true);
+    expect(onCommand).toHaveBeenCalledWith("go to calls");
+  });
+
+  it("saying the name again mid-session re-acks instead of becoming a command", () => {
+    machine.feed("echo", true);
+    machine.feed("hey echo", true);
+    expect(onWake).toHaveBeenCalledTimes(2);
+    expect(onCommand).not.toHaveBeenCalled();
+  });
+
+  it("wake + command in one breath runs from the final, with no ack over it", () => {
+    machine.feed("hey echo record", false);
     machine.feed("hey echo record new call", true);
     expect(onCommand).toHaveBeenCalledWith("record new call");
-    expect(onWake).not.toHaveBeenCalled(); // no "Yes?" over a running command
+    expect(onWake).not.toHaveBeenCalled();
   });
 
-  it("interim ack, then the person keeps talking: the final carries the command", () => {
-    machine.feed("echo", false); // ack fires here
-    machine.feed("echo record new call", true); // same utterance, continued
-    expect(onWake).toHaveBeenCalledTimes(1);
-    expect(onCommand).toHaveBeenCalledWith("record new call");
-    expect(states).toEqual(["awaiting", "idle"]);
-  });
-
-  it("a follow-up inside the window needs no wake word", () => {
-    machine.feed("echo", true);
-    machine.feed("record new call", true);
-    expect(onCommand).toHaveBeenCalledWith("record new call");
-  });
-
-  it("the window EXPIRES — speech after it is ordinary speech again", () => {
-    machine.feed("echo", true);
-    vi.advanceTimersByTime(10_001);
-    expect(states).toEqual(["awaiting", "idle"]);
-    machine.feed("record new call", true);
-    expect(onCommand).not.toHaveBeenCalled();
-  });
-
-  it("interims inside the window are not commands", () => {
-    machine.feed("echo", true);
-    machine.feed("record new", false);
+  it("a revised-away wake is a mishear, not a command", () => {
+    machine.feed("echo", false); // primed
+    machine.feed("that will do", true); // the recognizer changed its mind
+    expect(onWake).not.toHaveBeenCalled();
     expect(onCommand).not.toHaveBeenCalled();
   });
 

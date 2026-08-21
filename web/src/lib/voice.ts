@@ -77,78 +77,154 @@ export interface WakeListenerHandle {
   stop: () => void;
 }
 
-export type WakeState = "idle" | "awaiting";
+export type WakeState = "idle" | "engaged";
 
 export interface WakeHandlers {
   /** the name was heard alone — ack out loud and show the listening chip */
   onWake: () => void;
-  /** a command to run — either in the same breath or inside the window */
+  /** a command to run — either in the same breath or inside the session */
   onCommand: (command: string) => void;
   onState?: (state: WakeState) => void;
 }
 
 /**
+ * "That's all" in either language — said as a WHOLE utterance while
+ * engaged, it ends the conversation session on the spot.
+ */
+const STOP_RE = /^\s*(?:stop|enough|cancel|never mind|thanks,? that'?s all|بسه|بس کن|تمام|کافیه|هیچی|ممنون همین)[\s.,،!?]*$/i;
+
+/**
  * The wake DECISION machine, separated from the recognizer plumbing so it
  * can be tested with fed transcripts and fake timers.
  *
- * Speed is the design (user: "hey echo has a delay — make it faster"): the
- * machine acts on INTERIM results, so a bare «echo» gets its "Yes?" the
- * moment the recognizer first prints the word — not a second later when
- * end-of-speech finalizes it. Commands still wait for the FINAL transcript
- * (an interim command is half a sentence), and the old stop-the-listener/
- * start-a-fresh-one round-trip after the ack is gone entirely: the same
- * continuous stream feeds the command window.
+ * Three states, shaped by two live complaints:
  *
- * The one subtlety: after an interim bare-wake opens the window, that same
- * utterance's own FINAL arrives — as «echo» (ignored: it is the wake, not
- * a command) or as «echo record new call» (the person kept talking: the
- * remainder IS the command).
+ * IDLE → PRIMED: the name appears in an INTERIM transcript. The first
+ * version acked ("Yes?") right here — and talked OVER anyone saying
+ * "hey echo, go to the archive" in one breath (user: "it does not let me
+ * finish the sentence"). Now the ack waits `ackDelayMs`: if more words
+ * follow the name in the next interims, the ack is cancelled and the
+ * FINAL carries the command; only a name that stays alone gets the "Yes?".
+ *
+ * ENGAGED — the conversation session (user: "it should stand by listening
+ * and getting commands", not one wake word per command): after a wake or
+ * a command the machine STAYS engaged for `engageMs`, every final
+ * utterance is a command, each command renews the session, interim speech
+ * keeps it alive, and a stop word («بسه» / "stop") or silence ends it.
  */
 export function createWakeMachine(
   handlers: WakeHandlers,
-  windowMs = 10_000,
-): { feed: (transcript: string, isFinal: boolean) => void; cancel: () => void } {
-  let state: WakeState = "idle";
-  let timer: ReturnType<typeof setTimeout> | null = null;
+  options: { ackDelayMs?: number; engageMs?: number } = {},
+): {
+  feed: (transcript: string, isFinal: boolean) => void;
+  setMuted: (muted: boolean) => void;
+  cancel: () => void;
+} {
+  const ackDelayMs = options.ackDelayMs ?? 900;
+  const engageMs = options.engageMs ?? 45_000;
+  let state: "idle" | "primed" | "engaged" = "idle";
+  /** while the assistant's own voice is playing, the mic hears IT — a
+      machine that listens then would answer itself in a loop */
+  let muted = false;
+  let ackTimer: ReturnType<typeof setTimeout> | null = null;
+  let engageTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const clearAck = () => { if (ackTimer) clearTimeout(ackTimer); ackTimer = null; };
+  const clearEngage = () => { if (engageTimer) clearTimeout(engageTimer); engageTimer = null; };
 
   const toIdle = () => {
-    if (timer) clearTimeout(timer);
-    timer = null;
-    if (state !== "idle") {
-      state = "idle";
-      handlers.onState?.("idle");
-    }
+    clearAck();
+    clearEngage();
+    const wasVisible = state === "engaged";
+    state = "idle";
+    if (wasVisible) handlers.onState?.("idle");
+  };
+
+  const engage = () => {
+    clearAck();
+    clearEngage();
+    const entering = state !== "engaged";
+    state = "engaged";
+    if (entering) handlers.onState?.("engaged");
+    engageTimer = setTimeout(toIdle, engageMs);
+  };
+
+  const renew = () => {
+    clearEngage();
+    engageTimer = setTimeout(toIdle, engageMs);
   };
 
   return {
+    setMuted(next) {
+      muted = next;
+      // speech that straddled the mute began as the assistant's own voice
+      if (next && state === "primed") toIdle();
+      // a long spoken reply must not silently expire the session while the
+      // person was only ever listening to it
+      if (!next && state === "engaged") renew();
+    },
     feed(transcript, isFinal) {
+      if (muted) return;
       if (state === "idle") {
         const m = matchWake(transcript);
         if (!m.woke) return;
         if (m.command) {
-          // wake + command in one breath — run it, but only from the FINAL:
-          // an interim here is a sentence still being spoken
-          if (isFinal) handlers.onCommand(m.command);
+          // wake + command in one breath — run it from the FINAL only
+          if (isFinal) { engage(); handlers.onCommand(m.command); }
+          else state = "primed"; // command coming — never ack over it
           return;
         }
-        // bare wake — interim or final, whichever arrives first wins
-        state = "awaiting";
-        handlers.onState?.("awaiting");
-        handlers.onWake();
-        timer = setTimeout(toIdle, windowMs);
-      } else {
-        if (!isFinal) return;
+        if (isFinal) {
+          // definitely the name alone
+          engage();
+          handlers.onWake();
+          return;
+        }
+        // the name, mid-utterance: hold the ack briefly — the sentence may
+        // still be going ("hey echo, go to…")
+        state = "primed";
+        ackTimer = setTimeout(() => {
+          engage();
+          handlers.onWake();
+        }, ackDelayMs);
+      } else if (state === "primed") {
         const m = matchWake(transcript);
-        // the waking utterance's own final catching up — not a command
-        if (m.woke && !m.command) return;
-        const command = (m.woke ? m.command : transcript.trim());
-        if (!command) return; // stay in the window
+        if (!isFinal) {
+          // more words arrived after the name — a command is being spoken
+          if (m.woke && m.command) clearAck();
+          return;
+        }
+        clearAck();
+        if (m.woke && m.command) { engage(); handlers.onCommand(m.command); return; }
+        if (m.woke) { engage(); handlers.onWake(); return; }
+        // the recognizer revised the wake away — a mishear, let it go
         toIdle();
+      } else {
+        // engaged: the conversation session
+        if (!isFinal) { renew(); return; } // speech in progress keeps it alive
+        if (STOP_RE.test(transcript)) { toIdle(); return; }
+        const m = matchWake(transcript);
+        // saying the name again mid-session is a re-ack, not a command
+        if (m.woke && !m.command) { renew(); handlers.onWake(); return; }
+        const command = (m.woke ? m.command : transcript.trim());
+        if (!command) { renew(); return; }
+        renew();
         handlers.onCommand(command);
       }
     },
     cancel: toIdle,
   };
+}
+
+/**
+ * The assistant's own PLAYBACK state, published so the voice control can
+ * deafen itself while the speakers carry its voice — otherwise the mic
+ * transcribes the reply and the assistant starts answering itself.
+ */
+const playbackListeners = new Set<(speaking: boolean) => void>();
+let playbackToken = 0;
+function publishPlayback(speaking: boolean): void {
+  for (const listener of playbackListeners) listener(speaking);
 }
 
 /**
@@ -165,6 +241,8 @@ export function startVoiceControl(opts: {
   const Ctor = recognitionCtor();
   if (!Ctor) return null;
   const machine = createWakeMachine(opts);
+  const onPlayback = (speaking: boolean) => machine.setMuted(speaking);
+  playbackListeners.add(onPlayback);
   let stopped = false;
   const rec = new Ctor();
   rec.lang = opts.lang;
@@ -191,10 +269,11 @@ export function startVoiceControl(opts: {
     }
     // other errors (no-speech, network) fall through to onend's restart
   };
-  try { rec.start(); } catch { return null; }
+  try { rec.start(); } catch { playbackListeners.delete(onPlayback); return null; }
   return {
     stop: () => {
       stopped = true;
+      playbackListeners.delete(onPlayback);
       machine.cancel();
       try { rec.abort(); } catch { /* fine */ }
     },
@@ -285,12 +364,27 @@ async function speakAsync(text: string): Promise<void> {
   if (!cleaned) return;
   stopSpeaking();
 
+  /*
+   * Publish "the speakers carry my voice" for the duration — the voice
+   * control deafens itself on this signal. Token-guarded: a newer speak
+   * cancelling this one must not have its playback=false land after the
+   * newer playback=true.
+   */
+  const token = ++playbackToken;
+  const done = () => { if (token === playbackToken) publishPlayback(false); };
+  const speakUtterance = (utterance: SpeechSynthesisUtterance) => {
+    publishPlayback(true);
+    utterance.onend = done;
+    utterance.onerror = done;
+    window.speechSynthesis.speak(utterance);
+  };
+
   const persian = PERSIAN_RE.test(cleaned);
   if (!persian) {
     if (!("speechSynthesis" in window)) return;
     const utterance = new SpeechSynthesisUtterance(cleaned);
     utterance.lang = "en-US";
-    window.speechSynthesis.speak(utterance);
+    speakUtterance(utterance);
     return;
   }
 
@@ -300,7 +394,7 @@ async function speakAsync(text: string): Promise<void> {
     const utterance = new SpeechSynthesisUtterance(cleaned);
     utterance.voice = faVoice;
     utterance.lang = faVoice.lang;
-    window.speechSynthesis.speak(utterance);
+    speakUtterance(utterance);
     return;
   }
 
@@ -309,11 +403,15 @@ async function speakAsync(text: string): Promise<void> {
     const { api } = await import("@/api/client");
     const blob = await api.tts(cleaned.slice(0, 1200));
     serverAudio = new Audio(URL.createObjectURL(blob));
+    publishPlayback(true);
     serverAudio.onended = () => {
       if (serverAudio) URL.revokeObjectURL(serverAudio.src);
+      done();
     };
+    serverAudio.onerror = done;
     await serverAudio.play();
   } catch {
+    done();
     if (!warnedNoPersian) {
       warnedNoPersian = true;
       const { notify } = await import("@/lib/notify");

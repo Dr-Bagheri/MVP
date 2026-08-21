@@ -42,6 +42,8 @@ import type { DomainTool } from "./tools.ts";
  */
 const str = (description?: string): Record<string, unknown> =>
   ({ type: "string", ...(description ? { description } : {}) });
+const strEnum = (values: readonly string[], description?: string): Record<string, unknown> =>
+  ({ type: "string", enum: [...values], ...(description ? { description } : {}) });
 const obj = (
   properties: Record<string, unknown>,
   required: string[] = [],
@@ -63,10 +65,43 @@ export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
   {
     name: "navigate",
     label: "رفتن به صفحه",
+    /*
+     * The route MAP lives in the description and the enum, deliberately:
+     * without it the model guessed — "archive of calls" landed on /echo/calls
+     * and "users" landed on /settings (user report, 2026-08-21). A closed
+     * enum makes a wrong destination unrepresentable; the meanings make the
+     * right one findable. Every entry must stay inside the web surface's
+     * NAVIGABLE allow-list (web/src/lib/agentSurface.ts) — the executor
+     * still refuses anything else.
+     */
     description:
-      "Navigate the user's screen to a place in the platform. Use a route "
-      + "path such as /echo/calls, /echo/record, /workflows, /settings.",
-    parameters: obj({ path: str("In-app route path.") }, ["path"]),
+      "Navigate the user's screen to a page. Destinations: "
+      + "/ = home hub. "
+      + "/echo = Echo recording studio (record a call in the browser). "
+      + "/echo/upload = upload an audio file. "
+      + "/echo/calls = the list of recorded calls. "
+      + "/echo/archive = ARCHIVED calls (the calls archive). "
+      + "/echo/speakers = speakers directory. "
+      + "/conversations = past assistant conversations (history). "
+      + "/search = transcript search. "
+      + "/workflows = workflows. /agents = agents. "
+      + "/management/users = user & member management (people, roles, invitations). "
+      + "/management/skills = assistant skills. /management/models = AI models. "
+      + "/management/connectors = calendar/mail connectors. "
+      + "/management/server = server status (admin). "
+      + "/settings = settings home. /settings/general = general settings. "
+      + "/settings/assistant = assistant settings (autonomy, weekly digest). "
+      + "/settings/security = security. /settings/audit-logs = audit logs. ",
+    parameters: obj({
+      path: strEnum([
+        "/", "/echo", "/echo/upload", "/echo/calls", "/echo/archive", "/echo/speakers",
+        "/conversations", "/search", "/workflows", "/agents",
+        "/management/users", "/management/skills", "/management/models",
+        "/management/connectors", "/management/server",
+        "/settings", "/settings/general", "/settings/assistant",
+        "/settings/security", "/settings/audit-logs",
+      ], "The destination route."),
+    }, ["path"]),
     effect: "ui",
   },
   {

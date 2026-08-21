@@ -216,7 +216,7 @@ export function PresenceDock() {
         setOpen(true);
         submitRef.current(command, true);
       },
-      onState: (state) => setListening(state === "awaiting" ? "command" : null),
+      onState: (state) => setListening(state === "engaged" ? "command" : null),
       onError: () => {
         wakeRef.current = null;
         notify(t("micDenied"), "warn");
