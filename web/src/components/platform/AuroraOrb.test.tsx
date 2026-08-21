@@ -1,7 +1,14 @@
 import { render } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { AuroraOrb } from "./AuroraOrb";
 import { computeRms } from "@/lib/useAudioLevel";
+
+beforeAll(() => {
+  // JSDOM intentionally has no 2D implementation. Browser rendering is
+  // exercised by the production build; unit tests need only assert that the
+  // canvas remains the one decorative renderer.
+  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
+});
 
 describe("AuroraOrb", () => {
   it("carries its state and a CLAMPED level on one CSS variable", () => {
@@ -11,38 +18,31 @@ describe("AuroraOrb", () => {
     expect(root.style.getPropertyValue("--audio-level")).toBe("1"); // clamped
   });
 
-  it("ripples exist ONLY while listening; the halo only while speaking", () => {
-    const idle = render(<AuroraOrb state="idle" />).container;
-    expect(idle.querySelector(".aurora-ripple")).toBeNull();
-    expect(idle.querySelector(".aurora-halo")).toBeNull();
-    const listening = render(<AuroraOrb state="listening" />).container;
-    expect(listening.querySelectorAll(".aurora-ripple")).toHaveLength(3);
-    expect(listening.querySelector(".aurora-listen-scan")).not.toBeNull();
-    const speaking = render(<AuroraOrb state="speaking" />).container;
-    expect(speaking.querySelector(".aurora-halo")).not.toBeNull();
-    expect(speaking.querySelector(".aurora-voice-wave")).not.toBeNull();
+  it("hands every state to the live procedural renderer", () => {
+    for (const state of ["idle", "listening", "speaking", "muted"] as const) {
+      const { container } = render(<AuroraOrb state={state} />);
+      const canvas = container.querySelector(".aurora-canvas") as HTMLCanvasElement;
+      expect(canvas.dataset.renderState).toBe(state);
+    }
   });
 
-  it("every layer is decorative — nothing here competes with the button", () => {
+  it("the renderer is decorative — nothing here competes with the button", () => {
     const { container } = render(<AuroraOrb state="idle" />);
-    for (const layer of container.querySelectorAll(".aurora-root > span")) {
-      expect(layer.getAttribute("aria-hidden")).toBe("true");
-    }
+    expect(container.querySelector(".aurora-canvas")?.getAttribute("aria-hidden")).toBe("true");
   });
 
   it("muted stops floating but keeps the body (still clickable, still seen)", () => {
     const { container } = render(<AuroraOrb state="muted" />);
     const root = container.querySelector(".aurora-root") as HTMLElement;
     expect(root.classList.contains("aurora-float")).toBe(false);
-    expect(container.querySelector(".aurora-core")).not.toBeNull();
+    expect(container.querySelector(".aurora-canvas")).not.toBeNull();
   });
 
-  it("builds its identity from decorative procedural layers, not a raster image", () => {
+  it("uses one canvas-rendered identity, not a raster image or static layers", () => {
     const { container } = render(<AuroraOrb state="idle" />);
     expect(container.querySelector("img")).toBeNull();
-    expect(container.querySelector(".aurora-nebula")).not.toBeNull();
-    expect(container.querySelectorAll(".aurora-orbit")).toHaveLength(3);
-    expect(container.querySelector(".aurora-voice-wave")).toBeNull();
+    expect(container.querySelectorAll(".aurora-canvas")).toHaveLength(1);
+    expect(container.querySelectorAll(".aurora-root > span")).toHaveLength(0);
   });
 });
 
