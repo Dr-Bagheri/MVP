@@ -1226,6 +1226,17 @@
     "dialFailed": "The setting was not saved.",
     "digestToggle": "Weekly digest",
     "unread": "{count} unread",
-    "dialAct": "Act"
+    "dialAct": "Act",
+    "micDenied": "You didn't give mic access — grant it so I can help you.",
+    "voiceUnsupported": "This browser does not support voice commands.",
+    "wakeAck": "Yes?",
+    "listening": "Listening…",
+    "micButton": "Voice command",
+    "savedDial": "Autonomy level saved.",
+    "savedDigest": "Weekly digest saved.",
+    "bellLabel": "Notifications",
+    "bellEmpty": "No notifications.",
+    "bellCards": "Assistant messages",
+    "bellRecent": "Recent events"
   }
 }

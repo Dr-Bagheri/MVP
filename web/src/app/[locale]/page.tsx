@@ -1,9 +1,7 @@
 import { Suspense } from "react";
-import { AssistantMenu } from "@/components/platform/AssistantMenu";
 import { AssistantConversationProvider } from "@/components/platform/AssistantConversationState";
 import { Hub } from "@/components/platform/Hub";
 import { PlatformShell } from "@/components/platform/PlatformShell";
-import { MenuLayout } from "@/components/scaffold";
 
 /**
  * NeurAI's first page IS the assistant hub (M22) — this route used to redirect
@@ -36,9 +34,9 @@ export default function HubPage() {
         <AssistantConversationProvider>
           {/* New conversation stays in the Assistant submenu everywhere. On
               Home it clears a live hub and remains an enabled no-op when blank. */}
-          <MenuLayout menu={<AssistantMenu activeSlug="new" />}>
+          <div className="w-full">
             <Hub />
-          </MenuLayout>
+          </div>
         </AssistantConversationProvider>
       </Suspense>
     </PlatformShell>

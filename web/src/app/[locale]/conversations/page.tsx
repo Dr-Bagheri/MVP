@@ -5,9 +5,8 @@ import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { AssistantSession } from "@/api/types";
 import { AssistantPane } from "@/components/AssistantPane";
-import { AssistantMenu } from "@/components/platform/AssistantMenu";
 import { PlatformShell } from "@/components/platform/PlatformShell";
-import { MenuLayout, PageHeader } from "@/components/scaffold";
+import { PageHeader } from "@/components/scaffold";
 import { digits, formatDate } from "@/lib/format";
 
 /**
@@ -54,7 +53,7 @@ export default function ConversationsPage() {
             whose menu slot holds data reads as a different product than
             the pages beside it */}
         <div className="min-w-0 flex-1 overflow-y-auto">
-        <MenuLayout menu={<AssistantMenu activeSlug="history" />}>
+        <div className="w-full">
 
         {/* the records as a TABLE — the same card-table anatomy every other
             sub-page uses, at every width now that the menu slot holds the
@@ -143,7 +142,7 @@ export default function ConversationsPage() {
               )}
             </div>
           </div>
-        </MenuLayout>
+        </div>
         </div>
 
         {/*

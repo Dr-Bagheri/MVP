@@ -5,6 +5,17 @@ all phases, one by one"). M33–M36 are ratified in ARCHITECTURE.md.
 Pending on production: migrations 0073/0074/0075 (owner-run; core
 capability-detects and degrades loudly until they land).**
 
+**Voice-first pass (2026-08-21, user directive, same day):** the assistant
+menu is removed everywhere (presence replaces it); the dock's hotkey is
+**Ctrl+E**; the orb sits inset from the corner; wake words «echo / hi
+echo / salam echo / سلام اکو» open the dock and auto-send the spoken
+command (Web Speech API, feature-detected — Chrome-class browsers only);
+a voice ask is answered out loud in its own language; mic permission is
+requested on landing and a denial is announced at the orb's head; ALL
+platform notices ride one bus (`web/src/lib/notify.ts`) rendered as
+toasts above the orb, with a bell menu at the top bar's end holding the
+history + the agent's cards.
+
 **Deferred from Phase D, deliberately and on the record (M21 — the
 forfeit said out loud):**
 - **Live catch-me-up + realtime translation lane**: both need a realtime

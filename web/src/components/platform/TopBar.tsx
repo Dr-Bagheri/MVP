@@ -8,6 +8,7 @@ import { AvatarMenu } from "./AvatarMenu";
 import { formatDate } from "@/lib/format";
 import { useTimezonePreference } from "@/lib/usePreferences";
 import { Breadcrumbs } from "./Breadcrumbs";
+import { NotificationBell } from "./NotificationBell";
 
 /**
  * The platform top bar (M22): en/fa switcher · global search · avatar.
@@ -104,6 +105,10 @@ export function TopBar({ me, isPlatformRoot = false }: { me: User | null; isPlat
           </button>
         ))}
       </div>
+
+      {/* the notification menu — icon only, at the bar's end, beside the
+          calendar/clock (user directive, 2026-08-21) */}
+      {me !== null ? <NotificationBell /> : null}
     </header>
   );
 }

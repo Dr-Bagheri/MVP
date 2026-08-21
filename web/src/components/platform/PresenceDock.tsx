@@ -7,21 +7,30 @@ import { api } from "@/api/client";
 import type { AgentCardItem, AgentEvent } from "@/api/types";
 import { useRouter } from "@/i18n/routing";
 import { executeClientTool, SURFACE_TOOLS } from "@/lib/agentSurface";
+import { notify, subscribeNotify, type PlatformNotice } from "@/lib/notify";
+import { listenOnce, speak, startWakeListener, voiceInputSupported, type WakeListenerHandle } from "@/lib/voice";
 
 /**
- * PRESENCE (proposed M34) — the agent, always there.
+ * PRESENCE (M34) — the agent, always there.
  *
- * One persistent dock on every route: a collapsed orb at the corner, a
- * panel when opened (⌘K / Ctrl-K opens it anywhere), and the hub itself as
- * the maximized state — which is why the dock renders NOTHING on the hub
- * route: the approved first screen IS the presence, not a rival to it.
+ * One persistent dock on every route: a collapsed orb near the corner, a
+ * panel when opened (Ctrl+E opens it anywhere), and the hub itself as the
+ * maximized state — the orb hides on the hub route (the approved first
+ * screen IS the presence), but the panel, the voice wake word and the
+ * notification toasts stay live there: voice must work wherever the
+ * person is standing.
  *
- * Continuity: one conversation per day, resumed across pages and reloads
- * (the session id lives in localStorage under a dated key; the sign-out
- * sweep removes it — a conversation must not follow the next account on a
- * shared machine). Context: every ask carries the current route, so "this
- * page" means something. IDs only — the server re-reads everything under
- * RLS; nothing here is trusted (M34).
+ * VOICE (user directive, 2026-08-21): the dock listens for its name —
+ * «echo», «hi echo», «salam echo», «سلام اکو». A command in the same
+ * breath ("hey echo, record new call") is sent immediately, no button;
+ * the name alone gets a spoken "Yes?" and an 8-second window for the
+ * command. A voice-initiated ask is answered OUT LOUD in the language it
+ * was asked in. All of it is feature-detected and mic-permission-gated:
+ * denial produces a toast at the orb's head asking for access, never a
+ * silent nothing.
+ *
+ * NOTIFICATIONS: every notice on the bus pops as a small toast above the
+ * orb (auto-dismissed); the top-bar bell keeps the history.
  *
  * Client tools (M33): the dock is the surface's EXECUTOR. A ui-effect call
  * runs immediately through the same code paths a human uses; a write-effect
@@ -65,9 +74,18 @@ export function PresenceDock() {
   /** M35: the proactivity channel — refreshed whenever the panel opens */
   const [cards, setCards] = useState<AgentCardItem[]>([]);
   const [digest, setDigest] = useState<{ enabled: boolean; available: boolean } | null>(null);
+  /** voice state: null = idle; "command" = the post-wake / mic-button window */
+  const [listening, setListening] = useState<"command" | null>(null);
+  const [toasts, setToasts] = useState<PlatformNotice[]>([]);
   const sessionId = useRef<string | undefined>(undefined);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const wakeRef = useRef<WakeListenerHandle | null>(null);
+  const micGrantedRef = useRef(false);
+  /** the reply to a VOICE ask is spoken; typed asks stay silent */
+  const speakReplyRef = useRef(false);
+  const replyTextRef = useRef("");
+  const streamingRef = useRef(false);
 
   /** the dock exists only for signed-in members */
   useEffect(() => {
@@ -85,10 +103,20 @@ export function PresenceDock() {
     } catch { /* storage unavailable — a fresh thread each page is the floor */ }
   }, []);
 
-  /** ⌘K / Ctrl-K — the agent from anywhere */
+  /** every bus notice becomes a toast at the orb's head, gone after 4s */
+  useEffect(() => {
+    return subscribeNotify((notice) => {
+      setToasts((prev) => [...prev.slice(-2), notice]);
+      setTimeout(() => {
+        setToasts((prev) => prev.filter((item) => item.id !== notice.id));
+      }, 4000);
+    });
+  }, []);
+
+  /** Ctrl+E — the agent from anywhere (user directive; was Ctrl+K) */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "e") {
         e.preventDefault();
         setOpen((v) => {
           const next = !v;
@@ -114,6 +142,75 @@ export function PresenceDock() {
     }
   }, [member, open]);
 
+  const submitRef = useRef<(question: string, viaVoice: boolean) => void>(() => undefined);
+
+  const beginWake = useCallback(() => {
+    if (!micGrantedRef.current || wakeRef.current || !voiceInputSupported()) return;
+    wakeRef.current = startWakeListener({
+      lang: locale === "fa" ? "fa-IR" : "en-US",
+      onWake: (command) => {
+        if (streamingRef.current) return; // one conversation turn at a time
+        setOpen(true);
+        if (command) {
+          submitRef.current(command, true);
+          return;
+        }
+        // the name alone: answer out loud, then hold a window for the command
+        speak(t("wakeAck"));
+        suspendWake();
+        setListening("command");
+        const capture = listenOnce(locale === "fa" ? "fa-IR" : "en-US");
+        if (!capture) { setListening(null); beginWakeRef.current(); return; }
+        const timeout = setTimeout(() => capture.cancel(), 8000);
+        void capture.done.then((heard) => {
+          clearTimeout(timeout);
+          setListening(null);
+          beginWakeRef.current();
+          if (heard) submitRef.current(heard, true);
+        });
+      },
+      onError: () => {
+        wakeRef.current = null;
+        notify(t("micDenied"), "warn");
+      },
+    });
+  }, [locale, t]);
+  const beginWakeRef = useRef(beginWake);
+  beginWakeRef.current = beginWake;
+
+  function suspendWake() {
+    wakeRef.current?.stop();
+    wakeRef.current = null;
+  }
+
+  /**
+   * Ask for the microphone ON LANDING (user directive) — one getUserMedia,
+   * tracks stopped immediately; the grant is what SpeechRecognition needs.
+   * Denial → a toast at the orb's head asking for access.
+   */
+  useEffect(() => {
+    if (!member) return;
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) return;
+    let live = true;
+    navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
+      stream.getTracks().forEach((track) => track.stop());
+      if (!live) return;
+      micGrantedRef.current = true;
+      if (!voiceInputSupported()) {
+        notify(t("voiceUnsupported"), "warn");
+        return;
+      }
+      beginWakeRef.current();
+    }).catch(() => {
+      if (live) notify(t("micDenied"), "warn");
+    });
+    return () => {
+      live = false;
+      suspendWake();
+    };
+    // locale change restarts the listener with the right recognition lang
+  }, [member, locale, t]);
+
   function openCard(card: AgentCardItem) {
     if (!card.read) {
       setCards((prev) => prev.map((c) => (c.id === card.id ? { ...c, read: true } : c)));
@@ -136,19 +233,22 @@ export function PresenceDock() {
     });
   }, []);
 
-  async function send() {
-    const question = input.trim();
-    if (!question || streaming) return;
-    setInput("");
+  async function submit(question: string, viaVoice: boolean) {
+    const trimmed = question.trim();
+    if (!trimmed || streamingRef.current) return;
+    setOpen(true);
     setStreaming(true);
+    streamingRef.current = true;
+    speakReplyRef.current = viaVoice;
+    replyTextRef.current = "";
     const replyId = `p-${Date.now()}`;
     setMessages((prev) => [
       ...prev,
-      { id: `u-${Date.now()}`, role: "user", content: question, chips: [] },
+      { id: `u-${Date.now()}`, role: "user", content: trimmed, chips: [] },
       { id: replyId, role: "assistant", content: "", chips: [] },
     ]);
     try {
-      const stream = api.ask(question, { page: pathname, callIds: [] }, sessionId.current, {
+      const stream = api.ask(trimmed, { page: pathname, callIds: [] }, sessionId.current, {
         locale,
         clientTools: [...SURFACE_TOOLS],
         surface: { route: pathname.replace(/^\/(fa|en)(?=\/|$)/, "") || "/" },
@@ -156,13 +256,45 @@ export function PresenceDock() {
       for await (const event of stream) {
         await handleEvent(event, replyId);
       }
+      // the reply to a spoken question is spoken — in ITS language
+      if (speakReplyRef.current && replyTextRef.current) {
+        speak(replyTextRef.current);
+      }
     } catch {
       setMessages((prev) =>
         prev.map((m) => (m.id === replyId ? { ...m, failed: true } : m)));
     } finally {
       setStreaming(false);
+      streamingRef.current = false;
       setConsent(null);
     }
+  }
+  submitRef.current = (question, viaVoice) => { void submit(question, viaVoice); };
+
+  function send() {
+    const question = input.trim();
+    if (!question) return;
+    setInput("");
+    void submit(question, false);
+  }
+
+  /** the composer's mic: one utterance, sent by itself — no button press */
+  function dictate() {
+    if (!voiceInputSupported() || !micGrantedRef.current) {
+      notify(micGrantedRef.current ? t("voiceUnsupported") : t("micDenied"), "warn");
+      return;
+    }
+    suspendWake();
+    setListening("command");
+    const capture = listenOnce(locale === "fa" ? "fa-IR" : "en-US");
+    if (!capture) { setListening(null); beginWakeRef.current(); return; }
+    const timeout = setTimeout(() => capture.cancel(), 10000);
+    void capture.done.then((heard) => {
+      clearTimeout(timeout);
+      setListening(null);
+      beginWakeRef.current();
+      if (heard) void submit(heard, true);
+    });
   }
 
   async function handleEvent(event: AgentEvent, replyId: string) {
@@ -172,6 +304,7 @@ export function PresenceDock() {
         try { localStorage.setItem(todayKey(), event.id); } catch { /* fine */ }
         break;
       case "text_delta":
+        replyTextRef.current += event.delta;
         setMessages((prev) =>
           prev.map((m) => (m.id === replyId ? { ...m, content: m.content + event.delta } : m)));
         break;
@@ -191,6 +324,9 @@ export function PresenceDock() {
           break;
         }
         const result = executeClientTool(event.tool, event.args, { push: router.push });
+        // the surface action announces itself at the orb's head — "it
+        // started doing it" must be visible, not inferred
+        notify(event.label, result.ok ? "info" : "warn");
         await api.deliverToolResult(event.id, result.ok, result.detail).catch(() => undefined);
         break;
       }
@@ -212,21 +348,27 @@ export function PresenceDock() {
     setAutonomyState(next);
     try {
       await api.setAutonomy(next);
+      notify(t("savedDial"));
     } catch (cause) {
       setAutonomyState(prev);
-      const kind = (cause as { kind?: string }).kind;
-      setAutonomyNote(kind === "validation" || kind === "invalid" ? t("dialFailed") : t("dialNotReady"));
+      // 409 not_migrated = the deployment hasn't run db/0073 yet — a
+      // different sentence than "the save failed" (kinds of nothing)
+      const { status, detail } = cause as { status?: number; detail?: string };
+      const notReady = status === 409 || detail === "not_migrated";
+      setAutonomyNote(notReady ? t("dialNotReady") : t("dialFailed"));
+      notify(notReady ? t("dialNotReady") : t("dialFailed"), "warn");
     }
   }
 
-  // The hub IS the maximized presence — no orb on top of it.
+  // The hub IS the maximized presence — the idle orb hides there, but the
+  // panel (voice/hotkey can open it), the toasts and the wake word stay.
   const onHub = /^\/(fa|en)?\/?$/.test(pathname);
-  if (!member || onHub) return null;
+  if (!member) return null;
 
   return (
     <>
       {open ? (
-        <div className="fixed bottom-20 end-4 z-40 flex max-h-[70dvh] w-[min(92vw,24rem)] flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-xl">
+        <div className="fixed bottom-24 end-8 z-40 flex max-h-[70dvh] w-[min(92vw,24rem)] flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-xl">
           <div className="flex items-center gap-2 border-b border-border px-3 py-2">
             <span className="h-2 w-2 rounded-full bg-accent" aria-hidden />
             <span className="text-sm font-semibold text-fg">{t("title")}</span>
@@ -288,8 +430,12 @@ export function PresenceDock() {
                   onChange={(e) => {
                     const enabled = e.target.checked;
                     setDigest({ available: true, enabled });
-                    void api.setWeeklyDigest(enabled).catch(() =>
-                      setDigest({ available: true, enabled: !enabled }));
+                    void api.setWeeklyDigest(enabled)
+                      .then(() => notify(t("savedDigest")))
+                      .catch(() => {
+                        setDigest({ available: true, enabled: !enabled });
+                        notify(t("dialFailed"), "warn");
+                      });
                   }}
                 />
                 {t("digestToggle")}
@@ -350,7 +496,7 @@ export function PresenceDock() {
 
           <form
             className="flex items-end gap-2 border-t border-border p-2"
-            onSubmit={(e) => { e.preventDefault(); void send(); }}
+            onSubmit={(e) => { e.preventDefault(); send(); }}
           >
             <textarea
               ref={inputRef}
@@ -360,9 +506,22 @@ export function PresenceDock() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); }
+                if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
               }}
             />
+            <button
+              type="button"
+              className={`tap h-9 w-9 shrink-0 rounded-lg border text-sm ${
+                listening === "command"
+                  ? "border-accent bg-accent-soft text-accent"
+                  : "border-border text-fg-muted hover:border-accent hover:text-accent"
+              }`}
+              aria-label={t("micButton")}
+              title={t("micButton")}
+              onClick={dictate}
+            >
+              🎙
+            </button>
             <button
               type="submit"
               className="btn-primary h-9 min-h-0 px-3 text-sm disabled:opacity-50"
@@ -374,34 +533,61 @@ export function PresenceDock() {
         </div>
       ) : null}
 
-      <button
-        type="button"
-        aria-label={t("openLabel")}
-        title={`${t("openLabel")} (Ctrl+K)`}
-        className={`tap fixed bottom-4 end-4 z-40 grid h-12 w-12 place-items-center rounded-full border shadow-lg transition-colors ${
-          open
-            ? "border-accent bg-accent text-on-accent"
-            : "border-border bg-surface text-accent hover:border-accent"
-        }`}
-        onClick={() => {
-          setOpen((v) => {
-            const next = !v;
-            if (next) setTimeout(() => inputRef.current?.focus(), 0);
-            return next;
-          });
-        }}
-      >
-        {/* the idle glow does the orb's job (the hub-mock ruling), literally */}
-        <span className={`h-3 w-3 rounded-full ${open ? "bg-on-accent" : "animate-pulse bg-accent"}`} aria-hidden />
-        {unread > 0 && !open ? (
-          <span
-            className="absolute -end-0.5 -top-0.5 grid h-5 min-w-5 place-items-center rounded-full bg-danger px-1 text-[10px] font-bold text-white"
-            aria-label={t("unread", { count: unread })}
-          >
-            {unread}
-          </span>
-        ) : null}
-      </button>
+      {/* the toasts — every platform notice pops from the orb's head */}
+      {toasts.length > 0 ? (
+        <div className="pointer-events-none fixed bottom-[5.75rem] end-8 z-50 flex w-[min(88vw,20rem)] flex-col items-end gap-1.5">
+          {toasts.map((notice) => (
+            <p
+              key={notice.id}
+              role="status"
+              className={`rounded-xl border px-3 py-1.5 text-xs shadow-lg ${
+                notice.kind === "warn"
+                  ? "border-warning/40 bg-surface text-warning"
+                  : "border-border bg-surface text-fg"
+              }`}
+            >
+              {notice.text}
+            </p>
+          ))}
+        </div>
+      ) : null}
+
+      {listening === "command" ? (
+        <p className="pointer-events-none fixed bottom-[5.75rem] end-8 z-50 rounded-xl border border-accent/40 bg-surface px-3 py-1.5 text-xs text-accent shadow-lg">
+          {t("listening")}
+        </p>
+      ) : null}
+
+      {!onHub ? (
+        <button
+          type="button"
+          aria-label={t("openLabel")}
+          title={`${t("openLabel")} (Ctrl+E)`}
+          className={`tap fixed bottom-8 end-8 z-40 grid h-12 w-12 place-items-center rounded-full border shadow-lg transition-colors ${
+            open
+              ? "border-accent bg-accent text-on-accent"
+              : "border-border bg-surface text-accent hover:border-accent"
+          }`}
+          onClick={() => {
+            setOpen((v) => {
+              const next = !v;
+              if (next) setTimeout(() => inputRef.current?.focus(), 0);
+              return next;
+            });
+          }}
+        >
+          {/* the idle glow does the orb's job (the hub-mock ruling), literally */}
+          <span className={`h-3 w-3 rounded-full ${open ? "bg-on-accent" : "animate-pulse bg-accent"}`} aria-hidden />
+          {unread > 0 && !open ? (
+            <span
+              className="absolute -end-0.5 -top-0.5 grid h-5 min-w-5 place-items-center rounded-full bg-danger px-1 text-[10px] font-bold text-white"
+              aria-label={t("unread", { count: unread })}
+            >
+              {unread}
+            </span>
+          ) : null}
+        </button>
+      ) : null}
     </>
   );
 }
