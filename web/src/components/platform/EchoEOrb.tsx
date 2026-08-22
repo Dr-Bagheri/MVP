@@ -154,6 +154,7 @@ function ParticleField({ state, level }: { state: AuroraState; level: number }) 
     const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
     let previous = performance.now();
     let motion = 0;
+    let motionRate = 0.035;
     let frame = 0;
 
     const render = (now: number) => {
@@ -165,8 +166,13 @@ function ParticleField({ state, level }: { state: AuroraState; level: number }) 
       const muted = currentState === "muted";
 
       if (!reducedMotion && !muted) {
-        const motionRate = speaking ? 0.18 + currentLevel * 0.55 : 0.035;
+        const targetMotionRate = speaking ? 0.18 + currentLevel * 0.55 : 0.035;
+        const easingSpeed = targetMotionRate > motionRate ? 1.6 : 1.1;
+        const easing = 1 - Math.exp(-delta * easingSpeed);
+        motionRate += (targetMotionRate - motionRate) * easing;
         motion += delta * motionRate;
+      } else if (muted) {
+        motionRate = 0;
       }
 
       uniforms.uBoundary.value = 0.70;
