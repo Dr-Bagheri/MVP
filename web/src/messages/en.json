@@ -309,7 +309,15 @@
     "recoveryDiscard": "Discard",
     "recoveryDiscardConfirm": "Sure? Discard it",
     "recoverySaved": "Saved — continue from the unfinished-takes list.",
-    "recoveryFailed": "Could not save — the record no longer accepts audio or the connection failed; download still works."
+    "recoveryFailed": "Could not save — the record no longer accepts audio or the connection failed; download still works.",
+    "notesTitle": "Notes & chapters",
+    "notesEmpty": "Anything you write here is stamped with the take's clock.",
+    "notesPlaceholder": "A note…",
+    "noteAdd": "Add",
+    "chapterPlaceholder": "New chapter name…",
+    "chapterAdd": "Chapter",
+    "chapterChip": "Chapter",
+    "noteFailed": "The note did not save — try again."
   },
   "call": {
     "summary": "Summary",
@@ -338,7 +346,10 @@
     "degradedPartHint": "Part of this call came from the fallback lane and that part has no word-level timing; the rest of the transcript is complete.",
     "askAboutThis": "Ask the assistant about this call",
     "processing": "This call is still processing — {status}",
-    "noSummaryYet": "The summary is written when processing finishes."
+    "noSummaryYet": "The summary is written when processing finishes.",
+    "notesHeading": "Notes & chapters",
+    "chapterChip": "Chapter",
+    "noteDelete": "Delete"
   },
   "search": {
     "title": "Search",

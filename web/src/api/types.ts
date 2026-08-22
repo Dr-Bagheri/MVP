@@ -306,6 +306,17 @@ export interface Call extends CallSummary {
   parts?: CallPart[];
 }
 
+/** One annotation on a call (0079): a timestamped note or a named chapter.
+ *  `at_ms` null = un-anchored (about the call, not a moment in it). */
+export interface CallNote {
+  id: string;
+  kind: "note" | "chapter";
+  at_ms: number | null;
+  body: string;
+  created_by: string;
+  created_at: string;
+}
+
 // ---- transcript (SPEC: "This is the record") --------------------------------
 
 /**

@@ -13,6 +13,7 @@ import type {
   AgentMessage,
   AgentCard,
   AgentStats,
+  CallNote,
   RunTrace,
   AssistantSession,
   AuthoredSkill,
@@ -718,6 +719,26 @@ export const api = {
    * can never ride the BFF); everything that carries identity stays
    * server-side.
    */
+  /** Notes & chapters on a call (0079) — annotations, never the record. */
+  async callNotes(callId: string): Promise<CallNote[]> {
+    return bff<CallNote[]>(`/api/calls/${callId}/notes`);
+  },
+
+  async addCallNote(
+    callId: string,
+    input: { kind: "note" | "chapter"; at_ms?: number | null; body: string },
+  ): Promise<CallNote> {
+    return bff<CallNote>(`/api/calls/${callId}/notes`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    });
+  },
+
+  async deleteCallNote(noteId: string): Promise<void> {
+    await bff<null>(`/api/notes/${noteId}`, { method: "DELETE" });
+  },
+
   /** Which external sign-in methods are enabled (0078). Public read. */
   async authMethods(): Promise<{ provider: string; enabled: boolean }[]> {
     return bff<{ provider: string; enabled: boolean }[]>("/api/auth-methods");

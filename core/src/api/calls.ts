@@ -95,6 +95,16 @@ function refusalIsNotFound(error: unknown): never {
   throw error;
 }
 
+/** One annotation row (0079): a timestamped note or a named chapter. */
+export interface CallNote {
+  id: string;
+  kind: "note" | "chapter";
+  at_ms: number | null;
+  body: string;
+  created_by: string;
+  created_at: string;
+}
+
 export interface CallSummary {
   id: string;
   title: string;
@@ -468,6 +478,63 @@ export function createCallsRepo(db: Db) {
       // true = deleted, false = already deleted. Both mean "it is gone now",
       // so both are success — a retry is not a failure.
       if (!rows[0]) throw new NotFoundError("call not found");
+    },
+
+    /**
+     * Notes and chapters (0079) — annotations of a call, never the record.
+     * Listed AFTER the route has 404'd unreadable calls via get(), so an
+     * empty array means "no notes", not "no access" (the parts pattern —
+     * the two nothings are separated by sequencing).
+     */
+    async listNotes(identity: Identity, callId: string): Promise<CallNote[]> {
+      const id = assertUuid(callId, "call id");
+      return db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe<CallNote>(
+          `select id, kind, at_ms, body, created_by, created_at
+             from echo.call_note
+            where call_id = $1
+            order by at_ms nulls last, created_at`,
+          [id],
+        ),
+      );
+    },
+
+    async addNote(
+      identity: Identity, callId: string,
+      input: { kind: string; at_ms?: number | null | undefined; body: string },
+    ): Promise<CallNote> {
+      const id = assertUuid(callId, "call id");
+      if (input.kind !== "note" && input.kind !== "chapter") {
+        throw new ValidationError("kind must be note or chapter");
+      }
+      const body = input.body.trim();
+      if (body.length === 0) throw new ValidationError("a note needs words");
+      if (body.length > 2000) throw new ValidationError("a note tops out at 2000 characters");
+      const atMs = input.at_ms ?? null;
+      if (atMs !== null && (!Number.isInteger(atMs) || atMs < 0)) {
+        throw new ValidationError("at_ms must be a non-negative integer");
+      }
+      const rows = await db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe<CallNote>(
+          `insert into echo.call_note (call_id, org_id, kind, at_ms, body, created_by)
+           values ($1, $2, $3, $4, $5, $6)
+           returning id, kind, at_ms, body, created_by, created_at`,
+          [id, identity.orgId, input.kind, atMs, body, identity.userId],
+        ),
+      ).catch(refusalIsNotFound);
+      if (!rows[0]) throw new NotFoundError("call not found");
+      return rows[0];
+    },
+
+    /** Author's own only — RLS filters, so a foreign id is a clean 404. */
+    async deleteNote(identity: Identity, noteId: string): Promise<void> {
+      const id = assertUuid(noteId, "note id");
+      const rows = await db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe<{ id: string }>(
+          `delete from echo.call_note where id = $1 returning id`, [id],
+        ),
+      );
+      if (!rows[0]) throw new NotFoundError("note not found");
     },
   };
 }

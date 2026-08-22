@@ -12,6 +12,7 @@ import { Link } from "@/i18n/routing";
 import { digits, formatClock } from "@/lib/format";
 import { SAFETY_PART_BYTES, resumePoint } from "./uploadRules";
 import { recorderControls } from "./recorderControls";
+import { RecorderNotes } from "./RecorderNotes";
 
 /**
  * The browser recorder — Part 5's centrepiece, and the first REAL producer
@@ -84,6 +85,10 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
   const [quality, setQuality] = useState<null | "quiet" | "clipping" | "shareEnded">(null);
   /** Rolling RMS samples (~2/s) — the take's waveform timeline. */
   const [wave, setWave] = useState<number[]>([]);
+  /** Chapter marks (at_ms) dropped this session — drawn on the timeline. */
+  const [chapterMarks, setChapterMarks] = useState<number[]>([]);
+  /** Where THIS session's waveform starts (resume offset) — marker math. */
+  const waveStartMs = useRef(0);
   /**
    * RESUME mode (user directive, 2026-08-20): a call left unfinished — the
    * person navigated away, closed the tab, or paused and left — shows as
@@ -626,6 +631,8 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
     setPreviews([]);
     waveRef.current = [];
     setWave([]);
+    setChapterMarks([]);
+    waveStartMs.current = base.offsetMs;
     quietSinceMs.current = null;
     clipUntil.current = 0;
     setQuality(null);
@@ -867,7 +874,10 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
       ) : null}
 
       {live || phase === "finishing" ? (
-        <>
+        /* the pad rides BESIDE the take on wide screens, under it on small —
+           a thought lands in the pad instead of interrupting the meeting */
+        <div className="gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <div>
           <div className="flex items-center gap-4">
             <span
               className={`inline-block h-3 w-3 rounded-full ${
@@ -923,10 +933,11 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
             <p className="mt-4 text-xs text-fg-muted">{t("liveUnavailable")}</p>
           ) : null}
 
-          {/* the take's waveform timeline — one bar per RMS sample */}
+          {/* the take's waveform timeline — one bar per RMS sample, chapter
+              marks as vertical lines at their moment */}
           {wave.length > 1 ? (
             <div className="mt-4 rounded-md bg-surface-2 p-3" dir="ltr" aria-hidden>
-              <div className="flex h-10 items-center gap-px">
+              <div className="relative flex h-10 items-center gap-px">
                 {wave.map((v, i) => (
                   <span
                     key={i}
@@ -934,6 +945,19 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
                     style={{ height: `${Math.max(6, v * 100)}%` }}
                   />
                 ))}
+                {chapterMarks.map((ms, i) => {
+                  const span = recordedMs - waveStartMs.current;
+                  if (span <= 0) return null;
+                  const frac = (ms - waveStartMs.current) / span;
+                  if (frac < 0 || frac > 1) return null;
+                  return (
+                    <span
+                      key={`c-${i}`}
+                      className="absolute bottom-0 top-0 w-0.5 rounded bg-warning"
+                      style={{ left: `${frac * 100}%` }}
+                    />
+                  );
+                })}
               </div>
             </div>
           ) : null}
@@ -974,7 +998,18 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
               </button>
             </div>
           ) : null}
-        </>
+        </div>
+
+        {live && callId.current ? (
+          <div className="mt-4 lg:mt-0">
+            <RecorderNotes
+              callId={callId.current}
+              atMs={recordedMs}
+              onChapter={(ms) => setChapterMarks((prev) => [...prev, ms])}
+            />
+          </div>
+        ) : null}
+        </div>
       ) : null}
 
       {phase === "done" ? (

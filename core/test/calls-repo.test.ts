@@ -357,3 +357,46 @@ describe("transcript_timing is provenance, not a gate (steward-ratified)", () =>
     expect(timingFromCounts(Number("2"), Number("2"))).toBe("full");
   });
 });
+
+describe("notes & chapters (0079)", () => {
+  const NOTE_ROW = {
+    id: "44444444-4444-4444-8444-444444444444", kind: "note", at_ms: 65_000,
+    body: "پیگیری", created_by: ALICE, created_at: "2026-08-22T10:00:00.000Z",
+  };
+
+  it("refuses an invented kind, empty words and a negative moment — before any write", async () => {
+    const { db, log } = fakeDb(() => []);
+    const repo = createCallsRepo(db);
+    await expect(repo.addNote(IDENTITY, CALL, { kind: "bookmark", body: "x" }))
+      .rejects.toThrow(ValidationError);
+    await expect(repo.addNote(IDENTITY, CALL, { kind: "note", body: "   " }))
+      .rejects.toThrow(ValidationError);
+    await expect(repo.addNote(IDENTITY, CALL, { kind: "note", body: "x", at_ms: -1 }))
+      .rejects.toThrow(ValidationError);
+    expect(queries(log)).toHaveLength(0);
+  });
+
+  it("stamps the AUTHOR from the identity, never from input", async () => {
+    const { db, log } = fakeDb((sql) => (sql.includes("insert into echo.call_note") ? [NOTE_ROW] : []));
+    const repo = createCallsRepo(db);
+    const note = await repo.addNote(IDENTITY, CALL, { kind: "note", body: " پیگیری ", at_ms: 65_000 });
+    const insert = queries(log).find((l) => l.sql.includes("insert into echo.call_note"));
+    expect(insert?.params).toContain(ALICE);      // created_by = the caller
+    expect(insert?.params).toContain("پیگیری");   // trimmed body travels
+    expect(note.kind).toBe("note");
+  });
+
+  it("an un-anchored note carries null, not zero — a moment it never had", async () => {
+    const { db, log } = fakeDb((sql) => (sql.includes("insert into echo.call_note") ? [NOTE_ROW] : []));
+    const repo = createCallsRepo(db);
+    await repo.addNote(IDENTITY, CALL, { kind: "note", body: "کلی" });
+    const insert = queries(log).find((l) => l.sql.includes("insert into echo.call_note"));
+    expect(insert?.params?.[3]).toBeNull();
+  });
+
+  it("deleting a note RLS hid is a 404, not a silent success", async () => {
+    const { db } = fakeDb(() => []);
+    const repo = createCallsRepo(db);
+    await expect(repo.deleteNote(IDENTITY, NOTE_ROW.id)).rejects.toThrow(NotFoundError);
+  });
+});

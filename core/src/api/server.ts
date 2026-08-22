@@ -463,6 +463,44 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     return reply.send({ ...call, parts: await calls.parts(identity, id) });
   });
 
+  // ---- notes & chapters (0079) — annotations, never the record -----------
+
+  app.get("/v1/calls/:id/notes", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id } = request.params as { id: string };
+    // get() first: an unreadable call 404s HERE, so the empty list below
+    // can only ever mean "no notes" (the parts-route sequencing pattern)
+    await calls.get(identity, id);
+    return reply.send({ notes: await calls.listNotes(identity, id) });
+  });
+
+  app.post("/v1/calls/:id/notes", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as {
+      kind?: unknown; at_ms?: unknown; body?: unknown;
+    };
+    if (typeof body.kind !== "string" || typeof body.body !== "string") {
+      throw new ValidationError("kind and body are required");
+    }
+    if (body.at_ms !== undefined && body.at_ms !== null && typeof body.at_ms !== "number") {
+      throw new ValidationError("at_ms must be a number or null");
+    }
+    const note = await calls.addNote(identity, id, {
+      kind: body.kind,
+      at_ms: (body.at_ms as number | null | undefined) ?? null,
+      body: body.body,
+    });
+    return reply.code(201).send(note);
+  });
+
+  app.delete("/v1/notes/:id", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id } = request.params as { id: string };
+    await calls.deleteNote(identity, id);
+    return reply.code(204).send();
+  });
+
   app.patch("/v1/calls/:id", async (request, reply) => {
     const identity = await auth.requireActive(request);
     const { id } = request.params as { id: string };

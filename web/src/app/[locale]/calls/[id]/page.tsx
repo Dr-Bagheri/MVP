@@ -3,7 +3,7 @@
 import { use, useEffect, useMemo, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
-import type { Call, CallStatus, Person, Speaker, SummaryVersion, TranscriptSegment } from "@/api/types";
+import type { Call, CallNote, CallStatus, Me, Person, Speaker, SummaryVersion, TranscriptSegment } from "@/api/types";
 import { EchoAppShell } from "@/components/echo/EchoAppShell";
 import { Link } from "@/i18n/routing";
 import { useCrumbTitle } from "@/components/platform/CrumbTitle";
@@ -82,6 +82,9 @@ export default function CallDetailPage({
   const [directory, setDirectory] = useState<Person[]>([]);
   const [versions, setVersions] = useState<SummaryVersion[]>([]);
   const [shownVersion, setShownVersion] = useState<number | null>(null);
+  /** Notes & chapters (0079) + who I am, for the delete-own gate. */
+  const [notes, setNotes] = useState<CallNote[]>([]);
+  const [me, setMe] = useState<Me | null>(null);
   /**
    * English translations, per target (user directive): display-only, held
    * in state — the Persian record stays the single source of truth. Three
@@ -128,6 +131,8 @@ export default function CallDetailPage({
     void api.getTranscript(id).then(setRows);
     void api.getSpeakers(id).then(setSpeakers);
     void api.directory().then(setDirectory).catch(() => setDirectory([]));
+    void api.callNotes(id).then(setNotes).catch(() => setNotes([]));
+    void api.me().then(setMe).catch(() => setMe(null));
     void api.getSummaries(id).then((all) => {
       setVersions(all);
       setShownVersion(all.at(-1)?.version ?? null);
@@ -540,6 +545,47 @@ export default function CallDetailPage({
             {t("manageSpeakers")}
           </Link>
         </Card>
+
+        {/* notes & chapters (0079) — annotations of the call, never the
+            record; author-attributed, delete = own only (the server's rule,
+            mirrored as button visibility) */}
+        {notes.length > 0 ? (
+          <Card>
+            <h2 className="mb-3 text-sm font-semibold text-fg">{t("notesHeading")}</h2>
+            <ul className="space-y-2">
+              {notes.map((note) => (
+                <li key={note.id} className="flex items-start gap-2 text-sm leading-6 text-fg">
+                  <span className="ltr mt-0.5 shrink-0 text-xs text-fg-subtle">
+                    {note.at_ms !== null
+                      ? formatClock(Math.floor(note.at_ms / 1000), locale)
+                      : "—"}
+                  </span>
+                  {note.kind === "chapter" ? (
+                    <span className="mt-0.5 shrink-0 rounded bg-accent-soft px-1 py-0.5 text-[10px] font-semibold text-accent">
+                      {t("chapterChip")}
+                    </span>
+                  ) : null}
+                  <span className="min-w-0 flex-1" dir="auto">{note.body}</span>
+                  {me && note.created_by === me.id ? (
+                    <button
+                      type="button"
+                      className="tap shrink-0 rounded px-1.5 text-xs text-fg-muted hover:text-danger"
+                      onClick={() => {
+                        void api
+                          .deleteCallNote(note.id)
+                          .then(() => api.callNotes(id))
+                          .then(setNotes)
+                          .catch(() => undefined);
+                      }}
+                    >
+                      {t("noteDelete")}
+                    </button>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </Card>
+        ) : null}
       </div>
     </EchoAppShell>
   );
