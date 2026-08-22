@@ -8,16 +8,34 @@ import { formatClock } from "@/lib/format";
 import { notify } from "@/lib/notify";
 
 /**
- * The notes pad beside the recorder (user directive, 2026-08-22): while a
- * take rolls, a thought lands HERE instead of interrupting the meeting —
- * each entry stamped with the take's clock at the moment it was sent.
- * Chapters are the same gesture with a different meaning: a NAME for the
- * stretch that starts now.
+ * The notebook beside the recorder (redesigned 2026-08-22 after the user's
+ * verdict on v1: "make it like real … a notebook page with a chapter or a
+ * title in it and a big text box … both title and text in one place and it
+ * realize the title itself").
  *
- * Entries write to the server immediately (they must survive the tab, like
- * the audio does) and the session's list renders from what came BACK — the
- * server's row is the record, not the draft that produced it.
+ * ONE ruled page, one big box, one rule the writer never has to think
+ * about: **the first line of a multi-line entry IS the chapter title** —
+ * it is saved as a chapter (marked on the waveform) and the rest as the
+ * note. A single-line entry is just a note. No second input, no mode
+ * switch; write the way you'd write on paper.
+ *
+ * Entries write to the server immediately (they must survive the tab,
+ * like the audio does) and render from what came BACK — the server's row
+ * is the record, not the draft that produced it.
  */
+
+/** The split rule, exported for its test: title-and-body, or just a note. */
+export function splitEntry(raw: string): { title: string | null; body: string } {
+  const text = raw.replace(/\r\n/g, "\n").trim();
+  const lines = text.split("\n");
+  const first = (lines[0] ?? "").trim();
+  const rest = lines.slice(1).join("\n").trim();
+  // a title reads like a title: short, and followed by MORE writing —
+  // a lone line or a long opening sentence is a note, not a heading
+  if (rest && first && first.length <= 80) return { title: first, body: rest };
+  return { title: null, body: text };
+}
+
 export function RecorderNotes({
   callId,
   atMs,
@@ -33,22 +51,24 @@ export function RecorderNotes({
   const locale = useLocale();
   const [entries, setEntries] = useState<CallNote[]>([]);
   const [draft, setDraft] = useState("");
-  const [chapterDraft, setChapterDraft] = useState("");
   const [busy, setBusy] = useState(false);
 
-  async function add(kind: "note" | "chapter"): Promise<void> {
-    const body = (kind === "note" ? draft : chapterDraft).trim();
-    if (body === "" || busy) return;
+  async function add(): Promise<void> {
+    const { title, body } = splitEntry(draft);
+    if ((!title && !body) || busy) return;
     setBusy(true);
     const stamp = atMs;
     try {
-      const note = await api.addCallNote(callId, { kind, at_ms: stamp, body });
-      setEntries((prev) => [...prev, note]);
-      if (kind === "note") setDraft("");
-      else {
-        setChapterDraft("");
+      const saved: CallNote[] = [];
+      if (title) {
+        saved.push(await api.addCallNote(callId, { kind: "chapter", at_ms: stamp, body: title }));
         onChapter?.(stamp);
       }
+      if (body) {
+        saved.push(await api.addCallNote(callId, { kind: "note", at_ms: stamp, body }));
+      }
+      setEntries((prev) => [...prev, ...saved]);
+      setDraft("");
     } catch {
       notify(t("noteFailed"), "warn");
     } finally {
@@ -56,66 +76,61 @@ export function RecorderNotes({
     }
   }
 
+  /* the ruled paper: one repeating hairline per text row, drawn from the
+     theme's own border token so the page belongs to the card it sits on —
+     no boxed-off different background (the user's exact complaint) */
+  const ruled: React.CSSProperties = {
+    backgroundImage:
+      "repeating-linear-gradient(to bottom, transparent, transparent calc(1.75rem - 1px), rgb(var(--border) / 0.55) calc(1.75rem - 1px), rgb(var(--border) / 0.55) 1.75rem)",
+    lineHeight: "1.75rem",
+  };
+
   return (
-    <div className="flex h-full flex-col rounded-lg border border-border bg-surface p-3">
+    <div className="flex h-full flex-col">
       <p className="text-xs font-semibold text-fg-subtle">{t("notesTitle")}</p>
 
-      <div className="mt-2 min-h-16 flex-1 space-y-1.5 overflow-y-auto">
-        {entries.length === 0 ? (
-          <p className="text-xs leading-6 text-fg-muted">{t("notesEmpty")}</p>
-        ) : (
-          entries.map((entry) => (
-            <p key={entry.id} className="text-xs leading-6 text-fg" dir="auto">
-              <span className="ltr me-2 text-fg-subtle">
-                {formatClock(Math.floor((entry.at_ms ?? 0) / 1000), locale)}
-              </span>
+      {entries.length > 0 ? (
+        <div className="mt-2 max-h-44 overflow-y-auto pe-1" style={ruled}>
+          {entries.map((entry) => (
+            <p key={entry.id} dir="auto" style={{ lineHeight: "1.75rem" }}>
               {entry.kind === "chapter" ? (
-                <span className="me-1 rounded bg-accent-soft px-1 py-0.5 text-[10px] font-semibold text-accent">
-                  {t("chapterChip")}
+                <span className="font-bold text-fg">
+                  {entry.body}
+                  <span className="ltr ms-2 text-xs font-normal text-fg-subtle">
+                    {formatClock(Math.floor((entry.at_ms ?? 0) / 1000), locale)}
+                  </span>
                 </span>
-              ) : null}
-              {entry.body}
+              ) : (
+                <span className="whitespace-pre-wrap text-sm text-fg">{entry.body}</span>
+              )}
             </p>
-          ))
-        )}
-      </div>
+          ))}
+        </div>
+      ) : null}
 
-      <form
-        className="mt-2 flex gap-2"
-        onSubmit={(e) => { e.preventDefault(); void add("note"); }}
-      >
-        <input
-          className="input h-9 flex-1 text-sm"
-          placeholder={t("notesPlaceholder")}
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-        />
+      <textarea
+        dir="auto"
+        className="mt-2 min-h-44 w-full flex-1 resize-none border-0 bg-transparent p-0 text-sm text-fg outline-none placeholder:text-fg-subtle/60"
+        style={ruled}
+        placeholder={t("notebookPlaceholder")}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) void add();
+        }}
+      />
+
+      <div className="mt-2 flex items-center gap-2">
         <button
-          type="submit"
-          className="btn-secondary h-9 px-3 text-sm"
+          type="button"
+          className="btn-secondary h-9 px-4 text-sm"
           disabled={busy || draft.trim() === ""}
+          onClick={() => void add()}
         >
-          {t("noteAdd")}
+          {t("notebookAdd")}
         </button>
-      </form>
-      <form
-        className="mt-2 flex gap-2"
-        onSubmit={(e) => { e.preventDefault(); void add("chapter"); }}
-      >
-        <input
-          className="input h-9 flex-1 text-sm"
-          placeholder={t("chapterPlaceholder")}
-          value={chapterDraft}
-          onChange={(e) => setChapterDraft(e.target.value)}
-        />
-        <button
-          type="submit"
-          className="btn-secondary h-9 px-3 text-sm"
-          disabled={busy || chapterDraft.trim() === ""}
-        >
-          {t("chapterAdd")}
-        </button>
-      </form>
+        <span className="text-[11px] leading-4 text-fg-subtle">{t("notebookHint")}</span>
+      </div>
     </div>
   );
 }

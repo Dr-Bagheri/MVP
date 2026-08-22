@@ -323,15 +323,12 @@
     "recoveryDiscardConfirm": "Sure? Discard it",
     "recoverySaved": "Saved — continue from the unfinished-takes list.",
     "recoveryFailed": "Could not save — the record no longer accepts audio or the connection failed; download still works.",
-    "notesTitle": "Notes & chapters",
-    "notesEmpty": "Anything you write here is stamped with the take's clock.",
-    "notesPlaceholder": "A note…",
-    "noteAdd": "Add",
-    "chapterPlaceholder": "New chapter name…",
-    "chapterAdd": "Chapter",
-    "chapterChip": "Chapter",
+    "notesTitle": "Meeting notebook",
     "noteFailed": "The note did not save — try again.",
-    "pillOpen": "Open the recorder"
+    "pillOpen": "Open the recorder",
+    "notebookPlaceholder": "Write…\nThe first line becomes the chapter title.",
+    "notebookAdd": "Add",
+    "notebookHint": "Every entry is stamped with the take's clock; a multi-line entry's first line is the chapter title."
   },
   "call": {
     "summary": "Summary",

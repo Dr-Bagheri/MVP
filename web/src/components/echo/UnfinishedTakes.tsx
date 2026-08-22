@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
+import { recorderSnapshot, subscribeRecorder } from "@/lib/recordingEngine";
 import type { Call } from "@/api/types";
 import { uploadOnePart } from "@/lib/callUpload";
 import {
@@ -35,6 +36,18 @@ export function UnfinishedTakes() {
   const t = useTranslations("capture");
   const locale = useLocale();
   const epoch = useRefreshEpoch("calls");
+  /**
+   * The engine's live take is `status: "recording"` on the server too —
+   * without this it listed ITSELF as "unfinished" beside its own recorder,
+   * and a RESUMED take kept reappearing under the same name until finish
+   * (user bug report, 2026-08-22). While a take is rolling the whole card
+   * stands down: nothing can be resumed mid-take anyway (one take at a
+   * time is the engine's rule).
+   */
+  const engine = useSyncExternalStore(subscribeRecorder, recorderSnapshot, recorderSnapshot);
+  const engineBusy =
+    engine.phase === "starting" || engine.phase === "recording"
+    || engine.phase === "paused" || engine.phase === "finishing";
 
   const [unfinished, setUnfinished] = useState<Call[]>([]);
   const [recoveries, setRecoveries] = useState<RecoveryGroup[]>([]);
@@ -42,15 +55,21 @@ export function UnfinishedTakes() {
   const [note, setNote] = useState<{ callId: string; kind: "saved" | "failed" } | null>(null);
   const [armedDiscard, setArmedDiscard] = useState<string | null>(null);
 
+  const liveCallId = engine.callId;
   const refresh = useCallback(() => {
     void api
       .listCalls({ includeArchived: false })
       .then((calls) =>
-        setUnfinished(calls.filter((c) => c.status === "recording").slice(0, 3)),
+        setUnfinished(
+          calls
+            .filter((c) => c.status === "recording" && c.id !== liveCallId)
+            .slice(0, 3),
+        ),
       )
       .catch(() => setUnfinished([]));
-    void listLeftovers().then((parts) => setRecoveries(recoveryPlan(parts)));
-  }, []);
+    void listLeftovers().then((parts) =>
+      setRecoveries(recoveryPlan(parts).filter((g) => g.callId !== liveCallId)));
+  }, [liveCallId]);
 
   useEffect(() => {
     refresh();
@@ -110,6 +129,7 @@ export function UnfinishedTakes() {
     refresh();
   }
 
+  if (engineBusy) return null; // a rolling take: nothing here is actionable
   if (unfinished.length === 0 && recoveries.length === 0) return null;
 
   return (
