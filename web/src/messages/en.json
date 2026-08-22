@@ -891,7 +891,9 @@
     "inviteState_open": "Open",
     "inviteState_redeemed": "Redeemed",
     "inviteState_revoked": "Revoked",
-    "inviteState_expired": "Expired"
+    "inviteState_expired": "Expired",
+    "memberDeleted": "Member “{name}” was deleted.",
+    "memberDeleteFailed": "Deleting the member did not go through."
   },
   "settings": {
     "title": "Settings",

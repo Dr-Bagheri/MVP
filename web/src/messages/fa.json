@@ -891,7 +891,9 @@
     "inviteState_open": "باز",
     "inviteState_redeemed": "استفاده‌شده",
     "inviteState_revoked": "لغوشده",
-    "inviteState_expired": "منقضی"
+    "inviteState_expired": "منقضی",
+    "memberDeleted": "عضو «{name}» حذف شد.",
+    "memberDeleteFailed": "حذف عضو انجام نشد."
   },
   "settings": {
     "title": "تنظیمات",

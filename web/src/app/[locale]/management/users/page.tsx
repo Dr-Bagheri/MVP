@@ -238,6 +238,29 @@ export default function UsersPage() {
    * counted, not silently skipped. Rows already in the target state are
    * skipped as already-there, which is idempotence, not failure.
    */
+  /**
+   * The owner's true delete (tombstone), ONE handler for the row button
+   * and the detail panel — and it SAYS SO on the notification system
+   * (user report, 2026-08-22: "I deleted a user but there is no
+   * notification"): success and failure both land as a toast and in the
+   * bell. The first version swallowed both outcomes in a bare finally.
+   */
+  async function deleteMemberFor(u: User): Promise<void> {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await api.rejectMember(u.id);
+      setDetailId(null);
+      notify(t("memberDeleted", { name: personName(u, locale) }));
+      await load();
+    } catch {
+      notify(t("memberDeleteFailed"), "warn");
+      await load().catch(() => undefined);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function bulkSetStatus(target: "active" | "disabled"): Promise<void> {
     if (busy) return;
     setBusy(true);
@@ -742,17 +765,7 @@ export default function UsersPage() {
                             <button
                               className="text-danger/80 underline-offset-2 hover:text-danger hover:underline"
                               disabled={busy}
-                              onClick={() => {
-                                void (async () => {
-                                  setBusy(true);
-                                  try {
-                                    await api.rejectMember(u.id);
-                                    await load();
-                                  } finally {
-                                    setBusy(false);
-                                  }
-                                })();
-                              }}
+                              onClick={() => void deleteMemberFor(u)}
                             >
                               {t("deleteMember")}
                             </button>
@@ -780,20 +793,7 @@ export default function UsersPage() {
                person, retired handle — core's DELETE endpoint, M11 family);
                admins keep disable, which is reversible */
             {...(me?.role === "owner"
-              ? {
-                  onDelete: (u: User) => {
-                    void (async () => {
-                      setBusy(true);
-                      try {
-                        await api.rejectMember(u.id);
-                        setDetailId(null);
-                        await load();
-                      } finally {
-                        setBusy(false);
-                      }
-                    })();
-                  },
-                }
+              ? { onDelete: (u: User) => void deleteMemberFor(u) }
               : {})}
             onClose={() => setDetailId(null)}
           />
