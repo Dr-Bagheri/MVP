@@ -109,10 +109,6 @@ export default function SignInPage() {
       // 0078: an admin turned this method off — a different fact from a
       // broken round trip, and the person deserves the real one
       setError(t("oauthDisabled"));
-    } else if (oauth === "notlisted") {
-      // 0082: the account worked, the DOOR is invitation-only — say the
-      // real reason, not "failed" (their credentials were fine)
-      setError(t("oauthNotListed"));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot, on arrival
   }, []);

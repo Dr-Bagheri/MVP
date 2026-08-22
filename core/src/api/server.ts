@@ -28,7 +28,7 @@ import { createHealthRepo, type HealthRepo } from "./health.ts";
 import { createAuth, type Auth } from "./auth.ts";
 import { createWebhooksRepo, type WebhooksRepo } from "./webhooks.ts";
 import { createCallsRepo, type CallsRepo } from "./calls.ts";
-import { mapError, NotActivatedError, NotFoundError, pgErrorFields, ValidationError } from "./errors.ts";
+import { ConflictError, mapError, NotActivatedError, NotFoundError, pgErrorFields, ValidationError } from "./errors.ts";
 import { createMembersRepo, type MembersRepo } from "./members.ts";
 import { createModelsRepo, type ModelsRepo } from "./models.ts";
 import { createPlatformRepo, type PlatformRepo } from "./platform.ts";
@@ -985,36 +985,6 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
    * carries only what the token cannot know: what to call them, and whether
    * they are starting an org or joining one.
    */
-  /**
-   * The OAuth GATE (db/0082, user directive 2026-08-22): a Google/GitHub
-   * arrival may ENTER only if their verified email is on the platform
-   * root's allow-list. verifiedClaims — the signup posture: the token's
-   * signature is the wall, membership is not required (the whole point is
-   * deciding whether this stranger may become one). It answers one bit
-   * about an address the caller already proved they hold; before db/0082
-   * it answers allowed:true (the feature does not exist yet — a missing
-   * table must not close a working door).
-   */
-  app.post("/v1/oauth-gate", async (request, reply) => {
-    const claims = await auth.verifiedClaims(request);
-    const email = typeof claims.email === "string" ? claims.email.trim() : "";
-    if (!email) throw new ValidationError("the token carries no email");
-    try {
-      const rows = await options.db.withoutIdentity((tx) =>
-        tx.unsafe<{ allowed: boolean }>(
-          `select echo.oauth_email_allowed($1) as allowed`, [email],
-        ));
-      return reply.send({ allowed: Boolean(rows[0]?.allowed) });
-    } catch (cause) {
-      if ((cause as { code?: string }).code === "42883") {
-        // no such function — db/0082 has not run here; the list does not
-        // exist, so there is nothing to be absent from
-        return reply.send({ allowed: true, ungated: true });
-      }
-      throw cause;
-    }
-  });
-
   app.post("/v1/signup", async (request, reply) => {
     const claims = await auth.verifiedClaims(request);
     const body = (request.body ?? {}) as {
@@ -1141,45 +1111,37 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     return reply.send({ changed: await platform.restoreOrganization(identity, id, body.reason) });
   });
 
-  // ---- the OAuth allow-list (db/0082) — who may enter via Google/GitHub ----
-
-  app.get("/v1/platform/oauth-allowlist", async (request, reply) => {
+  /**
+   * Organizations are BORN here (db/0082, user ruling 2026-08-23): signup
+   * no longer founds — it joins an existing org by name as a pending
+   * member — so the console is the one birth path. Root-walled here AND
+   * in the definer function.
+   */
+  app.post("/v1/platform/organizations", async (request, reply) => {
     const identity = await auth.requirePlatformRoot(request);
-    const rows = await options.db.withIdentity(identity, (tx) =>
-      tx.unsafe<{ email: string; note: string; added_at: string }>(
-        `select email, note, added_at
-           from echo.platform_oauth_allowlist($1)`,
-        [identity.userId],
-      ));
-    return reply.send({ entries: rows });
-  });
-
-  app.post("/v1/platform/oauth-allowlist", async (request, reply) => {
-    const identity = await auth.requirePlatformRoot(request);
-    const body = (request.body ?? {}) as { email?: unknown; note?: unknown; reason?: unknown };
-    if (typeof body.email !== "string" || !body.email.includes("@")) {
-      throw new ValidationError("a valid email is required");
+    const body = (request.body ?? {}) as { name?: unknown; locale?: unknown; reason?: unknown };
+    if (typeof body.name !== "string" || body.name.trim() === "") {
+      throw new ValidationError("a name is required");
     }
     if (typeof body.reason !== "string") throw new ValidationError("reason is required");
-    await options.db.withIdentity(identity, (tx) =>
-      tx.unsafe(
-        `select echo.platform_oauth_allow($1, $2, $3, $4)`,
-        [identity.userId, body.email, typeof body.note === "string" ? body.note : "", body.reason],
-      ));
-    return reply.code(201).send({ allowed: true });
-  });
-
-  app.delete("/v1/platform/oauth-allowlist", async (request, reply) => {
-    const identity = await auth.requirePlatformRoot(request);
-    const body = (request.body ?? {}) as { email?: unknown; reason?: unknown };
-    if (typeof body.email !== "string") throw new ValidationError("email is required");
-    if (typeof body.reason !== "string") throw new ValidationError("reason is required");
-    await options.db.withIdentity(identity, (tx) =>
-      tx.unsafe(
-        `select echo.platform_oauth_disallow($1, $2, $3)`,
-        [identity.userId, body.email, body.reason],
-      ));
-    return reply.code(204).send();
+    try {
+      const rows = await options.db.withIdentity(identity, (tx) =>
+        tx.unsafe<{ platform_create_org: string }>(
+          `select echo.platform_create_org($1, $2, $3, $4)`,
+          [identity.userId, body.name,
+           typeof body.locale === "string" ? body.locale : "",
+           body.reason],
+        ));
+      return reply.code(201).send({ id: rows[0]?.platform_create_org ?? null });
+    } catch (cause) {
+      const pg = cause as { code?: string };
+      if (pg.code === "23505") {
+        // the name is signup's JOIN KEY — a twin would strand the original
+        throw new ConflictError("an active organization already has this name");
+      }
+      if (pg.code === "42883") throw new ConflictError("not_migrated");
+      throw cause;
+    }
   });
 
   app.patch("/v1/platform/users/:id", async (request, reply) => {

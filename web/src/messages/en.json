@@ -22,11 +22,11 @@
     "signInTitle": "Sign in to NeurAI Platform",
     "signUpTitle": "Create an account",
     "email": "Email",
-    "orgName": "Organization name",
-    "orgNameHint": "A new organization is created and you become its admin.",
+    "orgName": "Your organization's name",
+    "orgNameHint": "The organization you are joining — it must already exist; your membership activates once an admin approves it.",
     "working": "Working…",
     "finish": "Finish setting up",
-    "finishSetup": "Your account exists but is not attached to an organization yet. Enter a name to finish.",
+    "finishSetup": "Your account exists but is not attached to an organization yet. Enter your organization's name to join it.",
     "finishPasswordOauth": "Choose a password before entering NeurAI Platform. You can use it with your email as well as Google or GitHub.",
     "choosePassword": "Choose a password",
     "confirmPassword": "Confirm the password",
@@ -58,8 +58,7 @@
     "suspendedBody": "This is not about your account, and an organization admin cannot lift it. Contact NeurAI support to restore access.",
     "suspendedContact": "Contact NeurAI support",
     "resetReady": "Your password is set. Sign in with it now.",
-    "oauthDisabled": "This sign-in method has been turned off by an admin — sign in with email.",
-    "oauthNotListed": "This account is not allowed in — your email is not on the platform's allow-list. Ask the platform owner to add you."
+    "oauthDisabled": "This sign-in method has been turned off by an admin — sign in with email."
   },
   "calls": {
     "title": "Records",
@@ -727,14 +726,11 @@
     "action_org_restored": "Organization restored",
     "action_user_deleted": "User deleted",
     "action_user_restored": "User restored",
-    "oauth": "Google/GitHub access",
-    "oauthIntro": "Only the emails on this list can enter the platform with Google or GitHub. Email + password sign-in is independent of this list.",
-    "oauthAdd": "Allow an email",
-    "oauthNote": "Note (optional)",
-    "oauthAllow": "Allow",
-    "oauthEmpty": "The list is empty — until an email is added, Google/GitHub entry is closed to everyone.",
-    "oauthRemove": "Remove",
-    "oauthRemoveConfirm": "Remove from list"
+    "newOrg": "New organization",
+    "newOrgName": "Organization name",
+    "newOrgHint": "This name is the join key — members type exactly this name when signing up.",
+    "newOrgCreate": "Create",
+    "newOrgFailed": "Not created — an active organization with this name probably exists."
   },
   "workflows": {
     "title": "Workflows",

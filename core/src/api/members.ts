@@ -299,6 +299,20 @@ export function createMembersRepo(db: Db) {
         return { ...toMember(row), org_id: row.org_id as string };
       }
 
+      /*
+       * JOIN-ONLY signup (0082, user ruling 2026-08-23): with no invitation
+       * and no org named there is nothing to join — and FOUNDING is gone
+       * (every arrival used to become an org's active OWNER, which is the
+       * exact door the ruling closes). The SQL function refuses this too;
+       * this check exists to say it as a 400 with a name instead of a
+       * mapped surprise.
+       */
+      if (!input.orgName?.trim() && !input.joinOrg) {
+        throw new ValidationError(
+          "no invitation for this address — the name of an existing organization is required",
+          { code: "org_required" });
+      }
+
       try {
         // Explicit casts: with bare placeholders Postgres cannot resolve the
         // (uuid, citext, text, text, uuid) signature and answers 42P18
@@ -327,7 +341,15 @@ export function createMembersRepo(db: Db) {
           // second means the identity itself is unknown to Supabase.
           throw pg.constraint_name
             ? new ValidationError("no auth identity for this token")
-            : new ValidationError("no such organization");
+            : new ValidationError("no such organization — check the name with your admin",
+                { code: "org_not_found" });
+        }
+        if (pg.code === "21000") {
+          // 0082's ambiguity refusal: two active orgs share the name, so
+          // the name cannot pick one — the invitation flow can
+          throw new ValidationError(
+            "more than one organization has this name — ask your admin for an invitation",
+            { code: "org_ambiguous" });
         }
         throw error;
       }

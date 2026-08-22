@@ -27,6 +27,8 @@ const PUBLIC: Record<string, string> = {
     "the sign-in page asks which buttons to draw BEFORE anyone exists (0078); " +
     "it returns only {provider, enabled} — the same fact the page shows every visitor. " +
     "The PATCH twin is admin-walled here and in SQL.",
+  // (the 0082 oauth-gate entry lived here for a day — the allow-list was
+  // superseded by join-only signup before its migration ever applied)
 };
 
 interface Registration { key: string; at: number }

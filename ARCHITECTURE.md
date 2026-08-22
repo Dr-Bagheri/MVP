@@ -586,6 +586,23 @@ rate limiting · device revocation · agent long-term memory · billing wiring
 
 ## M15 — Monetization & access [user rulings, revised round 3]
 
+**[AMENDED 2026-08-23, user ruling — JOIN-ONLY SIGNUP, db/0082]:**
+signup FOUNDS nothing any more. The flow: anyone may authenticate
+(email+password or Google/GitHub OAuth — an OAuth arrival sets a
+password first); registration then requires the NAME of an EXISTING
+organization, matched exactly (case-insensitive) against active orgs —
+a right name joins as a **pending MEMBER** (acceptance stays the org's
+decision; a guessable name must never be an active membership), a wrong
+name is an honest refusal, an ambiguous name refuses toward the
+invitation flow. `register_account`'s founding branch is DELETED at the
+SQL altitude — it was the "first login for everyone is owner" hole.
+Orgs are born ONLY in the platform console (`platform_create_org`,
+root-walled, audited, duplicate-active-names refused — the name is the
+join key); owners are made ONLY there too (`platform_update_user`).
+Invitations (0060/D25) remain the instant active-on-arrival path. The
+0082 OAuth allow-list drafted earlier the same day was superseded by
+this before its migration ever applied, and was removed.
+
 One subscription = the whole package; no feature gating inside a paid plan.
 **No trial of any kind.** Access model: a person can **register themselves**
 — username + password, or **one-click Google (Gmail) sign-up** (OAuth) — but

@@ -12,27 +12,28 @@
 -- because register_account can no longer produce one — which is itself the
 -- fact 0056 exists to assert.
 
--- --- a founder is ACTIVE at birth (0056) -----------------------------------
+-- --- founding by SIGNUP is gone (0082): orgs are born in the console -------
 reset role;
 insert into auth.users (id, email)
 values ('0f000000-0000-4000-8000-00000000000f', 'founder@example.com');
 
 set local role echo_app;
-select echo.register_account(
-  '0f000000-0000-4000-8000-00000000000f', 'founder@example.com', 'بنیان‌گذار');
+select t.denied(
+  $$select echo.register_account(
+      '0f000000-0000-4000-8000-00000000000f', 'founder@example.com', 'بنیان‌گذار')$$,
+  'registering without an org name is REFUSED — nobody founds an org (and becomes '
+  'its owner) by signing up any more (0082)');
 
--- Authenticate as the founder, as the real UI would (invariant 2: with no
--- identity attached, echo_app cannot see even the row it just created).
-select set_config('echo.actor_id', '0f000000-0000-4000-8000-00000000000f', true);
-select t.ok(
-  (select status from echo.app_user where id = '0f000000-0000-4000-8000-00000000000f')
-    = 'active',
-  'a founder is ACTIVE at birth — the confirmed email is the acceptance (0056)');
-select t.ok(
-  (select accepted_at is null and accepted_by is null
-     from echo.app_user where id = '0f000000-0000-4000-8000-00000000000f'),
-  'nothing was "accepted": the record of the gate lives in auth email '
-  'confirmation, not in an acceptance stamp nobody made');
+-- Hand-seed 0f as an ACTIVE OWNER of a fresh org, at owner altitude — the
+-- exact shape platform_create_org + a console owner-promotion produce, which
+-- signup can no longer mint. The later one-way-door block needs a real owner.
+reset role;
+insert into echo.org (id, name)
+values ('ff000000-0000-4000-8000-00000000000f', 'سازمان بنیان‌گذار');
+insert into echo.app_user (id, org_id, email, display_name, role, status, accepted_at)
+values ('0f000000-0000-4000-8000-00000000000f', 'ff000000-0000-4000-8000-00000000000f',
+        'founder@example.com', 'بنیان‌گذار', 'owner', 'active', now());
+set local role echo_app;
 
 -- --- joining an existing org still pends (the other half of the matrix) ----
 reset role;
@@ -89,7 +90,7 @@ select t.ok(
 select t.ok(
   not exists (select 1 from echo.vendor_pending_orgs()
               where founder = '0f000000-0000-4000-8000-00000000000f'),
-  'a post-0056 founder''s org is NOT in the queue — born active, nothing to accept');
+  'an org with an ACTIVE owner is not in the queue — nothing to accept');
 select t.ok(
   not exists (select 1 from echo.vendor_pending_orgs()
               where org_id = '0a000000-0000-4000-8000-00000000000a'),

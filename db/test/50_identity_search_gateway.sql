@@ -137,23 +137,32 @@ select t.ok(
   (select allow_assistant from echo.resolve_api_key('sha-live')) = true,
   'an admin opens it, and the resolution reflects it immediately');
 
--- --- founding registration lands ACTIVE (M15 as amended by 0056) -----------
+-- --- signup JOINS, it never FOUNDS (0082, user ruling 2026-08-23) ----------
 reset role;
 insert into auth.users (id, email)
 values ('09000000-0000-4000-8000-000000000009', 'frank@example.com');
 
 set local role echo_app;
+select t.denied(
+  $$select echo.register_account(
+      '09000000-0000-4000-8000-000000000009', 'frank@example.com', 'فرانک')$$,
+  'a bare registration founds NOTHING — the everyone-arrives-as-owner door is closed (0082)');
+select t.denied(
+  $$select echo.register_account(
+      '09000000-0000-4000-8000-000000000009', 'frank@example.com', 'فرانک',
+      'سازمانی که وجود ندارد')$$,
+  'a name matching no active org is refused — the name is a JOIN key, not a founding wish');
 select t.ok(
   (select status from echo.register_account(
-     '09000000-0000-4000-8000-000000000009', 'frank@example.com', 'فرانک')) = 'active',
-  'founding a new org lands ACTIVE — the confirmed email is the acceptance (0056); '
-  'the join-an-existing-org path still pends, asserted in 80_vendor_acceptance');
+     '09000000-0000-4000-8000-000000000009', 'frank@example.com', 'فرانک',
+     'شرکت الف')) = 'pending',
+  'the RIGHT name joins the existing org as PENDING — acceptance stays the org''s decision');
 -- Read it as the new account: echo_app with no identity attached can see
 -- nothing, not even the row it just created (invariant 2).
 select set_config('echo.actor_id', '09000000-0000-4000-8000-000000000009', true);
 select t.ok(
-  (select role from echo.app_user where id = '09000000-0000-4000-8000-000000000009') = 'owner',
-  'registering without naming an org creates an org-of-one whose founder is its owner (M2/M23)');
+  (select role from echo.app_user where id = '09000000-0000-4000-8000-000000000009') = 'member',
+  'and the role is MEMBER, never owner — owners are made in the platform console only (0082)');
 
 select t.ok((select count(*) from echo.call) = 0,
   'and that brand-new account can still see nothing until someone accepts it');

@@ -57,11 +57,23 @@ describe("register tries the invitation door first", () => {
     expect(log.some((sql) => sql.includes("register_account"))).toBe(false);
   });
 
-  it("no invitation (zero rows) routes to the normal register_account path", async () => {
+  it("no invitation + an ORG NAME routes to register_account — the join path (0082)", async () => {
     const { db, log } = fakeDb([]);
     await createMembersRepo(db).register({
       userId: USER_ID, email: "nobody-invited@example.com", displayName: "کسی",
+      orgName: "شرکت الف",
     });
     expect(log.some((sql) => sql.includes("register_account"))).toBe(true);
+  });
+
+  it("no invitation and NO org named is a 400 with a name — founding is gone (0082)", async () => {
+    const { db, log } = fakeDb([]);
+    await expect(
+      createMembersRepo(db).register({
+        userId: USER_ID, email: "nobody-invited@example.com", displayName: "کسی",
+      }),
+    ).rejects.toThrow(/organization is required/);
+    // and the db was never asked to found anything
+    expect(log.some((sql) => sql.includes("register_account"))).toBe(false);
   });
 });
