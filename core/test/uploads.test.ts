@@ -267,3 +267,68 @@ describe("finish", () => {
     await expect(repo.finish(identity, CALL_ID)).rejects.toThrow(/not found/);
   });
 });
+
+describe("retry (the resumable pipeline's door)", () => {
+  const CALL = "33333333-3333-4333-8333-333333333333";
+  const OWNER = "44444444-4444-4444-8444-444444444444";
+  const callRow = { id: CALL, status: "failed", owner_id: OWNER };
+
+  it("all transcripts present → re-enters at link_speakers AS THE OWNER", async () => {
+    const { db, calls } = fakeDb((sql) => {
+      if (sql.includes("select id, status, owner_id")) return [callRow];
+      if (sql.includes("from echo.call_part")) return []; // no bare parts
+      if (sql.includes("set status = 'processing'")) return [{ id: CALL }];
+      return [];
+    });
+    const repo = createUploadsRepo(db, CONFIG);
+    const out = await repo.retry(
+      { userId: "99999999-9999-4999-8999-999999999999", orgId: "o", role: "admin", isActive: true },
+      CALL,
+    );
+    expect(out).toMatchObject({ resumed_at: "summary", status: "processing" });
+    const enqueue = calls.find((c) => c.sql.includes("pgmq") || c.sql.includes("send"));
+    // the job's ownerId is the CALL'S owner, never the (admin) retrier —
+    // a retry must not lend the pipeline the presser's wider read (M3)
+    expect(JSON.stringify(enqueue?.params)).toContain(OWNER);
+    expect(JSON.stringify(enqueue?.params)).not.toContain("99999999");
+  });
+
+  it("parts without transcripts re-run process_part, one job each", async () => {
+    const { db, calls } = fakeDb((sql) => {
+      if (sql.includes("select id, status, owner_id")) return [callRow];
+      if (sql.includes("from echo.call_part")) return [{ id: "p1" }, { id: "p2" }];
+      if (sql.includes("set status = 'processing'")) return [{ id: CALL }];
+      return [];
+    });
+    const repo = createUploadsRepo(db, CONFIG);
+    const out = await repo.retry(
+      { userId: OWNER, orgId: "o", role: "member", isActive: true }, CALL);
+    expect(out).toMatchObject({ resumed_at: "parts", parts: 2 });
+    const sends = calls.filter((c) => c.sql.toLowerCase().includes("send") && JSON.stringify(c.params).includes("echo_process_part"));
+    expect(sends).toHaveLength(2);
+  });
+
+  it("a call that is not FAILED refuses with its actual status named", async () => {
+    const { db } = fakeDb((sql) =>
+      sql.includes("select id, status, owner_id") ? [{ ...callRow, status: "ready" }] : []);
+    const repo = createUploadsRepo(db, CONFIG);
+    await expect(
+      repo.retry({ userId: OWNER, orgId: "o", role: "member", isActive: true }, CALL),
+    ).rejects.toThrow(/only a failed call/);
+  });
+
+  it("losing the race to a concurrent retry is the same answer, not a fault", async () => {
+    const { db, calls } = fakeDb((sql) => {
+      if (sql.includes("select id, status, owner_id")) return [callRow];
+      if (sql.includes("from echo.call_part")) return [];
+      if (sql.includes("set status = 'processing'")) return []; // someone else moved it
+      return [];
+    });
+    const repo = createUploadsRepo(db, CONFIG);
+    const out = await repo.retry(
+      { userId: OWNER, orgId: "o", role: "member", isActive: true }, CALL);
+    expect(out.status).toBe("processing");
+    const sends = calls.filter((c) => c.sql.toLowerCase().includes("send"));
+    expect(sends).toHaveLength(0); // the winner enqueued; we must not double it
+  });
+});

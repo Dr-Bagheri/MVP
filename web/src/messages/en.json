@@ -89,7 +89,9 @@
     "translate": "Translate",
     "confirmDelete": "Delete?",
     "untitled": "Untitled",
-    "resumeCall": "Resume"
+    "resumeCall": "Resume",
+    "retry": "Retry",
+    "retryStarted": "Processing restarted — the result updates in this table."
   },
   "status": {
     "recording": "Paused",

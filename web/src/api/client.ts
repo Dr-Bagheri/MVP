@@ -744,6 +744,12 @@ export const api = {
    * can never ride the BFF); everything that carries identity stays
    * server-side.
    */
+  /** Resume a FAILED call's pipeline — the retry door (2026-08-22). */
+  async retryCall(callId: string): Promise<{ status: string; resumed_at: string; parts: number }> {
+    return bff<{ status: string; resumed_at: string; parts: number }>(
+      `/api/calls/${callId}/retry`, { method: "POST" });
+  },
+
   /** Notes & chapters on a call (0079) — annotations, never the record. */
   async callNotes(callId: string): Promise<CallNote[]> {
     return bff<CallNote[]>(`/api/calls/${callId}/notes`);

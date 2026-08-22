@@ -89,7 +89,9 @@
     "translate": "ترجمه",
     "confirmDelete": "حذف شود؟",
     "untitled": "بدون عنوان",
-    "resumeCall": "ادامه"
+    "resumeCall": "ادامه",
+    "retry": "تلاش دوباره",
+    "retryStarted": "پردازش دوباره آغاز شد — نتیجه در همین جدول به‌روز می‌شود."
   },
   "status": {
     "recording": "متوقف‌شده",

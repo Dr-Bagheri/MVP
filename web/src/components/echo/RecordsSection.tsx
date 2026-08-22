@@ -295,6 +295,26 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
                               {t("resumeCall")}
                             </Link>
                           ) : null}
+                          {/* the RETRY door (user directive, 2026-08-22:
+                              "we got the voice — add an option to retry"):
+                              a failed call re-enters the pipeline where its
+                              artifacts say it stopped — parts without
+                              transcripts re-transcribe, otherwise straight
+                              to speakers+summary. Failed rows only. */}
+                          {call.status === "failed" ? (
+                            <button
+                              className="font-semibold text-accent underline-offset-2 hover:underline"
+                              disabled={busy}
+                              onClick={() =>
+                                void act(async () => {
+                                  await api.retryCall(call.id);
+                                  notify(t("retryStarted"));
+                                })
+                              }
+                            >
+                              {t("retry")}
+                            </button>
+                          ) : null}
                           <button
                             className="text-fg-muted underline-offset-2 hover:underline"
                             disabled={busy}

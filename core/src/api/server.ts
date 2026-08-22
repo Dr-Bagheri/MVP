@@ -369,6 +369,13 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     return reply.send(await uploads.finish(identity, id));
   });
 
+  // retry a FAILED call — the resumable pipeline's missing door
+  app.post("/v1/calls/:id/retry", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id } = request.params as { id: string };
+    return reply.send(await uploads.retry(identity, id));
+  });
+
   /**
    * On-demand TRANSLATION of a call's summary or transcript to English
    * (0063). Runs the /translator SYSTEM skill through the same runtime as

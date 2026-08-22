@@ -24,7 +24,7 @@ import { randomUUID } from "node:crypto";
 import { NotFoundError, ValidationError } from "./errors.ts";
 import { assertUuid, type Db, type SqlTx } from "../db/identity.ts";
 import { createStorageSigner } from "../storage/signer.ts";
-import { createQueue, Q_PROCESS_PART } from "../worker/queue.ts";
+import { createQueue, Q_LINK_SPEAKERS, Q_PROCESS_PART } from "../worker/queue.ts";
 import type { Identity } from "../agent/types.ts";
 
 export interface UploadsConfig {
@@ -426,6 +426,84 @@ export function createUploadsRepo(db: Db, config: UploadsConfig) {
       );
       if (!existing[0]) throw new NotFoundError("call not found");
       return existing[0];
+    },
+
+    /**
+     * RETRY a FAILED call (user directive, 2026-08-22: "we got the voice —
+     * add an option to retry the processing phase"). The pipeline was
+     * designed resumable (M7: every step idempotent against its artifact;
+     * dead-letter semantics: call-step failure = resumable fail) — this is
+     * the missing DOOR, not a new mechanism.
+     *
+     * The resume point comes from the ARTIFACTS, never a flag: parts that
+     * still lack transcripts (and are not marked missing) re-run
+     * process_part; when every surviving part has its transcript, the call
+     * re-enters at link_speakers, which chains to summarize as always.
+     * Steps re-check their artifacts on arrival, so a retry can never
+     * duplicate a transcript or a speaker roster.
+     *
+     * The JOB runs as the CALL'S OWNER (M3) — payload.ownerId is the
+     * call's owner_id, not the retrier: an admin pressing retry must not
+     * lend the pipeline their wider read. Status moves failed→processing
+     * here; the 0033 guard clears failure_reason on that transition.
+     */
+    async retry(
+      identity: Identity,
+      callId: string,
+    ): Promise<{ id: string; status: string; resumed_at: "parts" | "summary"; parts: number }> {
+      const id = assertUuid(callId, "call id");
+      const call = await db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe<{ id: string; status: string; owner_id: string }>(
+          `select id, status, owner_id from echo.call
+            where id = $1 and deleted_at is null`,
+          [id],
+        ),
+      );
+      if (!call[0]) throw new NotFoundError("call not found");
+      if (call[0].status !== "failed") {
+        throw new ValidationError("only a failed call can be retried",
+          { code: "not_failed", params: { status: call[0].status } });
+      }
+      const owner = call[0].owner_id;
+
+      // which parts never produced their transcript? (missing parts are
+      // the recorded gaps — retrying them would retry the loss, not fix it)
+      const bare = await db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe<{ id: string }>(
+          `select p.id from echo.call_part p
+            where p.call_id = $1
+              and p.missing = false
+              and p.storage_path is not null
+              and not exists (
+                select 1 from echo.transcript_segment s where s.part_id = p.id
+              )`,
+          [id],
+        ),
+      );
+
+      // 'processing' either way — honest ("back in the pipeline"); the
+      // link step advances it to 'summarizing' itself when it runs
+      const moved = await db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe<{ id: string }>(
+          `update echo.call set status = 'processing'
+            where id = $1 and status = 'failed'
+            returning id`,
+          [id],
+        ),
+      );
+      // a concurrent retry won the race — same intent, one answer, no fault
+      if (!moved[0]) {
+        return { id, status: "processing", resumed_at: bare.length > 0 ? "parts" : "summary", parts: 0 };
+      }
+
+      if (bare.length > 0) {
+        for (const part of bare) {
+          await queue.send(Q_PROCESS_PART, { callId: id, ownerId: owner, partId: part.id });
+        }
+        return { id, status: "processing", resumed_at: "parts", parts: bare.length };
+      }
+      await queue.send(Q_LINK_SPEAKERS, { callId: id, ownerId: owner });
+      return { id, status: "processing", resumed_at: "summary", parts: 0 };
     },
   };
 }
