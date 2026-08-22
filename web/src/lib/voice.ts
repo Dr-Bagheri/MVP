@@ -243,6 +243,9 @@ export function createWakeMachine(
   /** an interim promoted at 3s-silence makes the recognizer's own final a
       duplicate — swallow exactly one */
   let swallowNextFinal = false;
+  /** a BARE name in an interim already acked — the same utterance's final
+      must not re-ack, but a final that grew a command still runs it */
+  let ackedFromInterim = false;
 
   const clearEngage = () => { if (engageTimer) clearTimeout(engageTimer); engageTimer = null; };
   const clearStability = () => {
@@ -255,6 +258,7 @@ export function createWakeMachine(
     clearEngage();
     clearStability();
     swallowNextFinal = false;
+    ackedFromInterim = false;
     const wasVisible = state === "engaged";
     state = "idle";
     if (wasVisible) handlers.onState?.("idle");
@@ -282,55 +286,98 @@ export function createWakeMachine(
     },
     feed(transcript, isFinal) {
       if (muted) return;
+      /*
+       * The interim-stability endpoint, shared by the session AND by an
+       * interim wake that carried words after the name (user: some commands
+       * are short, some long): when the interim stops CHANGING for
+       * silenceMs, that text IS the command — promoted without waiting for
+       * the recognizer's final. The eventual final for the same utterance
+       * is swallowed once.
+       */
+      const trackInterim = (text: string) => {
+        if (text && text !== lastInterim) {
+          lastInterim = text;
+          if (stabilityTimer) clearTimeout(stabilityTimer);
+          stabilityTimer = setTimeout(() => {
+            const promoted = lastInterim;
+            clearStability();
+            if (!promoted || state !== "engaged" || muted) return;
+            swallowNextFinal = true;
+            if (STOP_RE.test(promoted)) { toIdle(); return; }
+            const pm = matchWake(promoted);
+            const command = pm.woke ? pm.command : promoted;
+            if (!command) return;
+            renew();
+            handlers.onCommand(command);
+          }, silenceMs);
+        }
+      };
+
       if (state === "idle") {
-        // FINALS only in idle: the utterance is complete, nothing to talk
-        // over, nothing to un-stick. The name alone acks; name + words runs.
-        if (!isFinal) return;
         const m = matchWake(transcript);
         if (!m.woke) return;
-        engage();
-        if (m.command) handlers.onCommand(m.command);
-        else handlers.onWake();
-      } else {
-        // engaged: the conversation session
-        if (!isFinal) {
-          renew(); // speech in progress keeps the session alive
-          /*
-           * DYNAMIC endpointing (user: some commands are short, some long):
-           * when the interim stops CHANGING for silenceMs, that text IS the
-           * command — promoted without waiting for the recognizer's final.
-           * The eventual final for the same utterance is swallowed once.
-           */
-          const text = transcript.trim();
-          if (text && text !== lastInterim) {
-            lastInterim = text;
-            if (stabilityTimer) clearTimeout(stabilityTimer);
-            stabilityTimer = setTimeout(() => {
-              const promoted = lastInterim;
-              clearStability();
-              if (!promoted || state !== "engaged" || muted) return;
-              swallowNextFinal = true;
-              if (STOP_RE.test(promoted)) { toIdle(); return; }
-              const pm = matchWake(promoted);
-              const command = pm.woke ? pm.command : promoted;
-              if (!command) return;
-              renew();
-              handlers.onCommand(command);
-            }, silenceMs);
-          }
+        if (isFinal) {
+          // the utterance is complete: the name alone acks; name + words runs
+          engage();
+          if (m.command) handlers.onCommand(m.command);
+          else handlers.onWake();
           return;
         }
-        clearStability();
-        if (swallowNextFinal) { swallowNextFinal = false; renew(); return; }
-        if (STOP_RE.test(transcript)) { toIdle(); return; }
-        const m = matchWake(transcript);
-        // saying the name again mid-session is a re-ack, not a command
-        if (m.woke && !m.command) { renew(); handlers.onWake(); return; }
-        const command = (m.woke ? m.command : transcript.trim());
-        if (!command) { renew(); return; }
-        renew();
-        handlers.onCommand(command);
+        /*
+         * INTERIM wake (2026-08-22, round 2 — the "calling it echo does not
+         * work" report): Chrome routinely ends a quiet recognition session
+         * WITHOUT finalizing the interim that carried the name — the
+         * restart discards it, and a finals-only idle reads as a dead orb.
+         * So the name in an interim wakes IMMEDIATELY. Stuck-proofness is
+         * kept by having no pre-engaged state at all: waking is a one-way
+         * step into the session, whose own timeout and stop words already
+         * know the way out. The cost is an occasional phantom ack when a
+         * mis-hear corrects itself — a chirp, against a door that opens.
+         */
+        engage();
+        if (!m.command) {
+          ackedFromInterim = true;
+          handlers.onWake();
+          return;
+        }
+        // name + speech still forming: the session's stability endpoint
+        // takes it from here (promotion and the final both strip the name)
+        trackInterim(transcript.trim());
+        return;
       }
+
+      // engaged: the conversation session
+      if (!isFinal) {
+        renew(); // speech in progress keeps the session alive
+        trackInterim(transcript.trim());
+        return;
+      }
+      clearStability();
+      if (swallowNextFinal) { swallowNextFinal = false; renew(); return; }
+      if (ackedFromInterim) {
+        /*
+         * The wake utterance's own final, after its interim already acked.
+         * Not a blind swallow: if the final GREW words after the name
+         * ("echo … go to records" finalized as one utterance), those words
+         * are the command. A final that is not the wake utterance at all
+         * (the person's next sentence) falls through to normal handling.
+         */
+        ackedFromInterim = false;
+        const wm = matchWake(transcript);
+        if (wm.woke) {
+          renew();
+          if (wm.command) handlers.onCommand(wm.command);
+          return;
+        }
+      }
+      if (STOP_RE.test(transcript)) { toIdle(); return; }
+      const m = matchWake(transcript);
+      // saying the name again mid-session is a re-ack, not a command
+      if (m.woke && !m.command) { renew(); handlers.onWake(); return; }
+      const command = (m.woke ? m.command : transcript.trim());
+      if (!command) { renew(); return; }
+      renew();
+      handlers.onCommand(command);
     },
     cancel: toIdle,
   };
@@ -524,6 +571,39 @@ async function pumpSpeechQueue(): Promise<void> {
   }
 }
 
+/**
+ * A watchdog around every awaited utterance (2026-08-22, the dead-orb
+ * report's second cause): Chrome's speechSynthesis is known to sometimes
+ * fire NEITHER onend NOR onerror — the await never settles, the pump never
+ * closes, `publishPlayback(false)` never runs, and the wake machine stays
+ * MUTED forever. From the outside that is indistinguishable from "the orb
+ * stopped hearing me". The ceiling is generous (real speech finishes long
+ * before it) and firing it also cancels the jammed engine so the NEXT
+ * utterance starts clean.
+ */
+function speechWatchdogMs(text: string): number {
+  return Math.min(30_000, 3_000 + text.length * 120);
+}
+
+function speakUtterance(utterance: SpeechSynthesisUtterance, text: string): Promise<void> {
+  return new Promise<void>((resolve) => {
+    let settled = false;
+    const finish = (jammed: boolean) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(watchdog);
+      if (jammed) {
+        try { window.speechSynthesis.cancel(); } catch { /* fine */ }
+      }
+      resolve();
+    };
+    const watchdog = setTimeout(() => finish(true), speechWatchdogMs(text));
+    utterance.onend = () => finish(false);
+    utterance.onerror = () => finish(false);
+    window.speechSynthesis.speak(utterance);
+  });
+}
+
 /** one utterance, AWAITED to its end — sequential, never cancelling */
 async function speakOne(cleaned: string): Promise<void> {
   const persian = PERSIAN_RE.test(cleaned);
@@ -532,11 +612,7 @@ async function speakOne(cleaned: string): Promise<void> {
     if (!synthAvailable) return;
     const utterance = new SpeechSynthesisUtterance(cleaned);
     utterance.lang = "en-US";
-    await new Promise<void>((resolve) => {
-      utterance.onend = () => resolve();
-      utterance.onerror = () => resolve();
-      window.speechSynthesis.speak(utterance);
-    });
+    await speakUtterance(utterance, cleaned);
     return;
   }
   const voices = synthAvailable ? await loadVoices() : [];
@@ -546,11 +622,7 @@ async function speakOne(cleaned: string): Promise<void> {
     const utterance = new SpeechSynthesisUtterance(cleaned);
     utterance.voice = faVoice;
     utterance.lang = faVoice.lang;
-    await new Promise<void>((resolve) => {
-      utterance.onend = () => resolve();
-      utterance.onerror = () => resolve();
-      window.speechSynthesis.speak(utterance);
-    });
+    await speakUtterance(utterance, cleaned);
     return;
   }
   try {
@@ -559,10 +631,21 @@ async function speakOne(cleaned: string): Promise<void> {
     const audio = new Audio(URL.createObjectURL(blob));
     serverAudio = audio; // the orb's level meter taps the CURRENT element
     await new Promise<void>((resolve) => {
-      audio.onended = () => { URL.revokeObjectURL(audio.src); resolve(); };
-      audio.onerror = () => resolve();
-      audio.onpause = () => resolve(); // stopSpeaking() pauses mid-word
-      void audio.play().catch(() => resolve());
+      let settled = false;
+      const finish = (jammed: boolean) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(watchdog);
+        if (jammed) { try { audio.pause(); } catch { /* fine */ } }
+        resolve();
+      };
+      // same wedge, other engine: a stalled download or a never-firing
+      // 'ended' must not hold the mute open forever
+      const watchdog = setTimeout(() => finish(true), speechWatchdogMs(cleaned) + 15_000);
+      audio.onended = () => { URL.revokeObjectURL(audio.src); finish(false); };
+      audio.onerror = () => finish(false);
+      audio.onpause = () => finish(false); // stopSpeaking() pauses mid-word
+      void audio.play().catch(() => finish(false));
     });
     if (serverAudio === audio) serverAudio = null;
   } catch {
@@ -608,10 +691,16 @@ async function speakAsync(text: string): Promise<void> {
    */
   const token = ++playbackToken;
   const done = () => { if (token === playbackToken) publishPlayback(false); };
-  const speakUtterance = (utterance: SpeechSynthesisUtterance) => {
+  const fireUtterance = (utterance: SpeechSynthesisUtterance) => {
     publishPlayback(true);
-    utterance.onend = done;
-    utterance.onerror = done;
+    // the same never-fires wedge as speakOne's, same watchdog: an ack that
+    // jams the engine would leave the wake machine muted — a dead orb
+    const watchdog = setTimeout(() => {
+      try { window.speechSynthesis.cancel(); } catch { /* fine */ }
+      done();
+    }, speechWatchdogMs(cleaned));
+    utterance.onend = () => { clearTimeout(watchdog); done(); };
+    utterance.onerror = () => { clearTimeout(watchdog); done(); };
     window.speechSynthesis.speak(utterance);
   };
 
@@ -620,7 +709,7 @@ async function speakAsync(text: string): Promise<void> {
     if (!("speechSynthesis" in window)) return;
     const utterance = new SpeechSynthesisUtterance(cleaned);
     utterance.lang = "en-US";
-    speakUtterance(utterance);
+    fireUtterance(utterance);
     return;
   }
 
@@ -633,7 +722,7 @@ async function speakAsync(text: string): Promise<void> {
     const utterance = new SpeechSynthesisUtterance(cleaned);
     utterance.voice = faVoice;
     utterance.lang = faVoice.lang;
-    speakUtterance(utterance);
+    fireUtterance(utterance);
     return;
   }
 
@@ -648,6 +737,13 @@ async function speakAsync(text: string): Promise<void> {
       done();
     };
     serverAudio.onerror = done;
+    // watchdog: a stalled stream must not hold the mute open forever
+    const audioWatchdog = setTimeout(() => {
+      try { serverAudio?.pause(); } catch { /* fine */ }
+      done();
+    }, speechWatchdogMs(cleaned) + 15_000);
+    serverAudio.addEventListener("ended", () => clearTimeout(audioWatchdog));
+    serverAudio.addEventListener("pause", () => { clearTimeout(audioWatchdog); done(); });
     await serverAudio.play();
   } catch {
     done();

@@ -26,13 +26,52 @@ describe("createWakeMachine", () => {
   });
   afterEach(() => vi.useRealTimers());
 
-  it("idle ignores INTERIMS entirely — no half-heard utterance can wedge it", () => {
-    machine.feed("echo", false);
-    machine.feed("echo go to records", false);
+  it("idle ignores interims WITHOUT the name — ordinary speech never wakes it", () => {
+    machine.feed("let us check", false);
+    machine.feed("let us check the report", false);
     vi.advanceTimersByTime(5_000);
     expect(onWake).not.toHaveBeenCalled();
     expect(onCommand).not.toHaveBeenCalled();
     expect(states).toEqual([]);
+  });
+
+  it("a bare name in an INTERIM wakes immediately — Chrome often never finalizes a quiet utterance", () => {
+    machine.feed("echo", false);
+    expect(onWake).toHaveBeenCalledTimes(1);
+    expect(states).toEqual(["engaged"]);
+  });
+
+  it("the woken utterance's own final 'echo' does not re-ack", () => {
+    machine.feed("echo", false);
+    machine.feed("echo", true);
+    expect(onWake).toHaveBeenCalledTimes(1);
+    expect(onCommand).not.toHaveBeenCalled();
+  });
+
+  it("a final that GREW words after the interim ack still runs them", () => {
+    machine.feed("echo", false);
+    machine.feed("echo go to records", true);
+    expect(onWake).toHaveBeenCalledTimes(1);
+    expect(onCommand).toHaveBeenCalledWith("go to records");
+  });
+
+  it("after an interim ack, the person's NEXT plain final is an ordinary command", () => {
+    machine.feed("echo", false);
+    machine.feed("open the archive", true);
+    expect(onCommand).toHaveBeenCalledWith("open the archive");
+  });
+
+  it("name + words in an INTERIM: the session's stability endpoint runs it, name stripped", () => {
+    machine.feed("echo go to", false);
+    machine.feed("echo go to records", false);
+    expect(states).toEqual(["engaged"]); // engaged at once, no command yet
+    expect(onCommand).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(3000);
+    expect(onCommand).toHaveBeenCalledWith("go to records");
+    // the recognizer's own final for the same words is swallowed once
+    machine.feed("echo go to records", true);
+    expect(onCommand).toHaveBeenCalledTimes(1);
+    expect(onWake).not.toHaveBeenCalled();
   });
 
   it("a FINAL bare name wakes and acks", () => {
