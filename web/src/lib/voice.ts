@@ -75,6 +75,9 @@ export function matchWake(transcript: string): { woke: boolean; command: string 
 
 export interface WakeListenerHandle {
   stop: () => void;
+  /** end the current wake SESSION without killing the recognizer — the
+      wake word keeps working for the next conversation */
+  endSession?: () => void;
 }
 
 export type WakeState = "idle" | "engaged";
@@ -99,6 +102,55 @@ const STOP_RE = /^\s*(?:stop|stop it|enough|cancel|never mind|thanks,? that'?s a
 /** the dock's local-stop gate — exported so "stop" never becomes a prompt */
 export function isStopCommand(text: string): boolean {
   return STOP_RE.test(text);
+}
+
+/**
+ * CONVERSATION-OVER detection (user rule, 2026-08-22): "stop" kept two
+ * meanings because only BARE stop words were caught — "okay stop",
+ * "thanks that's enough", "I don't have anything else" reached the model,
+ * which mused about recordings. An utterance is a goodbye when it is
+ * short, made ONLY of closing vocabulary, and contains a core closing
+ * phrase. Real requests always carry a non-closing word ("open", "برو",
+ * "records") and pass through untouched.
+ */
+const CLOSING_FILLER = new Set([
+  // en
+  "ok", "okay", "k", "no", "yes", "yeah", "nah", "thanks", "thank", "you",
+  "alright", "right", "well", "so", "that", "thats", "s", "is", "it", "was",
+  "all", "enough", "done", "i", "im", "m", "dont", "don", "t", "do", "not",
+  "have", "anything", "nothing", "else", "more", "were", "re", "we", "are",
+  "am", "good", "fine", "bye", "goodbye", "stop", "please", "now", "cool",
+  "great", "perfect",
+  // fa
+  "باشه", "نه", "آره", "بله", "مرسی", "ممنون", "ممنونم", "متشکرم", "تشکر",
+  "خیلی", "خب", "خوب", "دیگه", "دیگر", "چیزی", "چیز", "ندارم", "نداریم",
+  "نیست", "همین", "بود", "تمام", "شد", "بسه", "بس", "کن", "کافیه", "کافی",
+  "است", "خداحافظ", "بای", "فعلا", "لطفا", "من",
+]);
+
+const CLOSING_CORE = new RegExp(
+  [
+    "(don t|dont|do not) have anything( else| more)?",
+    "nothing (else|more)",
+    "that s? ?(all|it|enough)",
+    "(i ?m|we ?re|we are|i am) (all )?done",
+    "all done",
+    "\\benough\\b",
+    "\\bstop\\b",
+    "\\bbye\\b", "\\bgoodbye\\b",
+    "بسه", "بس کن", "کافیه", "کافی است", "تمام", "همین", "خداحافظ", "بای",
+    "ندارم", "نداریم",
+  ].join("|"),
+  "iu",
+);
+
+export function isConversationOver(text: string): boolean {
+  const c = canonical(text);
+  if (!c) return false;
+  const words = c.split(" ");
+  if (words.length > 8) return false;
+  if (!words.every((word) => CLOSING_FILLER.has(word))) return false;
+  return CLOSING_CORE.test(c);
 }
 
 /**
@@ -401,6 +453,7 @@ export function startVoiceControl(opts: {
       machine.cancel();
       try { rec.abort(); } catch { /* fine */ }
     },
+    endSession: () => machine.cancel(),
   };
 }
 

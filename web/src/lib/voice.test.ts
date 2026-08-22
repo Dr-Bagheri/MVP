@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isEchoOf, isNoiseUtterance, isStopCommand, matchWake, sameUtterance } from "./voice";
+import { isConversationOver, isEchoOf, isNoiseUtterance, isStopCommand, matchWake, sameUtterance } from "./voice";
 
 /**
  * The wake matcher is the one pure decision in the voice path — everything
@@ -116,5 +116,41 @@ describe("isNoiseUtterance — the dash-only phantom filter", () => {
     expect(isNoiseUtterance("و")).toBe(false);
     expect(isNoiseUtterance("ok")).toBe(false);
     expect(isNoiseUtterance("۲")).toBe(false);
+  });
+});
+
+describe("isConversationOver — the goodbye detector", () => {
+  it("catches every finished-phrase the user named, filler-tolerant", () => {
+    for (const phrase of [
+      "i dont have anything else",
+      "I don't have anything else",
+      "thanks thats enough",
+      "thanks that's it",
+      "stop it",
+      "okay stop",
+      "no thanks that's all",
+      "ok we're done",
+      "goodbye",
+      "مرسی همین بود",
+      "دیگه چیزی ندارم",
+      "خیلی ممنون کافیه",
+      "ممنون تمام شد",
+      "خداحافظ",
+    ]) {
+      expect(isConversationOver(phrase), phrase).toBe(true);
+    }
+  });
+
+  it("a real request NEVER reads as a goodbye — non-closing words break it", () => {
+    for (const phrase of [
+      "thanks, now open the records",
+      "stop the recording and save it",
+      "do we have anything else in the archive",
+      "that's the summary I wanted, translate it",
+      "برو به ضبط‌ها",
+      "خلاصهٔ همین تماس رو بگو",
+    ]) {
+      expect(isConversationOver(phrase), phrase).toBe(false);
+    }
   });
 });

@@ -12,7 +12,7 @@ import { subscribeAssistantOpen, subscribeRecordingLive } from "@/lib/assistantB
 import { notify, subscribeNotify, type PlatformNotice } from "@/lib/notify";
 import { computeRms, useAudioLevel, useSyntheticPulse } from "@/lib/useAudioLevel";
 import {
-  currentSpeechAudio, isEchoOf, isNoiseUtterance, isStopCommand, listenOnce, recentSpokenText, sameUtterance, speak,
+  currentSpeechAudio, isConversationOver, isEchoOf, isNoiseUtterance, isStopCommand, listenOnce, recentSpokenText, sameUtterance, speak,
   speakQueued, startVoiceControl, stopSpeaking, subscribeSpeechPlayback,
   voiceInputSupported, type WakeListenerHandle,
 } from "@/lib/voice";
@@ -388,10 +388,32 @@ export function PresenceDock() {
     setListening(null);
   }
 
+  /**
+   * The conversation is OVER (user rule, 2026-08-22): "thanks that's
+   * enough", "I don't have anything else", "stop it", «مرسی همین بود» —
+   * anything that means finished. Answer with one word, out loud in the
+   * goodbye's own language, and CLOSE THE ORB: speech cut, run aborted,
+   * session ended, panel gone. The wake word stays alive for next time.
+   */
+  function farewellClose(text: string): void {
+    stopSpeaking();
+    abortRef.current?.abort();
+    wakeRef.current?.endSession?.();
+    setListening(null); // tears the capture down via the session effect
+    setOpen(false);
+    setMinimized(false);
+    if (!silentRef.current && !recordingLive()) {
+      speak(/[؀-ۿ]/.test(text) ? "باشه." : "Okay.");
+    }
+  }
+
   function routeCommand(text: string): void {
     // "—" / "…" transcripts are the recognizer spelling NOISE (a breath,
     // a tap) — the dash-only phantom bubbles (user report, 2026-08-22)
     if (isNoiseUtterance(text)) return;
+    // goodbye phrases — filler-tolerant, so "okay stop" and "thanks
+    // that's it" no longer leak to the model as questions
+    if (isConversationOver(text)) { farewellClose(text); return; }
     if (isStopCommand(text)) { localStop(); return; }
     /*
      * The mic was open while the assistant talked — echo cancellation
