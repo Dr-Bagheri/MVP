@@ -24,6 +24,7 @@ dist/
 # the build gate's own output dir — kept separate so it cannot corrupt the
 # shared dev server's .next (see web/scripts/build-gate.mjs)
 .next-gate/
+.next-m30-gate/
 *.tsbuildinfo
 
 # Supabase CLI state

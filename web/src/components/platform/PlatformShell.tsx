@@ -15,7 +15,7 @@ import { TopBar } from "./TopBar";
  * mobile bottom bar. Apps render into `children`; the shell draws nothing
  * inside that slot.
  *
- * **M22's law, and the reason this component does not render an assistant:**
+ * **M22's law, and the reason this component does not own an assistant:**
  *
  *   > the app must be reachable on load, at every width, without dismissing
  *   > anything.
@@ -26,14 +26,13 @@ import { TopBar } from "./TopBar";
  * (main went full width, nothing overflowed) while the app became unreachable
  * behind an opaque layer. Both states passed every box measurement.
  *
- * So the assistant is not the shell's to place:
- *   - **on the hub, the assistant IS the page** — there is nothing to overlay,
- *     and a pane here would cover a screen that is already the assistant;
- *   - **inside an app**, the app owns its docked pane / bottom sheet, opened by
- *     a deliberate affordance and never on load.
+ * So the assistant is not the shell's to mount. PresenceDock stays global and
+ * owns voice, conversation, notifications and the one accessible trigger.
+ * The top bar exposes only an optional visual anchor for that trigger; without
+ * the shell it falls back to its fixed corner. No pane opens on load.
  *
- * A shell that renders an assistant on every route cannot honour that
- * distinction, which is exactly how the 40px bug happened.
+ * Keeping ownership outside the shell preserves that distinction and prevents
+ * a visual placement change from repeating the 40px/opaque-overlay failure.
  */
 export function PlatformShell({ children }: { children: ReactNode }) {
   const [me, setMe] = useState<Me | null>(null);

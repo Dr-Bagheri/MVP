@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import { useLocale, useTranslations } from "next-intl";
 import { usePathname } from "next/navigation";
 import { api } from "@/api/client";
@@ -17,16 +18,19 @@ import {
 } from "@/lib/voice";
 import { AuroraOrb, type AuroraState } from "./AuroraOrb";
 import { recorderControls } from "@/components/echo/recorderControls";
+import {
+  getPresenceAnchorSnapshot,
+  getServerPresenceAnchorSnapshot,
+  subscribePresenceAnchor,
+} from "./presenceAnchor";
 
 /**
  * PRESENCE (M34) — the agent, always there.
  *
- * One persistent dock on every route: a collapsed orb near the corner, a
- * panel when opened (Ctrl+E opens it anywhere), and the hub itself as the
- * maximized state — the orb hides on the hub route (the approved first
- * screen IS the presence), but the panel, the voice wake word and the
- * notification toasts stay live there: voice must work wherever the
- * person is standing.
+ * One persistent dock on every route: the collapsed orb sits in the platform
+ * top bar's glass cradle, then falls back to the corner on routes without that
+ * shell. The dock itself never remounts, so moving its ONE button does not
+ * reset the panel, voice wake word, unread state or conversation.
  *
  * VOICE (user directive, 2026-08-21): the dock listens for its name —
  * «echo», «hi echo», «salam echo», «سلام اکو». A command in the same
@@ -70,6 +74,11 @@ export function PresenceDock() {
   const locale = useLocale();
   const pathname = usePathname();
   const router = useRouter();
+  const topbarPresenceHost = useSyncExternalStore(
+    subscribePresenceAnchor,
+    getPresenceAnchorSnapshot,
+    getServerPresenceAnchorSnapshot,
+  );
 
   const [member, setMember] = useState(false);
   const [open, setOpen] = useState(false);
@@ -799,11 +808,63 @@ export function PresenceDock() {
 
   if (!member) return null;
 
+  const anchoredToTopbar = topbarPresenceHost !== null;
+  const surfacePosition = anchoredToTopbar
+    ? "left-1/2 top-[106px] -translate-x-1/2 md:top-[130px]"
+    : "bottom-[142px] end-4 md:bottom-[192px] md:end-6";
+  const panelHeight = anchoredToTopbar
+    ? "max-h-[calc(100dvh-7.5rem)] md:max-h-[calc(100dvh-9rem)]"
+    : "max-h-[70dvh]";
+
+  const assistantButton = (
+    <button
+      type="button"
+      aria-label={t("openLabel")}
+      title={`${t("openLabel")} (Ctrl+E)`}
+      className={
+        anchoredToTopbar
+          ? "tap relative z-10 block h-full w-full rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+          : "tap fixed bottom-4 end-4 z-40 block h-[76px] w-[76px] rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg md:bottom-6 md:end-6 md:h-[104px] md:w-[104px]"
+      }
+      onClick={() => {
+        setMinimized(false);
+        setOpen((v) => {
+          const next = !v;
+          if (next) setTimeout(() => inputRef.current?.focus(), 0);
+          return next;
+        });
+      }}
+    >
+      {/* The particle field is decorative; this button remains the single
+          accessible and interactive assistant control in either location. */}
+      <AuroraOrb
+        state={
+          (silent
+            ? "muted"
+            : speaking
+              ? "speaking"
+              : listening === "command"
+                ? "listening"
+                : "idle") satisfies AuroraState
+        }
+        level={orbLevel}
+      />
+      {unread > 0 && !open ? (
+        <span
+          className="absolute -end-0.5 -top-0.5 z-10 grid h-5 min-w-5 place-items-center rounded-full bg-danger px-1 text-[10px] font-bold text-white"
+          aria-label={t("unread", { count: unread })}
+        >
+          {unread}
+        </span>
+      ) : null}
+    </button>
+  );
+
   return (
     <>
       {open && minimized ? (
         /* the MINIMIZED pill: the conversation lives, the screen is yours */
-        <div className="fixed bottom-[142px] end-4 z-40 flex items-center gap-2 rounded-full md:bottom-[192px] md:end-6 border border-border bg-surface px-3 py-1.5 shadow-lg">
+        <div className={`fixed z-40 flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-1.5 shadow-lg ${surfacePosition}`}>
           <span className="h-2 w-2 rounded-full bg-accent" aria-hidden />
           <span className="text-xs font-semibold text-fg">{t("title")}</span>
           <button
@@ -827,7 +888,7 @@ export function PresenceDock() {
       ) : null}
 
       {open && !minimized ? (
-        <div className="fixed bottom-[142px] end-4 z-40 flex max-h-[70dvh] md:bottom-[192px] md:end-6 w-[min(92vw,24rem)] flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-xl">
+        <div className={`fixed z-40 flex w-[min(92vw,24rem)] flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-xl ${surfacePosition} ${panelHeight}`}>
           <div className="flex items-center gap-2 border-b border-border px-3 py-2">
             <span className="h-2 w-2 rounded-full bg-accent" aria-hidden />
             <span className="text-sm font-semibold text-fg">{t("title")}</span>
@@ -984,7 +1045,7 @@ export function PresenceDock() {
 
       {/* the toasts — every platform notice pops from the orb's head */}
       {toasts.length > 0 ? (
-        <div className="pointer-events-none fixed bottom-[142px] end-4 z-50 flex w-[min(88vw,20rem)] md:bottom-[192px] md:end-6 flex-col items-end gap-1.5">
+        <div className={`pointer-events-none fixed z-50 flex w-[min(88vw,20rem)] flex-col gap-1.5 ${surfacePosition} ${anchoredToTopbar ? "items-center" : "items-end"}`}>
           {toasts.map((notice) => (
             <p
               key={notice.id}
@@ -1004,51 +1065,17 @@ export function PresenceDock() {
       {/* ONE turn-state chip, and only while the panel is not showing its
           own header status — the old pair overlapped the composer */}
       {voiceStatus && (!open || minimized) ? (
-        <p className="pointer-events-none fixed bottom-[142px] end-4 z-50 rounded-xl md:bottom-[192px] md:end-6 border border-accent/40 bg-surface px-3 py-1.5 text-xs text-accent shadow-lg">
+        <p className={`pointer-events-none fixed z-50 rounded-xl border border-accent/40 bg-surface px-3 py-1.5 text-xs text-accent shadow-lg ${surfacePosition}`}>
           {voiceStatus}
         </p>
       ) : null}
 
-      {/* the orb, on EVERY route — the hub included (user directive,
-          2026-08-21: "let the orb be present for the landing page as well",
-          superseding the M34 hub-hides-the-orb reading) */}
-      <button
-        type="button"
-        aria-label={t("openLabel")}
-        title={`${t("openLabel")} (Ctrl+E)`}
-        className="tap fixed bottom-4 end-4 z-40 block h-[76px] w-[76px] rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg md:bottom-6 md:end-6 md:h-[104px] md:w-[104px]"
-        onClick={() => {
-          setMinimized(false);
-          setOpen((v) => {
-            const next = !v;
-            if (next) setTimeout(() => inputRef.current?.focus(), 0);
-            return next;
-          });
-        }}
-      >
-        {/* The transparent particle field is decorative; this button remains
-            the single accessible and interactive assistant control. */}
-        <AuroraOrb
-          state={
-            (silent
-              ? "muted"
-              : speaking
-                ? "speaking"
-                : listening === "command"
-                  ? "listening"
-                  : "idle") satisfies AuroraState
-          }
-          level={orbLevel}
-        />
-        {unread > 0 && !open ? (
-          <span
-            className="absolute -end-0.5 -top-0.5 z-10 grid h-5 min-w-5 place-items-center rounded-full bg-danger px-1 text-[10px] font-bold text-white"
-            aria-label={t("unread", { count: unread })}
-          >
-            {unread}
-          </span>
-        ) : null}
-      </button>
+      {/* Portal the complete control—not only its canvas—so accessibility,
+          unread state and interaction have one owner. Routes without the
+          platform shell retain the exact fixed-corner fallback. */}
+      {topbarPresenceHost
+        ? createPortal(assistantButton, topbarPresenceHost)
+        : assistantButton}
     </>
   );
 }

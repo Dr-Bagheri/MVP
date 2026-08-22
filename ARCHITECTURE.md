@@ -1328,10 +1328,14 @@ loud timeout forfeit; a foreign tool-result is indistinguishable from
 no-such-call. The result broker is in-process api state — the seam if the
 api ever scales horizontally.
 
-## M34 — Presence: the agent is always there [user-approved 2026-08-21]
+## M34 — Presence: the agent is always there [user-approved 2026-08-21; placement amended 2026-08-22]
 
-One persistent dock on every route (orb ↔ panel, Ctrl/⌘-K; the hub IS the
-maximized presence and renders no orb). One continuous conversation per
+One persistent dock on every route (orb ↔ panel, Ctrl/⌘-E), including the
+hub. The global locale layout owns its lifecycle; the platform top bar only
+offers a centred visual anchor: its lower edge curves into a glass cradle for
+the same live particle control. Routes without that shell retain the fixed
+corner fallback. Moving between the two never creates a second agent or resets
+conversation, voice, unread, or open state. One continuous conversation per
 day (dated client key, swept at sign-out). Every ask carries situational
 context — route + entity IDS ONLY, told to the model as untrusted fact;
 content is only ever reached through tools under RLS. Write-effect client
