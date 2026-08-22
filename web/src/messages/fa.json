@@ -317,7 +317,8 @@
     "chapterPlaceholder": "نام فصل جدید…",
     "chapterAdd": "فصل",
     "chapterChip": "فصل",
-    "noteFailed": "یادداشت ثبت نشد — دوباره تلاش کنید."
+    "noteFailed": "یادداشت ثبت نشد — دوباره تلاش کنید.",
+    "pillOpen": "بازکردن ضبط‌کننده"
   },
   "call": {
     "summary": "خلاصه",

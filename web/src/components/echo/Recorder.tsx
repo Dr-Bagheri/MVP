@@ -1,59 +1,40 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
-import { announceRecordingLive } from "@/lib/assistantBus";
-import { nextMeetingTitle } from "@/lib/meetingTitle";
-import { PartUploader, type UploaderProgress } from "@/lib/callUpload";
-import { bufferChunk, clearPart, clearTake, markPart } from "@/lib/takeBuffer";
+import {
+  addChapterMark,
+  finish,
+  pause,
+  recorderSnapshot,
+  resetRecorder,
+  resume,
+  retryUploads,
+  startRecording,
+  subscribeRecorder,
+  type RecorderErrorCode,
+} from "@/lib/recordingEngine";
 import { Card, Chip, Field } from "@/components/ui";
 import { Link } from "@/i18n/routing";
 import { digits, formatClock } from "@/lib/format";
-import { SAFETY_PART_BYTES, resumePoint } from "./uploadRules";
-import { recorderControls } from "./recorderControls";
+import { resumePoint } from "./uploadRules";
 import { RecorderNotes } from "./RecorderNotes";
 
 /**
- * The browser recorder — Part 5's centrepiece, and the first REAL producer
- * on the upload wire (the mock it replaces invented its level meter from
- * `Math.random()` and recorded nothing).
+ * The browser recorder — a VIEW over the module-level recording engine
+ * (lib/recordingEngine.ts). Everything that must survive navigation — the
+ * stream, the recorders, the uploader, the crash buffer, the clock — lives
+ * in the engine; this component renders its snapshot and owns only the
+ * START FORM (device pickers, title, language, source, resume adoption).
+ * Navigating away leaves the take rolling; the floating pill
+ * (FloatingRecorder) keeps it visible and controllable everywhere.
  *
- * What it actually does now:
- *  - **Microphone picker** from `enumerateDevices` (labels appear after the
- *    permission grant — the browser's rule, so the list refreshes then).
- *  - **Level meter** from an `AnalyserNode` reading the live stream: RMS of
- *    the time-domain signal, throttled to ~12 fps. It shows the SIGNAL, so
- *    a dead mic reads as a flat meter before it costs anyone a meeting
- *    (rule 7's spirit at the UI: positive detection, visible silence).
- *  - **Pause/resume** via `MediaRecorder.pause()` — paused time is not
- *    recorded and not counted; the clock is RECORDED time.
- *  - **One continuous take** (user directive, 2026-08-22 — the 30-minute
- *    split is retired): the whole take records as one part with no visible
- *    boundary. The only roll left is the storage byte ceiling
- *    (SAFETY_PART_BYTES, ~2.4 h of audio), silent when it happens: the
- *    current recorder stops (its blob uploads: sign → PUT → register) and a
- *    fresh one continues on the same stream — each part an independently
- *    decodable container.
- *  - **Crash-proof buffer**: every ~1s chunk also lands in IndexedDB
- *    (takeBuffer) and is dropped per-part once that part's upload registers.
- *    A crashed tab loses at most the last second; the New-meeting screen
- *    offers whatever is left for recovery.
- *  - **Tab/system audio** (opt-in): getDisplayMedia audio mixed with the
- *    microphone through one AudioContext — both sides of an online meeting
- *    in one take. Refusal is honest: the person CHOSE system audio, so a
- *    share without audio stops the start rather than silently recording
- *    less than promised (M21: degrade the inferred, fail on the told).
- *  - **Finish** stops the last part, waits behind the upload barrier, and
- *    only then flips the call to `processing`. A failed part BLOCKS finish
- *    with its bytes kept and a retry control — a call finished with a
- *    missing part would transcribe with a silent hole (M21: never the
- *    user's data).
- *  - **Speaker picker** drives playback of the finished parts via
- *    `setSinkId` — preview is where an output device choice has meaning.
+ * The recording behaviour itself is documented on the engine: one
+ * continuous take (30-minute rule retired 2026-08-22), silent byte-ceiling
+ * rolls, crash-proof IndexedDB buffer, tab/system audio mixing, waveform +
+ * quality watch, M38 captions, M33 agent controls.
  */
-
-type Phase = "idle" | "starting" | "recording" | "paused" | "finishing" | "done" | "failed";
 
 interface DeviceOption {
   id: string;
@@ -64,39 +45,22 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
   const t = useTranslations("capture");
   const locale = useLocale();
 
-  const [phase, setPhase] = useState<Phase>("idle");
+  const s = useSyncExternalStore(subscribeRecorder, recorderSnapshot, recorderSnapshot);
+  const phase = s.phase;
+
   const [title, setTitle] = useState("");
   const [mics, setMics] = useState<DeviceOption[]>([]);
   const [speakers, setSpeakers] = useState<DeviceOption[]>([]);
   const [micId, setMicId] = useState<string>("");
   const [speakerId, setSpeakerId] = useState<string>("");
-  const [level, setLevel] = useState(0);
-  const [recordedMs, setRecordedMs] = useState(0);
-  const [progress, setProgress] = useState<UploaderProgress>({ done: 0, pending: 0, failed: 0 });
-  const [error, setError] = useState<string | null>(null);
-  const [previews, setPreviews] = useState<{ idx: number; url: string }[]>([]);
-  /** Language hint for the transcriber (user directive, 2026-08-22).
-   *  'mixed' is the default — it preserves the both-languages hint every
-   *  call got before this was choosable; narrowing is an explicit act. */
+  /** Language hint for the transcriber. 'mixed' preserves the historical
+   *  both-languages hint; narrowing is an explicit act. */
   const [language, setLanguage] = useState<"fa" | "en" | "mixed">("mixed");
-  /** Audio source: the mic alone, or mic + tab/system audio mixed. */
   const [source, setSource] = useState<"mic" | "system">("mic");
-  /** Input-quality warning, one at a time, worst first. */
-  const [quality, setQuality] = useState<null | "quiet" | "clipping" | "shareEnded">(null);
-  /** Rolling RMS samples (~2/s) — the take's waveform timeline. */
-  const [wave, setWave] = useState<number[]>([]);
-  /** Chapter marks (at_ms) dropped this session — drawn on the timeline. */
-  const [chapterMarks, setChapterMarks] = useState<number[]>([]);
-  /** Where THIS session's waveform starts (resume offset) — marker math. */
-  const waveStartMs = useRef(0);
   /**
-   * RESUME mode (user directive, 2026-08-20): a call left unfinished — the
-   * person navigated away, closed the tab, or paused and left — shows as
-   * paused in the Calls table, and its Resume action lands here with
-   * `?resume=<id>`. Recording then CONTINUES on the same call: same id, the
-   * next part index, the offset where the audio actually ends. `null` =
-   * fresh-recording mode; "loading" while the call is fetched; "gone" when
-   * the id can no longer be resumed (finished meanwhile, or not theirs).
+   * RESUME mode: `?resume=<id>` — the call continues on the same id, next
+   * part index, offset where the audio ends. `null` = fresh; "loading"
+   * while fetched; "gone" when it can no longer be resumed.
    */
   const [resumeTarget, setResumeTarget] = useState<
     | null
@@ -105,106 +69,18 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
     | { callId: string; title: string | null; nextIdx: number; offsetMs: number }
   >(null);
 
-  const stream = useRef<MediaStream | null>(null);
-  const recorder = useRef<MediaRecorder | null>(null);
-  const uploader = useRef<PartUploader | null>(null);
-  const callId = useRef<string | null>(null);
-  /**
-   * M38 — live captions while recording: a SECOND MediaRecorder taps the
-   * same stream in 1s slices and posts them to the relay; captions ride
-   * back as SSE. Independent of the part recorder on purpose — the upload
-   * pipeline's 30-minute part math must never share a recorder with a
-   * best-effort caption lane. `captions === null` = lane off (unavailable
-   * or not started); "" finals with "" interim = on and listening.
-   */
-  const [captions, setCaptions] = useState<{ finals: string; interim: string } | null>(null);
-  const [captionsDown, setCaptionsDown] = useState(false);
-  const liveId = useRef<string | null>(null);
-  const liveRec = useRef<MediaRecorder | null>(null);
-  const liveEs = useRef<EventSource | null>(null);
-  const liveFinals = useRef("");
-
-  async function startLiveCaptions(mime: string): Promise<void> {
-    try {
-      const { session_id } = await api.liveSttStart();
-      liveId.current = session_id;
-    } catch {
-      // the lane is optional; its ABSENCE is said out loud (M21), once
-      setCaptionsDown(true);
-      return;
-    }
-    liveFinals.current = "";
-    setCaptions({ finals: "", interim: "" });
-    setCaptionsDown(false);
-    const rec = new MediaRecorder(stream.current!, { mimeType: mime });
-    rec.ondataavailable = (event) => {
-      if (event.data.size > 0 && liveId.current) {
-        void api.liveSttAudio(liveId.current, event.data).catch(() => undefined);
-      }
-    };
-    rec.start(1000);
-    liveRec.current = rec;
-    const es = new EventSource(`/api/live-stt/${encodeURIComponent(liveId.current)}/events`);
-    es.onmessage = (event) => {
-      try {
-        const body = JSON.parse(event.data as string) as {
-          type: string;
-          tokens?: { text: string; is_final: boolean }[];
-        };
-        if (body.type === "closed" || body.type === "error") {
-          es.close();
-          if (body.type === "error") setCaptionsDown(true);
-          return;
-        }
-        if (body.type === "tokens" && body.tokens) {
-          const finalText = body.tokens.filter((t) => t.is_final).map((t) => t.text).join("");
-          const interim = body.tokens.filter((t) => !t.is_final).map((t) => t.text).join("");
-          if (finalText) liveFinals.current += finalText;
-          setCaptions({ finals: liveFinals.current, interim });
-        }
-      } catch { /* not a caption frame */ }
-    };
-    liveEs.current = es;
-  }
-
-  function stopLiveCaptions(): void {
-    if (liveRec.current && liveRec.current.state !== "inactive") liveRec.current.stop();
-    liveRec.current = null;
-    if (liveId.current) void api.liveSttStop(liveId.current).catch(() => undefined);
-    liveId.current = null;
-    // leave the EventSource open briefly — the provider flushes finals on
-    // stop; the relay's `closed` event (or its idle reaper) ends it
-    const es = liveEs.current;
-    liveEs.current = null;
-    if (es) setTimeout(() => es.close(), 5000);
-  }
-  const audioCtx = useRef<AudioContext | null>(null);
-  const meterRaf = useRef<number>(0);
-  const timer = useRef<ReturnType<typeof setInterval> | null>(null);
-  const lastTick = useRef<number>(0);
-  const recordedRef = useRef<number>(0);
-  const partStartMs = useRef<number>(0);
-  const partIdx = useRef<number>(0);
-  const mimeType = useRef<string>("audio/webm");
   const previewEl = useRef<HTMLAudioElement>(null);
-  /** EVERY raw track acquired (mic + display) — the mixed stream's tracks
-   *  are synthetic; stopping only those would leave the real mic hot. */
-  const rawTracks = useRef<MediaStreamTrack[]>([]);
-  /** The take's resolved title — the crash buffer names recoveries with it. */
-  const takeTitle = useRef<string>("");
-  /** Waveform samples + quiet/clip tracking, all meter-loop state. */
-  const waveRef = useRef<number[]>([]);
-  const lastWaveAt = useRef<number>(0);
-  const quietSinceMs = useRef<number | null>(null);
-  const clipUntil = useRef<number>(0);
-  const shareEnded = useRef<boolean>(false);
-  /** Resolved by `onstop` AFTER it has enqueued (or skipped) its part. */
-  const flushDone = useRef<(() => void) | null>(null);
-  /** Parts actually handed to the uploader — zero means nothing to finish. */
-  const partsEnqueued = useRef<number>(0);
-  /** Resume adopts a call that already HAS parts: finishing with zero NEW
-   *  parts is then legitimate (they came back just to press finish). */
-  const priorParts = useRef<boolean>(false);
+
+  /** Errors come from the engine as CODES; the view speaks the language. */
+  const errorText = (code: RecorderErrorCode | null): string | null =>
+    code === null ? null : t(code);
+
+  // onFinished fires on the transition into done — refresh the caller's list
+  const prevPhase = useRef(phase);
+  useEffect(() => {
+    if (phase === "done" && prevPhase.current !== "done") onFinished?.();
+    prevPhase.current = phase;
+  }, [phase, onFinished]);
 
   /** Refresh the device lists. Before a grant, labels are blank by the
    *  browser's privacy rule — the picker names them generically then. */
@@ -233,91 +109,24 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
     };
   }, [refreshDevices]);
 
-  // teardown on unmount — the recorder must not outlive its screen
-  useEffect(
-    () => () => {
-      if (timer.current) clearInterval(timer.current);
-      cancelAnimationFrame(meterRaf.current);
-      if (recorder.current && recorder.current.state !== "inactive") recorder.current.stop();
-      if (liveRec.current && liveRec.current.state !== "inactive") liveRec.current.stop();
-      liveEs.current?.close();
-      if (liveId.current) void api.liveSttStop(liveId.current).catch(() => undefined);
-      stream.current?.getTracks().forEach((track) => track.stop());
-      rawTracks.current.forEach((track) => track.stop());
-      void audioCtx.current?.close();
-    },
-    [],
-  );
-
-  /**
-   * Leaving does not lose a take — it PAUSES it (user directive, 2026-08-20,
-   * revised same day from a stay-on-page guard to the resume model): an
-   * unfinished call shows as paused in the Calls table and continues from
-   * where the audio ends via its Resume action. So navigation is free —
-   * the unmount teardown stops the recorder, which flushes and uploads the
-   * current part. Two listeners remain:
-   *  - tab hidden (switch/minimize) → pause: the mic must not keep rolling
-   *    while nobody is looking. No auto-resume — splicing an absence into a
-   *    take is a decision, not a default.
-   *  - tab close / hard reload → the browser's leave prompt: a closing tab
-   *    cannot flush-and-upload the current part. Since the crash buffer
-   *    (2026-08-22) the real cost is ~the last second plus a recovery step,
-   *    not the part — but the prompt stays: "you are still recording" is
-   *    worth one confirmation.
-   */
-  const phaseRef = useRef(phase);
-  phaseRef.current = phase;
-  useEffect(() => {
-    if (phase !== "recording") return;
-    const onVisibility = () => {
-      if (document.hidden && phaseRef.current === "recording") pause();
-    };
-    const onBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (phaseRef.current === "recording") pause();
-      e.preventDefault();
-      // older Chrome shows the prompt only when returnValue is set
-      e.returnValue = "";
-    };
-    document.addEventListener("visibilitychange", onVisibility);
-    window.addEventListener("beforeunload", onBeforeUnload);
-    return () => {
-      document.removeEventListener("visibilitychange", onVisibility);
-      window.removeEventListener("beforeunload", onBeforeUnload);
-    };
-  }, [phase]);
-
-  /**
-   * M33: publish the live controls for the agent surface — the SAME
-   * functions the buttons call — while a take is live; clear on change.
-   * The agent's pause/resume tools reach these or get an honest refusal.
-   */
-  useEffect(() => {
-    if (phase === "recording" || phase === "paused") {
-      recorderControls.current = {
-        phase: () => (phaseRef.current === "recording" ? "recording"
-          : phaseRef.current === "paused" ? "paused" : "other"),
-        pause,
-        resume,
-        finish,
-      };
-      // the assistant's ears follow the take (user rule, 2026-08-21):
-      // rolling = assistant deaf and closed; paused/finished = ears back
-      announceRecordingLive(phase === "recording");
-      return () => {
-        recorderControls.current = null;
-        announceRecordingLive(false);
-      };
-    }
-    return undefined;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase]);
+  function start(titleOverride?: string): void {
+    const resume = typeof resumeTarget === "object" && resumeTarget !== null
+      ? resumeTarget
+      : null;
+    void startRecording({
+      micId,
+      language,
+      source,
+      title: titleOverride ?? title,
+      locale,
+      resume,
+    }).then(() => void refreshDevices()); // labels exist once permission does
+  }
 
   /**
    * M33: `?agentStart=<title>` — the agent's start_recording lands here and
-   * the recorder starts itself through its OWN start() (the human path,
-   * M33 rule 2: no parallel implementation). Once only (the ref): React
-   * StrictMode double-fires effects in dev, and two starts would race
-   * getUserMedia against itself.
+   * the recorder starts through the SAME path the button uses. Once only:
+   * StrictMode double-fires effects in dev.
    */
   const agentStarted = useRef(false);
   useEffect(() => {
@@ -327,19 +136,16 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
     if (agentTitle === null || params.get("resume")) return;
     agentStarted.current = true;
     setTitle(agentTitle);
-    // the title rides as an argument — reading it back from state here would
-    // be the stale-closure trap (this render's `title` is still empty)
-    void start(agentTitle);
+    // the title rides as an argument — this render's `title` is still empty
+    start(agentTitle);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot adoption
   }, []);
 
   /**
-   * Adopt the resume target from the URL. Read from `location.search` in an
-   * effect, deliberately NOT `useSearchParams()` — that hook forces a
-   * prerender bailout that broke the production build once already (the
-   * hub's Suspense failure). Guarded: only a call still in `recording`
-   * status is resumable — anything else gets the honest "gone" screen
-   * rather than a recorder that would upload into a finished call.
+   * Adopt the resume target from the URL. `location.search` in an effect,
+   * deliberately NOT `useSearchParams()` — that hook forced a prerender
+   * bailout that broke the production build once already. Only a call still
+   * in `recording` status is resumable.
    */
   useEffect(() => {
     const id = new URLSearchParams(window.location.search).get("resume");
@@ -360,411 +166,15 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
       .catch(() => setResumeTarget("gone"));
   }, []);
 
-  /**
-   * One complete part-recorder on the shared stream. `idx`/`offsetMs` and
-   * the chunk list are CLOSED OVER, not shared refs: at a part boundary the
-   * next recorder starts before the old one's `onstop` has fired, and a
-   * shared chunks array would be reset under the old recorder's feet — the
-   * whole part silently lost while the meter kept moving.
-   *
-   * Chunks arrive every second (`start(1000)`), which is what feeds the
-   * crash buffer AND the byte counter. Concatenating one recorder's chunks
-   * is a valid container; the only roll left is the silent storage-ceiling
-   * one (SAFETY_PART_BYTES — the 30-minute rule is retired, 2026-08-22).
-   */
-  function startPartRecorder(idx: number, offsetMs: number): void {
-    const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-      ? "audio/webm;codecs=opus"
-      : MediaRecorder.isTypeSupported("audio/webm")
-        ? "audio/webm"
-        : "audio/mp4"; // Safari
-    mimeType.current = mime.split(";")[0]!;
-    const localChunks: BlobPart[] = [];
-    let localBytes = 0;
-    let rolled = false;
-    const rec = new MediaRecorder(stream.current!, {
-      mimeType: mime,
-      audioBitsPerSecond: 48_000,
-    });
-    void markPart({
-      callId: callId.current!,
-      partIdx: idx,
-      offsetMs,
-      mime: mimeType.current,
-      title: takeTitle.current,
-    });
-    rec.ondataavailable = (e) => {
-      if (e.data.size === 0) return;
-      localChunks.push(e.data);
-      localBytes += e.data.size;
-      // the crash copy — best-effort, never blocking the take
-      void bufferChunk(callId.current!, idx, e.data);
-      if (localBytes >= SAFETY_PART_BYTES && !rolled && rec.state === "recording") {
-        // the storage byte ceiling: roll silently — same stream, next idx,
-        // offset where the audio actually is. Nothing on screen changes.
-        rolled = true;
-        rec.stop();
-        partIdx.current = idx + 1;
-        partStartMs.current = recordedRef.current;
-        startPartRecorder(partIdx.current, partStartMs.current);
-      }
-    };
-    rec.onstop = () => {
-      const blob = new Blob(localChunks, { type: mimeType.current });
-      if (blob.size > 0) {
-        setPreviews((prev) => [...prev, { idx, url: URL.createObjectURL(blob) }]);
-        uploader.current?.enqueue({
-          idx,
-          offsetMs,
-          blob,
-          contentType: mimeType.current,
-        });
-        partsEnqueued.current += 1;
-      }
-      /*
-       * ALWAYS resolve the flush, even for an empty tail — and only AFTER
-       * the enqueue above. `finish()` awaits this before settling the
-       * upload barrier: `stop()` returns before `onstop` fires, so without
-       * the handshake the barrier settled on an EMPTY queue ("clean",
-       * vacuously), the call flipped to processing, and the only part
-       * arrived too late to a call that no longer accepts audio. Both live
-       * "stuck at processing" calls were exactly this — zero parts, ever.
-       */
-      flushDone.current?.();
-      flushDone.current = null;
-    };
-    recorder.current = rec;
-    rec.start(1000);
-  }
-
-  /**
-   * RMS level meter on the live stream — the real signal, not a die roll.
-   * The same loop now also feeds the waveform timeline (~2 samples/s,
-   * downsampled by pair-merging past 600 columns) and the input-quality
-   * watch: sustained near-silence and clipping are both conditions the
-   * person can FIX mid-meeting, so they surface while it still matters —
-   * not in a post-mortem transcript hole.
-   */
-  function startMeter(): void {
-    const ctx = audioCtx.current ?? new AudioContext();
-    audioCtx.current = ctx;
-    const source = ctx.createMediaStreamSource(stream.current!);
-    const analyser = ctx.createAnalyser();
-    analyser.fftSize = 1024;
-    source.connect(analyser);
-    const data = new Uint8Array(analyser.fftSize);
-    let last = 0;
-    const loop = (now: number) => {
-      meterRaf.current = requestAnimationFrame(loop);
-      if (now - last < 80) return; // ~12fps is plenty for a meter
-      last = now;
-      analyser.getByteTimeDomainData(data);
-      let sum = 0;
-      let clipped = 0;
-      for (let i = 0; i < data.length; i += 1) {
-        const centered = (data[i]! - 128) / 128;
-        sum += centered * centered;
-        if (centered > 0.97 || centered < -0.97) clipped += 1;
-      }
-      const rms = Math.sqrt(sum / data.length);
-      // RMS of speech sits low; the sqrt-of-RMS curve spreads it over the bar
-      setLevel(Math.min(1, Math.sqrt(rms) * 1.4));
-
-      const recording = recorder.current?.state === "recording";
-      if (recording) {
-        // waveform sample every ~500ms of wall time while actually recording
-        if (now - lastWaveAt.current >= 500) {
-          lastWaveAt.current = now;
-          const samples = waveRef.current;
-          samples.push(Math.min(1, Math.sqrt(rms) * 1.4));
-          if (samples.length > 600) {
-            // merge pairs — the timeline keeps its shape, not its density
-            const merged: number[] = [];
-            for (let i = 0; i < samples.length; i += 2) {
-              merged.push(Math.max(samples[i]!, samples[i + 1] ?? 0));
-            }
-            waveRef.current = merged;
-          }
-          setWave([...waveRef.current]);
-        }
-        // clipping: a burst marks the next 3s
-        if (clipped / data.length > 0.02) clipUntil.current = now + 3000;
-        // near-silence: 8 continuous seconds means the mic is probably wrong
-        if (rms < 0.01) {
-          if (quietSinceMs.current === null) quietSinceMs.current = now;
-        } else {
-          quietSinceMs.current = null;
-        }
-        const isQuiet =
-          quietSinceMs.current !== null && now - quietSinceMs.current > 8000;
-        setQuality(
-          shareEnded.current
-            ? "shareEnded"
-            : now < clipUntil.current
-              ? "clipping"
-              : isQuiet
-                ? "quiet"
-                : null,
-        );
-      }
-    };
-    meterRaf.current = requestAnimationFrame(loop);
-  }
-
-  async function start(titleOverride?: string): Promise<void> {
-    setError(null);
-    setPhase("starting");
-    let micStream: MediaStream;
-    try {
-      micStream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          ...(micId ? { deviceId: { exact: micId } } : {}),
-          echoCancellation: true,
-          noiseSuppression: true,
-        },
-      });
-    } catch {
-      setPhase("idle");
-      setError(t("micDenied"));
-      return;
-    }
-    rawTracks.current = [...micStream.getTracks()];
-    shareEnded.current = false;
-    if (source === "system") {
-      /*
-       * Tab/system audio (user directive, 2026-08-22): both sides of an
-       * online meeting in one take. The browser requires a video track in
-       * the share picker; we stop it immediately — audio is all we keep.
-       * A share WITHOUT audio refuses the start: the person chose system
-       * audio, and recording less than promised is the silent kind of loss
-       * (M21: fail on what was told). Ending the share mid-take degrades
-       * to mic-only with a visible warning — that half was inferred.
-       */
-      let display: MediaStream;
-      try {
-        display = await navigator.mediaDevices.getDisplayMedia({
-          video: true,
-          audio: true,
-        });
-      } catch {
-        micStream.getTracks().forEach((track) => track.stop());
-        rawTracks.current = [];
-        setPhase("idle");
-        setError(t("shareDenied"));
-        return;
-      }
-      display.getVideoTracks().forEach((track) => track.stop());
-      const shareAudio = display.getAudioTracks();
-      if (shareAudio.length === 0) {
-        micStream.getTracks().forEach((track) => track.stop());
-        rawTracks.current = [];
-        setPhase("idle");
-        setError(t("shareNoAudio"));
-        return;
-      }
-      rawTracks.current.push(...shareAudio);
-      shareAudio[0]!.addEventListener("ended", () => {
-        shareEnded.current = true;
-      });
-      const ctx = new AudioContext();
-      audioCtx.current = ctx;
-      const dest = ctx.createMediaStreamDestination();
-      ctx.createMediaStreamSource(micStream).connect(dest);
-      ctx.createMediaStreamSource(new MediaStream(shareAudio)).connect(dest);
-      stream.current = dest.stream;
-    } else {
-      stream.current = micStream;
-    }
-    await refreshDevices(); // labels exist now that permission does
-    const resuming = typeof resumeTarget === "object" && resumeTarget !== null;
-    if (resuming) {
-      // RESUME: the call exists — adopt it and continue after its last audio
-      callId.current = resumeTarget.callId;
-    } else {
-      try {
-        /*
-         * A record NEVER goes untitled (user rule, 2026-08-22): a blank
-         * title auto-names as «جلسه ۱ / Meeting 1, 2, 3 …» — numbered from
-         * the highest existing auto-name, both languages one series. The
-         * list fetch is best-effort: an unreachable list still yields
-         * "Meeting 1" rather than an untitled row.
-         */
-        const typed = (titleOverride ?? title).trim();
-        const finalTitle = typed || nextMeetingTitle(
-          await api.listCalls({ includeArchived: true }).catch(() => []),
-          locale,
-        );
-        const created = await api.createCall({
-          title: finalTitle,
-          source: "web",
-          language,
-        });
-        callId.current = created.id;
-        takeTitle.current = finalTitle;
-      } catch {
-        rawTracks.current.forEach((track) => track.stop());
-        rawTracks.current = [];
-        stream.current = null;
-        setPhase("idle");
-        setError(t("createFailed"));
-        return;
-      }
-    }
-    if (resuming) takeTitle.current = resumeTarget.title ?? "";
-    uploader.current = new PartUploader(
-      api,
-      callId.current,
-      setProgress,
-      // a registered part's server copy is the record — drop the crash copy
-      (idx) => void clearPart(callId.current!, idx),
-    );
-    /* on resume the clock and part math START at the existing audio's end,
-       so the person sees the take's TOTAL time and the next part lands with
-       the next index at the right offset — resumePoint's two guarantees */
-    const base = resuming ? resumeTarget : { nextIdx: 0, offsetMs: 0 };
-    priorParts.current = resuming && base.nextIdx > 0;
-    recordedRef.current = base.offsetMs;
-    partStartMs.current = base.offsetMs;
-    partIdx.current = base.nextIdx;
-    partsEnqueued.current = 0;
-    setRecordedMs(base.offsetMs);
-    setPreviews([]);
-    waveRef.current = [];
-    setWave([]);
-    setChapterMarks([]);
-    waveStartMs.current = base.offsetMs;
-    quietSinceMs.current = null;
-    clipUntil.current = 0;
-    setQuality(null);
-    startMeter();
-    startPartRecorder(base.nextIdx, base.offsetMs);
-    // best-effort live captions on the same stream (M38) — failure is a
-    // visible note, never a blocked recording
-    void startLiveCaptions(
-      MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-        ? "audio/webm;codecs=opus"
-        : "audio/webm",
-    );
-    lastTick.current = Date.now();
-    timer.current = setInterval(() => {
-      // the clock counts RECORDED time: it advances only while recording
-      // (the part roll lives in ondataavailable now — byte-driven, silent)
-      if (recorder.current?.state === "recording") {
-        const now = Date.now();
-        recordedRef.current += now - lastTick.current;
-        lastTick.current = now;
-        setRecordedMs(recordedRef.current);
-      } else {
-        lastTick.current = Date.now();
-      }
-    }, 500);
-    setPhase("recording");
-  }
-
-  function pause(): void {
-    if (recorder.current?.state === "recording") {
-      recorder.current.pause();
-      if (liveRec.current?.state === "recording") liveRec.current.pause();
-      setPhase("paused");
-    }
-  }
-
-  function resume(): void {
-    if (recorder.current?.state === "paused") {
-      recorder.current.resume();
-      if (liveRec.current?.state === "paused") liveRec.current.resume();
-      lastTick.current = Date.now();
-      setPhase("recording");
-    }
-  }
-
-  async function finish(): Promise<void> {
-    setPhase("finishing");
-    stopLiveCaptions();
-    if (timer.current) clearInterval(timer.current);
-    cancelAnimationFrame(meterRaf.current);
-    setLevel(0);
-    // WAIT for onstop to enqueue the final part before settling the barrier
-    // (the handshake described on onstop; stop() alone returns too early)
-    await new Promise<void>((resolve) => {
-      if (!recorder.current || recorder.current.state === "inactive") {
-        resolve();
-        return;
-      }
-      flushDone.current = resolve;
-      recorder.current.stop();
-    });
-    stream.current?.getTracks().forEach((track) => track.stop());
-    rawTracks.current.forEach((track) => track.stop());
-    rawTracks.current = [];
-    stream.current = null;
-    void audioCtx.current?.close();
-    audioCtx.current = null;
-
-    if (partsEnqueued.current === 0 && !priorParts.current) {
-      // no audio ever reached the uploader — finishing would create a call
-      // stuck at "processing" forever, with nothing for the pipeline to do
-      setPhase("failed");
-      setError(t("nothingRecorded"));
-      return;
-    }
-
-    const settled = await uploader.current!.settle();
-    if (!settled.clean) {
-      // finish is BLOCKED: a call flipped to processing with a missing part
-      // would transcribe around a silent hole. The bytes are kept.
-      setPhase("failed");
-      return;
-    }
-    try {
-      await api.finishCall(callId.current!);
-    } catch {
-      setPhase("failed");
-      setError(t("finishFailed"));
-      return;
-    }
-    // finished clean — every part registered; the crash copy has no job left
-    void clearTake(callId.current!);
-    setPhase("done");
-    onFinished?.();
-  }
-
-  async function retryUploads(): Promise<void> {
-    if (partsEnqueued.current === 0) {
-      // nothing was ever recorded — there is nothing to retry; start over
-      setPhase("idle");
-      setError(null);
-      return;
-    }
-    setPhase("finishing");
-    setError(null);
-    uploader.current!.retryFailed();
-    const settled = await uploader.current!.settle();
-    if (!settled.clean) {
-      setPhase("failed");
-      return;
-    }
-    try {
-      await api.finishCall(callId.current!);
-      void clearTake(callId.current!);
-      setPhase("done");
-      onFinished?.();
-    } catch {
-      setPhase("failed");
-      setError(t("finishFailed"));
-    }
-  }
-
   // the preview element follows the chosen output device (setSinkId is the
   // one place a speaker choice has meaning in a recorder)
   useEffect(() => {
     const el = previewEl.current as (HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> }) | null;
     if (el?.setSinkId && speakerId) void el.setSinkId(speakerId).catch(() => undefined);
-  }, [speakerId, previews]);
+  }, [speakerId, s.previews]);
 
   const live = phase === "recording" || phase === "paused";
-  const recordedSec = Math.floor(recordedMs / 1000);
-
+  const recordedSec = Math.floor(s.recordedMs / 1000);
   const resuming = typeof resumeTarget === "object" && resumeTarget !== null;
 
   if (resumeTarget === "loading") {
@@ -840,7 +250,7 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
               </select>
             </Field>
             <Field label={t("languageField")}>
-              {/* the transcriber's hint — set at creation, immutable after */}
+              {/* the transcriber's hint — set at creation */}
               <select
                 className="input"
                 value={language}
@@ -866,7 +276,7 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
           <button
             className="btn-primary mt-5 h-12 px-6"
             disabled={phase === "starting"}
-            onClick={() => void start()}
+            onClick={() => start()}
           >
             {phase === "starting" ? t("starting") : resuming ? t("resumeStart") : t("start")}
           </button>
@@ -900,7 +310,7 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
           {/* live input-level meter — the REAL signal */}
           <div className="mt-4 flex h-8 items-end gap-1" dir="ltr" aria-hidden>
             {Array.from({ length: 28 }).map((_, i) => {
-              const active = phase === "recording" && level > i / 28;
+              const active = phase === "recording" && s.level > i / 28;
               return (
                 <span
                   key={i}
@@ -915,40 +325,40 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
 
           {/* M38: live captions — the relay's rolling transcript. Interim
               words render muted; finals accumulate. Absence says so. */}
-          {captions !== null ? (
+          {s.captions !== null ? (
             <div className="mt-4 rounded-md border border-border bg-surface p-3">
               <p className="text-xs font-semibold text-fg-subtle">{t("liveTitle")}</p>
               <p dir="auto" className="mt-1 max-h-36 overflow-y-auto whitespace-pre-wrap text-sm leading-6 text-fg">
-                {captions.finals === "" && captions.interim === "" ? (
+                {s.captions.finals === "" && s.captions.interim === "" ? (
                   <span className="text-fg-muted">{t("liveWaiting")}</span>
                 ) : (
                   <>
-                    {captions.finals}
-                    <span className="text-fg-muted">{captions.interim}</span>
+                    {s.captions.finals}
+                    <span className="text-fg-muted">{s.captions.interim}</span>
                   </>
                 )}
               </p>
             </div>
-          ) : captionsDown ? (
+          ) : s.captionsDown ? (
             <p className="mt-4 text-xs text-fg-muted">{t("liveUnavailable")}</p>
           ) : null}
 
           {/* the take's waveform timeline — one bar per RMS sample, chapter
               marks as vertical lines at their moment */}
-          {wave.length > 1 ? (
+          {s.wave.length > 1 ? (
             <div className="mt-4 rounded-md bg-surface-2 p-3" dir="ltr" aria-hidden>
               <div className="relative flex h-10 items-center gap-px">
-                {wave.map((v, i) => (
+                {s.wave.map((v, i) => (
                   <span
                     key={i}
                     className="min-w-px flex-1 rounded-sm bg-accent/70"
                     style={{ height: `${Math.max(6, v * 100)}%` }}
                   />
                 ))}
-                {chapterMarks.map((ms, i) => {
-                  const span = recordedMs - waveStartMs.current;
+                {s.chapterMarks.map((ms, i) => {
+                  const span = s.recordedMs - s.waveStartMs;
                   if (span <= 0) return null;
-                  const frac = (ms - waveStartMs.current) / span;
+                  const frac = (ms - s.waveStartMs) / span;
                   if (frac < 0 || frac > 1) return null;
                   return (
                     <span
@@ -963,21 +373,21 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
           ) : null}
 
           {/* input-quality watch: fixable NOW, so it surfaces now */}
-          {quality !== null && phase === "recording" ? (
+          {s.quality !== null && phase === "recording" ? (
             <p role="status" className="mt-3 text-xs leading-6 text-warning">
-              {quality === "quiet"
+              {s.quality === "quiet"
                 ? t("quietWarn")
-                : quality === "clipping"
+                : s.quality === "clipping"
                   ? t("clipWarn")
                   : t("shareEndedWarn")}
             </p>
           ) : null}
 
-          {progress.done + progress.pending + progress.failed > 0 ? (
+          {s.progress.done + s.progress.pending + s.progress.failed > 0 ? (
             <p className="mt-3 text-xs text-fg-muted">
               {t("uploadProgress", {
-                done: digits(progress.done, locale),
-                pending: digits(progress.pending, locale),
+                done: digits(s.progress.done, locale),
+                pending: digits(s.progress.pending, locale),
               })}
             </p>
           ) : null}
@@ -1000,12 +410,12 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
           ) : null}
         </div>
 
-        {live && callId.current ? (
+        {live && s.callId ? (
           <div className="mt-4 lg:mt-0">
             <RecorderNotes
-              callId={callId.current}
-              atMs={recordedMs}
-              onChapter={(ms) => setChapterMarks((prev) => [...prev, ms])}
+              callId={s.callId}
+              atMs={s.recordedMs}
+              onChapter={addChapterMark}
             />
           </div>
         ) : null}
@@ -1018,11 +428,11 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
             <Chip tone="success">{t("finishedChip")}</Chip>
             {t("finishedBody")}
           </p>
-          {previews[0] ? (
+          {s.previews[0] ? (
             <div>
               <p className="mb-1 text-xs text-fg-muted">{t("previewLabel")}</p>
               {/* one element, sink follows the speaker picker */}
-              <audio ref={previewEl} controls src={previews[0].url} className="w-full" />
+              <audio ref={previewEl} controls src={s.previews[0].url} className="w-full" />
             </div>
           ) : null}
           <Link href="/echo/records" className="btn-secondary inline-flex">
@@ -1031,9 +441,8 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
           <button
             className="btn-primary ms-3 inline-flex"
             onClick={() => {
-              setPhase("idle");
+              resetRecorder();
               setTitle("");
-              setProgress({ done: 0, pending: 0, failed: 0 });
             }}
           >
             {t("recordAnother")}
@@ -1044,8 +453,8 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
       {phase === "failed" ? (
         <div className="space-y-3">
           <p role="alert" className="text-sm text-danger">
-            {error ??
-              t("uploadFailedBody", { failed: digits(progress.failed, locale) })}
+            {errorText(s.error) ??
+              t("uploadFailedBody", { failed: digits(s.progress.failed, locale) })}
           </p>
           <button className="btn-primary" onClick={() => void retryUploads()}>
             {t("retryUploads")}
@@ -1053,9 +462,9 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
         </div>
       ) : null}
 
-      {phase === "idle" && error ? (
+      {phase === "idle" && s.error ? (
         <p role="alert" className="mt-3 text-sm text-danger">
-          {error}
+          {errorText(s.error)}
         </p>
       ) : null}
     </Card>

@@ -317,7 +317,8 @@
     "chapterPlaceholder": "New chapter name…",
     "chapterAdd": "Chapter",
     "chapterChip": "Chapter",
-    "noteFailed": "The note did not save — try again."
+    "noteFailed": "The note did not save — try again.",
+    "pillOpen": "Open the recorder"
   },
   "call": {
     "summary": "Summary",
