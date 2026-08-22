@@ -187,7 +187,8 @@
       "archive": "Archive",
       "speakers": "Speakers",
       "records": "Records",
-      "summaries": "Summaries"
+      "summaries": "Summaries",
+      "new-meeting": "New meeting"
     },
     "desc": {
       "record": "Record a session with your device microphone — 30-minute parts, uploaded as you go.",
@@ -195,7 +196,8 @@
       "archive": "Archived calls — same details and actions; unarchive moves one back to Calls.",
       "speakers": "People and their titles — every call page picks speakers from this list.",
       "records": "Your recordings, transcripts and summaries.",
-      "summaries": "Each recording's summary, gathered for reading."
+      "summaries": "Each recording's summary, gathered for reading.",
+      "new-meeting": "Record in the browser or upload an audio file — both in one place."
     }
   },
   "speakersDir": {

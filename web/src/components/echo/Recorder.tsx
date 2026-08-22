@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import { announceRecordingLive } from "@/lib/assistantBus";
+import { nextMeetingTitle } from "@/lib/meetingTitle";
 import { PartUploader, type UploaderProgress } from "@/lib/callUpload";
 import { Card, Chip, Field, Progress } from "@/components/ui";
 import { Link } from "@/i18n/routing";
@@ -418,8 +419,20 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
       callId.current = resumeTarget.callId;
     } else {
       try {
+        /*
+         * A record NEVER goes untitled (user rule, 2026-08-22): a blank
+         * title auto-names as «جلسه ۱ / Meeting 1, 2, 3 …» — numbered from
+         * the highest existing auto-name, both languages one series. The
+         * list fetch is best-effort: an unreachable list still yields
+         * "Meeting 1" rather than an untitled row.
+         */
+        const typed = (titleOverride ?? title).trim();
+        const finalTitle = typed || nextMeetingTitle(
+          await api.listCalls({ includeArchived: true }).catch(() => []),
+          locale,
+        );
         const created = await api.createCall({
-          title: (titleOverride ?? title).trim() || undefined,
+          title: finalTitle,
           source: "web",
         });
         callId.current = created.id;
@@ -615,7 +628,7 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
           ) : null}
           <Field label={t("titleField")}>
             <input
-              className="input"
+              className="input placeholder:text-fg-subtle/70"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder={t("titlePlaceholder")}

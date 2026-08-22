@@ -85,8 +85,8 @@ export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
     description:
       "Navigate the user's screen to a page. Destinations: "
       + "/ = home hub. "
-      + "/echo = Echo recording studio (record a call in the browser). "
-      + "/echo/upload = upload an audio file. "
+      + "/echo = New meeting (record in the browser or upload a file — two tabs, recorder first). "
+      + "/echo/upload = the New meeting page opened on the UPLOAD tab. "
       + "/echo/records = the RECORDS list (recorded calls/meetings — the section formerly named calls). "
       + "/echo/summaries = summaries of the recordings, gathered for reading. "
       + "/echo/archive = ARCHIVED records (the archive). "
