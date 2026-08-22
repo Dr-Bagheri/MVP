@@ -358,13 +358,14 @@ export function PresenceDock() {
           cap.interim = body.tokens.filter((tok) => !tok.is_final).map((tok) => tok.text).join("");
           const heard = `${cap.finals} ${cap.interim}`.trim();
           if (heard) {
-            // a stop word acts NOW — not 2.5s from now
+            // a stop word acts NOW — not 2.5s from now — and stop means
+            // CLOSED (user, 2026-08-22: the panel stayed open after stop)
             if (isStopCommand(heard)) {
               cap.finals = "";
               cap.interim = "";
               if (cap.silence) clearTimeout(cap.silence);
               if (cap.fastSettle) { clearTimeout(cap.fastSettle); cap.fastSettle = null; }
-              localStop();
+              farewellClose(heard);
               return;
             }
             // tokens landing during the VAD catch-up push it out a touch —
@@ -379,13 +380,6 @@ export function PresenceDock() {
       } catch { /* not a caption frame */ }
     };
     captureRef.current = cap;
-  }
-
-  /** the universal STOP: cut the voice, abort the run — never a prompt */
-  function localStop(): void {
-    stopSpeaking();
-    abortRef.current?.abort();
-    setListening(null);
   }
 
   /**
@@ -412,9 +406,9 @@ export function PresenceDock() {
     // a tap) — the dash-only phantom bubbles (user report, 2026-08-22)
     if (isNoiseUtterance(text)) return;
     // goodbye phrases — filler-tolerant, so "okay stop" and "thanks
-    // that's it" no longer leak to the model as questions
-    if (isConversationOver(text)) { farewellClose(text); return; }
-    if (isStopCommand(text)) { localStop(); return; }
+    // that's it" no longer leak to the model as questions. Stop words
+    // take the SAME exit: stop means closed (user rule, 2026-08-22).
+    if (isConversationOver(text) || isStopCommand(text)) { farewellClose(text); return; }
     /*
      * The mic was open while the assistant talked — echo cancellation
      * catches most of its voice; whatever leaks through is recognized by

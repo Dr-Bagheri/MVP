@@ -45,6 +45,14 @@ describe("matchWake", () => {
     expect(result.command).toBe("open my last call");
   });
 
+  it("survives the fa recognizer FUSING the greeting into the name", () => {
+    // live transcripts, 2026-08-22: fa-IR heard "hey echo" as «هایکو»,
+    // "hi echo" as «های اکو», and the bare name as «ایکو»
+    expect(matchWake("هایکو")).toEqual({ woke: true, command: "" });
+    expect(matchWake("های اکو")).toEqual({ woke: true, command: "" });
+    expect(matchWake("ایکو برو به ضبط‌ها").command).toBe("برو به ضبط‌ها");
+  });
+
   it("survives the English recognizer's artifacts for «سلام اکو»", () => {
     // live transcripts, 2026-08-21: the en-US model heard «سلام اکو» as
     // "Salon" and "Ecco salon" — both must be a bare wake, never a command

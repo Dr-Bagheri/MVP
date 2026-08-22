@@ -52,7 +52,15 @@ export function voiceInputSupported(): boolean {
  * language, and an English model spells the spoken name however English
  * lets it (live transcripts: "Ecco salon" for «سلام اکو»).
  */
-const WAKE_RE = /(?:^|\s)(?:(?:hey|hi|salam|سلام)[\s,،]+)?(?:echo|ecco|eko|اکو)(?!\p{L})[\s.,،!?]*/iu;
+/*
+ * Name variants grew from LIVE transcripts, not invention: the fa-IR
+ * recognizer FUSES "hey echo" into «هایکو» and "hi echo" into «های اکو»,
+ * and spells the bare name «ایکو» as often as «اکو» (user report,
+ * 2026-08-22: only the bare "echo" woke it). «های» joins the greetings;
+ * the fused forms join the NAME list — a greeting eaten by the recognizer
+ * must still wake.
+ */
+const WAKE_RE = /(?:^|\s)(?:(?:hey|hi|salam|سلام|های|هی)[\s,،]+)?(?:echo|ecco|eko|اکو|ایکو|هایکو)(?!\p{L})[\s.,،!?]*/iu;
 
 /**
  * What the ENGLISH recognizer makes of «سلام اکو» spoken whole: the two
