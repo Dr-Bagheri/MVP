@@ -105,6 +105,10 @@ export default function SignInPage() {
     } else if (oauth === "failed") {
       // the provider round trip died (expired code, denied consent, replay)
       setError(t("oauthFailed"));
+    } else if (oauth === "disabled") {
+      // 0078: an admin turned this method off — a different fact from a
+      // broken round trip, and the person deserves the real one
+      setError(t("oauthDisabled"));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot, on arrival
   }, []);

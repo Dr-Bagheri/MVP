@@ -66,6 +66,19 @@ export interface PartStepOptions {
   signedUrlTtlSec?: number;
 }
 
+/**
+ * call.language → the transcriber's language_hints. An explicit single
+ * language narrows the hints (a pure-Persian meeting hinted fa-only
+ * transcribes better — the feature's whole point); 'mixed' means both.
+ * Unknown vocabulary also means both: hints are a steer, and narrowing on a
+ * value we don't recognise would be the enum-drift failure pointed at audio.
+ */
+export function languageHintsFor(callLanguage: string): string[] {
+  if (callLanguage === "fa") return ["fa"];
+  if (callLanguage === "en") return ["en"];
+  return ["fa", "en"];
+}
+
 export function createPartStep({
   db,
   ml,
@@ -128,6 +141,13 @@ export function createPartStep({
         audioUrl,
         // Opaque to ml/ — correlation only, no authority, no meaning there.
         jobRef: part.id,
+        options: {
+          // The call's language hint steers the transcriber: an explicit
+          // single language narrows the hints; 'mixed' — and any value this
+          // worker does not recognise — keeps the historical both-languages
+          // hint rather than silently narrowing on unknown vocabulary.
+          languageHints: languageHintsFor(part.call_language),
+        },
       });
 
       // A value ml/ publishes that this worker does not recognise means the

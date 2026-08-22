@@ -1,77 +1,30 @@
-"use client";
-
-import { useTranslations } from "next-intl";
-import { Link } from "@/i18n/routing";
-import { ManagementPane } from "@/components/platform/ManagementPane";
-import { Card } from "@/components/ui";
+import { redirect } from "@/i18n/routing";
 
 /**
- * Management — the platform-level admin surface (M25).
+ * Management's home IS Users now (user directive, 2026-08-22: "make the
+ * first page of the management to be the users, remove this boxes").
  *
- * Skills and Connectors moved here from the top-level nav by user directive.
- * They are LINKED, not re-implemented: both surfaces exist and work, and a
- * second copy under a new route is two states to disagree.
+ * The card grid this page used to render was the sidebar repeated with
+ * descriptions — one navigation surface too many once the two-pane menu
+ * existed. A redirect rather than rendering Users here: two addresses
+ * rendering one screen is two homes for one feature, and the breadcrumb
+ * ancestor "Management" landing on Users is exactly the intent — the
+ * area's first page is its people.
  *
- * Server management is named and honestly marked as unwired. Its reads —
- * queue depths, dead letters, provider/key health, storage usage — are core/'s
- * and are queued rather than landed. A dashboard with placeholder gauges would
- * be worse than an empty one: a fabricated number in an operations surface is
- * a number someone will act on.
+ * (`desc.server` stays in the messages — the Server page uses it as its
+ * subtitle. The other card descriptions left with the cards.)
+ *
+ * SUPERSEDES the 2026-08-13 "landing-not-redirect" decision (which kept a
+ * refusal card from being Management's first face to a member): the user
+ * ruled Users the landing; a member reaching here by direct URL now sees
+ * the Users page's own refusal inside the pane — the pane stays, per the
+ * refusal-keeps-pane half of that ruling, which still stands.
  */
-/*
- * Every section the sidebar lists appears here too. `models` was missing while
- * the menu had no Models entry to contradict — the two-pane rebuild made the
- * gap visible, which is the argument for one nav model rather than two lists
- * that only disagree once someone looks at both.
- *
- * `ready: false` on models is not a placeholder: the page reads the list and
- * cannot save a change to it, and its own notice says so.
- */
-const SECTIONS = [
-  { key: "users", href: "/management/users", ready: true },
-  { key: "skills", href: "/management/skills", ready: true },
-  { key: "models", href: "/management/models", ready: true },
-  { key: "connectors", href: "/management/connectors", ready: true },
-  /* wired by FE3 against `GET /v1/admin/server` — per-metric `measured_at`,
-     so a real zero and a not-measured render differently */
-  { key: "server", href: "/management/server", ready: true },
-] as const;
-
-export default function ManagementPage() {
-  const t = useTranslations("management");
-
-  return (
-    /*
-     * `activeSlug=""` — on the landing itself no section is current, and
-     * marking one would claim you are somewhere you are not.
-     */
-    <ManagementPane activeSlug="">
-      <p className="mb-4 text-sm leading-7 text-fg-muted">{t("intro")}</p>
-
-      {/*
-        The cards stay, and they are NOT the menu repeated: the sidebar gives
-        each section its name, these give what it is FOR. Dropping them would
-        make this landing an empty pane; turning them into the navigation again
-        would be two homes for one nav, which is the thing the sidebar just
-        fixed.
-      */}
-      <div className="grid gap-3 sm:grid-cols-2">
-        {SECTIONS.map((s) => (
-          <Link key={s.key} href={s.href} className="block">
-            <Card className="h-full">
-              <div className="mb-1 flex items-center gap-2">
-                <h2 className="text-sm font-semibold text-fg">{t(`section.${s.key}`)}</h2>
-                {!s.ready ? (
-                  <span className="chip bg-surface-2 text-[10px] text-fg-muted">
-                    {t("notWired")}
-                  </span>
-                ) : null}
-              </div>
-              <p className="text-sm leading-6 text-fg-muted">{t(`desc.${s.key}`)}</p>
-            </Card>
-          </Link>
-        ))}
-      </div>
-    </ManagementPane>
-  );
+export default async function ManagementHome({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}) {
+  const { locale } = await params;
+  redirect({ href: "/management/users", locale });
 }

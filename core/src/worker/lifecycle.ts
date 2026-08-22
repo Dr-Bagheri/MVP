@@ -45,6 +45,9 @@ export interface PartRow {
   audio_sha256: string | null;
   status: PartStatus;
   missing: boolean;
+  /** The call's language hint ('fa' | 'en' | 'mixed'), set at creation —
+   *  joined in so the transcriber can be steered without a second read. */
+  call_language: string;
 }
 
 export interface Lifecycle {
@@ -62,17 +65,21 @@ export interface Lifecycle {
 }
 
 const PART_COLUMNS = `
-  id, call_id, idx, offset_ms, duration_ms,
-  storage_bucket, storage_path, audio_sha256, status, missing
+  p.id, p.call_id, p.idx, p.offset_ms, p.duration_ms,
+  p.storage_bucket, p.storage_path, p.audio_sha256, p.status, p.missing,
+  c.language as call_language
 `;
 
 export function createLifecycle(db: Db): Lifecycle {
   return {
     async getPart(identity, partId) {
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>
-        tx.unsafe<PartRow>(`select ${PART_COLUMNS} from echo.call_part where id = $1 limit 1`, [
-          partId,
-        ]),
+        tx.unsafe<PartRow>(
+          `select ${PART_COLUMNS}
+             from echo.call_part p join echo.call c on c.id = p.call_id
+            where p.id = $1 limit 1`,
+          [partId],
+        ),
       );
       return rows[0] ?? null;
     },
@@ -80,7 +87,9 @@ export function createLifecycle(db: Db): Lifecycle {
     async partsOfCall(identity, callId) {
       return db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<PartRow>(
-          `select ${PART_COLUMNS} from echo.call_part where call_id = $1 order by idx`,
+          `select ${PART_COLUMNS}
+             from echo.call_part p join echo.call c on c.id = p.call_id
+            where p.call_id = $1 order by p.idx`,
           [callId],
         ),
       );

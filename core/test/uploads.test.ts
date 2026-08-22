@@ -80,6 +80,32 @@ describe("createCall", () => {
     ).rejects.toThrow(/scope/);
     expect(calls).toHaveLength(0);
   });
+
+  it("refuses an invented language before any write; a real one rides the insert", async () => {
+    const { db, calls } = fakeDb(() => []);
+    const repo = createUploadsRepo(db, CONFIG);
+    await expect(
+      repo.createCall(identity, { source: "web", title: undefined, language: "de" }),
+    ).rejects.toThrow(/language/);
+    expect(calls).toHaveLength(0);
+
+    const { db: db2, calls: calls2 } = fakeDb((sql) =>
+      sql.includes("insert into echo.call") ? [{ id: CALL_ID }] : []);
+    const repo2 = createUploadsRepo(db2, CONFIG);
+    await repo2.createCall(identity, { source: "web", title: undefined, language: "en" });
+    const insert = calls2.find((c) => c.sql.includes("insert into echo.call"));
+    expect(insert?.params).toContain("en");
+  });
+
+  it("no language sent → the insert carries null and the column default decides", async () => {
+    const { db, calls } = fakeDb((sql) =>
+      sql.includes("insert into echo.call") ? [{ id: CALL_ID }] : []);
+    const repo = createUploadsRepo(db, CONFIG);
+    await repo.createCall(identity, { source: "web", title: undefined });
+    const insert = calls.find((c) => c.sql.includes("insert into echo.call"));
+    // the last param is the language slot — null defers to the column default
+    expect(insert?.params?.[insert.params.length - 1]).toBeNull();
+  });
 });
 
 describe("uploadPart", () => {

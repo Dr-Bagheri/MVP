@@ -718,10 +718,31 @@ export const api = {
    * can never ride the BFF); everything that carries identity stays
    * server-side.
    */
+  /** Which external sign-in methods are enabled (0078). Public read. */
+  async authMethods(): Promise<{ provider: string; enabled: boolean }[]> {
+    return bff<{ provider: string; enabled: boolean }[]>("/api/auth-methods");
+  },
+
+  /** Flip one sign-in method — admin/owner; the wall is core's + SQL's. */
+  async setAuthMethod(
+    provider: "google" | "github",
+    enabled: boolean,
+  ): Promise<{ provider: string; enabled: boolean }> {
+    return bff<{ provider: string; enabled: boolean }>(
+      `/api/auth-methods/${provider}`,
+      {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ enabled }),
+      },
+    );
+  },
+
   async createCall(input: {
     title?: string;
     scope?: "private" | "org";
     source: "web" | "upload";
+    language?: "fa" | "en" | "mixed";
   }): Promise<{ id: string }> {
     return bff<{ id: string }>("/api/calls", {
       method: "POST",

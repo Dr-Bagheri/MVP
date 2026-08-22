@@ -34,6 +34,7 @@ const part = (over: Partial<PartRow>): PartRow => ({
   audio_sha256: null,
   status: "diarized",
   missing: false,
+  call_language: "fa",
   ...over,
 });
 

@@ -50,10 +50,16 @@ export async function POST(request: Request) {
       title?: string;
       scope?: string;
       source?: string;
+      language?: string;
     };
     const created = await coreFetch<{ id: string }>("/v1/calls", {
       method: "POST",
-      body: { title: body.title, scope: body.scope, source: body.source },
+      body: {
+        title: body.title,
+        scope: body.scope,
+        source: body.source,
+        language: body.language,
+      },
     });
     return Response.json(created, { status: 201 });
   } catch (error) {

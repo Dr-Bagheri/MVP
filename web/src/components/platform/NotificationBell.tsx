@@ -6,7 +6,7 @@ import { api } from "@/api/client";
 import type { AgentCardItem } from "@/api/types";
 import { useRouter } from "@/i18n/routing";
 import { formatDate } from "@/lib/format";
-import { notifyHistory, subscribeNotify, type PlatformNotice } from "@/lib/notify";
+import { clearNotifications, notifyHistory, subscribeNotify, type PlatformNotice } from "@/lib/notify";
 
 /**
  * The top-bar notification menu (user directive, 2026-08-21: "add a
@@ -104,7 +104,19 @@ export function NotificationBell() {
               ) : null}
               {notices.length > 0 ? (
                 <div>
-                  <p className="px-2 pb-1 pt-1 text-[11px] font-semibold text-fg-subtle">{t("bellRecent")}</p>
+                  <div className="flex items-center justify-between">
+                    <p className="px-2 pb-1 pt-1 text-[11px] font-semibold text-fg-subtle">{t("bellRecent")}</p>
+                    <button
+                      type="button"
+                      className="tap rounded-md px-2 py-1 text-[11px] text-fg-muted hover:bg-surface-2 hover:text-fg"
+                      onClick={() => {
+                        clearNotifications();
+                        setNotices([]);
+                      }}
+                    >
+                      {t("bellClear")}
+                    </button>
+                  </div>
                   {notices.slice(0, 8).map((notice) => (
                     <p
                       key={notice.id}

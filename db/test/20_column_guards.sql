@@ -1,20 +1,46 @@
 -- What each person may CHANGE — the rules RLS cannot express, enforced by
--- the triggers in 0011.
+-- the triggers in 0011 (hierarchy per 0077: acting on someone else's record
+-- requires strictly outranking its owner — owner > admin > member).
 
--- --- an admin may delete anything, and rewrite nothing ---------------------
+-- --- outranking edits; peers and superiors are walled (0077) ---------------
 reset role;
 set local role echo_app;
 select set_config('echo.actor_id', '01000000-0000-4000-8000-000000000001', true);
 
+-- the owner retitles a member's call — the exact case 0077 exists for
+update echo.call set title = 'بازنویسی مدیر'
+ where id = 'c1000000-0000-4000-8000-000000000001';
+select t.ok(
+  (select title from echo.call where id = 'c1000000-0000-4000-8000-000000000001')
+    = 'بازنویسی مدیر',
+  'the org owner may retitle a member''s call (0077 hierarchy)');
+update echo.call set title = 'مذاکره قرارداد'
+ where id = 'c1000000-0000-4000-8000-000000000001';
+
+-- seed a call the OWNER owns, so upward reach has a real target
+insert into echo.call (id, org_id, owner_id, title, scope, status)
+values ('c7000000-0000-4000-8000-000000000007', '0a000000-0000-4000-8000-00000000000a',
+        '01000000-0000-4000-8000-000000000001', 'جلسه مالک', 'org', 'ready');
+
+-- a plain admin may edit a member's, and may NOT reach up or sideways
+select set_config('echo.actor_id', '06000000-0000-4000-8000-000000000006', true);
+update echo.call set title = 'بازنویسی ادمین'
+ where id = 'c1000000-0000-4000-8000-000000000001';
+select t.ok(
+  (select title from echo.call where id = 'c1000000-0000-4000-8000-000000000001')
+    = 'بازنویسی ادمین',
+  'an admin may retitle a member''s call (0077 hierarchy)');
+update echo.call set title = 'مذاکره قرارداد'
+ where id = 'c1000000-0000-4000-8000-000000000001';
 select t.denied(
   $$update echo.call set title = 'دستکاری‌شده'
-     where id = 'c1000000-0000-4000-8000-000000000001'$$,
-  'an admin cannot retitle a call they do not own');
+     where id = 'c7000000-0000-4000-8000-000000000007'$$,
+  'an admin cannot retitle the owner''s call — rank reaches down, never up');
 select t.denied(
-  $$update echo.call set scope = 'org'
-     where id = 'c1000000-0000-4000-8000-000000000001'$$,
-  'an admin cannot publish someone else''s private call to the org');
+  $$select echo.soft_delete_call('c7000000-0000-4000-8000-000000000007')$$,
+  'nor delete it — the doors follow the same hierarchy');
 
+select set_config('echo.actor_id', '01000000-0000-4000-8000-000000000001', true);
 select t.ok(echo.soft_delete_call('c1000000-0000-4000-8000-000000000001'),
   'an admin may delete a member''s private recording (M11)');
 select t.ok(

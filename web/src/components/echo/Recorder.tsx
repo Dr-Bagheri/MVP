@@ -6,10 +6,11 @@ import { api } from "@/api/client";
 import { announceRecordingLive } from "@/lib/assistantBus";
 import { nextMeetingTitle } from "@/lib/meetingTitle";
 import { PartUploader, type UploaderProgress } from "@/lib/callUpload";
-import { Card, Chip, Field, Progress } from "@/components/ui";
+import { bufferChunk, clearPart, clearTake, markPart } from "@/lib/takeBuffer";
+import { Card, Chip, Field } from "@/components/ui";
 import { Link } from "@/i18n/routing";
 import { digits, formatClock } from "@/lib/format";
-import { PART_MS, resumePoint } from "./uploadRules";
+import { SAFETY_PART_BYTES, resumePoint } from "./uploadRules";
 import { recorderControls } from "./recorderControls";
 
 /**
@@ -26,11 +27,22 @@ import { recorderControls } from "./recorderControls";
  *    (rule 7's spirit at the UI: positive detection, visible silence).
  *  - **Pause/resume** via `MediaRecorder.pause()` — paused time is not
  *    recorded and not counted; the clock is RECORDED time.
- *  - **30-minute parts** (M2/M7): at each boundary the current recorder is
- *    stopped (its blob uploads immediately: sign → PUT → register) and a
- *    fresh one starts on the same stream. Each part is a complete,
- *    independently decodable container — slicing one long stream would
- *    yield chunks only the first of which can be decoded.
+ *  - **One continuous take** (user directive, 2026-08-22 — the 30-minute
+ *    split is retired): the whole take records as one part with no visible
+ *    boundary. The only roll left is the storage byte ceiling
+ *    (SAFETY_PART_BYTES, ~2.4 h of audio), silent when it happens: the
+ *    current recorder stops (its blob uploads: sign → PUT → register) and a
+ *    fresh one continues on the same stream — each part an independently
+ *    decodable container.
+ *  - **Crash-proof buffer**: every ~1s chunk also lands in IndexedDB
+ *    (takeBuffer) and is dropped per-part once that part's upload registers.
+ *    A crashed tab loses at most the last second; the New-meeting screen
+ *    offers whatever is left for recovery.
+ *  - **Tab/system audio** (opt-in): getDisplayMedia audio mixed with the
+ *    microphone through one AudioContext — both sides of an online meeting
+ *    in one take. Refusal is honest: the person CHOSE system audio, so a
+ *    share without audio stops the start rather than silently recording
+ *    less than promised (M21: degrade the inferred, fail on the told).
  *  - **Finish** stops the last part, waits behind the upload barrier, and
  *    only then flips the call to `processing`. A failed part BLOCKS finish
  *    with its bytes kept and a retry control — a call finished with a
@@ -62,6 +74,16 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
   const [progress, setProgress] = useState<UploaderProgress>({ done: 0, pending: 0, failed: 0 });
   const [error, setError] = useState<string | null>(null);
   const [previews, setPreviews] = useState<{ idx: number; url: string }[]>([]);
+  /** Language hint for the transcriber (user directive, 2026-08-22).
+   *  'mixed' is the default — it preserves the both-languages hint every
+   *  call got before this was choosable; narrowing is an explicit act. */
+  const [language, setLanguage] = useState<"fa" | "en" | "mixed">("mixed");
+  /** Audio source: the mic alone, or mic + tab/system audio mixed. */
+  const [source, setSource] = useState<"mic" | "system">("mic");
+  /** Input-quality warning, one at a time, worst first. */
+  const [quality, setQuality] = useState<null | "quiet" | "clipping" | "shareEnded">(null);
+  /** Rolling RMS samples (~2/s) — the take's waveform timeline. */
+  const [wave, setWave] = useState<number[]>([]);
   /**
    * RESUME mode (user directive, 2026-08-20): a call left unfinished — the
    * person navigated away, closed the tab, or paused and left — shows as
@@ -160,6 +182,17 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
   const partIdx = useRef<number>(0);
   const mimeType = useRef<string>("audio/webm");
   const previewEl = useRef<HTMLAudioElement>(null);
+  /** EVERY raw track acquired (mic + display) — the mixed stream's tracks
+   *  are synthetic; stopping only those would leave the real mic hot. */
+  const rawTracks = useRef<MediaStreamTrack[]>([]);
+  /** The take's resolved title — the crash buffer names recoveries with it. */
+  const takeTitle = useRef<string>("");
+  /** Waveform samples + quiet/clip tracking, all meter-loop state. */
+  const waveRef = useRef<number[]>([]);
+  const lastWaveAt = useRef<number>(0);
+  const quietSinceMs = useRef<number | null>(null);
+  const clipUntil = useRef<number>(0);
+  const shareEnded = useRef<boolean>(false);
   /** Resolved by `onstop` AFTER it has enqueued (or skipped) its part. */
   const flushDone = useRef<(() => void) | null>(null);
   /** Parts actually handed to the uploader — zero means nothing to finish. */
@@ -205,6 +238,7 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
       liveEs.current?.close();
       if (liveId.current) void api.liveSttStop(liveId.current).catch(() => undefined);
       stream.current?.getTracks().forEach((track) => track.stop());
+      rawTracks.current.forEach((track) => track.stop());
       void audioCtx.current?.close();
     },
     [],
@@ -220,10 +254,11 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
    *  - tab hidden (switch/minimize) → pause: the mic must not keep rolling
    *    while nobody is looking. No auto-resume — splicing an absence into a
    *    take is a decision, not a default.
-   *  - tab close / hard reload → the browser's leave prompt: unlike in-app
-   *    navigation, a closing tab cannot flush the current part, so up to
-   *    the current part's audio would be lost silently. The prompt is the
-   *    honest cost sentence; everything already uploaded stays resumable.
+   *  - tab close / hard reload → the browser's leave prompt: a closing tab
+   *    cannot flush-and-upload the current part. Since the crash buffer
+   *    (2026-08-22) the real cost is ~the last second plus a recovery step,
+   *    not the part — but the prompt stays: "you are still recording" is
+   *    worth one confirmation.
    */
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
@@ -326,6 +361,11 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
    * next recorder starts before the old one's `onstop` has fired, and a
    * shared chunks array would be reset under the old recorder's feet — the
    * whole part silently lost while the meter kept moving.
+   *
+   * Chunks arrive every second (`start(1000)`), which is what feeds the
+   * crash buffer AND the byte counter. Concatenating one recorder's chunks
+   * is a valid container; the only roll left is the silent storage-ceiling
+   * one (SAFETY_PART_BYTES — the 30-minute rule is retired, 2026-08-22).
    */
   function startPartRecorder(idx: number, offsetMs: number): void {
     const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
@@ -335,12 +375,34 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
         : "audio/mp4"; // Safari
     mimeType.current = mime.split(";")[0]!;
     const localChunks: BlobPart[] = [];
+    let localBytes = 0;
+    let rolled = false;
     const rec = new MediaRecorder(stream.current!, {
       mimeType: mime,
       audioBitsPerSecond: 48_000,
     });
+    void markPart({
+      callId: callId.current!,
+      partIdx: idx,
+      offsetMs,
+      mime: mimeType.current,
+      title: takeTitle.current,
+    });
     rec.ondataavailable = (e) => {
-      if (e.data.size > 0) localChunks.push(e.data);
+      if (e.data.size === 0) return;
+      localChunks.push(e.data);
+      localBytes += e.data.size;
+      // the crash copy — best-effort, never blocking the take
+      void bufferChunk(callId.current!, idx, e.data);
+      if (localBytes >= SAFETY_PART_BYTES && !rolled && rec.state === "recording") {
+        // the storage byte ceiling: roll silently — same stream, next idx,
+        // offset where the audio actually is. Nothing on screen changes.
+        rolled = true;
+        rec.stop();
+        partIdx.current = idx + 1;
+        partStartMs.current = recordedRef.current;
+        startPartRecorder(partIdx.current, partStartMs.current);
+      }
     };
     rec.onstop = () => {
       const blob = new Blob(localChunks, { type: mimeType.current });
@@ -367,12 +429,19 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
       flushDone.current = null;
     };
     recorder.current = rec;
-    rec.start();
+    rec.start(1000);
   }
 
-  /** RMS level meter on the live stream — the real signal, not a die roll. */
+  /**
+   * RMS level meter on the live stream — the real signal, not a die roll.
+   * The same loop now also feeds the waveform timeline (~2 samples/s,
+   * downsampled by pair-merging past 600 columns) and the input-quality
+   * watch: sustained near-silence and clipping are both conditions the
+   * person can FIX mid-meeting, so they surface while it still matters —
+   * not in a post-mortem transcript hole.
+   */
   function startMeter(): void {
-    const ctx = new AudioContext();
+    const ctx = audioCtx.current ?? new AudioContext();
     audioCtx.current = ctx;
     const source = ctx.createMediaStreamSource(stream.current!);
     const analyser = ctx.createAnalyser();
@@ -386,12 +455,53 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
       last = now;
       analyser.getByteTimeDomainData(data);
       let sum = 0;
+      let clipped = 0;
       for (let i = 0; i < data.length; i += 1) {
         const centered = (data[i]! - 128) / 128;
         sum += centered * centered;
+        if (centered > 0.97 || centered < -0.97) clipped += 1;
       }
+      const rms = Math.sqrt(sum / data.length);
       // RMS of speech sits low; the sqrt-of-RMS curve spreads it over the bar
-      setLevel(Math.min(1, Math.sqrt(Math.sqrt(sum / data.length)) * 1.4));
+      setLevel(Math.min(1, Math.sqrt(rms) * 1.4));
+
+      const recording = recorder.current?.state === "recording";
+      if (recording) {
+        // waveform sample every ~500ms of wall time while actually recording
+        if (now - lastWaveAt.current >= 500) {
+          lastWaveAt.current = now;
+          const samples = waveRef.current;
+          samples.push(Math.min(1, Math.sqrt(rms) * 1.4));
+          if (samples.length > 600) {
+            // merge pairs — the timeline keeps its shape, not its density
+            const merged: number[] = [];
+            for (let i = 0; i < samples.length; i += 2) {
+              merged.push(Math.max(samples[i]!, samples[i + 1] ?? 0));
+            }
+            waveRef.current = merged;
+          }
+          setWave([...waveRef.current]);
+        }
+        // clipping: a burst marks the next 3s
+        if (clipped / data.length > 0.02) clipUntil.current = now + 3000;
+        // near-silence: 8 continuous seconds means the mic is probably wrong
+        if (rms < 0.01) {
+          if (quietSinceMs.current === null) quietSinceMs.current = now;
+        } else {
+          quietSinceMs.current = null;
+        }
+        const isQuiet =
+          quietSinceMs.current !== null && now - quietSinceMs.current > 8000;
+        setQuality(
+          shareEnded.current
+            ? "shareEnded"
+            : now < clipUntil.current
+              ? "clipping"
+              : isQuiet
+                ? "quiet"
+                : null,
+        );
+      }
     };
     meterRaf.current = requestAnimationFrame(loop);
   }
@@ -399,8 +509,9 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
   async function start(titleOverride?: string): Promise<void> {
     setError(null);
     setPhase("starting");
+    let micStream: MediaStream;
     try {
-      stream.current = await navigator.mediaDevices.getUserMedia({
+      micStream = await navigator.mediaDevices.getUserMedia({
         audio: {
           ...(micId ? { deviceId: { exact: micId } } : {}),
           echoCancellation: true,
@@ -411,6 +522,53 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
       setPhase("idle");
       setError(t("micDenied"));
       return;
+    }
+    rawTracks.current = [...micStream.getTracks()];
+    shareEnded.current = false;
+    if (source === "system") {
+      /*
+       * Tab/system audio (user directive, 2026-08-22): both sides of an
+       * online meeting in one take. The browser requires a video track in
+       * the share picker; we stop it immediately — audio is all we keep.
+       * A share WITHOUT audio refuses the start: the person chose system
+       * audio, and recording less than promised is the silent kind of loss
+       * (M21: fail on what was told). Ending the share mid-take degrades
+       * to mic-only with a visible warning — that half was inferred.
+       */
+      let display: MediaStream;
+      try {
+        display = await navigator.mediaDevices.getDisplayMedia({
+          video: true,
+          audio: true,
+        });
+      } catch {
+        micStream.getTracks().forEach((track) => track.stop());
+        rawTracks.current = [];
+        setPhase("idle");
+        setError(t("shareDenied"));
+        return;
+      }
+      display.getVideoTracks().forEach((track) => track.stop());
+      const shareAudio = display.getAudioTracks();
+      if (shareAudio.length === 0) {
+        micStream.getTracks().forEach((track) => track.stop());
+        rawTracks.current = [];
+        setPhase("idle");
+        setError(t("shareNoAudio"));
+        return;
+      }
+      rawTracks.current.push(...shareAudio);
+      shareAudio[0]!.addEventListener("ended", () => {
+        shareEnded.current = true;
+      });
+      const ctx = new AudioContext();
+      audioCtx.current = ctx;
+      const dest = ctx.createMediaStreamDestination();
+      ctx.createMediaStreamSource(micStream).connect(dest);
+      ctx.createMediaStreamSource(new MediaStream(shareAudio)).connect(dest);
+      stream.current = dest.stream;
+    } else {
+      stream.current = micStream;
     }
     await refreshDevices(); // labels exist now that permission does
     const resuming = typeof resumeTarget === "object" && resumeTarget !== null;
@@ -434,17 +592,27 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
         const created = await api.createCall({
           title: finalTitle,
           source: "web",
+          language,
         });
         callId.current = created.id;
+        takeTitle.current = finalTitle;
       } catch {
-        stream.current?.getTracks().forEach((track) => track.stop());
+        rawTracks.current.forEach((track) => track.stop());
+        rawTracks.current = [];
         stream.current = null;
         setPhase("idle");
         setError(t("createFailed"));
         return;
       }
     }
-    uploader.current = new PartUploader(api, callId.current, setProgress);
+    if (resuming) takeTitle.current = resumeTarget.title ?? "";
+    uploader.current = new PartUploader(
+      api,
+      callId.current,
+      setProgress,
+      // a registered part's server copy is the record — drop the crash copy
+      (idx) => void clearPart(callId.current!, idx),
+    );
     /* on resume the clock and part math START at the existing audio's end,
        so the person sees the take's TOTAL time and the next part lands with
        the next index at the right offset — resumePoint's two guarantees */
@@ -456,6 +624,11 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
     partsEnqueued.current = 0;
     setRecordedMs(base.offsetMs);
     setPreviews([]);
+    waveRef.current = [];
+    setWave([]);
+    quietSinceMs.current = null;
+    clipUntil.current = 0;
+    setQuality(null);
     startMeter();
     startPartRecorder(base.nextIdx, base.offsetMs);
     // best-effort live captions on the same stream (M38) — failure is a
@@ -468,19 +641,12 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
     lastTick.current = Date.now();
     timer.current = setInterval(() => {
       // the clock counts RECORDED time: it advances only while recording
+      // (the part roll lives in ondataavailable now — byte-driven, silent)
       if (recorder.current?.state === "recording") {
         const now = Date.now();
         recordedRef.current += now - lastTick.current;
         lastTick.current = now;
         setRecordedMs(recordedRef.current);
-        // the 30-minute boundary rolls the part: stop uploads it, a fresh
-        // recorder continues on the same stream (M2's split, recorded time)
-        if (recordedRef.current - partStartMs.current >= PART_MS) {
-          recorder.current.stop();
-          partIdx.current += 1;
-          partStartMs.current = recordedRef.current;
-          startPartRecorder(partIdx.current, partStartMs.current);
-        }
       } else {
         lastTick.current = Date.now();
       }
@@ -522,6 +688,8 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
       recorder.current.stop();
     });
     stream.current?.getTracks().forEach((track) => track.stop());
+    rawTracks.current.forEach((track) => track.stop());
+    rawTracks.current = [];
     stream.current = null;
     void audioCtx.current?.close();
     audioCtx.current = null;
@@ -548,6 +716,8 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
       setError(t("finishFailed"));
       return;
     }
+    // finished clean — every part registered; the crash copy has no job left
+    void clearTake(callId.current!);
     setPhase("done");
     onFinished?.();
   }
@@ -569,6 +739,7 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
     }
     try {
       await api.finishCall(callId.current!);
+      void clearTake(callId.current!);
       setPhase("done");
       onFinished?.();
     } catch {
@@ -586,8 +757,6 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
 
   const live = phase === "recording" || phase === "paused";
   const recordedSec = Math.floor(recordedMs / 1000);
-  const inPartMs = recordedMs - partStartMs.current;
-  const partNo = partIdx.current + 1;
 
   const resuming = typeof resumeTarget === "object" && resumeTarget !== null;
 
@@ -663,6 +832,29 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
                 ))}
               </select>
             </Field>
+            <Field label={t("languageField")}>
+              {/* the transcriber's hint — set at creation, immutable after */}
+              <select
+                className="input"
+                value={language}
+                onChange={(e) => setLanguage(e.target.value as "fa" | "en" | "mixed")}
+                disabled={resuming}
+              >
+                <option value="mixed">{t("languageMixed")}</option>
+                <option value="fa">{t("languageFa")}</option>
+                <option value="en">{t("languageEn")}</option>
+              </select>
+            </Field>
+            <Field label={t("sourceField")}>
+              <select
+                className="input"
+                value={source}
+                onChange={(e) => setSource(e.target.value as "mic" | "system")}
+              >
+                <option value="mic">{t("sourceMic")}</option>
+                <option value="system">{t("sourceSystem")}</option>
+              </select>
+            </Field>
           </div>
           <button
             className="btn-primary mt-5 h-12 px-6"
@@ -731,22 +923,31 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
             <p className="mt-4 text-xs text-fg-muted">{t("liveUnavailable")}</p>
           ) : null}
 
-          {/* 30-minute part indicator (M7) */}
-          <div className="mt-4 rounded-md bg-surface-2 p-3">
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-xs font-medium text-fg">
-                {t("currentPart", {
-                  n: digits(partNo, locale),
-                  time: formatClock(Math.floor(inPartMs / 1000), locale),
-                })}
-              </span>
-              <Chip tone="info">
-                {formatClock(Math.max(0, Math.floor((PART_MS - inPartMs) / 1000)), locale)}
-              </Chip>
+          {/* the take's waveform timeline — one bar per RMS sample */}
+          {wave.length > 1 ? (
+            <div className="mt-4 rounded-md bg-surface-2 p-3" dir="ltr" aria-hidden>
+              <div className="flex h-10 items-center gap-px">
+                {wave.map((v, i) => (
+                  <span
+                    key={i}
+                    className="min-w-px flex-1 rounded-sm bg-accent/70"
+                    style={{ height: `${Math.max(6, v * 100)}%` }}
+                  />
+                ))}
+              </div>
             </div>
-            <Progress value={Math.min(100, (inPartMs / PART_MS) * 100)} />
-            <p className="mt-2 text-xs leading-6 text-fg-muted">{t("partNotice")}</p>
-          </div>
+          ) : null}
+
+          {/* input-quality watch: fixable NOW, so it surfaces now */}
+          {quality !== null && phase === "recording" ? (
+            <p role="status" className="mt-3 text-xs leading-6 text-warning">
+              {quality === "quiet"
+                ? t("quietWarn")
+                : quality === "clipping"
+                  ? t("clipWarn")
+                  : t("shareEndedWarn")}
+            </p>
+          ) : null}
 
           {progress.done + progress.pending + progress.failed > 0 ? (
             <p className="mt-3 text-xs text-fg-muted">
@@ -780,7 +981,7 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
         <div className="space-y-3">
           <p className="flex items-center gap-2 text-sm text-success">
             <Chip tone="success">{t("finishedChip")}</Chip>
-            {t("finishedBody", { parts: digits(Math.max(1, progress.done), locale) })}
+            {t("finishedBody")}
           </p>
           {previews[0] ? (
             <div>

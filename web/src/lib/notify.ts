@@ -43,6 +43,13 @@ export function notifyHistory(): PlatformNotice[] {
   return [...history];
 }
 
+/** The bell's "clear" — empties the history. The bell re-reads on its own
+ *  (it is the only renderer of the history); listeners are per-NOTICE and
+ *  stay untouched — clearing the list is not unsubscribing from the future. */
+export function clearNotifications(): void {
+  history.length = 0;
+}
+
 /** test seam only — the bus is module state and tests share the module */
 export function resetNotifications(): void {
   listeners.clear();

@@ -394,6 +394,21 @@ on agent_run.
   ONE title and a continuous timeline. Schema: `calls → parts → transcript
   rows`. Browser capture writes parts crash-safe as it goes; upload of part N
   starts while N+1 records.
+- **[AMENDED 2026-08-22, user directive: "remove the 30 min rule …
+  just capture everything together and also remove the warnings for it"]**
+  The fixed 30-minute TIME split is retired for the browser recorder: a take
+  records as ONE continuous part with no visible boundary and no part UI.
+  Parts remain the storage/pipeline unit unchanged (resume-after-navigation
+  and crash recovery still append parts at the next idx/offset); the only
+  roll left in a live take is the storage tier's per-object byte cap
+  (SAFETY_PART_BYTES = 45 MB ≈ 2.4 h at the recorder's bitrate), performed
+  silently at a chunk boundary. Schema, worker and timeline math are
+  untouched — this is a producer-side policy change, not a model change.
+  The recorder also gained a crash-proof IndexedDB chunk buffer (cleared
+  per part on registered upload; leftovers surface as a recovery card) and
+  a per-call `language` hint ('fa'|'en'|'mixed', set at creation, immutable
+  per 0011) that the worker maps to the transcriber's language_hints —
+  unknown values keep the historical ["fa","en"], never narrowing on drift.
 - DAG per part: `upload → transcode → vad → transcribe → diarize` ; per call:
   `→ link-speakers → summarize → ready` (summary spans all parts).
 - Status column IS the position; every step idempotent (checks its artifact,
@@ -505,6 +520,22 @@ not a policy.
   making a narrowed policy visible — the drizzle lesson pre-empted:
   the doc must not promise what does not exist).
 - The **agent deletes nothing, ever** (role grant — M3).
+- **[AMENDED 2026-08-22, user ruling — the ROLE HIERARCHY on record
+  actions, db/0077]**: "the owner must have all the options for the
+  records over admins and members, admins only over themselves and
+  members, members just themselves." One rule for EVERY action (rename,
+  scope, archive, delete, restore): acting on someone else's record
+  requires strictly outranking its owner (owner > admin > member,
+  `echo.role_rank`/`echo.actor_outranks`); then the actor may do
+  everything the record's owner could. This SUPERSEDES both halves of the
+  old split — "admins delete any" (an admin no longer deletes an owner's
+  or a peer admin's record) and "only the call's owner may rewrite it"
+  (an outranking role now may — the org owner renaming a member's record
+  was the case the user hit). Restore stays admin-and-above (2026-08-13
+  ruling: members never restore). Read visibility is UNCHANGED — admins
+  still read everything; the hierarchy governs writes only. Enforced in
+  SQL (guard trigger + both definer doors), mirrored in the records UI
+  for button visibility only.
 - **[Ratified round 3]** Deletion = soft-delete with a **30-day purge
   window** (visible to admins), then hard purge of audio, transcript, and
   derived data together.

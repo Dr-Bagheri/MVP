@@ -58,17 +58,43 @@ export function createUploadsRepo(db: Db, config: UploadsConfig) {
 
     async createCall(
       identity: Identity,
-      input: { title?: string | undefined; scope?: string | undefined; source: "web" | "upload" },
+      input: {
+        title?: string | undefined;
+        scope?: string | undefined;
+        source: "web" | "upload";
+        language?: string | undefined;
+      },
     ): Promise<{ id: string }> {
       if (input.scope !== undefined && input.scope !== "private" && input.scope !== "org") {
         throw new ValidationError("scope must be private or org");
       }
+      /*
+       * The LANGUAGE HINT (user directive, 2026-08-22): set at creation,
+       * immutable after (the 0011 guard), read by the worker to steer the
+       * transcriber's language_hints. `mixed` means "both fa and en" and is
+       * what the web recorder sends by default — it preserves the
+       * both-languages hint every call got before this field was consumable.
+       * The column default stays 'fa' for producers that never send one.
+       */
+      if (
+        input.language !== undefined &&
+        input.language !== "fa" && input.language !== "en" && input.language !== "mixed"
+      ) {
+        throw new ValidationError("language must be fa, en or mixed");
+      }
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<{ id: string }>(
-          `insert into echo.call (org_id, owner_id, title, scope, status, source)
-           values ($1, $2, $3, coalesce($4, 'private')::echo.call_scope, 'recording', $5::echo.call_source)
+          `insert into echo.call (org_id, owner_id, title, scope, status, source, language)
+           values ($1, $2, $3, coalesce($4, 'private')::echo.call_scope, 'recording', $5::echo.call_source, coalesce($6, 'fa'))
            returning id`,
-          [identity.orgId, identity.userId, input.title?.trim() ?? "", input.scope ?? null, input.source],
+          [
+            identity.orgId,
+            identity.userId,
+            input.title?.trim() ?? "",
+            input.scope ?? null,
+            input.source,
+            input.language ?? null,
+          ],
         ),
       );
       if (!rows[0]) throw new ValidationError("could not create the call");

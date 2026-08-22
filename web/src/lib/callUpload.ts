@@ -76,6 +76,9 @@ export class PartUploader {
     private readonly api: UploadApi,
     private readonly callId: string,
     private readonly onProgress?: (p: UploaderProgress) => void,
+    /** Fires once per part, AFTER its register lands — the crash buffer's
+     *  signal that the server copy exists and the local copy may drop. */
+    private readonly onPartDone?: (idx: number) => void,
   ) {}
 
   private report(): void {
@@ -99,6 +102,7 @@ export class PartUploader {
           await uploadOnePart(this.api, this.callId, job);
         }
         this.doneCount += 1;
+        this.onPartDone?.(job.idx);
       } catch {
         this.failedJobs.push(job);
       } finally {

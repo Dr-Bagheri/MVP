@@ -68,6 +68,17 @@ beforeEach(() => {
   identityState.mockResolvedValue({ state: "member", me: {} });
   setPassword.mockResolvedValue(undefined);
   oauthPasswordEnrollment.mockResolvedValue({ required: false });
+  // 0078: OAuthButtons asks /api/auth-methods before drawing anything —
+  // answer it with both enabled so the button assertions see the buttons
+  vi.stubGlobal("fetch", vi.fn(() =>
+    Promise.resolve(new Response(JSON.stringify([
+      { provider: "google", enabled: true },
+      { provider: "github", enabled: true },
+    ]), { headers: { "content-type": "application/json" } }))));
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
 describe("sign-in actually signs in", () => {
@@ -256,18 +267,30 @@ describe("the provider buttons are REAL links (the mock's dead Google button is 
   it.each([
     ["Google", "/api/auth/oauth/google"],
     ["GitHub", "/api/auth/oauth/github"],
-  ])("sign-in offers %s pointing at the live PKCE route", (name, href) => {
+  ])("sign-in offers %s pointing at the live PKCE route", async (name, href) => {
     render(<SignInPage />);
-    const a = screen.getByRole("link", { name: new RegExp(name) });
+    // findBy: the buttons draw only after /api/auth-methods answers (0078)
+    const a = await screen.findByRole("link", { name: new RegExp(name) });
     // the EXACT BFF path, un-locale-prefixed: a /fa/api/... href would 404,
     // which is precisely a dead button wearing a live one's clothes
     expect(a.getAttribute("href")).toBe(href);
   });
 
-  it("sign-up offers both providers too", () => {
+  it("sign-up offers both providers too", async () => {
     render(<SignUpPage />);
-    expect(screen.getByRole("link", { name: /Google/ }).getAttribute("href")).toBe("/api/auth/oauth/google");
-    expect(screen.getByRole("link", { name: /GitHub/ }).getAttribute("href")).toBe("/api/auth/oauth/github");
+    expect((await screen.findByRole("link", { name: /Google/ })).getAttribute("href")).toBe("/api/auth/oauth/google");
+    expect((await screen.findByRole("link", { name: /GitHub/ })).getAttribute("href")).toBe("/api/auth/oauth/github");
+  });
+
+  it("a method an admin turned OFF is not offered (0078) — the negative is the feature", async () => {
+    vi.stubGlobal("fetch", vi.fn(() =>
+      Promise.resolve(new Response(JSON.stringify([
+        { provider: "google", enabled: false },
+        { provider: "github", enabled: true },
+      ]), { headers: { "content-type": "application/json" } }))));
+    render(<SignInPage />);
+    await screen.findByRole("link", { name: /GitHub/ });
+    expect(screen.queryByRole("link", { name: /Google/ })).toBeNull();
   });
 });
 

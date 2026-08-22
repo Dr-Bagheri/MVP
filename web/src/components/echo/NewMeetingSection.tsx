@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { Recorder } from "./Recorder";
 import { UploadPanel } from "./UploadPanel";
+import { UnfinishedTakes } from "./UnfinishedTakes";
 
 /**
  * Echo · New meeting (user directive, 2026-08-22): "Record in browser"
@@ -25,6 +26,8 @@ export function NewMeetingSection({
 
   return (
     <div className="space-y-5">
+      {/* unfinished takes come FIRST — continuing beats starting over */}
+      <UnfinishedTakes />
       <div className="flex w-fit overflow-hidden rounded-lg border border-border" role="tablist">
         {(["record", "upload"] as const).map((key) => (
           <button

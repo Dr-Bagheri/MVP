@@ -263,18 +263,50 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
 
   app.get("/health", async () => ({ ok: true }));
 
+  /**
+   * Sign-in method toggles (0078). The GET is PUBLIC and pre-identity by
+   * nature — the sign-in page asks it before anyone exists, exactly like
+   * the page itself is public. It answers only which buttons to draw.
+   * The PATCH is admin-walled here AND in SQL (the definer door).
+   */
+  app.get("/v1/auth-methods", async () => {
+    const rows = await options.db.withoutIdentity((tx) =>
+      tx.unsafe<{ provider: string; enabled: boolean }>(
+        `select provider, enabled from echo.signin_method order by provider`,
+      ));
+    return { methods: rows };
+  });
+
+  app.patch("/v1/auth-methods/:provider", async (request, reply) => {
+    const identity = await auth.requireAdmin(request);
+    const { provider } = request.params as { provider: string };
+    if (provider !== "google" && provider !== "github") {
+      throw new ValidationError("unknown sign-in method");
+    }
+    const body = (request.body ?? {}) as { enabled?: unknown };
+    if (typeof body.enabled !== "boolean") {
+      throw new ValidationError("enabled must be true or false");
+    }
+    await options.db.withIdentity(identity, (tx) =>
+      tx.unsafe(`select echo.set_signin_method($1, $2)`, [provider, body.enabled]));
+    return reply.send({ provider, enabled: body.enabled });
+  });
+
   // ---- calls -------------------------------------------------------------
 
   // ---- the upload surface (Part 5): audio enters the pipeline ------------
 
   app.post("/v1/calls", async (request, reply) => {
     const identity = await auth.requireActive(request);
-    const body = (request.body ?? {}) as { title?: unknown; scope?: unknown; source?: unknown };
+    const body = (request.body ?? {}) as {
+      title?: unknown; scope?: unknown; source?: unknown; language?: unknown;
+    };
     const source = body.source === "upload" ? "upload" : "web";
     const created = await uploads.createCall(identity, {
       title: typeof body.title === "string" ? body.title : undefined,
       scope: typeof body.scope === "string" ? body.scope : undefined,
       source,
+      language: typeof body.language === "string" ? body.language : undefined,
     });
     return reply.code(201).send(created);
   });

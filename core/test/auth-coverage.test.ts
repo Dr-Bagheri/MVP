@@ -23,6 +23,10 @@ const SRC = readFileSync(new URL("../src/api/server.ts", import.meta.url), "utf8
 /** Routes that deliberately answer without an identity, each with its reason. */
 const PUBLIC: Record<string, string> = {
   "GET /health": "the load balancer's probe — it must answer while the database is down",
+  "GET /v1/auth-methods":
+    "the sign-in page asks which buttons to draw BEFORE anyone exists (0078); " +
+    "it returns only {provider, enabled} — the same fact the page shows every visitor. " +
+    "The PATCH twin is admin-walled here and in SQL.",
 };
 
 interface Registration { key: string; at: number }

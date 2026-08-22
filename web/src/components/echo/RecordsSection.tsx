@@ -68,9 +68,21 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
     return members.find((m) => m.id === id)?.display_name ?? id;
   }
 
-  /** The rows this person may change: their own, or any as an admin (M11). */
+  /**
+   * The rows this person may change (0077 hierarchy, user ruling
+   * 2026-08-22): their own, or one whose owner their role strictly
+   * outranks — owner > admin > member. Peers are walled both ways. The
+   * WALL is the database's guard trigger; this only decides which action
+   * buttons to show, and when the owner's rank is unknown it shows
+   * nothing rather than promising a click the server will refuse.
+   */
   function mayEdit(call: Call): boolean {
-    return call.owner_id === me?.id || me?.role === "admin" || me?.role === "owner";
+    if (!me) return false;
+    if (call.owner_id === me.id) return true;
+    const rank: Record<string, number> = { owner: 3, admin: 2, member: 1 };
+    const ownerRole = members.find((m) => m.id === call.owner_id)?.role;
+    if (!ownerRole) return false;
+    return (rank[me.role] ?? 0) > (rank[ownerRole] ?? 0);
   }
 
   async function act(fn: () => Promise<unknown>): Promise<void> {

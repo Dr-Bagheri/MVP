@@ -12,7 +12,7 @@ import { subscribeAssistantOpen, subscribeRecordingLive } from "@/lib/assistantB
 import { notify, subscribeNotify, type PlatformNotice } from "@/lib/notify";
 import { computeRms, useAudioLevel, useSyntheticPulse } from "@/lib/useAudioLevel";
 import {
-  currentSpeechAudio, isConversationOver, isEchoOf, isNoiseUtterance, isStopCommand, listenOnce, recentSpokenText, sameUtterance, speak,
+  currentSpeechAudio, isConversationOver, isEchoOf, isNoiseUtterance, isStopCommand, recentSpokenText, sameUtterance, speak,
   speakQueued, startVoiceControl, stopSpeaking, subscribeSpeechPlayback,
   voiceInputSupported, type WakeListenerHandle,
 } from "@/lib/voice";
@@ -67,6 +67,37 @@ interface DockMessage {
 
 function todayKey(): string {
   return `${PRESENCE_KEY}:${new Date().toISOString().slice(0, 10)}`;
+}
+
+/**
+ * The mic glyph (user-supplied shape, 2026-08-22): a filled capsule, the
+ * open cradle arc, a stem. Drawn as an SVG in currentColor rather than the
+ * provided PNG so it follows the theme — a black bitmap would vanish on
+ * the dark surface. `slashed` is the off state.
+ */
+function MicIcon({ slashed }: { slashed?: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden focusable="false">
+      <rect x="9" y="2.5" width="6" height="12" rx="3" fill="currentColor" />
+      <path
+        d="M5.5 11.5a6.5 6.5 0 0 0 13 0"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.4"
+        strokeLinecap="round"
+      />
+      <line
+        x1="12" y1="18" x2="12" y2="21.5"
+        stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"
+      />
+      {slashed ? (
+        <line
+          x1="4" y1="3" x2="20" y2="21"
+          stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"
+        />
+      ) : null}
+    </svg>
+  );
 }
 
 export function PresenceDock() {
@@ -783,25 +814,6 @@ export function PresenceDock() {
     void submit(question, false);
   }
 
-  /** the composer's mic: one utterance, sent by itself — no button press */
-  function dictate() {
-    if (!voiceInputSupported() || !micGrantedRef.current) {
-      notify(micGrantedRef.current ? t("voiceUnsupported") : t("micDenied"), "warn");
-      return;
-    }
-    suspendWake();
-    setListening("command");
-    const capture = listenOnce(locale === "fa" ? "fa-IR" : "en-US");
-    if (!capture) { setListening(null); beginWakeRef.current(); return; }
-    const timeout = setTimeout(() => capture.cancel(), 10000);
-    void capture.done.then((heard) => {
-      clearTimeout(timeout);
-      setListening(null);
-      beginWakeRef.current();
-      if (heard) void submit(heard, true);
-    });
-  }
-
   async function handleEvent(event: AgentEvent, replyId: string) {
     switch (event.type) {
       case "session":
@@ -970,7 +982,7 @@ export function PresenceDock() {
             {/* the EARS twin: listening on/off, next to the mouth toggle */}
             <button
               type="button"
-              className={`tap h-7 w-7 rounded-md ${
+              className={`tap inline-flex h-7 w-7 items-center justify-center rounded-md ${
                 ears ? "text-fg-muted hover:bg-surface-2 hover:text-fg" : "bg-danger/15 text-danger"
               }`}
               aria-label={t("earsLabel")}
@@ -978,7 +990,7 @@ export function PresenceDock() {
               title={t("earsLabel")}
               onClick={toggleEars}
             >
-              {ears ? "🎙" : "🚫"}
+              <MicIcon slashed={!ears} />
             </button>
             <button
               type="button"
@@ -1090,19 +1102,6 @@ export function PresenceDock() {
                 if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
               }}
             />
-            <button
-              type="button"
-              className={`tap h-9 w-9 shrink-0 rounded-lg border text-sm ${
-                listening === "command"
-                  ? "border-accent bg-accent-soft text-accent"
-                  : "border-border text-fg-muted hover:border-accent hover:text-accent"
-              }`}
-              aria-label={t("micButton")}
-              title={t("micButton")}
-              onClick={dictate}
-            >
-              🎙
-            </button>
             <button
               type="submit"
               className="btn-primary h-9 min-h-0 px-3 text-sm disabled:opacity-50"

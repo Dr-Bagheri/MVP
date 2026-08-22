@@ -57,7 +57,8 @@
     "suspendedTitle": "Your organization's access is suspended",
     "suspendedBody": "This is not about your account, and an organization admin cannot lift it. Contact NeurAI support to restore access.",
     "suspendedContact": "Contact NeurAI support",
-    "resetReady": "Your password is set. Sign in with it now."
+    "resetReady": "Your password is set. Sign in with it now.",
+    "oauthDisabled": "This sign-in method has been turned off by an admin — sign in with email."
   },
   "calls": {
     "title": "Records",
@@ -253,13 +254,11 @@
     "micDenied": "Microphone access was not granted. Allow it in your browser settings and try again.",
     "createFailed": "Could not create the call — check your connection and try again.",
     "finishFailed": "Could not finish the call — the parts are uploaded; try again.",
-    "partNotice": "Sessions longer than 30 minutes auto-split into 30-minute parts — one call, one title, a continuous timeline.",
-    "currentPart": "Part {n} — {time}",
-    "uploadProgress": "Parts uploaded: {done} — queued: {pending}",
+    "uploadProgress": "Uploading audio: {done} done — {pending} queued",
     "uploadFailedBody": "{failed} part(s) failed to upload. Your recorded audio is kept — try again.",
     "retryUploads": "Try again",
     "finishedChip": "Recording finished",
-    "finishedBody": "{parts} part(s) uploaded — transcription has started.",
+    "finishedBody": "Recording uploaded — transcription has started.",
     "previewLabel": "Preview the recording (through the chosen speaker)",
     "goToCalls": "See calls",
     "recordAnother": "New recording",
@@ -286,7 +285,31 @@
     "untitledCall": "Untitled call",
     "liveTitle": "Live transcript",
     "liveWaiting": "Listening…",
-    "liveUnavailable": "Live transcript is unavailable — recording continues without it."
+    "liveUnavailable": "Live transcript is unavailable — recording continues without it.",
+    "languageField": "Meeting language",
+    "languageMixed": "Persian & English",
+    "languageFa": "Persian",
+    "languageEn": "English",
+    "sourceField": "Audio source",
+    "sourceMic": "Microphone",
+    "sourceSystem": "Microphone + tab/system audio",
+    "shareDenied": "Screen share was not granted — try again and pick a tab or screen.",
+    "shareNoAudio": "The chosen share had no audio — enable “Share audio” when picking the tab.",
+    "quietWarn": "Barely any signal is coming in — check the microphone and its distance.",
+    "clipWarn": "The input is clipping — move back from the microphone a little.",
+    "shareEndedWarn": "The tab/system audio share ended — recording continues with the microphone only.",
+    "unfinishedTitle": "Unfinished takes",
+    "unfinishedBody": "These takes are not finished yet — continue right where they stopped.",
+    "resumeAction": "Resume recording",
+    "recoveryTitle": "Unsaved audio on this device",
+    "recoveryBody": "This audio was kept locally while recording and never reached the server.",
+    "recoverySave": "Save to the record",
+    "recoverySaving": "Saving…",
+    "recoveryDownload": "Download",
+    "recoveryDiscard": "Discard",
+    "recoveryDiscardConfirm": "Sure? Discard it",
+    "recoverySaved": "Saved — continue from the unfinished-takes list.",
+    "recoveryFailed": "Could not save — the record no longer accepts audio or the connection failed; download still works."
   },
   "call": {
     "summary": "Summary",
@@ -751,7 +774,6 @@
   },
   "management": {
     "title": "Management",
-    "intro": "People, skills, connectors and service health — in one place.",
     "group": {
       "people": "People",
       "ai": "Assistant",
@@ -765,11 +787,8 @@
       "server": "Service health"
     },
     "desc": {
-      "users": "Add, approve, assign roles and disable members of your organization.",
-      "skills": "The assistant's ready-made instructions at three levels: system, organization and personal.",
-      "connectors": "API keys and webhooks — the gateway outside systems use.",
-      "models": "The list of models the org's assistant is allowed to use.",
-      "server": "Processing queues, work that keeps failing, gateway keys and storage use."
+      "server": "Processing queues, work that keeps failing, gateway keys and storage use.",
+      "users": "Add, approve, assign roles and disable members of your organization."
     },
     "notWired": "Not wired yet",
     "server": {
@@ -926,7 +945,7 @@
       "general": "Organization name, default call scope, language and theme.",
       "assistant": "The assistant's autonomy level and the weekly digest.",
       "security": "The wall this deployment keeps around your account and your data.",
-      "sso": "How people enter this platform. All methods are live.",
+      "sso": "How people enter this platform, and turning each method on or off.",
       "oauth-apps": "API keys and webhooks — the same gateway outside systems use.",
       "audit-logs": "Who did what, and when — human actions, approval decisions, and assistant runs.",
       "audit-log-drains": "Deliver audit events to your own systems - signed, retried, identifiers only.",
@@ -1214,12 +1233,17 @@
     "methodsAction": "View methods"
   },
   "signin": {
-    "intro": "External sign-in methods available for this platform.",
+    "intro": "External sign-in methods for this platform — an admin or the owner can turn each on or off.",
     "active": "Active",
     "method_google": "Google",
     "method_google_note": "OAuth 2.0 with PKCE; the code is exchanged server-side.",
     "method_github": "GitHub",
-    "method_github_note": "OAuth 2.0 with PKCE; the code is exchanged server-side."
+    "method_github_note": "OAuth 2.0 with PKCE; the code is exchanged server-side.",
+    "off": "Off",
+    "toggleLabel": "Toggle {method} sign-in",
+    "turnedOn": "{method} sign-in turned on.",
+    "turnedOff": "{method} sign-in turned off.",
+    "toggleFailed": "The sign-in method change did not go through — try again."
   },
   "legal": {
     "version": "Version 2026-08-16",
@@ -1253,7 +1277,6 @@
     "voiceUnsupported": "This browser does not support voice commands.",
     "wakeAck": "Yes?",
     "listening": "Listening…",
-    "micButton": "Voice command",
     "bellLabel": "Notifications",
     "bellEmpty": "No notifications.",
     "bellCards": "Assistant messages",
@@ -1267,7 +1290,8 @@
     "speakingState": "Speaking…",
     "earsLabel": "Assistant listening",
     "earsOn": "Listening — just say “echo”.",
-    "earsOff": "Not listening anymore."
+    "earsOff": "Not listening anymore.",
+    "bellClear": "Clear"
   },
   "summaries": {
     "empty": "No summaries yet — as each recording finishes processing, its summary lands here.",

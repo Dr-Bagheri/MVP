@@ -23,6 +23,22 @@ export async function GET(
     return Response.redirect(new URL("/en/sign-in?oauth=failed", origin), 303);
   }
 
+  /*
+   * 0078: a DISABLED method refuses here too — hiding the button on the
+   * sign-in page is courtesy; this check is the wall's web half (the SQL
+   * half guards the toggle itself). An unreachable settings read falls
+   * open, same as the buttons: the toggle exists to remove offers, and an
+   * API outage must not lock every door (M21).
+   */
+  try {
+    const res = await fetch(`${origin}/api/auth-methods`, { cache: "no-store" });
+    const methods = (await res.json()) as { provider: string; enabled: boolean }[];
+    const row = methods.find((m) => m.provider === provider);
+    if (row && !row.enabled) {
+      return Response.redirect(new URL("/en/sign-in?oauth=disabled", origin), 303);
+    }
+  } catch { /* fall open */ }
+
   const verifier = randomBytes(48).toString("base64url");
   const challenge = createHash("sha256").update(verifier).digest("base64url");
 

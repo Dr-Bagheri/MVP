@@ -21,7 +21,19 @@
 
 export const MAX_MB = 50;
 export const MAX_MINUTES = 240;
-export const PART_MS = 30 * 60 * 1000; // M2/M7: the 30-minute part ceiling
+
+/**
+ * The 30-minute part split is RETIRED (user directive, 2026-08-22): a take
+ * records as ONE continuous part, with no boundary the person ever sees.
+ * Parts remain the storage/pipeline unit — resume after navigation and
+ * crash recovery still append parts — but the only reason a LIVE take rolls
+ * a part is the storage tier's 50 MB per-object cap (`MAX_MB` above). At the
+ * recorder's 48 kbps that is ~2.4 hours; rolling at 45 MB leaves headroom
+ * for container overhead so no part is ever refused at byte 52,428,801.
+ * The roll is silent: same stream, next idx, correct offset — the person
+ * sees one recording, the pipeline sees decodable parts.
+ */
+export const SAFETY_PART_BYTES = 45 * 1024 * 1024;
 
 /** Container types the recorder/uploader can hand the pipeline (mirror of core's FORMATS). */
 export const AUDIO_TYPES: Readonly<Record<string, string>> = {
