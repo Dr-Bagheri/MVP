@@ -1717,9 +1717,14 @@ export const api = {
   /** M38: open a live-transcription relay session (503 = lane not configured).
       `ticket` + `direct_url` let the browser stream to core WITHOUT the
       serverless hop — the lag fix; both nullable for an older core. */
-  async liveSttStart(): Promise<{ session_id: string; ticket?: string; direct_url?: string | null }> {
+  async liveSttStart(format?: "pcm16k"): Promise<{ session_id: string; ticket?: string; direct_url?: string | null }> {
     return bff<{ session_id: string; ticket?: string; direct_url?: string | null }>(
-      "/api/live-stt/start", { method: "POST" });
+      "/api/live-stt/start", {
+        method: "POST",
+        ...(format
+          ? { headers: { "content-type": "application/json" }, body: JSON.stringify({ format }) }
+          : {}),
+      });
   },
   /** M38: one audio chunk to the relay — binary, so raw fetch. Fire-and-forget. */
   async liveSttAudio(sessionId: string, chunk: Blob): Promise<void> {

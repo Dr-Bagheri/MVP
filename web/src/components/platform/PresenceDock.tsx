@@ -10,12 +10,11 @@ import { useRouter } from "@/i18n/routing";
 import { executeClientTool, SURFACE_TOOLS } from "@/lib/agentSurface";
 import { subscribeAssistantOpen, subscribeRecordingLive } from "@/lib/assistantBus";
 import { notify, subscribeNotify, type PlatformNotice } from "@/lib/notify";
-import { computeRms, useAudioLevel, useSyntheticPulse } from "@/lib/useAudioLevel";
+import { useAudioLevel, useSyntheticPulse } from "@/lib/useAudioLevel";
 import {
-  currentSpeechAudio, isConversationOver, isEchoOf, isNoiseUtterance, isStopCommand, recentSpokenText, sameUtterance, speak,
-  speakQueued, startVoiceControl, stopSpeaking, subscribeSpeechPlayback,
-  voiceInputSupported, type WakeListenerHandle,
+  currentSpeechAudio, speak, speakQueued, stopSpeaking, subscribeSpeechPlayback,
 } from "@/lib/voice";
+import { startVoiceLoop, voiceLoopSupported, type VoiceLoopHandle } from "@/lib/voiceLoop";
 import { AuroraOrb, type AuroraState } from "./AuroraOrb";
 import { recorderControls } from "@/components/echo/recorderControls";
 import {
@@ -198,12 +197,10 @@ export function PresenceDock() {
     setEars(next);
     try { localStorage.setItem("neurai-voice-ears", next ? "1" : "0"); } catch { /* fine */ }
     if (next) {
-      beginWakeRef.current();
+      beginLoopRef.current();
       notify(t("earsOn"));
     } else {
-      suspendWake();
-      if (captureRef.current) teardownCapture(captureRef.current);
-      setListening(null);
+      suspendLoop();
       notify(t("earsOff"));
     }
   }
@@ -211,278 +208,47 @@ export function PresenceDock() {
   const sessionId = useRef<string | undefined>(undefined);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
-  const wakeRef = useRef<WakeListenerHandle | null>(null);
-  const micGrantedRef = useRef(false);
+  /** the ONE voice listener (lib/voiceLoop — the 2026-08-22 rebuild) */
+  const loopRef = useRef<VoiceLoopHandle | null>(null);
   /** the reply to a VOICE ask is spoken; typed asks stay silent */
   const speakReplyRef = useRef(false);
   const replyTextRef = useRef("");
   const streamingRef = useRef(false);
   /** the running ask, abortable by the spoken/typed STOP intent */
   const abortRef = useRef<AbortController | null>(null);
-  /** a barge-in's new question, waiting for the aborted run to unwind */
-  const pendingCommandRef = useRef<string | null>(null);
+  /** a barge-in's (or a stale-thread retry's) question, waiting for the
+      aborted run to unwind */
+  const pendingCommandRef = useRef<{ text: string; viaVoice: boolean } | null>(null);
   /** user rule (2026-08-21): once THIS reply started a recording, the
       voice stays shut — a spoken confirmation would be recorded into the
       call and "cause confusion" */
   const muteReplyRef = useRef(false);
   const recordingLive = () => recorderControls.current?.phase() === "recording";
 
-  /*
-   * FULL-DUPLEX CONVERSATION CAPTURE (2026-08-21 rework, after the
-   * half-duplex version transcribed the assistant's own reply into a
-   * command — user screenshot). The shape every production voice agent
-   * uses, applied here:
-   *
-   *  - ONE continuous relay capture for the whole conversation (Soniox
-   *    hears fa+en mixed; no per-command session churn, no gaps for the
-   *    TTS to leak into).
-   *  - The mic runs WITH echo cancellation, and stays open THROUGH
-   *    thinking and speaking — listening and executing at the same time.
-   *  - Utterances are segmented by OUR silence clock (2.5s after the
-   *    last word); each routes by turn state:
-   *      stop word            → instant local stop, any state
-   *      echo of the voice    → dropped (isEchoOf vs what it just said)
-   *      speech over thinking → BARGE-IN: abort the run, ask the new thing
-   *      speech over speaking → BARGE-IN: cut the voice, ask the new thing
-   *      speech while idle-in-session → the next command
-   *  - Stop-intents act from the INTERIM — "بسه" does not wait 2.5s.
-   */
-  interface RelayCapture {
-    id: string;
-    stream: MediaStream;
-    rec: MediaRecorder;
-    es: EventSource;
-    finals: string;
-    interim: string;
-    silence: ReturnType<typeof setTimeout> | null;
-    /** local VAD (the FAST endpoint): when the mic's own energy has been
-        quiet this long, the person stopped — no waiting on network tokens */
-    lastVoiceAt: number;
-    vadInterval: ReturnType<typeof setInterval> | null;
-    fastSettle: ReturnType<typeof setTimeout> | null;
-    audioCtx: AudioContext | null;
-    /** the previous settle's text — the provider re-finalizing the words
-        the VAD already consumed must not become a second command */
-    lastConsumed: string;
-    lastConsumedAt: number;
-    done: boolean;
-  }
-  const captureRef = useRef<RelayCapture | null>(null);
-  const relayDownRef = useRef(false);
-  /** token-silence FALLBACK clock (network-dependent, hence generous) */
-  const CAPTURE_SILENCE_MS = 2500;
-  /** the mic's own quiet time that means "I'm done talking" */
-  const VAD_QUIET_MS = 1100;
-  /** after the VAD endpoint, this long for late tokens to catch up */
-  const VAD_CATCHUP_MS = 600;
-
-  function teardownCapture(cap: RelayCapture): void {
-    cap.done = true;
-    if (cap.silence) clearTimeout(cap.silence);
-    if (cap.fastSettle) clearTimeout(cap.fastSettle);
-    if (cap.vadInterval) clearInterval(cap.vadInterval);
-    if (cap.audioCtx) void cap.audioCtx.close().catch(() => undefined);
-    try { if (cap.rec.state !== "inactive") cap.rec.stop(); } catch { /* fine */ }
-    cap.stream.getTracks().forEach((track) => track.stop());
-    cap.es.close();
-    void api.liveSttStop(cap.id).catch(() => undefined);
-    if (captureRef.current === cap) captureRef.current = null;
-  }
-
-  /** one utterance ended — clear the buffers, keep the capture LIVE */
-  function settleUtterance(cap: RelayCapture): void {
-    if (cap.done) return;
-    if (cap.silence) clearTimeout(cap.silence);
-    cap.silence = null;
-    if (cap.fastSettle) clearTimeout(cap.fastSettle);
-    cap.fastSettle = null;
-    cap.lastVoiceAt = 0;
-    const text = `${cap.finals} ${cap.interim}`.trim();
-    cap.finals = "";
-    cap.interim = "";
-    if (!text) return;
-    // the VAD consumed this from the interim; the provider finalizing the
-    // SAME words is not a second utterance ("it hears everything twice")
-    if (sameUtterance(text, cap.lastConsumed) && Date.now() - cap.lastConsumedAt < 8000) return;
-    cap.lastConsumed = text;
-    cap.lastConsumedAt = Date.now();
-    routeCommand(text);
-  }
-
-  async function beginCapture(): Promise<void> {
-    if (captureRef.current || relayDownRef.current) return;
-    let sessionId: string;
-    let direct: { base: string; ticket: string } | null = null;
-    try {
-      const started = await api.liveSttStart();
-      sessionId = started.session_id;
-      /* the DIRECT lane: with a ticket and a public core url the browser
-         streams straight to core — the per-chunk serverless hop was the
-         seconds of transcript lag the user measured */
-      if (started.ticket && started.direct_url) {
-        direct = { base: started.direct_url.replace(/\/$/, ""), ticket: started.ticket };
-      }
-    } catch {
-      relayDownRef.current = true; // machine fallback takes over, quietly
-      return;
-    }
-    let stream: MediaStream;
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          /* the first defense of full-duplex: the browser's acoustic echo
-             canceller subtracts what the SPEAKERS are playing — most of
-             the assistant's own voice never reaches the transcript */
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-      });
-    } catch {
-      void api.liveSttStop(sessionId).catch(() => undefined);
-      return;
-    }
-    const sendChunk = (chunk: Blob): void => {
-      if (direct) {
-        void fetch(`${direct.base}/v1/live-stt/${encodeURIComponent(sessionId)}/audio?ticket=${direct.ticket}`, {
-          method: "POST",
-          headers: { "content-type": "application/octet-stream" },
-          body: chunk,
-        }).catch(() => undefined);
-      } else {
-        void api.liveSttAudio(sessionId, chunk).catch(() => undefined);
-      }
-    };
-    const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-      ? "audio/webm;codecs=opus" : "audio/webm";
-    const rec = new MediaRecorder(stream, { mimeType: mime });
-    rec.ondataavailable = (event) => {
-      if (event.data.size > 0) sendChunk(event.data);
-    };
-    rec.start(300);
-    const es = new EventSource(direct
-      ? `${direct.base}/v1/live-stt/${encodeURIComponent(sessionId)}/events?ticket=${direct.ticket}`
-      : `/api/live-stt/${encodeURIComponent(sessionId)}/events`);
-    const cap: RelayCapture = {
-      id: sessionId, stream, rec, es, finals: "", interim: "", silence: null,
-      lastVoiceAt: 0, vadInterval: null, fastSettle: null, audioCtx: null,
-      lastConsumed: "", lastConsumedAt: 0, done: false,
-    };
-    /*
-     * LOCAL VAD — the fast endpoint. The mic's own RMS says when the
-     * person stopped: after VAD_QUIET_MS of quiet (with something already
-     * transcribed), a short catch-up window lets late tokens land, then
-     * the utterance settles. End-of-speech → answer starts in ~1.7s
-     * instead of network-token silence stacking on transcript lag.
-     */
-    try {
-      const audioCtx = new AudioContext();
-      const analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 512;
-      audioCtx.createMediaStreamSource(stream).connect(analyser);
-      const vadBuffer = new Uint8Array(analyser.fftSize);
-      cap.audioCtx = audioCtx;
-      cap.vadInterval = setInterval(() => {
-        if (cap.done) return;
-        analyser.getByteTimeDomainData(vadBuffer);
-        const level = computeRms(vadBuffer);
-        const now = Date.now();
-        if (level > 0.05) {
-          cap.lastVoiceAt = now;
-          if (cap.fastSettle) { clearTimeout(cap.fastSettle); cap.fastSettle = null; }
-          return;
-        }
-        const heard = `${cap.finals} ${cap.interim}`.trim();
-        if (!heard || cap.lastVoiceAt === 0 || cap.fastSettle) return;
-        if (now - cap.lastVoiceAt >= VAD_QUIET_MS) {
-          cap.fastSettle = setTimeout(() => settleUtterance(cap), VAD_CATCHUP_MS);
-        }
-      }, 100);
-    } catch { /* no AudioContext — the token-silence fallback still ends turns */ }
-    const armSilence = () => {
-      if (cap.silence) clearTimeout(cap.silence);
-      cap.silence = setTimeout(() => settleUtterance(cap), CAPTURE_SILENCE_MS);
-    };
-    es.onmessage = (event) => {
-      try {
-        const body = JSON.parse(event.data as string) as {
-          type: string;
-          tokens?: { text: string; is_final: boolean }[];
-        };
-        if (body.type === "closed" || body.type === "error") {
-          settleUtterance(cap);
-          teardownCapture(cap);
-          return;
-        }
-        if (body.type === "tokens" && body.tokens) {
-          const finalText = body.tokens.filter((tok) => tok.is_final).map((tok) => tok.text).join("");
-          if (finalText) cap.finals += finalText;
-          cap.interim = body.tokens.filter((tok) => !tok.is_final).map((tok) => tok.text).join("");
-          const heard = `${cap.finals} ${cap.interim}`.trim();
-          if (heard) {
-            // a stop word acts NOW — not 2.5s from now — and stop means
-            // CLOSED (user, 2026-08-22: the panel stayed open after stop)
-            if (isStopCommand(heard)) {
-              cap.finals = "";
-              cap.interim = "";
-              if (cap.silence) clearTimeout(cap.silence);
-              if (cap.fastSettle) { clearTimeout(cap.fastSettle); cap.fastSettle = null; }
-              farewellClose(heard);
-              return;
-            }
-            // tokens landing during the VAD catch-up push it out a touch —
-            // the transcript is still arriving
-            if (cap.fastSettle) {
-              clearTimeout(cap.fastSettle);
-              cap.fastSettle = setTimeout(() => settleUtterance(cap), 400);
-            }
-            armSilence();
-          }
-        }
-      } catch { /* not a caption frame */ }
-    };
-    captureRef.current = cap;
-  }
-
   /**
-   * The conversation is OVER (user rule, 2026-08-22): "thanks that's
-   * enough", "I don't have anything else", "stop it", «مرسی همین بود» —
-   * anything that means finished. Answer with one word, out loud in the
-   * goodbye's own language, and CLOSE THE ORB: speech cut, run aborted,
-   * session ended, panel gone. The wake word stays alive for next time.
+   * The conversation is OVER — a spoken stop (rule 3), or the loop's
+   * session timing out with the panel open. One word out loud in the
+   * interface language, then CLOSED: speech cut, run aborted, session
+   * ended, panel gone. The name keeps working for next time.
    */
-  function farewellClose(text: string): void {
+  function farewellClose(): void {
     stopSpeaking();
     abortRef.current?.abort();
-    wakeRef.current?.endSession?.();
-    setListening(null); // tears the capture down via the session effect
+    loopRef.current?.endSession();
+    setListening(null);
     setOpen(false);
     setMinimized(false);
     if (!silentRef.current && !recordingLive()) {
-      speak(/[؀-ۿ]/.test(text) ? "باشه." : "Okay.");
+      speak(locale === "fa" ? "باشه." : "Okay.");
     }
   }
 
+  /** an utterance the loop decided is a COMMAND — barge-in aware */
   function routeCommand(text: string): void {
-    // "—" / "…" transcripts are the recognizer spelling NOISE (a breath,
-    // a tap) — the dash-only phantom bubbles (user report, 2026-08-22)
-    if (isNoiseUtterance(text)) return;
-    // goodbye phrases — filler-tolerant, so "okay stop" and "thanks
-    // that's it" no longer leak to the model as questions. Stop words
-    // take the SAME exit: stop means closed (user rule, 2026-08-22).
-    if (isConversationOver(text) || isStopCommand(text)) { farewellClose(text); return; }
-    /*
-     * The mic was open while the assistant talked — echo cancellation
-     * catches most of its voice; whatever leaks through is recognized by
-     * TEXT (it is a fragment of what was just said) and dropped. A real
-     * interruption brings new words and BARGES IN.
-     */
-    if (isEchoOf(text, recentSpokenText())) return;
     if (speakingRef.current) stopSpeaking(); // barge-in over speaking
     if (streamingRef.current) {
-      // barge-in over thinking: abort the run and let its unwind hand the
-      // NEW question in (submit refuses re-entry while streamingRef holds)
-      pendingCommandRef.current = text;
+      // barge-in over thinking: abort the run; its unwind asks the new thing
+      pendingCommandRef.current = { text, viaVoice: true };
       abortRef.current?.abort();
       return;
     }
@@ -490,18 +256,6 @@ export function PresenceDock() {
     setMinimized(false);
     submitRef.current(text, true);
   }
-
-  /* ONE capture per engaged conversation — through thinking and speaking */
-  useEffect(() => {
-    if (listening === "command" && !captureRef.current) {
-      void beginCapture();
-    }
-    if (listening !== "command" && captureRef.current) {
-      // session over (stop word, timeout): whatever is mid-air is void
-      teardownCapture(captureRef.current);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [listening]);
 
   /** the dock exists only for signed-in members */
   useEffect(() => {
@@ -567,14 +321,13 @@ export function PresenceDock() {
   useEffect(() => {
     return subscribeRecordingLive((live) => {
       if (live) {
+        // rule 2: a rolling take owns the room — deaf, silent, closed
         stopSpeaking();
-        suspendWake();
-        if (captureRef.current) teardownCapture(captureRef.current);
-        setListening(null);
+        suspendLoop();
         setOpen(false);
         setMinimized(false);
       } else {
-        beginWakeRef.current();
+        beginLoopRef.current();
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -634,77 +387,60 @@ export function PresenceDock() {
     return modelRef.current ?? undefined;
   }
 
-  const beginWake = useCallback(() => {
+  /**
+   * Start THE voice loop (the 2026-08-22 rebuild — one listener, the M38
+   * relay, bilingual by construction, no browser speech recognition).
+   * Denial → a toast at the orb's head asking for access.
+   */
+  const beginLoop = useCallback(() => {
     if (!earsRef.current) return; // the ears toggle is OFF — stay deaf
-    if (!micGrantedRef.current || wakeRef.current || !voiceInputSupported()) return;
-    /*
-     * One continuous recognizer, one state machine (createWakeMachine).
-     * The old shape — final-results-only plus a stop-the-listener/
-     * listenOnce round-trip after the ack — was the delay the user felt:
-     * the ack now fires on the INTERIM transcript and the command window
-     * reads the same stream, no restart anywhere.
-     */
-    wakeRef.current = startVoiceControl({
-      lang: locale === "fa" ? "fa-IR" : "en-US",
+    if (loopRef.current || recordingLive()) return;
+    if (!voiceLoopSupported()) {
+      notify(t("voiceUnsupported"), "warn");
+      return;
+    }
+    void startVoiceLoop({
       onWake: () => {
         if (streamingRef.current) return; // one conversation turn at a time
         setOpen(true);
         setMinimized(false);
         if (!silentRef.current && !recordingLive()) speak(t("wakeAck"));
       },
-      onCommand: (command) => {
-        // while a relay capture is live, IT is the command channel — the
-        // browser transcript would be a lower-quality duplicate
-        if (captureRef.current) return;
-        routeCommand(command);
-      },
-      onState: (state) => setListening(state === "engaged" ? "command" : null),
-      onError: () => {
-        wakeRef.current = null;
+      onCommand: (command) => routeCommand(command),
+      onStop: () => farewellClose(),
+      onState: (state) => setListening(state === "session" ? "command" : null),
+    }).then((handle) => {
+      if (!handle) {
         notify(t("micDenied"), "warn");
-      },
-    });
-  }, [locale, t]);
-  const beginWakeRef = useRef(beginWake);
-  beginWakeRef.current = beginWake;
-
-  function suspendWake() {
-    wakeRef.current?.stop();
-    wakeRef.current = null;
-  }
-
-  /**
-   * Ask for the microphone ON LANDING (user directive) — one getUserMedia,
-   * tracks stopped immediately; the grant is what SpeechRecognition needs.
-   * Denial → a toast at the orb's head asking for access.
-   */
-  useEffect(() => {
-    if (!member) return;
-    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) return;
-    let live = true;
-    navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
-      stream.getTracks().forEach((track) => track.stop());
-      if (!live) return;
-      micGrantedRef.current = true;
-      if (!voiceInputSupported()) {
-        notify(t("voiceUnsupported"), "warn");
         return;
       }
-      beginWakeRef.current();
-    }).catch(() => {
-      if (live) notify(t("micDenied"), "warn");
+      if (loopRef.current) { handle.stop(); return; } // a race — keep one
+      loopRef.current = handle;
+      handle.setSpeaking(speakingRef.current);
     });
-    return () => {
-      live = false;
-      suspendWake();
-      if (captureRef.current) {
-        captureRef.current.done = true;
-        teardownCapture(captureRef.current);
-      }
-    };
-    // locale change restarts the listener with the right recognition lang
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [member, locale, t]);
+  }, [t]);
+  const beginLoopRef = useRef(beginLoop);
+  beginLoopRef.current = beginLoop;
+
+  function suspendLoop() {
+    loopRef.current?.stop();
+    loopRef.current = null;
+    setListening(null);
+  }
+
+  /** the loop's stop-while-speaking rule needs to know the mouth's state */
+  useEffect(() => subscribeSpeechPlayback((next) => {
+    loopRef.current?.setSpeaking(next);
+  }), []);
+
+  /** the ears open on landing (member only); leaving closes them */
+  useEffect(() => {
+    if (!member) return;
+    beginLoopRef.current();
+    return () => suspendLoop();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [member]);
 
   function openCard(card: AgentCardItem) {
     if (!card.read) {
@@ -735,9 +471,10 @@ export function PresenceDock() {
     muteReplyRef.current = false;
     replyTextRef.current = "";
     const replyId = `p-${Date.now()}`;
+    const userMsgId = `u-${Date.now()}`;
     setMessages((prev) => [
       ...prev,
-      { id: `u-${Date.now()}`, role: "user", content: trimmed, chips: [] },
+      { id: userMsgId, role: "user", content: trimmed, chips: [] },
       { id: replyId, role: "assistant", content: "", chips: [] },
     ]);
     const controller = new AbortController();
@@ -794,18 +531,35 @@ export function PresenceDock() {
         setMessages((prev) => prev.filter((m) => !(m.id === replyId && m.content === "")));
       } else {
         const detail = (cause as { detail?: string }).detail;
-        setMessages((prev) =>
-          prev.map((m) => (m.id === replyId ? { ...m, failed: true, failedDetail: detail } : m)));
+        const status = (cause as { status?: number }).status;
+        /*
+         * THE STALE-THREAD TRAP (user screenshot, 2026-08-22: EVERY ask
+         * died "not found"): the dock resumes today's stored conversation
+         * id, but that row can be gone — swept, purged, or minted against
+         * a different database. A dead thread must not kill every future
+         * question: drop the id, remove the doomed bubbles, retry ONCE
+         * fresh. A second failure has no stored id and reports honestly.
+         */
+        if (sessionId.current && (status === 404 || /not.?found/i.test(detail ?? ""))) {
+          sessionId.current = undefined;
+          try { localStorage.removeItem(todayKey()); } catch { /* fine */ }
+          setMessages((prev) => prev.filter((m) => m.id !== replyId && m.id !== userMsgId));
+          pendingCommandRef.current = { text: trimmed, viaVoice };
+        } else {
+          setMessages((prev) =>
+            prev.map((m) => (m.id === replyId ? { ...m, failed: true, failedDetail: detail } : m)));
+        }
       }
     } finally {
       setStreaming(false);
       streamingRef.current = false;
       setConsent(null);
-      // a barge-in parked its question while this run unwound — ask it now
+      // a barge-in (or the stale-thread retry) parked its question while
+      // this run unwound — ask it now
       const queued = pendingCommandRef.current;
       if (queued) {
         pendingCommandRef.current = null;
-        setTimeout(() => submitRef.current(queued, true), 0);
+        setTimeout(() => submitRef.current(queued.text, queued.viaVoice), 0);
       }
     }
   }

@@ -138,7 +138,7 @@ export function createLiveStt(options: LiveSttOptions = {}) {
   return {
     available: () => Boolean(apiKey),
 
-    start(userId: string): { session_id: string; ticket: string } {
+    start(userId: string, format?: "pcm16k"): { session_id: string; ticket: string } {
       if (!apiKey) throw new Error("live stt unavailable — no provider key");
       const mine = [...sessions.values()].filter((s) => s.userId === userId);
       if (mine.length >= maxPerUser) {
@@ -164,11 +164,19 @@ export function createLiveStt(options: LiveSttOptions = {}) {
          * is the JSON config, then binary audio, then an empty string to
          * end. audio_format "auto" lets the browser send what
          * MediaRecorder produces (webm/opus) without a PCM pipeline.
+         *
+         * "pcm16k" (the voice loop, 2026-08-22 rebuild): raw s16le mono
+         * 16 kHz frames. Raw PCM has NO container header, which is the
+         * property the always-on wake listener needs — it can gate chunks
+         * on local VAD (streaming only actual speech, with a pre-roll ring)
+         * without ever corrupting a container mid-stream.
          */
         ws.send(JSON.stringify({
           api_key: apiKey,
           model,
-          audio_format: "auto",
+          ...(format === "pcm16k"
+            ? { audio_format: "pcm_s16le", sample_rate: 16000, num_channels: 1 }
+            : { audio_format: "auto" }),
           language_hints: ["fa", "en"],
           enable_language_identification: true,
         }));

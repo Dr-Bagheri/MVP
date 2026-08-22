@@ -783,7 +783,11 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     if (!liveStt.available()) {
       return reply.code(503).send({ error: "live_stt_unavailable" });
     }
-    return reply.send(liveStt.start(identity.userId));
+    const body = (request.body ?? {}) as { format?: unknown };
+    return reply.send(liveStt.start(
+      identity.userId,
+      body.format === "pcm16k" ? "pcm16k" : undefined,
+    ));
   });
 
   /*

@@ -10,10 +10,14 @@ import { coreFetch, errorResponse } from "@/server/core";
  */
 export const dynamic = "force-dynamic";
 
-export async function POST() {
+export async function POST(request: Request) {
   try {
+    const body = (await request.json().catch(() => ({}))) as { format?: string };
     const started = await coreFetch<{ session_id: string; ticket: string }>(
-      "/v1/live-stt/start", { method: "POST", body: {} });
+      "/v1/live-stt/start", {
+        method: "POST",
+        body: body.format === "pcm16k" ? { format: "pcm16k" } : {},
+      });
     return Response.json({
       ...started,
       direct_url: process.env.CORE_PUBLIC_URL ?? null,
