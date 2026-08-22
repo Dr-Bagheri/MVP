@@ -910,16 +910,19 @@ export function PresenceDock() {
       }}
     >
       {/* The particle field is decorative; this button remains the single
-          accessible and interactive assistant control in either location. */}
+          accessible and interactive assistant control in either location.
+          Silent mode deliberately does NOT reach the orb (user ruling,
+          2026-08-22: "the particles must move all the time — it does not
+          depend on anything"): silent is about the VOICE, and the frozen
+          orb read as a dead assistant. The orb's "muted" state stays in
+          its contract, unused by this consumer. */}
       <AuroraOrb
         state={
-          (silent
-            ? "muted"
-            : speaking
-              ? "speaking"
-              : listening === "command"
-                ? "listening"
-                : "idle") satisfies AuroraState
+          (speaking
+            ? "speaking"
+            : listening === "command"
+              ? "listening"
+              : "idle") satisfies AuroraState
         }
         level={orbLevel}
       />
