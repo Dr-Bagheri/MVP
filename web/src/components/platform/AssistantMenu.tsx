@@ -1,7 +1,12 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
+import type { AssistantSession } from "@/api/types";
+import { api } from "@/api/client";
 import { SectionMenu } from "@/components/scaffold";
+import { openAssistant } from "@/lib/assistantBus";
+import { useRefreshEpoch } from "@/lib/refreshBus";
 import { useAssistantConversation } from "./AssistantConversationState";
 
 /**
@@ -21,8 +26,20 @@ export function AssistantMenu({
   activeSlug: "new" | "hub" | "history" | "search" | "workflows" | "agents";
 }) {
   const t = useTranslations("platform");
+  const tConversations = useTranslations("conversations");
   const { started, startNewConversation } = useAssistantConversation();
   const isHub = activeSlug === "new" || activeSlug === "hub";
+
+  /* the TWO latest conversations, right in the menu (user directive,
+     2026-08-22) — refreshed whenever any session changes anywhere, orb
+     talks included. Clicking one opens it in the dock where you stand. */
+  const [recent, setRecent] = useState<AssistantSession[]>([]);
+  const sessionsEpoch = useRefreshEpoch("sessions");
+  useEffect(() => {
+    void api.agentSessions()
+      .then((rows) => setRecent(rows.slice(0, 2)))
+      .catch(() => setRecent([]));
+  }, [sessionsEpoch]);
   return (
     <SectionMenu
       navLabel={t("assistantMenuLabel")}
@@ -41,6 +58,13 @@ export function AssistantMenu({
               onSelect: isHub && started ? startNewConversation : undefined,
             },
             { slug: "history", href: "/conversations", label: t("history") },
+            ...recent.map((session) => ({
+              slug: `recent-${session.id}`,
+              href: "/conversations",
+              label: `· ${session.title ?? tConversations("untitled")}`,
+              preventNavigation: true,
+              onSelect: () => openAssistant({ sessionId: session.id }),
+            })),
           ],
         },
         {

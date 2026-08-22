@@ -97,6 +97,7 @@ vi.mock("@/api/client", () => ({
     assistantTools: async () => visibleTools,
     sessionFeedback: async () => ({}),
     shareState: async () => false,
+    agentSessions: async () => [],
   },
 }));
 

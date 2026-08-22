@@ -62,7 +62,7 @@ import type {
  * basis as the `Call`/`Org` migrations.
  */
 import type { MeRecord } from "@echo/core/wire";
-import { announceWrite } from "@/lib/refreshBus";
+import { announceChange, announceWrite } from "@/lib/refreshBus";
 
 /*
  * The AGENT_SESSIONS/AGENT_THREADS fixtures left with the ask() mock (Part 1,
@@ -1584,26 +1584,38 @@ export const api = {
        for a core that predates the plural wire (it truncated to the first
        chip — a control that read as wired and dropped the rest). `web`
        rides only when true, so an older core sees nothing new. */
-    yield* streamAssistant(
-      '/api/assistant/ask',
-      {
-        question,
-        session_id: sessionId,
-        call_id: ctx.callIds[0],
-        ...(ctx.callIds.length > 1 ? { call_ids: ctx.callIds } : {}),
-        model: opts?.model,
-        skill: opts?.skill,
-        agent: opts?.agent,
-        workflow: opts?.workflow,
-        connector_provider: opts?.connectorProvider,
-        source_id: opts?.sourceId,
-        ...(opts?.web ? { web: true } : {}),
-        ...(opts?.locale ? { locale: opts.locale } : {}),
-        ...(opts?.clientTools?.length ? { client_tools: opts.clientTools } : {}),
-        ...(opts?.surface ? { context: opts.surface } : {}),
-      },
-      opts?.signal,
-    );
+    try {
+      yield* streamAssistant(
+        '/api/assistant/ask',
+        {
+          question,
+          session_id: sessionId,
+          call_id: ctx.callIds[0],
+          ...(ctx.callIds.length > 1 ? { call_ids: ctx.callIds } : {}),
+          model: opts?.model,
+          skill: opts?.skill,
+          agent: opts?.agent,
+          workflow: opts?.workflow,
+          connector_provider: opts?.connectorProvider,
+          source_id: opts?.sourceId,
+          ...(opts?.web ? { web: true } : {}),
+          ...(opts?.locale ? { locale: opts.locale } : {}),
+          ...(opts?.clientTools?.length ? { client_tools: opts.clientTools } : {}),
+          ...(opts?.surface ? { context: opts.surface } : {}),
+        },
+        opts?.signal,
+      );
+    } finally {
+      /*
+       * An ask WRITES a conversation (the user turn lands even on a failed
+       * run), but it rides its own SSE fetch, not bff() — so the one-place
+       * announcer never fires for it and every history surface stayed
+       * stale until reload (user report, 2026-08-22: "any talk with the
+       * orb must count in history"). Announced here, once, however the
+       * stream ends — done, error, or abort.
+       */
+      announceChange("sessions");
+    }
   },
 
   /** M33: answer a `client_tool_call` — performed, declined, or failed. */
