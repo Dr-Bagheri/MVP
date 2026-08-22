@@ -79,6 +79,11 @@ export async function hasProfileContext(db: Db): Promise<boolean> {
   return hasColumn(db, "app_user", "about");
 }
 
+/** db/0081 (voice enrollment): the person voiceprint columns. */
+export async function hasVoiceprints(db: Db): Promise<boolean> {
+  return hasColumn(db, "person", "voiceprint");
+}
+
 export async function hasAutonomyColumn(db: Db): Promise<boolean> {
   return hasColumn(db, "app_user", "autonomy");
 }

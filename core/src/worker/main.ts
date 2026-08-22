@@ -116,7 +116,9 @@ export async function main(): Promise<void> {
     queue,
     handlers: [
       createPartStep({ db, ml, queue, lifecycle, storage }),
-      createLinkSpeakersStep({ db, queue, lifecycle }),
+      // ml + storage arm M39 voice matching; without them the step is
+      // exactly the pre-M39 step (matching is best-effort either way)
+      createLinkSpeakersStep({ db, queue, lifecycle, ml, storage }),
       createSummarizeStep({ db, lifecycle, summarizer, queue }),
       // M35: signals — briefs and digests, each run AS the owner
       createSignalStep({ db }),

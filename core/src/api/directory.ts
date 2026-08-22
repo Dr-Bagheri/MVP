@@ -13,6 +13,7 @@
  */
 import { ConflictError, NotActivatedError, NotFoundError, ValidationError } from "./errors.ts";
 import { assertUuid, type Db, type SqlTx } from "../db/identity.ts";
+import { hasVoiceprints } from "../db/capabilities.ts";
 import type { Identity } from "../agent/types.ts";
 
 /** Mirror of 0062's constraint. Codes — the UI localizes. */
@@ -28,6 +29,13 @@ export interface PersonRecord {
   title: PersonTitle;
   /** Set when the person IS a platform member (directory ↔ account link). */
   app_user_id: string | null;
+  /**
+   * Voice enrollment state (db/0081) — WHEN, never the vector: the vector
+   * is match-machinery, not display data, and serving it would put a
+   * biometric on every directory response for no screen that needs it.
+   * ABSENT (not false) before 0081 — the capability pattern.
+   */
+  voice_enrolled_at?: string | null;
 }
 
 const PERSON_COLUMNS = "id, display_name, title, app_user_id";
@@ -37,6 +45,9 @@ const toPerson = (row: Record<string, unknown>): PersonRecord => ({
   display_name: String(row.display_name),
   title: (row.title as PersonTitle) ?? "",
   app_user_id: (row.app_user_id as string | null) ?? null,
+  ...(Object.prototype.hasOwnProperty.call(row, "voiceprint_at")
+    ? { voice_enrolled_at: row.voiceprint_at ? new Date(row.voiceprint_at as string | Date).toISOString() : null }
+    : {}),
 });
 
 function assertTitle(title: string): asserts title is PersonTitle {
@@ -52,14 +63,85 @@ export function createDirectoryRepo(db: Db) {
   return {
     /** Everyone the caller may see, merged tombstones excluded. */
     async list(identity: Identity): Promise<PersonRecord[]> {
+      const withVoice = await hasVoiceprints(db);
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<Record<string, unknown>>(
-          `select ${PERSON_COLUMNS} from echo.person
+          `select ${PERSON_COLUMNS}${withVoice ? ", voiceprint_at" : ""}
+             from echo.person
             where merged_into is null
             order by display_name`,
         ),
       );
       return rows.map(toPerson);
+    },
+
+    /**
+     * Store an enrollment (db/0081). The vector arrives WITH its model's
+     * name and both land together — comparing vectors across models is
+     * confident nonsense, so the pair is inseparable at every layer.
+     */
+    async setVoiceprint(
+      identity: Identity,
+      personId: string,
+      input: { vector: number[]; model: string },
+    ): Promise<void> {
+      const id = assertUuid(personId, "person id");
+      if (!(await hasVoiceprints(db))) throw new ConflictError("not_migrated");
+      if (input.vector.length < 8 || input.vector.some((v) => !Number.isFinite(v))) {
+        throw new ValidationError("degenerate embedding vector");
+      }
+      const rows = await db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe<{ id: string }>(
+          `update echo.person
+              set voiceprint = $2::float8[],
+                  voiceprint_model = $3,
+                  voiceprint_at = now(),
+                  voiceprint_by = $4
+            where id = $1 and merged_into is null
+            returning id`,
+          [id, input.vector, input.model, identity.userId],
+        ),
+      );
+      if (!rows[0]) throw new NotFoundError("no such person");
+    },
+
+    async clearVoiceprint(identity: Identity, personId: string): Promise<void> {
+      const id = assertUuid(personId, "person id");
+      if (!(await hasVoiceprints(db))) throw new ConflictError("not_migrated");
+      const rows = await db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe<{ id: string }>(
+          `update echo.person
+              set voiceprint = null, voiceprint_model = null,
+                  voiceprint_at = null, voiceprint_by = null
+            where id = $1
+            returning id`,
+          [id],
+        ),
+      );
+      if (!rows[0]) throw new NotFoundError("no such person");
+    },
+
+    /**
+     * The match candidates: every enrolled print the caller may see, for
+     * ONE model — the worker asks with the extractor's name, so a model
+     * upgrade silently excludes stale prints instead of mis-scoring them.
+     * Reads the vectors; exists for the matcher, never for a screen.
+     */
+    async voiceprints(
+      identity: Identity,
+      model: string,
+    ): Promise<{ person_id: string; vector: number[] }[]> {
+      if (!(await hasVoiceprints(db))) return [];
+      const rows = await db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe<{ id: string; voiceprint: number[] }>(
+          `select id, voiceprint from echo.person
+            where merged_into is null
+              and voiceprint is not null
+              and voiceprint_model = $1`,
+          [model],
+        ),
+      );
+      return rows.map((r) => ({ person_id: r.id, vector: r.voiceprint }));
     },
 
     async create(

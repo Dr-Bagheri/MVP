@@ -18,6 +18,7 @@ response.
 | Method | Path | Purpose |
 |---|---|---|
 | `POST` | `/process` | The whole job: transcode → VAD → transcribe → diarize. Synchronous. |
+| `POST` | `/embed` | One speaker-embedding vector from audio (M39). Multipart `audio` file, or JSON `{audio_url\|audio_path, ranges?: [{start_ms,end_ms}], job_ref?}` — `ranges` (ms, file-relative) pick one voice's speech out of a longer take. Response: `{embedding, dim, model, speech_ms}`. The `model` name travels with every vector: vectors compare only within one model's space. Refuses < 1.5 s of audio (`bad_request`); `embedding_unavailable` (503, retryable) when the deployment carries no model; `/health.embedder` reports the capability. |
 | `GET` | `/health` | Liveness + which lanes are configured. No secrets in the body. |
 
 ### `GET /health`

@@ -11,11 +11,18 @@ import type { Lifecycle } from "./lifecycle.ts";
 import { Q_AGENT_RULES, Q_LINK_SPEAKERS, Q_SUMMARIZE, type JobPayload, type Queue } from "./queue.ts";
 import { StepError, type StepHandler } from "./runner.ts";
 import { enqueueWebhooks } from "./webhook-enqueue.ts";
+import type { MlClient } from "./ml-client.ts";
+import { matchEnrolledVoices, type StorageSignerLike, type VoiceMatchOptions } from "./voice-match.ts";
 
 export interface LinkSpeakersOptions {
   db: Db;
   queue: Queue;
   lifecycle: Lifecycle;
+  /** Voice matching (M39) — both optional so every existing wiring and
+   *  fake stays valid; matching simply doesn't run without them. */
+  ml?: MlClient;
+  storage?: StorageSignerLike;
+  voiceMatch?: VoiceMatchOptions;
 }
 
 /**
@@ -23,11 +30,13 @@ export interface LinkSpeakersOptions {
  * (SPEC: "a short voice snippet plays for identification"), then hand the call
  * to the summarizer.
  *
- * It does NOT link voices to people. That is an owner's deliberate act (M11):
- * voices from private calls never enter the org's directory by passive
- * capture, so the pipeline names nobody.
+ * Linking voices to PEOPLE: hand-linking is the owner's act as ever (M11) —
+ * and since M39 the pipeline may also link a voice to a person who ENROLLED
+ * a voiceprint (enrollment is the deliberate act M11 requires; a person with
+ * no print is never matched, never named). Matching is best-effort: its
+ * failure logs and forfeits, never blocks the call.
  */
-export function createLinkSpeakersStep({ db, queue, lifecycle }: LinkSpeakersOptions): StepHandler {
+export function createLinkSpeakersStep({ db, queue, lifecycle, ml, storage, voiceMatch }: LinkSpeakersOptions): StepHandler {
   return {
     name: "link_speakers",
     queue: Q_LINK_SPEAKERS,
@@ -55,6 +64,23 @@ export function createLinkSpeakersStep({ db, queue, lifecycle }: LinkSpeakersOpt
           [payload.callId],
         ),
       );
+
+      // M39: match unlinked voices against ENROLLED prints — best-effort,
+      // never the pipeline's problem when it can't (M21: forfeit out loud)
+      if (ml && storage) {
+        try {
+          await matchEnrolledVoices({
+            db, ml, storage, identity, callId: payload.callId, log,
+            ...(voiceMatch ? { options: voiceMatch } : {}),
+          });
+        } catch (cause) {
+          log.warn(
+            { call_id: payload.callId,
+              error_type: (cause as { errorType?: string }).errorType ?? "voice_match_failed" },
+            "voice matching forfeited — the call proceeds unnamed",
+          );
+        }
+      }
 
       await lifecycle.setCallStatus(identity, payload.callId, "summarizing");
       await queue.send(Q_SUMMARIZE, { callId: payload.callId, ownerId: payload.ownerId });

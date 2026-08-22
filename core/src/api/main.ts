@@ -133,6 +133,9 @@ export async function main(): Promise<void> {
      */
     storageUrl: process.env.SUPABASE_URL,
     storageServiceKey: process.env.SUPABASE_SERVICE_KEY,
+    // M39 voice enrollment — same box as the worker's default; empty string
+    // deliberately disables (an explicit "no ml here" for split deployments)
+    mlBaseUrl: process.env.ML_BASE_URL === "" ? undefined : (process.env.ML_BASE_URL ?? "http://127.0.0.1:7801"),
     /**
      * M32's one-time root claim. This is an email selector, not a password or
      * a browser-visible token; the matching person still authenticates through

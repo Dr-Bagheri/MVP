@@ -41,6 +41,77 @@ export function SpeakersDirectory() {
   const [editName, setEditName] = useState("");
   /** two-click delete, the records-table pattern */
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  /**
+   * Voice enrollment (M39): an inline ~8s mic take per person; only the
+   * VECTOR is stored server-side. The column renders only when the wire
+   * carries `voice_enrolled_at` (db/0081 has run) — a control for a column
+   * that does not exist would read as wired and do nothing.
+   */
+  const [enroll, setEnroll] = useState<
+    null | { personId: string; phase: "recording" | "sending"; secondsLeft: number }
+  >(null);
+  const enrollStop = useState<{ stop: (() => void) | null }>({ stop: null })[0];
+  const voiceReady =
+    people !== null && people.length > 0 && people[0] !== undefined
+    && "voice_enrolled_at" in people[0];
+
+  async function startEnroll(person: Person): Promise<void> {
+    if (enroll) return;
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch {
+      notify(t("voiceMicDenied"), "warn");
+      return;
+    }
+    const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+      ? "audio/webm;codecs=opus" : "audio/webm";
+    const rec = new MediaRecorder(stream, { mimeType: mime });
+    const chunks: BlobPart[] = [];
+    rec.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+    rec.onstop = () => {
+      stream.getTracks().forEach((track) => track.stop());
+      const blob = new Blob(chunks, { type: mime.split(";")[0]! });
+      setEnroll({ personId: person.id, phase: "sending", secondsLeft: 0 });
+      void api
+        .enrollVoice(person.id, blob)
+        .then(async () => {
+          notify(t("voiceEnrolled", { name: person.display_name }));
+          setPeople(await api.directory());
+        })
+        .catch(() => notify(t("voiceFailed"), "warn"))
+        .finally(() => setEnroll(null));
+    };
+    rec.start();
+    setEnroll({ personId: person.id, phase: "recording", secondsLeft: 8 });
+    let left = 8;
+    const tick = setInterval(() => {
+      left -= 1;
+      if (left <= 0) {
+        clearInterval(tick);
+        if (rec.state !== "inactive") rec.stop();
+      } else {
+        setEnroll((prev) =>
+          prev?.personId === person.id ? { ...prev, secondsLeft: left } : prev);
+      }
+    }, 1000);
+    enrollStop.stop = () => {
+      clearInterval(tick);
+      if (rec.state !== "inactive") rec.stop();
+    };
+  }
+
+  async function clearVoiceFor(person: Person): Promise<void> {
+    setBusy(true);
+    try {
+      await api.clearVoice(person.id);
+      setPeople(await api.directory());
+    } catch {
+      notify(t("voiceFailed"), "warn");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   const speakersEpoch = useRefreshEpoch("speakers");
   useEffect(() => {
@@ -160,6 +231,9 @@ export function SpeakersDirectory() {
                 <tr className="border-b border-border">
                   <th className="table-head px-4 py-3 text-start">{t("colName")}</th>
                   <th className="table-head px-4 py-3 text-start">{t("colTitle")}</th>
+                  {voiceReady ? (
+                    <th className="table-head px-4 py-3 text-start">{t("colVoice")}</th>
+                  ) : null}
                   {canManage ? (
                     <th className="table-head px-4 py-3 text-start">{t("colActions")}</th>
                   ) : null}
@@ -210,6 +284,52 @@ export function SpeakersDirectory() {
                         </span>
                       )}
                     </td>
+                    {voiceReady ? (
+                      <td className="px-4 py-2.5 text-xs">
+                        {enroll?.personId === person.id ? (
+                          enroll.phase === "recording" ? (
+                            <span className="flex items-center gap-2">
+                              <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-danger" aria-hidden />
+                              <span className="text-fg">{t("voiceRecording", { s: enroll.secondsLeft })}</span>
+                              <button
+                                type="button"
+                                className="text-fg-muted underline-offset-2 hover:text-fg hover:underline"
+                                onClick={() => enrollStop.stop?.()}
+                              >
+                                {t("voiceStop")}
+                              </button>
+                            </span>
+                          ) : (
+                            <span className="text-fg-muted">{t("voiceSending")}</span>
+                          )
+                        ) : person.voice_enrolled_at ? (
+                          <span className="flex items-center gap-2">
+                            <span className="chip bg-success/15 text-success">{t("voiceOn")}</span>
+                            {canManage ? (
+                              <button
+                                type="button"
+                                className="text-fg-muted underline-offset-2 hover:text-danger hover:underline"
+                                disabled={busy}
+                                onClick={() => void clearVoiceFor(person)}
+                              >
+                                {t("voiceRemove")}
+                              </button>
+                            ) : null}
+                          </span>
+                        ) : canManage ? (
+                          <button
+                            type="button"
+                            className="text-accent underline-offset-2 hover:underline"
+                            disabled={busy || enroll !== null}
+                            onClick={() => void startEnroll(person)}
+                          >
+                            {t("voiceEnroll")}
+                          </button>
+                        ) : (
+                          <span className="text-fg-subtle">—</span>
+                        )}
+                      </td>
+                    ) : null}
                     {canManage ? (
                       <td className="px-4 py-2.5">
                         <span className="flex items-center gap-3 text-xs">

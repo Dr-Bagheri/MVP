@@ -43,6 +43,7 @@ import { createAssistantAgent, listAssistantAgents, resolveAssistantAgent } from
 import { createConnectorsRepo, type ConnectorOAuthOptions, type ConnectorProvider } from "./connectors.ts";
 import { createTts } from "./tts.ts";
 import { createLiveStt } from "./live-stt.ts";
+import { createMlClient } from "../worker/ml-client.ts";
 import { createWorkflow, listWorkflows, resolveWorkflow } from "./workflows.ts";
 import type { DomainTool } from "../agent/tools.ts";
 import { agentToolsDb, type Db } from "../db/identity.ts";
@@ -69,6 +70,9 @@ export interface ServerOptions<TDeps> {
   storageServiceKey?: string | undefined;
   /** M32: only this verified email may claim the first platform-root record. */
   platformBootstrapEmail?: string | undefined;
+  /** M39 voice enrollment: where ml/'s /embed answers. Absent = enrollment
+   *  refuses with a named reason; nothing else cares. */
+  mlBaseUrl?: string | undefined;
   logger?: boolean;
 }
 
@@ -1235,6 +1239,58 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     const identity = await auth.requireAdmin(request);
     const { id } = request.params as { id: string };
     await directory.remove(identity, id);
+    return reply.code(204).send();
+  });
+
+  /**
+   * Voice enrollment (M39, db/0081): the clip's bytes arrive raw, go to
+   * ml/'s /embed, and only the VECTOR is stored — the platform keeps no
+   * enrollment audio (a voiceprint is one biometric; a clip is that plus a
+   * recording nobody promised to keep). Admin-walled like every directory
+   * edit; presence of a print = consent to be matched, deleting it is the
+   * withdrawal.
+   */
+  app.post("/v1/directory/:id/voice", async (request, reply) => {
+    const identity = await auth.requireAdmin(request);
+    const { id } = request.params as { id: string };
+    if (!options.mlBaseUrl) {
+      throw new ValidationError("voice enrollment is not configured on this deployment",
+        { code: "enrollment_unconfigured" });
+    }
+    const bytes = request.body as Buffer;
+    if (!Buffer.isBuffer(bytes) || bytes.length === 0) {
+      throw new ValidationError("send the enrollment clip as a raw audio body");
+    }
+    if (bytes.length > 8 * 1024 * 1024) {
+      throw new ValidationError("enrollment clip tops out at 8MB — ten seconds is plenty");
+    }
+    const ml = createMlClient({ baseUrl: options.mlBaseUrl, timeoutMs: 120_000 });
+    let embedded;
+    try {
+      embedded = await ml.embed({
+        audioBytes: bytes,
+        contentType: request.headers["content-type"] ?? "application/octet-stream",
+        jobRef: `enroll-${id}`,
+      });
+    } catch (cause) {
+      const err = cause as { errorType?: string; retryable?: boolean; message?: string };
+      // ml/'s own sentence when it spoke; a named nothing when it didn't
+      throw new ValidationError(
+        err.message ?? "the voice service did not answer",
+        { code: err.errorType ?? "embedding_failed" },
+      );
+    }
+    await directory.setVoiceprint(identity, id, {
+      vector: embedded.embedding,
+      model: embedded.model,
+    });
+    return reply.code(201).send({ enrolled: true, speech_ms: embedded.speech_ms });
+  });
+
+  app.delete("/v1/directory/:id/voice", async (request, reply) => {
+    const identity = await auth.requireAdmin(request);
+    const { id } = request.params as { id: string };
+    await directory.clearVoiceprint(identity, id);
     return reply.code(204).send();
   });
 

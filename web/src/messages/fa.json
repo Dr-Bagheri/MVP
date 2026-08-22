@@ -216,7 +216,17 @@
     "renamed": "ذخیره شد.",
     "personDeleted": "گویندهٔ «{name}» حذف شد.",
     "deleteFailed": "حذف انجام نشد.",
-    "deleteNotReady": "این قابلیت هنوز روی این استقرار فعال نیست."
+    "deleteNotReady": "این قابلیت هنوز روی این استقرار فعال نیست.",
+    "colVoice": "صدا",
+    "voiceEnroll": "ثبت صدا",
+    "voiceRecording": "در حال ضبط… {s} ثانیه",
+    "voiceStop": "پایان",
+    "voiceSending": "در حال ذخیره…",
+    "voiceOn": "ثبت شده",
+    "voiceRemove": "حذف صدا",
+    "voiceEnrolled": "صدای {name} ثبت شد — از این پس در جلسه‌ها به‌طور خودکار شناسایی می‌شود.",
+    "voiceFailed": "ثبت صدا انجام نشد — دوباره تلاش کنید.",
+    "voiceMicDenied": "دسترسی میکروفون داده نشد."
   },
   "titles": {
     "ceo": "مدیرعامل",

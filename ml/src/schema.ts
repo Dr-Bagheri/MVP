@@ -22,6 +22,32 @@ export const OptionsSchema = z
 
 export type Options = z.infer<typeof OptionsSchema>;
 
+/** POST /embed — one voice vector from audio (voice enrollment, 2026-08-22).
+ *  `ranges` (ms) picks one voice's speech out of a longer take; absent =
+ *  the whole file. Same source rules as /process: url or path, never both. */
+export const EmbedRequestSchema = z
+  .object({
+    audio_url: z.string().url().optional(),
+    audio_path: z.string().min(1).optional(),
+    ranges: z
+      .array(z.object({ start_ms: z.number().int().min(0), end_ms: z.number().int().min(1) }))
+      .max(200)
+      .optional(),
+    job_ref: z.string().max(200).optional(),
+  })
+  .refine((b) => Boolean(b.audio_url) !== Boolean(b.audio_path), {
+    message: "provide exactly one of audio_url or audio_path",
+  });
+
+export const EmbedResponseSchema = z.object({
+  embedding: z.array(z.number()).min(1),
+  dim: z.number().int().min(1),
+  model: z.string().min(1),
+  /** how much audio actually fed the vector — a caller deciding whether to
+      trust a match needs to know it came from 2s, not 60s */
+  speech_ms: z.number().int().min(0),
+});
+
 export const ProcessRequestSchema = z
   .object({
     audio_url: z.string().url().optional(),
@@ -150,6 +176,8 @@ export const HealthSchema = z
     vad: z.string(),
     /** True when the energy fallback is running instead of Silero. */
     vad_degraded: z.boolean(),
+    /** Can /embed answer here — the model is per-deployment (0081 lane). */
+    embedder: z.boolean(),
   })
   .strict();
 

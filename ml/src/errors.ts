@@ -13,6 +13,8 @@ export type ErrorType =
   | "stt_failed"
   | "stt_no_word_timestamps"
   | "diarization_failed"
+  | "embedding_unavailable"
+  | "embedding_failed"
   | "internal";
 
 const TABLE: Record<ErrorType, { http: number; retryable: boolean }> = {
@@ -26,6 +28,10 @@ const TABLE: Record<ErrorType, { http: number; retryable: boolean }> = {
   stt_failed: { http: 502, retryable: true },
   stt_no_word_timestamps: { http: 422, retryable: false },
   diarization_failed: { http: 500, retryable: true },
+  // the embedding model is a deployment artifact — absence can end with the
+  // next deploy, so a caller may retry; a compute failure is a real fault
+  embedding_unavailable: { http: 503, retryable: true },
+  embedding_failed: { http: 500, retryable: true },
   internal: { http: 500, retryable: true },
 };
 

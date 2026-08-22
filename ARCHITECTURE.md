@@ -1445,6 +1445,43 @@ Prove-at-acceptance: `core/scripts/live-stt-probe.mjs` streams a
 piper-generated Persian WAV through the real endpoint and requires
 non-empty finals (the platform speaks, the relay hears it back).
 
+## M39 — Voice enrollment and matching [user-directed 2026-08-22]
+
+A directory person may ENROLL a voice: a short clip → one embedding
+vector (ml/'s `POST /embed`, the diarizer's own 3D-Speaker ONNX exposed
+as a primitive — ml/ stays productless: audio in, vector out, meaning is
+core/'s). Only the VECTOR is stored (db/0081: `person.voiceprint` + its
+MODEL's name + provenance, whole-or-absent) — the platform keeps no
+enrollment audio. Enrollment/removal is admin-walled like every
+directory edit (`POST/DELETE /v1/directory/:id/voice`); the api relays
+bytes and stores what ml/ returns, never inventing either.
+
+**The consent line (amends M11's directory-privacy reading, same
+principle):** enrolling IS the deliberate act. The worker's
+`link_speakers` step now matches each UNLINKED call speaker against the
+org's enrolled prints (same-model only — vectors never compare across
+extractors; the model name rides every /embed response, so no shared
+constant can drift) and links a confident match with provenance
+(`linked_by` = the job's owner identity, undoable in the UI like any
+hand link). A person with no print is never matched, never named;
+nothing enrolls passively. Matching is BEST-EFFORT: any failure (ml
+down, old ml, storage hiccup) logs a named forfeit and the call
+proceeds exactly as pre-M39 (M21 — a name can be re-earned on the next
+call; a call stuck behind a matcher cannot).
+
+Decision rule, conservative on purpose (a wrong name on a transcript is
+worse than none): cosine ≥ 0.6 AND ≥ 0.1 ahead of the runner-up, per
+speaker from ≥3s of their clearest single-part speech (≤60s), thresholds
+code-defaulted. Rule-7 acceptance: `ml/test/smoke/embedding-live.ts` on
+the deployment box — same voice speaking DIFFERENT sentences must beat a
+different voice speaking the SAME sentence by a margin (the text axis as
+the control, so an extractor fingerprinting content instead of voice
+fails immediately). Recorded bound, the diarizer spike's own caveat:
+piper voices are synthetic — this proves plumbing and separation, not
+far-field/same-gender robustness; the first real enrollment is the real
+positive detection and thresholds stay strict until real voices
+calibrate them.
+
 ## Invariants (locked)
 
 1. The transcript is the source of truth; everything else derived + rebuildable.

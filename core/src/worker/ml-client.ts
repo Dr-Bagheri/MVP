@@ -139,6 +139,26 @@ export interface MlClientOptions {
 export interface MlClient {
   process(request: MlProcessRequest): Promise<MlProcessResult>;
   health(): Promise<{ ok: boolean; lanes: Record<string, string> }>;
+  /** One voice vector (0081): whole file, or `ranges` (ms, file-relative)
+   *  picking one voice's speech out of a longer take. Bytes mode carries an
+   *  enrollment clip; url mode is the worker matching a call speaker. */
+  embed(request: MlEmbedRequest): Promise<MlEmbedResult>;
+}
+
+export interface MlEmbedRequest {
+  audioUrl?: string;
+  audioBytes?: Buffer;
+  contentType?: string;
+  ranges?: { start_ms: number; end_ms: number }[];
+  jobRef?: string;
+}
+
+export interface MlEmbedResult {
+  embedding: number[];
+  dim: number;
+  /** the extractor's name — vectors compare only within one model's space */
+  model: string;
+  speech_ms: number;
 }
 
 export function createMlClient({
@@ -214,8 +234,71 @@ export function createMlClient({
     }
   }
 
+  async function embed(request: MlEmbedRequest): Promise<MlEmbedResult> {
+    const controller = new AbortController();
+    // embedding a minute of audio is seconds of work — a tighter clock than
+    // /process's, so a wedged extractor surfaces fast
+    const timer = setTimeout(() => controller.abort(), Math.min(timeoutMs, 120_000));
+    let response: Response;
+    try {
+      if (request.audioBytes) {
+        const form = new FormData();
+        form.append(
+          "audio",
+          new Blob([new Uint8Array(request.audioBytes)], {
+            type: request.contentType ?? "application/octet-stream",
+          }),
+          "clip.bin",
+        );
+        if (request.jobRef) form.append("job_ref", request.jobRef);
+        response = await fetchImpl(`${root}/embed`, {
+          method: "POST", body: form, signal: controller.signal,
+        });
+      } else {
+        response = await fetchImpl(`${root}/embed`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            audio_url: request.audioUrl,
+            ...(request.ranges?.length ? { ranges: request.ranges } : {}),
+            ...(request.jobRef ? { job_ref: request.jobRef } : {}),
+          }),
+          signal: controller.signal,
+        });
+      }
+    } catch {
+      const aborted = controller.signal.aborted;
+      throw new MlRequestError(
+        aborted ? "ml_timeout" : "ml_unreachable",
+        aborted ? "ml/ did not answer the embed in time" : "ml/ is unreachable",
+        true,
+      );
+    } finally {
+      clearTimeout(timer);
+    }
+    const text = await response.text();
+    if (!response.ok) {
+      let errorType = "ml_http_error";
+      let retryable = response.status >= 500;
+      let message = `ml/ returned HTTP ${response.status}`;
+      try {
+        const parsed = JSON.parse(text) as { error_type?: string; retryable?: boolean; message?: string };
+        if (parsed.error_type) errorType = parsed.error_type;
+        if (typeof parsed.retryable === "boolean") retryable = parsed.retryable;
+        if (parsed.message) message = parsed.message;
+      } catch { /* a proxy or a crash, not ml/ speaking */ }
+      throw new MlRequestError(errorType, message, retryable, response.status);
+    }
+    try {
+      return JSON.parse(text) as MlEmbedResult;
+    } catch {
+      throw new MlRequestError("ml_bad_response", "ml/ returned a non-JSON embed body", true, response.status);
+    }
+  }
+
   return {
     process: post,
+    embed,
 
     async health() {
       const response = await fetchImpl(`${root}/health`);

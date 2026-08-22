@@ -404,6 +404,9 @@ export interface Person {
   /** Closed vocabulary code ('' = not chosen); the UI localizes it. */
   title: string;
   app_user_id: string | null;
+  /** Voice enrollment (M39/db-0081): WHEN, never the vector. ABSENT before
+   *  the migration; null = not enrolled. */
+  voice_enrolled_at?: string | null;
 }
 
 export interface Speaker {

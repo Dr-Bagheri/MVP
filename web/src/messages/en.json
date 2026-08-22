@@ -216,7 +216,17 @@
     "renamed": "Saved.",
     "personDeleted": "Person “{name}” was deleted.",
     "deleteFailed": "The delete did not go through.",
-    "deleteNotReady": "This isn't available on this deployment yet."
+    "deleteNotReady": "This isn't available on this deployment yet.",
+    "colVoice": "Voice",
+    "voiceEnroll": "Enroll voice",
+    "voiceRecording": "Recording… {s}s",
+    "voiceStop": "Stop",
+    "voiceSending": "Saving…",
+    "voiceOn": "Enrolled",
+    "voiceRemove": "Remove voice",
+    "voiceEnrolled": "{name}'s voice is enrolled — they will be recognized automatically in meetings.",
+    "voiceFailed": "Voice enrollment did not go through — try again.",
+    "voiceMicDenied": "Microphone access was not granted."
   },
   "titles": {
     "ceo": "CEO",

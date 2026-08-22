@@ -1,5 +1,6 @@
-// The whole HTTP surface: POST /process and GET /health (CONTRACT.md §1).
-// Nothing else is exposed, because nothing else is anyone's business.
+// The whole HTTP surface: POST /process, POST /embed and GET /health
+// (CONTRACT.md §1). Nothing else is exposed, because nothing else is
+// anyone's business.
 
 import { createWriteStream } from "node:fs";
 import { pipeline as streamPipeline } from "node:stream/promises";
@@ -12,8 +13,11 @@ import { hostOnly, jobLogger, logger } from "./log.js";
 import { ffmpegAvailable, ffmpegVersionString } from "./audio/ffmpeg.js";
 import { assertLocalPathAllowed, fetchToFile, makeWorkspace } from "./audio/source.js";
 import { diarizerName } from "./diarize/index.js";
+import { embedSamples, embedderAvailable, sliceRanges } from "./embed/extractor.js";
+import { toMono16k } from "./audio/ffmpeg.js";
+import { readWav } from "./audio/wav.js";
 import { ML_VERSION, runJob } from "./pipeline.js";
-import { HealthSchema, OptionsSchema, ProcessRequestSchema, ProcessResponseSchema } from "./schema.js";
+import { EmbedRequestSchema, EmbedResponseSchema, HealthSchema, OptionsSchema, ProcessRequestSchema, ProcessResponseSchema } from "./schema.js";
 import { laneStatus } from "./stt/registry.js";
 import { vadEngine } from "./vad/index.js";
 
@@ -59,6 +63,9 @@ export async function buildServer() {
       // The fallback is a legitimate configuration, not a failure — so this is
       // reported rather than refused (M21: what is forfeited is said out loud).
       vad_degraded: vad === "energy-rms",
+      // resolves the SPECIFIC callable /embed depends on (rule 7): the model
+      // file AND the binding class, not "the module imported"
+      embedder: await embedderAvailable(),
     });
   });
 
@@ -105,6 +112,75 @@ export async function buildServer() {
     } catch (e) {
       const err = toMlError(e);
       jobLogger(jobRef).warn({ error_type: err.type, retryable: err.retryable }, "job failed");
+      return reply.code(err.http).send(err.body(jobRef));
+    } finally {
+      await ws.cleanup();
+    }
+  });
+
+  /**
+   * POST /embed — one voice vector (voice enrollment, 2026-08-22).
+   *
+   * Multipart (one `audio` file — the enrollment clip) or JSON with
+   * audio_url/audio_path + optional ms `ranges` picking one voice's speech
+   * out of a longer take (how a call speaker gets its signature). The
+   * vector means nothing to this service; what it names is core/'s
+   * business. Health reports the capability so a deployment without the
+   * model degrades ONE endpoint, said out loud, never startup.
+   */
+  app.post("/embed", async (req, reply) => {
+    const ws = await makeWorkspace();
+    let jobRef: string | undefined;
+    try {
+      const input = path.join(ws.dir, "input.bin");
+      let ranges: { start_ms: number; end_ms: number }[] = [];
+      if (req.isMultipart()) {
+        const parsed = await consumeMultipart(req, input);
+        jobRef = parsed.jobRef;
+      } else {
+        const body = EmbedRequestSchema.parse(req.body);
+        jobRef = body.job_ref;
+        ranges = body.ranges ?? [];
+        if (body.audio_url) {
+          const bytes = await fetchToFile(body.audio_url, input);
+          jobLogger(jobRef).info(
+            { step: "fetch", host: hostOnly(body.audio_url), bytes },
+            "audio downloaded",
+          );
+        } else {
+          await assertLocalPathAllowed(body.audio_path!);
+          const { createReadStream } = await import("node:fs");
+          await streamPipeline(createReadStream(body.audio_path!), createWriteStream(input));
+        }
+      }
+      const log = jobLogger(jobRef);
+      const wav = path.join(ws.dir, "mono16k.wav");
+      await toMono16k(input, wav);
+      const pcm = await readWav(wav);
+      const sliced = sliceRanges(pcm.samples, pcm.sampleRate, ranges);
+      const speechMs = Math.round((sliced.length / pcm.sampleRate) * 1000);
+      if (speechMs < 1500) {
+        // a vector from under ~1.5s of audio matches everyone a little and
+        // nobody well — refusing beats storing a signature that lies
+        throw new MlError("bad_request", `too little audio for a voice signature (${speechMs}ms < 1500ms)`);
+      }
+      // cap what feeds the model — a signature saturates long before this
+      const MAX_EMBED_S = 120;
+      const capped = sliced.length > pcm.sampleRate * MAX_EMBED_S
+        ? sliced.subarray(0, pcm.sampleRate * MAX_EMBED_S)
+        : sliced;
+      const started = Date.now();
+      const embedding = await embedSamples(capped, pcm.sampleRate);
+      log.info({ ms: Date.now() - started, dim: embedding.dim, speech_ms: speechMs }, "embedding done");
+      return EmbedResponseSchema.parse({
+        embedding: embedding.vector,
+        dim: embedding.dim,
+        model: embedding.model,
+        speech_ms: speechMs,
+      });
+    } catch (e) {
+      const err = toMlError(e);
+      jobLogger(jobRef).warn({ error_type: err.type, retryable: err.retryable }, "embed failed");
       return reply.code(err.http).send(err.body(jobRef));
     } finally {
       await ws.cleanup();

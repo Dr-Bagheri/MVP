@@ -1000,6 +1000,21 @@ export const api = {
     await bff(`/api/directory/${id}`, { method: "DELETE" });
   },
 
+  /**
+   * Voice enrollment (M39): the clip's bytes travel raw; the platform
+   * stores only the VECTOR. Admin/owner — the directory-edit wall.
+   */
+  async enrollVoice(personId: string, clip: Blob): Promise<{ enrolled: boolean; speech_ms: number }> {
+    return bff<{ enrolled: boolean; speech_ms: number }>(
+      `/api/directory/${personId}/voice`,
+      { method: "POST", headers: { "content-type": clip.type || "application/octet-stream" }, body: clip },
+    );
+  },
+
+  async clearVoice(personId: string): Promise<void> {
+    await bff(`/api/directory/${personId}/voice`, { method: "DELETE" });
+  },
+
   // ---- summaries --------------------------------------------------------------
   /**
    * **LIVE** — `GET /api/calls/{id}/summaries`, newest first.
