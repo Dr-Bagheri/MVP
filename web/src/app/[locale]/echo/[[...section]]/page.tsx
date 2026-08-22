@@ -95,7 +95,7 @@ export default function EchoPage({
         />
       }
     >
-      <PageContainer width={slug === "records" || slug === "archive" ? "wide" : "default"}>
+      <PageContainer width={slug === "records" || slug === "archive" || slug === "new-meeting" ? "wide" : "default"}>
         <PageHeader title={tEcho(`section.${slug}`)} subtitle={tEcho(`desc.${slug}`)} />
         {slug === "new-meeting" ? (
           <NewMeetingSection

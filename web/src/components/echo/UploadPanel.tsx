@@ -90,7 +90,7 @@ export function UploadPanel({ onFinished }: { onFinished?: () => void }) {
   }
 
   return (
-    <Card className="max-w-2xl">
+    <Card>
       {phase === "idle" || phase === "checking" ? (
         <>
           <div

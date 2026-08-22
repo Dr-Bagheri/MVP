@@ -593,14 +593,14 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
 
   if (resumeTarget === "loading") {
     return (
-      <Card className="max-w-2xl">
+      <Card>
         <p className="text-sm text-fg-muted">{t("resumeLoading")}</p>
       </Card>
     );
   }
   if (resumeTarget === "gone") {
     return (
-      <Card className="max-w-2xl">
+      <Card>
         <p className="text-sm text-fg-muted">{t("resumeGone")}</p>
         <Link href="/echo/records" className="btn-secondary mt-4 inline-flex px-4">
           {t("resumeBackToCalls")}
@@ -610,7 +610,7 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
   }
 
   return (
-    <Card className="max-w-2xl">
+    <Card>
       {phase === "idle" || phase === "starting" ? (
         <>
           {resuming ? (
