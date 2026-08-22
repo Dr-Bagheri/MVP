@@ -950,6 +950,10 @@ export const api = {
       body: JSON.stringify(patch),
     });
   },
+  /** admin/owner-only true delete (db/0076); 409 not_migrated pre-0076 */
+  async deletePerson(id: string): Promise<void> {
+    await bff(`/api/directory/${id}`, { method: "DELETE" });
+  },
 
   // ---- summaries --------------------------------------------------------------
   /**

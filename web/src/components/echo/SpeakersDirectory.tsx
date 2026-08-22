@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import { notify } from "@/lib/notify";
 import { useRefreshEpoch } from "@/lib/refreshBus";
-import type { Person } from "@/api/types";
+import type { Me, Person } from "@/api/types";
 import { Card, EmptyState } from "@/components/ui";
 
 /**
@@ -30,11 +30,59 @@ export function SpeakersDirectory() {
   const [name, setName] = useState("");
   const [title, setTitle] = useState("");
   const [busy, setBusy] = useState(false);
+  /** role wall (user ruling, 2026-08-22): members ADD and SEE; edit,
+      retitle and delete are the admins' and the owner's. The real wall is
+      the server's (requireAdmin + db/0076's definer door) — hiding the
+      controls here just keeps the screen honest about it. */
+  const [me, setMe] = useState<Me | null>(null);
+  const canManage = me?.role === "admin" || me?.role === "owner";
+  /** inline rename: which row is being edited, and the draft name */
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  /** two-click delete, the records-table pattern */
+  const [confirmId, setConfirmId] = useState<string | null>(null);
 
   const speakersEpoch = useRefreshEpoch("speakers");
   useEffect(() => {
     void api.directory().then(setPeople).catch(() => setPeople([]));
   }, [speakersEpoch]);
+
+  useEffect(() => {
+    void api.me().then(setMe).catch(() => undefined);
+  }, []);
+
+  async function renameFor(person: Person): Promise<void> {
+    const next = editName.trim();
+    setEditingId(null);
+    if (!next || next === person.display_name || busy) return;
+    setBusy(true);
+    try {
+      await api.updatePerson(person.id, { display_name: next });
+      notify(t("renamed"));
+      setPeople(await api.directory());
+    } catch {
+      notify(t("addFailed"), "warn");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteFor(person: Person): Promise<void> {
+    if (busy) return;
+    setConfirmId(null);
+    setBusy(true);
+    try {
+      await api.deletePerson(person.id);
+      notify(t("personDeleted", { name: person.display_name }));
+      setPeople(await api.directory());
+    } catch (cause) {
+      const { status, detail } = cause as { status?: number; detail?: string };
+      const notMigrated = status === 409 || detail === "not_migrated";
+      notify(notMigrated ? t("deleteNotReady") : t("deleteFailed"), "warn");
+    } finally {
+      setBusy(false);
+    }
+  }
 
 
   async function add(): Promise<void> {
@@ -112,29 +160,84 @@ export function SpeakersDirectory() {
                 <tr className="border-b border-border">
                   <th className="table-head px-4 py-3 text-start">{t("colName")}</th>
                   <th className="table-head px-4 py-3 text-start">{t("colTitle")}</th>
+                  {canManage ? (
+                    <th className="table-head px-4 py-3 text-start">{t("colActions")}</th>
+                  ) : null}
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {people.map((person) => (
                   <tr key={person.id} className="transition-colors hover:bg-surface-2">
-                    <td className="px-4 py-2.5 font-medium text-fg">{person.display_name}</td>
-                    <td className="px-4 py-2.5">
-                      {/* the title is editable IN PLACE — a directory you
-                          must leave to correct stops being corrected */}
-                      <select
-                        className="input h-9 min-h-0 w-44 py-0 text-xs"
-                        value={person.title}
-                        disabled={busy}
-                        onChange={(e) => void retitle(person, e.target.value)}
-                      >
-                        <option value="">{t("noTitle")}</option>
-                        {TITLE_CODES.map((code) => (
-                          <option key={code} value={code}>
-                            {tTitles(code)}
-                          </option>
-                        ))}
-                      </select>
+                    <td className="px-4 py-2.5 font-medium text-fg">
+                      {editingId === person.id ? (
+                        <input
+                          className="input h-9 min-h-0 w-48 py-0 text-sm"
+                          value={editName}
+                          autoFocus
+                          disabled={busy}
+                          onChange={(e) => setEditName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") void renameFor(person);
+                            if (e.key === "Escape") setEditingId(null);
+                          }}
+                          onBlur={() => void renameFor(person)}
+                        />
+                      ) : (
+                        person.display_name
+                      )}
                     </td>
+                    <td className="px-4 py-2.5">
+                      {canManage ? (
+                        /* the title is editable IN PLACE — a directory you
+                            must leave to correct stops being corrected */
+                        <select
+                          className="input h-9 min-h-0 w-44 py-0 text-xs"
+                          value={person.title}
+                          disabled={busy}
+                          onChange={(e) => void retitle(person, e.target.value)}
+                        >
+                          <option value="">{t("noTitle")}</option>
+                          {TITLE_CODES.map((code) => (
+                            <option key={code} value={code}>
+                              {tTitles(code)}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        /* members SEE, never edit (user ruling, 2026-08-22) */
+                        <span className="text-fg-muted">
+                          {person.title ? tTitles(person.title) : t("noTitle")}
+                        </span>
+                      )}
+                    </td>
+                    {canManage ? (
+                      <td className="px-4 py-2.5">
+                        <span className="flex items-center gap-3 text-xs">
+                          <button
+                            type="button"
+                            className="text-fg-muted underline-offset-2 hover:text-fg hover:underline"
+                            disabled={busy}
+                            onClick={() => {
+                              setEditingId(person.id);
+                              setEditName(person.display_name);
+                            }}
+                          >
+                            {t("edit")}
+                          </button>
+                          <button
+                            type="button"
+                            className="text-danger/80 underline-offset-2 hover:text-danger hover:underline"
+                            disabled={busy}
+                            onClick={() => {
+                              if (confirmId === person.id) void deleteFor(person);
+                              else setConfirmId(person.id);
+                            }}
+                          >
+                            {confirmId === person.id ? t("confirmDelete") : t("delete")}
+                          </button>
+                        </span>
+                      </td>
+                    ) : null}
                   </tr>
                 ))}
               </tbody>

@@ -205,7 +205,15 @@
     "empty": "Nobody yet — add a name and a title above.",
     "colName": "Name",
     "colTitle": "Title",
-    "noTitle": "No title"
+    "noTitle": "No title",
+    "colActions": "Actions",
+    "edit": "Edit",
+    "delete": "Delete",
+    "confirmDelete": "Sure?",
+    "renamed": "Saved.",
+    "personDeleted": "Person “{name}” was deleted.",
+    "deleteFailed": "The delete did not go through.",
+    "deleteNotReady": "This isn't available on this deployment yet."
   },
   "titles": {
     "ceo": "CEO",

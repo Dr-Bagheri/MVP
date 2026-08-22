@@ -90,3 +90,27 @@ describe("speaker attribution", () => {
     ).rejects.toThrow(/no such speaker/);
   });
 });
+
+describe("remove — db/0076's named door, mapped honestly", () => {
+  const PERSON = "31111111-2222-4333-8444-555555555555";
+  const throwing = (code: string) => fakeDb(() => { throw Object.assign(new Error("x"), { code }); });
+
+  it("calls the DOOR, never a bare DELETE", async () => {
+    const { db, log } = fakeDb(() => []);
+    await createDirectoryRepo(db).remove(WHO, PERSON);
+    expect(log[0]!.sql).toContain("echo.delete_person");
+    expect(log[0]!.sql).not.toMatch(/deletes+from/i);
+  });
+
+  it("42883 (door absent — db/0076 not run) is a NAMEABLE not_migrated, not a crash", async () => {
+    await expect(createDirectoryRepo(throwing("42883").db).remove(WHO, PERSON))
+      .rejects.toThrow(/not_migrated/);
+  });
+
+  it("42501 (the SQL role wall) surfaces as not-permitted; P0002 as no-such-person", async () => {
+    await expect(createDirectoryRepo(throwing("42501").db).remove(WHO, PERSON))
+      .rejects.toThrow(/not permitted/);
+    await expect(createDirectoryRepo(throwing("P0002").db).remove(WHO, PERSON))
+      .rejects.toThrow(/no such person/);
+  });
+});

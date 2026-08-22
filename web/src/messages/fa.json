@@ -205,7 +205,15 @@
     "empty": "هنوز کسی ثبت نشده است — نام و سمت را بالا اضافه کنید.",
     "colName": "نام",
     "colTitle": "سمت",
-    "noTitle": "بدون سمت"
+    "noTitle": "بدون سمت",
+    "colActions": "عملیات",
+    "edit": "ویرایش",
+    "delete": "حذف",
+    "confirmDelete": "مطمئنید؟",
+    "renamed": "ذخیره شد.",
+    "personDeleted": "گویندهٔ «{name}» حذف شد.",
+    "deleteFailed": "حذف انجام نشد.",
+    "deleteNotReady": "این قابلیت هنوز روی این استقرار فعال نیست."
   },
   "titles": {
     "ceo": "مدیرعامل",

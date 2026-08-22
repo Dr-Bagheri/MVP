@@ -11,7 +11,7 @@
  *  - linking stamps linked_by/linked_at (who attributed the voice is part
  *    of the record — attribution is a claim about a PERSON).
  */
-import { ConflictError, NotFoundError, ValidationError } from "./errors.ts";
+import { ConflictError, NotActivatedError, NotFoundError, ValidationError } from "./errors.ts";
 import { assertUuid, type Db, type SqlTx } from "../db/identity.ts";
 import type { Identity } from "../agent/types.ts";
 
@@ -106,6 +106,30 @@ export function createDirectoryRepo(db: Db) {
       );
       if (!rows[0]) throw new NotFoundError("no such person");
       return toPerson(rows[0]);
+    },
+
+    /**
+     * True delete of a directory person, through db/0076's NAMED DOOR —
+     * the role wall (admin/owner) lives in the FUNCTION, below every api
+     * route (the D27 altitude rule). Linked speakers are unlinked by the
+     * door itself; the speaker rows and transcripts survive.
+     */
+    async remove(identity: Identity, personId: string): Promise<void> {
+      const id = assertUuid(personId, "person id");
+      try {
+        await db.withIdentity(identity, (tx: SqlTx) =>
+          tx.unsafe(`select echo.delete_person($1)`, [id]));
+      } catch (cause) {
+        const code = (cause as { code?: string }).code;
+        if (code === "42883") {
+          // the door does not exist yet — db/0076 has not run here. A
+          // nameable nothing (the autonomy precedent), never a crash.
+          throw new ConflictError("not_migrated");
+        }
+        if (code === "42501") throw new NotActivatedError("not permitted");
+        if (code === "P0002") throw new NotFoundError("no such person");
+        throw cause;
+      }
     },
 
     /**

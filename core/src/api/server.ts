@@ -1137,14 +1137,28 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     }));
   });
 
+  /*
+   * Editing/deleting directory people is ADMIN work (user ruling,
+   * 2026-08-22: members add and see; admins and the owner edit and
+   * delete). The edit gate lives here (requireAdmin — the same wall every
+   * management route uses); the DELETE's wall additionally lives in
+   * db/0076's definer function, below any route.
+   */
   app.patch("/v1/directory/:id", async (request, reply) => {
-    const identity = await auth.requireActive(request);
+    const identity = await auth.requireAdmin(request);
     const { id } = request.params as { id: string };
     const body = (request.body ?? {}) as { display_name?: unknown; title?: unknown };
     return reply.send(await directory.update(identity, id, {
       displayName: typeof body.display_name === "string" ? body.display_name : undefined,
       title: typeof body.title === "string" ? body.title : undefined,
     }));
+  });
+
+  app.delete("/v1/directory/:id", async (request, reply) => {
+    const identity = await auth.requireAdmin(request);
+    const { id } = request.params as { id: string };
+    await directory.remove(identity, id);
+    return reply.code(204).send();
   });
 
   app.patch("/v1/calls/:id/speakers/:speakerId", async (request, reply) => {
