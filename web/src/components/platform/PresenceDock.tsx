@@ -1080,13 +1080,16 @@ export function PresenceDock() {
       ) : null}
 
       {/* the toasts — every platform notice pops from the orb's head */}
+      {/* every platform notice pops FROM THE BELL's corner (user directive,
+          2026-08-22 — superseding pop-from-the-orb: the orb moved to the
+          bar's centre and the bell is where notifications live) */}
       {toasts.length > 0 ? (
-        <div className={`pointer-events-none fixed z-50 flex w-[min(88vw,20rem)] flex-col gap-1.5 ${surfacePosition} ${anchoredToTopbar ? "items-center" : "items-end"}`}>
+        <div className="pointer-events-none fixed end-4 top-16 z-50 flex w-[min(88vw,20rem)] flex-col items-end gap-1.5 md:end-6">
           {toasts.map((notice) => (
             <p
               key={notice.id}
               role="status"
-              className={`toast-from-orb rounded-xl border px-3 py-1.5 text-xs shadow-lg ${
+              className={`toast-from-bell rounded-xl border px-3 py-1.5 text-xs shadow-lg ${
                 notice.kind === "warn"
                   ? "border-warning/40 bg-surface text-warning"
                   : "border-border bg-surface text-fg"
