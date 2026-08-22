@@ -1076,13 +1076,9 @@ export function PresenceDock() {
         </div>
       ) : null}
 
-      {/* ONE turn-state chip, and only while the panel is not showing its
-          own header status — the old pair overlapped the composer */}
-      {voiceStatus && (!open || minimized) ? (
-        <p className={`pointer-events-none fixed z-50 rounded-xl border border-accent/40 bg-surface px-3 py-1.5 text-xs text-accent shadow-lg ${surfacePosition}`}>
-          {voiceStatus}
-        </p>
-      ) : null}
+      {/* NO floating turn-state chip (user directive, 2026-08-22: "there is
+          a notif still, remove it") — the orb's own animation states carry
+          listening/speaking, and the panel header shows the word when open. */}
 
       {/* Portal the complete control—not only its canvas—so accessibility,
           unread state and interaction have one owner. Routes without the
