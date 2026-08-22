@@ -33,10 +33,12 @@ const SENTENCE_A = "جلسهٔ امروز دربارهٔ بودجهٔ سال آ�
 const SENTENCE_B = "لطفاً گزارش فروش ماه گذشته را تا پنج‌شنبه برای من ارسال کنید.";
 
 async function synth(model: string, text: string, out: string): Promise<void> {
-  // piper reads its text from stdin; the shell pipe is the reliable feed
+  // piper reads its text from stdin; the shell pipe is the reliable feed.
+  // The short flags (-m/-f) are the ones both the C++ binary and the
+  // python CLI accept — the long spellings differ between them.
   const piper = process.env.PIPER_BIN ?? path.join(PIPER_DIR, "piper", "piper");
   await run("bash", ["-c",
-    `printf %s ${JSON.stringify(text)} | ${piper} --model ${model} --output_file ${out}`]);
+    `printf %s ${JSON.stringify(text)} | ${piper} -m ${model} -f ${out}`]);
 }
 
 async function embed(file: string): Promise<number[]> {

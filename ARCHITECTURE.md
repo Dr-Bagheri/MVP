@@ -1482,6 +1482,13 @@ far-field/same-gender robustness; the first real enrollment is the real
 positive detection and thresholds stay strict until real voices
 calibrate them.
 
+**Acceptance RUN 2026-08-22 on neurai-core-1 (live extractor,
+embedding.onnx, dim 512; piper amir vs ganji, ~4-5s per sample):**
+same-voice/diff-text **0.780**; cross-voice/same-text **0.109** (the
+control); cross-voice/diff-text 0.217 — the 0.6/0.1 rule sits between
+the clusters with margin on both sides. Conditions attached per the
+live-lane standard; re-run at release gates.
+
 ## Invariants (locked)
 
 1. The transcript is the source of truth; everything else derived + rebuildable.
