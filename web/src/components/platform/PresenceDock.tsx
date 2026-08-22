@@ -782,9 +782,11 @@ export function PresenceDock() {
           break;
         }
         const result = await executeClientTool(event.tool, event.args, { push: router.push });
-        // the surface action announces itself at the orb's head — "it
-        // started doing it" must be visible, not inferred
-        notify(event.label, result.ok ? "info" : "warn");
+        // NO toast for the assistant's own actions (user directive,
+        // 2026-08-22, reversing the 08-21 announcement): the conversation
+        // already shows the tool chip and the model narrates the outcome —
+        // a popup on top was the same fact a third time. Toasts remain for
+        // everything ELSE on the platform (saves, failures, table actions).
         // starting/resuming a recording SHUTS the voice for this reply —
         // and cuts anything already being said (user rule, 2026-08-21)
         if (result.ok && (event.tool === "start_recording" || event.tool === "resume_recording")) {
