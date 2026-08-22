@@ -518,6 +518,28 @@ export const api = {
     const suffix = params.size ? `?${params}` : "";
     return bff<PlatformPage<PlatformUser>>(`/api/platform/users${suffix}`);
   },
+  /** The OAuth allow-list (db/0082) — who may enter via Google/GitHub. */
+  async platformOauthAllowlist(): Promise<{ entries: { email: string; note: string; added_at: string }[] }> {
+    return bff<{ entries: { email: string; note: string; added_at: string }[] }>(
+      "/api/platform/oauth-allowlist");
+  },
+
+  async platformOauthAllow(email: string, note: string, reason: string): Promise<void> {
+    await bff("/api/platform/oauth-allowlist", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email, note, reason }),
+    });
+  },
+
+  async platformOauthDisallow(email: string, reason: string): Promise<void> {
+    await bff("/api/platform/oauth-allowlist", {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email, reason }),
+    });
+  },
+
   async platformAudit(query: { offset?: number; limit?: number } = {})
     : Promise<PlatformPage<PlatformAuditEntry>> {
     const params = new URLSearchParams();

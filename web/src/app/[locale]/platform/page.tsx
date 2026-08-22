@@ -19,7 +19,7 @@ import type {
 } from "@/api/types";
 
 type AccessState = "checking" | "claim" | "root" | "denied";
-type Tab = "organizations" | "users" | "audit";
+type Tab = "organizations" | "users" | "audit" | "oauth";
 type OrgFilter = "all" | "active" | "suspended";
 type UserFilter = "all" | "active" | "pending" | "disabled";
 
@@ -77,6 +77,8 @@ const PAGE = 50;
  * reach a call, transcript, conversation, key, or connector; that wall is RLS,
  * not this UI.
  */
+import { OauthAllowlist } from "@/components/platform/OauthAllowlist";
+
 export default function PlatformControlPage() {
   const t = useTranslations("platformRoot");
   const locale = useLocale();
@@ -440,7 +442,7 @@ export default function PlatformControlPage() {
 
         {/* tabs */}
         <nav className="mt-6 flex gap-1 border-b border-border" role="tablist" aria-label={t("title")}>
-          {(["organizations", "users", "audit"] as const).map((key) => (
+          {(["organizations", "users", "audit", "oauth"] as const).map((key) => (
             <button
               key={key}
               role="tab"
@@ -453,7 +455,7 @@ export default function PlatformControlPage() {
               onClick={() => setTab(key)}
             >
               {t(key)}
-              {key !== "audit" ? (
+              {key !== "audit" && key !== "oauth" ? (
                 <span className="ms-2 rounded-full bg-surface-2 px-1.5 text-xs text-fg-muted">
                   {key === "organizations" ? overview.organizations.total : overview.users.total}
                 </span>
@@ -832,6 +834,9 @@ export default function PlatformControlPage() {
             ) : null}
           </section>
         ) : null}
+
+        {/* OAUTH ALLOW-LIST (db/0082): who may enter via Google/GitHub */}
+        {tab === "oauth" ? <OauthAllowlist /> : null}
       </main>
 
       {pending ? (

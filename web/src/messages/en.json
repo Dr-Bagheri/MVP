@@ -58,7 +58,8 @@
     "suspendedBody": "This is not about your account, and an organization admin cannot lift it. Contact NeurAI support to restore access.",
     "suspendedContact": "Contact NeurAI support",
     "resetReady": "Your password is set. Sign in with it now.",
-    "oauthDisabled": "This sign-in method has been turned off by an admin — sign in with email."
+    "oauthDisabled": "This sign-in method has been turned off by an admin — sign in with email.",
+    "oauthNotListed": "This account is not allowed in — your email is not on the platform's allow-list. Ask the platform owner to add you."
   },
   "calls": {
     "title": "Records",
@@ -726,7 +727,15 @@
     "action_org_deleted": "Organization deleted",
     "action_org_restored": "Organization restored",
     "action_user_deleted": "User deleted",
-    "action_user_restored": "User restored"
+    "action_user_restored": "User restored",
+    "oauth": "Google/GitHub access",
+    "oauthIntro": "Only the emails on this list can enter the platform with Google or GitHub. Email + password sign-in is independent of this list.",
+    "oauthAdd": "Allow an email",
+    "oauthNote": "Note (optional)",
+    "oauthAllow": "Allow",
+    "oauthEmpty": "The list is empty — until an email is added, Google/GitHub entry is closed to everyone.",
+    "oauthRemove": "Remove",
+    "oauthRemoveConfirm": "Remove from list"
   },
   "workflows": {
     "title": "Workflows",

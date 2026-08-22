@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { exchangeOAuthCode } from "@/server/supabase";
-import { writeSession } from "@/server/session";
+import { clearSession, writeSession } from "@/server/session";
+import { CORE_URL } from "@/server/core";
 
 /**
  * The OAuth return address. The provider round-trip lands here with an
@@ -36,6 +37,30 @@ export async function GET(request: Request) {
 
   try {
     const tokens = await exchangeOAuthCode(code, verifier);
+    /*
+     * THE ALLOW-LIST GATE (db/0082, user directive 2026-08-22): an OAuth
+     * arrival enters only if the platform root listed their email. Asked
+     * BEFORE the session is kept — "it checks and tells you if you can or
+     * can not go in first". core verifies the token itself (the signup
+     * posture) and answers one bit; a refusal drops the just-minted
+     * session and says exactly why. If core is UNREACHABLE the arrival
+     * fails closed for OAuth (unlike the sign-in page's button list,
+     * which falls open — offering a button is cosmetic, admitting a
+     * person is not).
+     */
+    try {
+      const gate = await fetch(`${CORE_URL}/v1/oauth-gate`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${tokens.access_token}` },
+        cache: "no-store",
+      });
+      const verdict = (await gate.json()) as { allowed?: boolean };
+      if (!gate.ok || verdict.allowed !== true) {
+        return to("oauth=notlisted");
+      }
+    } catch {
+      return to("oauth=failed");
+    }
     await writeSession({
       accessToken: tokens.access_token,
       refreshToken: tokens.refresh_token,
@@ -44,6 +69,7 @@ export async function GET(request: Request) {
     return to("oauth=ok");
   } catch {
     // expired code, replayed code, provider mismatch — all one honest answer
+    await clearSession().catch(() => undefined);
     return to("oauth=failed");
   }
 }

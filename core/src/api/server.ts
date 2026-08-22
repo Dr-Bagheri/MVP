@@ -978,6 +978,36 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
    * carries only what the token cannot know: what to call them, and whether
    * they are starting an org or joining one.
    */
+  /**
+   * The OAuth GATE (db/0082, user directive 2026-08-22): a Google/GitHub
+   * arrival may ENTER only if their verified email is on the platform
+   * root's allow-list. verifiedClaims — the signup posture: the token's
+   * signature is the wall, membership is not required (the whole point is
+   * deciding whether this stranger may become one). It answers one bit
+   * about an address the caller already proved they hold; before db/0082
+   * it answers allowed:true (the feature does not exist yet — a missing
+   * table must not close a working door).
+   */
+  app.post("/v1/oauth-gate", async (request, reply) => {
+    const claims = await auth.verifiedClaims(request);
+    const email = typeof claims.email === "string" ? claims.email.trim() : "";
+    if (!email) throw new ValidationError("the token carries no email");
+    try {
+      const rows = await options.db.withoutIdentity((tx) =>
+        tx.unsafe<{ allowed: boolean }>(
+          `select echo.oauth_email_allowed($1) as allowed`, [email],
+        ));
+      return reply.send({ allowed: Boolean(rows[0]?.allowed) });
+    } catch (cause) {
+      if ((cause as { code?: string }).code === "42883") {
+        // no such function — db/0082 has not run here; the list does not
+        // exist, so there is nothing to be absent from
+        return reply.send({ allowed: true, ungated: true });
+      }
+      throw cause;
+    }
+  });
+
   app.post("/v1/signup", async (request, reply) => {
     const claims = await auth.verifiedClaims(request);
     const body = (request.body ?? {}) as {
@@ -1102,6 +1132,47 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     const body = (request.body ?? {}) as { reason?: unknown };
     if (typeof body.reason !== "string") throw new ValidationError("reason is required");
     return reply.send({ changed: await platform.restoreOrganization(identity, id, body.reason) });
+  });
+
+  // ---- the OAuth allow-list (db/0082) — who may enter via Google/GitHub ----
+
+  app.get("/v1/platform/oauth-allowlist", async (request, reply) => {
+    const identity = await auth.requirePlatformRoot(request);
+    const rows = await options.db.withIdentity(identity, (tx) =>
+      tx.unsafe<{ email: string; note: string; added_at: string }>(
+        `select email, note, added_at
+           from echo.platform_oauth_allowlist($1)`,
+        [identity.userId],
+      ));
+    return reply.send({ entries: rows });
+  });
+
+  app.post("/v1/platform/oauth-allowlist", async (request, reply) => {
+    const identity = await auth.requirePlatformRoot(request);
+    const body = (request.body ?? {}) as { email?: unknown; note?: unknown; reason?: unknown };
+    if (typeof body.email !== "string" || !body.email.includes("@")) {
+      throw new ValidationError("a valid email is required");
+    }
+    if (typeof body.reason !== "string") throw new ValidationError("reason is required");
+    await options.db.withIdentity(identity, (tx) =>
+      tx.unsafe(
+        `select echo.platform_oauth_allow($1, $2, $3, $4)`,
+        [identity.userId, body.email, typeof body.note === "string" ? body.note : "", body.reason],
+      ));
+    return reply.code(201).send({ allowed: true });
+  });
+
+  app.delete("/v1/platform/oauth-allowlist", async (request, reply) => {
+    const identity = await auth.requirePlatformRoot(request);
+    const body = (request.body ?? {}) as { email?: unknown; reason?: unknown };
+    if (typeof body.email !== "string") throw new ValidationError("email is required");
+    if (typeof body.reason !== "string") throw new ValidationError("reason is required");
+    await options.db.withIdentity(identity, (tx) =>
+      tx.unsafe(
+        `select echo.platform_oauth_disallow($1, $2, $3)`,
+        [identity.userId, body.email, body.reason],
+      ));
+    return reply.code(204).send();
   });
 
   app.patch("/v1/platform/users/:id", async (request, reply) => {
