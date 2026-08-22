@@ -2,10 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createWakeMachine } from "./voice";
 
 /**
- * The wake machine, v2 — shaped by three live complaints (2026-08-21):
- * the "Yes?" barged into sentences still being spoken; every command
- * needed its own "hey echo"; and the assistant's spoken reply must not
- * be transcribed into a command against itself.
+ * The wake machine, v3 — TWO states (2026-08-22 simplification: the
+ * interim-primed ack machinery "was getting stuck"; idle now reacts to
+ * FINALS only, and the conversation session keeps the fast interim
+ * endpoint). What is pinned: waking is boring and reliable; the session
+ * is where the cleverness lives; the assistant's own voice never feeds it.
  */
 describe("createWakeMachine", () => {
   let onWake: ReturnType<typeof vi.fn<() => void>>;
@@ -20,31 +21,30 @@ describe("createWakeMachine", () => {
     states = [];
     machine = createWakeMachine(
       { onWake, onCommand, onState: (s) => states.push(s) },
-      { ackDelayMs: 900, engageMs: 45_000 },
+      { engageMs: 45_000 },
     );
   });
   afterEach(() => vi.useRealTimers());
 
-  it("lets the sentence FINISH: no ack while words keep coming after the name", () => {
-    machine.feed("hey echo", false); // the name appears mid-sentence
-    machine.feed("hey echo go to the", false); // …and the sentence continues
-    vi.advanceTimersByTime(2000); // well past the ack delay
-    expect(onWake).not.toHaveBeenCalled(); // nothing talked over them
-    machine.feed("hey echo go to the archive of calls", true);
-    expect(onCommand).toHaveBeenCalledWith("go to the archive of calls");
+  it("idle ignores INTERIMS entirely — no half-heard utterance can wedge it", () => {
+    machine.feed("echo", false);
+    machine.feed("echo go to records", false);
+    vi.advanceTimersByTime(5_000);
+    expect(onWake).not.toHaveBeenCalled();
+    expect(onCommand).not.toHaveBeenCalled();
+    expect(states).toEqual([]);
   });
 
-  it("a name that stays alone gets its ack after the short hold", () => {
-    machine.feed("echo", false);
-    expect(onWake).not.toHaveBeenCalled(); // not instantly — the hold
-    vi.advanceTimersByTime(900);
+  it("a FINAL bare name wakes and acks", () => {
+    machine.feed("echo", true);
     expect(onWake).toHaveBeenCalledTimes(1);
     expect(states).toEqual(["engaged"]);
   });
 
-  it("a FINAL bare name acks immediately — the utterance is over, nothing to interrupt", () => {
-    machine.feed("echo", true);
-    expect(onWake).toHaveBeenCalledTimes(1);
+  it("a FINAL name + command runs the command, with no ack talked over it", () => {
+    machine.feed("hey echo record new call", true);
+    expect(onCommand).toHaveBeenCalledWith("record new call");
+    expect(onWake).not.toHaveBeenCalled();
   });
 
   it("STANDBY: one wake, then several commands with no wake word between", () => {
@@ -58,8 +58,8 @@ describe("createWakeMachine", () => {
   it("each command RENEWS the session", () => {
     machine.feed("echo", true);
     vi.advanceTimersByTime(40_000);
-    machine.feed("go to calls", true); // 5s before expiry — renews
-    vi.advanceTimersByTime(40_000); // 80s after wake, 40s after command
+    machine.feed("go to calls", true);
+    vi.advanceTimersByTime(40_000);
     machine.feed("open the archive", true);
     expect(onCommand).toHaveBeenCalledTimes(2);
   });
@@ -82,7 +82,7 @@ describe("createWakeMachine", () => {
 
   it("MUTED while the assistant speaks: its own voice is never a command", () => {
     machine.feed("echo", true);
-    machine.setMuted(true); // the reply starts playing
+    machine.setMuted(true);
     machine.feed("I have navigated you to the calls archive", true);
     expect(onCommand).not.toHaveBeenCalled();
     machine.setMuted(false);
@@ -93,41 +93,21 @@ describe("createWakeMachine", () => {
   it("unmute RENEWS the session — a long reply must not silently expire it", () => {
     machine.feed("echo", true);
     machine.setMuted(true);
-    vi.advanceTimersByTime(44_000); // almost the whole window spent listening
+    vi.advanceTimersByTime(44_000);
     machine.setMuted(false);
-    vi.advanceTimersByTime(10_000); // would have expired without the renew
+    vi.advanceTimersByTime(10_000);
     machine.feed("go to calls", true);
     expect(onCommand).toHaveBeenCalledWith("go to calls");
   });
 
   it("saying the name again mid-session re-acks instead of becoming a command", () => {
     machine.feed("echo", true);
-    machine.feed("hey echo", true);
+    machine.feed("echo", true);
     expect(onWake).toHaveBeenCalledTimes(2);
     expect(onCommand).not.toHaveBeenCalled();
   });
 
-  it("wake + command in one breath runs from the final, with no ack over it", () => {
-    machine.feed("hey echo record", false);
-    machine.feed("hey echo record new call", true);
-    expect(onCommand).toHaveBeenCalledWith("record new call");
-    expect(onWake).not.toHaveBeenCalled();
-  });
-
-  it("a revised-away wake is a mishear, not a command", () => {
-    machine.feed("echo", false); // primed
-    machine.feed("that will do", true); // the recognizer changed its mind
-    expect(onWake).not.toHaveBeenCalled();
-    expect(onCommand).not.toHaveBeenCalled();
-  });
-
-  it("unrelated speech never wakes it", () => {
-    machine.feed("let us check the report", true);
-    expect(onWake).not.toHaveBeenCalled();
-    expect(onCommand).not.toHaveBeenCalled();
-  });
-
-  it("an interim is not a command WHILE it is still changing", () => {
+  it("in-session: a changing interim is not a command", () => {
     machine.feed("echo", true);
     machine.feed("record new", false);
     vi.advanceTimersByTime(2000);
@@ -136,12 +116,11 @@ describe("createWakeMachine", () => {
     expect(onCommand).not.toHaveBeenCalled();
   });
 
-  it("3s of SILENCE promotes the interim — the input ends when the person does", () => {
+  it("in-session: 3s of silence promotes the interim; the late final is swallowed once", () => {
     machine.feed("echo", true);
     machine.feed("record new call", false);
     vi.advanceTimersByTime(3000);
     expect(onCommand).toHaveBeenCalledWith("record new call");
-    // the recognizer's own late final for that utterance is a duplicate
     machine.feed("record new call", true);
     expect(onCommand).toHaveBeenCalledTimes(1);
   });
@@ -152,5 +131,11 @@ describe("createWakeMachine", () => {
     vi.advanceTimersByTime(3000);
     expect(onCommand).not.toHaveBeenCalled();
     expect(states).toEqual(["engaged", "idle"]);
+  });
+
+  it("unrelated speech never wakes it", () => {
+    machine.feed("let us check the report", true);
+    expect(onWake).not.toHaveBeenCalled();
+    expect(onCommand).not.toHaveBeenCalled();
   });
 });

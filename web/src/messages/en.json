@@ -1264,7 +1264,10 @@
     "minimize": "Minimize",
     "restore": "Restore",
     "thinkingState": "Thinking…",
-    "speakingState": "Speaking…"
+    "speakingState": "Speaking…",
+    "earsLabel": "Assistant listening",
+    "earsOn": "Listening — just say “echo”.",
+    "earsOff": "Not listening anymore."
   },
   "summaries": {
     "empty": "No summaries yet — as each recording finishes processing, its summary lands here.",

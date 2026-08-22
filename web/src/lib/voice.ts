@@ -44,41 +44,22 @@ export function voiceInputSupported(): boolean {
 }
 
 /**
- * The wake phrase: an optional greeting, then the name — either script.
- * Whatever FOLLOWS the name in the same utterance is the command
- * ("hey echo, record new call" → "record new call").
- *
- * `ecco`/`eko` are accepted as the name: the recognizer runs in the UI
- * language, and an English model spells the spoken name however English
- * lets it (live transcripts: "Ecco salon" for «سلام اکو»).
+ * ONE wake word: the NAME — «echo / اکو» — wherever it appears in the
+ * utterance (user simplification, 2026-08-22: "just go with hearing just
+ * echo, remove other listening start options — it's getting stuck").
+ * The greeting grammar, the fused-greeting artifacts («هایکو») and the
+ * whole-utterance salam forms ("Salon") are all GONE: every extra trigger
+ * was another way to misfire. What remains: the name's honest spellings
+ * through both recognizers (اکو/ایکو in fa, ecco/eko in en), and the
+ * remainder AFTER the name is the command — so "hey echo do X" still
+ * works, because the name is in it.
  */
-/*
- * Name variants grew from LIVE transcripts, not invention: the fa-IR
- * recognizer FUSES "hey echo" into «هایکو» and "hi echo" into «های اکو»,
- * and spells the bare name «ایکو» as often as «اکو» (user report,
- * 2026-08-22: only the bare "echo" woke it). «های» joins the greetings;
- * the fused forms join the NAME list — a greeting eaten by the recognizer
- * must still wake.
- */
-const WAKE_RE = /(?:^|\s)(?:(?:hey|hi|salam|سلام|های|هی)[\s,،]+)?(?:echo|ecco|eko|اکو|ایکو|هایکو)(?!\p{L})[\s.,،!?]*/iu;
-
-/**
- * What the ENGLISH recognizer makes of «سلام اکو» spoken whole: the two
- * words fuse into the nearest English word ("Salon", live transcript,
- * 2026-08-21). Only honoured as a COMPLETE utterance — "salon" inside a
- * sentence is someone's actual word.
- */
-const SALAM_ARTIFACT_RE = /^\s*(?:salon|salam|salaam|slalom)[\s.,،!?]*$/i;
+const WAKE_RE = /(?:^|\s)(?:echo|ecco|eko|اکو|ایکو)(?!\p{L})[\s.,،!?]*/iu;
 
 export function matchWake(transcript: string): { woke: boolean; command: string } {
-  if (SALAM_ARTIFACT_RE.test(transcript)) return { woke: true, command: "" };
   const m = WAKE_RE.exec(transcript);
   if (!m) return { woke: false, command: "" };
-  const command = transcript.slice(m.index + m[0].length).trim();
-  // "Ecco salon": the name matched, and the trailing greeting-artifact is
-  // recognizer residue, not a command — a bare wake, not a question.
-  if (SALAM_ARTIFACT_RE.test(command)) return { woke: true, command: "" };
-  return { woke: true, command };
+  return { woke: true, command: transcript.slice(m.index + m[0].length).trim() };
 }
 
 export interface WakeListenerHandle {
@@ -234,23 +215,28 @@ export function isEchoOf(utterance: string, spoken: string): boolean {
  */
 export function createWakeMachine(
   handlers: WakeHandlers,
-  options: { ackDelayMs?: number; engageMs?: number; silenceMs?: number } = {},
+  options: { engageMs?: number; silenceMs?: number } = {},
 ): {
   feed: (transcript: string, isFinal: boolean) => void;
   setMuted: (muted: boolean) => void;
   cancel: () => void;
 } {
-  const ackDelayMs = options.ackDelayMs ?? 900;
   const engageMs = options.engageMs ?? 45_000;
   /** a spoken command ENDS on silence (user: "3s of silence = the input"):
       if the interim transcript stops changing for this long, it IS the
       command — no waiting on the recognizer's own slow endpointing */
   const silenceMs = options.silenceMs ?? 3_000;
-  let state: "idle" | "primed" | "engaged" = "idle";
+  /*
+   * TWO states only (2026-08-22 simplification: the interim-primed ack
+   * machinery "was getting stuck" — every extra state was another way to
+   * wedge). Idle listens for FINALS carrying the name; engaged is the
+   * conversation session. Interims matter only inside the session, where
+   * their stability drives the fast endpoint.
+   */
+  let state: "idle" | "engaged" = "idle";
   /** while the assistant's own voice is playing, the mic hears IT — a
       machine that listens then would answer itself in a loop */
   let muted = false;
-  let ackTimer: ReturnType<typeof setTimeout> | null = null;
   let engageTimer: ReturnType<typeof setTimeout> | null = null;
   let stabilityTimer: ReturnType<typeof setTimeout> | null = null;
   let lastInterim = "";
@@ -258,7 +244,6 @@ export function createWakeMachine(
       duplicate — swallow exactly one */
   let swallowNextFinal = false;
 
-  const clearAck = () => { if (ackTimer) clearTimeout(ackTimer); ackTimer = null; };
   const clearEngage = () => { if (engageTimer) clearTimeout(engageTimer); engageTimer = null; };
   const clearStability = () => {
     if (stabilityTimer) clearTimeout(stabilityTimer);
@@ -267,7 +252,6 @@ export function createWakeMachine(
   };
 
   const toIdle = () => {
-    clearAck();
     clearEngage();
     clearStability();
     swallowNextFinal = false;
@@ -277,7 +261,6 @@ export function createWakeMachine(
   };
 
   const engage = () => {
-    clearAck();
     clearEngage();
     const entering = state !== "engaged";
     state = "engaged";
@@ -293,8 +276,6 @@ export function createWakeMachine(
   return {
     setMuted(next) {
       muted = next;
-      // speech that straddled the mute began as the assistant's own voice
-      if (next && state === "primed") toIdle();
       // a long spoken reply must not silently expire the session while the
       // person was only ever listening to it
       if (!next && state === "engaged") renew();
@@ -302,39 +283,14 @@ export function createWakeMachine(
     feed(transcript, isFinal) {
       if (muted) return;
       if (state === "idle") {
+        // FINALS only in idle: the utterance is complete, nothing to talk
+        // over, nothing to un-stick. The name alone acks; name + words runs.
+        if (!isFinal) return;
         const m = matchWake(transcript);
         if (!m.woke) return;
-        if (m.command) {
-          // wake + command in one breath — run it from the FINAL only
-          if (isFinal) { engage(); handlers.onCommand(m.command); }
-          else state = "primed"; // command coming — never ack over it
-          return;
-        }
-        if (isFinal) {
-          // definitely the name alone
-          engage();
-          handlers.onWake();
-          return;
-        }
-        // the name, mid-utterance: hold the ack briefly — the sentence may
-        // still be going ("hey echo, go to…")
-        state = "primed";
-        ackTimer = setTimeout(() => {
-          engage();
-          handlers.onWake();
-        }, ackDelayMs);
-      } else if (state === "primed") {
-        const m = matchWake(transcript);
-        if (!isFinal) {
-          // more words arrived after the name — a command is being spoken
-          if (m.woke && m.command) clearAck();
-          return;
-        }
-        clearAck();
-        if (m.woke && m.command) { engage(); handlers.onCommand(m.command); return; }
-        if (m.woke) { engage(); handlers.onWake(); return; }
-        // the recognizer revised the wake away — a mishear, let it go
-        toIdle();
+        engage();
+        if (m.command) handlers.onCommand(m.command);
+        else handlers.onWake();
       } else {
         // engaged: the conversation session
         if (!isFinal) {

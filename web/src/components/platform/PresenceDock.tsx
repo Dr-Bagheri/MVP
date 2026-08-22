@@ -129,12 +129,23 @@ export function PresenceDock() {
    */
   const [silent, setSilent] = useState(false);
   const silentRef = useRef(false);
+  /**
+   * The EARS toggle (user directive, 2026-08-22): the twin of silent mode
+   * for the other direction — off means the assistant stops listening
+   * entirely (wake word and capture both down) until switched back on.
+   * Persisted; default ON.
+   */
+  const [ears, setEars] = useState(true);
+  const earsRef = useRef(true);
 
   useEffect(() => {
     try {
       const stored = localStorage.getItem("neurai-voice-silent") === "1";
       setSilent(stored);
       silentRef.current = stored;
+      const earsStored = localStorage.getItem("neurai-voice-ears") !== "0";
+      setEars(earsStored);
+      earsRef.current = earsStored;
     } catch { /* storage unavailable — voice stays on */ }
   }, []);
 
@@ -144,6 +155,22 @@ export function PresenceDock() {
     setSilent(next);
     try { localStorage.setItem("neurai-voice-silent", next ? "1" : "0"); } catch { /* fine */ }
     notify(next ? t("silentOn") : t("silentOff"));
+  }
+
+  function toggleEars() {
+    const next = !earsRef.current;
+    earsRef.current = next;
+    setEars(next);
+    try { localStorage.setItem("neurai-voice-ears", next ? "1" : "0"); } catch { /* fine */ }
+    if (next) {
+      beginWakeRef.current();
+      notify(t("earsOn"));
+    } else {
+      suspendWake();
+      if (captureRef.current) teardownCapture(captureRef.current);
+      setListening(null);
+      notify(t("earsOff"));
+    }
   }
   const [toasts, setToasts] = useState<PlatformNotice[]>([]);
   const sessionId = useRef<string | undefined>(undefined);
@@ -573,6 +600,7 @@ export function PresenceDock() {
   }
 
   const beginWake = useCallback(() => {
+    if (!earsRef.current) return; // the ears toggle is OFF — stay deaf
     if (!micGrantedRef.current || wakeRef.current || !voiceInputSupported()) return;
     /*
      * One continuous recognizer, one state machine (createWakeMachine).
@@ -938,6 +966,19 @@ export function PresenceDock() {
               onClick={toggleSilent}
             >
               {silent ? "🔇" : "🔊"}
+            </button>
+            {/* the EARS twin: listening on/off, next to the mouth toggle */}
+            <button
+              type="button"
+              className={`tap h-7 w-7 rounded-md ${
+                ears ? "text-fg-muted hover:bg-surface-2 hover:text-fg" : "bg-danger/15 text-danger"
+              }`}
+              aria-label={t("earsLabel")}
+              aria-pressed={!ears}
+              title={t("earsLabel")}
+              onClick={toggleEars}
+            >
+              {ears ? "🎙" : "🚫"}
             </button>
             <button
               type="button"
