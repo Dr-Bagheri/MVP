@@ -27,9 +27,7 @@ const vertexShader = /* glsl */ `
 
   uniform float uPixelRatio;
   uniform float uBoundary;
-  uniform float uTime;
   uniform float uMotion;
-  uniform float uLevel;
 
   varying float vAlpha;
   varying float vHue;
@@ -42,13 +40,11 @@ const vertexShader = /* glsl */ `
     float phase = fract(aPhase + uMotion * aSpeed);
     float bounce = 1.0 - 4.0 * abs(phase - 0.5);
     vec2 position = perpendicular * offset + direction * (bounce * halfChord);
-    float voicePulse = 0.975 + sin(uTime * (3.0 + uLevel * 8.0) + aPhase * 19.0) * uLevel * 0.018;
-    position *= voicePulse;
 
     gl_Position = vec4(position, 0.0, 1.0);
-    gl_PointSize = aBaseSize * (0.82 + uLevel * 0.18) * uPixelRatio;
+    gl_PointSize = aBaseSize * uPixelRatio;
 
-    vAlpha = (0.30 + uLevel * 0.64) * (0.90 + 0.10 * sin(aPhase * 31.0 + uTime));
+    vAlpha = 0.78 * (0.90 + 0.10 * sin(aPhase * 31.0));
     vHue = aHue;
   }
 `;
@@ -85,9 +81,9 @@ const seeded = (value: number) => {
 
 /**
  * The selected production identity: 300 transparent GPU particles.
- * Particles keep one constant footprint in every state. Speaking changes
- * their speed, brightness and pulse without resizing the field; the visible
- * edge remains capped below 85% of the circular footprint.
+ * Particles keep one constant footprint, brightness, color and dot size in
+ * every state. Speaking changes movement speed only; the visible edge remains
+ * capped below 85% of the circular footprint.
  */
 export function EchoEOrb({ state, level = 0 }: { state: AuroraState; level?: number }) {
   const clamped = clamp(level);
@@ -130,9 +126,7 @@ function ParticleField({ state, level }: { state: AuroraState; level: number }) 
     const uniforms = {
       uPixelRatio: { value: 1 },
       uBoundary: { value: 0.70 },
-      uTime: { value: 0 },
       uMotion: { value: 0 },
-      uLevel: { value: 0 },
     };
     const material = new ShaderMaterial({
       transparent: true,
@@ -159,7 +153,6 @@ function ParticleField({ state, level }: { state: AuroraState; level: number }) 
 
     const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
     let previous = performance.now();
-    let motionTime = 0;
     let motion = 0;
     let frame = 0;
 
@@ -172,15 +165,12 @@ function ParticleField({ state, level }: { state: AuroraState; level: number }) 
       const muted = currentState === "muted";
 
       if (!reducedMotion && !muted) {
-        motionTime += delta;
         const motionRate = speaking ? 0.18 + currentLevel * 0.55 : 0.035;
         motion += delta * motionRate;
       }
 
       uniforms.uBoundary.value = 0.70;
-      uniforms.uTime.value = motionTime;
       uniforms.uMotion.value = motion;
-      uniforms.uLevel.value = muted ? 0.08 : speaking ? 0.35 + currentLevel * 0.65 : 0.24;
       renderer.render(scene, camera);
       canvas.dataset.gpuStatus = "active";
       canvas.dataset.gpuPoints = String(renderer.info.render.points);
