@@ -12,7 +12,7 @@ import { subscribeAssistantOpen, subscribeRecordingLive } from "@/lib/assistantB
 import { notify, subscribeNotify, type PlatformNotice } from "@/lib/notify";
 import { computeRms, useAudioLevel, useSyntheticPulse } from "@/lib/useAudioLevel";
 import {
-  currentSpeechAudio, isEchoOf, isStopCommand, listenOnce, recentSpokenText, sameUtterance, speak,
+  currentSpeechAudio, isEchoOf, isNoiseUtterance, isStopCommand, listenOnce, recentSpokenText, sameUtterance, speak,
   speakQueued, startVoiceControl, stopSpeaking, subscribeSpeechPlayback,
   voiceInputSupported, type WakeListenerHandle,
 } from "@/lib/voice";
@@ -389,6 +389,9 @@ export function PresenceDock() {
   }
 
   function routeCommand(text: string): void {
+    // "—" / "…" transcripts are the recognizer spelling NOISE (a breath,
+    // a tap) — the dash-only phantom bubbles (user report, 2026-08-22)
+    if (isNoiseUtterance(text)) return;
     if (isStopCommand(text)) { localStop(); return; }
     /*
      * The mic was open while the assistant talked — echo cancellation
@@ -781,7 +784,14 @@ export function PresenceDock() {
           await api.deliverToolResult(event.id, false, "the user declined").catch(() => undefined);
           break;
         }
-        const result = await executeClientTool(event.tool, event.args, { push: router.push });
+        const result = await executeClientTool(event.tool, event.args, {
+          push: router.push,
+          // the top bar's own switch mechanism: same route, other locale
+          switchLocale: (next) => router.replace(
+            pathname.replace(/^\/(fa|en)(?=\/|$)/, "") || "/",
+            { locale: next },
+          ),
+        });
         // NO toast for the assistant's own actions (user directive,
         // 2026-08-22, reversing the 08-21 announcement): the conversation
         // already shows the tool chip and the model narrates the outcome —

@@ -21,6 +21,7 @@ export const SURFACE_TOOLS: readonly string[] = [
   "finish_recording",
   "set_member_status",
   "set_member_role",
+  "set_language",
   "rename_record",
   "set_record_scope",
   "archive_record",
@@ -40,6 +41,9 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 export interface SurfaceContext {
   /** locale-aware push — the i18n router's, so /fa|/en is not the tool's problem */
   push: (path: string) => void;
+  /** re-render the CURRENT route under the other locale (the top bar's own
+      switch mechanism, handed in so the tool cannot invent a second one) */
+  switchLocale?: (next: "fa" | "en") => void;
 }
 
 export interface SurfaceResult {
@@ -177,6 +181,16 @@ export async function executeClientTool(
       if (query.length < 2) return { ok: false, detail: "query too short" };
       surface.push(`/search?q=${encodeURIComponent(query)}`);
       return { ok: true, detail: "search opened" };
+    }
+    case "set_language": {
+      const language = a.language === "fa" || a.language === "en" ? a.language : null;
+      if (!language) return { ok: false, detail: "language must be fa or en" };
+      if (!surface.switchLocale) return { ok: false, detail: "this surface cannot switch language" };
+      surface.switchLocale(language);
+      // the stored preference follows so the choice survives the session —
+      // best-effort: the visible switch already happened
+      void import("@/api/client").then(({ api }) => api.setLocale(language)).catch(() => undefined);
+      return { ok: true, detail: `the interface language is ${language} now` };
     }
     case "finish_recording": {
       const controls = recorderControls.current;

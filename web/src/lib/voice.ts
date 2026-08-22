@@ -101,6 +101,16 @@ export function isStopCommand(text: string): boolean {
   return STOP_RE.test(text);
 }
 
+/**
+ * A transcript with no letter or digit is the recognizer spelling NOISE —
+ * a breath or keyboard tap arriving as "—" or "…" (user report,
+ * 2026-08-22: dash-only bubbles mid-conversation, "it heard something
+ * that was not"). Never a command, never a message.
+ */
+export function isNoiseUtterance(text: string): boolean {
+  return !/[\p{L}\p{N}]/u.test(text);
+}
+
 /** language-agnostic canonical form for echo comparison */
 function canonical(text: string): string {
   return text

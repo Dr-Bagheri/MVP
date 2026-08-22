@@ -15,6 +15,7 @@ const setCallTitle = vi.fn();
 const deleteCall = vi.fn();
 const agentSessions = vi.fn();
 const archiveSession = vi.fn();
+const setLocale = vi.fn();
 vi.mock("@/api/client", () => ({
   api: {
     members: (...args: unknown[]) => members(...args),
@@ -25,6 +26,7 @@ vi.mock("@/api/client", () => ({
     deleteCall: (...args: unknown[]) => deleteCall(...args),
     agentSessions: (...args: unknown[]) => agentSessions(...args),
     archiveSession: (...args: unknown[]) => archiveSession(...args),
+    setLocale: (...args: unknown[]) => setLocale(...args),
   },
 }));
 
@@ -57,6 +59,7 @@ beforeEach(() => {
   deleteCall.mockReset();
   agentSessions.mockReset();
   archiveSession.mockReset();
+  setLocale.mockReset();
   recorderControls.current = null;
 });
 
@@ -181,6 +184,19 @@ describe("executeClientTool", () => {
     expect(archiveSession).toHaveBeenCalledWith("s-1", true);
     const missing = await executeClientTool("delete_conversation", { conversation: "نیست" }, ctx);
     expect(missing.ok).toBe(false);
+  });
+
+  it("set_language flips the UI through the shell's own switch and persists it", async () => {
+    const push = vi.fn();
+    const switchLocale = vi.fn();
+    setLocale.mockResolvedValue({});
+    const result = await executeClientTool("set_language", { language: "fa" }, { push, switchLocale });
+    expect(result.ok).toBe(true);
+    expect(switchLocale).toHaveBeenCalledWith("fa");
+    // an invented locale is a refusal, not a guess
+    const bad = await executeClientTool("set_language", { language: "de" }, { push, switchLocale });
+    expect(bad.ok).toBe(false);
+    expect(switchLocale).toHaveBeenCalledTimes(1);
   });
 
   it("open_call demands a real id — a model cannot navigate by prose", async () => {

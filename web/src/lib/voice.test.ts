@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isEchoOf, isStopCommand, matchWake, sameUtterance } from "./voice";
+import { isEchoOf, isNoiseUtterance, isStopCommand, matchWake, sameUtterance } from "./voice";
 
 /**
  * The wake matcher is the one pure decision in the voice path — everything
@@ -102,5 +102,19 @@ describe("sameUtterance — the re-finalization dedupe", () => {
 
   it("empty never matches anything", () => {
     expect(sameUtterance("", "")).toBe(false);
+  });
+});
+
+describe("isNoiseUtterance — the dash-only phantom filter", () => {
+  it("punctuation-only transcripts are noise (the mid-conversation dash bubbles)", () => {
+    for (const phantom of ["—", "-", "…", "...", "؟", "?!"]) {
+      expect(isNoiseUtterance(phantom), phantom).toBe(true);
+    }
+  });
+
+  it("anything with a letter or digit — either script — is real speech", () => {
+    expect(isNoiseUtterance("و")).toBe(false);
+    expect(isNoiseUtterance("ok")).toBe(false);
+    expect(isNoiseUtterance("۲")).toBe(false);
   });
 });

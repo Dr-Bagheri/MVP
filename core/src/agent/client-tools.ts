@@ -153,6 +153,18 @@ export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
     effect: "ui",
   },
   {
+    name: "set_language",
+    label: { fa: "تغییر زبان", en: "Switching language" },
+    description:
+      "Switch the platform interface language — fa (Persian) or en "
+      + "(English). Use when the user asks to change the platform/UI "
+      + "language or version.",
+    parameters: obj({
+      language: strEnum(["fa", "en"], "fa = Persian, en = English."),
+    }, ["language"]),
+    effect: "ui",
+  },
+  {
     name: "finish_recording",
     label: { fa: "پایان ضبط", en: "Finishing the recording" },
     description:
