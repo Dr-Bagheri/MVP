@@ -58,6 +58,9 @@ const ALLOWED = {
     "documents the corruption signatures themselves — the sweep matching its own rule text. " +
     "A path entry rather than the marker because that file belongs to the steward and is not " +
     "mine to add a marker line to.",
+  "AGENTS.md":
+    "the agent-conventions copy of CLAUDE.md (added 2026-08-22) — carries the same " +
+    "signature list for the same reason, and the same expected self-hit with it.",
 };
 
 /**

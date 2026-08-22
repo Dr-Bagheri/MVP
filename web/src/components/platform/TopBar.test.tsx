@@ -18,21 +18,29 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe("TopBar presence cradle", () => {
-  it("registers one interactive host inside a non-blocking curved glass cradle", () => {
+describe("TopBar presence ring", () => {
+  it("registers ONE interactive host that is itself the single ring", () => {
     const { container, unmount } = render(<TopBar me={null} />);
     const header = container.querySelector("[data-platform-topbar]");
-    const curve = container.querySelector("[data-presence-curve]");
-    const cradle = container.querySelector("[data-presence-cradle]");
     const host = container.querySelector<HTMLElement>("#neurai-topbar-presence");
 
     expect(header).not.toBeNull();
-    expect(curve).toHaveClass("pointer-events-none");
-    expect(cradle).toHaveClass("pointer-events-none");
     expect(host).toHaveClass("pointer-events-auto");
+    expect(host).toHaveClass("rounded-full");
+    expect(host).toHaveClass("border-border-strong"); // the ONE line circle
     expect(getPresenceAnchorSnapshot()).toBe(host);
 
     unmount();
     expect(getPresenceAnchorSnapshot()).toBeNull();
+  });
+
+  it("the glass sphere is GONE — no curve bulge, no optical layers (user redesign, 2026-08-22)", () => {
+    const { container } = render(<TopBar me={null} />);
+    expect(container.querySelector("[data-presence-curve]")).toBeNull();
+    const host = container.querySelector<HTMLElement>("#neurai-topbar-presence")!;
+    // the host is a single EMPTY ring the dock portals into — extra glass
+    // layers would be the old design creeping back
+    expect(host.children).toHaveLength(0);
+    expect(host.className).not.toContain("backdrop-blur");
   });
 });

@@ -809,11 +809,13 @@ export function PresenceDock() {
   if (!member) return null;
 
   const anchoredToTopbar = topbarPresenceHost !== null;
+  /* the small ring pokes ~21/24px below the 56px bar — surfaces hang just
+     under that (user redesign, 2026-08-22) */
   const surfacePosition = anchoredToTopbar
-    ? "left-1/2 top-[106px] -translate-x-1/2 md:top-[130px]"
+    ? "left-1/2 top-[88px] -translate-x-1/2 md:top-[92px]"
     : "bottom-[142px] end-4 md:bottom-[192px] md:end-6";
   const panelHeight = anchoredToTopbar
-    ? "max-h-[calc(100dvh-7.5rem)] md:max-h-[calc(100dvh-9rem)]"
+    ? "max-h-[calc(100dvh-7rem)]"
     : "max-h-[70dvh]";
 
   const assistantButton = (
