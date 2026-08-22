@@ -19,7 +19,7 @@ import {
   CALENDAR_PREFERENCES, iso, isoOrNull, MEMBER_ROLES, TIMEZONE_AUTO, USER_STATUSES,
   type CalendarPreference, type MemberRole, type UserStatus,
 } from "./vocabulary.ts";
-import { hasAutonomyColumn } from "../db/capabilities.ts";
+import { hasAutonomyColumn, hasProfileContext } from "../db/capabilities.ts";
 import { assertUuid, type Db, type SqlTx } from "../db/identity.ts";
 import type { Identity } from "../agent/types.ts";
 
@@ -135,6 +135,16 @@ export interface MeRecord extends MemberRecord {
    * omitted field, never a fabricated "assist".
    */
   autonomy?: "watch" | "assist" | "act";
+  /**
+   * Profile context (db/0080, user directive 2026-08-22): what the person
+   * does and what they told us about themselves, plus the CONSENT flag —
+   * `assistant_context` true means the assistant may see the two texts at
+   * ask time. All three ABSENT before 0080 (capability-gated, the autonomy
+   * pattern) — omitted, never fabricated.
+   */
+  job_title?: string | null;
+  about?: string | null;
+  assistant_context?: boolean;
 }
 
 /**
@@ -340,6 +350,7 @@ export function createMembersRepo(db: Db) {
       // Capability-gated column (db/0073): the select must not name a column
       // an un-migrated deployment does not have.
       const withAutonomy = await hasAutonomyColumn(db);
+      const withProfileCtx = await hasProfileContext(db);
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<Record<string, unknown>>(
           // The org join is LEFT for the same reason resolveIdentity's is: an
@@ -357,7 +368,9 @@ export function createMembersRepo(db: Db) {
                   u.avatar_url, u.role, u.status,
                   u.accepted_at, u.last_seen_at, u.created_at,
                   u.preferred_model, u.locale, u.calendar, u.timezone,
-                  ${withAutonomy ? "u.autonomy," : ""} o.name as org_name
+                  ${withAutonomy ? "u.autonomy," : ""}
+                  ${withProfileCtx ? "u.job_title, u.about, u.assistant_context," : ""}
+                  o.name as org_name
              from echo.app_user u
              left join echo.org o on o.id = u.org_id
             where u.id = $1
@@ -387,7 +400,39 @@ export function createMembersRepo(db: Db) {
         ...(withAutonomy
           ? { autonomy: (row.autonomy as MeRecord["autonomy"]) ?? "assist" }
           : {}),
+        ...(withProfileCtx
+          ? {
+              job_title: (row.job_title as string | null) ?? null,
+              about: (row.about as string | null) ?? null,
+              assistant_context: Boolean(row.assistant_context),
+            }
+          : {}),
       };
+    },
+
+    /**
+     * What the assistant may know about the asker (0080) — the CONSENTED
+     * profile context, or null. Null covers three different nothings the
+     * caller treats identically on purpose: the columns don't exist yet,
+     * consent is off, or both texts are empty — in every case the prompt
+     * simply carries no personal line. The distinction lives in /v1/me,
+     * where the person manages it; the ask path only needs "include or not".
+     */
+    async assistantContext(
+      identity: Identity,
+    ): Promise<{ job_title: string | null; about: string | null } | null> {
+      if (!(await hasProfileContext(db))) return null;
+      const rows = await db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe<{ job_title: string | null; about: string | null; assistant_context: boolean }>(
+          `select job_title, about, assistant_context
+             from echo.app_user where id = $1 limit 1`,
+          [identity.userId],
+        ),
+      );
+      const row = rows[0];
+      if (!row || !row.assistant_context) return null;
+      if (!row.job_title && !row.about) return null;
+      return { job_title: row.job_title, about: row.about };
     },
 
     /**
@@ -413,6 +458,9 @@ export function createMembersRepo(db: Db) {
         calendar?: string | undefined;
         timezone?: string | undefined;
         locale?: string | undefined;
+        job_title?: string | null | undefined;
+        about?: string | null | undefined;
+        assistant_context?: boolean | undefined;
       },
     ): Promise<MeRecord> {
       const displayName = patch.display_name?.trim();
@@ -476,10 +524,35 @@ export function createMembersRepo(db: Db) {
           { code: "locale_shape" });
       }
 
+      // Profile context (0080): trimmed-to-null texts, hard length caps.
+      const jobTitle = patch.job_title === undefined
+        ? undefined
+        : (patch.job_title?.trim() || null);
+      if (jobTitle && jobTitle.length > 120) {
+        throw new ValidationError("job_title tops out at 120 characters",
+          { code: "job_title_too_long", params: { max: "120" } });
+      }
+      const about = patch.about === undefined
+        ? undefined
+        : (patch.about?.trim() || null);
+      if (about && about.length > 2000) {
+        throw new ValidationError("about tops out at 2000 characters",
+          { code: "about_too_long", params: { max: "2000" } });
+      }
+      const wantsProfileCtx = jobTitle !== undefined || about !== undefined
+        || patch.assistant_context !== undefined;
+      if (wantsProfileCtx && !(await hasProfileContext(db))) {
+        // deployment ahead of its migration — refuse loudly, never a
+        // cheerful 200 over a column that does not exist (the locale lesson)
+        throw new ValidationError(
+          "profile context is not available on this deployment yet (db/0080 pending)",
+          { code: "not_migrated" });
+      }
+
       if (displayName === undefined && displayNameEn === undefined && username === undefined
           && patch.avatar_url === undefined
           && patch.calendar === undefined && patch.timezone === undefined
-          && patch.locale === undefined) {
+          && patch.locale === undefined && !wantsProfileCtx) {
         throw new ValidationError("nothing to update", { code: "nothing_to_update" });
       }
 
@@ -490,16 +563,30 @@ export function createMembersRepo(db: Db) {
             // it", so each field carries an explicit boolean saying whether
             // it was supplied. coalesce() alone would make clearing a name
             // impossible — the classic optional-column bug.
-            `update echo.app_user
-                set display_name    = case when $2  then $3::text  else display_name end,
-                    display_name_en = case when $4  then $5::text  else display_name_en end,
-                    username        = case when $6  then $7::text  else username end,
-                    calendar        = case when $8  then $9::text  else calendar end,
-                    timezone        = case when $10 then $11::text else timezone end,
-                    locale          = case when $12 then $13::text else locale end,
-                    avatar_url      = case when $14 then $15::text else avatar_url end
-              where id = $1
-              returning ${MEMBER_COLUMNS}`,
+            wantsProfileCtx
+              ? `update echo.app_user
+                    set display_name    = case when $2  then $3::text  else display_name end,
+                        display_name_en = case when $4  then $5::text  else display_name_en end,
+                        username        = case when $6  then $7::text  else username end,
+                        calendar        = case when $8  then $9::text  else calendar end,
+                        timezone        = case when $10 then $11::text else timezone end,
+                        locale          = case when $12 then $13::text else locale end,
+                        avatar_url      = case when $14 then $15::text else avatar_url end,
+                        job_title       = case when $16 then $17::text else job_title end,
+                        about           = case when $18 then $19::text else about end,
+                        assistant_context = case when $20 then $21::boolean else assistant_context end
+                  where id = $1
+                  returning ${MEMBER_COLUMNS}`
+              : `update echo.app_user
+                    set display_name    = case when $2  then $3::text  else display_name end,
+                        display_name_en = case when $4  then $5::text  else display_name_en end,
+                        username        = case when $6  then $7::text  else username end,
+                        calendar        = case when $8  then $9::text  else calendar end,
+                        timezone        = case when $10 then $11::text else timezone end,
+                        locale          = case when $12 then $13::text else locale end,
+                        avatar_url      = case when $14 then $15::text else avatar_url end
+                  where id = $1
+                  returning ${MEMBER_COLUMNS}`,
             [
               identity.userId,
               displayName !== undefined, displayName ?? null,
@@ -511,6 +598,13 @@ export function createMembersRepo(db: Db) {
               patch.timezone !== undefined, patch.timezone ?? null,
               patch.locale !== undefined, patch.locale ?? null,
               patch.avatar_url !== undefined, patch.avatar_url ?? null,
+              ...(wantsProfileCtx
+                ? [
+                    jobTitle !== undefined, jobTitle ?? null,
+                    about !== undefined, about ?? null,
+                    patch.assistant_context !== undefined, patch.assistant_context ?? null,
+                  ]
+                : []),
             ],
           ),
         );

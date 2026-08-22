@@ -194,6 +194,14 @@ export interface Me extends User {
    * the Settings control renders the default but must not claim it is stored.
    */
   autonomy?: "watch" | "assist" | "act";
+  /**
+   * Profile context (db/0080): what the person does + their own words, and
+   * the CONSENT flag that lets the assistant see the two texts at ask time.
+   * All three ABSENT before 0080 — the form renders only what is stored.
+   */
+  job_title?: string | null;
+  about?: string | null;
+  assistant_context?: boolean;
 }
 
 // ---- calls (SPEC "Call") ----------------------------------------------------

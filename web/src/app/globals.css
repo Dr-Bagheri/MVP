@@ -42,57 +42,58 @@
  */
 @layer base {
   :root {
-    /* DARK — primary. BLUE-VIOLET revision (user directive, 2026-08-17):
-       hues shift ~262°→~248°, the violet stays dominant. Every value below
-       mirrors design-system/neurai-platform/verify-pairs.mjs — edit THERE
-       first, run it, then copy; a hex that exists only here is a fifth
-       place for the numbers to disagree. */
-    --bg: 10 9 48;                /* #0A0930 — the WEBSITE's own ground */
-    --surface: 20 17 76;          /* #14114C */
-    --surface-2: 30 27 96;        /* #1E1B60 */
-    --border: 48 45 118;          /* #302D76 — hairline, decorative */
-    --border-strong: 122 118 212; /* #7A76D4 — control edges, 3.48:1 */
-    --fg: 237 238 255;            /* #EDEEFF — blue-tinted, not neutral */
-    --fg-muted: 176 176 224;      /* #B0B0E0 */
+    /* DARK — primary. NEUTRAL-BLACK revision (user directive, 2026-08-22:
+       "sana.ai theme — black and lighter black"). All chroma leaves the
+       ground; the brand violet is the one color left, in the accent. Every
+       value below mirrors design-system/neurai-platform/verify-pairs.mjs —
+       edit THERE first, run it, then copy; a hex that exists only here is
+       a fifth place for the numbers to disagree. */
+    --bg: 0 0 0;                  /* #000000 — the sana ground: black */
+    --surface: 20 20 20;          /* #141414 — …and lighter black */
+    --surface-2: 31 31 31;        /* #1F1F1F */
+    --border: 42 42 42;           /* #2A2A2A — hairline, decorative */
+    --border-strong: 112 112 112; /* #707070 — control edges, 3.72:1 */
+    --fg: 250 250 250;            /* #FAFAFA — neutral, no tint */
+    --fg-muted: 166 166 166;      /* #A6A6A6 */
     /* group LABELS in a menu — recedes toward the surface so a title reads as
-       a label, not a destination. 4.84:1, deliberately below --fg-muted's
-       7.34: the requirement is a relationship, asserted in verify-pairs. */
-    --fg-subtle: 143 143 204;     /* #8F8FCC */
-    --accent: 155 133 255;        /* #9B85FF — violet with the blue lean */
+       a label, not a destination. 4.99:1, deliberately below --fg-muted's
+       7.57: the requirement is a relationship, asserted in verify-pairs. */
+    --fg-subtle: 133 133 133;     /* #858585 */
+    --accent: 155 133 255;        /* #9B85FF — the brand violet stays */
     /*
      * DARK on the violet. White FAILS here — the accent is a bright surface
      * in this theme, not an ink. This token is why the active rail tile and
      * the send button are legible.
      */
-    --on-accent: 10 9 48;         /* #0A0930 */
-    --accent-soft: 36 31 97;      /* #241F61 — computed 12% tint over surface */
+    --on-accent: 0 0 0;           /* #000000 */
+    --accent-soft: 36 34 48;      /* #242230 — computed 12% tint over surface */
     --success: 74 222 128;
     --warning: 251 191 36;
     --danger: 251 113 133;
     --info: 125 211 252;
     /* `.btn-primary` follows the one accent family (M22) */
     --primary: 155 133 255;
-    --on-primary: 10 9 48;
-    --secondary: 176 176 224;
-    --muted: 30 27 96;
+    --on-primary: 0 0 0;
+    --secondary: 166 166 166;
+    --muted: 31 31 31;
     /* retained for the Echo shell until its interior re-derives */
-    --sidebar: 20 17 76;
-    --sidebar-fg: 237 238 255;
+    --sidebar: 20 20 20;
+    --sidebar-fg: 250 250 250;
     --brand-mark-image: url("/brand/neurai-mark.png");
   }
 
   [data-theme="light"] {
-    /* LIGHT — "super light blue" (the same directive), derived FROM the dark */
-    --bg: 238 244 255;            /* #EEF4FF — the super light blue ground */
+    /* LIGHT — neutral near-white, derived FROM the dark (same revision) */
+    --bg: 245 245 245;            /* #F5F5F5 — neutral ground, cards white */
     --surface: 255 255 255;
-    --surface-2: 227 237 253;     /* #E3EDFD */
-    --border: 207 222 246;        /* #CFDEF6 */
-    --border-strong: 123 133 200; /* #7B85C8 — 3:1 control edges */
-    --fg: 18 26 64;               /* #121A40 */
-    --fg-muted: 74 83 132;        /* #4A5384 */
+    --surface-2: 237 237 237;     /* #EDEDED */
+    --border: 226 226 226;        /* #E2E2E2 */
+    --border-strong: 118 118 118; /* #767676 — 4.54:1 control edges */
+    --fg: 23 23 23;               /* #171717 */
+    --fg-muted: 89 89 89;         /* #595959 */
     /* recede = move toward the surface, so it goes DARKER here and lighter in
        dark mode. One semantic, opposite directions — the surface moves too. */
-    --fg-subtle: 101 111 160;     /* #656FA0 */
+    --fg-subtle: 110 110 110;     /* #6E6E6E */
     /*
      * A DERIVED ink, not the fill violet: the bright accent fails on white.
      * The brand violet stays for marks and fills; this carries text and CTAs.
@@ -106,10 +107,10 @@
     --info: 7 89 133;
     --primary: 87 71 230;
     --on-primary: 255 255 255;
-    --secondary: 74 83 132;
-    --muted: 227 237 253;
+    --secondary: 89 89 89;
+    --muted: 237 237 237;
     --sidebar: 255 255 255;
-    --sidebar-fg: 18 26 64;
+    --sidebar-fg: 23 23 23;
     --brand-mark-image: url("/brand/neurai-mark-light-transparent.png");
   }
 
@@ -338,7 +339,7 @@
   select.input,
   select.select-pill {
     appearance: none;
-    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%238F8FCC' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='m6 9 6 6 6-6'/></svg>");
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23858585' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='m6 9 6 6 6-6'/></svg>");
     background-repeat: no-repeat;
     background-size: 0.85rem;
   }

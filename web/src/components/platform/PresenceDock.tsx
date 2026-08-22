@@ -91,9 +91,13 @@ function MicIcon({ slashed }: { slashed?: boolean }) {
         stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"
       />
       {slashed ? (
+        /* the off state matches the speaker toggle's grammar: the same
+           glyph with a red slash — no badge, no filled circle (user
+           directive 2026-08-22: "a simple red slash on it is enough") */
         <line
           x1="4" y1="3" x2="20" y2="21"
-          stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"
+          className="text-danger"
+          stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"
         />
       ) : null}
     </svg>
@@ -979,11 +983,12 @@ export function PresenceDock() {
             >
               {silent ? "🔇" : "🔊"}
             </button>
-            {/* the EARS twin: listening on/off, next to the mouth toggle */}
+            {/* the EARS twin: listening on/off, next to the mouth toggle —
+                off = same glyph, red slash, same quiet chrome as the speaker */}
             <button
               type="button"
               className={`tap inline-flex h-7 w-7 items-center justify-center rounded-md ${
-                ears ? "text-fg-muted hover:bg-surface-2 hover:text-fg" : "bg-danger/15 text-danger"
+                ears ? "text-fg-muted hover:bg-surface-2 hover:text-fg" : "bg-accent-soft text-fg-muted"
               }`}
               aria-label={t("earsLabel")}
               aria-pressed={!ears}

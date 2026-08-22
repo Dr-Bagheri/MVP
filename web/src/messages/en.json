@@ -1221,7 +1221,20 @@
     "photoPreviewTitle": "Use this photo?",
     "photoAccept": "Use photo",
     "photoCancel": "Cancel",
-    "photoError": "The image could not be read or saved."
+    "photoError": "The image could not be read or saved.",
+    "jobTitle": "Role",
+    "jobTitleHint": "What you do — in your own words.",
+    "about": "About you",
+    "aboutHint": "Experience and interests; shared with the assistant only if you choose below.",
+    "aboutPlaceholder": "Relevant information about yourself, like your experience and interests",
+    "assistantDataTitle": "Assistant & data",
+    "shareWithAssistant": "Let the assistant use this",
+    "shareWithAssistantHint": "When on, the assistant sees your role and about text while answering, to personalize its replies. Turn it off any time.",
+    "exportTitle": "Export account data",
+    "exportHint": "One JSON file of your profile, records, transcripts, summaries and notes — exactly what you can already see.",
+    "exportAction": "Request data export",
+    "exportWorking": "Gathering… {done}/{total}",
+    "exportFailed": "The export did not complete — try again."
   },
   "common": {
     "cancel": "Cancel",

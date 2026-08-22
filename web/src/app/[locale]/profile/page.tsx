@@ -7,6 +7,7 @@ import { api, BffError } from "@/api/client";
 import type { Me, ModelInfo } from "@/api/types";
 import { AvatarEditor } from "@/components/platform/AvatarEditor";
 import { ChangePassword } from "@/components/platform/ChangePassword";
+import { ExportAccountData } from "@/components/platform/ExportAccountData";
 import { PlatformShell } from "@/components/platform/PlatformShell";
 import { FormPanel, FormRow, PageContainer, PageHeader, PanelFooter, Section } from "@/components/scaffold";
 import { modelLabel } from "@/lib/format";
@@ -37,6 +38,8 @@ interface ProfilePatch {
   display_name?: string;
   display_name_en?: string | null;
   username?: string | null;
+  job_title?: string | null;
+  about?: string | null;
 }
 
 /** Where a refusal belongs on the form. */
@@ -63,6 +66,9 @@ export default function ProfilePage() {
   const [displayName, setDisplayName] = useState("");
   const [displayNameEn, setDisplayNameEn] = useState("");
   const [username, setUsername] = useState("");
+  /** Profile context (0080) — drafts, same clear-vs-omit rules as the names. */
+  const [jobTitle, setJobTitle] = useState("");
+  const [about, setAbout] = useState("");
 
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [saving, setSaving] = useState(false);
@@ -74,6 +80,8 @@ export default function ProfilePage() {
     setDisplayName(user.display_name);
     setDisplayNameEn(user.display_name_en ?? "");
     setUsername(user.username ?? "");
+    setJobTitle(user.job_title ?? "");
+    setAbout(user.about ?? "");
   }
 
   useEffect(() => {
@@ -123,6 +131,15 @@ export default function ProfilePage() {
     const savedHandle = user.username ?? "";
     if (handle.toLowerCase() !== savedHandle.toLowerCase()) {
       patch.username = handle === "" ? null : handle;
+    }
+
+    // Profile context (0080): included ONLY when the wire carries the fields
+    // (a deployment ahead of its migration must not receive them and 400).
+    if (user.assistant_context !== undefined) {
+      const role = jobTitle.trim();
+      if (role !== (user.job_title ?? "")) patch.job_title = role === "" ? null : role;
+      const bio = about.trim();
+      if (bio !== (user.about ?? "")) patch.about = bio === "" ? null : bio;
     }
 
     return Object.keys(patch).length === 0 ? null : patch;
@@ -214,6 +231,33 @@ export default function ProfilePage() {
               </div>
             </FormRow>
 
+            {/* Profile context (0080) — rendered only when the wire carries
+                the fields: a form for columns a deployment does not have yet
+                would be controls that read as wired and do nothing. */}
+            {me.assistant_context !== undefined ? (
+              <>
+                <FormRow label={t("jobTitle")} description={t("jobTitleHint")} htmlFor="profile-job">
+                  <input
+                    id="profile-job"
+                    className="input"
+                    value={jobTitle}
+                    onChange={(e) => setJobTitle(e.target.value)}
+                    maxLength={120}
+                  />
+                </FormRow>
+                <FormRow label={t("about")} description={t("aboutHint")} htmlFor="profile-about">
+                  <textarea
+                    id="profile-about"
+                    className="input min-h-24 resize-y py-2 leading-6"
+                    value={about}
+                    onChange={(e) => setAbout(e.target.value)}
+                    maxLength={2000}
+                    placeholder={t("aboutPlaceholder")}
+                  />
+                </FormRow>
+              </>
+            ) : null}
+
             {/* A refusal that names no field belongs where the whole form can
                 see it, and it is the SERVER's sentence: core/ owns the
                 username rule and is the only thing that knows whether a
@@ -278,6 +322,46 @@ export default function ProfilePage() {
             </FormRow>
           </FormPanel>
         </Section>
+
+        {/* Assistant & data (user directive, 2026-08-22, after the sana.ai
+            reference): the CONSENT switch — may the assistant see the role
+            and about texts above — and the data export. The switch saves
+            immediately (a consent that waits for a Save button is a consent
+            someone believes they gave and didn't), and adopts the server's
+            answer, never optimistic. */}
+        {me.assistant_context !== undefined ? (
+          <Section title={t("assistantDataTitle")} divided>
+            <FormPanel>
+              <FormRow label={t("shareWithAssistant")} description={t("shareWithAssistantHint")}>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={me.assistant_context}
+                  aria-label={t("shareWithAssistant")}
+                  className={`tap relative h-6 w-11 shrink-0 rounded-full transition-colors ${
+                    me.assistant_context ? "bg-accent" : "border border-border bg-surface-2"
+                  }`}
+                  onClick={() => {
+                    void api
+                      .updateProfile({ assistant_context: !me.assistant_context })
+                      .then(adopt)
+                      .catch(() => setError({ field: null, message: t("saveFailed") }));
+                  }}
+                >
+                  <span
+                    className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${
+                      me.assistant_context ? "end-0.5" : "start-0.5"
+                    }`}
+                    aria-hidden
+                  />
+                </button>
+              </FormRow>
+              <FormRow label={t("exportTitle")} description={t("exportHint")}>
+                <ExportAccountData />
+              </FormRow>
+            </FormPanel>
+          </Section>
+        ) : null}
 
         {/* Its own section and its own save. A password change is not another
             profile field: it re-authenticates, it can fail for reasons the

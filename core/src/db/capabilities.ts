@@ -70,6 +70,15 @@ export async function hasSignalTables(db: Db): Promise<boolean> {
 
 export type Autonomy = "watch" | "assist" | "act";
 
+/**
+ * db/0080's trio (job_title, about, assistant_context) lands in ONE
+ * migration, so one representative column answers for all three — probing
+ * each would be three catalogue reads for one fact.
+ */
+export async function hasProfileContext(db: Db): Promise<boolean> {
+  return hasColumn(db, "app_user", "about");
+}
+
 export async function hasAutonomyColumn(db: Db): Promise<boolean> {
   return hasColumn(db, "app_user", "autonomy");
 }

@@ -15,6 +15,7 @@ import { describe, expect, it } from "vitest";
 
 import { ConflictError, NotFoundError, ValidationError } from "../src/api/errors.ts";
 import { createMembersRepo } from "../src/api/members.ts";
+import { resetCapabilityCache } from "../src/db/capabilities.ts";
 import { createDb, type SqlClient, type SqlTx } from "../src/db/identity.ts";
 import type { Identity } from "../src/agent/types.ts";
 
@@ -32,7 +33,15 @@ const ROW = {
   preferred_model: null, org_name: "سازمان",
 };
 
-function fakeDb(onUpdate?: () => never) {
+function fakeDb(
+  onUpdate?: () => never,
+  opts?: {
+    /** the catalogue answers empty — a deployment ahead of its migration */
+    catalogueEmpty?: boolean;
+    /** the row the 0080 consent read returns */
+    contextRow?: { job_title: string | null; about: string | null; assistant_context: boolean };
+  },
+) {
   const log: { sql: string; params?: unknown[] | undefined }[] = [];
   const make = (): SqlClient => ({
     async begin<T>(fn: (tx: SqlTx) => Promise<T>): Promise<T> {
@@ -40,6 +49,10 @@ function fakeDb(onUpdate?: () => never) {
       (tx as unknown as { unsafe: SqlTx["unsafe"] }).unsafe = (async (sql: string, params?: unknown[]) => {
         log.push({ sql, params });
         if (sql.includes("update echo.app_user") && onUpdate) onUpdate();
+        if (sql.includes("information_schema")) return opts?.catalogueEmpty ? [] : [ROW];
+        if (sql.includes("select job_title, about, assistant_context")) {
+          return opts?.contextRow ? [opts.contextRow] : [];
+        }
         return sql.includes("set local") || sql.includes("set_config") ? [] : [ROW];
       }) as SqlTx["unsafe"];
       return fn(tx);
@@ -445,5 +458,54 @@ describe("database refusals become the right answer", () => {
     const db = createDb({ app: make(), agent: make() });
     await expect(createMembersRepo(db).updateProfile(IDENTITY, { username: "ali" }))
       .rejects.toBeInstanceOf(NotFoundError);
+  });
+});
+
+describe("profile context (0080)", () => {
+  it("the three fields ride the supplied-flag scheme — clear vs omit stays expressible", async () => {
+    resetCapabilityCache();
+    const { db, log } = fakeDb();
+    const repo = createMembersRepo(db);
+    await repo.updateProfile(IDENTITY, { job_title: "مدیر محصول", about: null, assistant_context: true });
+    const params = updateParams(log);
+    // tail: [.., setJobTitle, jobTitle, setAbout, about, setConsent, consent]
+    expect(params.slice(15)).toEqual([true, "مدیر محصول", true, null, true, true]);
+  });
+
+  it("a deployment ahead of db/0080 refuses LOUDLY, never a cheerful 200", async () => {
+    resetCapabilityCache();
+    // the catalogue answers EMPTY — the columns do not exist here yet
+    const { db } = fakeDb(undefined, { catalogueEmpty: true });
+    const repo = createMembersRepo(db);
+    await expect(repo.updateProfile(IDENTITY, { about: "سلام" }))
+      .rejects.toThrow(/db\/0080 pending/);
+    resetCapabilityCache();
+  });
+
+  it("assistantContext: consent OFF is null — the texts exist and the assistant sees nothing", async () => {
+    resetCapabilityCache();
+    const { db } = fakeDb(undefined, {
+      contextRow: { job_title: "مدیر", about: "بیو", assistant_context: false },
+    });
+    const repo = createMembersRepo(db);
+    expect(await repo.assistantContext(IDENTITY)).toBeNull();
+  });
+
+  it("assistantContext: consent ON with texts returns them — the two-direction pair", async () => {
+    resetCapabilityCache();
+    const { db } = fakeDb(undefined, {
+      contextRow: { job_title: "مدیر", about: "بیو", assistant_context: true },
+    });
+    const repo = createMembersRepo(db);
+    expect(await repo.assistantContext(IDENTITY)).toEqual({ job_title: "مدیر", about: "بیو" });
+  });
+
+  it("assistantContext: consent ON over EMPTY texts is still null — nothing to say is not a line", async () => {
+    resetCapabilityCache();
+    const { db } = fakeDb(undefined, {
+      contextRow: { job_title: null, about: null, assistant_context: true },
+    });
+    const repo = createMembersRepo(db);
+    expect(await repo.assistantContext(IDENTITY)).toBeNull();
   });
 });

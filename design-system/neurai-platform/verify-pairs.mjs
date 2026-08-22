@@ -51,39 +51,41 @@ const over = (fg, bg, a) => {
 export const TINT = 0.12;
 
 /**
- * BLUE-VIOLET revision (user directive, 2026-08-17): "blueish purple —
- * still more purple than blue — and light mode super light blue." Hues
- * shift from ~262° toward ~248°; the violet stays dominant in the accent.
- * The previous measured-brand palette is in git history if the direction
+ * NEUTRAL-BLACK revision (user directive, 2026-08-22): "use the sana.ai
+ * theme for everything — dark mode black and lighter black." Sana's token
+ * set is not open source (checked: their identity is Stockholm Design
+ * Lab's, proprietary), so these are DERIVED from the reference shots:
+ * true-black ground, near-black surfaces, neutral grays for text — all
+ * chroma leaves the ground and lives only in the accent, which stays the
+ * NeurAI violet (the brand's one color; a fully neutral accent would make
+ * links, active states and the orb indistinguishable from prose). The
+ * blue-violet palette this replaces is in git history if the direction
  * ever reverts.
  */
 export const DARK = {
-  // GROUND MATCHES THE WEBSITE (user directive, 2026-08-17 round 2): the
-  // marketing site sits on #0A0930 and the app now shares it — one product,
-  // one night sky. Surfaces re-stepped from the deeper base.
-  bg: "#0A0930",
-  surface: "#14114C",
-  surface2: "#1E1B60",
-  border: "#302D76",        // hairline, decorative
-  borderStrong: "#7A76D4",  // control boundaries — clears 3:1
-  fg: "#EDEEFF",
-  fgMuted: "#B0B0E0",
-  fgSubtle: "#8F8FCC",     // group labels — recedes toward the surface
-  accent: "#9B85FF",        // violet with the blue lean — purple stays in charge
-  onAccent: "#0A0930",      // DARK on violet: white fails here, as before
+  bg: "#000000",            // the sana ground: black
+  surface: "#141414",       // …and lighter black
+  surface2: "#1F1F1F",
+  border: "#2A2A2A",        // hairline, decorative
+  borderStrong: "#707070",  // control boundaries — clears 3:1
+  fg: "#FAFAFA",
+  fgMuted: "#A6A6A6",
+  fgSubtle: "#858585",     // group labels — recedes toward the surface
+  accent: "#9B85FF",        // the brand violet — the one color left
+  onAccent: "#000000",      // DARK on violet: white fails here, as before
   success: "#4ADE80", warning: "#FBBF24", danger: "#FB7185", info: "#7DD3FC",
 };
 
 export const LIGHT = {
-  bg: "#EEF4FF",            // the "super light blue" ground
+  bg: "#F5F5F5",            // neutral near-white ground, cards pure white
   surface: "#FFFFFF",
-  surface2: "#E3EDFD",
-  border: "#CFDEF6",
-  borderStrong: "#7B85C8",
-  fg: "#121A40",
-  fgMuted: "#4A5384",
-  fgSubtle: "#656FA0",     // group labels — recedes toward the surface
-  accent: "#5747E6",        // DERIVED blue-violet ink; fills stay the brand's
+  surface2: "#EDEDED",
+  border: "#E2E2E2",
+  borderStrong: "#767676",
+  fg: "#171717",
+  fgMuted: "#595959",
+  fgSubtle: "#6E6E6E",     // group labels — recedes toward the surface
+  accent: "#5747E6",        // DERIVED violet ink; fills stay the brand's
   onAccent: "#FFFFFF",
   success: "#166534", warning: "#92400E", danger: "#BE123C", info: "#075985",
 };

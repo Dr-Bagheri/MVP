@@ -617,6 +617,9 @@ export const api = {
     calendar?: CalendarPreference;
     timezone?: string;
     locale?: string;
+    job_title?: string | null;
+    about?: string | null;
+    assistant_context?: boolean;
   }): Promise<Me> {
     return bff<Me>("/api/me", {
       method: "PATCH",
