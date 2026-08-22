@@ -528,6 +528,22 @@ export default function PlatformControlPage() {
                         >
                           {t("restoreOrganization")}
                         </ActionButton>
+                        <ActionButton
+                          danger
+                          disabled={busy}
+                          onClick={() =>
+                            setPending({
+                              key: `org-purge-${o.id}`,
+                              title: t("purgeOrgNow"),
+                              effect: t("effectPurgeOrg"),
+                              target: o.name,
+                              danger: true,
+                              run: (r) => api.purgePlatformOrganization(o.id, r),
+                            })
+                          }
+                        >
+                          {t("purgeNow")}
+                        </ActionButton>
                       </>
                     ) : (
                       <>
@@ -686,6 +702,22 @@ export default function PlatformControlPage() {
                             }
                           >
                             {t("restoreUser")}
+                          </ActionButton>
+                          <ActionButton
+                            danger
+                            disabled={busy}
+                            onClick={() =>
+                              setPending({
+                                key: `user-purge-${u.id}`,
+                                title: t("purgeUserNow"),
+                                effect: t("effectPurgeUser"),
+                                target: u.display_name || u.email,
+                                danger: true,
+                                run: (r) => api.purgePlatformUser(u.id, r),
+                              })
+                            }
+                          >
+                            {t("purgeNow")}
                           </ActionButton>
                         </>
                       ) : (

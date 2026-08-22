@@ -730,7 +730,12 @@
     "newOrgName": "Organization name",
     "newOrgHint": "This name is the join key — members type exactly this name when signing up.",
     "newOrgCreate": "Create",
-    "newOrgFailed": "Not created — an active organization with this name probably exists."
+    "newOrgFailed": "Not created — an active organization with this name probably exists.",
+    "purgeNow": "Purge now",
+    "purgeUserNow": "Purge user now",
+    "purgeOrgNow": "Purge organization now",
+    "effectPurgeUser": "Irreversible: the user's identity is erased and all their records and audio are deleted NOW — no 7-day window.",
+    "effectPurgeOrg": "Irreversible: the entire organization — members, records, transcripts and audio — is deleted NOW — no 7-day window."
   },
   "workflows": {
     "title": "Workflows",

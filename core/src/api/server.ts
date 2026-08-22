@@ -44,6 +44,7 @@ import { createConnectorsRepo, type ConnectorOAuthOptions, type ConnectorProvide
 import { createTts } from "./tts.ts";
 import { createLiveStt } from "./live-stt.ts";
 import { createMlClient } from "../worker/ml-client.ts";
+import { createStorage as createPurgeStorage } from "../purge/main.ts";
 import { createWorkflow, listWorkflows, resolveWorkflow } from "./workflows.ts";
 import type { DomainTool } from "../agent/tools.ts";
 import { agentToolsDb, type Db } from "../db/identity.ts";
@@ -1189,6 +1190,66 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     const body = (request.body ?? {}) as { reason?: unknown };
     if (typeof body.reason !== "string") throw new ValidationError("reason is required");
     return reply.send({ changed: await platform.softDeleteUser(identity, id, body.reason) });
+  });
+
+  /**
+   * INSTANT PURGE from the trash views (db/0083, user directive
+   * 2026-08-23). Objects FIRST: the audio of every affected call is
+   * deleted from storage before any row moves — the row is the map to
+   * the object, and the map is deleted last. A storage failure ABORTS
+   * (retryable): a purge that cannot keep the whole promise must not
+   * keep half. Refuses without storage configuration for the same
+   * reason.
+   */
+  const sweepPurgeObjects = async (
+    identity: Identity,
+    target: { org?: string; user?: string },
+  ): Promise<void> => {
+    if (!options.storageUrl || !options.storageServiceKey) {
+      throw new ValidationError(
+        "instant purge needs storage configuration — deleting rows without the audio would leave recordings orphaned",
+        { code: "purge_unconfigured" });
+    }
+    const paths = await options.db.withIdentity(identity, (tx) =>
+      tx.unsafe<{ bucket: string; path: string }>(
+        `select bucket, path from echo.platform_call_storage_paths($1, $2, $3)`,
+        [identity.userId, target.org ?? null, target.user ?? null],
+      )).catch((cause) => {
+        if ((cause as { code?: string }).code === "42883") {
+          throw new ConflictError("not_migrated");
+        }
+        throw cause;
+      });
+    const storage = createPurgeStorage(options.storageUrl, options.storageServiceKey);
+    for (const object of paths) {
+      // remove() returns false for already-gone — recovery states are
+      // normal inputs here, not faults; real failures throw and abort
+      await storage.remove(object.bucket, object.path);
+    }
+  };
+
+  app.post("/v1/platform/users/:id/purge", async (request, reply) => {
+    const identity = await auth.requirePlatformRoot(request);
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { reason?: unknown };
+    if (typeof body.reason !== "string") throw new ValidationError("reason is required");
+    await sweepPurgeObjects(identity, { user: id });
+    await options.db.withIdentity(identity, (tx) =>
+      tx.unsafe(`select echo.platform_purge_user($1, $2, $3)`,
+        [identity.userId, id, body.reason]));
+    return reply.send({ purged: true });
+  });
+
+  app.post("/v1/platform/organizations/:id/purge", async (request, reply) => {
+    const identity = await auth.requirePlatformRoot(request);
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { reason?: unknown };
+    if (typeof body.reason !== "string") throw new ValidationError("reason is required");
+    await sweepPurgeObjects(identity, { org: id });
+    await options.db.withIdentity(identity, (tx) =>
+      tx.unsafe(`select echo.platform_purge_org($1, $2, $3)`,
+        [identity.userId, id, body.reason]));
+    return reply.send({ purged: true });
   });
 
   app.post("/v1/platform/users/:id/restore", async (request, reply) => {

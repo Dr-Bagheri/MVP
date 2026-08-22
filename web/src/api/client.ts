@@ -518,6 +518,23 @@ export const api = {
     const suffix = params.size ? `?${params}` : "";
     return bff<PlatformPage<PlatformUser>>(`/api/platform/users${suffix}`);
   },
+  /** Instant purge (db/0083): NOW, objects first, root-walled twice. */
+  async purgePlatformOrganization(id: string, reason: string): Promise<{ purged: boolean }> {
+    return bff<{ purged: boolean }>(`/api/platform/organizations/${id}/purge`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ reason }),
+    });
+  },
+
+  async purgePlatformUser(id: string, reason: string): Promise<{ purged: boolean }> {
+    return bff<{ purged: boolean }>(`/api/platform/users/${id}/purge`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ reason }),
+    });
+  },
+
   /** Organizations are born in the console (db/0082) — root-walled. */
   async platformCreateOrg(name: string, reason: string): Promise<{ id: string | null }> {
     return bff<{ id: string | null }>("/api/platform/organizations", {
