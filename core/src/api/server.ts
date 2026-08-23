@@ -377,6 +377,20 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     return reply.send(await uploads.retry(identity, id));
   });
 
+  // regenerate a READY call's summary as a NEW version — optionally shaped
+  // by a ruled template and/or the requester's instruction (2026-08-23)
+  app.post("/v1/calls/:id/summaries", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { template?: string; instruction?: string };
+    return reply.send(
+      await uploads.resummarize(identity, id, {
+        ...(typeof body.template === "string" ? { template: body.template } : {}),
+        ...(typeof body.instruction === "string" ? { instruction: body.instruction } : {}),
+      }),
+    );
+  });
+
   /**
    * On-demand TRANSLATION of a call's summary or transcript to English
    * (0063). Runs the /translator SYSTEM skill through the same runtime as

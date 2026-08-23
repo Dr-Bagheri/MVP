@@ -24,7 +24,8 @@ import { randomUUID } from "node:crypto";
 import { NotFoundError, ValidationError } from "./errors.ts";
 import { assertUuid, type Db, type SqlTx } from "../db/identity.ts";
 import { createStorageSigner } from "../storage/signer.ts";
-import { createQueue, Q_LINK_SPEAKERS, Q_PROCESS_PART } from "../worker/queue.ts";
+import { createQueue, Q_LINK_SPEAKERS, Q_PROCESS_PART, Q_SUMMARIZE } from "../worker/queue.ts";
+import { SUMMARY_INSTRUCTION_MAX, SUMMARY_TEMPLATES } from "./vocabulary.ts";
 import type { Identity } from "../agent/types.ts";
 
 export interface UploadsConfig {
@@ -504,6 +505,67 @@ export function createUploadsRepo(db: Db, config: UploadsConfig) {
       }
       await queue.send(Q_LINK_SPEAKERS, { callId: id, ownerId: owner });
       return { id, status: "processing", resumed_at: "summary", parts: 0 };
+    },
+
+    /**
+     * REGENERATE a summary (user directive, 2026-08-23): a new VERSION on
+     * the existing ladder — versions are never edited in place, so this is
+     * an enqueue, not a write. Optionally shaped by a template from the
+     * ruled list and/or the requester's own instruction (bounded like every
+     * reason field; it steers structure, it is not content).
+     *
+     * Ready calls only: a failed call has the retry door, and a call still
+     * in the pipeline will summarize on its own. Status moves
+     * ready→summarizing so every table and page that already polls the
+     * pipeline sees this run the same way. The JOB runs as the CALL'S
+     * OWNER (M3), exactly like retry.
+     */
+    async resummarize(
+      identity: Identity,
+      callId: string,
+      opts: { template?: string; instruction?: string },
+    ): Promise<{ id: string; status: string }> {
+      const id = assertUuid(callId, "call id");
+      if (opts.template !== undefined
+        && !(SUMMARY_TEMPLATES as readonly string[]).includes(opts.template)) {
+        throw new ValidationError("unknown summary template",
+          { code: "unknown_template", params: { template: opts.template } });
+      }
+      const instruction = opts.instruction?.trim() || undefined;
+      if (instruction && instruction.length > SUMMARY_INSTRUCTION_MAX) {
+        throw new ValidationError("instruction too long",
+          { code: "instruction_too_long", params: { max: SUMMARY_INSTRUCTION_MAX } });
+      }
+      const call = await db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe<{ id: string; status: string; owner_id: string }>(
+          `select id, status, owner_id from echo.call
+            where id = $1 and deleted_at is null`,
+          [id],
+        ),
+      );
+      if (!call[0]) throw new NotFoundError("call not found");
+      if (call[0].status !== "ready") {
+        throw new ValidationError("only a ready call can be re-summarized",
+          { code: "not_ready", params: { status: call[0].status } });
+      }
+      const moved = await db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe<{ id: string }>(
+          `update echo.call set status = 'summarizing'
+            where id = $1 and status = 'ready'
+            returning id`,
+          [id],
+        ),
+      );
+      // a concurrent regenerate won the race — same intent, one answer
+      if (moved[0]) {
+        await queue.send(Q_SUMMARIZE, {
+          callId: id,
+          ownerId: call[0].owner_id,
+          ...(opts.template ? { template: opts.template } : {}),
+          ...(instruction ? { instruction } : {}),
+        });
+      }
+      return { id, status: "summarizing" };
     },
   };
 }

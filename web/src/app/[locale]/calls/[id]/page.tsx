@@ -10,6 +10,18 @@ import { useCrumbTitle } from "@/components/platform/CrumbTitle";
 import { Card, Chip, PageHeader, StatusChip } from "@/components/ui";
 import { formatClock, formatDate, digits, modelLabel } from "@/lib/format";
 import { isFillerWord, stripFillers } from "@/lib/cleanRead";
+import { notify } from "@/lib/notify";
+import { SUMMARY_TEMPLATES, type SummaryTemplate } from "@echo/core/vocabulary";
+
+/** Template → its literal message key: typed against the producer's union,
+    so a new ruled template breaks this build until it gets a label. */
+const TEMPLATE_LABEL_KEY: Record<SummaryTemplate, "templateBoard" | "templateGroup" | "templateTeam" | "templateItTeam" | "templateInterview"> = {
+  board: "templateBoard",
+  group: "templateGroup",
+  team: "templateTeam",
+  it_team: "templateItTeam",
+  interview: "templateInterview",
+};
 
 /**
  * Read view (SPEC "The core loop" #3): player beside the transcript, summary
@@ -107,6 +119,35 @@ export default function CallDetailPage({
    */
   const [speakerFilter, setSpeakerFilter] = useState<string | null>(null);
   const [cleanRead, setCleanRead] = useState(false);
+  /** Regenerate-summary panel (user directive, 2026-08-23): template from
+      the ruled list + an optional instruction; the run rides the normal
+      pipeline, so the existing status polling shows it and the new version
+      arrives through the same fetch as every other. */
+  const [regenOpen, setRegenOpen] = useState(false);
+  const [regenTemplate, setRegenTemplate] = useState<string>("");
+  const [regenInstruction, setRegenInstruction] = useState("");
+  const [regenBusy, setRegenBusy] = useState(false);
+
+  async function regenerate(): Promise<void> {
+    if (regenBusy) return;
+    setRegenBusy(true);
+    try {
+      await api.resummarize(id, {
+        ...(regenTemplate ? { template: regenTemplate } : {}),
+        ...(regenInstruction.trim() ? { instruction: regenInstruction.trim() } : {}),
+      });
+      setRegenOpen(false);
+      setRegenInstruction("");
+      notify(t("regenStarted"));
+      // the status flips to summarizing — the polling effect takes it from here
+      const fresh = await api.getCall(id).catch(() => null);
+      if (fresh) setCall(fresh);
+    } catch {
+      notify(t("regenFailed"), "warn");
+    } finally {
+      setRegenBusy(false);
+    }
+  }
 
   async function translate(what: "summary" | "transcript"): Promise<void> {
     const set = what === "summary" ? setSummaryEn : setTranscriptEn;
@@ -299,25 +340,76 @@ export default function CallDetailPage({
       <Card className="mb-4">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold text-fg">{t("summary")}</h2>
-          {versions.length > 0 ? (
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs text-fg-muted">{t("versions")}:</span>
-              {versions.map((v) => (
-                <button
-                  key={v.version}
-                  onClick={() => setShownVersion(v.version)}
-                  className={`chip ${
-                    v.version === shownVersion
-                      ? "bg-accent-soft text-accent"
-                      : "bg-surface-2 text-fg-muted"
-                  }`}
-                >
-                  {t("version", { n: digits(v.version, locale) })}
-                </button>
-              ))}
-            </div>
-          ) : null}
+          <div className="flex flex-wrap items-center gap-3">
+            {versions.length > 0 ? (
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-fg-muted">{t("versions")}:</span>
+                {versions.map((v) => (
+                  <button
+                    key={v.version}
+                    onClick={() => setShownVersion(v.version)}
+                    className={`chip ${
+                      v.version === shownVersion
+                        ? "bg-accent-soft text-accent"
+                        : "bg-surface-2 text-fg-muted"
+                    }`}
+                  >
+                    {t("version", { n: digits(v.version, locale) })}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            {call.status === "ready" ? (
+              <button
+                className="text-xs text-accent underline-offset-2 hover:underline"
+                onClick={() => setRegenOpen((v) => !v)}
+              >
+                {t("regenerate")}
+              </button>
+            ) : null}
+          </div>
         </div>
+        {regenOpen && call.status === "ready" ? (
+          <div className="mb-3 space-y-2 rounded-lg border border-border bg-surface-2/40 p-3">
+            <div className="grid gap-2 sm:grid-cols-2">
+              <select
+                className="input h-9 min-h-0 py-0 text-xs"
+                value={regenTemplate}
+                onChange={(e) => setRegenTemplate(e.target.value)}
+              >
+                <option value="">{t("templateDefault")}</option>
+                {SUMMARY_TEMPLATES.map((k) => (
+                  <option key={k} value={k}>
+                    {t(TEMPLATE_LABEL_KEY[k])}
+                  </option>
+                ))}
+              </select>
+              <input
+                className="input h-9 min-h-0 py-0 text-xs"
+                maxLength={500}
+                placeholder={t("regenInstructionHint")}
+                value={regenInstruction}
+                onChange={(e) => setRegenInstruction(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") void regenerate(); }}
+              />
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                className="btn-primary h-8 min-h-0 px-3 text-xs"
+                disabled={regenBusy}
+                onClick={() => void regenerate()}
+              >
+                {t("regenGo")}
+              </button>
+              <button
+                className="text-xs text-fg-muted underline-offset-2 hover:underline"
+                onClick={() => setRegenOpen(false)}
+              >
+                {t("regenCancel")}
+              </button>
+            </div>
+          </div>
+        ) : null}
         {summary ? (
           <>
             {showSummaryEn && summaryEn === "loading" ? (

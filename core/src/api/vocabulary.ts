@@ -216,3 +216,21 @@ export type ProposalKind = (typeof PROPOSAL_KINDS)[number];
  */
 export const TRANSCRIPT_TIMINGS = ["full", "mixed", "none"] as const;
 export type TranscriptTiming = (typeof TRANSCRIPT_TIMINGS)[number];
+
+/**
+ * Summary TEMPLATES (user ruling, 2026-08-23 — this exact list, no sales
+ * and no standup): a template is a structural addendum to the summarizer's
+ * skill prompt, chosen per regeneration, never a second skill. The keys
+ * are the wire vocabulary; the Persian addenda live with the worker.
+ */
+export const SUMMARY_TEMPLATES = [
+  "board",
+  "group",
+  "team",
+  "it_team",
+  "interview",
+] as const;
+export type SummaryTemplate = (typeof SUMMARY_TEMPLATES)[number];
+
+/** The regenerate door's instruction field is bounded like every reason. */
+export const SUMMARY_INSTRUCTION_MAX = 500;

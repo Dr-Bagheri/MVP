@@ -64,6 +64,11 @@ const EXCLUDED: Record<string, string> = {
     "is no local union or local member list to drift. Same reasoning as " +
     "AUDIT_SOURCES — the missing guard is the consequence of importing rather " +
     "than copying, not an oversight.",
+  SUMMARY_TEMPLATES:
+    "not mirrored: the call page imports SUMMARY_TEMPLATES and the " +
+    "SummaryTemplate type straight from this module, and its label map is " +
+    "typed Record<SummaryTemplate, …> — a new ruled template breaks the web " +
+    "BUILD until it gets a label, which is a stronger guard than a mirror.",
 };
 
 /** A published vocabulary is a frozen array of strings. */

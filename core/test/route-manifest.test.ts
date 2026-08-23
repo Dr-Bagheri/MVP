@@ -44,6 +44,7 @@ const REQUIRED_ROUTES: [method: string, path: string, why: string][] = [
   ["GET", "/v1/calls/:id/speakers", "SPEC §The transcript — resolving a segment's speaker_id"],
   ["GET", "/v1/calls/:id/summary", "SPEC §The summary"],
   ["GET", "/v1/calls/:id/summaries", "invariant 4 — versions, never edits"],
+  ["POST", "/v1/calls/:id/summaries", "2026-08-23 — regenerate as a NEW version, optionally shaped by a ruled template and the requester's instruction"],
   ["GET", "/v1/search", "SPEC §Search"],
 
   ["POST", "/v1/assistant/ask", "SPEC §The assistant"],

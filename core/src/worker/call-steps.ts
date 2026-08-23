@@ -118,6 +118,9 @@ export interface Summarizer {
     identity: Identity;
     callId: string;
     transcript: string;
+    /** Regenerate extras (2026-08-23): template key + requester's ask. */
+    template?: string | undefined;
+    instruction?: string | undefined;
   }): Promise<SummaryWritten | SummarySkipped>;
 }
 
@@ -183,7 +186,13 @@ export function createSummarizeStep({
       // without anyone replaying them by hand.
       let result;
       try {
-        result = await summarizer.summarize({ identity, callId: payload.callId, transcript });
+        result = await summarizer.summarize({
+          identity,
+          callId: payload.callId,
+          transcript,
+          template: payload.template,
+          instruction: payload.instruction,
+        });
       } catch (error) {
         if ((error as Error)?.name === "MissingSystemSkillError") {
           throw new StepError("summarizer_skill_missing", (error as Error).message, true);

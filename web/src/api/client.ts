@@ -754,6 +754,19 @@ export const api = {
       `/api/calls/${callId}/retry`, { method: "POST" });
   },
 
+  /** Regenerate a READY call's summary as a NEW version (2026-08-23) —
+      optionally shaped by a ruled template and/or an instruction. */
+  async resummarize(
+    callId: string,
+    opts: { template?: string; instruction?: string } = {},
+  ): Promise<{ id: string; status: string }> {
+    return bff<{ id: string; status: string }>(`/api/calls/${callId}/summaries`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(opts),
+    });
+  },
+
   /** Notes & chapters on a call (0079) — annotations, never the record. */
   async callNotes(callId: string): Promise<CallNote[]> {
     return bff<CallNote[]>(`/api/calls/${callId}/notes`);

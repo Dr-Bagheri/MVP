@@ -46,6 +46,11 @@ export interface JobPayload {
   ownerId: string;
   /** Absent on the per-call steps. */
   partId?: string;
+  /** Regenerate-a-summary extras (user directive, 2026-08-23): a template
+      key from SUMMARY_TEMPLATES and/or the requester's own instruction.
+      Only the summarize step reads them; absent on every other message. */
+  template?: string;
+  instruction?: string;
 }
 
 /**

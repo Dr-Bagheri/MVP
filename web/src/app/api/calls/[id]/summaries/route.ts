@@ -17,3 +17,27 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     return errorResponse(error);
   }
 }
+
+/**
+ * Regenerate as a NEW version (2026-08-23): optional template key +
+ * requester instruction, forwarded verbatim — the ruled key list and the
+ * length bound are core's to enforce, and a copy here would be a second
+ * spelling of one rule.
+ */
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  try {
+    const body = (await request.json().catch(() => ({}))) as {
+      template?: string;
+      instruction?: string;
+    };
+    return Response.json(
+      await coreFetch<{ id: string; status: string }>(
+        `/v1/calls/${encodeURIComponent(id)}/summaries`,
+        { method: "POST", body },
+      ),
+    );
+  } catch (error) {
+    return errorResponse(error);
+  }
+}
