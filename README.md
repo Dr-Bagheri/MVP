@@ -9,10 +9,12 @@ and turns them into summaries you can question. Everything a user, an agent or
 a job touches is bounded by the same permission wall — enforced in the
 database, not in a prompt.
 
-> **Status: private, pre-release.** The architecture is locked (v1.0, decisions
-> M1–M25 in [ARCHITECTURE.md](ARCHITECTURE.md)); `db/`, `core/` and `ml/` are
-> built and tested, `web/` is wiring the last milestone-4 surfaces. Nothing
-> here is deployed for real users yet.
+> **Status: private, deployed.** Production runs today: the web app on Vercel
+> at **app.neurai.pt**, the core api + worker + speech service on a dedicated
+> server behind **api.neurai.pt** (Cloudflare Tunnel), and a managed Postgres
+> with row-level security as the authorization wall. The platform has its
+> first real organization and owner; wider onboarding is deliberate and
+> vendor-gated.
 
 ---
 
@@ -20,126 +22,58 @@ database, not in a prompt.
 
 | Surface | What you get |
 |---|---|
-| **Assistant hub** | The first page *is* the assistant: ask anything, get answers drawn from what you have access to. Conversations persist; history is reachable, never permanent chrome. |
-| **Echo — record** | Browser capture that writes in 30-minute parts as it goes, so a crash costs one part, never the call. Part N uploads while N+1 records. |
-| **Echo — calls** | Every call becomes a titled, summarized object: speaker-labelled transcript, word-level timing where the engine gives it, tap-to-seek. |
-| **Ask your calls** | Grounded Q&A over transcripts with timestamp citations, plus write actions that go through a propose → you confirm → execute loop. |
-| **User management** | Invitations, three roles (owner / admin / member), suspend, and a true-delete that actually removes a person, with a tombstone so the record of the deletion survives. |
-| **API gateway** | Per-member API keys minted show-once, each acting with exactly its owner's authority — never more — plus webhooks with signed delivery and a delivery log. |
-| **Both languages** | Persian default and English, RTL-first, Vazirmatn, Persian digits, Jalali-capable dates — not a translation layer bolted on. |
-
-### Built vs. designed
-
-The information architecture is complete; some panels behind it are not.
-Rather than hide the unbuilt ones, the app names them and says so on the page
-— a control that looks live and silently does nothing is worse than an honest
-blank. Where this README describes the product, it marks the difference too:
-
-"Verified" is three different claims here, and the project keeps them apart —
-flattening them is how a repo starts lying about itself:
-
-1. **Fixture-proven** — the logic is asserted against a captured response body.
-2. **Screen-verified** — someone loaded it in a browser and measured it: RTL at
-   both widths, contrast, the awkward states.
-3. **Live-token-verified** — exercised against the real server as a real signed-in
-   person. **Nothing is at level 3 yet**, because sign-in doesn't complete end to
-   end (see below).
-
-| Surface | State |
-|---|---|
-| Assistant hub · Echo (record + calls) · call detail · search · Management (Users, Connectors) | **Built** — screen-verified |
-| Audit Logs — read surface | **Built** — reads the real trail (admin actions, agent runs, proposal decisions) |
-| Management · Server health | **Built** — live per-metric reads, screen-verified |
-| Settings — section IA, your own preferences, organisation form | **Built** — screens live; the client swaps to the live path with auth |
-| Conversations | **Server live, UI live** — joined end to end with auth |
-| Management · Models | **Named, not wired** — visible with an on-page notice |
-| Log Drains | **Backend exists; read surface not wired** |
-| SSO, Legal Documents | **Out of v1 scope** — listed so the IA is honest, not implemented |
-
-**Sign-in is the one gap that matters.** The accounts, roles and permission wall
-are all built and tested, but the browser sign-in flow isn't completable yet, so
-no surface has been exercised end to end as a real signed-in user. Until it is,
-the two token-gated surfaces (Audit Logs, Server health) can't be photographed
-truthfully — an unauthenticated browser shows their error state, which would
-libel a working surface. They're absent from the screenshots below for exactly
-that reason.
+| **Assistant hub** | The first page *is* the assistant: ask by text or **voice** (it wakes only to its name, stays deaf and silent while you record, stops on «بس/stop», and follows Persian and English in the same breath). Conversations persist; the orb docks in the top bar on every other screen. |
+| **Echo — new meeting** | A recording engine that survives navigation (the take docks into the top bar as a mini recorder), with a crash buffer, an LED level meter, live captions, a waveform with chapters, an **agenda checklist** and a **meeting notebook** (first line becomes the chapter), quality guards (quiet / clipping / share-ended / **mic disconnected → auto-pause + fallback**), tab/system audio for online meetings, an optional spoken consent announcement that lands in the record, a one-tap **quick voice memo**, and a red **Stop & delete** that confirms before discarding. Long takes roll silently into parts at a storage ceiling — one call, one timeline. |
+| **Echo — records** | Live-refreshing statuses, inline rename, private/org scope switch, archive, **retry** for failed calls, **bulk actions** over selected rows, and deletes that confirm again with a typed reason recorded in the **deletion ledger**. Authority over rows follows the strict role hierarchy (owner > admin > member; peers walled both ways). |
+| **A call's page** | Speaker-labelled transcript with honest per-row timing, **click-any-word playback**, reading modes (per-speaker filter, clean-read that hides filler sounds), **versioned summaries** regenerable with meeting **templates** (board / group / team / IT team / interview), a custom instruction, and an optional **figures-and-dates ledger**; English translation on demand; **exports** (SRT / VTT / Markdown) with an ID-**redaction** toggle. |
+| **Speakers & voices** | A people directory with org titles, and **scripted voice enrollment** — read a phoneme-rich passage (Persian or English, both always offered) and the pipeline recognizes you automatically in future meetings. Only the voice vector is stored. |
+| **User management** | Join-only sign-up (anyone may authenticate; orgs and owners are born only in the vendor console), invitations, three roles + platform root, suspend, and a true-delete with a tombstone so the record of the deletion survives. Sign-in providers (Google / GitHub) have product-level on/off switches. |
+| **API gateway** | Per-member API keys minted show-once, each acting with exactly its owner's authority — never more — plus webhooks with signed delivery, replay protection, an address guard, and a delivery log. |
+| **Platform console** | Vendor-only: create organizations, mint owners, approve and suspend, and **instant purge** (objects-first) for users and whole organizations — every action with a typed reason in the platform audit. |
+| **Both languages** | Persian default and English, RTL-first, Vazirmatn, Persian digits with the language, months with the calendar preference (Jalali/Gregorian) — not a translation layer bolted on. |
 
 ## Screenshots
 
-From the running shell with seeded demo data. The product is Persian-first, so
-these are the Persian screens; the English locale is the same UI mirrored.
-
-| Assistant hub — fa | Assistant hub — en |
-|---|---|
-| ![The hub in Persian: the N-mark over the greeting, the prompt box, and one app card — Echo. The caption under the greeting is the scope promise: "whatever you ask stays inside your own access."](docs/screenshots/hub-fa.png) | ![The same hub in English, mirrored left-to-right — one layout, not two designs.](docs/screenshots/hub-en.png) |
-
-| Echo — record and calls, one screen | Management · Users |
-|---|---|
-| ![Echo after the pivot: recording controls on top — record in the browser or upload a file, with the level meter and a note that sessions longer than 30 minutes split themselves into parts that stay one call with one timeline — and the calls list directly below, each row showing owner, Jalali date, duration, private/org scope and status, including one still summarizing and one failed.](docs/screenshots/echo-merged.png) | ![User management: pending sign-ups awaiting approval, then the member table with username, role and status. The stat tiles show counts with "—" where a trend would go, and say why in a line underneath: until status history accumulates, a percentage would be invented.](docs/screenshots/management-users.png) |
-
-| Call detail — the timing ladder | Search |
-|---|---|
-| ![A call whose transcript is partly word-timed: the amber chip says "part of this call has reduced accuracy" — part, not the whole — and the line beneath explains that one part came through the fallback lane and lacks word-level timing while the rest of the transcript is complete. Lines with word timing are seekable per word; the degraded part is seekable per line.](docs/screenshots/call-detail.png) | ![Searching transcripts and summaries, four hits across two calls, each labelled "in transcript" or "in summary" with its timestamp. Matching is Persian-folded, so a hit can be correct without being highlighted — the layout is built to read properly with no marks at all.](docs/screenshots/search.png) |
-
-| Management · Connectors | Management — two-pane, grouped |
-|---|---|
-| ![The API gateway surface: keys listed by the member who owns them — each acting with that member's authority and dying with their account — showing last use, expiry, revoked and expired states, and whether the key may reach the assistant. Below, webhooks that report that something happened without shipping the content.](docs/screenshots/management-connectors.png) | ![Management's two-pane layout: a sidebar grouped under People / Assistant / Service, with an unbuilt entry carrying its own "not connected yet" tag rather than being hidden, and a breadcrumb that appears on inner pages but never on the hub.](docs/screenshots/management-two-pane.png) |
-
-| Settings · General | Account menu |
-|---|---|
-| ![Settings with the organisation form live: your own preferences (interface language, theme) separated from organisation-wide settings, each field carrying the line that says who it affects — a personal choice overrides the org default.](docs/screenshots/settings-general.png) | ![The account menu open over the shell: identity header first, then the entries — so who you are is answered before what you can do.](docs/screenshots/avatar-menu.png) |
-
-Four things worth noticing, because they are deliberate. **Nothing is faked**:
-a tile with no honest trend to show prints `—` and explains itself. **The
-assistant docks rather than takes over** — selecting an app keeps the app
-reachable at every width, with no dialog to dismiss on arrival. **An API key
-is a member, not a service account**: it can do exactly what its owner can do,
-and disabling the person disables the key in the same instant. And **a
-degraded transcript says which part degraded** — a call that is 95% word-timed
-warning as though the whole transcript were unreliable was a real bug; the
-chip naming *part* of the call is the fix, and the visible proof of the timing
-ladder.
-
-> Captured from the current build. Sign-in screens are deliberately absent
-> because the flow can't complete end to end yet, and a screenshot would promise
-> something that doesn't work — as are the two surfaces that need a real token to
-> render their data, for the same reason in reverse: unauthenticated, they show
-> an error that isn't the truth about them.
+**Being re-shot.** The interface moved to its neutral-black theme with solid
+pill buttons in August 2026, and every stored screenshot predates that — a
+stale picture would document a product that no longer exists, so the old
+gallery is retired rather than left to mislead. Fresh captures of the current
+surfaces (the hub, the top bar with the docked mini recorder, New meeting,
+the records table, a call page, the speakers directory, Settings, Management,
+and the platform console) land here with the next signed-in capture pass.
 
 ## Architecture
 
-Four packages, three planes. The control plane owns identity and permissions,
-the work plane moves jobs, the data plane holds the record and the indexes
-that can be rebuilt from it. Full reasoning, decision by decision, in
-[ARCHITECTURE.md](ARCHITECTURE.md).
+Four packages, three planes, two deployment homes. The control plane owns
+identity and permissions, the work plane moves jobs, the data plane holds the
+record and the indexes that can be rebuilt from it.
 
 ```mermaid
 flowchart TB
-    subgraph client["Browser"]
+    subgraph vercel["Vercel — app.neurai.pt"]
         UI["Next.js App Router — UI<br/>fa default + en · RTL-first"]
+        RT["BFF route handlers<br/>the session lives here;<br/>the browser never holds a token"]
     end
 
-    subgraph bff["web/ — BFF"]
-        RT["Route handlers<br/>the session lives here;<br/>the browser never holds a token"]
+    subgraph hetzner["Dedicated server — api.neurai.pt (Cloudflare Tunnel)"]
+        API["core api (Fastify)<br/>/v1 · SSE · gateway"]
+        AG["agent runtime<br/>tools · policy veto<br/>propose → confirm"]
+        WK["core worker<br/>pipeline steps"]
+        ML["ml — speech facade<br/>VAD · STT relay · diarization ·<br/>voice embeddings · stateless"]
     end
 
-    subgraph app["core/ — one codebase, two processes"]
-        API["api (Fastify)<br/>/v1 · SSE · gateway"]
-        AG["Pi agent runtime<br/>tools · policy veto<br/>propose → confirm"]
-        WK["worker<br/>pipeline DAG executor"]
-    end
+    STT["Soniox<br/>streaming + batch STT"]
+    LLM["OpenRouter<br/>user-chosen models<br/>(catalogue is curated)"]
 
-    ML["ml/ — speech facade<br/>audio in → words + speakers out<br/>stateless, productless"]
-    STT["STT providers<br/>Soniox · OpenRouter lanes"]
-    LLM["OpenRouter<br/>user-chosen models"]
-
-    subgraph sb["Supabase"]
+    subgraph sb["Supabase (managed)"]
         DB[("Postgres<br/>RLS · role grants · pgmq")]
         ST[("Storage — private buckets<br/>signed URLs only")]
-        EF["Edge functions<br/>webhook probe"]
+        AUTH["Auth — ES256 tokens,<br/>verified via JWKS"]
+        EF["Edge function<br/>webhook probe"]
     end
 
     UI --> RT --> API
+    RT --> AUTH
     API --> AG
     API --> DB
     AG --> DB
@@ -163,36 +97,39 @@ back door.
 
 ```mermaid
 flowchart LR
-    REC["record<br/>(browser)"] --> P["parts<br/>≤30 min each"]
+    REC["record<br/>(browser; one continuous take,<br/>silent part rolls at a byte ceiling)"] --> P["parts<br/>one shared timeline"]
     P --> Q["pgmq<br/>process_part"]
     Q --> V["VAD<br/>silence trimming"]
-    V --> A["ASR<br/>word timings where available"]
+    V --> A["STT<br/>word timings where available"]
     A --> D["diarization<br/>who spoke when"]
-    D --> LS["link speakers<br/>(per call)"]
-    LS --> SUM["summarize<br/>(spans all parts)"]
+    D --> LS["link speakers<br/>+ enrolled-voice matching"]
+    LS --> SUM["summarize<br/>skill ladder · templates ·<br/>figures ledger"]
     SUM --> R["ready"]
 
     A -. "no word timings" .-> DEG["degraded + flagged<br/>never a lost call"]
     DEG --> D
+    R -. "regenerate<br/>(new version)" .-> SUM
+    FAIL["failed"] -. "retry — resumes at<br/>the missing artifact" .-> Q
 ```
 
 Every step is idempotent — it checks for its artifact, not a done flag — so a
 retry is safe. Failures retry with backoff, then land in a dead-letter queue;
-a failed call is *visibly* failed and resumable. When a transcription lane
-can't carry word timestamps, the call degrades to line-level timing and says
-so, rather than being lost (the timing ladder, M20).
+a failed call is *visibly* failed and offers a retry button that re-enters the
+pipeline exactly where the artifacts say it stopped. When a transcription lane
+can't carry word timestamps, the call degrades down a timing ladder (word →
+line → anchored span) and says so per row, rather than being lost.
 
 ## Stack
 
 | Layer | Choice |
 |---|---|
-| Language | TypeScript everywhere (M9) |
+| Language | TypeScript everywhere |
 | `web/` | Next.js App Router · next-intl · Tailwind · RTL-first · Vazirmatn |
-| `core/` | Fastify · zod at every boundary · pino (no content in logs) · SSE |
+| `core/` | Fastify · zod at every boundary · pino (no content in logs) · SSE · postgres.js |
 | Agent | Pi (`pi-agent-core` + `pi-ai`) — the scope wall is ours, not the harness's |
-| `ml/` | Soniox + OpenRouter STT lanes · Silero VAD · sherpa-onnx diarization |
-| Data | Supabase Postgres · hand-written SQL migrations · RLS + role grants · Drizzle for queries only · pgmq |
-| Tests | Vitest per package · a SQL suite that tests the wall itself · live acceptance runs |
+| `ml/` | Soniox STT (streaming + batch) · Silero VAD · sherpa-onnx diarization · speaker embeddings |
+| Data | Supabase Postgres · hand-written SQL migrations · RLS + role grants · **no ORM** (postgres.js only) · pgmq |
+| Tests | Vitest per package · a SQL suite that tests the wall itself · a production-build gate · a byte-level encoding sweep · contrast verification · opt-in live lanes |
 
 ## Repository layout
 
@@ -343,8 +280,52 @@ The design system has its own gate — `design-system/neurai-platform/verify-pai
 fails the build if any token pair drops below its contrast floor. It runs as
 part of `@echo/web test`.
 
+### Production deploys
+
+Production has two homes and three motions:
+
+- **Web** — push to `main`; Vercel builds and promotes automatically. Confirm
+  with `npx vercel ls mvp --scope <team>` — a push is not a deploy until the
+  newest row says **Ready**.
+- **Core (api + worker)** — from the repo root:
+
+  ```bash
+  git archive HEAD core | gzip > core-deploy.tar.gz
+  scp core-deploy.tar.gz root@<server>:/tmp/
+  ssh root@<server> "cd /opt/neurai/app && tar xzf /tmp/core-deploy.tar.gz \
+    && systemctl restart neurai-api neurai-worker \
+    && curl -sf http://127.0.0.1:8080/health"
+  ```
+
+  The deploy is done when `/health` answers 200 and both units are `active`.
+- **ml** — same archive path plus `ml/src`, `ml/package.json`,
+  `ml/tsconfig.json`; build in `/opt/neurai/app/ml` and restart `neurai-ml`.
+
+Server environment lives in `/etc/neurai/core.env` (app/agent database URLs,
+Supabase URL + service key, provider keys). The owner and purge credentials
+are deliberately **not** on the server — migrations cannot run from there.
+
+### Migrations in production
+
+Operator-run, never automated, never from the server:
+
+```bash
+git pull
+sed -i 's/\r$//' db/migrations/*.sql
+DATABASE_URL="$OWNER" node db/scripts/db.mjs migrate
+git checkout -- db/migrations
+```
+
+`$OWNER` must be the Supabase **session pooler** connection string (the
+`aws-…pooler.supabase.com:5432` host with the `postgres.<project-ref>` user)
+plus `?options=-c%20check_function_bodies%3Doff` — the direct `db.<ref>`
+host is IPv6-only and unresolvable from most home networks.
+
 ---
 
 ## License
 
-Proprietary — all rights reserved. This is a private commercial repository.
+**Proprietary — all rights reserved.** This is a private commercial
+repository; see [LICENSE](LICENSE). Open-source components it builds on are
+listed with their licenses in
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
