@@ -17,6 +17,7 @@ import {
   type RecorderErrorCode,
 } from "@/lib/recordingEngine";
 import { notify } from "@/lib/notify";
+import { speakQueued } from "@/lib/voice";
 import { Card, Chip, Field } from "@/components/ui";
 import { Link } from "@/i18n/routing";
 import { digits, formatClock } from "@/lib/format";
@@ -61,6 +62,8 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
   const [source, setSource] = useState<"mic" | "system">("mic");
   /** the red stop-and-delete asks AGAIN before acting (user directive) */
   const [confirmDiscard, setConfirmDiscard] = useState(false);
+  /** speak «این جلسه ضبط می‌شود» into the room — and into the record */
+  const [announceOn, setAnnounceOn] = useState(false);
   /**
    * RESUME mode: `?resume=<id>` — the call continues on the same id, next
    * part index, offset where the audio ends. `null` = fresh; "loading"
@@ -124,7 +127,15 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
       title: titleOverride ?? title,
       locale,
       resume,
-    }).then(() => void refreshDevices()); // labels exist once permission does
+    }).then(() => {
+      void refreshDevices(); // labels exist once permission does
+      /* consent announcement (user Persian-moat item, 2026-08-23): spoken
+         AFTER the take starts, so the announcement itself lands IN the
+         recording — an announcement outside the record proves nothing */
+      if (announceOn && recorderSnapshot().phase === "recording") {
+        speakQueued(t("announceLine"));
+      }
+    });
   }
 
   /**
@@ -277,6 +288,14 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
               </select>
             </Field>
           </div>
+          <label className="mt-3 flex cursor-pointer items-center gap-2 text-sm text-fg">
+            <input
+              type="checkbox"
+              checked={announceOn}
+              onChange={(e) => setAnnounceOn(e.target.checked)}
+            />
+            {t("announceOption")}
+          </label>
           <div className="mt-5 flex flex-wrap items-center gap-3">
             <button
               className="btn-primary h-12 px-6"

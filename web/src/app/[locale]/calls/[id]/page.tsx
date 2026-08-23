@@ -19,6 +19,7 @@ import {
   vttFrom,
 } from "@/lib/exportCall";
 import { notify } from "@/lib/notify";
+import { redactSensitive } from "@/lib/redact";
 import { SUMMARY_TEMPLATES, type SummaryTemplate } from "@echo/core/vocabulary";
 
 /** Template → its literal message key: typed against the producer's union,
@@ -127,6 +128,10 @@ export default function CallDetailPage({
    */
   const [speakerFilter, setSpeakerFilter] = useState<string | null>(null);
   const [cleanRead, setCleanRead] = useState(false);
+  /** redact identifier-shaped digit runs in EXPORTS (first slice of the
+      redaction engine) — display stays verbatim; the toggle guards what
+      leaves the product, not what the room said */
+  const [redactExports, setRedactExports] = useState(false);
   /** Regenerate-summary panel (user directive, 2026-08-23): template from
       the ruled list + an optional instruction; the run rides the normal
       pipeline, so the existing status polling shows it and the new version
@@ -612,13 +617,16 @@ export default function CallDetailPage({
                       className="ltr rounded-full bg-surface-2 px-2 py-0.5 uppercase hover:text-fg disabled:opacity-40"
                       disabled={!canExportSubtitles(rows)}
                       title={!canExportSubtitles(rows) ? t("exportNoTiming") : undefined}
-                      onClick={() =>
+                      onClick={() => {
+                        const out = redactExports
+                          ? rows.map((r) => ({ ...r, text: redactSensitive(r.text) }))
+                          : rows;
                         downloadText(
                           exportFilename(call.title, kind),
-                          kind === "srt" ? srtFrom(rows, speakerName) : vttFrom(rows, speakerName),
+                          kind === "srt" ? srtFrom(out, speakerName) : vttFrom(out, speakerName),
                           "text/plain",
-                        )
-                      }
+                        );
+                      }}
                     >
                       {kind}
                     </button>
@@ -626,22 +634,40 @@ export default function CallDetailPage({
                   <button
                     type="button"
                     className="ltr rounded-full bg-surface-2 px-2 py-0.5 uppercase hover:text-fg"
-                    onClick={() =>
+                    onClick={() => {
+                      const out = redactExports
+                        ? rows.map((r) => ({ ...r, text: redactSensitive(r.text) }))
+                        : rows;
                       downloadText(
                         exportFilename(call.title, "md"),
                         markdownFrom({
                           title: call.title || t("untitledExport"),
                           date: formatDate(call.started_at, locale),
-                          summary: summary?.body ?? null,
-                          rows,
+                          summary: redactExports
+                            ? (summary?.body ? redactSensitive(summary.body) : null)
+                            : (summary?.body ?? null),
+                          rows: out,
                           speakerName,
                           labels: { summary: t("summary"), transcript: t("transcript") },
                         }),
                         "text/markdown",
-                      )
-                    }
+                      );
+                    }}
                   >
                     md
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={redactExports}
+                    title={t("redactHint")}
+                    onClick={() => setRedactExports((v) => !v)}
+                    className={`rounded-full px-2 py-0.5 transition-colors ${
+                      redactExports
+                        ? "bg-accent-soft font-semibold text-accent"
+                        : "bg-surface-2 hover:text-fg"
+                    }`}
+                  >
+                    {t("redactToggle")}
                   </button>
                 </span>
                 <button
