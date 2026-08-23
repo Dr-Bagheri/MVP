@@ -73,6 +73,15 @@ export const DARK = {
   fgSubtle: "#858585",     // group labels — recedes toward the surface
   accent: "#9B85FF",        // the brand violet — the one color left
   onAccent: "#000000",      // DARK on violet: white fails here, as before
+  /* SOLID-BUTTON revision (user directive, 2026-08-23: "solid theme …
+     look like [sana's] buttons"): the primary CTA is the NEUTRAL pair —
+     a white pill on the black theme, near-black on light — matching the
+     reference; the violet stays the accent, never the button fill. */
+  primary: "#FAFAFA",
+  onPrimary: "#000000",
+  /* ink on the danger FILL: the dark theme's danger is a light rose, so
+     the ink is black — the on-accent role-flip pattern again */
+  onDanger: "#000000",
   success: "#4ADE80", warning: "#FBBF24", danger: "#FB7185", info: "#7DD3FC",
 };
 
@@ -87,6 +96,9 @@ export const LIGHT = {
   fgSubtle: "#6E6E6E",     // group labels — recedes toward the surface
   accent: "#5747E6",        // DERIVED violet ink; fills stay the brand's
   onAccent: "#FFFFFF",
+  primary: "#171717",       // the neutral CTA, mirrored to the light theme
+  onPrimary: "#FFFFFF",
+  onDanger: "#FFFFFF",      // light's danger is a deep red — white ink
   success: "#166534", warning: "#92400E", danger: "#BE123C", info: "#075985",
 };
 
@@ -122,6 +134,8 @@ for (const [name, T] of [["DARK (primary)", DARK], ["LIGHT (derived)", LIGHT]]) 
   check("accent as text on bg", T.accent, T.bg);
   check("accent as text on surface", T.accent, T.surface);
   check("ON-ACCENT on accent fill", T.onAccent, T.accent);
+  check("ON-PRIMARY on primary fill (solid CTA)", T.onPrimary, T.primary);
+  check("ON-DANGER on danger fill (solid danger button)", T.onDanger, T.danger);
   for (const k of ["success", "warning", "danger", "info"]) check(`${k} on surface`, T[k], T.surface);
   for (const k of ["success", "warning", "danger", "info", "accent"]) {
     check(`${k} on its ${TINT * 100}% chip (composited)`, T[k], over(T[k], T.surface, TINT));

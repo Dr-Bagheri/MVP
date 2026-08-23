@@ -71,9 +71,14 @@
     --warning: 251 191 36;
     --danger: 251 113 133;
     --info: 125 211 252;
-    /* `.btn-primary` follows the one accent family (M22) */
-    --primary: 155 133 255;
+    /* SOLID-BUTTON revision (user directive, 2026-08-23): the primary CTA
+       is the NEUTRAL pair — a white pill on this theme, per the sana
+       reference. The violet stays the accent; it no longer fills buttons. */
+    --primary: 250 250 250;
     --on-primary: 0 0 0;
+    /* ink on the danger FILL — the on-accent role-flip pattern: dark's
+       danger is a light rose, so the ink is black */
+    --on-danger: 0 0 0;
     --secondary: 166 166 166;
     --muted: 31 31 31;
     /* retained for the Echo shell until its interior re-derives */
@@ -105,8 +110,9 @@
     --warning: 146 64 14;
     --danger: 190 18 60;
     --info: 7 89 133;
-    --primary: 87 71 230;
+    --primary: 23 23 23;
     --on-primary: 255 255 255;
+    --on-danger: 255 255 255;
     --secondary: 89 89 89;
     --muted: 237 237 237;
     --sidebar: 255 255 255;
@@ -292,25 +298,31 @@
    * `.tap` (composed here) extends the HIT area to 44 — the standing 44px
    * ruling is satisfied by the tap target, the approved density by the box.
    */
+  /*
+   * SOLID PILLS platform-wide (user directive, 2026-08-23, from the sana
+   * reference shot): every button is a fully-rounded pill with a SOLID
+   * fill — no outline-only buttons. Primary is the neutral fg/bg pair
+   * (white pill in dark, near-black in light — the tokens flip);
+   * secondary is the solid gray pill beside it in the reference. The
+   * violet stays the ACCENT (links, active states, the orb) so "the main
+   * thing to press" and "a thing to read" still never look alike.
+   */
   .btn {
     @apply tap inline-flex min-h-control cursor-pointer items-center justify-center gap-2
-           rounded-md px-4 text-center text-sm font-semibold leading-control transition-colors duration-150
+           rounded-full px-5 text-center text-sm font-semibold leading-control transition-all duration-150
            disabled:pointer-events-none disabled:opacity-50;
   }
-  /* Primary action = navy. The accent stays for links and inline emphasis, so
-     "the main thing to press" and "a thing to read" never look alike. */
   .btn-primary {
-    @apply btn bg-primary text-on-primary hover:bg-secondary active:bg-primary;
+    @apply btn bg-primary text-on-primary hover:opacity-90 active:opacity-80;
   }
   .btn-secondary {
-    @apply btn border border-border bg-surface text-fg hover:border-secondary hover:bg-muted
-           active:bg-surface-2;
+    @apply btn bg-surface-2 text-fg hover:bg-border active:bg-surface-2;
   }
   .btn-ghost {
     @apply btn text-fg-muted hover:bg-muted hover:text-fg active:bg-surface-2;
   }
   .btn-danger {
-    @apply btn bg-danger text-white hover:brightness-110 active:brightness-95;
+    @apply btn bg-danger text-on-danger hover:opacity-90 active:opacity-80;
   }
 
   /*

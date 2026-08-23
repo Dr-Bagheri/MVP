@@ -115,6 +115,8 @@ let shareEnded = false;
 let flushDone: (() => void) | null = null;
 let partsEnqueued = 0;
 let priorParts = false;
+/** a discard in progress: the final onstop must NOT enqueue its blob */
+let discarding = false;
 // caption lane
 let liveId: string | null = null;
 let liveRec: MediaRecorder | null = null;
@@ -273,7 +275,7 @@ function startPartRecorder(idx: number, offsetMs: number): void {
   };
   rec.onstop = () => {
     const blob = new Blob(localChunks, { type: mimeType });
-    if (blob.size > 0) {
+    if (blob.size > 0 && !discarding) {
       patch({ previews: [...snapshot.previews, { idx, url: URL.createObjectURL(blob) }] });
       uploader?.enqueue({ idx, offsetMs, blob, contentType: mimeType });
       partsEnqueued += 1;
@@ -562,6 +564,64 @@ export async function finish(): Promise<void> {
   // finished clean — every part registered; the crash copy has no job left
   void clearTake(snapshot.callId!);
   setPhase("done");
+}
+
+/**
+ * Stop WITHOUT saving (user directive, 2026-08-23: the red stop-and-delete
+ * button; the view confirms before calling this). Everything local is torn
+ * down and forgotten — the final blob never reaches the uploader, the
+ * crash copy is cleared — and the call row is soft-deleted server-side
+ * with a platform-authored ledger reason (0085; the on-screen confirm was
+ * the consent). If that delete is refused (e.g. the ledger migration has
+ * not run), the recording has STILL stopped and nothing will process —
+ * the caller is told so it can say so.
+ */
+export async function discardRecording(): Promise<{ deleted: boolean }> {
+  if (snapshot.phase !== "recording" && snapshot.phase !== "paused") {
+    return { deleted: false };
+  }
+  const callId = snapshot.callId;
+  discarding = true;
+  setPhase("finishing");
+  stopLiveCaptions();
+  if (timer) clearInterval(timer);
+  timer = null;
+  cancelAnimationFrame(meterRaf);
+  patch({ level: 0 });
+  await new Promise<void>((resolve) => {
+    if (!recorder || recorder.state === "inactive") {
+      resolve();
+      return;
+    }
+    flushDone = resolve;
+    recorder.stop();
+  });
+  stream?.getTracks().forEach((track) => track.stop());
+  rawTracks.forEach((track) => track.stop());
+  rawTracks = [];
+  stream = null;
+  void audioCtx?.close();
+  audioCtx = null;
+  discarding = false;
+
+  let deleted = false;
+  if (callId) {
+    void clearTake(callId);
+    try {
+      await api.deleteCall(callId, "ضبط ناتمام — توقف و حذف توسط کاربر");
+      deleted = true;
+    } catch {
+      // said out loud by the view; the stop itself already succeeded
+    }
+  }
+  // straight back to the start form — there is nothing to review
+  patch({
+    phase: "idle", callId: null, title: "", recordedMs: 0, level: 0,
+    wave: [], waveStartMs: 0, chapterMarks: [], quality: null,
+    progress: { done: 0, pending: 0, failed: 0 }, error: null,
+    captions: null, captionsDown: false, previews: [],
+  });
+  return { deleted };
 }
 
 export async function retryUploads(): Promise<void> {

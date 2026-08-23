@@ -5,6 +5,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import {
   addChapterMark,
+  discardRecording,
   finish,
   pause,
   recorderSnapshot,
@@ -15,6 +16,7 @@ import {
   subscribeRecorder,
   type RecorderErrorCode,
 } from "@/lib/recordingEngine";
+import { notify } from "@/lib/notify";
 import { Card, Chip, Field } from "@/components/ui";
 import { Link } from "@/i18n/routing";
 import { digits, formatClock } from "@/lib/format";
@@ -57,6 +59,8 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
    *  both-languages hint; narrowing is an explicit act. */
   const [language, setLanguage] = useState<"fa" | "en" | "mixed">("mixed");
   const [source, setSource] = useState<"mic" | "system">("mic");
+  /** the red stop-and-delete asks AGAIN before acting (user directive) */
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
   /**
    * RESUME mode: `?resume=<id>` — the call continues on the same id, next
    * part index, offset where the audio ends. `null` = fresh; "loading"
@@ -393,7 +397,7 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
           ) : null}
 
           {live ? (
-            <div className="mt-5 flex flex-wrap gap-3">
+            <div className="mt-5 flex flex-wrap items-center gap-3">
               {phase === "recording" ? (
                 <button className="btn-secondary h-12 px-6" onClick={pause}>
                   {t("pause")}
@@ -406,6 +410,39 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
               <button className="btn-primary h-12 px-6" onClick={() => void finish()}>
                 {t("finish")}
               </button>
+              {/* stop WITHOUT saving (user directive, 2026-08-23): red solid
+                  fill, and it asks again — the first press only arms it */}
+              {confirmDiscard ? (
+                <span className="flex items-center gap-2">
+                  <button
+                    className="btn-danger h-12 px-6"
+                    onClick={() => {
+                      setConfirmDiscard(false);
+                      void discardRecording().then(({ deleted }) => {
+                        notify(
+                          deleted ? t("discarded") : t("discardDeleteFailed"),
+                          deleted ? undefined : "warn",
+                        );
+                      });
+                    }}
+                  >
+                    {t("discardConfirm")}
+                  </button>
+                  <button
+                    className="btn-ghost h-12 px-4"
+                    onClick={() => setConfirmDiscard(false)}
+                  >
+                    {t("discardKeep")}
+                  </button>
+                </span>
+              ) : (
+                <button
+                  className="btn-danger h-12 px-6"
+                  onClick={() => setConfirmDiscard(true)}
+                >
+                  {t("discard")}
+                </button>
+              )}
             </div>
           ) : null}
         </div>
