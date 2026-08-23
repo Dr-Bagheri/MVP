@@ -89,6 +89,11 @@ export async function hasDeletionLedger(db: Db): Promise<boolean> {
   return hasTable(db, "deletion_record");
 }
 
+/** db/0086: tags on records. */
+export async function hasCallTags(db: Db): Promise<boolean> {
+  return hasColumn(db, "call", "tags");
+}
+
 export async function hasAutonomyColumn(db: Db): Promise<boolean> {
   return hasColumn(db, "app_user", "autonomy");
 }

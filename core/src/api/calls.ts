@@ -12,6 +12,7 @@
  */
 import { ConflictError, NotFoundError, ValidationError } from "./errors.ts";
 import { assertUuid, type Db, type SqlTx } from "../db/identity.ts";
+import { hasCallTags } from "../db/capabilities.ts";
 import type { Identity } from "../agent/types.ts";
 
 // The published vocabularies live in vocabulary.ts, which imports nothing so
@@ -153,6 +154,12 @@ export interface CallSummary {
    * "mixed" vs "none" is information the boolean could not carry.
    */
   transcript_timing: TranscriptTiming | null;
+  /**
+   * db/0086 — labels the record wears. ABSENT (not []) until the migration
+   * has run on this deployment: a consumer must treat "no field" as
+   * "feature not migrated", never as "no tags".
+   */
+  tags?: string[];
 }
 
 /**
@@ -225,6 +232,8 @@ interface CallRow {
   current_summary_id: string | null;
   transcribed_part_count: number | string;
   timed_part_count: number | string;
+  /** present only when the 0086 column exists and was selected */
+  tags?: string[];
 }
 
 /**
@@ -271,6 +280,8 @@ const toSummary = (row: CallRow): CallSummary => ({
   transcript_timing: timingFromCounts(
     Number(row.transcribed_part_count), Number(row.timed_part_count),
   ),
+  // absent stays absent — [] would claim "no tags" on an un-migrated deploy
+  ...(row.tags !== undefined ? { tags: row.tags } : {}),
 });
 
 export const MAX_PAGE = 100;
@@ -279,6 +290,8 @@ export interface ListOptions {
   limit?: number | undefined;
   /** Keyset pagination: started_at of the last row seen. */
   before?: string | undefined;
+  /** 0086: only calls wearing this tag (array-contains over the GIN index). */
+  tag?: string | undefined;
 }
 
 export function createCallsRepo(db: Db) {
@@ -289,15 +302,24 @@ export function createCallsRepo(db: Db) {
       if (before !== null && Number.isNaN(Date.parse(before))) {
         throw new ValidationError("before must be an ISO timestamp");
       }
+      const withTags = await hasCallTags(db);
+      if (options.tag !== undefined && !withTags) {
+        // filtering by a column that does not exist must refuse, not
+        // silently return everything — a filter that stops filtering is
+        // the failure mode, not a fallback
+        throw new ConflictError("not_migrated");
+      }
+      const tag = options.tag?.trim() || null;
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<CallRow>(
-          `select ${CALL_COLUMNS}
+          `select ${CALL_COLUMNS}${withTags ? ", c.tags" : ""}
              from echo.call c
             where c.deleted_at is null
               and ($2::timestamptz is null or c.started_at < $2::timestamptz)
+              ${withTags ? "and ($3::text is null or c.tags @> array[$3::text])" : ""}
             order by c.started_at desc
             limit $1`,
-          [limit, before],
+          withTags ? [limit, before, tag] : [limit, before],
         ),
       );
       return rows.map(toSummary);
@@ -305,9 +327,10 @@ export function createCallsRepo(db: Db) {
 
     async get(identity: Identity, callId: string): Promise<CallSummary> {
       const id = assertUuid(callId, "call id");
+      const withTags = await hasCallTags(db);
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<CallRow>(
-          `select ${CALL_COLUMNS} from echo.call c
+          `select ${CALL_COLUMNS}${withTags ? ", c.tags" : ""} from echo.call c
             where c.id = $1 and c.deleted_at is null limit 1`,
           [id],
         ),
@@ -325,10 +348,16 @@ export function createCallsRepo(db: Db) {
      */
     async update(
       identity: Identity, callId: string,
-      patch: { title?: string | undefined; scope?: "private" | "org" | undefined },
+      patch: {
+        title?: string | undefined;
+        scope?: "private" | "org" | undefined;
+        /** 0086: the FULL replacement set — tags are a small list someone
+            edits whole, so there is no merge semantics to get wrong. */
+        tags?: string[] | undefined;
+      },
     ): Promise<CallSummary> {
       const id = assertUuid(callId, "call id");
-      if (patch.title === undefined && patch.scope === undefined) {
+      if (patch.title === undefined && patch.scope === undefined && patch.tags === undefined) {
         throw new ValidationError("nothing to update");
       }
       if (patch.title !== undefined && patch.title.trim().length === 0) {
@@ -337,14 +366,35 @@ export function createCallsRepo(db: Db) {
       if (patch.scope !== undefined && patch.scope !== "private" && patch.scope !== "org") {
         throw new ValidationError("scope must be private or org");
       }
+      let tags: string[] | null = null;
+      if (patch.tags !== undefined) {
+        if (!(await hasCallTags(db))) throw new ConflictError("not_migrated");
+        if (!Array.isArray(patch.tags) || patch.tags.some((t) => typeof t !== "string")) {
+          throw new ValidationError("tags must be an array of strings");
+        }
+        // the api re-speaks the 0086 trigger's sentence; the trigger is the wall
+        tags = patch.tags.map((t) => t.trim()).filter((t) => t !== "");
+        if (tags.length > 10) {
+          throw new ValidationError("at most 10 tags", { code: "too_many_tags", params: { max: 10 } });
+        }
+        if (tags.some((t) => t.length > 40)) {
+          throw new ValidationError("each tag is at most 40 characters",
+            { code: "tag_too_long", params: { max: 40 } });
+        }
+        tags = [...new Set(tags)];
+      }
+      const withTags = patch.tags !== undefined;
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<{ id: string }>(
           `update echo.call
               set title = coalesce($2, title),
                   scope = coalesce($3::echo.call_scope, scope)
+                  ${withTags ? ", tags = $4::text[]" : ""}
             where id = $1 and deleted_at is null
             returning id`,
-          [id, patch.title ?? null, patch.scope ?? null],
+          withTags
+            ? [id, patch.title ?? null, patch.scope ?? null, tags]
+            : [id, patch.title ?? null, patch.scope ?? null],
         ),
       );
       if (!rows[0]) throw new NotFoundError("call not found");

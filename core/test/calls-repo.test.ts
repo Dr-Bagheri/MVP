@@ -43,11 +43,14 @@ function fakeDb(rowsFor: (sql: string, params?: unknown[]) => unknown[]) {
   return { log, db: createDb({ app: make(), agent: make() }) };
 }
 
-/** Product statements only — `set local role` and set_config are plumbing. */
+/** Product statements only — `set local role`, set_config and the 0086
+    capability probe (information_schema) are plumbing. */
 const queries = (log: { sql: string; params?: unknown[] | undefined }[]) =>
   log.filter((l) => {
     const sql = l.sql.trim().toLowerCase();
-    return !sql.startsWith("set local") && !sql.includes("set_config('echo.actor_id'");
+    return !sql.startsWith("set local")
+      && !sql.includes("set_config('echo.actor_id'")
+      && !sql.includes("information_schema");
   });
 
 describe("list", () => {

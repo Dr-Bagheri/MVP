@@ -53,6 +53,13 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
       server would refuse is a promise the click can't keep. */
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState<null | { reason: string }>(null);
+  /** Tags (0086): filter chip + inline whole-set editor. The column exists
+      only after the migration; until the wire carries `tags`, no tag UI
+      renders — a control for a column that does not exist would read as
+      wired and do nothing. */
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
+  const [taggingId, setTaggingId] = useState<string | null>(null);
+  const [tagsDraft, setTagsDraft] = useState("");
   /* A row action's failure is still said OUT LOUD — `act` used to swallow
      them — but through the notification system now (orb toast + top bell),
      not an inline line in the table (user directive, 2026-08-21). */
@@ -146,9 +153,36 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
       && (view === "archive" ? call.archived_at !== null : call.archived_at === null),
   );
 
-  const selectable = live.filter((call) => mayEdit(call));
+  const tagsReady =
+    calls !== null && calls.length > 0 && calls[0] !== undefined && "tags" in calls[0];
+  const allTags = tagsReady
+    ? [...new Set(live.flatMap((call) => call.tags ?? []))].sort()
+    : [];
+  const shown =
+    tagFilter === null ? live : live.filter((call) => call.tags?.includes(tagFilter));
+
+  const selectable = shown.filter((call) => mayEdit(call));
   const allSelected =
     selectable.length > 0 && selectable.every((call) => selected.has(call.id));
+
+  async function saveTags(call: Call): Promise<void> {
+    const tags = [...new Set(
+      tagsDraft.split(/[,،]/).map((t) => t.trim()).filter((t) => t !== ""),
+    )].slice(0, 10);
+    setTaggingId(null);
+    await act(async () => {
+      try {
+        await api.setCallTags(call.id, tags);
+      } catch (cause) {
+        const { status, detail } = cause as { status?: number; detail?: string };
+        if (status === 409 || detail === "not_migrated") {
+          notify(t("tagsNotReady"), "warn");
+          return;
+        }
+        throw cause;
+      }
+    });
+  }
 
   function toggleSelect(id: string): void {
     setSelected((prev) => {
@@ -184,6 +218,39 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="h-page">{t(view === "archive" ? "archiveTitle" : "title")}</h2>
       </div>
+
+      {/* tag filter chips — only when tags exist to filter by */}
+      {allTags.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            aria-pressed={tagFilter === null}
+            onClick={() => setTagFilter(null)}
+            className={`h-7 rounded-full px-2.5 text-xs transition-colors ${
+              tagFilter === null
+                ? "bg-accent-soft font-semibold text-accent"
+                : "bg-surface-2 text-fg-muted hover:text-fg"
+            }`}
+          >
+            {t("allTags")}
+          </button>
+          {allTags.map((tag) => (
+            <button
+              key={tag}
+              type="button"
+              aria-pressed={tagFilter === tag}
+              onClick={() => setTagFilter((prev) => (prev === tag ? null : tag))}
+              className={`h-7 rounded-full px-2.5 text-xs transition-colors ${
+                tagFilter === tag
+                  ? "bg-accent-soft font-semibold text-accent"
+                  : "bg-surface-2 text-fg-muted hover:text-fg"
+              }`}
+            >
+              {tag}
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       {/* the bulk bar — appears only while a selection exists */}
       {selected.size > 0 ? (
@@ -291,7 +358,7 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
                 </tr>
               </thead>
               <tbody>
-                {live.map((call) => (
+                {shown.map((call) => (
                   <tr
                     key={call.id}
                     /* the whole ROW is the way in (user directive) — the
@@ -367,6 +434,11 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
                             {t("parts", { count: digits(call.parts?.length ?? 0, locale) })}
                           </span>
                         ) : null}
+                        {(call.tags ?? []).map((tag) => (
+                          <span key={tag} className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] text-fg-muted">
+                            {tag}
+                          </span>
+                        ))}
                       </div>
                     </td>
                     <td className="px-4 py-3 text-sm text-fg-muted">
@@ -475,6 +547,43 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
                           >
                             {t("rename")}
                           </button>
+                          {/* tags (0086): whole-set inline editor, only when
+                              the wire carries the column */}
+                          {tagsReady ? (
+                            taggingId === call.id ? (
+                              <span className="flex items-center gap-2">
+                                <input
+                                  className="input h-8 min-h-0 w-44 py-0 text-xs"
+                                  autoFocus
+                                  placeholder={t("tagsHint")}
+                                  value={tagsDraft}
+                                  onChange={(e) => setTagsDraft(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") void saveTags(call);
+                                    if (e.key === "Escape") setTaggingId(null);
+                                  }}
+                                />
+                                <button
+                                  className="text-accent underline-offset-2 hover:underline"
+                                  disabled={busy}
+                                  onClick={() => void saveTags(call)}
+                                >
+                                  {tCommon("save")}
+                                </button>
+                              </span>
+                            ) : (
+                              <button
+                                className="text-fg-muted underline-offset-2 hover:underline"
+                                disabled={busy}
+                                onClick={() => {
+                                  setTaggingId(call.id);
+                                  setTagsDraft((call.tags ?? []).join("، "));
+                                }}
+                              >
+                                {t("tags")}
+                              </button>
+                            )
+                          ) : null}
                           {/* archiving/restoring MOVES the row between the
                               two sections — the reload drops it from this
                               view, which is the move made visible */}

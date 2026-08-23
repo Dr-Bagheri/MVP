@@ -471,12 +471,14 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
 
   app.get("/v1/calls",async (request: FastifyRequest, reply: FastifyReply) => {
     const identity = await auth.requireActive(request);
-    const query = request.query as { limit?: string; before?: string };
+    const query = request.query as { limit?: string; before?: string; tag?: string };
     const limit = query.limit === undefined ? undefined : Number(query.limit);
     if (limit !== undefined && !Number.isFinite(limit)) {
       throw new ValidationError("limit must be a number");
     }
-    return reply.send({ calls: await calls.list(identity, { limit, before: query.before }) });
+    return reply.send({
+      calls: await calls.list(identity, { limit, before: query.before, tag: query.tag }),
+    });
   });
 
   /**
@@ -535,16 +537,21 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
   app.patch("/v1/calls/:id", async (request, reply) => {
     const identity = await auth.requireActive(request);
     const { id } = request.params as { id: string };
-    const body = (request.body ?? {}) as { title?: unknown; scope?: unknown };
+    const body = (request.body ?? {}) as { title?: unknown; scope?: unknown; tags?: unknown };
     if (body.title !== undefined && typeof body.title !== "string") {
       throw new ValidationError("title must be a string");
     }
     if (body.scope !== undefined && typeof body.scope !== "string") {
       throw new ValidationError("scope must be a string");
     }
+    if (body.tags !== undefined
+      && (!Array.isArray(body.tags) || body.tags.some((t) => typeof t !== "string"))) {
+      throw new ValidationError("tags must be an array of strings");
+    }
     return reply.send(await calls.update(identity, id, {
       title: body.title as string | undefined,
       scope: body.scope as "private" | "org" | undefined,
+      tags: body.tags as string[] | undefined,
     }));
   });
 

@@ -946,6 +946,15 @@ export const api = {
       body: JSON.stringify({ title }),
     });
   },
+  /** 0086: replace the record's tag set (whole-list write, ≤10, ≤40 chars).
+      409 not_migrated until the column exists on the deployment. */
+  async setCallTags(id: string, tags: string[]): Promise<Call> {
+    return bff<Call>(`/api/calls/${id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tags }),
+    });
+  },
   /**
    * Soft delete with a purge window (M11). Never the agent's path.
    *
