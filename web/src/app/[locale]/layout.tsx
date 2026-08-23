@@ -80,9 +80,11 @@ export default async function LocaleLayout({
               Renders nothing for signed-out visitors and on the hub (the hub
               IS the maximized presence). */}
           <PresenceDock />
-          {/* the floating mini recorder (2026-08-22): a live take stays
-              visible and controllable on every page except the recorder's
-              own; renders nothing when no take is rolling */}
+          {/* the mini recorder (2026-08-22; docked 2026-08-23): a live take
+              stays visible and controllable on every page except the
+              recorder's own — portalled into the top bar's slot beside the
+              clock when a bar is present, floating otherwise; renders
+              nothing when no take is rolling */}
           <FloatingRecorder />
         </NextIntlClientProvider>
       </body>
