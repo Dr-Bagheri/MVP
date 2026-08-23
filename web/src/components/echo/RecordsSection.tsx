@@ -66,6 +66,23 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
     // eslint-disable-next-line react-hooks/exhaustive-deps -- view is fixed per mount
   }, [view, callsEpoch]);
 
+  /**
+   * The PIPELINE moves statuses server-side (user report, 2026-08-23:
+   * "processing → ready needs a full page refresh"). The refresh bus only
+   * hears CLIENT writes, so while any row sits in a WORKER-moved status
+   * the table re-reads itself every few seconds — and stops the moment
+   * everything is terminal. `recording` is deliberately not in the set:
+   * only client actions move it, and those announce; polling on it would
+   * spin forever on an abandoned take.
+   */
+  useEffect(() => {
+    const WORKER_MOVED = new Set(["processing", "linking", "summarizing"]);
+    if (!calls?.some((c) => WORKER_MOVED.has(c.status))) return;
+    const timer = setInterval(() => { void load(); }, 5000);
+    return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load is stable per mount
+  }, [calls]);
+
   /** id → display name, falling back to the id rather than to `undefined`. */
   function ownerName(id: string): string {
     return members.find((m) => m.id === id)?.display_name ?? id;

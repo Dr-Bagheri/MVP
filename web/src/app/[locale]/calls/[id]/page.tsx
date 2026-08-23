@@ -157,6 +157,37 @@ export default function CallDetailPage({
   }, [id]);
 
   /**
+   * While the PIPELINE is still moving this call (user report, 2026-08-23:
+   * the status only changed on a full page refresh), the page re-reads
+   * itself every few seconds — and when a poll sees the status become
+   * terminal, it fetches what the pipeline produced (transcript, speakers,
+   * summaries, audio) so "Ready" arrives WITH its content, not as a chip
+   * over an empty page. Stops the moment nothing is in flight.
+   */
+  useEffect(() => {
+    const WORKER_MOVED = new Set(["processing", "linking", "summarizing"]);
+    if (!call || !WORKER_MOVED.has(call.status)) return;
+    const timer = setInterval(() => {
+      void api.getCall(id).then((fresh) => {
+        if (!fresh) return;
+        setCall(fresh);
+        if (!WORKER_MOVED.has(fresh.status)) {
+          void api.getTranscript(id).then(setRows).catch(() => undefined);
+          void api.getSpeakers(id).then(setSpeakers).catch(() => undefined);
+          void api.getSummaries(id).then((all) => {
+            setVersions(all);
+            setShownVersion(all.at(-1)?.version ?? null);
+          }).catch(() => undefined);
+          void api.getCallAudio(id)
+            .then((res) => setAudioParts(res?.parts ?? null))
+            .catch(() => undefined);
+        }
+      }).catch(() => undefined);
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [call, id]);
+
+  /**
    * The REAL player (the fake clock this replaces once showed 0:11 of an
    * 0:08 recording — a playhead with no audio behind it). One element, the
    * parts as one continuous timeline: each part carries `offset_ms`, so
