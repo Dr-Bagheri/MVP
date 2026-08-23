@@ -9,6 +9,7 @@ import { Link } from "@/i18n/routing";
 import { useCrumbTitle } from "@/components/platform/CrumbTitle";
 import { Card, Chip, PageHeader, StatusChip } from "@/components/ui";
 import { formatClock, formatDate, digits, modelLabel } from "@/lib/format";
+import { isFillerWord, stripFillers } from "@/lib/cleanRead";
 
 /**
  * Read view (SPEC "The core loop" #3): player beside the transcript, summary
@@ -96,6 +97,16 @@ export default function CallDetailPage({
   const [showSummaryEn, setShowSummaryEn] = useState(false);
   const [showTranscriptEn, setShowTranscriptEn] = useState(false);
   const [translateError, setTranslateError] = useState<string | null>(null);
+  /**
+   * Reading modes (user directive, 2026-08-23) — DISPLAY only, the record
+   * is untouched: filter the transcript to one speaker's lines, and a
+   * clean-read toggle that hides pure hesitation sounds. The filler list
+   * is deliberately narrow (uh/um/hmm and their Persian spellings) — a
+   * word that can carry meaning («خب», "like") is never on it, because a
+   * clean-read that changes what was said is an edit wearing a view.
+   */
+  const [speakerFilter, setSpeakerFilter] = useState<string | null>(null);
+  const [cleanRead, setCleanRead] = useState(false);
 
   async function translate(what: "summary" | "transcript"): Promise<void> {
     const set = what === "summary" ? setSummaryEn : setTranscriptEn;
@@ -441,6 +452,58 @@ export default function CallDetailPage({
                 </span>
               </div>
             ) : null}
+            {/* reading modes — display only; the toggles say so by holding
+                their pressed state, and verbatim is always one press back */}
+            {rows.length > 0 && !showTranscriptEn ? (
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                {speakers.length > 1 ? (
+                  <>
+                    <button
+                      type="button"
+                      aria-pressed={speakerFilter === null}
+                      onClick={() => setSpeakerFilter(null)}
+                      className={`h-7 rounded-full px-2.5 text-xs transition-colors ${
+                        speakerFilter === null
+                          ? "bg-accent-soft font-semibold text-accent"
+                          : "bg-surface-2 text-fg-muted hover:text-fg"
+                      }`}
+                    >
+                      {t("allSpeakers")}
+                    </button>
+                    {speakers.map((sp) => (
+                      <button
+                        key={sp.id}
+                        type="button"
+                        aria-pressed={speakerFilter === sp.id}
+                        onClick={() =>
+                          setSpeakerFilter((prev) => (prev === sp.id ? null : sp.id))
+                        }
+                        className={`h-7 rounded-full px-2.5 text-xs transition-colors ${
+                          speakerFilter === sp.id
+                            ? "bg-accent-soft font-semibold text-accent"
+                            : "bg-surface-2 text-fg-muted hover:text-fg"
+                        }`}
+                      >
+                        {sp.label}
+                      </button>
+                    ))}
+                  </>
+                ) : null}
+                <span className="ms-auto" />
+                <button
+                  type="button"
+                  aria-pressed={cleanRead}
+                  onClick={() => setCleanRead((v) => !v)}
+                  className={`h-7 rounded-full px-2.5 text-xs transition-colors ${
+                    cleanRead
+                      ? "bg-accent-soft font-semibold text-accent"
+                      : "bg-surface-2 text-fg-muted hover:text-fg"
+                  }`}
+                >
+                  {t("cleanRead")}
+                </button>
+              </div>
+            ) : null}
           </div>
           {showTranscriptEn && transcriptEn === "loading" ? (
             <p className="p-4 text-sm text-fg-muted">{t("translating")}</p>
@@ -452,7 +515,10 @@ export default function CallDetailPage({
             </p>
           ) : (
           <ul className="divide-y divide-border">
-            {rows.map((row) => (
+            {(speakerFilter === null
+              ? rows
+              : rows.filter((row) => row.speaker_id === speakerFilter)
+            ).map((row) => (
               <li
                 key={row.id}
                 className={`flex gap-3 px-4 py-3 transition-colors ${
@@ -489,14 +555,21 @@ export default function CallDetailPage({
                       provenance above, and explaining is all it may do. */}
                   {row.words.length > 0 ? (
                     <p className="text-sm leading-7 text-fg">
-                      {row.words.map((word, i) => (
+                      {(cleanRead
+                        ? row.words.filter((word) => !isFillerWord(word.w))
+                        : row.words
+                      ).map((word, i) => (
                         <span
                           key={`${row.id}-${i}`}
                           className="cursor-pointer rounded px-0.5 hover:bg-accent/20"
                           onClick={(e) => {
                             e.stopPropagation();
+                            // actually SEEK AND PLAY — this handler used to
+                            // set two state flags and never touch the audio
+                            // element: click-a-word looked wired and did
+                            // nothing audible
                             setPlayheadMs(word.start_ms);
-                            setPlaying(true);
+                            void playFrom(word.start_ms);
                           }}
                         >
                           {word.w}{" "}
@@ -504,7 +577,9 @@ export default function CallDetailPage({
                       ))}
                     </p>
                   ) : (
-                    <p className="text-sm leading-7 text-fg">{row.text}</p>
+                    <p className="text-sm leading-7 text-fg">
+                      {cleanRead ? stripFillers(row.text) : row.text}
+                    </p>
                   )}
                 </div>
               </li>

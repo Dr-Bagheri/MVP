@@ -91,7 +91,12 @@
     "resumeCall": "Resume",
     "retry": "Retry",
     "retryStarted": "Processing restarted — the result updates in this table.",
-    "deleteReasonHint": "Reason (recorded in the log)"
+    "deleteReasonHint": "Reason (recorded in the log)",
+    "selectedCount": "{n} selected",
+    "selectAll": "Select every row you can act on",
+    "selectRow": "Select “{title}”",
+    "clearSelection": "Clear selection",
+    "bulkFailed": "{n} of {total} did not go through."
   },
   "status": {
     "recording": "Paused",
@@ -266,6 +271,9 @@
     "discardKeep": "Keep recording",
     "discarded": "Recording stopped and deleted — nothing was saved.",
     "discardDeleteFailed": "Recording stopped and nothing will process, but the record could not be deleted — remove it from Records.",
+    "micLostWarn": "Microphone disconnected — recording paused. Reconnect it or plug in another, then press Resume.",
+    "quickMemo": "Quick voice memo",
+    "memoTitle": "Voice memo",
     "finishing": "Finishing…",
     "recordingState": "Recording",
     "pausedState": "Paused — no audio is being recorded",
@@ -360,6 +368,8 @@
     "translateFailed": "Translation failed — try again.",
     "renameSpeaker": "Rename speaker",
     "seekHint": "Click any word to seek the audio there.",
+    "allSpeakers": "All speakers",
+    "cleanRead": "Hide filler sounds",
     "noAudio": "No audio is available to play.",
     "seekHintMixed": "Click a word where word timing exists, otherwise click the line.",
     "seekHintLine": "Click any line to seek the audio there.",

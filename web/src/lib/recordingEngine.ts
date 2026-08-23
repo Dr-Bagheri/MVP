@@ -52,7 +52,7 @@ export interface RecorderSnapshot {
   /** Where this session's waveform starts (resume offset) — marker math. */
   waveStartMs: number;
   chapterMarks: number[];
-  quality: null | "quiet" | "clipping" | "shareEnded";
+  quality: null | "quiet" | "clipping" | "shareEnded" | "micLost";
   progress: UploaderProgress;
   error: RecorderErrorCode | null;
   captions: { finals: string; interim: string } | null;
@@ -117,6 +117,10 @@ let partsEnqueued = 0;
 let priorParts = false;
 /** a discard in progress: the final onstop must NOT enqueue its blob */
 let discarding = false;
+/** the mic vanished mid-take (unplugged headset): paused until reacquired */
+let micLost = false;
+/** the system-audio mixing node — where a replacement mic must connect */
+let mixDest: MediaStreamAudioDestinationNode | null = null;
 // caption lane
 let liveId: string | null = null;
 let liveRec: MediaRecorder | null = null;
@@ -356,6 +360,55 @@ function startMeter(): void {
   meterRaf = requestAnimationFrame(loop);
 }
 
+// ---- mic-loss guard ---------------------------------------------------------
+
+/**
+ * A disconnected microphone (headset unplugged, Bluetooth died) must not
+ * roll silence while the screen says Recording: the take auto-PAUSES and
+ * the quality line names the reason. Resume first reacquires a mic — the
+ * browser's current default — and splices it into the live stream, so the
+ * person plugs back in (or falls to the laptop mic) and continues.
+ */
+function watchMicTrack(track: MediaStreamTrack): void {
+  track.addEventListener("ended", () => {
+    if (snapshot.phase !== "recording" && snapshot.phase !== "paused") return;
+    micLost = true;
+    if (snapshot.phase === "recording") pause();
+    patch({ quality: "micLost" });
+  });
+}
+
+async function reacquireMic(): Promise<boolean> {
+  let fresh: MediaStream;
+  try {
+    fresh = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true },
+    });
+  } catch {
+    patch({ error: "micDenied" });
+    return false;
+  }
+  const newTrack = fresh.getAudioTracks()[0];
+  if (!newTrack) return false;
+  if (mixDest && audioCtx) {
+    // system-audio path: the recorded stream is the mixer's output — the
+    // replacement mic joins as a new source, the dead one just goes quiet
+    audioCtx.createMediaStreamSource(new MediaStream([newTrack])).connect(mixDest);
+  } else if (stream) {
+    // pure-mic path: splice the track in the recorded stream itself
+    stream.getAudioTracks()
+      .filter((track) => track.readyState === "ended")
+      .forEach((track) => stream!.removeTrack(track));
+    stream.addTrack(newTrack);
+  }
+  rawTracks = rawTracks.filter((track) => track.readyState !== "ended");
+  rawTracks.push(newTrack);
+  watchMicTrack(newTrack);
+  micLost = false;
+  patch({ quality: null });
+  return true;
+}
+
 // ---- the controls -----------------------------------------------------------
 
 export async function startRecording(opts: StartOptions): Promise<void> {
@@ -380,6 +433,9 @@ export async function startRecording(opts: StartOptions): Promise<void> {
   }
   rawTracks = [...micStream.getTracks()];
   shareEnded = false;
+  micLost = false;
+  mixDest = null;
+  micStream.getAudioTracks().forEach(watchMicTrack);
   if (opts.source === "system") {
     /*
      * Tab/system audio: both sides of an online meeting in one take. The
@@ -411,6 +467,7 @@ export async function startRecording(opts: StartOptions): Promise<void> {
     const ctx = new AudioContext();
     audioCtx = ctx;
     const dest = ctx.createMediaStreamDestination();
+    mixDest = dest;
     ctx.createMediaStreamSource(micStream).connect(dest);
     ctx.createMediaStreamSource(new MediaStream(shareAudio)).connect(dest);
     stream = dest.stream;
@@ -505,12 +562,17 @@ export function pause(): void {
 }
 
 export function resume(): void {
-  if (recorder?.state === "paused") {
-    recorder.resume();
-    if (liveRec?.state === "paused") liveRec.resume();
-    lastTick = Date.now();
-    setPhase("recording");
-  }
+  void (async () => {
+    // a lost mic must be replaced BEFORE the take rolls again — resuming
+    // onto a dead track records silence that looks like recording
+    if (micLost && !(await reacquireMic())) return;
+    if (recorder?.state === "paused") {
+      recorder.resume();
+      if (liveRec?.state === "paused") liveRec.resume();
+      lastTick = Date.now();
+      setPhase("recording");
+    }
+  })();
 }
 
 export function addChapterMark(atMs: number): void {
@@ -539,6 +601,8 @@ export async function finish(): Promise<void> {
   stream = null;
   void audioCtx?.close();
   audioCtx = null;
+  mixDest = null;
+  micLost = false;
 
   if (partsEnqueued === 0 && !priorParts) {
     // no audio ever reached the uploader — finishing would create a call
@@ -602,6 +666,8 @@ export async function discardRecording(): Promise<{ deleted: boolean }> {
   stream = null;
   void audioCtx?.close();
   audioCtx = null;
+  mixDest = null;
+  micLost = false;
   discarding = false;
 
   let deleted = false;

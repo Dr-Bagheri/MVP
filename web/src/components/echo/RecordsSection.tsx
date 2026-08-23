@@ -47,6 +47,12 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
       a reason, which lands in the deletion ledger the admins read. */
   const [deleting, setDeleting] = useState<null | { id: string; reason: string }>(null);
   const [renameDraft, setRenameDraft] = useState("");
+  /** Bulk actions (user directive, 2026-08-23): select several rows, then
+      archive them together or delete them under ONE typed reason. Only
+      rows this person may edit are selectable — a checkbox on a row the
+      server would refuse is a promise the click can't keep. */
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState<null | { reason: string }>(null);
   /* A row action's failure is still said OUT LOUD — `act` used to swallow
      them — but through the notification system now (orb toast + top bell),
      not an inline line in the table (user directive, 2026-08-21). */
@@ -63,6 +69,10 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
     // the wire sends owner_id only — names come from the member list
     void api.members().then(setMembers).catch(() => setMembers([]));
     void load();
+    // a view change or an external mutation invalidates the selection —
+    // acting on rows that may no longer be in front of the person
+    setSelected(new Set());
+    setBulkDeleting(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- view is fixed per mount
   }, [view, callsEpoch]);
 
@@ -136,11 +146,105 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
       && (view === "archive" ? call.archived_at !== null : call.archived_at === null),
   );
 
+  const selectable = live.filter((call) => mayEdit(call));
+  const allSelected =
+    selectable.length > 0 && selectable.every((call) => selected.has(call.id));
+
+  function toggleSelect(id: string): void {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  /** One action over every selected row; failures are counted, not hidden,
+      and the reload shows what the server actually holds. */
+  async function bulk(perRow: (id: string) => Promise<unknown>): Promise<void> {
+    if (busy || selected.size === 0) return;
+    setBusy(true);
+    const ids = [...selected];
+    const results = await Promise.allSettled(ids.map((id) => perRow(id)));
+    const failed = results.filter((r) => r.status === "rejected").length;
+    if (failed > 0) {
+      notify(
+        t("bulkFailed", { n: digits(failed, locale), total: digits(ids.length, locale) }),
+        "warn",
+      );
+    }
+    setSelected(new Set());
+    setBulkDeleting(null);
+    await load().catch(() => undefined);
+    setBusy(false);
+  }
+
   return (
     <section className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="h-page">{t(view === "archive" ? "archiveTitle" : "title")}</h2>
       </div>
+
+      {/* the bulk bar — appears only while a selection exists */}
+      {selected.size > 0 ? (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-surface px-4 py-2 text-sm">
+          <span className="text-fg">
+            {t("selectedCount", { n: digits(selected.size, locale) })}
+          </span>
+          <button
+            className="btn-secondary h-8 min-h-0 px-3 text-xs"
+            disabled={busy}
+            onClick={() => void bulk((id) => api.setArchived(id, view === "live"))}
+          >
+            {view === "live" ? t("archive") : t("unarchive")}
+          </button>
+          {bulkDeleting !== null ? (
+            <span className="flex items-center gap-2">
+              <input
+                className="input h-8 min-h-0 w-44 py-0 text-xs"
+                autoFocus
+                placeholder={t("deleteReasonHint")}
+                value={bulkDeleting.reason}
+                onChange={(e) => setBulkDeleting({ reason: e.target.value })}
+                onKeyDown={(e) => { if (e.key === "Escape") setBulkDeleting(null); }}
+              />
+              <button
+                className="btn-danger h-8 min-h-0 px-3 text-xs"
+                disabled={busy || bulkDeleting.reason.trim().length < 3}
+                onClick={() => {
+                  const reason = bulkDeleting.reason.trim();
+                  void bulk((id) => api.deleteCall(id, reason));
+                }}
+              >
+                {t("confirmDelete")}
+              </button>
+              <button
+                className="text-xs text-fg-muted underline-offset-2 hover:underline"
+                onClick={() => setBulkDeleting(null)}
+              >
+                {tCommon("cancel")}
+              </button>
+            </span>
+          ) : (
+            <button
+              className="btn-danger h-8 min-h-0 px-3 text-xs"
+              disabled={busy}
+              onClick={() => setBulkDeleting({ reason: "" })}
+            >
+              {t("delete")}
+            </button>
+          )}
+          <button
+            className="text-xs text-fg-muted underline-offset-2 hover:underline"
+            onClick={() => {
+              setSelected(new Set());
+              setBulkDeleting(null);
+            }}
+          >
+            {t("clearSelection")}
+          </button>
+        </div>
+      ) : null}
 
       {calls === null ? null : live.length === 0 ? (
         <Card>
@@ -161,6 +265,22 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
             <table className="w-full min-w-max">
               <thead>
                 <tr className="border-b border-border">
+                  <th className="w-10 px-3 py-3">
+                    {selectable.length > 0 ? (
+                      <input
+                        type="checkbox"
+                        aria-label={t("selectAll")}
+                        checked={allSelected}
+                        onChange={() =>
+                          setSelected(
+                            allSelected
+                              ? new Set()
+                              : new Set(selectable.map((call) => call.id)),
+                          )
+                        }
+                      />
+                    ) : null}
+                  </th>
                   <th className="table-head px-4 py-3">{t("columnTitle")}</th>
                   <th className="table-head px-4 py-3">{t("columnOwner")}</th>
                   <th className="table-head px-4 py-3">{t("columnDate")}</th>
@@ -180,6 +300,16 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
                     className="row-link border-b border-border last:border-0"
                     onClick={() => router.push(`/calls/${call.id}`)}
                   >
+                    <td className="w-10 px-3 py-3" onClick={(e) => e.stopPropagation()}>
+                      {mayEdit(call) ? (
+                        <input
+                          type="checkbox"
+                          aria-label={t("selectRow", { title: call.title || t("untitled") })}
+                          checked={selected.has(call.id)}
+                          onChange={() => toggleSelect(call.id)}
+                        />
+                      ) : null}
+                    </td>
                     <td
                       className="px-4 py-3"
                       onClick={(e) => {

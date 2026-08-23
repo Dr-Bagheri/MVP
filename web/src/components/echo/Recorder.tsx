@@ -277,13 +277,40 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
               </select>
             </Field>
           </div>
-          <button
-            className="btn-primary mt-5 h-12 px-6"
-            disabled={phase === "starting"}
-            onClick={() => start()}
-          >
-            {phase === "starting" ? t("starting") : resuming ? t("resumeStart") : t("start")}
-          </button>
+          <div className="mt-5 flex flex-wrap items-center gap-3">
+            <button
+              className="btn-primary h-12 px-6"
+              disabled={phase === "starting"}
+              onClick={() => start()}
+            >
+              {phase === "starting" ? t("starting") : resuming ? t("resumeStart") : t("start")}
+            </button>
+            {/* instant voice memo (user directive, 2026-08-23): one tap, no
+                form — records through the same pipeline with a self-naming
+                title, for the thought that won't wait for a form */}
+            {!resuming ? (
+              <button
+                className="btn-secondary h-12 px-6"
+                disabled={phase === "starting"}
+                onClick={() => {
+                  const at = new Intl.DateTimeFormat(
+                    locale === "fa" ? "fa-IR" : "en-GB",
+                    { hour: "2-digit", minute: "2-digit" },
+                  ).format(new Date());
+                  void startRecording({
+                    micId,
+                    language: "mixed",
+                    source: "mic",
+                    title: `${t("memoTitle")} ${at}`,
+                    locale,
+                    resume: null,
+                  });
+                }}
+              >
+                {t("quickMemo")}
+              </button>
+            ) : null}
+          </div>
         </>
       ) : null}
 
@@ -311,17 +338,25 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
             </span>
           </div>
 
-          {/* live input-level meter — the REAL signal */}
-          <div className="mt-4 flex h-8 items-end gap-1" dir="ltr" aria-hidden>
-            {Array.from({ length: 28 }).map((_, i) => {
-              const active = phase === "recording" && s.level > i / 28;
+          {/* live input-level meter — an LED-segment strip (user directive,
+              2026-08-23: "technical and stronger but more compact"): fixed
+              thin segments that LIGHT left-to-right with the signal, the
+              last stretch in the warning tone — the professional-console
+              anatomy, half the old height */}
+          <div
+            className="mt-4 flex h-5 items-center gap-[3px] rounded-md border border-border bg-surface px-2"
+            dir="ltr"
+            aria-hidden
+          >
+            {Array.from({ length: 36 }).map((_, i) => {
+              const lit = phase === "recording" && s.level > i / 36;
+              const hot = i >= 30;
               return (
                 <span
                   key={i}
-                  className={`w-full rounded-sm transition-all ${
-                    active ? "bg-accent" : "bg-surface-2"
+                  className={`h-2.5 flex-1 rounded-[1px] transition-colors duration-75 ${
+                    lit ? (hot ? "bg-warning" : "bg-accent") : "bg-surface-2"
                   }`}
-                  style={{ height: active ? `${30 + (i % 5) * 12}%` : "18%" }}
                 />
               );
             })}
@@ -355,8 +390,8 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
                 {s.wave.map((v, i) => (
                   <span
                     key={i}
-                    className="min-w-px flex-1 rounded-sm bg-accent/70"
-                    style={{ height: `${Math.max(6, v * 100)}%` }}
+                    className="min-w-px flex-1 rounded-full bg-accent/80"
+                    style={{ height: `${Math.max(4, v * 100)}%` }}
                   />
                 ))}
                 {s.chapterMarks.map((ms, i) => {
@@ -376,14 +411,19 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
             </div>
           ) : null}
 
-          {/* input-quality watch: fixable NOW, so it surfaces now */}
-          {s.quality !== null && phase === "recording" ? (
+          {/* input-quality watch: fixable NOW, so it surfaces now. A lost
+              mic shows while PAUSED too — the auto-pause is the state the
+              warning explains */}
+          {s.quality !== null
+            && (phase === "recording" || (phase === "paused" && s.quality === "micLost")) ? (
             <p role="status" className="mt-3 text-xs leading-6 text-warning">
               {s.quality === "quiet"
                 ? t("quietWarn")
                 : s.quality === "clipping"
                   ? t("clipWarn")
-                  : t("shareEndedWarn")}
+                  : s.quality === "micLost"
+                    ? t("micLostWarn")
+                    : t("shareEndedWarn")}
             </p>
           ) : null}
 
