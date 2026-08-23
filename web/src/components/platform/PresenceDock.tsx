@@ -633,6 +633,11 @@ export function PresenceDock() {
   }
 
   if (!member) return null;
+  /* the PLATFORM CONTROL is the vendor's operations room, not the product
+     (user directive, 2026-08-23: "remove the orb from the platform
+     control") — no assistant presence there. The loop keeps running so
+     the ears survive a visit; only the rendering stands down. */
+  if (/^\/(fa|en)\/platform(\/|$)/.test(pathname)) return null;
 
   const anchoredToTopbar = topbarPresenceHost !== null;
   /* the small ring pokes ~21/24px below the 56px bar — surfaces hang just

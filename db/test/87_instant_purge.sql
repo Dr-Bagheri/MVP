@@ -81,8 +81,19 @@ select t.ok(
   'and its members with it');
 select t.ok(
   exists (select 1 from echo.platform_audit
-           where action = 'org_purged' and reason like '%سازمان پاک‌شدنی%'),
-  'the audit keeps the FACT with the org''s name in the reason — references severed, record kept');
+           where action = 'org_purged' and target_purged
+             and target_org_id is null
+             and reason like '%سازمان پاک‌شدنی%'),
+  'the audit keeps the FACT with the org''s name in the reason — no target CAN exist, and target_purged declares why (0084)');
+select t.ok(
+  exists (select 1 from echo.platform_audit
+           where action = 'org_deleted' and target_purged and target_org_id is null),
+  'the earlier soft-delete entry survived the purge with its reference severed AND declared');
+select t.ok(
+  not exists (select 1 from echo.platform_audit
+               where target_user_id is null and target_org_id is null
+                 and not target_purged),
+  'and no row ever silently lacks a subject — the exception is only ever the declared one');
 
 -- ── the walls ─────────────────────────────────────────────────────────────
 select t.denied(
