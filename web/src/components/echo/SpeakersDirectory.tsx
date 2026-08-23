@@ -1,12 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useTranslations } from "next-intl";
+import { Fragment, useEffect, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import { notify } from "@/lib/notify";
 import { useRefreshEpoch } from "@/lib/refreshBus";
 import type { Me, Person } from "@/api/types";
 import { Card, EmptyState } from "@/components/ui";
+import {
+  ENROLLMENT_SCRIPTS,
+  MAX_ENROLL_SECONDS,
+  MIN_ENROLL_SECONDS,
+  type EnrollmentLang,
+} from "@/lib/enrollmentScript";
 
 /**
  * The people directory as an Echo section (user directive, 2026-08-17):
@@ -26,6 +32,7 @@ export const TITLE_CODES = [
 export function SpeakersDirectory() {
   const t = useTranslations("speakersDir");
   const tTitles = useTranslations("titles");
+  const locale = useLocale();
   const [people, setPeople] = useState<Person[] | null>(null);
   const [name, setName] = useState("");
   const [title, setTitle] = useState("");
@@ -44,21 +51,48 @@ export function SpeakersDirectory() {
   /** 0085: the person's deletion carries a reason into the ledger */
   const [confirmReason, setConfirmReason] = useState("");
   /**
-   * Voice enrollment (M39): an inline ~8s mic take per person; only the
-   * VECTOR is stored server-side. The column renders only when the wire
-   * carries `voice_enrolled_at` (db/0081 has run) — a control for a column
-   * that does not exist would read as wired and do nothing.
+   * Voice enrollment (M39; scripted 2026-08-23 by user directive): pressing
+   * enroll opens a compact panel with a PLATFORM-PROVIDED passage to read
+   * aloud — written for phoneme coverage so the sample carries the full
+   * weight of the voice — in Persian or English (both always offered,
+   * reading ONE is enough), with Start and Finish & save. Only the VECTOR
+   * is stored server-side. The column renders only when the wire carries
+   * `voice_enrolled_at` (db/0081 has run) — a control for a column that
+   * does not exist would read as wired and do nothing.
    */
   const [enroll, setEnroll] = useState<
-    null | { personId: string; phase: "recording" | "sending"; secondsLeft: number }
+    null | {
+      personId: string;
+      lang: EnrollmentLang;
+      phase: "ready" | "recording" | "sending";
+      seconds: number;
+    }
   >(null);
-  const enrollStop = useState<{ stop: (() => void) | null }>({ stop: null })[0];
+  const enrollControls = useState<{ finish: (() => void) | null; cancel: (() => void) | null }>(
+    { finish: null, cancel: null },
+  )[0];
   const voiceReady =
     people !== null && people.length > 0 && people[0] !== undefined
     && "voice_enrolled_at" in people[0];
 
-  async function startEnroll(person: Person): Promise<void> {
+  function openEnroll(person: Person): void {
     if (enroll) return;
+    setEnroll({
+      personId: person.id,
+      lang: locale === "fa" ? "fa" : "en",
+      phase: "ready",
+      seconds: 0,
+    });
+  }
+
+  function closeEnroll(): void {
+    enrollControls.cancel?.();
+    enrollControls.finish = null;
+    enrollControls.cancel = null;
+    setEnroll(null);
+  }
+
+  async function startEnrollRecording(person: Person): Promise<void> {
     let stream: MediaStream;
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -70,11 +104,17 @@ export function SpeakersDirectory() {
       ? "audio/webm;codecs=opus" : "audio/webm";
     const rec = new MediaRecorder(stream, { mimeType: mime });
     const chunks: BlobPart[] = [];
+    /* Cancel must DISCARD: MediaRecorder only hands over data through
+       onstop, so the flag is how "finish and save" and "stop and forget"
+       share one stop path without the forgotten take being sent anyway. */
+    let discard = false;
     rec.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
     rec.onstop = () => {
       stream.getTracks().forEach((track) => track.stop());
+      if (discard) return;
       const blob = new Blob(chunks, { type: mime.split(";")[0]! });
-      setEnroll({ personId: person.id, phase: "sending", secondsLeft: 0 });
+      setEnroll((prev) =>
+        prev?.personId === person.id ? { ...prev, phase: "sending" } : prev);
       void api
         .enrollVoice(person.id, blob)
         .then(async () => {
@@ -85,20 +125,27 @@ export function SpeakersDirectory() {
         .finally(() => setEnroll(null));
     };
     rec.start();
-    setEnroll({ personId: person.id, phase: "recording", secondsLeft: 8 });
-    let left = 8;
+    setEnroll((prev) =>
+      prev?.personId === person.id ? { ...prev, phase: "recording", seconds: 0 } : prev);
+    let elapsed = 0;
     const tick = setInterval(() => {
-      left -= 1;
-      if (left <= 0) {
-        clearInterval(tick);
-        if (rec.state !== "inactive") rec.stop();
-      } else {
-        setEnroll((prev) =>
-          prev?.personId === person.id ? { ...prev, secondsLeft: left } : prev);
-      }
+      elapsed += 1;
+      setEnroll((prev) =>
+        prev?.personId === person.id ? { ...prev, seconds: elapsed } : prev);
+      // walking away with the mic open must not become an unbounded upload
+      if (elapsed >= MAX_ENROLL_SECONDS) enrollControls.finish?.();
     }, 1000);
-    enrollStop.stop = () => {
+    enrollControls.finish = () => {
       clearInterval(tick);
+      enrollControls.finish = null;
+      enrollControls.cancel = null;
+      if (rec.state !== "inactive") rec.stop();
+    };
+    enrollControls.cancel = () => {
+      clearInterval(tick);
+      discard = true;
+      enrollControls.finish = null;
+      enrollControls.cancel = null;
       if (rec.state !== "inactive") rec.stop();
     };
   }
@@ -243,7 +290,8 @@ export function SpeakersDirectory() {
               </thead>
               <tbody className="divide-y divide-border">
                 {people.map((person) => (
-                  <tr key={person.id} className="transition-colors hover:bg-surface-2">
+                  <Fragment key={person.id}>
+                  <tr className="transition-colors hover:bg-surface-2">
                     <td className="px-4 py-2.5 font-medium text-fg">
                       {editingId === person.id ? (
                         <input
@@ -289,21 +337,9 @@ export function SpeakersDirectory() {
                     {voiceReady ? (
                       <td className="px-4 py-2.5 text-xs">
                         {enroll?.personId === person.id ? (
-                          enroll.phase === "recording" ? (
-                            <span className="flex items-center gap-2">
-                              <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-danger" aria-hidden />
-                              <span className="text-fg">{t("voiceRecording", { s: enroll.secondsLeft })}</span>
-                              <button
-                                type="button"
-                                className="text-fg-muted underline-offset-2 hover:text-fg hover:underline"
-                                onClick={() => enrollStop.stop?.()}
-                              >
-                                {t("voiceStop")}
-                              </button>
-                            </span>
-                          ) : (
-                            <span className="text-fg-muted">{t("voiceSending")}</span>
-                          )
+                          /* the open panel below carries the ONE set of
+                             controls — a twin here is how they disagree */
+                          <span className="text-fg-muted" aria-hidden>…</span>
                         ) : person.voice_enrolled_at ? (
                           <span className="flex items-center gap-2">
                             <span className="chip bg-success/15 text-success">{t("voiceOn")}</span>
@@ -323,7 +359,7 @@ export function SpeakersDirectory() {
                             type="button"
                             className="text-accent underline-offset-2 hover:underline"
                             disabled={busy || enroll !== null}
-                            onClick={() => void startEnroll(person)}
+                            onClick={() => openEnroll(person)}
                           >
                             {t("voiceEnroll")}
                           </button>
@@ -384,6 +420,112 @@ export function SpeakersDirectory() {
                       </td>
                     ) : null}
                   </tr>
+                  {enroll?.personId === person.id ? (
+                    <tr className="bg-surface-2/50">
+                      <td
+                        colSpan={2 + (voiceReady ? 1 : 0) + (canManage ? 1 : 0)}
+                        className="px-4 py-3"
+                      >
+                        <div className="max-w-xl space-y-2" data-enroll-panel>
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="text-xs font-medium text-fg">
+                              {t("voiceScriptTitle")}
+                            </span>
+                            {/* both languages ALWAYS offered, small — reading
+                                one of them is enough to save */}
+                            <span
+                              className="flex overflow-hidden rounded-lg border border-border"
+                              role="group"
+                              aria-label={t("voiceScriptTitle")}
+                            >
+                              {(["fa", "en"] as const).map((l) => (
+                                <button
+                                  key={l}
+                                  type="button"
+                                  disabled={enroll.phase !== "ready"}
+                                  aria-pressed={enroll.lang === l}
+                                  className={`h-7 px-2.5 text-xs transition-colors ${
+                                    enroll.lang === l
+                                      ? "bg-accent-soft font-semibold text-accent"
+                                      : "bg-surface text-fg-muted hover:text-fg"
+                                  }`}
+                                  onClick={() =>
+                                    setEnroll((prev) => (prev ? { ...prev, lang: l } : prev))
+                                  }
+                                >
+                                  {l === "fa" ? "فارسی" : "English"}
+                                </button>
+                              ))}
+                            </span>
+                          </div>
+                          <p
+                            dir={enroll.lang === "fa" ? "rtl" : "ltr"}
+                            className="rounded-lg border border-border bg-surface p-3 text-sm leading-7 text-fg"
+                          >
+                            {ENROLLMENT_SCRIPTS[enroll.lang]}
+                          </p>
+                          <p className="text-[11px] text-fg-subtle">{t("voiceScriptHint")}</p>
+                          <div className="flex flex-wrap items-center gap-3 text-xs">
+                            {enroll.phase === "ready" ? (
+                              <>
+                                <button
+                                  type="button"
+                                  className="btn-primary h-8 min-h-0 px-3 text-xs"
+                                  onClick={() => void startEnrollRecording(person)}
+                                >
+                                  {t("voiceStart")}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="text-fg-muted underline-offset-2 hover:text-fg hover:underline"
+                                  onClick={closeEnroll}
+                                >
+                                  {t("voiceCancel")}
+                                </button>
+                              </>
+                            ) : enroll.phase === "recording" ? (
+                              <>
+                                <span className="flex items-center gap-2">
+                                  <span
+                                    className="inline-block h-2 w-2 animate-pulse rounded-full bg-danger"
+                                    aria-hidden
+                                  />
+                                  <span className="ltr tabular-nums text-fg">
+                                    {t("voiceRecording", { s: enroll.seconds })}
+                                  </span>
+                                </span>
+                                <button
+                                  type="button"
+                                  className="btn-primary h-8 min-h-0 px-3 text-xs"
+                                  disabled={enroll.seconds < MIN_ENROLL_SECONDS}
+                                  title={
+                                    enroll.seconds < MIN_ENROLL_SECONDS
+                                      ? t("voiceKeepReading", {
+                                          s: MIN_ENROLL_SECONDS - enroll.seconds,
+                                        })
+                                      : undefined
+                                  }
+                                  onClick={() => enrollControls.finish?.()}
+                                >
+                                  {t("voiceFinish")}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="text-fg-muted underline-offset-2 hover:text-fg hover:underline"
+                                  onClick={closeEnroll}
+                                >
+                                  {t("voiceCancel")}
+                                </button>
+                              </>
+                            ) : (
+                              <span className="text-fg-muted">{t("voiceSending")}</span>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : null}
+                  </Fragment>
                 ))}
               </tbody>
             </table>
