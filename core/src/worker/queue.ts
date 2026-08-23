@@ -51,6 +51,8 @@ export interface JobPayload {
       Only the summarize step reads them; absent on every other message. */
   template?: string;
   instruction?: string;
+  /** Append the «ارقام و تاریخ‌ها» ledger section to the summary. */
+  figures?: boolean;
 }
 
 /**

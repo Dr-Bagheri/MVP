@@ -758,7 +758,7 @@ export const api = {
       optionally shaped by a ruled template and/or an instruction. */
   async resummarize(
     callId: string,
-    opts: { template?: string; instruction?: string } = {},
+    opts: { template?: string; instruction?: string; figures?: boolean } = {},
   ): Promise<{ id: string; status: string }> {
     return bff<{ id: string; status: string }>(`/api/calls/${callId}/summaries`, {
       method: "POST",

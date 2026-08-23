@@ -52,4 +52,13 @@ describe("composeSummaryInput", () => {
     const input = composeSummaryInput({ hasSkill: true, transcript: "متن", instruction: "   " });
     expect(input).not.toContain("خواستهٔ درخواست‌کننده");
   });
+
+  it("the figures ledger rides only when asked, and forbids an invented empty table", () => {
+    const withLedger = composeSummaryInput({ hasSkill: true, transcript: "متن", figures: true });
+    expect(withLedger).toContain("ارقام و تاریخ‌ها");
+    // the empty case must be an ABSENT section, said in the addendum itself
+    expect(withLedger).toContain("این بخش را به‌کل نیاور");
+    const without = composeSummaryInput({ hasSkill: true, transcript: "متن" });
+    expect(without).not.toContain("ارقام و تاریخ‌ها");
+  });
 });

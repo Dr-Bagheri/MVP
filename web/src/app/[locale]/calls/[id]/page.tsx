@@ -10,6 +10,14 @@ import { useCrumbTitle } from "@/components/platform/CrumbTitle";
 import { Card, Chip, PageHeader, StatusChip } from "@/components/ui";
 import { formatClock, formatDate, digits, modelLabel } from "@/lib/format";
 import { isFillerWord, stripFillers } from "@/lib/cleanRead";
+import {
+  canExportSubtitles,
+  downloadText,
+  exportFilename,
+  markdownFrom,
+  srtFrom,
+  vttFrom,
+} from "@/lib/exportCall";
 import { notify } from "@/lib/notify";
 import { SUMMARY_TEMPLATES, type SummaryTemplate } from "@echo/core/vocabulary";
 
@@ -126,6 +134,7 @@ export default function CallDetailPage({
   const [regenOpen, setRegenOpen] = useState(false);
   const [regenTemplate, setRegenTemplate] = useState<string>("");
   const [regenInstruction, setRegenInstruction] = useState("");
+  const [regenFigures, setRegenFigures] = useState(false);
   const [regenBusy, setRegenBusy] = useState(false);
 
   async function regenerate(): Promise<void> {
@@ -135,6 +144,7 @@ export default function CallDetailPage({
       await api.resummarize(id, {
         ...(regenTemplate ? { template: regenTemplate } : {}),
         ...(regenInstruction.trim() ? { instruction: regenInstruction.trim() } : {}),
+        ...(regenFigures ? { figures: true } : {}),
       });
       setRegenOpen(false);
       setRegenInstruction("");
@@ -393,6 +403,14 @@ export default function CallDetailPage({
                 onKeyDown={(e) => { if (e.key === "Enter") void regenerate(); }}
               />
             </div>
+            <label className="flex cursor-pointer items-center gap-2 text-xs text-fg">
+              <input
+                type="checkbox"
+                checked={regenFigures}
+                onChange={(e) => setRegenFigures(e.target.checked)}
+              />
+              {t("regenFigures")}
+            </label>
             <div className="flex items-center gap-3">
               <button
                 className="btn-primary h-8 min-h-0 px-3 text-xs"
@@ -582,6 +600,50 @@ export default function CallDetailPage({
                   </>
                 ) : null}
                 <span className="ms-auto" />
+                {/* export pack, phase 1 (2026-08-23): generated from what
+                    this page already holds. Subtitles refuse when no row
+                    carries usable timing — a nine-minute cue is not one. */}
+                <span className="flex items-center gap-1.5 text-xs text-fg-muted">
+                  <span>{t("exportLabel")}</span>
+                  {(["srt", "vtt"] as const).map((kind) => (
+                    <button
+                      key={kind}
+                      type="button"
+                      className="ltr rounded-full bg-surface-2 px-2 py-0.5 uppercase hover:text-fg disabled:opacity-40"
+                      disabled={!canExportSubtitles(rows)}
+                      title={!canExportSubtitles(rows) ? t("exportNoTiming") : undefined}
+                      onClick={() =>
+                        downloadText(
+                          exportFilename(call.title, kind),
+                          kind === "srt" ? srtFrom(rows, speakerName) : vttFrom(rows, speakerName),
+                          "text/plain",
+                        )
+                      }
+                    >
+                      {kind}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    className="ltr rounded-full bg-surface-2 px-2 py-0.5 uppercase hover:text-fg"
+                    onClick={() =>
+                      downloadText(
+                        exportFilename(call.title, "md"),
+                        markdownFrom({
+                          title: call.title || t("untitledExport"),
+                          date: formatDate(call.started_at, locale),
+                          summary: summary?.body ?? null,
+                          rows,
+                          speakerName,
+                          labels: { summary: t("summary"), transcript: t("transcript") },
+                        }),
+                        "text/markdown",
+                      )
+                    }
+                  >
+                    md
+                  </button>
+                </span>
                 <button
                   type="button"
                   aria-pressed={cleanRead}

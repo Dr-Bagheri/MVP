@@ -523,7 +523,7 @@ export function createUploadsRepo(db: Db, config: UploadsConfig) {
     async resummarize(
       identity: Identity,
       callId: string,
-      opts: { template?: string; instruction?: string },
+      opts: { template?: string; instruction?: string; figures?: boolean },
     ): Promise<{ id: string; status: string }> {
       const id = assertUuid(callId, "call id");
       if (opts.template !== undefined
@@ -563,6 +563,7 @@ export function createUploadsRepo(db: Db, config: UploadsConfig) {
           ownerId: call[0].owner_id,
           ...(opts.template ? { template: opts.template } : {}),
           ...(instruction ? { instruction } : {}),
+          ...(opts.figures ? { figures: true } : {}),
         });
       }
       return { id, status: "summarizing" };

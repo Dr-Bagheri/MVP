@@ -382,11 +382,16 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
   app.post("/v1/calls/:id/summaries", async (request, reply) => {
     const identity = await auth.requireActive(request);
     const { id } = request.params as { id: string };
-    const body = (request.body ?? {}) as { template?: string; instruction?: string };
+    const body = (request.body ?? {}) as {
+      template?: string;
+      instruction?: string;
+      figures?: boolean;
+    };
     return reply.send(
       await uploads.resummarize(identity, id, {
         ...(typeof body.template === "string" ? { template: body.template } : {}),
         ...(typeof body.instruction === "string" ? { instruction: body.instruction } : {}),
+        ...(body.figures === true ? { figures: true } : {}),
       }),
     );
   });

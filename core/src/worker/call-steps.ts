@@ -121,6 +121,7 @@ export interface Summarizer {
     /** Regenerate extras (2026-08-23): template key + requester's ask. */
     template?: string | undefined;
     instruction?: string | undefined;
+    figures?: boolean | undefined;
   }): Promise<SummaryWritten | SummarySkipped>;
 }
 
@@ -192,6 +193,7 @@ export function createSummarizeStep({
           transcript,
           template: payload.template,
           instruction: payload.instruction,
+          figures: payload.figures,
         });
       } catch (error) {
         if ((error as Error)?.name === "MissingSystemSkillError") {
