@@ -10,6 +10,7 @@ import { useTimezonePreference } from "@/lib/usePreferences";
 import { Breadcrumbs } from "./Breadcrumbs";
 import { NotificationBell } from "./NotificationBell";
 import { registerPresenceAnchor } from "./presenceAnchor";
+import { registerRecorderAnchor } from "./recorderAnchor";
 
 /**
  * The platform top bar (M22): en/fa switcher · global search · avatar.
@@ -65,6 +66,12 @@ export function TopBar({ me, isPlatformRoot = false }: { me: User | null; isPlat
     anchorCleanupRef.current = node ? registerPresenceAnchor(node) : () => undefined;
   }, []);
   useEffect(() => () => anchorCleanupRef.current(), []);
+  const recorderCleanupRef = useRef<() => void>(() => undefined);
+  const setRecorderAnchorRef = useCallback((node: HTMLDivElement | null) => {
+    recorderCleanupRef.current();
+    recorderCleanupRef.current = node ? registerRecorderAnchor(node) : () => undefined;
+  }, []);
+  useEffect(() => () => recorderCleanupRef.current(), []);
   /*
    * Switching locale re-renders the SAME route under the other prefix, so the
    * user stays where they were. Sending them home on a language change would
@@ -95,6 +102,18 @@ export function TopBar({ me, isPlatformRoot = false }: { me: User | null; isPlat
         <div className="flex min-w-0 items-center justify-end gap-2">
           {/* Conversations moved UNDER the hub's prompt box (user directive,
               round 2) — the bar carries no twin of it. */}
+
+          {/* the mini recorder docks here while a take is live (user
+              directive, 2026-08-23): beside the calendar/clock, DOM-first in
+              this end cluster = the centre-side position in BOTH directions
+              (LTR lays the cluster out left→right, RTL right→left — first
+              child lands nearest the centre either way). Empty and invisible
+              when nothing is rolling. */}
+          <div
+            ref={setRecorderAnchorRef}
+            id="neurai-topbar-recorder"
+            className="flex min-w-0 items-center empty:hidden"
+          />
           <Clock />
 
           {/* Search LEFT the top bar (user directive, 2026-08-18) — it lives

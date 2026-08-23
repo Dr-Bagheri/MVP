@@ -1,6 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import { useLocale, useTranslations } from "next-intl";
 import { usePathname, useRouter } from "@/i18n/routing";
 import {
@@ -10,15 +11,27 @@ import {
   resume,
   subscribeRecorder,
 } from "@/lib/recordingEngine";
+import {
+  getRecorderAnchorSnapshot,
+  getServerRecorderAnchorSnapshot,
+  subscribeRecorderAnchor,
+} from "@/components/platform/recorderAnchor";
 import { formatClock } from "@/lib/format";
 
 /**
- * The floating mini recorder (user directive, 2026-08-22): while a take is
- * live and the person is ANYWHERE but the recorder screen, this pill keeps
- * it visible and controllable — the red dot, the clock, pause/resume,
- * finish, and a click through to the full recorder. It exists because the
- * engine now survives navigation; a rolling mic with no visible presence
- * would be the worst kind of quiet.
+ * The mini recorder (user directive, 2026-08-22): while a take is live and
+ * the person is ANYWHERE but the recorder screen, this pill keeps it visible
+ * and controllable — the red dot, the clock, pause/resume, finish, and a
+ * click through to the full recorder. It exists because the engine survives
+ * navigation; a rolling mic with no visible presence would be the worst kind
+ * of quiet.
+ *
+ * Placement (user directive, 2026-08-23): it DOCKS into the top bar beside
+ * the calendar/clock, at the centre-side end of that cluster — the bar
+ * offers `recorderAnchor` and the pill portals in, styled like the bar's
+ * other bordered controls. Screens without the bar (the platform console,
+ * auth) register no anchor, and the pill falls back to floating: a live mic
+ * must never be invisible.
  *
  * Hidden on the recorder's own screens (/echo new-meeting and its aliases)
  * — two live controls for one take is how they disagree.
@@ -29,35 +42,54 @@ export function FloatingRecorder() {
   const pathname = usePathname();
   const router = useRouter();
   const s = useSyncExternalStore(subscribeRecorder, recorderSnapshot, recorderSnapshot);
+  const anchor = useSyncExternalStore(
+    subscribeRecorderAnchor,
+    getRecorderAnchorSnapshot,
+    getServerRecorderAnchorSnapshot,
+  );
 
   const live = s.phase === "recording" || s.phase === "paused" || s.phase === "finishing";
   if (!live) return null;
 
   // the recorder screen renders the full controls — the pill stands down
-  // (locale-stripped pathname; aliases record/upload/new-meeting land there)
+  // (locale-stripped pathname; aliases record/upload/new-meeting land there).
+  // Matched by SEGMENT, not prefix: startsWith("/echo/record") also swallowed
+  // "/echo/records" — the records LIST — and the pill silently never showed
+  // there while a take was rolling.
+  const echoSection =
+    pathname === "/echo" ? "" : pathname.startsWith("/echo/") ? (pathname.split("/")[2] ?? "") : null;
   const onRecorderScreen =
-    pathname === "/echo" ||
-    pathname.startsWith("/echo/new-meeting") ||
-    pathname.startsWith("/echo/record") ||
-    pathname.startsWith("/echo/upload");
+    echoSection !== null && ["", "new-meeting", "record", "upload"].includes(echoSection);
   if (onRecorderScreen) return null;
 
-  return (
-    <div className="fixed bottom-4 start-4 z-40 flex items-center gap-2 rounded-full border border-border bg-surface py-1.5 pe-2 ps-3 shadow-xl">
+  const docked = anchor !== null;
+
+  const pill = (
+    <div
+      className={
+        docked
+          ? "flex h-9 min-w-0 items-center gap-1 rounded-lg border border-border bg-surface pe-1 ps-2.5"
+          : "fixed bottom-4 start-4 z-40 flex items-center gap-2 rounded-full border border-border bg-surface py-1.5 pe-2 ps-3 shadow-xl"
+      }
+    >
       <button
         type="button"
-        className="tap flex items-center gap-2"
+        className="tap flex min-w-0 items-center gap-2"
         onClick={() => router.push("/echo")}
         aria-label={t("pillOpen")}
         title={t("pillOpen")}
       >
         <span
-          className={`inline-block h-2.5 w-2.5 rounded-full ${
+          className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${
             s.phase === "recording" ? "animate-pulse bg-danger" : "bg-fg-subtle"
           }`}
           aria-hidden
         />
-        <span className="max-w-32 truncate text-xs font-medium text-fg">
+        <span
+          className={`truncate text-xs font-medium text-fg ${
+            docked ? "hidden max-w-28 md:inline" : "max-w-32"
+          }`}
+        >
           {s.title || t("untitledCall")}
         </span>
         <span className="ltr text-xs tabular-nums text-fg-muted">
@@ -96,4 +128,6 @@ export function FloatingRecorder() {
       )}
     </div>
   );
+
+  return docked ? createPortal(pill, anchor) : pill;
 }

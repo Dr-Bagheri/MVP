@@ -2,6 +2,7 @@ import { render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TopBar } from "./TopBar";
 import { getPresenceAnchorSnapshot } from "./presenceAnchor";
+import { getRecorderAnchorSnapshot } from "./recorderAnchor";
 
 vi.mock("next-intl", () => ({ useLocale: () => "en" }));
 vi.mock("@/i18n/routing", () => ({
@@ -32,6 +33,18 @@ describe("TopBar presence ring", () => {
 
     unmount();
     expect(getPresenceAnchorSnapshot()).toBeNull();
+  });
+
+  it("offers the mini recorder its slot beside the clock (user directive, 2026-08-23)", () => {
+    // the seam FloatingRecorder docks through: the bar must register the
+    // REAL slot element — a slot rendered but never registered would leave
+    // the pill floating forever while this markup reads as done
+    const { container, unmount } = render(<TopBar me={null} />);
+    const slot = container.querySelector<HTMLElement>("#neurai-topbar-recorder");
+    expect(slot).not.toBeNull();
+    expect(getRecorderAnchorSnapshot()).toBe(slot);
+    unmount();
+    expect(getRecorderAnchorSnapshot()).toBeNull();
   });
 
   it("the glass sphere is GONE — no curve bulge, no optical layers (user redesign, 2026-08-22)", () => {
