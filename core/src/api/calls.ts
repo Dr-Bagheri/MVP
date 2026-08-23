@@ -10,7 +10,7 @@
  * What the app layer DOES own: shape, pagination bounds, validation, and
  * turning "no row" into a 404 rather than a 403 (existence is information).
  */
-import { NotFoundError, ValidationError } from "./errors.ts";
+import { ConflictError, NotFoundError, ValidationError } from "./errors.ts";
 import { assertUuid, type Db, type SqlTx } from "../db/identity.ts";
 import type { Identity } from "../agent/types.ts";
 
@@ -468,13 +468,24 @@ export function createCallsRepo(db: Db) {
      * Direct `deleted_at` writes now raise for application roles — including
      * the admin path that used to work. One door, deliberately.
      */
-    async softDelete(identity: Identity, callId: string): Promise<void> {
+    async softDelete(identity: Identity, callId: string, reason: string): Promise<void> {
       const id = assertUuid(callId, "call id");
+      if (reason.trim().length < 3) {
+        // 0085: a deletion carries its reason into the ledger — asked at
+        // the button, required at every layer beneath it
+        throw new ValidationError("a reason is required (at least 3 characters)",
+          { code: "reason_required" });
+      }
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<{ deleted: boolean }>(
-          `select echo.soft_delete_call($1::uuid) as deleted`, [id],
+          `select echo.soft_delete_call($1::uuid, $2::text) as deleted`, [id, reason.trim()],
         ),
-      ).catch(refusalIsNotFound);
+      ).catch((cause) => {
+        if ((cause as { code?: string }).code === "42883") {
+          throw new ConflictError("not_migrated"); // db/0085 pending here
+        }
+        return refusalIsNotFound(cause);
+      });
       // true = deleted, false = already deleted. Both mean "it is gone now",
       // so both are success — a retry is not a failure.
       if (!rows[0]) throw new NotFoundError("call not found");

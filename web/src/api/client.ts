@@ -952,10 +952,14 @@ export const api = {
    * These stay fixture-backed only until the swap lands with the rest of the
    * write path — no longer because anything is broken.
    */
-  async deleteCall(id: string): Promise<void> {
+  async deleteCall(id: string, reason: string): Promise<void> {
     /* **LIVE** — the M11 named door: owner deletes their own, admin any;
-       idempotent 204, so a double-click is harmless. */
-    await bff(`/api/calls/${id}`, { method: "DELETE" });
+       idempotent 204. The REASON rides into the deletion ledger (0085). */
+    await bff(`/api/calls/${id}`, {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ reason }),
+    });
   },
   async restoreCall(id: string): Promise<void> {
     /* **LIVE** — admin-only by the user's ruling; a member's attempt gets
@@ -1028,8 +1032,12 @@ export const api = {
     });
   },
   /** admin/owner-only true delete (db/0076); 409 not_migrated pre-0076 */
-  async deletePerson(id: string): Promise<void> {
-    await bff(`/api/directory/${id}`, { method: "DELETE" });
+  async deletePerson(id: string, reason: string): Promise<void> {
+    await bff(`/api/directory/${id}`, {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ reason }),
+    });
   },
 
   /**
@@ -1309,8 +1317,12 @@ export const api = {
    * owner-only true delete is the one door. Callers hide the button from
    * non-owners rather than letting them collect a 403.
    */
-  async rejectMember(id: string): Promise<void> {
-    await fetch(`/api/admin/members/${id}`, { method: "DELETE" }).then((r) => {
+  async rejectMember(id: string, reason: string): Promise<void> {
+    await fetch(`/api/admin/members/${id}`, {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ reason }),
+    }).then((r) => {
       if (!r.ok) throw new BffError(r.status);
     });
   },

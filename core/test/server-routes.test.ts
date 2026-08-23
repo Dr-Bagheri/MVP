@@ -591,11 +591,19 @@ describe("calls routes", () => {
     })).statusCode).toBe(400);
   });
 
-  it("deletes softly and answers 204", async () => {
+  it("deletes softly WITH a reason and answers 204 (0085)", async () => {
+    const res = await server().inject({
+      method: "DELETE", url: `/v1/calls/${CALL}`, headers: authed,
+      payload: { reason: "جلسهٔ آزمایشی بود" },
+    });
+    expect(res.statusCode).toBe(204);
+  });
+
+  it("a delete WITHOUT a reason is a 400 — the ledger takes no blanks", async () => {
     const res = await server().inject({
       method: "DELETE", url: `/v1/calls/${CALL}`, headers: authed,
     });
-    expect(res.statusCode).toBe(204);
+    expect(res.statusCode).toBe(400);
   });
 });
 

@@ -43,7 +43,7 @@ export function MemberDetail({
    *  because core alone can tell "taken" from "retired". */
   onRename?: (id: string, patch: { display_name?: string; username?: string | null }) => Promise<void>;
   /** Owner-only true delete (tombstone). Absent = the button never renders. */
-  onDelete?: (user: User) => void;
+  onDelete?: (user: User, reason: string) => void;
   onClose: () => void;
 }) {
   const t = useTranslations("management");
@@ -51,6 +51,8 @@ export function MemberDetail({
   const locale = useLocale();
   /** Two-step delete: the first press arms it, the second is the real one. */
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  /** 0085: every deletion carries its reason into the ledger */
+  const [deleteReason, setDeleteReason] = useState("");
 
   /*
    * Rename drafts. Re-synced from the SERVER value (not just on person
@@ -252,10 +254,24 @@ export function MemberDetail({
             {onDelete ? (
               confirmingDelete ? (
                 <span className="flex items-center gap-2">
+                  <input
+
+                    className="input h-9 min-h-0 w-44 py-0 text-xs"
+
+                    autoFocus
+
+                    placeholder={t("deleteReasonHint")}
+
+                    value={deleteReason}
+
+                    onChange={(e) => setDeleteReason(e.target.value)}
+
+                  />
+
                   <button
                     className="btn-danger"
-                    disabled={busy}
-                    onClick={() => onDelete(user)}
+                    disabled={busy || deleteReason.trim().length < 3}
+                    onClick={() => onDelete(user, deleteReason.trim())}
                   >
                     {t("confirmDeleteMember")}
                   </button>

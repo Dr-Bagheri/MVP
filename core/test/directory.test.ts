@@ -97,20 +97,20 @@ describe("remove — db/0076's named door, mapped honestly", () => {
 
   it("calls the DOOR, never a bare DELETE", async () => {
     const { db, log } = fakeDb(() => []);
-    await createDirectoryRepo(db).remove(WHO, PERSON);
+    await createDirectoryRepo(db).remove(WHO, PERSON, "دلیل آزمایشی");
     expect(log[0]!.sql).toContain("echo.delete_person");
     expect(log[0]!.sql).not.toMatch(/deletes+from/i);
   });
 
   it("42883 (door absent — db/0076 not run) is a NAMEABLE not_migrated, not a crash", async () => {
-    await expect(createDirectoryRepo(throwing("42883").db).remove(WHO, PERSON))
+    await expect(createDirectoryRepo(throwing("42883").db).remove(WHO, PERSON, "دلیل آزمایشی"))
       .rejects.toThrow(/not_migrated/);
   });
 
   it("42501 (the SQL role wall) surfaces as not-permitted; P0002 as no-such-person", async () => {
-    await expect(createDirectoryRepo(throwing("42501").db).remove(WHO, PERSON))
+    await expect(createDirectoryRepo(throwing("42501").db).remove(WHO, PERSON, "دلیل آزمایشی"))
       .rejects.toThrow(/not permitted/);
-    await expect(createDirectoryRepo(throwing("P0002").db).remove(WHO, PERSON))
+    await expect(createDirectoryRepo(throwing("P0002").db).remove(WHO, PERSON, "دلیل آزمایشی"))
       .rejects.toThrow(/no such person/);
   });
 });

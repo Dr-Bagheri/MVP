@@ -83,7 +83,7 @@ describe("the audit row rides the transaction it describes", () => {
     // `false` = already tombstoned. A second entry would read as two
     // deletions of one person.
     const { db, log } = fakeDb(() => [{ tombstone_user: false }]);
-    await createInvitationsRepo(db).tombstone({ ...ADMIN, role: "owner" }, TARGET).catch(() => {});
+    await createInvitationsRepo(db).tombstone({ ...ADMIN, role: "owner" }, TARGET, "دلیل آزمایشی").catch(() => {});
     expect(audited(log)).toHaveLength(0);
   });
 });

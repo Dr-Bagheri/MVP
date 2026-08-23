@@ -172,7 +172,9 @@ describe("executeClientTool", () => {
     const result = await executeClientTool("delete_record", { record: "call 3" }, ctx);
     expect(result.ok).toBe(true);
     expect(result.detail).toContain("restorable");
-    expect(deleteCall).toHaveBeenCalledWith("c-1");
+    // 0085: the assistant's delete carries its ledger reason — the consent
+    // card was the confirm, and the line says the user approved it there
+    expect(deleteCall).toHaveBeenCalledWith("c-1", "با تأیید کاربر از طریق دستیار");
   });
 
   it("delete_conversation archives — resolved by title, refused when unknown", async () => {

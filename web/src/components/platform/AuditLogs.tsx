@@ -72,7 +72,7 @@ const TRANSLATABLE_ACTIONS: Record<string, readonly string[]> = {
   agent_run: ["ok", "error", "running"],
 };
 
-const TRANSLATABLE_TARGETS = ["proposal", "agent_run", "member", "org", "call"];
+const TRANSLATABLE_TARGETS = ["proposal", "agent_run", "member", "org", "call", "deletion"];
 
 /** Keys the three sources are known to build. Anything else renders under its
  *  raw name rather than being hidden — a detail we do not recognise is still a
@@ -85,6 +85,7 @@ const SOURCE_TONE: Record<AuditSource, "accent" | "info" | "neutral"> = {
   admin_action: "accent",
   proposal_decision: "info",
   agent_run: "neutral",
+  deletion: "neutral",
 };
 
 export function AuditLogs() {

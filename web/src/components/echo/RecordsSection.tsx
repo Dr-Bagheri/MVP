@@ -43,6 +43,9 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
   // ---- row actions (the calls CRUD, user directive 2026-08-16) ----
   const [busy, setBusy] = useState(false);
   const [renamingId, setRenamingId] = useState<string | null>(null);
+  /** 0085 (user ruling): deleting a RECORD asks to confirm again and takes
+      a reason, which lands in the deletion ledger the admins read. */
+  const [deleting, setDeleting] = useState<null | { id: string; reason: string }>(null);
   const [renameDraft, setRenameDraft] = useState("");
   /* A row action's failure is still said OUT LOUD — `act` used to swallow
      them — but through the notification system now (orb toast + top bell),
@@ -346,16 +349,46 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
                           >
                             {t("translate")}
                           </button>
-                          {/* ONE click (user verdict: the two-step read as
-                              an error). The 30-day restore window is the
-                              real safety net, not a second press. */}
-                          <button
-                            className="text-danger/80 underline-offset-2 hover:text-danger hover:underline"
-                            disabled={busy}
-                            onClick={() => void act(() => api.deleteCall(call.id))}
-                          >
-                            {t("delete")}
-                          </button>
+                          {/* REVERSED 2026-08-23 (user ruling — supersedes the earlier
+                              one-click verdict): a record's deletion confirms AGAIN and
+                              takes a REASON, which the deletion ledger keeps (0085). */}
+                          {deleting?.id === call.id ? (
+                            <span className="flex items-center gap-2">
+                              <input
+                                className="input h-8 min-h-0 w-44 py-0 text-xs"
+                                autoFocus
+                                placeholder={t("deleteReasonHint")}
+                                value={deleting.reason}
+                                onChange={(e) => setDeleting({ id: call.id, reason: e.target.value })}
+                                onKeyDown={(e) => { if (e.key === "Escape") setDeleting(null); }}
+                              />
+                              <button
+                                className="font-semibold text-danger underline-offset-2 hover:underline"
+                                disabled={busy || deleting.reason.trim().length < 3}
+                                onClick={() => {
+                                  const reason = deleting.reason.trim();
+                                  setDeleting(null);
+                                  void act(() => api.deleteCall(call.id, reason));
+                                }}
+                              >
+                                {t("confirmDelete")}
+                              </button>
+                              <button
+                                className="text-fg-muted underline-offset-2 hover:underline"
+                                onClick={() => setDeleting(null)}
+                              >
+                                {tCommon("cancel")}
+                              </button>
+                            </span>
+                          ) : (
+                            <button
+                              className="text-danger/80 underline-offset-2 hover:text-danger hover:underline"
+                              disabled={busy}
+                              onClick={() => setDeleting({ id: call.id, reason: "" })}
+                            >
+                              {t("delete")}
+                            </button>
+                          )}
                         </span>
                       ) : null}
                     </td>

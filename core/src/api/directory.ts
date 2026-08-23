@@ -196,11 +196,16 @@ export function createDirectoryRepo(db: Db) {
      * route (the D27 altitude rule). Linked speakers are unlinked by the
      * door itself; the speaker rows and transcripts survive.
      */
-    async remove(identity: Identity, personId: string): Promise<void> {
+    async remove(identity: Identity, personId: string, reason: string): Promise<void> {
       const id = assertUuid(personId, "person id");
+      if (reason.trim().length < 3) {
+        // 0085: deletions carry their reason into the ledger
+        throw new ValidationError("a reason is required (at least 3 characters)",
+          { code: "reason_required" });
+      }
       try {
         await db.withIdentity(identity, (tx: SqlTx) =>
-          tx.unsafe(`select echo.delete_person($1)`, [id]));
+          tx.unsafe(`select echo.delete_person($1, $2::text)`, [id, reason.trim()]));
       } catch (cause) {
         const code = (cause as { code?: string }).code;
         if (code === "42883") {

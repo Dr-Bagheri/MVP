@@ -41,6 +41,8 @@ export function SpeakersDirectory() {
   const [editName, setEditName] = useState("");
   /** two-click delete, the records-table pattern */
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  /** 0085: the person's deletion carries a reason into the ledger */
+  const [confirmReason, setConfirmReason] = useState("");
   /**
    * Voice enrollment (M39): an inline ~8s mic take per person; only the
    * VECTOR is stored server-side. The column renders only when the wire
@@ -138,12 +140,12 @@ export function SpeakersDirectory() {
     }
   }
 
-  async function deleteFor(person: Person): Promise<void> {
+  async function deleteFor(person: Person, reason: string): Promise<void> {
     if (busy) return;
     setConfirmId(null);
     setBusy(true);
     try {
-      await api.deletePerson(person.id);
+      await api.deletePerson(person.id, reason);
       notify(t("personDeleted", { name: person.display_name }));
       setPeople(await api.directory());
     } catch (cause) {
@@ -344,17 +346,40 @@ export function SpeakersDirectory() {
                           >
                             {t("edit")}
                           </button>
-                          <button
-                            type="button"
-                            className="text-danger/80 underline-offset-2 hover:text-danger hover:underline"
-                            disabled={busy}
-                            onClick={() => {
-                              if (confirmId === person.id) void deleteFor(person);
-                              else setConfirmId(person.id);
-                            }}
-                          >
-                            {confirmId === person.id ? t("confirmDelete") : t("delete")}
-                          </button>
+                          {confirmId === person.id ? (
+                            <span className="flex items-center gap-2">
+                              <input
+                                className="input h-8 min-h-0 w-40 py-0 text-xs"
+                                autoFocus
+                                placeholder={t("deleteReasonHint")}
+                                value={confirmReason}
+                                onChange={(e) => setConfirmReason(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === "Escape") { setConfirmId(null); setConfirmReason(""); } }}
+                              />
+                              <button
+                                type="button"
+                                className="text-danger underline-offset-2 hover:underline"
+                                disabled={busy || confirmReason.trim().length < 3}
+                                onClick={() => {
+                                  const reason = confirmReason.trim();
+                                  setConfirmId(null);
+                                  setConfirmReason("");
+                                  void deleteFor(person, reason);
+                                }}
+                              >
+                                {t("confirmDelete")}
+                              </button>
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              className="text-danger/80 underline-offset-2 hover:text-danger hover:underline"
+                              disabled={busy}
+                              onClick={() => { setConfirmId(person.id); setConfirmReason(""); }}
+                            >
+                              {t("delete")}
+                            </button>
+                          )}
                         </span>
                       </td>
                     ) : null}

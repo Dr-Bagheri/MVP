@@ -79,6 +79,8 @@ export default function UsersPage() {
   const [role, setRole] = useState<Role | "">("");
   const [sort, setSort] = useState<MemberSort>("default");
   const [busy, setBusy] = useState(false);
+  /** 0085: rejecting a pending member is a deletion — reason required */
+  const [rejecting, setRejecting] = useState<null | { id: string; reason: string }>(null);
 
   // ---- bulk selection + detail (Part 4 tail) ----
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
@@ -245,11 +247,11 @@ export default function UsersPage() {
    * notification"): success and failure both land as a toast and in the
    * bell. The first version swallowed both outcomes in a bare finally.
    */
-  async function deleteMemberFor(u: User): Promise<void> {
+  async function deleteMemberFor(u: User, reason: string): Promise<void> {
     if (busy) return;
     setBusy(true);
     try {
-      await api.rejectMember(u.id);
+      await api.rejectMember(u.id, reason);
       setDetailId(null);
       notify(t("memberDeleted", { name: personName(u, locale) }));
       await load();
@@ -442,21 +444,42 @@ export default function UsersPage() {
                       cannot be PATCHed, and hiding the button beats letting
                       an admin collect a 403 they can do nothing about */}
                   {me?.role === "owner" ? (
-                    <button
-                      className="btn-secondary h-9 min-h-0 px-3 text-xs"
-                      disabled={busy}
-                      onClick={async () => {
-                        setBusy(true);
-                        try {
-                          await api.rejectMember(u.id);
-                          await load();
-                        } finally {
-                          setBusy(false);
-                        }
-                      }}
-                    >
-                      {tAdmin("reject")}
-                    </button>
+                    rejecting?.id === u.id ? (
+                      <span className="flex items-center gap-2">
+                        <input
+                          className="input h-9 min-h-0 w-40 py-0 text-xs"
+                          autoFocus
+                          placeholder={t("deleteReasonHint")}
+                          value={rejecting.reason}
+                          onChange={(e) => setRejecting({ id: u.id, reason: e.target.value })}
+                          onKeyDown={(e) => { if (e.key === "Escape") setRejecting(null); }}
+                        />
+                        <button
+                          className="btn-secondary h-9 min-h-0 px-3 text-xs text-danger"
+                          disabled={busy || rejecting.reason.trim().length < 3}
+                          onClick={async () => {
+                            setBusy(true);
+                            try {
+                              await api.rejectMember(u.id, rejecting.reason.trim());
+                              setRejecting(null);
+                              await load();
+                            } finally {
+                              setBusy(false);
+                            }
+                          }}
+                        >
+                          {tAdmin("reject")}
+                        </button>
+                      </span>
+                    ) : (
+                      <button
+                        className="btn-secondary h-9 min-h-0 px-3 text-xs"
+                        disabled={busy}
+                        onClick={() => setRejecting({ id: u.id, reason: "" })}
+                      >
+                        {tAdmin("reject")}
+                      </button>
+                    )
                   ) : null}
                 </li>
               ))}
@@ -762,13 +785,37 @@ export default function UsersPage() {
                             {t("memberEdit")}
                           </button>
                           {me?.role === "owner" && u.role !== "owner" && u.id !== me?.id ? (
-                            <button
-                              className="text-danger/80 underline-offset-2 hover:text-danger hover:underline"
-                              disabled={busy}
-                              onClick={() => void deleteMemberFor(u)}
-                            >
-                              {t("deleteMember")}
-                            </button>
+                            rejecting?.id === u.id ? (
+                              <span className="flex items-center gap-2">
+                                <input
+                                  className="input h-8 min-h-0 w-40 py-0 text-xs"
+                                  autoFocus
+                                  placeholder={t("deleteReasonHint")}
+                                  value={rejecting.reason}
+                                  onChange={(e) => setRejecting({ id: u.id, reason: e.target.value })}
+                                  onKeyDown={(e) => { if (e.key === "Escape") setRejecting(null); }}
+                                />
+                                <button
+                                  className="text-danger underline-offset-2 hover:underline"
+                                  disabled={busy || rejecting.reason.trim().length < 3}
+                                  onClick={() => {
+                                    const reason = rejecting.reason.trim();
+                                    setRejecting(null);
+                                    void deleteMemberFor(u, reason);
+                                  }}
+                                >
+                                  {t("deleteMember")}
+                                </button>
+                              </span>
+                            ) : (
+                              <button
+                                className="text-danger/80 underline-offset-2 hover:text-danger hover:underline"
+                                disabled={busy}
+                                onClick={() => setRejecting({ id: u.id, reason: "" })}
+                              >
+                                {t("deleteMember")}
+                              </button>
+                            )
                           ) : null}
                         </span>
                       </td>
@@ -793,7 +840,7 @@ export default function UsersPage() {
                person, retired handle — core's DELETE endpoint, M11 family);
                admins keep disable, which is reversible */
             {...(me?.role === "owner"
-              ? { onDelete: (u: User) => void deleteMemberFor(u) }
+              ? { onDelete: (u: User, reason: string) => void deleteMemberFor(u, reason) }
               : {})}
             onClose={() => setDetailId(null)}
           />

@@ -557,7 +557,10 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
   app.delete("/v1/calls/:id", async (request, reply) => {
     const identity = await auth.requireActive(request);
     const { id } = request.params as { id: string };
-    await calls.softDelete(identity, id);   // soft — M11
+    // 0085: every product deletion carries its reason into the ledger
+    const body = (request.body ?? {}) as { reason?: unknown };
+    if (typeof body.reason !== "string") throw new ValidationError("reason is required");
+    await calls.softDelete(identity, id, body.reason);   // soft — M11
     return reply.code(204).send();
   });
 
@@ -1343,7 +1346,9 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
   app.delete("/v1/directory/:id", async (request, reply) => {
     const identity = await auth.requireAdmin(request);
     const { id } = request.params as { id: string };
-    await directory.remove(identity, id);
+    const body = (request.body ?? {}) as { reason?: unknown };
+    if (typeof body.reason !== "string") throw new ValidationError("reason is required");
+    await directory.remove(identity, id, body.reason);
     return reply.code(204).send();
   });
 
@@ -1863,7 +1868,9 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
   app.delete("/v1/admin/members/:id", async (request, reply) => {
     const identity = await auth.requireOwner(request);
     const { id } = request.params as { id: string };
-    await invitations.tombstone(identity, id);
+    const body = (request.body ?? {}) as { reason?: unknown };
+    if (typeof body.reason !== "string") throw new ValidationError("reason is required");
+    await invitations.tombstone(identity, id, body.reason);
     return reply.code(204).send();
   });
 

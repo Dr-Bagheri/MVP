@@ -90,7 +90,8 @@
     "untitled": "بدون عنوان",
     "resumeCall": "ادامه",
     "retry": "تلاش دوباره",
-    "retryStarted": "پردازش دوباره آغاز شد — نتیجه در همین جدول به‌روز می‌شود."
+    "retryStarted": "پردازش دوباره آغاز شد — نتیجه در همین جدول به‌روز می‌شود.",
+    "deleteReasonHint": "دلیل حذف (در گزارش ثبت می‌شود)"
   },
   "status": {
     "recording": "متوقف‌شده",
@@ -228,7 +229,8 @@
     "voiceRemove": "حذف صدا",
     "voiceEnrolled": "صدای {name} ثبت شد — از این پس در جلسه‌ها به‌طور خودکار شناسایی می‌شود.",
     "voiceFailed": "ثبت صدا انجام نشد — دوباره تلاش کنید.",
-    "voiceMicDenied": "دسترسی میکروفون داده نشد."
+    "voiceMicDenied": "دسترسی میکروفون داده نشد.",
+    "deleteReasonHint": "دلیل حذف (در گزارش ثبت می‌شود)"
   },
   "titles": {
     "ceo": "مدیرعامل",
@@ -953,7 +955,8 @@
     "inviteState_revoked": "لغوشده",
     "inviteState_expired": "منقضی",
     "memberDeleted": "عضو «{name}» حذف شد.",
-    "memberDeleteFailed": "حذف عضو انجام نشد."
+    "memberDeleteFailed": "حذف عضو انجام نشد.",
+    "deleteReasonHint": "دلیل حذف (در گزارش ثبت می‌شود)"
   },
   "settings": {
     "title": "تنظیمات",
@@ -1018,7 +1021,8 @@
     "source": {
       "admin_action": "کنش مدیر",
       "proposal_decision": "تصمیم دربارهٔ پیشنهاد",
-      "agent_run": "اجرای دستیار"
+      "agent_run": "اجرای دستیار",
+      "deletion": "حذف‌ها"
     },
     "colWhen": "زمان",
     "colWho": "کنشگر",
@@ -1042,14 +1046,18 @@
       "reject": "رد شد",
       "ok": "انجام شد",
       "error": "با خطا پایان یافت",
-      "running": "در حال اجرا"
+      "running": "در حال اجرا",
+      "call": "حذف رکورد",
+      "person": "حذف گوینده",
+      "member": "حذف عضو"
     },
     "target": {
       "proposal": "پیشنهاد دستیار",
       "agent_run": "اجرای دستیار",
       "member": "عضو",
       "org": "سازمان",
-      "call": "تماس"
+      "call": "تماس",
+      "deletion": "موضوع حذف"
     },
     "detail": {
       "kind": "گونه",
@@ -1059,7 +1067,8 @@
       "tokens_in": "توکن ورودی",
       "tokens_out": "توکن خروجی",
       "error": "خطا",
-      "finished_at": "پایان"
+      "finished_at": "پایان",
+      "reason": "دلیل"
     }
   },
   "drains": {

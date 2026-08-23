@@ -257,7 +257,7 @@ export async function executeClientTool(
         "the record is back from the archive", "unarchiving was refused");
     case "delete_record":
       return recordAction(a.record,
-        (id, api) => api.deleteCall(id),
+        (id, api) => api.deleteCall(id, "با تأیید کاربر از طریق دستیار"), // 0085: consent card = the confirm; this is the ledger line
         "the record was deleted — restorable for 30 days", "deleting was refused");
     case "restore_record":
       return recordAction(a.record,

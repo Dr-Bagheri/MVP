@@ -90,7 +90,8 @@
     "untitled": "Untitled",
     "resumeCall": "Resume",
     "retry": "Retry",
-    "retryStarted": "Processing restarted — the result updates in this table."
+    "retryStarted": "Processing restarted — the result updates in this table.",
+    "deleteReasonHint": "Reason (recorded in the log)"
   },
   "status": {
     "recording": "Paused",
@@ -228,7 +229,8 @@
     "voiceRemove": "Remove voice",
     "voiceEnrolled": "{name}'s voice is enrolled — they will be recognized automatically in meetings.",
     "voiceFailed": "Voice enrollment did not go through — try again.",
-    "voiceMicDenied": "Microphone access was not granted."
+    "voiceMicDenied": "Microphone access was not granted.",
+    "deleteReasonHint": "Reason (recorded in the log)"
   },
   "titles": {
     "ceo": "CEO",
@@ -953,7 +955,8 @@
     "inviteState_revoked": "Revoked",
     "inviteState_expired": "Expired",
     "memberDeleted": "Member “{name}” was deleted.",
-    "memberDeleteFailed": "Deleting the member did not go through."
+    "memberDeleteFailed": "Deleting the member did not go through.",
+    "deleteReasonHint": "Reason (recorded in the log)"
   },
   "settings": {
     "title": "Settings",
@@ -1018,7 +1021,8 @@
     "source": {
       "admin_action": "Admin action",
       "proposal_decision": "Proposal decision",
-      "agent_run": "Assistant run"
+      "agent_run": "Assistant run",
+      "deletion": "Deletions"
     },
     "colWhen": "When",
     "colWho": "Who",
@@ -1042,14 +1046,18 @@
       "reject": "Rejected",
       "ok": "Completed",
       "error": "Ended with an error",
-      "running": "Running"
+      "running": "Running",
+      "call": "Record deleted",
+      "person": "Person deleted",
+      "member": "Member deleted"
     },
     "target": {
       "proposal": "Assistant proposal",
       "agent_run": "Assistant run",
       "member": "Member",
       "org": "Organization",
-      "call": "Call"
+      "call": "Call",
+      "deletion": "Deleted item"
     },
     "detail": {
       "kind": "Kind",
@@ -1059,7 +1067,8 @@
       "tokens_in": "Tokens in",
       "tokens_out": "Tokens out",
       "error": "Error",
-      "finished_at": "Finished"
+      "finished_at": "Finished",
+      "reason": "Reason"
     }
   },
   "drains": {

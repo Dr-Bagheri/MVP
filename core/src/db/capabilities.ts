@@ -84,6 +84,11 @@ export async function hasVoiceprints(db: Db): Promise<boolean> {
   return hasColumn(db, "person", "voiceprint");
 }
 
+/** db/0085: the deletion ledger (reasoned product deletions). */
+export async function hasDeletionLedger(db: Db): Promise<boolean> {
+  return hasTable(db, "deletion_record");
+}
+
 export async function hasAutonomyColumn(db: Db): Promise<boolean> {
   return hasColumn(db, "app_user", "autonomy");
 }

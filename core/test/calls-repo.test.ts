@@ -174,9 +174,9 @@ describe("delete is soft (M11)", () => {
    */
   it("goes through echo.soft_delete_call, never a direct write", async () => {
     const { db, log } = fakeDb(() => [{ deleted: true }]);
-    await createCallsRepo(db).softDelete(IDENTITY, CALL);
+    await createCallsRepo(db).softDelete(IDENTITY, CALL, "جلسهٔ آزمایشی بود");
     const statement = log.find((l) => l.sql.includes("soft_delete_call"))!;
-    expect(statement.params).toEqual([CALL]);
+    expect(statement.params).toEqual([CALL, "جلسهٔ آزمایشی بود"]); // 0085: the reason travels INTO the door
     // Direct deleted_at writes now raise for application roles (db/0032):
     // one door, so deletion cannot quietly acquire a second implementation.
     expect(log.some((l) => /set\s+deleted_at/i.test(l.sql))).toBe(false);
@@ -187,7 +187,7 @@ describe("delete is soft (M11)", () => {
     // `false` = already deleted. The caller wanted it gone and it is gone; a
     // double-clicked delete button is not a failure.
     const { db } = fakeDb(() => [{ deleted: false }]);
-    await expect(createCallsRepo(db).softDelete(IDENTITY, CALL)).resolves.toBeUndefined();
+    await expect(createCallsRepo(db).softDelete(IDENTITY, CALL, "دوباره حذف")).resolves.toBeUndefined();
   });
 
   it("turns the database's refusal into 404, not 500", async () => {
@@ -203,7 +203,7 @@ describe("delete is soft (M11)", () => {
         code: "42501", routine: "exec_stmt_raise",
       });
     });
-    await expect(createCallsRepo(db).softDelete(IDENTITY, CALL))
+    await expect(createCallsRepo(db).softDelete(IDENTITY, CALL, "نفوذ آزمایشی"))
       .rejects.toBeInstanceOf(NotFoundError);
   });
 });
@@ -398,5 +398,14 @@ describe("notes & chapters (0079)", () => {
     const { db } = fakeDb(() => []);
     const repo = createCallsRepo(db);
     await expect(repo.deleteNote(IDENTITY, NOTE_ROW.id)).rejects.toThrow(NotFoundError);
+  });
+});
+
+describe("softDelete requires a reason (0085)", () => {
+  it("a blank reason is a 400 before any statement runs", async () => {
+    const { db, log } = fakeDb(() => []);
+    await expect(createCallsRepo(db).softDelete(IDENTITY, CALL, "  "))
+      .rejects.toThrow(/reason is required/);
+    expect(queries(log)).toHaveLength(0);
   });
 });

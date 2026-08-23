@@ -36,6 +36,7 @@
 import { ValidationError } from "./errors.ts";
 import { iso } from "./vocabulary.ts";
 import { type Db, type SqlTx } from "../db/identity.ts";
+import { hasDeletionLedger } from "../db/capabilities.ts";
 import type { Identity } from "../agent/types.ts";
 
 /**
@@ -172,6 +173,26 @@ export const AUDIT_FEED_SQL = `
     from echo.agent_run r
 `;
 
+/**
+ * The deletion ledger's arm (db/0085) — appended only when the table
+ * exists (the capability pattern: code deploys ahead of the migration, and
+ * a feed naming a missing table would 500 the whole compliance page).
+ * The DETAIL carries the actor's reason — their own sentence, the same
+ * posture as the platform audit — never titles or content.
+ */
+export const DELETION_FEED_ARM = `
+  union all
+  select 'deletion',
+         d.id::text,
+         d.created_at,
+         d.actor_id,
+         d.kind,
+         'deletion',
+         d.target_id::text,
+         jsonb_build_object('reason', d.reason)
+    from echo.deletion_record d
+`;
+
 export function createAuditRepo(db: Db) {
   return {
     /**
@@ -233,13 +254,16 @@ export function createAuditRepo(db: Db) {
        * without inferring it from the page being short. It is dropped before
        * the entries are returned; its only job is to decide the cursor.
        */
+      const feedSql = (await hasDeletionLedger(db))
+        ? AUDIT_FEED_SQL + DELETION_FEED_ARM
+        : AUDIT_FEED_SQL;
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<Record<string, unknown>>(
           // `feed.at::text` keeps the microseconds Postgres stores and the
           // JS Date the driver hands back cannot hold — it is the cursor's
           // value, never the displayed one.
           `select feed.*, feed.at::text as at_cursor, u.display_name as actor_name
-             from (${AUDIT_FEED_SQL}) feed
+             from (${feedSql}) feed
              left join echo.app_user u on u.id = feed.actor_id
             where ($2::timestamptz is null
                    or (feed.at, feed.source, feed.id)

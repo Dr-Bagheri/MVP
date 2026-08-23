@@ -28,10 +28,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
  * org, members only their own — enforced in core/, asserted by SQL tests.
  * The agent has no path here at all (its DB role has no DELETE).
  */
-export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   try {
-    await coreFetch(`/v1/calls/${id}`, { method: "DELETE" });
+    const body = (await request.json().catch(() => ({}))) as { reason?: string };
+    await coreFetch(`/v1/calls/${id}`, { method: "DELETE", body: { reason: body.reason } });
     return new Response(null, { status: 204 });
   } catch (error) {
     return errorResponse(error);

@@ -147,7 +147,7 @@ export const TIMEZONE_AUTO = "auto";
  * against `pg_enum` because there is nothing to check against — the guard is
  * that the SQL naming them lives beside it in `audit.ts`.
  */
-export const AUDIT_SOURCES = ["admin_action", "proposal_decision", "agent_run"] as const;
+export const AUDIT_SOURCES = ["admin_action", "proposal_decision", "agent_run", "deletion"] as const;
 export type AuditSource = (typeof AUDIT_SOURCES)[number];
 
 /**

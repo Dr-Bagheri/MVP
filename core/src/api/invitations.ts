@@ -328,8 +328,13 @@ export function createInvitationsRepo(db: Db, config: InvitationsConfig = {}) {
      * trail survives a person's removal, which is the whole point of doing it
      * this way rather than with a DELETE.
      */
-    async tombstone(identity: Identity, memberId: string): Promise<void> {
+    async tombstone(identity: Identity, memberId: string, reason: string): Promise<void> {
       const id = assertUuid(memberId, "member id");
+      if (reason.trim().length < 3) {
+        // 0085: deletions carry their reason into the ledger
+        throw new ValidationError("a reason is required (at least 3 characters)",
+          { code: "reason_required" });
+      }
       if (id === identity.userId) {
         // The database would likely refuse too, but the message matters: an
         // owner deleting themselves would leave an org with no owner and no
@@ -338,7 +343,7 @@ export function createInvitationsRepo(db: Db, config: InvitationsConfig = {}) {
       }
       const rows = await db.withIdentity(identity, async (tx: SqlTx) => {
         const done = await tx.unsafe<{ tombstone_user: boolean }>(
-          `select echo.tombstone_user($1::uuid) as tombstone_user`, [id],
+          `select echo.tombstone_user($1::uuid, $2::text) as tombstone_user`, [id, reason.trim()],
         );
         /**
          * Only on a REAL deletion. `false` means already tombstoned, and a

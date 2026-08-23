@@ -163,20 +163,20 @@ describe("true delete", () => {
   it("refuses an owner deleting themselves", async () => {
     // It would leave an org with no owner and no way to appoint one.
     const { db } = fakeDb(() => [{ tombstone_user: true }]);
-    await expect(createInvitationsRepo(db).tombstone(OWNER, OWNER.userId))
+    await expect(createInvitationsRepo(db).tombstone(OWNER, OWNER.userId, "دلیل آزمایشی"))
       .rejects.toBeInstanceOf(ValidationError);
   });
 
   it("is idempotent — already tombstoned is not an error", async () => {
     const { db } = fakeDb(() => [{ tombstone_user: false }]);
-    await expect(createInvitationsRepo(db).tombstone(OWNER, OTHER)).resolves.toBeUndefined();
+    await expect(createInvitationsRepo(db).tombstone(OWNER, OTHER, "دلیل آزمایشی")).resolves.toBeUndefined();
   });
 
   it("turns a refusal into 404, not 500", async () => {
     const { db } = fakeDb(() => {
       throw Object.assign(new Error("no"), { code: "42501", routine: "exec_stmt_raise" });
     });
-    await expect(createInvitationsRepo(db).tombstone(OWNER, OTHER))
+    await expect(createInvitationsRepo(db).tombstone(OWNER, OTHER, "دلیل آزمایشی"))
       .rejects.toBeInstanceOf(NotFoundError);
   });
 });
