@@ -94,6 +94,31 @@ export async function hasCallTags(db: Db): Promise<boolean> {
   return hasColumn(db, "call", "tags");
 }
 
+async function hasFunction(db: Db, qualified: string): Promise<boolean> {
+  const key = `fn:${qualified}`;
+  const cached = cache.get(key);
+  if (cached !== undefined) return cached;
+  try {
+    // to_regproc reads pg_catalog, which is not permission-filtered the way
+    // information_schema is — existence is the fact; the grant is the
+    // migration's own concern
+    const rows = await db.withoutIdentity((tx: SqlTx) => tx.unsafe<{ present: boolean }>(
+      `select to_regproc($1) is not null as present`,
+      [qualified],
+    ));
+    const present = rows[0]?.present === true;
+    cache.set(key, present);
+    return present;
+  } catch {
+    return false;
+  }
+}
+
+/** db/0091: console sight moved behind definer doors (the policy leak fix). */
+export async function hasConsoleSightDoors(db: Db): Promise<boolean> {
+  return hasFunction(db, "echo.platform_list_users");
+}
+
 /** db/0087: the summary grounding report. */
 export async function hasSummaryGrounding(db: Db): Promise<boolean> {
   return hasColumn(db, "summary", "grounding");

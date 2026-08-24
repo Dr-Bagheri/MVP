@@ -11,6 +11,7 @@ import type { Identity } from "../agent/types.ts";
 import { NotFoundError, ValidationError } from "./errors.ts";
 import { MEMBER_ROLES, type MemberRole, type UserStatus } from "./vocabulary.ts";
 import { assertUuid, type Db, type SqlTx } from "../db/identity.ts";
+import { hasConsoleSightDoors } from "../db/capabilities.ts";
 
 export interface PlatformOverview {
   /** The signed-in root only; lets the console avoid offering self-removal. */
@@ -196,7 +197,12 @@ export function createPlatformRepo(db: Db) {
     },
 
     async overview(identity: Identity): Promise<PlatformOverview> {
-      const rows = await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe<CountRow>(`
+      // 0091: counts run at platform altitude only through the door — a
+      // count below the wall is an inventory true only for the counter
+      const viaDoor = await hasConsoleSightDoors(db);
+      const rows = await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe<CountRow>(viaDoor ? `
+        select * from echo.platform_overview_counts()
+      ` : `
         select
           (select count(*) from echo.org) as organization_total,
           (select count(*) from echo.org where status = 'active') as organization_active,
@@ -239,7 +245,23 @@ export function createPlatformRepo(db: Db) {
       const search = searchTerm(input.search);
       // A boolean, never user text — safe to branch the SQL fragment on.
       const deletedClause = input.deleted ? "o.deleted_at is not null" : "o.deleted_at is null";
-      const rows = await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe<OrganizationRow>(`
+      /*
+       * 0091: sight through the CONSOLE DOOR (definer function), because the
+       * 0066 product-table policies are dropped — they made every org screen
+       * platform-wide for a root. The pre-0091 branch keeps the old direct
+       * read working until the migration lands; it still serves then because
+       * the old policies still exist exactly as long as the door doesn't.
+       */
+      const viaDoor = await hasConsoleSightDoors(db);
+      const rows = await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe<OrganizationRow>(viaDoor ? `
+        select o.id, o.name, o.status, o.locale, o.created_at, o.deleted_at, o.purge_after,
+               o.member_count
+          from echo.platform_list_orgs() o
+         where ${deletedClause}
+           and ($1::text is null or o.name ilike ('%' || $1 || '%'))
+         order by o.created_at desc, o.id desc
+         offset $2 limit $3
+      ` : `
         select o.id, o.name, o.status, o.locale, o.created_at, o.deleted_at, o.purge_after,
                count(u.id) as member_count
           from echo.org o
@@ -274,7 +296,24 @@ export function createPlatformRepo(db: Db) {
       const { offset, limit } = pageOptions(input);
       const search = searchTerm(input.search);
       const deletedClause = input.deleted ? "u.deleted_at is not null" : "u.deleted_at is null";
-      const rows = await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe<UserRow>(`
+      // 0091: through the console door once it exists (see organizations())
+      const viaDoor = await hasConsoleSightDoors(db);
+      const rows = await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe<UserRow>(viaDoor ? `
+        select u.id, u.org_id, u.org_name, u.email,
+               u.display_name, u.display_name_en, u.username, u.locale,
+               u.role, u.status,
+               u.created_at, u.last_seen_at, u.deleted_at, u.purge_after,
+               u.is_platform_root
+          from echo.platform_list_users() u
+         where ${deletedClause}
+           and ($1::text is null
+                or u.email ilike ('%' || $1 || '%')
+                or u.display_name ilike ('%' || $1 || '%')
+                or coalesce(u.username, '') ilike ('%' || $1 || '%')
+                or u.org_name ilike ('%' || $1 || '%'))
+         order by u.created_at desc, u.id desc
+         offset $2 limit $3
+      ` : `
         select u.id, u.org_id, o.name as org_name, u.email::text as email,
                u.display_name, u.display_name_en, u.username, u.locale,
                u.role::text as role, u.status,
