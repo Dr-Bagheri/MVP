@@ -7,6 +7,11 @@ import { notify } from "@/lib/notify";
 import { useRefreshEpoch } from "@/lib/refreshBus";
 import type { Me, Person } from "@/api/types";
 import { Card, EmptyState } from "@/components/ui";
+import { ConfirmDialog, IconAction } from "@/components/rowActions";
+import { IconPencil, IconTrash } from "@/components/icons";
+
+/** 2026-08-24 cleanup: popup-confirmed deletes; the ledger's fixed line. */
+const UI_DELETE_REASON = "حذف با تأیید کاربر در پنجرهٔ تأیید";
 import {
   ENROLLMENT_SCRIPTS,
   MAX_ENROLL_SECONDS,
@@ -46,10 +51,8 @@ export function SpeakersDirectory() {
   /** inline rename: which row is being edited, and the draft name */
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
-  /** two-click delete, the records-table pattern */
-  const [confirmId, setConfirmId] = useState<string | null>(null);
-  /** 0085: the person's deletion carries a reason into the ledger */
-  const [confirmReason, setConfirmReason] = useState("");
+  /** popup-confirmed delete (2026-08-24) — the dialog is the second click */
+  const [confirmDelete, setConfirmDelete] = useState<Person | null>(null);
   /**
    * Voice enrollment (M39; scripted 2026-08-23 by user directive): pressing
    * enroll opens a compact panel with a PLATFORM-PROVIDED passage to read
@@ -189,7 +192,6 @@ export function SpeakersDirectory() {
 
   async function deleteFor(person: Person, reason: string): Promise<void> {
     if (busy) return;
-    setConfirmId(null);
     setBusy(true);
     try {
       await api.deletePerson(person.id, reason);
@@ -291,7 +293,7 @@ export function SpeakersDirectory() {
               <tbody className="divide-y divide-border">
                 {people.map((person) => (
                   <Fragment key={person.id}>
-                  <tr className="transition-colors hover:bg-surface-2">
+                  <tr className="group transition-colors hover:bg-surface-2">
                     <td className="px-4 py-2.5 font-medium text-fg">
                       {editingId === person.id ? (
                         <input
@@ -307,7 +309,23 @@ export function SpeakersDirectory() {
                           onBlur={() => void renameFor(person)}
                         />
                       ) : (
-                        person.display_name
+                        <span className="flex items-center gap-1.5">
+                          <span>{person.display_name}</span>
+                          {/* rename ON the name — pencil on hover (2026-08-24) */}
+                          {canManage ? (
+                            <IconAction
+                              label={t("edit")}
+                              className="opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
+                              disabled={busy}
+                              onClick={() => {
+                                setEditingId(person.id);
+                                setEditName(person.display_name);
+                              }}
+                            >
+                              <IconPencil width={14} height={14} />
+                            </IconAction>
+                          ) : null}
+                        </span>
                       )}
                     </td>
                     <td className="px-4 py-2.5">
@@ -370,53 +388,16 @@ export function SpeakersDirectory() {
                     ) : null}
                     {canManage ? (
                       <td className="px-4 py-2.5">
-                        <span className="flex items-center gap-3 text-xs">
-                          <button
-                            type="button"
-                            className="text-fg-muted underline-offset-2 hover:text-fg hover:underline"
-                            disabled={busy}
-                            onClick={() => {
-                              setEditingId(person.id);
-                              setEditName(person.display_name);
-                            }}
-                          >
-                            {t("edit")}
-                          </button>
-                          {confirmId === person.id ? (
-                            <span className="flex items-center gap-2">
-                              <input
-                                className="input h-8 min-h-0 w-40 py-0 text-xs"
-                                autoFocus
-                                placeholder={t("deleteReasonHint")}
-                                value={confirmReason}
-                                onChange={(e) => setConfirmReason(e.target.value)}
-                                onKeyDown={(e) => { if (e.key === "Escape") { setConfirmId(null); setConfirmReason(""); } }}
-                              />
-                              <button
-                                type="button"
-                                className="text-danger underline-offset-2 hover:underline"
-                                disabled={busy || confirmReason.trim().length < 3}
-                                onClick={() => {
-                                  const reason = confirmReason.trim();
-                                  setConfirmId(null);
-                                  setConfirmReason("");
-                                  void deleteFor(person, reason);
-                                }}
-                              >
-                                {t("confirmDelete")}
-                              </button>
-                            </span>
-                          ) : (
-                            <button
-                              type="button"
-                              className="text-danger/80 underline-offset-2 hover:text-danger hover:underline"
-                              disabled={busy}
-                              onClick={() => { setConfirmId(person.id); setConfirmReason(""); }}
-                            >
-                              {t("delete")}
-                            </button>
-                          )}
-                        </span>
+                        {/* delete = trash icon + are-you-sure popup; the
+                            typed reason retired (2026-08-24) */}
+                        <IconAction
+                          label={t("delete")}
+                          danger
+                          disabled={busy}
+                          onClick={() => setConfirmDelete(person)}
+                        >
+                          <IconTrash />
+                        </IconAction>
                       </td>
                     ) : null}
                   </tr>
@@ -532,6 +513,22 @@ export function SpeakersDirectory() {
           </div>
         )}
       </Card>
+
+      {confirmDelete !== null ? (
+        <ConfirmDialog
+          title={t("deleteConfirmTitle", { name: confirmDelete.display_name })}
+          body={t("deleteConfirmBody")}
+          confirmLabel={t("delete")}
+          cancelLabel={t("voiceCancel")}
+          busy={busy}
+          onCancel={() => setConfirmDelete(null)}
+          onConfirm={() => {
+            const person = confirmDelete;
+            setConfirmDelete(null);
+            void deleteFor(person, UI_DELETE_REASON);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

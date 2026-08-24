@@ -1,8 +1,9 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use, useEffect, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { EchoAppShell } from "@/components/echo/EchoAppShell";
+import { IconArchive, IconFileText, IconMic, IconRows, IconUsers } from "@/components/icons";
 import { RecordsSection } from "@/components/echo/RecordsSection";
 import { SpeakersDirectory } from "@/components/echo/SpeakersDirectory";
 import { SummariesSection } from "@/components/echo/SummariesSection";
@@ -74,6 +75,16 @@ export default function EchoPage({
    */
   const [recordsEpoch, setRecordsEpoch] = useState(0);
 
+  /* menu icons (2026-08-24, sana reference) — keyed here beside the slugs
+     so a new section without an icon is a visible gap, not a crash */
+  const SECTION_ICONS: Record<Slug, ReactNode> = {
+    "new-meeting": <IconMic />,
+    records: <IconRows />,
+    summaries: <IconFileText />,
+    archive: <IconArchive />,
+    speakers: <IconUsers />,
+  };
+
   const groups = GROUPS.map((group) => ({
     key: group,
     title: tEcho(`group.${group}`),
@@ -81,6 +92,7 @@ export default function EchoPage({
       slug: s.slug,
       href: s.slug === "new-meeting" ? "/echo" : `/echo/${s.slug}`,
       label: tEcho(`section.${s.slug}`),
+      icon: SECTION_ICONS[s.slug],
     })),
   }));
 

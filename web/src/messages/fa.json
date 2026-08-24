@@ -100,7 +100,11 @@
     "selectAll": "انتخاب همهٔ ردیف‌های قابل ویرایش",
     "selectRow": "انتخاب «{title}»",
     "clearSelection": "لغو انتخاب",
-    "bulkFailed": "{n} از {total} انجام نشد."
+    "bulkFailed": "{n} از {total} انجام نشد.",
+    "moreActions": "عملیات بیشتر",
+    "deleteConfirmTitle": "«{title}» حذف شود؟",
+    "deleteConfirmBody": "رکورد به حذف‌شده‌ها می‌رود و تا پایان مهلت پاک‌سازی توسط مدیر قابل بازگردانی است.",
+    "bulkDeleteConfirmTitle": "{n} رکورد حذف شود؟"
   },
   "status": {
     "recording": "متوقف‌شده",
@@ -227,6 +231,8 @@
     "confirmDelete": "مطمئنید؟",
     "renamed": "ذخیره شد.",
     "personDeleted": "گویندهٔ «{name}» حذف شد.",
+    "deleteConfirmTitle": "«{name}» حذف شود؟",
+    "deleteConfirmBody": "این شخص از فهرست گویندگان حذف می‌شود؛ نامش روی تماس‌های پیوندخوردهٔ قبلی همان‌طور که ثبت شده می‌ماند.",
     "deleteFailed": "حذف انجام نشد.",
     "deleteNotReady": "این قابلیت هنوز روی این استقرار فعال نیست.",
     "colVoice": "صدا",
@@ -965,6 +971,8 @@
     "colMemberActions": "عملیات",
     "memberEdit": "ویرایش",
     "deleteMember": "حذف عضو",
+    "deleteMemberConfirmTitle": "عضو «{name}» حذف شود؟",
+    "deleteMemberConfirmBody": "پروفایل او خالی می‌شود، نام کاربری‌اش بازنشسته می‌شود و رکوردهایش طبق قوانین حذف رفتار می‌کنند. این کار برگشت‌پذیر نیست.",
     "confirmDeleteMember": "حذف قطعی عضو",
     "deleteMemberNote": "حساب خالی می‌شود و نام کاربری برای همیشه بازنشسته می‌ماند؛ تماس‌های او طبق سیاست حذف نرم کنار گذاشته می‌شوند. این کار بازگشت ندارد.",
     "colName": "نام",

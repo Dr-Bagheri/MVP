@@ -22,6 +22,9 @@ export interface MenuItem {
   slug: string;
   href: string;
   label: string;
+  /** 16px line icon (2026-08-24, sana reference) — currentColor, so the
+      item's own state colors it; items without one simply indent less. */
+  icon?: ReactNode;
   /** A currently unavailable destination remains visible but cannot be opened. */
   disabled?: boolean;
   /** The current destination is shown, but selecting it again must not reload it. */
@@ -83,7 +86,10 @@ export function SectionMenu({
                 <li key={item.slug}>
                   {item.disabled ? (
                     <button type="button" disabled className={itemClass}>
-                      <span className="truncate">{item.label}</span>
+                      <span className="flex min-w-0 items-center gap-2.5">
+                        {item.icon ? <span className="shrink-0 opacity-80">{item.icon}</span> : null}
+                        <span className="truncate">{item.label}</span>
+                      </span>
                       {item.badge ? (
                         <span className="chip bg-surface-2 text-[10px] text-fg-muted">{item.badge}</span>
                       ) : null}
@@ -98,7 +104,10 @@ export function SectionMenu({
                         item.onSelect?.();
                       } : undefined}
                     >
-                      <span className="truncate">{item.label}</span>
+                      <span className="flex min-w-0 items-center gap-2.5">
+                        {item.icon ? <span className="shrink-0 opacity-80">{item.icon}</span> : null}
+                        <span className="truncate">{item.label}</span>
+                      </span>
                       {item.badge ? (
                         <span className="chip bg-surface-2 text-[10px] text-fg-muted">{item.badge}</span>
                       ) : null}

@@ -18,6 +18,8 @@ import { ManagementPane } from "@/components/platform/ManagementPane";
 import { PageHeader } from "@/components/scaffold";
 import { MemberDetail } from "@/components/platform/MemberDetail";
 import { Card, Chip, EmptyState } from "@/components/ui";
+import { ConfirmDialog, IconAction } from "@/components/rowActions";
+import { IconPencil, IconTrash } from "@/components/icons";
 import { digits, formatDate, personName } from "@/lib/format";
 
 /**
@@ -81,6 +83,9 @@ export default function UsersPage() {
   const [busy, setBusy] = useState(false);
   /** 0085: rejecting a pending member is a deletion — reason required */
   const [rejecting, setRejecting] = useState<null | { id: string; reason: string }>(null);
+  /** 2026-08-24: the members-table delete confirms in a POPUP; the ledger
+      receives the fixed consent line instead of a typed reason */
+  const [confirmDeleteMember, setConfirmDeleteMember] = useState<User | null>(null);
 
   // ---- bulk selection + detail (Part 4 tail) ----
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
@@ -775,47 +780,23 @@ export default function UsersPage() {
                         </td>
                       ) : null}
                       <td className="py-3 align-top">
-                        <span className="flex items-center gap-3 text-xs">
+                        <span className="flex items-center gap-1.5 text-xs">
                           {/* Edit = the detail panel, where every editable
-                              fact lives — one editing surface, not two */}
-                          <button
-                            className="text-fg-muted underline-offset-2 hover:underline"
-                            onClick={() => setDetailId(u.id)}
-                          >
-                            {t("memberEdit")}
-                          </button>
+                              fact lives — a pencil now (2026-08-24) */}
+                          <IconAction label={t("memberEdit")} onClick={() => setDetailId(u.id)}>
+                            <IconPencil />
+                          </IconAction>
                           {me?.role === "owner" && u.role !== "owner" && u.id !== me?.id ? (
-                            rejecting?.id === u.id ? (
-                              <span className="flex items-center gap-2">
-                                <input
-                                  className="input h-8 min-h-0 w-40 py-0 text-xs"
-                                  autoFocus
-                                  placeholder={t("deleteReasonHint")}
-                                  value={rejecting.reason}
-                                  onChange={(e) => setRejecting({ id: u.id, reason: e.target.value })}
-                                  onKeyDown={(e) => { if (e.key === "Escape") setRejecting(null); }}
-                                />
-                                <button
-                                  className="text-danger underline-offset-2 hover:underline"
-                                  disabled={busy || rejecting.reason.trim().length < 3}
-                                  onClick={() => {
-                                    const reason = rejecting.reason.trim();
-                                    setRejecting(null);
-                                    void deleteMemberFor(u, reason);
-                                  }}
-                                >
-                                  {t("deleteMember")}
-                                </button>
-                              </span>
-                            ) : (
-                              <button
-                                className="text-danger/80 underline-offset-2 hover:text-danger hover:underline"
-                                disabled={busy}
-                                onClick={() => setRejecting({ id: u.id, reason: "" })}
-                              >
-                                {t("deleteMember")}
-                              </button>
-                            )
+                            /* delete = trash + are-you-sure popup; the typed
+                               reason retired for the inline path (2026-08-24) */
+                            <IconAction
+                              label={t("deleteMember")}
+                              danger
+                              disabled={busy}
+                              onClick={() => setConfirmDeleteMember(u)}
+                            >
+                              <IconTrash />
+                            </IconAction>
                           ) : null}
                         </span>
                       </td>
@@ -826,6 +807,22 @@ export default function UsersPage() {
             </div>
           )}
         </Card>
+
+        {confirmDeleteMember !== null ? (
+          <ConfirmDialog
+            title={t("deleteMemberConfirmTitle", { name: confirmDeleteMember.display_name })}
+            body={t("deleteMemberConfirmBody")}
+            confirmLabel={t("deleteMember")}
+            cancelLabel={tCommon("cancel")}
+            busy={busy}
+            onCancel={() => setConfirmDeleteMember(null)}
+            onConfirm={() => {
+              const target = confirmDeleteMember;
+              setConfirmDeleteMember(null);
+              void deleteMemberFor(target, "حذف با تأیید کاربر در پنجرهٔ تأیید");
+            }}
+          />
+        ) : null}
 
         {detailUser ? (
           <MemberDetail

@@ -100,7 +100,11 @@
     "selectAll": "Select every row you can act on",
     "selectRow": "Select “{title}”",
     "clearSelection": "Clear selection",
-    "bulkFailed": "{n} of {total} did not go through."
+    "bulkFailed": "{n} of {total} did not go through.",
+    "moreActions": "More actions",
+    "deleteConfirmTitle": "Delete “{title}”?",
+    "deleteConfirmBody": "The record moves to Deleted and stays restorable by an admin until its purge window ends.",
+    "bulkDeleteConfirmTitle": "Delete {n} records?"
   },
   "status": {
     "recording": "Paused",
@@ -227,6 +231,8 @@
     "confirmDelete": "Sure?",
     "renamed": "Saved.",
     "personDeleted": "Person “{name}” was deleted.",
+    "deleteConfirmTitle": "Delete “{name}”?",
+    "deleteConfirmBody": "They are removed from the speakers directory; their name on already-linked calls stays as recorded.",
     "deleteFailed": "The delete did not go through.",
     "deleteNotReady": "This isn't available on this deployment yet.",
     "colVoice": "Voice",
@@ -965,6 +971,8 @@
     "colMemberActions": "Actions",
     "memberEdit": "Edit",
     "deleteMember": "Delete member",
+    "deleteMemberConfirmTitle": "Delete member “{name}”?",
+    "deleteMemberConfirmBody": "Their profile is emptied, their username is retired, and their records follow the deletion rules. This is not reversible.",
     "confirmDeleteMember": "Permanently delete member",
     "deleteMemberNote": "The account is emptied and the username stays retired forever; their calls are set aside under the soft-delete policy. This cannot be undone.",
     "colName": "Name",

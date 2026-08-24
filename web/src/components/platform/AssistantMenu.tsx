@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import type { AssistantSession } from "@/api/types";
 import { api } from "@/api/client";
 import { SectionMenu } from "@/components/scaffold";
+import { IconAgent, IconHistory, IconPlus, IconSearch, IconZap } from "@/components/icons";
 import { openAssistant } from "@/lib/assistantBus";
 import { useRefreshEpoch } from "@/lib/refreshBus";
 import { useAssistantConversation } from "./AssistantConversationState";
@@ -53,11 +54,12 @@ export function AssistantMenu({
               slug: "new",
               href: "/",
               label: t("newConversation"),
+              icon: <IconPlus />,
               /* On Home this stays put; on every subpage it returns to Home. */
               preventNavigation: isHub,
               onSelect: isHub && started ? startNewConversation : undefined,
             },
-            { slug: "history", href: "/conversations", label: t("history") },
+            { slug: "history", href: "/conversations", label: t("history"), icon: <IconHistory /> },
             ...recent.map((session) => ({
               slug: `recent-${session.id}`,
               href: "/conversations",
@@ -70,7 +72,7 @@ export function AssistantMenu({
         {
           key: "explore",
           title: t("assistantMenuExplore"),
-          items: [{ slug: "search", href: "/search", label: t("search") }],
+          items: [{ slug: "search", href: "/search", label: t("search"), icon: <IconSearch /> }],
         },
         {
           /* the assistant's setup doors (user directive, round 2: they left
@@ -79,8 +81,8 @@ export function AssistantMenu({
           key: "setup",
           title: t("assistantMenuSetup"),
           items: [
-            { slug: "workflows", href: "/workflows", label: t("workflows") },
-            { slug: "agents", href: "/agents", label: t("agents") },
+            { slug: "workflows", href: "/workflows", label: t("workflows"), icon: <IconZap /> },
+            { slug: "agents", href: "/agents", label: t("agents"), icon: <IconAgent /> },
           ],
         },
       ]}

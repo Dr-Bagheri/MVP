@@ -13,6 +13,15 @@ import { Card, EmptyState, StatusChip } from "@/components/ui";
 // copy of that arithmetic beside the table is how two countdowns disagree.
 import { formatDate, formatDuration, digits } from "@/lib/format";
 import { DeletedCallsCard } from "./DeletedCallsCard";
+import { ConfirmDialog, IconAction, KebabMenu } from "@/components/rowActions";
+import { IconArchive, IconGlobe, IconPencil, IconShare, IconTag, IconTrash } from "@/components/icons";
+
+/**
+ * 0085 + the 2026-08-24 cleanup: the delete popup's confirm IS the consent,
+ * and the ledger receives this fixed, platform-authored line instead of a
+ * typed one (user ruling: "remove the reason part, ask if you are sure").
+ */
+const UI_DELETE_REASON = "حذف با تأیید کاربر در پنجرهٔ تأیید";
 
 /**
  * The calls list, lifted out of `/calls` for the merged Echo surface.
@@ -43,16 +52,16 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
   // ---- row actions (the calls CRUD, user directive 2026-08-16) ----
   const [busy, setBusy] = useState(false);
   const [renamingId, setRenamingId] = useState<string | null>(null);
-  /** 0085 (user ruling): deleting a RECORD asks to confirm again and takes
-      a reason, which lands in the deletion ledger the admins read. */
-  const [deleting, setDeleting] = useState<null | { id: string; reason: string }>(null);
+  /** 2026-08-24: delete confirms in a POPUP (no typed reason — the ledger
+      gets the fixed UI_DELETE_REASON); null = no dialog showing. */
+  const [confirmDelete, setConfirmDelete] = useState<null | { id: string; title: string }>(null);
+  const [confirmBulk, setConfirmBulk] = useState(false);
   const [renameDraft, setRenameDraft] = useState("");
   /** Bulk actions (user directive, 2026-08-23): select several rows, then
       archive them together or delete them under ONE typed reason. Only
       rows this person may edit are selectable — a checkbox on a row the
       server would refuse is a promise the click can't keep. */
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [bulkDeleting, setBulkDeleting] = useState<null | { reason: string }>(null);
   /** Tags (0086): filter chip + inline whole-set editor. The column exists
       only after the migration; until the wire carries `tags`, no tag UI
       renders — a control for a column that does not exist would read as
@@ -79,7 +88,7 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
     // a view change or an external mutation invalidates the selection —
     // acting on rows that may no longer be in front of the person
     setSelected(new Set());
-    setBulkDeleting(null);
+    setConfirmBulk(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- view is fixed per mount
   }, [view, callsEpoch]);
 
@@ -208,16 +217,16 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
       );
     }
     setSelected(new Set());
-    setBulkDeleting(null);
+    setConfirmBulk(false);
     await load().catch(() => undefined);
     setBusy(false);
   }
 
   return (
     <section className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="h-page">{t(view === "archive" ? "archiveTitle" : "title")}</h2>
-      </div>
+      {/* the section's OWN heading is gone (2026-08-24 cleanup): the page
+          header above already says Records — two identical titles stacked
+          was the first thing the user asked to remove */}
 
       {/* tag filter chips — only when tags exist to filter by */}
       {allTags.length > 0 ? (
@@ -265,47 +274,18 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
           >
             {view === "live" ? t("archive") : t("unarchive")}
           </button>
-          {bulkDeleting !== null ? (
-            <span className="flex items-center gap-2">
-              <input
-                className="input h-8 min-h-0 w-44 py-0 text-xs"
-                autoFocus
-                placeholder={t("deleteReasonHint")}
-                value={bulkDeleting.reason}
-                onChange={(e) => setBulkDeleting({ reason: e.target.value })}
-                onKeyDown={(e) => { if (e.key === "Escape") setBulkDeleting(null); }}
-              />
-              <button
-                className="btn-danger h-8 min-h-0 px-3 text-xs"
-                disabled={busy || bulkDeleting.reason.trim().length < 3}
-                onClick={() => {
-                  const reason = bulkDeleting.reason.trim();
-                  void bulk((id) => api.deleteCall(id, reason));
-                }}
-              >
-                {t("confirmDelete")}
-              </button>
-              <button
-                className="text-xs text-fg-muted underline-offset-2 hover:underline"
-                onClick={() => setBulkDeleting(null)}
-              >
-                {tCommon("cancel")}
-              </button>
-            </span>
-          ) : (
-            <button
-              className="btn-danger h-8 min-h-0 px-3 text-xs"
-              disabled={busy}
-              onClick={() => setBulkDeleting({ reason: "" })}
-            >
-              {t("delete")}
-            </button>
-          )}
+          <button
+            className="btn-danger h-8 min-h-0 px-3 text-xs"
+            disabled={busy}
+            onClick={() => setConfirmBulk(true)}
+          >
+            {t("delete")}
+          </button>
           <button
             className="text-xs text-fg-muted underline-offset-2 hover:underline"
             onClick={() => {
               setSelected(new Set());
-              setBulkDeleting(null);
+              setConfirmBulk(false);
             }}
           >
             {t("clearSelection")}
@@ -352,7 +332,9 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
                   <th className="table-head px-4 py-3">{t("columnOwner")}</th>
                   <th className="table-head px-4 py-3">{t("columnDate")}</th>
                   <th className="table-head px-4 py-3">{t("columnLength")}</th>
-                  <th className="table-head px-4 py-3">{t("columnScope")}</th>
+                  {/* the Scope COLUMN retired (2026-08-24 cleanup): scope
+                      lives in the row's ⋯ menu; an org-shared row says so
+                      with a chip beside its title */}
                   <th className="table-head px-4 py-3">{t("columnStatus")}</th>
                   <th className="table-head px-4 py-3">{t("columnActions")}</th>
                 </tr>
@@ -364,7 +346,7 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
                     /* the whole ROW is the way in (user directive) — the
                        interactive cells stop the bubble so a toggle is never
                        also a navigation */
-                    className="row-link border-b border-border last:border-0"
+                    className="group row-link border-b border-border last:border-0"
                     onClick={() => router.push(`/calls/${call.id}`)}
                   >
                     <td className="w-10 px-3 py-3" onClick={(e) => e.stopPropagation()}>
@@ -412,18 +394,40 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
                           </button>
                         </span>
                       ) : (
-                        <Link
-                          href={`/calls/${call.id}`}
-                          className="font-medium text-fg hover:text-accent"
-                        >
-                          {/* an empty title renders as a WORD, not as a blank
-                              link nobody can click on purpose */}
-                          {call.title.trim() === "" ? (
-                            <span className="text-fg-muted">{t("untitled")}</span>
-                          ) : (
-                            call.title
-                          )}
-                        </Link>
+                        <span className="flex items-center gap-1.5">
+                          <Link
+                            href={`/calls/${call.id}`}
+                            className="font-medium text-fg hover:text-accent"
+                          >
+                            {/* an empty title renders as a WORD, not as a blank
+                                link nobody can click on purpose */}
+                            {call.title.trim() === "" ? (
+                              <span className="text-fg-muted">{t("untitled")}</span>
+                            ) : (
+                              call.title
+                            )}
+                          </Link>
+                          {call.scope === "org" ? (
+                            <span className="chip bg-accent-soft text-[10px] text-accent">
+                              {t("scopeOrg")}
+                            </span>
+                          ) : null}
+                          {/* rename lives ON the title now — a pencil that
+                              appears when the pointer arrives (2026-08-24) */}
+                          {mayEdit(call) ? (
+                            <IconAction
+                              label={t("rename")}
+                              className="opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
+                              disabled={busy}
+                              onClick={() => {
+                                setRenamingId(call.id);
+                                setRenameDraft(call.title);
+                              }}
+                            >
+                              <IconPencil width={14} height={14} />
+                            </IconAction>
+                          ) : null}
+                        </span>
                       )}
                       <div className="mt-1 flex flex-wrap items-center gap-2">
                         {/* `parts` is not on the wire yet — absent means "not
@@ -458,43 +462,6 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
                       {call.duration_ms === null
                         ? t("durationUnknown")
                         : formatDuration(call.duration_ms / 1000, locale)}
-                    </td>
-                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                      {/* an ON/OFF switch (user directive): off = private,
-                          on = the whole organization — the state is visible
-                          from the position, not just the word */}
-                      <span className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          role="switch"
-                          aria-checked={call.scope === "org"}
-                          aria-label={call.scope === "org" ? t("makePrivate") : t("makeOrg")}
-                          /* FLEX places the knob, not absolute offsets: the
-                             first version's start-* arithmetic parked the
-                             circle half outside the track in RTL (user
-                             report). justify-start/end follow the document
-                             direction by definition — there is no offset to
-                             get wrong. */
-                          className={`tap flex h-5 w-9 shrink-0 items-center rounded-full px-0.5 transition-colors ${
-                            call.scope === "org"
-                              ? "justify-end bg-accent"
-                              : "justify-start border border-border-strong bg-surface-2"
-                          }`}
-                          onClick={async () => {
-                            await api.setScope(call.id, call.scope === "org" ? "private" : "org");
-                            void load();
-                          }}
-                        >
-                          <span
-                            className={`h-3.5 w-3.5 rounded-full ${
-                              call.scope === "org" ? "bg-on-accent" : "bg-fg-muted"
-                            }`}
-                          />
-                        </button>
-                        <span className="text-xs text-fg-muted">
-                          {call.scope === "org" ? t("scopeOrg") : t("scopePrivate")}
-                        </span>
-                      </span>
                     </td>
                     <td className="px-4 py-3">
                       <StatusChip status={call.status} label={tStatus(call.status)} />
@@ -537,114 +504,85 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
                               {t("retry")}
                             </button>
                           ) : null}
-                          <button
-                            className="text-fg-muted underline-offset-2 hover:underline"
-                            disabled={busy}
-                            onClick={() => {
-                              setRenamingId(call.id);
-                              setRenameDraft(call.title);
-                            }}
-                          >
-                            {t("rename")}
-                          </button>
-                          {/* tags (0086): whole-set inline editor, only when
-                              the wire carries the column */}
-                          {tagsReady ? (
-                            taggingId === call.id ? (
-                              <span className="flex items-center gap-2">
-                                <input
-                                  className="input h-8 min-h-0 w-44 py-0 text-xs"
-                                  autoFocus
-                                  placeholder={t("tagsHint")}
-                                  value={tagsDraft}
-                                  onChange={(e) => setTagsDraft(e.target.value)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter") void saveTags(call);
-                                    if (e.key === "Escape") setTaggingId(null);
-                                  }}
-                                />
-                                <button
-                                  className="text-accent underline-offset-2 hover:underline"
-                                  disabled={busy}
-                                  onClick={() => void saveTags(call)}
-                                >
-                                  {tCommon("save")}
-                                </button>
-                              </span>
-                            ) : (
-                              <button
-                                className="text-fg-muted underline-offset-2 hover:underline"
-                                disabled={busy}
-                                onClick={() => {
-                                  setTaggingId(call.id);
-                                  setTagsDraft((call.tags ?? []).join("، "));
-                                }}
-                              >
-                                {t("tags")}
-                              </button>
-                            )
-                          ) : null}
-                          {/* archiving/restoring MOVES the row between the
-                              two sections — the reload drops it from this
-                              view, which is the move made visible */}
-                          <button
-                            className="text-fg-muted underline-offset-2 hover:underline"
-                            disabled={busy}
-                            onClick={() =>
-                              void act(() => api.setArchived(call.id, call.archived_at === null))
-                            }
-                          >
-                            {call.archived_at === null ? t("archive") : t("unarchive")}
-                          </button>
-                          <button
-                            className="text-fg-muted underline-offset-2 hover:underline"
-                            disabled={busy}
-                            /* lands on the call with BOTH translations firing
-                               (?translate=1) — summary and transcript */
-                            onClick={() => router.push(`/calls/${call.id}?translate=1`)}
-                          >
-                            {t("translate")}
-                          </button>
-                          {/* REVERSED 2026-08-23 (user ruling — supersedes the earlier
-                              one-click verdict): a record's deletion confirms AGAIN and
-                              takes a REASON, which the deletion ledger keeps (0085). */}
-                          {deleting?.id === call.id ? (
+                          {/* tags editor stays inline; the ⋯ menu opens it */}
+                          {taggingId === call.id ? (
                             <span className="flex items-center gap-2">
                               <input
                                 className="input h-8 min-h-0 w-44 py-0 text-xs"
                                 autoFocus
-                                placeholder={t("deleteReasonHint")}
-                                value={deleting.reason}
-                                onChange={(e) => setDeleting({ id: call.id, reason: e.target.value })}
-                                onKeyDown={(e) => { if (e.key === "Escape") setDeleting(null); }}
+                                placeholder={t("tagsHint")}
+                                value={tagsDraft}
+                                onChange={(e) => setTagsDraft(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") void saveTags(call);
+                                  if (e.key === "Escape") setTaggingId(null);
+                                }}
                               />
                               <button
-                                className="font-semibold text-danger underline-offset-2 hover:underline"
-                                disabled={busy || deleting.reason.trim().length < 3}
-                                onClick={() => {
-                                  const reason = deleting.reason.trim();
-                                  setDeleting(null);
-                                  void act(() => api.deleteCall(call.id, reason));
-                                }}
+                                className="text-accent underline-offset-2 hover:underline"
+                                disabled={busy}
+                                onClick={() => void saveTags(call)}
                               >
-                                {t("confirmDelete")}
-                              </button>
-                              <button
-                                className="text-fg-muted underline-offset-2 hover:underline"
-                                onClick={() => setDeleting(null)}
-                              >
-                                {tCommon("cancel")}
+                                {tCommon("save")}
                               </button>
                             </span>
-                          ) : (
-                            <button
-                              className="text-danger/80 underline-offset-2 hover:text-danger hover:underline"
-                              disabled={busy}
-                              onClick={() => setDeleting({ id: call.id, reason: "" })}
-                            >
-                              {t("delete")}
-                            </button>
-                          )}
+                          ) : null}
+                          {/* delete = a trash icon and an are-you-sure popup
+                              (2026-08-24 — the typed reason retired; the
+                              ledger receives the fixed consent line) */}
+                          <IconAction
+                            label={t("delete")}
+                            danger
+                            disabled={busy}
+                            onClick={() =>
+                              setConfirmDelete({ id: call.id, title: call.title || t("untitled") })
+                            }
+                          >
+                            <IconTrash />
+                          </IconAction>
+                          {/* everything secondary folds into ⋯ (2026-08-24):
+                              translate, scope, archive, tags */}
+                          <KebabMenu
+                            label={t("moreActions")}
+                            items={[
+                              {
+                                key: "translate",
+                                label: t("translate"),
+                                icon: <IconGlobe />,
+                                onSelect: () => router.push(`/calls/${call.id}?translate=1`),
+                              },
+                              {
+                                key: "scope",
+                                label: call.scope === "org" ? t("makePrivate") : t("makeOrg"),
+                                icon: <IconShare />,
+                                disabled: busy,
+                                onSelect: () =>
+                                  void act(() =>
+                                    api.setScope(call.id, call.scope === "org" ? "private" : "org"),
+                                  ),
+                              },
+                              {
+                                key: "archive",
+                                label: call.archived_at === null ? t("archive") : t("unarchive"),
+                                icon: <IconArchive />,
+                                disabled: busy,
+                                onSelect: () =>
+                                  void act(() => api.setArchived(call.id, call.archived_at === null)),
+                              },
+                              ...(tagsReady
+                                ? [{
+                                    key: "tags",
+                                    label: t("tags"),
+                                    icon: <IconTag />,
+                                    disabled: busy,
+                                    onSelect: () => {
+                                      setTaggingId(call.id);
+                                      setTagsDraft((call.tags ?? []).join("، "));
+                                    },
+                                  }]
+                                : []),
+                            ]}
+                          />
                         </span>
                       ) : null}
                     </td>
@@ -664,6 +602,36 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
       */}
       {view === "live" && me?.role === "admin" && deleted.length > 0 ? (
         <DeletedCallsCard deleted={deleted} onChanged={() => void load()} />
+      ) : null}
+
+      {/* the are-you-sure popups (2026-08-24): confirm is the consent; the
+          ledger receives the fixed line, and the body says it stays
+          restorable for the purge window */}
+      {confirmDelete !== null ? (
+        <ConfirmDialog
+          title={t("deleteConfirmTitle", { title: confirmDelete.title })}
+          body={t("deleteConfirmBody")}
+          confirmLabel={t("delete")}
+          cancelLabel={tCommon("cancel")}
+          busy={busy}
+          onCancel={() => setConfirmDelete(null)}
+          onConfirm={() => {
+            const id = confirmDelete.id;
+            setConfirmDelete(null);
+            void act(() => api.deleteCall(id, UI_DELETE_REASON));
+          }}
+        />
+      ) : null}
+      {confirmBulk ? (
+        <ConfirmDialog
+          title={t("bulkDeleteConfirmTitle", { n: digits(selected.size, locale) })}
+          body={t("deleteConfirmBody")}
+          confirmLabel={t("delete")}
+          cancelLabel={tCommon("cancel")}
+          busy={busy}
+          onCancel={() => setConfirmBulk(false)}
+          onConfirm={() => void bulk((id) => api.deleteCall(id, UI_DELETE_REASON))}
+        />
       ) : null}
     </section>
   );

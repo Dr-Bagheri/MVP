@@ -10,6 +10,8 @@ import { useCrumbTitle } from "@/components/platform/CrumbTitle";
 import { Card, Chip, PageHeader, StatusChip } from "@/components/ui";
 import { formatClock, formatDate, digits, modelLabel } from "@/lib/format";
 import { isFillerWord, stripFillers } from "@/lib/cleanRead";
+import { KebabMenu } from "@/components/rowActions";
+import { IconArchive, IconGlobe, IconShare, IconTag } from "@/components/icons";
 import { faDisplay } from "@/lib/faDisplay";
 import {
   canExportSubtitles,
@@ -96,6 +98,7 @@ export default function CallDetailPage({
   const tTitles = useTranslations("titles");
   const tStatus = useTranslations("status");
   const tCalls = useTranslations("calls");
+  const tCommon = useTranslations("common");
   const locale = useLocale();
 
   const [call, setCall] = useState<Call | null>(null);
@@ -129,6 +132,20 @@ export default function CallDetailPage({
    */
   const [speakerFilter, setSpeakerFilter] = useState<string | null>(null);
   const [cleanRead, setCleanRead] = useState(false);
+  /** the ⋯ menu's tag editor (2026-08-24) — whole-set, like the table's */
+  const [tagsOpen, setTagsOpen] = useState(false);
+  const [tagsDraft, setTagsDraft] = useState("");
+
+  async function saveDetailTags(): Promise<void> {
+    const tags = [...new Set(
+      tagsDraft.split(/[,،]/).map((s) => s.trim()).filter((s) => s !== ""),
+    )].slice(0, 10);
+    setTagsOpen(false);
+    try {
+      await api.setCallTags(id, tags);
+      setCall(await api.getCall(id));
+    } catch { /* refusal already surfaced by the notification system */ }
+  }
   /** redact identifier-shaped digit runs in EXPORTS (first slice of the
       redaction engine) — display stays verbatim; the toggle guards what
       leaves the product, not what the room said */
@@ -383,8 +400,75 @@ export default function CallDetailPage({
                 {t("regenerate")}
               </button>
             ) : null}
+            {/* the record's ⋯ menu, same four as the table row (2026-08-24) */}
+            <KebabMenu
+              label={tCalls("moreActions")}
+              items={[
+                {
+                  key: "translate",
+                  label: tCalls("translate"),
+                  icon: <IconGlobe />,
+                  onSelect: () => {
+                    void translate("summary");
+                    void translate("transcript");
+                  },
+                },
+                {
+                  key: "scope",
+                  label: call.scope === "org" ? tCalls("makePrivate") : tCalls("makeOrg"),
+                  icon: <IconShare />,
+                  onSelect: () =>
+                    void api
+                      .setScope(id, call.scope === "org" ? "private" : "org")
+                      .then(() => api.getCall(id))
+                      .then(setCall)
+                      .catch(() => undefined),
+                },
+                {
+                  key: "archive",
+                  label: call.archived_at === null ? tCalls("archive") : tCalls("unarchive"),
+                  icon: <IconArchive />,
+                  onSelect: () =>
+                    void api
+                      .setArchived(id, call.archived_at === null)
+                      .then(() => api.getCall(id))
+                      .then(setCall)
+                      .catch(() => undefined),
+                },
+                ...(call.tags !== undefined
+                  ? [{
+                      key: "tags",
+                      label: tCalls("tags"),
+                      icon: <IconTag />,
+                      onSelect: () => setTagsOpen((v) => !v),
+                    }]
+                  : []),
+              ]}
+            />
           </div>
         </div>
+        {/* inline tag editor for the detail page, opened from ⋯ */}
+        {tagsOpen && call.tags !== undefined ? (
+          <div className="mb-3 flex items-center gap-2">
+            <input
+              className="input h-8 min-h-0 w-64 py-0 text-xs"
+              autoFocus
+              placeholder={tCalls("tagsHint")}
+              value={tagsDraft}
+              onChange={(e) => setTagsDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void saveDetailTags();
+                if (e.key === "Escape") setTagsOpen(false);
+              }}
+            />
+            <button
+              className="text-xs text-accent underline-offset-2 hover:underline"
+              onClick={() => void saveDetailTags()}
+            >
+              {tCommon("save")}
+            </button>
+          </div>
+        ) : null}
         {regenOpen && call.status === "ready" ? (
           <div className="mb-3 space-y-2 rounded-lg border border-border bg-surface-2/40 p-3">
             <div className="grid gap-2 sm:grid-cols-2">
