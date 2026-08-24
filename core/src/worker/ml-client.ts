@@ -52,6 +52,8 @@ export interface MlProcessOptions {
   maxSpeakers?: number;
   vad?: boolean;
   lane?: string | null;
+  /** Org glossary terms for recognition biasing (2026-08-23). Advisory. */
+  context?: string[];
 }
 
 export interface MlProcessRequest {
@@ -180,6 +182,7 @@ export function createMlClient({
         max_speakers: request.options?.maxSpeakers ?? 8,
         vad: request.options?.vad ?? true,
         lane: request.options?.lane ?? null,
+        ...(request.options?.context?.length ? { context: request.options.context } : {}),
       },
     };
 

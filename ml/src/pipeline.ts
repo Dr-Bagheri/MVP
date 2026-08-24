@@ -155,7 +155,13 @@ async function singleStream(job: Job): Promise<StreamOutcome> {
 
   const wantSpeakers = job.options.diarize !== "off";
   const lane = await transcribe(
-    { file: sttFile, languageHints: job.options.language_hints, diarize: wantSpeakers, durationMs: map.speechMs },
+    {
+      file: sttFile,
+      languageHints: job.options.language_hints,
+      diarize: wantSpeakers,
+      durationMs: map.speechMs,
+      context: job.options.context,
+    },
     job.log,
     job.options.lane,
   );
@@ -247,6 +253,7 @@ async function perChannel(job: Job, channels: number): Promise<StreamOutcome> {
         languageHints: job.options.language_hints,
         diarize: false,
         durationMs: trimmed.map.speechMs,
+        context: job.options.context,
       },
       job.log,
       job.options.lane,

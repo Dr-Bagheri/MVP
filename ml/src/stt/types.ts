@@ -32,6 +32,12 @@ export interface SttInput {
   diarize: boolean;
   /** Duration of `file`, for lanes that must synthesize a span. */
   durationMs: number;
+  /**
+   * Org glossary terms (names, product words) to bias recognition toward
+   * (2026-08-23 quality pass). Optional and advisory: a lane that cannot
+   * use them ignores them; they never gate a transcription.
+   */
+  context?: string[];
 }
 
 export interface SttLane {

@@ -40,9 +40,10 @@
  * entrance.**
  */
 import { changedFields, record } from "./admin-actions.ts";
-import { NotFoundError, ValidationError } from "./errors.ts";
+import { ConflictError, NotFoundError, ValidationError } from "./errors.ts";
 import { iso } from "./vocabulary.ts";
 import { type Db, type SqlTx } from "../db/identity.ts";
+import { hasOrgGlossary } from "../db/capabilities.ts";
 import type { Identity } from "../agent/types.ts";
 
 export interface OrgRecord {
@@ -59,6 +60,8 @@ export interface OrgRecord {
    */
   allowed_models: string[];
   created_at: string;
+  /** 0088 STT glossary. ABSENT until the migration runs on the deployment. */
+  glossary?: string[];
 }
 
 const ORG_COLUMNS = `id, name, status, locale, allowed_models, created_at`;
@@ -70,6 +73,8 @@ const toOrg = (row: Record<string, unknown>): OrgRecord => ({
   locale: String(row.locale),
   allowed_models: (row.allowed_models as string[] | null) ?? [],
   created_at: iso(row.created_at),
+  // absent stays absent on an un-migrated deployment
+  ...(row.glossary !== undefined ? { glossary: (row.glossary as string[] | null) ?? [] } : {}),
 });
 
 const MAX_NAME = 120;
@@ -78,9 +83,11 @@ export function createOrgRepo(db: Db) {
   return {
     /** The caller's own org. Any active member — the shell shows its name. */
     async get(identity: Identity): Promise<OrgRecord> {
+      const withGlossary = await hasOrgGlossary(db);
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<Record<string, unknown>>(
-          `select ${ORG_COLUMNS} from echo.org where id = $1`, [identity.orgId],
+          `select ${ORG_COLUMNS}${withGlossary ? ", glossary" : ""} from echo.org where id = $1`,
+          [identity.orgId],
         ),
       );
       const row = rows[0];
@@ -98,7 +105,13 @@ export function createOrgRepo(db: Db) {
      */
     async update(
       identity: Identity,
-      patch: { name?: string | undefined; locale?: string | undefined; allowedModels?: string[] | undefined },
+      patch: {
+        name?: string | undefined;
+        locale?: string | undefined;
+        allowedModels?: string[] | undefined;
+        /** 0088: the STT recognition glossary — whole-set replacement. */
+        glossary?: string[] | undefined;
+      },
     ): Promise<OrgRecord> {
       const name = patch.name?.trim();
       if (patch.name !== undefined) {
@@ -117,19 +130,41 @@ export function createOrgRepo(db: Db) {
           throw new ValidationError("allowed_models must be an array of model ids");
         }
       }
-      if (name === undefined && patch.locale === undefined && patch.allowedModels === undefined) {
+      let glossary: string[] | null = null;
+      if (patch.glossary !== undefined) {
+        if (!(await hasOrgGlossary(db))) throw new ConflictError("not_migrated");
+        if (!Array.isArray(patch.glossary) || patch.glossary.some((t) => typeof t !== "string")) {
+          throw new ValidationError("glossary must be an array of strings");
+        }
+        // the api re-speaks the 0088 trigger's sentence; the trigger is the wall
+        glossary = [...new Set(patch.glossary.map((t) => t.trim()).filter((t) => t !== ""))];
+        if (glossary.length > 200) {
+          throw new ValidationError("at most 200 glossary terms",
+            { code: "too_many_terms", params: { max: 200 } });
+        }
+        if (glossary.some((t) => t.length > 60)) {
+          throw new ValidationError("each glossary term is at most 60 characters",
+            { code: "term_too_long", params: { max: 60 } });
+        }
+      }
+      if (name === undefined && patch.locale === undefined
+        && patch.allowedModels === undefined && patch.glossary === undefined) {
         throw new ValidationError("nothing to update");
       }
 
+      const withGlossary = patch.glossary !== undefined;
       const rows = await db.withIdentity(identity, async (tx: SqlTx) => {
         const updated = await tx.unsafe<Record<string, unknown>>(
           `update echo.org
               set name           = coalesce($2::text, name),
                   locale         = coalesce($3::text, locale),
                   allowed_models = coalesce($4::text[], allowed_models)
+                  ${withGlossary ? ", glossary = $5::text[]" : ""}
             where id = $1
-            returning ${ORG_COLUMNS}`,
-          [identity.orgId, name ?? null, patch.locale ?? null, patch.allowedModels ?? null],
+            returning ${ORG_COLUMNS}${withGlossary ? ", glossary" : ""}`,
+          withGlossary
+            ? [identity.orgId, name ?? null, patch.locale ?? null, patch.allowedModels ?? null, glossary]
+            : [identity.orgId, name ?? null, patch.locale ?? null, patch.allowedModels ?? null],
         );
         /**
          * Audited in the SAME transaction, and only after the update actually
@@ -144,6 +179,7 @@ export function createOrgRepo(db: Db) {
             targetId: identity.orgId,
             detail: changedFields({
               name, locale: patch.locale, allowed_models: patch.allowedModels,
+              glossary: patch.glossary,
             }),
           });
         }

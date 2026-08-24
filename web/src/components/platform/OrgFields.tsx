@@ -95,7 +95,15 @@ export function OrgFields() {
   const [org, setOrg] = useState<Org | null>(null);
   const [name, setName] = useState("");
   const [locale, setLocale] = useState("");
+  /** 0088 glossary, edited as one term per line. Rendered ONLY when the
+      wire carries the column — a textarea for a column that does not
+      exist would read as wired and save nothing. */
+  const [glossaryDraft, setGlossaryDraft] = useState("");
   const [busy, setBusy] = useState(false);
+
+  const glossaryReady = org !== null && "glossary" in org;
+  const parseGlossary = (raw: string): string[] =>
+    [...new Set(raw.split(/\r?\n|[,،]/).map((t) => t.trim()).filter((t) => t !== ""))].slice(0, 200);
 
   const isAdmin = me?.role === "admin" || me?.role === "owner";
 
@@ -105,6 +113,7 @@ export function OrgFields() {
       setOrg(row);
       setName(row.name);
       setLocale(row.locale);
+      setGlossaryDraft((row.glossary ?? []).join("\n"));
     });
   }, []);
 
@@ -117,12 +126,19 @@ export function OrgFields() {
    * Compare in the server's terms, or the comparison is about a different
    * value than the one being stored.
    */
-  const patch = (): { name?: string; locale?: string } => {
+  const patch = (): { name?: string; locale?: string; glossary?: string[] } => {
     if (!org) return {};
-    const next: { name?: string; locale?: string } = {};
+    const next: { name?: string; locale?: string; glossary?: string[] } = {};
     const trimmed = name.trim();
     if (trimmed !== org.name) next.name = trimmed;
     if (locale !== org.locale) next.locale = locale;
+    if (glossaryReady) {
+      const terms = parseGlossary(glossaryDraft);
+      const saved = org.glossary ?? [];
+      if (terms.length !== saved.length || terms.some((t, i) => t !== saved[i])) {
+        next.glossary = terms;
+      }
+    }
     return next;
   };
 
@@ -139,6 +155,7 @@ export function OrgFields() {
       setOrg(updated);
       setName(updated.name);
       setLocale(updated.locale);
+      setGlossaryDraft((updated.glossary ?? []).join("\n"));
       notify(t("orgSaved"));
     } catch {
       notify(t("orgSaveFailed"), "warn");
@@ -205,6 +222,23 @@ export function OrgFields() {
           ))}
         </select>
       </FormRow>
+
+      {glossaryReady ? (
+        <FormRow
+          label={t("orgGlossary")}
+          description={t("orgGlossaryHint")}
+          htmlFor="org-glossary"
+        >
+          <textarea
+            id="org-glossary"
+            className="input min-h-28 py-2 leading-6"
+            value={glossaryDraft}
+            disabled={busy}
+            onChange={(event) => setGlossaryDraft(event.target.value)}
+            placeholder={t("orgGlossaryPlaceholder")}
+          />
+        </FormRow>
+      ) : null}
 
       <PanelFooter>
         {/* save outcomes ride the notification system now (orb toast +

@@ -74,6 +74,12 @@ export class SonioxLane implements SttLane {
         language_hints: input.languageHints,
         enable_language_identification: true,
         enable_speaker_diarization: input.diarize,
+        // the org glossary as recognition context (2026-08-23): a bounded,
+        // comma-joined string of names/terms — absent entirely when empty,
+        // because an empty context field is a claim we didn't make
+        ...(input.context && input.context.length > 0
+          ? { context: input.context.join("، ").slice(0, 2_000) }
+          : {}),
       }),
     });
     const body = await readJson(res, "soniox create transcription");

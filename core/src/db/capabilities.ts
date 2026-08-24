@@ -99,6 +99,11 @@ export async function hasSummaryGrounding(db: Db): Promise<boolean> {
   return hasColumn(db, "summary", "grounding");
 }
 
+/** db/0088: the org glossary (STT recognition context). */
+export async function hasOrgGlossary(db: Db): Promise<boolean> {
+  return hasColumn(db, "org", "glossary");
+}
+
 export async function hasAutonomyColumn(db: Db): Promise<boolean> {
   return hasColumn(db, "app_user", "autonomy");
 }

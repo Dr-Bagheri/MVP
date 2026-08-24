@@ -1437,7 +1437,7 @@ export const api = {
    * `/v1/admin/org`, the one path core/ deliberately never registered, and the
    * truthful 404 got recorded as "the feature isn't built".
    */
-  async updateOrg(patch: { name?: string; locale?: string; allowed_models?: string[] }): Promise<Org> {
+  async updateOrg(patch: { name?: string; locale?: string; allowed_models?: string[]; glossary?: string[] }): Promise<Org> {
     /* **LIVE** — `PATCH /api/admin/org` → `PATCH /v1/admin/org` (admin). */
     return bff<Org>("/api/admin/org", {
       method: "PATCH",

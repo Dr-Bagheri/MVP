@@ -14,6 +14,9 @@ export const OptionsSchema = z
     max_speakers: z.number().int().min(1).max(15).default(8),
     vad: z.boolean().default(true),
     lane: z.string().min(1).nullable().default(null),
+    /** Org glossary terms to bias recognition toward (2026-08-23).
+        Advisory: lanes that cannot use them ignore them. */
+    context: z.array(z.string().min(1).max(60)).max(200).default([]),
   })
   .strict()
   // prefault, not default: every field has its own default, so an absent

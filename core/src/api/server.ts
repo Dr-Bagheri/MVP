@@ -1758,7 +1758,9 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
    */
   app.patch("/v1/admin/org", async (request, reply) => {
     const identity = await auth.requireAdmin(request);
-    const body = (request.body ?? {}) as { name?: unknown; locale?: unknown; allowed_models?: unknown };
+    const body = (request.body ?? {}) as {
+      name?: unknown; locale?: unknown; allowed_models?: unknown; glossary?: unknown;
+    };
     if (body.name !== undefined && typeof body.name !== "string") {
       throw new ValidationError("name must be a string");
     }
@@ -1768,10 +1770,14 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     if (body.allowed_models !== undefined && !Array.isArray(body.allowed_models)) {
       throw new ValidationError("allowed_models must be an array");
     }
+    if (body.glossary !== undefined && !Array.isArray(body.glossary)) {
+      throw new ValidationError("glossary must be an array");
+    }
     return reply.send(await org.update(identity, {
       name: body.name as string | undefined,
       locale: body.locale as string | undefined,
       allowedModels: body.allowed_models as string[] | undefined,
+      glossary: body.glossary as string[] | undefined,
     }));
   });
 

@@ -30,6 +30,7 @@
  */
 import type { Identity } from "../agent/types.ts";
 import type { Db, SqlTx } from "../db/identity.ts";
+import { hasOrgGlossary } from "../db/capabilities.ts";
 import { JSONB_PARAM, toJsonb } from "../db/jsonb.ts";
 import { resolveJobIdentity } from "./job-identity.ts";
 import { unknownVocabulary, type MlClient } from "./ml-client.ts";
@@ -136,6 +137,29 @@ export function createPartStep({
         signedUrlTtlSec,
       );
 
+      /*
+       * The org GLOSSARY (0088, 2026-08-23): names and terms the org
+       * recorded to bias recognition toward — Persian proper names are
+       * where the transcriber's errors concentrate. Read under the owner's
+       * identity like everything else; absent column or empty list = no
+       * context sent. Best-effort: a failed read costs the bias, never the
+       * transcription.
+       */
+      let glossary: string[] = [];
+      if (await hasOrgGlossary(db)) {
+        try {
+          const rows = await db.withIdentity(identity, (tx: SqlTx) =>
+            tx.unsafe<{ glossary: string[] }>(
+              `select o.glossary from echo.org o where o.id = $1`,
+              [identity.orgId],
+            ),
+          );
+          glossary = rows[0]?.glossary ?? [];
+        } catch {
+          log.warn({ part_id: part.id }, "glossary read failed; transcribing without context");
+        }
+      }
+
       // The signed URL is a credential; it is passed, never logged.
       const result = await ml.process({
         audioUrl,
@@ -147,6 +171,7 @@ export function createPartStep({
           // worker does not recognise — keeps the historical both-languages
           // hint rather than silently narrowing on unknown vocabulary.
           languageHints: languageHintsFor(part.call_language),
+          ...(glossary.length > 0 ? { context: glossary } : {}),
         },
       });
 
