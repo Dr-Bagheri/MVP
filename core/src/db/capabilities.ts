@@ -104,6 +104,11 @@ export async function hasOrgGlossary(db: Db): Promise<boolean> {
   return hasColumn(db, "org", "glossary");
 }
 
+/** db/0089: the provisional (live-caption) transcript on the call. */
+export async function hasProvisionalTranscript(db: Db): Promise<boolean> {
+  return hasColumn(db, "call", "provisional_transcript");
+}
+
 export async function hasAutonomyColumn(db: Db): Promise<boolean> {
   return hasColumn(db, "app_user", "autonomy");
 }

@@ -367,7 +367,13 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
   app.post("/v1/calls/:id/finish", async (request, reply) => {
     const identity = await auth.requireActive(request);
     const { id } = request.params as { id: string };
-    return reply.send(await uploads.finish(identity, id));
+    // M40: the live-caption preview may ride the finish body
+    const body = (request.body ?? {}) as { provisional_transcript?: unknown };
+    return reply.send(await uploads.finish(identity, id, {
+      ...(typeof body.provisional_transcript === "string"
+        ? { provisional: body.provisional_transcript }
+        : {}),
+    }));
   });
 
   // retry a FAILED call — the resumable pipeline's missing door

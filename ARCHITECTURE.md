@@ -1506,6 +1506,34 @@ control); cross-voice/diff-text 0.217 — the 0.6/0.1 rule sits between
 the clusters with margin on both sides. Conditions attached per the
 live-lane standard; re-run at release gates.
 
+## M40 — The provisional transcript rung [user-approved speed pass, 2026-08-23]
+
+The live-caption lane's finals ride the FINISH call and land on the call
+row (db/0089 `call.provisional_transcript`) — a rough, timing-less,
+speaker-less preview readable seconds after finishing, while the real
+pipeline runs. It is deliberately NOT a transcript_segment rung: nothing
+downstream reads it (search, summarizer, speakers all blind to it), the
+UI badges it «رونوشت موقت», and the SCHEMA clears it the moment the call
+reaches `ready` — a trigger, so no code path can forget. Written once, by
+the owner, only on the recording→processing transition, bounded 200k
+chars; oversize or un-migrated silently drops the preview, never the
+finish (M21: a rough copy must not cost the real one). This does not
+amend M20 — the timing ladder governs the REAL transcript's rungs; the
+provisional is a different artifact with its own one-way lifecycle.
+
+## Speed/quality pass ledger [2026-08-23, user-approved 1-8 + 10-12]
+
+Shipped same day: worker concurrency actually gating (the config knob had
+sized the pool and gated nothing); speaker-aware summaries (roster with
+directory names/titles in the prompt); 0087 summary grounding (second-
+pass claim verification riding the same INSERT — advisory, null =
+unchecked, never a fabricated clean); 0088 org glossary → Soniox
+recognition context; faDisplay (display-only Persian normalization — the
+stored record stays byte-identical); bare member/directory listings join
+the 60s read cache (queried listings stay uncached). Items 1 and 2 of
+the pass (parallel fetch dedupe, direct-to-storage uploads) were found
+ALREADY BUILT and verified rather than rebuilt.
+
 ## Invariants (locked)
 
 1. The transcript is the source of truth; everything else derived + rebuildable.

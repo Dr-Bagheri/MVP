@@ -373,6 +373,8 @@
     "manageSpeakers": "Manage speakers & titles",
     "translateEn": "Translate to EN",
     "groundingClean": "Checked — every claim has transcript support.",
+    "provisionalChip": "Provisional transcript",
+    "provisionalHint": "Rough text from the live captions, shown while processing runs — the checked transcript with speakers and timing replaces it automatically.",
     "groundingFlagged": "These parts lack clear support in the transcript:",
     "translating": "Translating…",
     "showOriginal": "Show original",

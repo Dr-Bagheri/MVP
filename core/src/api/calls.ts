@@ -12,7 +12,7 @@
  */
 import { ConflictError, NotFoundError, ValidationError } from "./errors.ts";
 import { assertUuid, type Db, type SqlTx } from "../db/identity.ts";
-import { hasCallTags } from "../db/capabilities.ts";
+import { hasCallTags, hasProvisionalTranscript } from "../db/capabilities.ts";
 import type { Identity } from "../agent/types.ts";
 
 // The published vocabularies live in vocabulary.ts, which imports nothing so
@@ -160,6 +160,12 @@ export interface CallSummary {
    * "feature not migrated", never as "no tags".
    */
   tags?: string[];
+  /**
+   * M40 (db/0089) — the live-caption preview, DETAIL response only. Plain
+   * timing-less text shown while the pipeline runs; the schema clears it
+   * at 'ready'. Absent on the list and on un-migrated deployments.
+   */
+  provisional_transcript?: string | null;
 }
 
 /**
@@ -234,6 +240,8 @@ interface CallRow {
   timed_part_count: number | string;
   /** present only when the 0086 column exists and was selected */
   tags?: string[];
+  /** present only on the detail read when the 0089 column exists */
+  provisional_transcript?: string | null;
 }
 
 /**
@@ -282,6 +290,9 @@ const toSummary = (row: CallRow): CallSummary => ({
   ),
   // absent stays absent — [] would claim "no tags" on an un-migrated deploy
   ...(row.tags !== undefined ? { tags: row.tags } : {}),
+  ...(row.provisional_transcript !== undefined
+    ? { provisional_transcript: row.provisional_transcript }
+    : {}),
 });
 
 export const MAX_PAGE = 100;
@@ -328,9 +339,12 @@ export function createCallsRepo(db: Db) {
     async get(identity: Identity, callId: string): Promise<CallSummary> {
       const id = assertUuid(callId, "call id");
       const withTags = await hasCallTags(db);
+      // M40: the provisional preview travels on the DETAIL only — a list
+      // of fifty calls has no business carrying fifty rough transcripts
+      const withProvisional = await hasProvisionalTranscript(db);
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<CallRow>(
-          `select ${CALL_COLUMNS}${withTags ? ", c.tags" : ""} from echo.call c
+          `select ${CALL_COLUMNS}${withTags ? ", c.tags" : ""}${withProvisional ? ", c.provisional_transcript" : ""} from echo.call c
             where c.id = $1 and c.deleted_at is null limit 1`,
           [id],
         ),

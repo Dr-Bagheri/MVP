@@ -619,7 +619,9 @@ export async function finish(): Promise<void> {
     return;
   }
   try {
-    await api.finishCall(snapshot.callId!);
+    // M40: the caption lane's finals ride the finish as the instant
+    // preview — the pipeline's checked transcript replaces it at 'ready'
+    await api.finishCall(snapshot.callId!, liveFinals || undefined);
   } catch {
     setPhase("failed");
     patch({ error: "finishFailed" });
@@ -706,7 +708,7 @@ export async function retryUploads(): Promise<void> {
     return;
   }
   try {
-    await api.finishCall(snapshot.callId!);
+    await api.finishCall(snapshot.callId!, liveFinals || undefined);
     void clearTake(snapshot.callId!);
     setPhase("done");
   } catch {

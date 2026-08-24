@@ -860,7 +860,18 @@ export const api = {
     });
   },
 
-  async finishCall(callId: string): Promise<{ id: string; status: string }> {
+  async finishCall(
+    callId: string,
+    /** M40: the live-caption text — the instant preview while the pipeline runs. */
+    provisional?: string,
+  ): Promise<{ id: string; status: string }> {
+    if (provisional?.trim()) {
+      return bff(`/api/calls/${callId}/finish`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ provisional_transcript: provisional }),
+      });
+    }
     return bff(`/api/calls/${callId}/finish`, { method: "POST" });
   },
 

@@ -26,6 +26,7 @@ import { assertUuid, type Db, type SqlTx } from "../db/identity.ts";
 import { createStorageSigner } from "../storage/signer.ts";
 import { createQueue, Q_LINK_SPEAKERS, Q_PROCESS_PART, Q_SUMMARIZE } from "../worker/queue.ts";
 import { SUMMARY_INSTRUCTION_MAX, SUMMARY_TEMPLATES } from "./vocabulary.ts";
+import { hasProvisionalTranscript } from "../db/capabilities.ts";
 import type { Identity } from "../agent/types.ts";
 
 export interface UploadsConfig {
@@ -406,14 +407,31 @@ export function createUploadsRepo(db: Db, config: UploadsConfig) {
      * 'recording' call flips — finishing twice is a no-op with the same
      * answer, because the end state IS "processing has begun".
      */
-    async finish(identity: Identity, callId: string): Promise<{ id: string; status: string }> {
+    async finish(
+      identity: Identity,
+      callId: string,
+      opts: { provisional?: string } = {},
+    ): Promise<{ id: string; status: string }> {
       const id = assertUuid(callId, "call id");
+      /*
+       * M40 (0089): the live-caption text rides the finish — written in the
+       * SAME update that flips recording→processing, so it can only ever
+       * land on the finish transition, once, by whoever may finish. Bounded
+       * and capability-gated; oversize or un-migrated silently drops the
+       * preview, never the finish (a rough copy must not cost the real one).
+       */
+      const provisional = opts.provisional?.trim() || undefined;
+      const canPreview =
+        provisional !== undefined
+        && provisional.length <= 200_000
+        && (await hasProvisionalTranscript(db));
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<{ id: string; status: string }>(
           `update echo.call set status = 'processing'
+                  ${canPreview ? ", provisional_transcript = $2" : ""}
             where id = $1 and status = 'recording' and deleted_at is null
             returning id, status`,
-          [id],
+          canPreview ? [id, provisional] : [id],
         ),
       );
       if (rows[0]) return rows[0];

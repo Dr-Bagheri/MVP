@@ -715,6 +715,19 @@ export default function CallDetailPage({
             <p className="ltr whitespace-pre-wrap p-4 text-start text-sm leading-8 text-fg">
               {transcriptEn}
             </p>
+          ) : rows.length === 0
+            && call.provisional_transcript
+            && !transcriptionComplete(call.status) ? (
+            /* M40: the live-caption preview — readable SECONDS after finish,
+               loudly provisional, replaced (and schema-cleared) the moment
+               the checked transcript lands */
+            <div className="p-4">
+              <Chip tone="warning">{t("provisionalChip")}</Chip>
+              <p dir="auto" className="mt-3 whitespace-pre-wrap text-sm leading-8 text-fg">
+                {faDisplay(call.provisional_transcript)}
+              </p>
+              <p className="mt-3 text-xs text-fg-muted">{t("provisionalHint")}</p>
+            </div>
           ) : (
           <ul className="divide-y divide-border">
             {(speakerFilter === null
