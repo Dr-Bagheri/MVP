@@ -119,6 +119,7 @@ export async function hasConsoleSightDoors(db: Db): Promise<boolean> {
   return hasFunction(db, "echo.platform_list_users");
 }
 
+
 /** db/0087: the summary grounding report. */
 export async function hasSummaryGrounding(db: Db): Promise<boolean> {
   return hasColumn(db, "summary", "grounding");

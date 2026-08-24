@@ -52,6 +52,15 @@ export const IconArchive = (p: SVGProps<SVGSVGElement>) => (
 export const IconUsers = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><circle cx="9.5" cy="8.5" r="3.2" /><path d="M4 19.5c.9-3 3-4.5 5.5-4.5s4.6 1.5 5.5 4.5" /><path d="M16 5.6a3.2 3.2 0 0 1 0 5.8" /><path d="M17.5 15.3c1.6.7 2.7 2 3.2 4.2" /></svg>
 );
+/** Speakers: a person mid-speech — arcs, not a second two-person glyph
+    (2026-08-24: speakers/users/management had collapsed into one icon). */
+export const IconVoice = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><circle cx="9" cy="8.5" r="3.2" /><path d="M3.5 19.5c.9-3 3-4.5 5.5-4.5s4.6 1.5 5.5 4.5" /><path d="M16.5 6.5a5 5 0 0 1 0 6" /><path d="M19 4.5a8.2 8.2 0 0 1 0 10" /></svg>
+);
+/** Management·Users: one person, framed — distinct from the rail's pair. */
+export const IconUser = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><circle cx="12" cy="12" r="8.5" /><circle cx="12" cy="10" r="2.8" /><path d="M6.8 18.4c1.1-2.4 3-3.6 5.2-3.6s4.1 1.2 5.2 3.6" /></svg>
+);
 export const IconSparkle = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><path d="M12 3.5 13.8 9l5.7 1.8-5.7 1.8L12 18.3l-1.8-5.7L4.5 10.8 10.2 9 12 3.5Z" /><path d="M19 16.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8.8-2.2Z" strokeWidth="1.3" /></svg>
 );
@@ -78,6 +87,10 @@ export const IconGlobe = (p: SVGProps<SVGSVGElement>) => (
 );
 export const IconShare = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><circle cx="6" cy="12" r="2.5" /><circle cx="17.5" cy="5.5" r="2.5" /><circle cx="17.5" cy="18.5" r="2.5" /><path d="m8.3 10.8 7-4M8.3 13.2l7 4" /></svg>
+);
+/** Points to inline-END; compose with `rtl:-scale-x-100` where rendered. */
+export const IconChevronEnd = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><path d="m9 5.5 6.5 6.5L9 18.5" /></svg>
 );
 export const IconTag = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><path d="M3.5 11V4.5A1 1 0 0 1 4.5 3.5H11a2 2 0 0 1 1.4.6l7.5 7.5a2 2 0 0 1 0 2.8l-5.5 5.5a2 2 0 0 1-2.8 0L4.1 12.4a2 2 0 0 1-.6-1.4Z" /><circle cx="8" cy="8" r="1.3" fill="currentColor" stroke="none" /></svg>

@@ -556,6 +556,61 @@ export function createCallsRepo(db: Db) {
     },
 
     /**
+     * A HUMAN's summary edit (0092): a NEW version authored 'human' on the
+     * existing ladder — versions are never overwritten, and the pointer
+     * moves by the 0008 trigger. Authority is the 0077 hierarchy inside
+     * the door; refusal reads as 404 (not probeable).
+     */
+    async editSummary(
+      identity: Identity, callId: string, body: string,
+    ): Promise<{ version: number }> {
+      const id = assertUuid(callId, "call id");
+      if (body.trim().length === 0 || body.length > 50_000) {
+        throw new ValidationError("summary body must be 1 to 50000 characters",
+          { code: "bad_body", params: { max: 50_000 } });
+      }
+      const rows = await db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe<{ version: number }>(
+          `select echo.edit_summary($1::uuid, $2::text) as version`, [id, body],
+        ),
+      ).catch((cause) => {
+        if ((cause as { code?: string }).code === "42883") {
+          throw new ConflictError("not_migrated"); // db/0092 pending here
+        }
+        return refusalIsNotFound(cause);
+      });
+      if (!rows[0]) throw new NotFoundError("call not found");
+      return { version: Number(rows[0].version) };
+    },
+
+    /**
+     * A HUMAN's transcript correction (0092): the line keeps its identity,
+     * words are cleared (D15 demotes the part's timing flag — designed for
+     * exactly this), edited_at/edited_by stamped.
+     */
+    async editSegment(
+      identity: Identity, callId: string, segmentId: string, text: string,
+    ): Promise<void> {
+      assertUuid(callId, "call id");
+      const seg = assertUuid(segmentId, "segment id");
+      if (text.trim().length === 0 || text.length > 10_000) {
+        throw new ValidationError("segment text must be 1 to 10000 characters",
+          { code: "bad_body", params: { max: 10_000 } });
+      }
+      const rows = await db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe<{ ok: boolean }>(
+          `select echo.edit_transcript_segment($1::uuid, $2::text) as ok`, [seg, text],
+        ),
+      ).catch((cause) => {
+        if ((cause as { code?: string }).code === "42883") {
+          throw new ConflictError("not_migrated"); // db/0092 pending here
+        }
+        return refusalIsNotFound(cause);
+      });
+      if (!rows[0]) throw new NotFoundError("segment not found");
+    },
+
+    /**
      * Notes and chapters (0079) — annotations of a call, never the record.
      * Listed AFTER the route has 404'd unreadable calls via get(), so an
      * empty array means "no notes", not "no access" (the parts pattern —

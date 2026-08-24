@@ -36,9 +36,14 @@ export function PageHeader({
   );
 }
 
-export function EmptyState({ text }: { text: string }) {
+/** 2026-08-24 cleanup #8: an empty table offers the VERB, not just the
+    fact — pass `action` (usually a Link styled as the primary button). */
+export function EmptyState({ text, action }: { text: string; action?: ReactNode }) {
   return (
-    <div className="py-16 text-center text-sm text-fg-muted">{text}</div>
+    <div className="py-16 text-center text-sm text-fg-muted">
+      <p>{text}</p>
+      {action ? <div className="mt-4 flex justify-center">{action}</div> : null}
+    </div>
   );
 }
 
@@ -85,6 +90,17 @@ const STATUS_TONE: Record<CallStatus, Tone> = {
  * unstyled one, which is a silent break rather than a graceful degrade.
  */
 export function StatusChip({ status, label }: { status: string; label: string }) {
+  /* cleanup #4 (2026-08-24): READY is the normal state, so it gets the
+     QUIETEST rendering — a plain dot and muted word, no chip fill. Color
+     stays for the states worth noticing (pipeline motion, failure). */
+  if (status === "ready") {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs text-fg-muted">
+        <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden />
+        {label}
+      </span>
+    );
+  }
   return <Chip tone={STATUS_TONE[status as CallStatus] ?? "neutral"}>{label}</Chip>;
 }
 

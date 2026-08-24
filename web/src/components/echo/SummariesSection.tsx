@@ -6,8 +6,9 @@ import { api } from "@/api/client";
 import { useRefreshEpoch } from "@/lib/refreshBus";
 import type { Call, SummaryVersion } from "@/api/types";
 import { Link } from "@/i18n/routing";
-import { Card } from "@/components/ui";
-import { formatDate } from "@/lib/format";
+import { Card, EmptyState } from "@/components/ui";
+import { formatDate, formatRelativeDate } from "@/lib/format";
+import { SummaryBody } from "./SummaryBody";
 
 /**
  * Echo · Summaries (user directive, 2026-08-21: "add a summary section
@@ -54,7 +55,14 @@ export function SummariesSection() {
   if (records.length === 0) {
     return (
       <Card>
-        <p className="text-sm leading-6 text-fg-muted">{t("empty")}</p>
+        <EmptyState
+          text={t("empty")}
+          action={
+            <Link href="/echo" className="btn-primary h-10 min-h-0 px-5 text-sm">
+              {t("emptyAction")}
+            </Link>
+          }
+        />
       </Card>
     );
   }
@@ -74,8 +82,11 @@ export function SummariesSection() {
             onClick={() => setSelected(record.id)}
           >
             <span className="block font-medium">{record.title ?? t("untitled")}</span>
-            <span className="mt-0.5 block text-xs text-fg-subtle">
-              {formatDate(record.started_at, locale)}
+            <span
+              className="mt-0.5 block text-xs text-fg-subtle"
+              title={formatDate(record.started_at, locale)}
+            >
+              {formatRelativeDate(record.started_at, locale)}
             </span>
           </button>
         ))}
@@ -89,10 +100,11 @@ export function SummariesSection() {
         ) : (
           <>
             {/* summaries are Persian by ruling (M6) — direction pinned so an
-                English UI does not flip the paragraph */}
-            <p dir="rtl" className="whitespace-pre-wrap text-sm leading-7 text-fg">
-              {current.body}
-            </p>
+                English UI does not flip the paragraph; rendered as a
+                DOCUMENT (chapters bold, paragraphs smaller — 2026-08-24) */}
+            <div dir="rtl" className="text-sm">
+              <SummaryBody text={current.body} />
+            </div>
             <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-border pt-3 text-xs text-fg-subtle">
               <span>{t("version", { version: current.version })}</span>
               <span>{formatDate(current.created_at, locale)}</span>

@@ -3,7 +3,7 @@
 import { use, useEffect, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { EchoAppShell } from "@/components/echo/EchoAppShell";
-import { IconArchive, IconFileText, IconMic, IconRows, IconUsers } from "@/components/icons";
+import { IconArchive, IconFileText, IconMic, IconRows, IconVoice } from "@/components/icons";
 import { RecordsSection } from "@/components/echo/RecordsSection";
 import { SpeakersDirectory } from "@/components/echo/SpeakersDirectory";
 import { SummariesSection } from "@/components/echo/SummariesSection";
@@ -82,7 +82,7 @@ export default function EchoPage({
     records: <IconRows />,
     summaries: <IconFileText />,
     archive: <IconArchive />,
-    speakers: <IconUsers />,
+    speakers: <IconVoice />,
   };
 
   const groups = GROUPS.map((group) => ({

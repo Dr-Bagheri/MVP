@@ -12,6 +12,7 @@
  *    platform-authored sentence — the popup's confirm IS the consent).
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { IconDots } from "@/components/icons";
 
 export function IconAction({
@@ -59,58 +60,99 @@ export interface KebabItem {
   disabled?: boolean;
 }
 
-export function KebabMenu({ label, items }: { label: string; items: KebabItem[] }) {
-  const [open, setOpen] = useState(false);
+const MENU_W = 176; // matches min-w-44
+
+export function KebabMenu({
+  label,
+  items,
+  trigger,
+}: {
+  label: string;
+  items: KebabItem[];
+  /** replaces the ⋯ glyph (e.g. the player's speed readout «۱.۵×») */
+  trigger?: ReactNode;
+}) {
+  /** null = closed; otherwise the VIEWPORT position the portal renders at.
+      The menu portals to <body> (user report, 2026-08-24: opening it inside
+      a table's overflow container clipped the menu and scrolled the table —
+      "the menu should be always on top"). position:fixed + a portal escapes
+      every ancestor overflow; any scroll or resize simply closes it. */
+  const [at, setAt] = useState<{ top: number; left: number } | null>(null);
   const rootRef = useRef<HTMLSpanElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+
+  function toggle() {
+    if (at) return setAt(null);
+    const rect = rootRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const rtl = document.documentElement.dir === "rtl";
+    const left = rtl ? rect.left : rect.right - MENU_W;
+    setAt({
+      top: Math.min(rect.bottom + 4, window.innerHeight - 8),
+      left: Math.max(8, Math.min(left, window.innerWidth - MENU_W - 8)),
+    });
+  }
 
   useEffect(() => {
-    if (!open) return;
+    if (!at) return;
+    const close = () => setAt(null);
     const onDown = (e: MouseEvent) => {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (!rootRef.current?.contains(target) && !menuRef.current?.contains(target)) close();
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") close();
     };
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
     return () => {
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
     };
-  }, [open]);
+  }, [at]);
 
   return (
     <span ref={rootRef} className="relative inline-flex" onClick={(e) => e.stopPropagation()}>
-      <IconAction label={label} onClick={() => setOpen((v) => !v)}>
-        <IconDots />
+      <IconAction label={label} onClick={toggle} className={trigger ? "w-auto px-1.5" : ""}>
+        {trigger ?? <IconDots />}
       </IconAction>
-      {open ? (
-        <div
-          role="menu"
-          className="absolute end-0 top-8 z-40 min-w-44 rounded-lg border border-border bg-surface py-1 shadow-xl"
-        >
-          {items.map((item) => (
-            <button
-              key={item.key}
-              type="button"
-              role="menuitem"
-              disabled={item.disabled}
-              onClick={() => {
-                setOpen(false);
-                item.onSelect();
-              }}
-              className={`flex w-full items-center gap-2.5 px-3 py-2 text-start text-xs transition-colors ${
-                item.danger
-                  ? "text-danger hover:bg-danger/10"
-                  : "text-fg-muted hover:bg-surface-2 hover:text-fg"
-              } disabled:pointer-events-none disabled:opacity-40`}
+      {at
+        ? createPortal(
+            <div
+              ref={menuRef}
+              role="menu"
+              style={{ position: "fixed", top: at.top, left: at.left, minWidth: MENU_W }}
+              className="z-50 max-h-80 overflow-y-auto rounded-lg border border-border bg-surface py-1 shadow-xl"
+              onClick={(e) => e.stopPropagation()}
             >
-              {item.icon ? <span className="shrink-0 opacity-80">{item.icon}</span> : null}
-              <span className="truncate">{item.label}</span>
-            </button>
-          ))}
-        </div>
-      ) : null}
+              {items.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  role="menuitem"
+                  disabled={item.disabled}
+                  onClick={() => {
+                    setAt(null);
+                    item.onSelect();
+                  }}
+                  className={`flex w-full items-center gap-2.5 px-3 py-2 text-start text-xs transition-colors ${
+                    item.danger
+                      ? "text-danger hover:bg-danger/10"
+                      : "text-fg-muted hover:bg-surface-2 hover:text-fg"
+                  } disabled:pointer-events-none disabled:opacity-40`}
+                >
+                  {item.icon ? <span className="shrink-0 opacity-80">{item.icon}</span> : null}
+                  <span className="truncate">{item.label}</span>
+                </button>
+              ))}
+            </div>,
+            document.body,
+          )
+        : null}
     </span>
   );
 }

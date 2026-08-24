@@ -387,6 +387,29 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     return reply.send(await uploads.retry(identity, id));
   });
 
+  // a HUMAN's summary edit — a new version authored 'human' (0092)
+  app.post("/v1/calls/:id/summaries/edit", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { body?: unknown };
+    if (typeof body.body !== "string") {
+      throw new ValidationError("body must be a string");
+    }
+    return reply.send(await calls.editSummary(identity, id, body.body));
+  });
+
+  // a HUMAN's transcript correction — line kept, words cleared (0092)
+  app.patch("/v1/calls/:id/segments/:segmentId", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id, segmentId } = request.params as { id: string; segmentId: string };
+    const body = (request.body ?? {}) as { text?: unknown };
+    if (typeof body.text !== "string") {
+      throw new ValidationError("text must be a string");
+    }
+    await calls.editSegment(identity, id, segmentId, body.text);
+    return reply.send({ ok: true });
+  });
+
   // regenerate a READY call's summary as a NEW version — optionally shaped
   // by a ruled template and/or the requester's instruction (2026-08-23)
   app.post("/v1/calls/:id/summaries", async (request, reply) => {

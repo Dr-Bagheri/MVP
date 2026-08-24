@@ -63,7 +63,10 @@ export function AssistantMenu({
             ...recent.map((session) => ({
               slug: `recent-${session.id}`,
               href: "/conversations",
-              label: `· ${session.title ?? tConversations("untitled")}`,
+              label: session.title ?? tConversations("untitled"),
+              /* smaller + shifted inward (user directive, 2026-08-24) —
+                 the indent says "under History"; the old «· » prefix retired */
+              sub: true,
               preventNavigation: true,
               onSelect: () => openAssistant({ sessionId: session.id }),
             })),

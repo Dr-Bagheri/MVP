@@ -176,6 +176,28 @@ export function formatDate(iso: string, locale: string): string {
   return bidiIsolate(`${digits(jd, locale)} ${JALALI_MONTHS[jm - 1]} ${digits(jy, locale)}`);
 }
 
+/**
+ * Relative rendering for TABLE dates (2026-08-24 cleanup #3): «امروز»,
+ * «دیروز», «N روز پیش» up to a week, then the full formatDate. Day
+ * boundaries are computed in the viewer's resolved timezone — a call at
+ * 23:50 is «دیروز» the moment midnight passes, not 10 minutes later.
+ * Callers put the exact formatDate in the title attribute.
+ */
+export function formatRelativeDate(iso: string, locale: string): string {
+  const zone = resolvedTimezone();
+  const day = (d: Date) => {
+    const { y, m, d: dd } = partsIn(d, zone);
+    return Date.UTC(y, m - 1, dd);
+  };
+  const diff = Math.round((day(new Date()) - day(new Date(iso))) / 86_400_000);
+  if (diff <= 0) return locale === "fa" ? "امروز" : "Today";
+  if (diff === 1) return locale === "fa" ? "دیروز" : "Yesterday";
+  if (diff < 7) {
+    return locale === "fa" ? `${faDigits(diff)} روز پیش` : `${diff} days ago`;
+  }
+  return formatDate(iso, locale);
+}
+
 export function formatTime(iso: string, locale: string): string {
   const { hh, mm } = partsIn(new Date(iso), resolvedTimezone());
   const pad = (n: number) => String(n).padStart(2, "0");

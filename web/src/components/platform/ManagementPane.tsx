@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import { TwoPane, type PaneGroup } from "./TwoPane";
-import { IconChip, IconPlug, IconPulse, IconSparkle, IconUsers } from "@/components/icons";
+import { IconChip, IconPlug, IconPulse, IconSparkle, IconUser } from "@/components/icons";
 
 /**
  * Management's two-pane surface (user directive, review round 2: "Management
@@ -51,7 +51,7 @@ export function ManagementPane({
 
   /* menu icons (2026-08-24, sana reference) */
   const ICONS: Record<string, ReactNode> = {
-    users: <IconUsers />,
+    users: <IconUser />,
     skills: <IconSparkle />,
     models: <IconChip />,
     connectors: <IconPlug />,

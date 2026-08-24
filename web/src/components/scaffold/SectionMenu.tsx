@@ -25,6 +25,9 @@ export interface MenuItem {
   /** 16px line icon (2026-08-24, sana reference) — currentColor, so the
       item's own state colors it; items without one simply indent less. */
   icon?: ReactNode;
+  /** A SUB-entry (the recents under History): smaller and shifted inward —
+      hierarchy said by indent, not by a decorative dot. */
+  sub?: boolean;
   /** A currently unavailable destination remains visible but cannot be opened. */
   disabled?: boolean;
   /** The current destination is shown, but selecting it again must not reload it. */
@@ -75,7 +78,9 @@ export function SectionMenu({
           <ul>
             {group.items.map((item) => {
               const active = item.slug === activeSlug;
-              const itemClass = `tap my-px flex w-full items-center justify-between rounded-lg px-3 py-[5px] text-menu-item transition-colors ${
+              const itemClass = `tap my-px flex w-full items-center justify-between rounded-lg py-[5px] transition-colors ${
+                item.sub ? "ps-8 pe-3 text-xs" : "px-3 text-menu-item"
+              } ${
                 item.disabled
                   ? "cursor-not-allowed bg-surface-2 text-fg-muted opacity-55"
                   : active

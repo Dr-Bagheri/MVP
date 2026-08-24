@@ -959,6 +959,22 @@ export const api = {
       body: JSON.stringify({ title }),
     });
   },
+  /** 0092: a human's summary edit — a NEW version authored 'human'. */
+  async editSummary(id: string, body: string): Promise<{ version: number }> {
+    return bff<{ version: number }>(`/api/calls/${id}/summaries/edit`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ body }),
+    });
+  },
+  /** 0092: a human's transcript correction — line kept, words cleared. */
+  async editSegment(callId: string, segmentId: string, text: string): Promise<void> {
+    await bff<{ ok: boolean }>(`/api/calls/${callId}/segments/${segmentId}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text }),
+    });
+  },
   /** 0086: replace the record's tag set (whole-list write, ≤10, ≤40 chars).
       409 not_migrated until the column exists on the deployment. */
   async setCallTags(id: string, tags: string[]): Promise<Call> {

@@ -62,6 +62,9 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
   const [source, setSource] = useState<"mic" | "system">("mic");
   /** the red stop-and-delete asks AGAIN before acting (user directive) */
   const [confirmDiscard, setConfirmDiscard] = useState(false);
+  /** cleanup #5 (2026-08-24): the four device/language selects fold behind
+      a disclosure — returning users see a title and two buttons */
+  const [showSettings, setShowSettings] = useState(false);
   /** speak «این جلسه ضبط می‌شود» into the room — and into the record */
   const [announceOn, setAnnounceOn] = useState(false);
   /**
@@ -239,6 +242,16 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
               disabled={resuming}
             />
           </Field>
+          <button
+            type="button"
+            className="mt-3 flex items-center gap-1.5 text-xs text-fg-muted underline-offset-2 hover:text-fg hover:underline"
+            aria-expanded={showSettings}
+            onClick={() => setShowSettings((v) => !v)}
+          >
+            <span aria-hidden>{showSettings ? "▾" : "▸"}</span>
+            {t("recordSettings")}
+          </button>
+          {showSettings ? (
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <Field label={t("micField")}>
               <select className="input" value={micId} onChange={(e) => setMicId(e.target.value)}>
@@ -288,6 +301,7 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
               </select>
             </Field>
           </div>
+          ) : null}
           <label className="mt-3 flex cursor-pointer items-center gap-2 text-sm text-fg">
             <input
               type="checkbox"
