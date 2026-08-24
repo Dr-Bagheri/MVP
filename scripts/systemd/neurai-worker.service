@@ -1,0 +1,14 @@
+[Unit]
+Description=NeurAI pipeline worker
+After=network-online.target neurai-ml.service
+Wants=network-online.target
+[Service]
+User=neurai
+Group=neurai
+WorkingDirectory=/opt/neurai/app/core
+EnvironmentFile=/etc/neurai/core.env
+ExecStart=/usr/bin/node --experimental-strip-types src/worker/main.ts
+Restart=always
+RestartSec=3
+[Install]
+WantedBy=multi-user.target

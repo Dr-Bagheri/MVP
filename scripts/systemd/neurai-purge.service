@@ -1,0 +1,19 @@
+# NeurAI — the scheduled purge (Q5/M11): deletes what the 7/30-day windows
+# have released, OBJECTS FIRST. Oneshot — the paired .timer runs it nightly.
+# Requires /etc/neurai/purge.env holding DATABASE_URL_PURGE (echo_purge, the
+# only role with DELETE) — the operator writes that file by hand; it is the
+# one credential the app boxes otherwise never hold.
+[Unit]
+Description=NeurAI purge sweep (oneshot)
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/etc/neurai/purge.env
+
+[Service]
+Type=oneshot
+User=neurai
+Group=neurai
+WorkingDirectory=/opt/neurai/app/core
+EnvironmentFile=/etc/neurai/core.env
+EnvironmentFile=/etc/neurai/purge.env
+ExecStart=/usr/bin/node --experimental-strip-types src/purge/main.ts

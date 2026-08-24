@@ -1,0 +1,12 @@
+[Unit]
+Description=NeurAI Persian TTS (piper, M37) - loopback only
+After=network.target
+
+[Service]
+ExecStart=/opt/neurai/tts-venv/bin/python -m piper.http_server --host 127.0.0.1 --port 5001 -m /opt/neurai/tts/fa_IR-gyro-medium.onnx
+Restart=always
+RestartSec=3
+User=neurai
+
+[Install]
+WantedBy=multi-user.target

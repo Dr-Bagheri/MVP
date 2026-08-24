@@ -19,6 +19,7 @@ import postgres from "postgres";
 
 import { buildServer } from "./server.ts";
 import { createDb, type SqlClient } from "../db/identity.ts";
+import { initWatchtower, reportError } from "../observe/watchtower.ts";
 
 const log = pino({
   level: process.env.LOG_LEVEL || "info",
@@ -92,6 +93,13 @@ function assertVerificationConfigured(): void {
 
 export async function main(): Promise<void> {
   assertVerificationConfigured();
+  // item 10 (2026-08-23): scrubbed error reporting; dark without SENTRY_DSN
+  initWatchtower("api", log);
+  process.on("unhandledRejection", (reason) => {
+    reportError(reason, { where: "unhandledRejection" });
+    log.error({ err: reason instanceof Error ? reason.constructor.name : typeof reason },
+      "unhandled rejection");
+  });
   const port = Number(process.env.PORT || 8080);
   if (!Number.isFinite(port)) throw new Error("api: PORT must be a number");
 

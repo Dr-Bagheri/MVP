@@ -1,0 +1,12 @@
+# Nightly purge schedule. Persistent=true runs a missed sweep at next boot —
+# a purge window that expired while the box was down still gets honored.
+[Unit]
+Description=Nightly NeurAI purge sweep
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+RandomizedDelaySec=600
+Persistent=true
+
+[Install]
+WantedBy=timers.target

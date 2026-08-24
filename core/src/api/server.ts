@@ -29,6 +29,7 @@ import { createAuth, type Auth } from "./auth.ts";
 import { createWebhooksRepo, type WebhooksRepo } from "./webhooks.ts";
 import { createCallsRepo, type CallsRepo } from "./calls.ts";
 import { ConflictError, mapError, NotActivatedError, NotFoundError, pgErrorFields, ValidationError } from "./errors.ts";
+import { reportError } from "../observe/watchtower.ts";
 import { createMembersRepo, type MembersRepo } from "./members.ts";
 import { createModelsRepo, type ModelsRepo } from "./models.ts";
 import { createPlatformRepo, type PlatformRepo } from "./platform.ts";
@@ -227,6 +228,9 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
         // the database's message.
         mapped.diagnosis ?? "internal error",
       );
+      // item 10: the same fact reaches the watchtower, scrubbed by
+      // construction (observe/watchtower.ts owns what may travel)
+      reportError(error, { where: "api", route: request.routeOptions?.url ?? "?" });
     } else {
       /**
        * Not ours — but one class of "theirs" earns a line anyway.

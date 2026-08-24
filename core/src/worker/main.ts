@@ -10,6 +10,7 @@ import pino from "pino";
 import postgres from "postgres";
 
 import { agentToolsDb, createDb, type SqlClient } from "../db/identity.ts";
+import { initWatchtower, reportError } from "../observe/watchtower.ts";
 import { loadWorkerConfig } from "./config.ts";
 import { createDeadLetterSink } from "./dead-letter.ts";
 import { createLifecycle } from "./lifecycle.ts";
@@ -124,7 +125,24 @@ export async function main(): Promise<void> {
       createSignalStep({ db }),
     ],
     config,
-    sink: createDeadLetterSink({ db, lifecycle, queue, log }),
+    sink: (() => {
+      const inner = createDeadLetterSink({ db, lifecycle, queue, log });
+      return {
+        // item 10: a dead letter IS the operator-attention event — the
+        // watchtower hears about it with codes only (queue + errorType;
+        // the letter's own content stays in the archive table)
+        onDeadLetter: async (
+          ...args: Parameters<typeof inner.onDeadLetter>
+        ): Promise<void> => {
+          const [queueName, , info] = args;
+          reportError(
+            new Error(`dead letter on ${queueName}: ${(info as { errorType?: string })?.errorType ?? "unknown"}`),
+            { where: "worker.deadLetter", queue: String(queueName) },
+          );
+          return inner.onDeadLetter(...args);
+        },
+      };
+    })(),
     log,
   });
 
@@ -169,6 +187,14 @@ export async function main(): Promise<void> {
     });
   }
 
+  // item 10 (2026-08-23): scrubbed error reporting; dark without SENTRY_DSN
+  initWatchtower("worker", log);
+  process.on("unhandledRejection", (reason) => {
+    reportError(reason, { where: "unhandledRejection" });
+    log.error({ err: reason instanceof Error ? reason.constructor.name : typeof reason },
+      "unhandled rejection");
+  });
+
   log.info(
     { concurrency: config.concurrency, batch: config.batchSize, ml: config.mlBaseUrl },
     "worker started",
@@ -183,6 +209,7 @@ export async function main(): Promise<void> {
       // process: it backs off and tries again, because the work is still in
       // the queue and will be there when the database returns.
       log.error({ err: (error as Error).message }, "poll failed; backing off");
+      reportError(error, { where: "worker.poll" });
       await sleep(config.idlePollMs);
     }
   }

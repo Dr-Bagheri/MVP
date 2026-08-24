@@ -1,0 +1,14 @@
+[Unit]
+Description=NeurAI ml speech service (:7801)
+After=network-online.target
+Wants=network-online.target
+[Service]
+User=neurai
+Group=neurai
+WorkingDirectory=/opt/neurai/app/ml
+EnvironmentFile=/etc/neurai/ml.env
+ExecStart=/usr/bin/node dist/src/index.js
+Restart=always
+RestartSec=3
+[Install]
+WantedBy=multi-user.target
