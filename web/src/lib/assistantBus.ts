@@ -11,6 +11,9 @@
 export interface AssistantOpenRequest {
   /** adopt and load this stored conversation; omitted = just open */
   sessionId?: string;
+  /** pre-fill the composer (record page's "ask about this record") — a
+      DRAFT the person sends or edits; never auto-submitted */
+  draft?: string;
 }
 
 type Listener = (request: AssistantOpenRequest) => void;

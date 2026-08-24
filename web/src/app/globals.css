@@ -476,3 +476,20 @@
     animation: none;
   }
 }
+
+/*
+ * #12 (2026-08-24): the record page prints as a clean DOCUMENT — the app
+ * chrome, the player and every hover/menu control step aside. `.no-print`
+ * marks page-level chrome; the shell pieces are addressed by their own
+ * hooks so no page has to remember them.
+ */
+@media print {
+  [data-platform-topbar],
+  nav,
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #ffffff;
+  }
+}

@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, use, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { Call, CallNote, CallStatus, Me, Person, Speaker, SummaryVersion, TranscriptSegment } from "@/api/types";
@@ -11,8 +11,10 @@ import { Card, Chip } from "@/components/ui";
 import { formatClock, formatDate, formatDuration, digits } from "@/lib/format";
 import { isFillerWord, stripFillers } from "@/lib/cleanRead";
 import { IconAction, KebabMenu } from "@/components/rowActions";
-import { IconArchive, IconFileText, IconGlobe, IconPencil, IconShare, IconSparkle, IconTag } from "@/components/icons";
-import { SummaryBody } from "@/components/echo/SummaryBody";
+import {
+  IconArchive, IconFileText, IconGlobe, IconPencil, IconShare, IconSparkle, IconTag,
+} from "@/components/icons";
+import { SummaryBody, parseSummary } from "@/components/echo/SummaryBody";
 import { faDisplay } from "@/lib/faDisplay";
 import {
   canExportSubtitles,
@@ -22,7 +24,11 @@ import {
   srtFrom,
   vttFrom,
 } from "@/lib/exportCall";
+import {
+  isGenericTitle, lineDiff, mergeParagraphs, suggestTitleFrom, talkTimes,
+} from "@/lib/transcriptView";
 import { notify } from "@/lib/notify";
+import { openAssistant } from "@/lib/assistantBus";
 import { redactSensitive } from "@/lib/redact";
 import { SUMMARY_TEMPLATES, type SummaryTemplate } from "@echo/core/vocabulary";
 
@@ -37,58 +43,26 @@ const TEMPLATE_LABEL_KEY: Record<SummaryTemplate, "templateBoard" | "templateGro
 };
 
 /**
- * Read view (SPEC "The core loop" #3): player beside the transcript, summary
- * above, clicking a line seeks the audio. Parts share ONE continuous
- * timeline, so a line's position is its absolute ms.
+ * Read view (SPEC "The core loop" #3) — since 2026-08-24 ONE document-like
+ * card: header (title · date · the ⋯ menu), the sticky player, the summary
+ * document, the transcript, notes, related records. Clicking a line seeks
+ * the audio; parts share ONE continuous timeline.
  */
 
-/**
- * Pipeline positions at which transcription itself has FINISHED, and so
- * `transcript_timing` is worth showing.
- *
- * The value counts TRANSCRIBED parts only — an untranscribed part isn't
- * counted as untimed, it isn't counted at all — so mid-flight it reports what
- * the transcript looks like so far. That is the honest thing to send, but it
- * has a sharp edge: the worker asserts a part's word-timing flag ONCE, AFTER
- * writing that part's segments, so between those two moments the part counts
- * transcribed-but-not-timed and the call reads **"none"** for an instant.
- * "none" is the strongest degraded claim there is, and flashing it on a
- * perfectly healthy call is a visible lie. Declining to make the claim until
- * transcription ends costs no new copy — it is a suppression, not a string.
- *
- * NOT simply `status === "ready"`: `linking` is link-speakers ACROSS parts,
- * so a call that has reached it necessarily has every part transcribed, and
- * summarization runs later still. Neither can change a transcript's timing,
- * so a mixed call sitting in either already has a settled, true claim to
- * make. Gating on `ready` alone would withhold correct information for two
- * whole pipeline stages.
- *
- * Named for the PIPELINE STAGE, not for permanence: an agent correction that
- * blanks a line's words demotes the flag even after `ready`. That is a true
- * change of fact rather than a retraction, so it needs no gate — but it does
- * mean this value must never be cached as though it were immutable.
- */
+/** See the long provenance comment in git history: transcription is settled
+    from `linking` onward, and the timing claim is withheld before that. */
 const TRANSCRIPTION_COMPLETE: readonly CallStatus[] = ["linking", "summarizing", "ready"];
-
-/**
- * The membership test takes a `string`, while the list above keeps its narrow
- * `CallStatus[]` type. Both halves are deliberate.
- *
- * The list stays narrow so a typo in one of those three literals is a compile
- * error — that is the whole reason to type a constant. The PARAMETER is wide
- * because `call.status` is `string` on the wire: core/ types it that way on
- * purpose so a status added by a later migration cannot crash a client, and
- * that promise only holds if consumers stop insisting the value is one of the
- * six they know.
- *
- * The alternative was `includes(call.status as CallStatus)`, which compiles
- * and is a lie — it asserts the server can only ever send what this file
- * already knows about. An unknown status returns false here, which suppresses
- * the provenance caveat: the safe direction, since a caveat about a pipeline
- * stage we do not recognise is worse than no caveat.
- */
 const transcriptionComplete = (status: string): boolean =>
   (TRANSCRIPTION_COMPLETE as readonly string[]).includes(status);
+
+/** #19: the pipeline as STEPS — only statuses on the ladder render it. */
+const PIPELINE_LADDER: readonly string[] = ["recording", "processing", "linking", "summarizing", "ready"];
+
+/** #7: stable per-speaker tints (index into the roster, not the id hash —
+    a roster is small and its order is stable within a call). */
+const SPEAKER_TEXT = ["text-accent", "text-info", "text-success", "text-warning"] as const;
+const SPEAKER_BORDER = ["border-accent/60", "border-info/60", "border-success/60", "border-warning/60"] as const;
+
 export default function CallDetailPage({
   params,
 }: {
@@ -111,30 +85,33 @@ export default function CallDetailPage({
   /** Notes & chapters (0079) + who I am, for the delete-own gate. */
   const [notes, setNotes] = useState<CallNote[]>([]);
   const [me, setMe] = useState<Me | null>(null);
-  /**
-   * English translations, per target (user directive): display-only, held
-   * in state — the Persian record stays the single source of truth. Three
-   * states each: null = not asked, "loading", or the text. `showEn` flips
-   * the view without refetching.
-   */
+  /** #16 related: the org's list, fetched once for the tag overlap. */
+  const [allCalls, setAllCalls] = useState<Call[]>([]);
+  /** English translations, display-only; the Persian record is the truth. */
   const [summaryEn, setSummaryEn] = useState<string | "loading" | null>(null);
   const [transcriptEn, setTranscriptEn] = useState<string | "loading" | null>(null);
   const [showSummaryEn, setShowSummaryEn] = useState(false);
   const [showTranscriptEn, setShowTranscriptEn] = useState(false);
   const [translateError, setTranslateError] = useState<string | null>(null);
-  /**
-   * Reading modes (user directive, 2026-08-23) — DISPLAY only, the record
-   * is untouched: filter the transcript to one speaker's lines, and a
-   * clean-read toggle that hides pure hesitation sounds. The filler list
-   * is deliberately narrow (uh/um/hmm and their Persian spellings) — a
-   * word that can carry meaning («خب», "like") is never on it, because a
-   * clean-read that changes what was said is an edit wearing a view.
-   */
+  /** Reading modes — DISPLAY only, the record is untouched. */
   const [speakerFilter, setSpeakerFilter] = useState<string | null>(null);
   const [cleanRead, setCleanRead] = useState(false);
-  /** the ⋯ menu's tag editor (2026-08-24) — whole-set, like the table's */
+  const [paragraphMode, setParagraphMode] = useState(false);
+  const [followPlayback, setFollowPlayback] = useState(true);
+  const [outlineMode, setOutlineMode] = useState(false);
+  const [compareOpen, setCompareOpen] = useState(false);
+  /** the ⋯ menu's tag editor — whole-set, like the table's */
   const [tagsOpen, setTagsOpen] = useState(false);
   const [tagsDraft, setTagsDraft] = useState("");
+  /** #2 find in this record */
+  const [findQ, setFindQ] = useState("");
+  const [findIdx, setFindIdx] = useState(0);
+  /** #17 jump-back after a far seek */
+  const [jumpBack, setJumpBack] = useState<{ scroll: number } | null>(null);
+  /** #13 selection → note */
+  const [selNote, setSelNote] = useState<{ text: string; atMs: number; x: number; y: number } | null>(null);
+  /** #14 title suggestion editor (only over recorder-invented titles) */
+  const [titleDraft, setTitleDraft] = useState<string | null>(null);
 
   async function saveDetailTags(): Promise<void> {
     const tags = [...new Set(
@@ -146,14 +123,9 @@ export default function CallDetailPage({
       setCall(await api.getCall(id));
     } catch { /* refusal already surfaced by the notification system */ }
   }
-  /** redact identifier-shaped digit runs in EXPORTS (first slice of the
-      redaction engine) — display stays verbatim; the toggle guards what
-      leaves the product, not what the room said */
+  /** redact identifier-shaped digit runs in EXPORTS — display stays verbatim */
   const [redactExports, setRedactExports] = useState(false);
-  /** Regenerate-summary panel (user directive, 2026-08-23): template from
-      the ruled list + an optional instruction; the run rides the normal
-      pipeline, so the existing status polling shows it and the new version
-      arrives through the same fetch as every other. */
+  /** Regenerate-summary panel: template + optional instruction. */
   const [regenOpen, setRegenOpen] = useState(false);
   const [regenTemplate, setRegenTemplate] = useState<string>("");
   const [regenInstruction, setRegenInstruction] = useState("");
@@ -172,7 +144,6 @@ export default function CallDetailPage({
       setRegenOpen(false);
       setRegenInstruction("");
       notify(t("regenStarted"));
-      // the status flips to summarizing — the polling effect takes it from here
       const fresh = await api.getCall(id).catch(() => null);
       if (fresh) setCall(fresh);
     } catch {
@@ -189,8 +160,6 @@ export default function CallDetailPage({
     set("loading");
     show(true);
     try {
-      // the model rides along so a user with no saved preference still
-      // translates — core falls back to their preference when omitted
       const catalogue = await api.models();
       const model = catalogue.preferred_model ?? catalogue.models[0]?.id;
       const result = await api.translateCall(id, what, model);
@@ -203,32 +172,29 @@ export default function CallDetailPage({
   }
   const [playheadMs, setPlayheadMs] = useState(0);
   const [playing, setPlaying] = useState(false);
-  /** player controls (2026-08-24): volume + speed live on the top bar */
+  /** player controls: volume + speed live on the sticky bar */
   const [volume, setVolume] = useState(1);
   const [rate, setRate] = useState(1);
   /** 0092: edit modes — summary as a draft, one transcript line at a time */
   const [editingSummary, setEditingSummary] = useState(false);
   const [summaryDraft, setSummaryDraft] = useState("");
+  /** Word-like EDITOR controls (user directive): size + markdown shape */
+  const [editFontSize, setEditFontSize] = useState(1);
+  const draftRef = useRef<HTMLTextAreaElement | null>(null);
   const [editRowId, setEditRowId] = useState<string | null>(null);
   const [rowDraft, setRowDraft] = useState("");
-  /** speaker inline editor (2026-08-24): opened from the pencil ON the
-      label in the transcript — the side roster card is gone */
-  const [editSpeakerId, setEditSpeakerId] = useState<string | null>(null);
+  /** speaker inline editor — keyed by the ROW (user report: keying by the
+      speaker opened every popover of that speaker at once) */
+  const [editSpeakerRow, setEditSpeakerRow] = useState<string | null>(null);
   const [speakerDraft, setSpeakerDraft] = useState("");
-  /** Word-like type size for the summary document, persisted per device */
-  const [fontScale, setFontScale] = useState(1);
-  useEffect(() => {
-    try {
-      const stored = Number(localStorage.getItem("neurai-summary-scale"));
-      if (stored >= 0.85 && stored <= 1.4) setFontScale(stored);
-    } catch { /* stays 1 */ }
-  }, []);
-  function bumpFontScale(delta: number): void {
-    setFontScale((prev) => {
-      const next = Math.round(Math.min(1.4, Math.max(0.85, prev + delta)) * 100) / 100;
-      try { localStorage.setItem("neurai-summary-scale", String(next)); } catch { /* per-session */ }
-      return next;
-    });
+
+  /** an edit that fails because 0092 hasn't run yet says WHICH failure */
+  function editFailNotify(cause: unknown): void {
+    const { status, detail } = cause as { status?: number; detail?: string };
+    notify(
+      status === 409 || detail === "not_migrated" ? t("editNotReady") : t("editFailed"),
+      "warn",
+    );
   }
 
   async function saveSummaryEdit(): Promise<void> {
@@ -240,8 +206,8 @@ export default function CallDetailPage({
       const all = await api.getSummaries(id);
       setVersions(all);
       setShownVersion(version);
-    } catch {
-      notify(t("editFailed"), "warn");
+    } catch (cause) {
+      editFailNotify(cause);
     }
   }
 
@@ -252,9 +218,26 @@ export default function CallDetailPage({
       await api.editSegment(id, segmentId, text);
       setEditRowId(null);
       setRows(await api.getTranscript(id));
-    } catch {
-      notify(t("editFailed"), "warn");
+    } catch (cause) {
+      editFailNotify(cause);
     }
+  }
+
+  /** wrap the SELECTION (or insert at caret) — the editor's Bold/Heading/
+      bullet controls write the same light markdown the document renders */
+  function wrapDraftSelection(before: string, after = "", linePrefix = ""): void {
+    const el = draftRef.current;
+    if (!el) return;
+    const { selectionStart: s, selectionEnd: e, value } = el;
+    let next: string;
+    if (linePrefix) {
+      const lineStart = value.lastIndexOf("\n", s - 1) + 1;
+      next = value.slice(0, lineStart) + linePrefix + value.slice(lineStart);
+    } else {
+      next = value.slice(0, s) + before + value.slice(s, e) + after + value.slice(e);
+    }
+    setSummaryDraft(next);
+    el.focus();
   }
 
   function exportSubtitles(kind: "srt" | "vtt"): void {
@@ -312,6 +295,8 @@ export default function CallDetailPage({
   const audioEl = useRef<HTMLAudioElement | null>(null);
   /** The part whose URL is loaded in the element right now. */
   const loadedIdx = useRef<number | null>(null);
+  /** #1 the bounded transcript scroller (5-ish lines, its own scrollbar) */
+  const listRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     void api.getCall(id).then(setCall);
@@ -320,37 +305,28 @@ export default function CallDetailPage({
     void api.directory().then(setDirectory).catch(() => setDirectory([]));
     void api.callNotes(id).then(setNotes).catch(() => setNotes([]));
     void api.me().then(setMe).catch(() => setMe(null));
+    void api.listCalls({ includeArchived: false }).then(setAllCalls).catch(() => setAllCalls([]));
     void api.getSummaries(id).then((all) => {
       setVersions(all);
       setShownVersion(all.at(-1)?.version ?? null);
     });
-    // 404 = no audio (not there / not yours / nothing uploaded) — the
-    // player simply doesn't offer itself; other failures leave it hidden too
     void api
       .getCallAudio(id)
       .then((res) => setAudioParts(res?.parts ?? null))
       .catch(() => setAudioParts(null));
-    /*
-     * ?translate=1 — the calls table's Translate action lands here and both
-     * translations fire on arrival. window.location, not useSearchParams: a
-     * mount-time read needs no Suspense boundary and cannot trip the
-     * prerender gate the way the hub's hook did.
-     */
-    if (new URLSearchParams(window.location.search).get("translate") === "1") {
+    const params = new URLSearchParams(window.location.search);
+    /* ?translate=1 — the table's Translate action lands here */
+    if (params.get("translate") === "1") {
       void translate("summary");
       void translate("transcript");
     }
+    /* #15: ?t=<seconds> — a shared link opens seeked, never auto-playing */
+    const tSec = Number(params.get("t"));
+    if (Number.isFinite(tSec) && tSec > 0) setPlayheadMs(tSec * 1000);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-once per call
   }, [id]);
 
-  /**
-   * While the PIPELINE is still moving this call (user report, 2026-08-23:
-   * the status only changed on a full page refresh), the page re-reads
-   * itself every few seconds — and when a poll sees the status become
-   * terminal, it fetches what the pipeline produced (transcript, speakers,
-   * summaries, audio) so "Ready" arrives WITH its content, not as a chip
-   * over an empty page. Stops the moment nothing is in flight.
-   */
+  /** pipeline polling — the page re-reads while the worker moves the call */
   useEffect(() => {
     const WORKER_MOVED = new Set(["processing", "linking", "summarizing"]);
     if (!call || !WORKER_MOVED.has(call.status)) return;
@@ -374,13 +350,6 @@ export default function CallDetailPage({
     return () => clearInterval(timer);
   }, [call, id]);
 
-  /**
-   * The REAL player (the fake clock this replaces once showed 0:11 of an
-   * 0:08 recording — a playhead with no audio behind it). One element, the
-   * parts as one continuous timeline: each part carries `offset_ms`, so
-   * global time = part offset + element time, a part ending rolls to the
-   * next, and a seek picks the right part before it sets the element.
-   */
   const partFor = (ms: number) => {
     if (!audioParts || audioParts.length === 0) return null;
     let candidate = audioParts[0]!;
@@ -426,6 +395,13 @@ export default function CallDetailPage({
     }
   }
 
+  /** #17: a click-to-seek remembers where you were READING */
+  function seekWithReturn(ms: number): void {
+    setJumpBack({ scroll: listRef.current?.scrollTop ?? 0 });
+    setPlayheadMs(ms);
+    void playFrom(ms);
+  }
+
   function togglePlay(): void {
     if (!audioEl.current) return;
     if (playing) {
@@ -438,26 +414,76 @@ export default function CallDetailPage({
     }
   }
 
+  /** #4 keyboard: space play/pause, arrows seek, +/- speed — never while
+      typing in a field */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement;
+      if (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable) return;
+      if (e.key === " ") {
+        e.preventDefault();
+        togglePlay();
+      } else if (e.key === "ArrowRight") {
+        void playFrom(playheadMs + 5000);
+      } else if (e.key === "ArrowLeft") {
+        void playFrom(Math.max(0, playheadMs - 5000));
+      } else if (e.key === "+" || e.key === "=") {
+        setRateBoth(rate === 1 ? 1.5 : 2);
+      } else if (e.key === "-") {
+        setRateBoth(rate === 2 ? 1.5 : 1);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
+  /** #17: the chip expires — an offer to return is stale after half a minute */
+  useEffect(() => {
+    if (!jumpBack) return;
+    const timer = setTimeout(() => setJumpBack(null), 30_000);
+    return () => clearTimeout(timer);
+  }, [jumpBack]);
+
   const activeRowId = useMemo(
     () => rows.find((r) => playheadMs >= r.start_ms && playheadMs < r.end_ms)?.id ?? null,
     [rows, playheadMs],
   );
 
-  /**
-   * Cleanup #7: notebook chapters render INSIDE the transcript, as dividers
-   * at their moment — computed against the VISIBLE rows so a speaker filter
-   * doesn't strand a divider before a hidden line.
-   */
+  /** #1: while playing, the active line stays in view (toggleable in ⋯) */
+  useEffect(() => {
+    if (!playing || !followPlayback || !activeRowId) return;
+    listRef.current
+      ?.querySelector(`[data-row="${activeRowId}"]`)
+      ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [activeRowId, playing, followPlayback]);
+
+  const visibleRows = useMemo(
+    () => (speakerFilter === null ? rows : rows.filter((r) => r.speaker_id === speakerFilter)),
+    [rows, speakerFilter],
+  );
+
+  /** #2: matches over the VISIBLE rows; Enter walks them */
+  const findMatches = useMemo(() => {
+    const q = findQ.trim();
+    if (q === "") return [];
+    return visibleRows.filter((r) => r.text.includes(q)).map((r) => r.id);
+  }, [findQ, visibleRows]);
+  const findCurrent = findMatches.length > 0 ? findMatches[findIdx % findMatches.length] : null;
+  useEffect(() => {
+    if (!findCurrent) return;
+    listRef.current
+      ?.querySelector(`[data-row="${findCurrent}"]`)
+      ?.scrollIntoView({ block: "center" });
+  }, [findCurrent]);
+
+  /** chapters render INSIDE the transcript, at their moment */
   const chaptersBefore = useMemo(() => {
     const anchored = notes
       .filter((n) => n.at_ms !== null)
       .sort((a, b) => (a.at_ms ?? 0) - (b.at_ms ?? 0));
-    const visible = speakerFilter === null
-      ? rows
-      : rows.filter((r) => r.speaker_id === speakerFilter);
     const map = new Map<string, CallNote[]>();
     let ci = 0;
-    for (const row of visible) {
+    for (const row of visibleRows) {
       const before: CallNote[] = [];
       while (ci < anchored.length && (anchored[ci]?.at_ms ?? 0) <= row.start_ms) {
         before.push(anchored[ci]!);
@@ -466,429 +492,706 @@ export default function CallDetailPage({
       if (before.length > 0) map.set(row.id, before);
     }
     return map;
-  }, [notes, rows, speakerFilter]);
+  }, [notes, visibleRows]);
 
-  /**
-   * `speaker_id` is null on the wire when nothing has attributed the segment
-   * yet — verified on a live row. That is a real state and gets its own
-   * word: passing null through would have printed `undefined` above the
-   * line, which reads as a bug rather than as "we don't know who spoke".
-   */
-  const speakerName = (speakerId: string | null) => {
+  /** #10 talk-time shares (only meaningful with >1 speaker) */
+  const shares = useMemo(() => talkTimes(rows), [rows]);
+
+  /** #16 related by SHARED TAGS — the only overlap this page can compute
+      honestly from what it holds */
+  const related = useMemo(() => {
+    const mine = new Set(call?.tags ?? []);
+    if (mine.size === 0) return [];
+    return allCalls
+      .filter((c) => c.id !== id && (c.tags ?? []).some((tag) => mine.has(tag)))
+      .slice(0, 5);
+  }, [allCalls, call, id]);
+
+  const speakerName = useCallback((speakerId: string | null) => {
     if (speakerId === null) return t("unattributed");
     const speaker = speakers.find((s) => s.id === speakerId);
     return speaker?.person_name ?? speaker?.label ?? speakerId;
-  };
+  }, [speakers, t]);
 
-  /*
-   * The breadcrumb leaf. Three states, not two — FE2's correction to the
-   * shape I proposed, and it fixes a bug I'd have shipped:
-   *
-   *   undefined  not loaded yet   → leaf omitted, trail is briefly shorter
-   *   null       loaded, no title → "Untitled"
-   *   string     the title
-   *
-   * I proposed `string | null` with null meaning "not yet", which collapses
-   * two different nothings into one value — and the collapse costs exactly
-   * the case it was meant to protect: a genuinely untitled call becomes
-   * indistinguishable from one still loading, so it renders as a permanently
-   * missing crumb instead of as an untitled call.
-   *
-   * `call?.title` gives that split for free: undefined while the fetch is in
-   * flight, then whatever the server actually sent.
-   */
+  const speakerIndex = useCallback(
+    (speakerId: string | null) =>
+      Math.max(0, speakers.findIndex((s) => s.id === speakerId)),
+    [speakers],
+  );
+
+  /** #13: select transcript text → offer to keep it as a note */
+  function onListMouseUp(): void {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || sel.rangeCount === 0) return setSelNote(null);
+    const text = sel.toString().trim();
+    if (text.length < 3 || text.length > 500) return setSelNote(null);
+    const node = sel.anchorNode instanceof Element ? sel.anchorNode : sel.anchorNode?.parentElement;
+    const li = node?.closest?.("[data-start]");
+    if (!li || !listRef.current?.contains(li)) return setSelNote(null);
+    const rect = sel.getRangeAt(0).getBoundingClientRect();
+    setSelNote({
+      text,
+      atMs: Number(li.getAttribute("data-start")),
+      x: rect.left + rect.width / 2,
+      y: rect.top,
+    });
+  }
+
+  async function saveSelectionNote(): Promise<void> {
+    if (!selNote) return;
+    const body = `«${selNote.text}»`;
+    setSelNote(null);
+    try {
+      await api.addCallNote(id, { kind: "note", at_ms: selNote.atMs, body });
+      setNotes(await api.callNotes(id));
+      notify(t("selectionSaved"));
+    } catch {
+      notify(t("editFailed"), "warn");
+    }
+  }
+
   useCrumbTitle(call?.title);
 
   const summary = versions.find((v) => v.version === shownVersion) ?? null;
+  const prevVersion = useMemo(() => {
+    if (!summary) return null;
+    return versions
+      .filter((v) => v.version < summary.version)
+      .sort((a, b) => b.version - a.version)[0] ?? null;
+  }, [versions, summary]);
 
   if (!call) return <EchoAppShell>{null}</EchoAppShell>;
 
+  const durMs = call.duration_ms ?? 0;
+  const stepIdx = PIPELINE_LADDER.indexOf(call.status);
+  const genericTitle = isGenericTitle(call.title);
+  const titleSuggestion = genericTitle && summary ? suggestTitleFrom(summary.body) : null;
+
+  const headings = summary
+    ? parseSummary(summary.body).filter((b) => b.kind === "heading")
+    : [];
+
+  /** the ONE ⋯ menu, on the title row (user directive) */
+  const menuItems = [
+    {
+      key: "ask",
+      label: t("askAbout"),
+      icon: <IconSparkle />,
+      onSelect: () =>
+        openAssistant({
+          draft: locale === "fa"
+            ? `دربارهٔ رکورد «${call.title || tCalls("untitled")}»: `
+            : `About the record "${call.title || tCalls("untitled")}": `,
+        }),
+    },
+    {
+      key: "translate",
+      label: tCalls("translate"),
+      icon: <IconGlobe />,
+      onSelect: () => {
+        void translate("summary");
+        void translate("transcript");
+      },
+    },
+    ...(call.status === "ready"
+      ? [{
+          key: "regenerate",
+          label: t("regenerate"),
+          icon: <IconSparkle />,
+          onSelect: () => setRegenOpen(true),
+        }]
+      : []),
+    ...(call.status === "failed"
+      ? [{
+          key: "retry",
+          label: tCalls("retry"),
+          icon: <IconSparkle />,
+          onSelect: () =>
+            void api.retryCall(id)
+              .then(() => api.getCall(id)).then(setCall)
+              .then(() => notify(tCalls("retryStarted")))
+              .catch(() => notify(tCommon("actionFailed"), "warn")),
+        }]
+      : []),
+    {
+      key: "export",
+      label: t("exportMenu"),
+      icon: <IconFileText />,
+      sub: [
+        {
+          key: "export-srt", label: "SRT",
+          disabled: !canExportSubtitles(rows),
+          onSelect: () => exportSubtitles("srt"),
+        },
+        {
+          key: "export-vtt", label: "VTT",
+          disabled: !canExportSubtitles(rows),
+          onSelect: () => exportSubtitles("vtt"),
+        },
+        {
+          key: "export-md", label: "Markdown",
+          disabled: rows.length === 0,
+          onSelect: () => exportMarkdown(),
+        },
+        {
+          key: "export-redact",
+          label: `${t("redactToggle")}${redactExports ? " ✓" : ""}`,
+          keepOpen: true,
+          onSelect: () => setRedactExports((v) => !v),
+        },
+      ],
+    },
+    {
+      key: "copy-summary",
+      label: t("copySummary"),
+      icon: <IconFileText />,
+      disabled: !summary,
+      onSelect: () => {
+        if (!summary) return;
+        void navigator.clipboard.writeText(summary.body).then(() => notify(t("copied")));
+      },
+    },
+    { key: "print", label: t("printLabel"), icon: <IconFileText />, onSelect: () => window.print() },
+    /* view toggles — they stay in the menu when pressed */
+    {
+      key: "view-follow",
+      label: `${t("followPlayback")}${followPlayback ? " ✓" : ""}`,
+      keepOpen: true,
+      onSelect: () => setFollowPlayback((v) => !v),
+    },
+    {
+      key: "view-paragraphs",
+      label: `${t("paragraphMode")}${paragraphMode ? " ✓" : ""}`,
+      keepOpen: true,
+      onSelect: () => setParagraphMode((v) => !v),
+    },
+    {
+      key: "view-fillers",
+      label: `${t("cleanRead")}${cleanRead ? " ✓" : ""}`,
+      keepOpen: true,
+      onSelect: () => setCleanRead((v) => !v),
+    },
+    {
+      key: "view-outline",
+      label: `${t("outlineMode")}${outlineMode ? " ✓" : ""}`,
+      keepOpen: true,
+      disabled: headings.length < 2,
+      onSelect: () => setOutlineMode((v) => !v),
+    },
+    {
+      key: "scope",
+      label: call.scope === "org" ? tCalls("makePrivate") : tCalls("makeOrg"),
+      icon: <IconShare />,
+      onSelect: () =>
+        void api
+          .setScope(id, call.scope === "org" ? "private" : "org")
+          .then(() => api.getCall(id))
+          .then(setCall)
+          .catch(() => undefined),
+    },
+    {
+      key: "archive",
+      label: call.archived_at === null ? tCalls("archive") : tCalls("unarchive"),
+      icon: <IconArchive />,
+      onSelect: () =>
+        void api
+          .setArchived(id, call.archived_at === null)
+          .then(() => api.getCall(id))
+          .then(setCall)
+          .catch(() => undefined),
+    },
+    ...(call.tags !== undefined
+      ? [{
+          key: "tags",
+          label: tCalls("tags"),
+          icon: <IconTag />,
+          onSelect: () => setTagsOpen((v) => !v),
+        }]
+      : []),
+  ];
+
   return (
     <EchoAppShell>
-      {/* structured header (2026-08-24): title on its own line with a real
-          division under it; status chip and model name are GONE — the page
-          is about the record, not the pipeline */}
-      <div className="mb-4 border-b border-border pb-4">
-        <h1 className="text-2xl font-bold leading-tight text-fg">
-          {call.title.trim() === "" ? tCalls("untitled") : call.title}
-        </h1>
-        <p className="mt-1.5 flex flex-wrap items-center gap-x-3 text-sm text-fg-muted">
-          <span>{formatDate(call.started_at, locale)}</span>
-          {call.duration_ms !== null ? (
-            <span>{formatDuration(call.duration_ms / 1000, locale)}</span>
-          ) : null}
-          {(call.parts?.length ?? 0) > 1 ? (
-            <span>{tCalls("parts", { count: digits(call.parts?.length ?? 0, locale) })}</span>
-          ) : null}
-        </p>
-      </div>
-
-      {/* THE PLAYER — on top of the summary, sticky while reading (user
-          directive): seek bar, pause/stop, volume, speed from a menu */}
-      <div className="sticky top-2 z-30 mb-4 flex items-center gap-3 rounded-xl border border-border bg-surface px-4 py-2.5 shadow-sm">
-        <audio
-          ref={audioEl}
-          className="hidden"
-          onTimeUpdate={(e) => {
-            const el = e.currentTarget;
-            const part = audioParts?.find((p) => p.idx === loadedIdx.current);
-            if (part) setPlayheadMs(part.offset_ms + el.currentTime * 1000);
-          }}
-          onEnded={() => {
-            // a part ending is not the CALL ending unless it was the last
-            const next = audioParts?.find((p) => p.idx === (loadedIdx.current ?? 0) + 1);
-            if (next) void playFrom(next.offset_ms);
-            else setPlaying(false);
-          }}
-          onPause={() => setPlaying(false)}
-        />
-        <button
-          className="btn-primary h-9 w-9 min-h-0 shrink-0 px-0 disabled:opacity-50"
-          onClick={togglePlay}
-          disabled={audioParts === null || audioParts.length === 0}
-          title={audioParts === null ? t("noAudio") : undefined}
-          aria-label={playing ? t("pause") : t("play")}
-        >
-          {playing ? "⏸" : "▶"}
-        </button>
-        <button
-          className="btn-secondary h-9 w-9 min-h-0 shrink-0 px-0 disabled:opacity-50"
-          onClick={stopPlayback}
-          disabled={audioParts === null || audioParts.length === 0}
-          aria-label={t("stop")}
-        >
-          ◼
-        </button>
-        <span className="ltr shrink-0 text-xs tabular-nums text-fg-muted">
-          {formatClock(playheadMs / 1000, locale)} /{" "}
-          {call.duration_ms === null
-            ? tCalls("durationUnknown")
-            : formatClock(call.duration_ms / 1000, locale)}
-        </span>
-        <input
-          type="range"
-          dir="ltr"
-          className="min-w-0 flex-1 accent-accent"
-          min={0}
-          max={Math.max(call.duration_ms ?? 0, playheadMs, 1)}
-          value={playheadMs}
-          disabled={audioParts === null || audioParts.length === 0}
-          aria-label={t("seek")}
-          onChange={(e) => {
-            const ms = Number(e.target.value);
-            setPlayheadMs(ms);
-            void playFrom(ms);
-          }}
-        />
-        <input
-          type="range"
-          dir="ltr"
-          className="hidden w-20 shrink-0 accent-accent sm:block"
-          min={0}
-          max={1}
-          step={0.05}
-          value={volume}
-          aria-label={t("volume")}
-          onChange={(e) => setVolumeBoth(Number(e.target.value))}
-        />
-        <KebabMenu
-          label={t("speed")}
-          trigger={<span className="ltr text-xs font-semibold">{rate}×</span>}
-          items={[1, 1.5, 2].map((r) => ({
-            key: String(r),
-            label: `${r}×${rate === r ? " ✓" : ""}`,
-            onSelect: () => setRateBoth(r),
-          }))}
-        />
-      </div>
-
-      {/* summary above the transcript, versioned */}
-      <Card className="mb-4">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold text-fg">{t("summary")}</h2>
-          <div className="flex flex-wrap items-center gap-1.5">
-            {/* versions as a SELECT (user report: the chip row grew without
-                bound) — one control, any number of versions */}
-            {versions.length > 0 ? (
-              <select
-                className="input h-8 min-h-0 w-auto py-0 text-xs"
-                value={shownVersion ?? ""}
-                aria-label={t("versions")}
-                onChange={(e) => setShownVersion(Number(e.target.value))}
-              >
-                {[...versions].reverse().map((v) => (
-                  <option key={v.version} value={v.version}>
-                    {t("version", { n: digits(v.version, locale) })}
-                    {v.model === "human" ? " ✎" : ""}
-                  </option>
-                ))}
-              </select>
-            ) : null}
-            {/* Word-like type size (user directive): the whole document
-                scales from one control pair */}
-            <IconAction label={t("fontSmaller")} onClick={() => bumpFontScale(-0.1)}>
-              <span className="text-[11px] font-semibold">A−</span>
-            </IconAction>
-            <IconAction label={t("fontLarger")} onClick={() => bumpFontScale(0.1)}>
-              <span className="text-[13px] font-semibold">A+</span>
-            </IconAction>
-            {/* the summary is EDITABLE (0092): a new version, never in place */}
-            {summary && !showSummaryEn ? (
-              <IconAction
-                label={t("editSummary")}
-                onClick={() => {
-                  setSummaryDraft(summary.body);
-                  setEditingSummary(true);
-                }}
-              >
-                <IconPencil />
-              </IconAction>
-            ) : null}
-            {/* ONE ⋯ for everything else (user directive): translate,
-                regenerate, exports, scope, archive, tags */}
-            <KebabMenu
-              label={tCalls("moreActions")}
-              items={[
-                {
-                  key: "translate",
-                  label: tCalls("translate"),
-                  icon: <IconGlobe />,
-                  onSelect: () => {
-                    void translate("summary");
-                    void translate("transcript");
-                  },
-                },
-                ...(call.status === "ready"
-                  ? [{
-                      key: "regenerate",
-                      label: t("regenerate"),
-                      icon: <IconSparkle />,
-                      onSelect: () => setRegenOpen(true),
-                    }]
-                  : []),
-                {
-                  key: "export-srt",
-                  label: `${t("exportLabel")} SRT`,
-                  icon: <IconFileText />,
-                  disabled: !canExportSubtitles(rows),
-                  onSelect: () => exportSubtitles("srt"),
-                },
-                {
-                  key: "export-vtt",
-                  label: `${t("exportLabel")} VTT`,
-                  icon: <IconFileText />,
-                  disabled: !canExportSubtitles(rows),
-                  onSelect: () => exportSubtitles("vtt"),
-                },
-                {
-                  key: "export-md",
-                  label: `${t("exportLabel")} MD`,
-                  icon: <IconFileText />,
-                  disabled: rows.length === 0,
-                  onSelect: () => exportMarkdown(),
-                },
-                {
-                  key: "scope",
-                  label: call.scope === "org" ? tCalls("makePrivate") : tCalls("makeOrg"),
-                  icon: <IconShare />,
-                  onSelect: () =>
-                    void api
-                      .setScope(id, call.scope === "org" ? "private" : "org")
-                      .then(() => api.getCall(id))
-                      .then(setCall)
-                      .catch(() => undefined),
-                },
-                {
-                  key: "archive",
-                  label: call.archived_at === null ? tCalls("archive") : tCalls("unarchive"),
-                  icon: <IconArchive />,
-                  onSelect: () =>
-                    void api
-                      .setArchived(id, call.archived_at === null)
-                      .then(() => api.getCall(id))
-                      .then(setCall)
-                      .catch(() => undefined),
-                },
-                ...(call.tags !== undefined
-                  ? [{
-                      key: "tags",
-                      label: tCalls("tags"),
-                      icon: <IconTag />,
-                      onSelect: () => setTagsOpen((v) => !v),
-                    }]
-                  : []),
-              ]}
-            />
-          </div>
-        </div>
-        {/* inline tag editor for the detail page, opened from ⋯ */}
-        {tagsOpen && call.tags !== undefined ? (
-          <div className="mb-3 flex items-center gap-2">
-            <input
-              className="input h-8 min-h-0 w-64 py-0 text-xs"
-              autoFocus
-              placeholder={tCalls("tagsHint")}
-              value={tagsDraft}
-              onChange={(e) => setTagsDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") void saveDetailTags();
-                if (e.key === "Escape") setTagsOpen(false);
-              }}
-            />
-            <button
-              className="text-xs text-accent underline-offset-2 hover:underline"
-              onClick={() => void saveDetailTags()}
-            >
-              {tCommon("save")}
-            </button>
-          </div>
-        ) : null}
-        {regenOpen && call.status === "ready" ? (
-          <div className="mb-3 space-y-2 rounded-lg border border-border bg-surface-2/40 p-3">
-            <div className="grid gap-2 sm:grid-cols-2">
-              <select
-                className="input h-9 min-h-0 py-0 text-xs"
-                value={regenTemplate}
-                onChange={(e) => setRegenTemplate(e.target.value)}
-              >
-                <option value="">{t("templateDefault")}</option>
-                {SUMMARY_TEMPLATES.map((k) => (
-                  <option key={k} value={k}>
-                    {t(TEMPLATE_LABEL_KEY[k])}
-                  </option>
-                ))}
-              </select>
-              <input
-                className="input h-9 min-h-0 py-0 text-xs"
-                maxLength={500}
-                placeholder={t("regenInstructionHint")}
-                value={regenInstruction}
-                onChange={(e) => setRegenInstruction(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") void regenerate(); }}
-              />
-            </div>
-            <label className="flex cursor-pointer items-center gap-2 text-xs text-fg">
-              <input
-                type="checkbox"
-                checked={regenFigures}
-                onChange={(e) => setRegenFigures(e.target.checked)}
-              />
-              {t("regenFigures")}
-            </label>
-            <div className="flex items-center gap-3">
-              <button
-                className="btn-primary h-8 min-h-0 px-3 text-xs"
-                disabled={regenBusy}
-                onClick={() => void regenerate()}
-              >
-                {t("regenGo")}
-              </button>
-              <button
-                className="text-xs text-fg-muted underline-offset-2 hover:underline"
-                onClick={() => setRegenOpen(false)}
-              >
-                {t("regenCancel")}
-              </button>
-            </div>
-          </div>
-        ) : null}
-        {summary ? (
-          <>
-            {editingSummary ? (
-              /* the EDIT mode (0092): a draft over the shown version; save
-                 writes a NEW version authored 'human' — nothing overwritten */
-              <div className="space-y-2">
-                <textarea
-                  className="input min-h-64 w-full py-2 text-sm leading-7"
-                  value={summaryDraft}
-                  autoFocus
-                  onChange={(e) => setSummaryDraft(e.target.value)}
-                />
-                <div className="flex items-center gap-2">
+      {/* ONE document card (user directive, 2026-08-24): header, player,
+          summary, transcript, notes — divisions inside one box, not a
+          stack of separate cards */}
+      <Card className="!p-0">
+        {/* ── header: title · date · ⋯ ─────────────────────────────────── */}
+        <div className="px-5 pb-4 pt-5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              {titleDraft !== null ? (
+                <span className="flex items-center gap-2">
+                  <input
+                    className="input h-10 min-h-0 w-full max-w-md text-lg font-bold"
+                    value={titleDraft}
+                    autoFocus
+                    onChange={(e) => setTitleDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") setTitleDraft(null);
+                      if (e.key === "Enter" && titleDraft.trim()) {
+                        void api.setCallTitle(id, titleDraft.trim())
+                          .then(() => api.getCall(id)).then(setCall)
+                          .catch(() => notify(tCommon("actionFailed"), "warn"));
+                        setTitleDraft(null);
+                      }
+                    }}
+                  />
                   <button
-                    className="btn-primary h-9 min-h-0 px-4 text-sm"
-                    disabled={summaryDraft.trim() === ""}
-                    onClick={() => void saveSummaryEdit()}
+                    className="btn-primary h-9 min-h-0 px-3 text-xs"
+                    disabled={titleDraft.trim() === ""}
+                    onClick={() => {
+                      void api.setCallTitle(id, titleDraft.trim())
+                        .then(() => api.getCall(id)).then(setCall)
+                        .catch(() => notify(tCommon("actionFailed"), "warn"));
+                      setTitleDraft(null);
+                    }}
                   >
                     {tCommon("save")}
                   </button>
-                  <button
-                    className="btn-secondary h-9 min-h-0 px-4 text-sm"
-                    onClick={() => setEditingSummary(false)}
-                  >
-                    {tCommon("cancel")}
-                  </button>
-                </div>
-              </div>
-            ) : showSummaryEn && summaryEn === "loading" ? (
-              <p className="text-sm text-fg-muted">{t("translating")}</p>
-            ) : showSummaryEn && typeof summaryEn === "string" ? (
-              /* the TRANSLATION view: LTR English, clearly a rendering of
-                 the record rather than the record itself */
-              <p className="ltr whitespace-pre-wrap text-start text-sm leading-8 text-fg">
-                {summaryEn}
-              </p>
-            ) : (
-              /* the DOCUMENT view (2026-08-24): chapters bold and larger,
-                 paragraphs smaller — and the whole thing scales from the
-                 A−/A+ control like a word processor */
-              <div style={{ fontSize: `${0.875 * fontScale}rem` }}>
-                <SummaryBody text={summary.body} />
-              </div>
-            )}
-            {/* 0087 grounding verdict — rendered ONLY when a verdict exists.
-                Absent field (un-migrated) and null (unchecked) both render
-                nothing: an absent check must not look like a passed one. */}
-            {summary.grounding ? (
-              summary.grounding.clean ? (
-                <p className="mt-2 flex items-center gap-1.5 text-xs text-success">
-                  <span aria-hidden>✓</span> {t("groundingClean")}
-                </p>
+                </span>
               ) : (
-                <div className="mt-2 rounded-md border border-warning/30 bg-warning/10 px-3 py-2">
-                  <p className="text-xs font-semibold text-warning">{t("groundingFlagged")}</p>
-                  <ul className="mt-1 space-y-1">
-                    {summary.grounding.flags.map((flag, i) => (
-                      <li key={i} className="text-xs leading-5 text-fg-muted">
-                        «{flag.claim}»{flag.note ? ` — ${flag.note}` : ""}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )
+                <h1 className="flex items-center gap-2 text-2xl font-bold leading-tight text-fg">
+                  <span className="truncate">
+                    {call.title.trim() === "" ? tCalls("untitled") : call.title}
+                  </span>
+                  {/* #14: only a recorder-invented name gets second-guessed */}
+                  {titleSuggestion ? (
+                    <IconAction
+                      label={t("suggestTitle")}
+                      className="no-print"
+                      onClick={() => setTitleDraft(titleSuggestion)}
+                    >
+                      <IconSparkle width={14} height={14} />
+                    </IconAction>
+                  ) : null}
+                </h1>
+              )}
+            </div>
+            {/* the date IN FRONT of the title row, the ⋯ beside it */}
+            <div className="no-print flex shrink-0 items-center gap-2 pt-1 text-sm text-fg-muted">
+              <span>{formatDate(call.started_at, locale)}</span>
+              {call.duration_ms !== null ? (
+                <span>· {formatDuration(call.duration_ms / 1000, locale)}</span>
+              ) : null}
+              <KebabMenu label={tCalls("moreActions")} items={menuItems} />
+            </div>
+          </div>
+
+          {/* #19: a call still in the pipeline shows STAGES, not one word */}
+          {stepIdx >= 0 && call.status !== "ready" ? (
+            <ol className="no-print mt-3 flex flex-wrap items-center gap-1.5 text-xs">
+              {PIPELINE_LADDER.map((step, i) => (
+                <Fragment key={step}>
+                  {i > 0 ? <span aria-hidden className="text-fg-subtle">–</span> : null}
+                  <li
+                    className={
+                      i < stepIdx
+                        ? "text-fg-muted"
+                        : i === stepIdx
+                          ? "font-semibold text-accent"
+                          : "text-fg-subtle"
+                    }
+                  >
+                    {tStatus(step)}
+                  </li>
+                </Fragment>
+              ))}
+            </ol>
+          ) : null}
+          {call.status === "failed" ? (
+            <p className="mt-3 text-xs text-danger">{tStatus("failed")}</p>
+          ) : null}
+
+          {/* inline tag editor, opened from ⋯ */}
+          {tagsOpen && call.tags !== undefined ? (
+            <div className="no-print mt-3 flex items-center gap-2">
+              <input
+                className="input h-8 min-h-0 w-64 py-0 text-xs"
+                autoFocus
+                placeholder={tCalls("tagsHint")}
+                value={tagsDraft}
+                onChange={(e) => setTagsDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void saveDetailTags();
+                  if (e.key === "Escape") setTagsOpen(false);
+                }}
+              />
+              <button
+                className="text-xs text-accent underline-offset-2 hover:underline"
+                onClick={() => void saveDetailTags()}
+              >
+                {tCommon("save")}
+              </button>
+            </div>
+          ) : null}
+        </div>
+
+        {/* ── the player — sticky UNDER the app chrome (z below every menu) */}
+        <div className="no-print sticky top-0 z-10 flex items-center gap-3 border-t border-border bg-surface px-5 py-2.5">
+          <audio
+            ref={audioEl}
+            className="hidden"
+            onTimeUpdate={(e) => {
+              const el = e.currentTarget;
+              const part = audioParts?.find((p) => p.idx === loadedIdx.current);
+              if (part) setPlayheadMs(part.offset_ms + el.currentTime * 1000);
+            }}
+            onEnded={() => {
+              const next = audioParts?.find((p) => p.idx === (loadedIdx.current ?? 0) + 1);
+              if (next) void playFrom(next.offset_ms);
+              else setPlaying(false);
+            }}
+            onPause={() => setPlaying(false)}
+          />
+          <button
+            className="btn-primary h-9 w-9 min-h-0 shrink-0 px-0 disabled:opacity-50"
+            onClick={togglePlay}
+            disabled={audioParts === null || audioParts.length === 0}
+            title={audioParts === null ? t("noAudio") : undefined}
+            aria-label={playing ? t("pause") : t("play")}
+          >
+            {playing ? "⏸" : "▶"}
+          </button>
+          <button
+            className="btn-secondary h-9 w-9 min-h-0 shrink-0 px-0 disabled:opacity-50"
+            onClick={stopPlayback}
+            disabled={audioParts === null || audioParts.length === 0}
+            aria-label={t("stop")}
+          >
+            ◼
+          </button>
+          <span className="ltr shrink-0 text-xs tabular-nums text-fg-muted">
+            {formatClock(playheadMs / 1000, locale)} /{" "}
+            {call.duration_ms === null
+              ? tCalls("durationUnknown")
+              : formatClock(call.duration_ms / 1000, locale)}
+          </span>
+          {/* seek + the timeline map (#11) + chapter ticks (#5) */}
+          <div className="relative min-w-0 flex-1" dir="ltr">
+            <input
+              type="range"
+              className="w-full accent-accent"
+              min={0}
+              max={Math.max(durMs, playheadMs, 1)}
+              value={playheadMs}
+              disabled={audioParts === null || audioParts.length === 0}
+              aria-label={t("seek")}
+              onChange={(e) => {
+                const ms = Number(e.target.value);
+                setPlayheadMs(ms);
+                void playFrom(ms);
+              }}
+            />
+            {durMs > 0 ? (
+              <div aria-hidden className="pointer-events-none absolute inset-x-0 top-full h-1">
+                {rows.map((r) => (
+                  <span
+                    key={r.id}
+                    className="absolute top-0 h-1 rounded-full bg-accent/25"
+                    style={{
+                      left: `${(r.start_ms / durMs) * 100}%`,
+                      width: `${Math.max(0.4, ((r.end_ms - r.start_ms) / durMs) * 100)}%`,
+                    }}
+                  />
+                ))}
+                {notes.filter((n) => n.at_ms !== null && n.kind === "chapter").map((n) => (
+                  <span
+                    key={n.id}
+                    className="absolute -top-0.5 h-2 w-0.5 rounded bg-warning"
+                    style={{ left: `${((n.at_ms ?? 0) / durMs) * 100}%` }}
+                  />
+                ))}
+              </div>
             ) : null}
-            {/* the model name is GONE from the reading view (user directive)
-                — provenance lives in the version history, not on the page */}
-            {showSummaryEn && typeof summaryEn === "string" ? (
-              <div className="mt-3 flex justify-end">
+          </div>
+          <input
+            type="range"
+            dir="ltr"
+            className="hidden w-20 shrink-0 accent-accent sm:block"
+            min={0}
+            max={1}
+            step={0.05}
+            value={volume}
+            aria-label={t("volume")}
+            onChange={(e) => setVolumeBoth(Number(e.target.value))}
+          />
+          <KebabMenu
+            label={t("speed")}
+            trigger={<span className="ltr text-xs font-semibold">{rate}×</span>}
+            items={[1, 1.5, 2].map((r) => ({
+              key: String(r),
+              label: `${r}×${rate === r ? " ✓" : ""}`,
+              onSelect: () => setRateBoth(r),
+            }))}
+          />
+        </div>
+
+        {/* ── the summary document ─────────────────────────────────────── */}
+        <section className="border-t border-border px-5 py-4">
+          <div className="no-print mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-fg">{t("summary")}</h2>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {versions.length > 0 ? (
+                <select
+                  className="input h-8 min-h-0 w-auto py-0 text-xs"
+                  value={shownVersion ?? ""}
+                  aria-label={t("versions")}
+                  onChange={(e) => {
+                    setShownVersion(Number(e.target.value));
+                    setCompareOpen(false);
+                  }}
+                >
+                  {[...versions].reverse().map((v) => (
+                    <option key={v.version} value={v.version}>
+                      {t("version", { n: digits(v.version, locale) })}
+                      {v.model === "human" ? " ✎" : ""}
+                    </option>
+                  ))}
+                </select>
+              ) : null}
+              {/* #6: what changed against the previous version */}
+              {prevVersion ? (
+                <button
+                  type="button"
+                  aria-pressed={compareOpen}
+                  onClick={() => setCompareOpen((v) => !v)}
+                  className={`h-8 rounded-full px-2.5 text-xs transition-colors ${
+                    compareOpen
+                      ? "bg-accent-soft font-semibold text-accent"
+                      : "bg-surface-2 text-fg-muted hover:text-fg"
+                  }`}
+                >
+                  {t("compare")}
+                </button>
+              ) : null}
+              {summary && !showSummaryEn ? (
+                <IconAction
+                  label={t("editSummary")}
+                  onClick={() => {
+                    setSummaryDraft(summary.body);
+                    setEditingSummary(true);
+                  }}
+                >
+                  <IconPencil />
+                </IconAction>
+              ) : null}
+            </div>
+          </div>
+
+          {regenOpen && call.status === "ready" ? (
+            <div className="no-print mb-3 space-y-2 rounded-lg border border-border bg-surface-2/40 p-3">
+              <div className="grid gap-2 sm:grid-cols-2">
+                <select
+                  className="input h-9 min-h-0 py-0 text-xs"
+                  value={regenTemplate}
+                  onChange={(e) => setRegenTemplate(e.target.value)}
+                >
+                  <option value="">{t("templateDefault")}</option>
+                  {SUMMARY_TEMPLATES.map((k) => (
+                    <option key={k} value={k}>
+                      {t(TEMPLATE_LABEL_KEY[k])}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  className="input h-9 min-h-0 py-0 text-xs"
+                  maxLength={500}
+                  placeholder={t("regenInstructionHint")}
+                  value={regenInstruction}
+                  onChange={(e) => setRegenInstruction(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") void regenerate(); }}
+                />
+              </div>
+              <label className="flex cursor-pointer items-center gap-2 text-xs text-fg">
+                <input
+                  type="checkbox"
+                  checked={regenFigures}
+                  onChange={(e) => setRegenFigures(e.target.checked)}
+                />
+                {t("regenFigures")}
+              </label>
+              <div className="flex items-center gap-3">
+                <button
+                  className="btn-primary h-8 min-h-0 px-3 text-xs"
+                  disabled={regenBusy}
+                  onClick={() => void regenerate()}
+                >
+                  {t("regenGo")}
+                </button>
                 <button
                   className="text-xs text-fg-muted underline-offset-2 hover:underline"
-                  onClick={() => setShowSummaryEn(false)}
+                  onClick={() => setRegenOpen(false)}
                 >
-                  {t("showOriginal")}
+                  {t("regenCancel")}
                 </button>
               </div>
-            ) : null}
-          </>
-        ) : (
-          <p className="text-sm text-fg-muted">
-            {call.status === "ready" ? t("noSummaryYet") : t("processing", { status: tStatus(call.status) })}
-          </p>
-        )}
-        {translateError ? (
-          <p role="alert" className="mt-2 text-xs text-danger">
-            {translateError}
-          </p>
-        ) : null}
-      </Card>
+            </div>
+          ) : null}
 
-      <div className="space-y-4">
-        {/* transcript — full width now: the speaker roster card is gone,
-            speakers are edited ON their labels in the lines (2026-08-24) */}
-        <Card className="!p-0">
-          <div className="border-b border-border px-4 py-3">
+          {summary ? (
+            <>
+              {editingSummary ? (
+                <div className="space-y-2">
+                  {/* the WORD-like editor bar (user directive): size + shape */}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <select
+                      className="input h-8 min-h-0 w-auto py-0 text-xs"
+                      value={editFontSize}
+                      aria-label={t("editorSize")}
+                      onChange={(e) => setEditFontSize(Number(e.target.value))}
+                    >
+                      <option value={0.875}>{t("sizeSmall")}</option>
+                      <option value={1}>{t("sizeNormal")}</option>
+                      <option value={1.2}>{t("sizeLarge")}</option>
+                    </select>
+                    <IconAction label={t("editorBold")} onClick={() => wrapDraftSelection("**", "**")}>
+                      <span className="text-xs font-black">B</span>
+                    </IconAction>
+                    <IconAction label={t("editorHeading")} onClick={() => wrapDraftSelection("", "", "### ")}>
+                      <span className="text-xs font-bold">H</span>
+                    </IconAction>
+                    <IconAction label={t("editorBullet")} onClick={() => wrapDraftSelection("", "", "- ")}>
+                      <span className="text-xs font-bold">•</span>
+                    </IconAction>
+                  </div>
+                  <textarea
+                    ref={draftRef}
+                    className="input min-h-64 w-full py-2 leading-7"
+                    style={{ fontSize: `${0.875 * editFontSize}rem` }}
+                    value={summaryDraft}
+                    autoFocus
+                    onChange={(e) => setSummaryDraft(e.target.value)}
+                  />
+                  <div className="flex items-center gap-2">
+                    <button
+                      className="btn-primary h-9 min-h-0 px-4 text-sm"
+                      disabled={summaryDraft.trim() === ""}
+                      onClick={() => void saveSummaryEdit()}
+                    >
+                      {tCommon("save")}
+                    </button>
+                    <button
+                      className="btn-secondary h-9 min-h-0 px-4 text-sm"
+                      onClick={() => setEditingSummary(false)}
+                    >
+                      {tCommon("cancel")}
+                    </button>
+                  </div>
+                </div>
+              ) : compareOpen && prevVersion ? (
+                /* #6: the diff view — removed struck, added tinted */
+                <div className="space-y-0.5 text-sm leading-7">
+                  {lineDiff(prevVersion.body, summary.body).map((line, i) => (
+                    <p
+                      key={i}
+                      className={
+                        line.kind === "added"
+                          ? "rounded bg-success/10 px-1 text-fg"
+                          : line.kind === "removed"
+                            ? "rounded bg-danger/10 px-1 text-fg-muted line-through"
+                            : "px-1 text-fg-muted"
+                      }
+                    >
+                      {faDisplay(line.text) || " "}
+                    </p>
+                  ))}
+                </div>
+              ) : showSummaryEn && summaryEn === "loading" ? (
+                <p className="text-sm text-fg-muted">{t("translating")}</p>
+              ) : showSummaryEn && typeof summaryEn === "string" ? (
+                <p className="ltr whitespace-pre-wrap text-start text-sm leading-8 text-fg">
+                  {summaryEn}
+                </p>
+              ) : outlineMode && headings.length >= 2 ? (
+                /* #18: the document as its chapter list */
+                <ul className="space-y-1.5">
+                  {headings.map((h, i) => (
+                    <li key={i}>
+                      <button
+                        type="button"
+                        className="text-sm font-semibold text-accent underline-offset-2 hover:underline"
+                        onClick={() => setOutlineMode(false)}
+                      >
+                        {faDisplay(h.text ?? "")}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <SummaryBody text={summary.body} />
+              )}
+              {summary.grounding ? (
+                summary.grounding.clean ? (
+                  <p className="mt-2 flex items-center gap-1.5 text-xs text-success">
+                    <span aria-hidden>✓</span> {t("groundingClean")}
+                  </p>
+                ) : (
+                  <div className="mt-2 rounded-md border border-warning/30 bg-warning/10 px-3 py-2">
+                    <p className="text-xs font-semibold text-warning">{t("groundingFlagged")}</p>
+                    <ul className="mt-1 space-y-1">
+                      {summary.grounding.flags.map((flag, i) => (
+                        <li key={i} className="text-xs leading-5 text-fg-muted">
+                          «{flag.claim}»{flag.note ? ` — ${flag.note}` : ""}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )
+              ) : null}
+              {showSummaryEn && typeof summaryEn === "string" ? (
+                <div className="no-print mt-3 flex justify-end">
+                  <button
+                    className="text-xs text-fg-muted underline-offset-2 hover:underline"
+                    onClick={() => setShowSummaryEn(false)}
+                  >
+                    {t("showOriginal")}
+                  </button>
+                </div>
+              ) : null}
+            </>
+          ) : (
+            <p className="text-sm text-fg-muted">
+              {call.status === "ready" ? t("noSummaryYet") : t("processing", { status: tStatus(call.status) })}
+            </p>
+          )}
+          {translateError ? (
+            <p role="alert" className="mt-2 text-xs text-danger">
+              {translateError}
+            </p>
+          ) : null}
+        </section>
+
+        {/* ── the transcript ───────────────────────────────────────────── */}
+        <section className="border-t border-border">
+          <div className="no-print border-b border-border px-5 py-3">
             <div className="flex items-center gap-3">
               <h2 className="text-sm font-semibold text-fg">{t("transcript")}</h2>
+              {/* #2: find in this record */}
+              {rows.length > 0 ? (
+                <span className="flex items-center gap-1.5">
+                  <input
+                    className="input h-7 min-h-0 w-40 py-0 text-xs"
+                    placeholder={t("findPlaceholder")}
+                    value={findQ}
+                    onChange={(e) => {
+                      setFindQ(e.target.value);
+                      setFindIdx(0);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") setFindIdx((i) => i + 1);
+                      if (e.key === "Escape") setFindQ("");
+                    }}
+                  />
+                  {findQ.trim() !== "" ? (
+                    <span className="ltr text-xs tabular-nums text-fg-muted">
+                      {findMatches.length === 0
+                        ? "0"
+                        : `${(findIdx % findMatches.length) + 1}/${findMatches.length}`}
+                    </span>
+                  ) : null}
+                </span>
+              ) : null}
               <span className="flex-1" />
               {showTranscriptEn && typeof transcriptEn === "string" ? (
                 <button
@@ -898,7 +1201,7 @@ export default function CallDetailPage({
                   {t("showOriginal")}
                 </button>
               ) : null}
-              <span className="text-xs text-fg-muted">
+              <span className="hidden text-xs text-fg-muted md:inline">
                 {call.transcript_timing === "full"
                   ? t("seekHint")
                   : call.transcript_timing === "mixed"
@@ -906,107 +1209,63 @@ export default function CallDetailPage({
                     : t("seekHintLine")}
               </span>
             </div>
-            {/* M6/M20 provenance — subtle, explained, self-clearing.
-                "mixed" and "none" now say DIFFERENT things: «بخشی» scopes the
-                caveat to one part of an otherwise complete transcript, which
-                is the truth for a mostly-word-timed call and was actively
-                misleading under the shared string. null = no transcript at
-                all, so there is nothing to caveat.
-                Suppressed until transcription ends — see TRANSCRIPTION_COMPLETE. */}
-            {transcriptionComplete(call.status) &&
-            (call.transcript_timing === "mixed" || call.transcript_timing === "none") ? (
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <Chip tone="warning">
-                  {call.transcript_timing === "mixed" ? t("degradedPart") : t("degraded")}
-                </Chip>
-                <span className="text-xs text-fg-muted">
-                  {call.transcript_timing === "mixed" ? t("degradedPartHint") : t("degradedHint")}
-                </span>
-              </div>
-            ) : null}
-            {/* reading modes — display only; the toggles say so by holding
-                their pressed state, and verbatim is always one press back */}
-            {rows.length > 0 && !showTranscriptEn ? (
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                {speakers.length > 1 ? (
-                  <>
+            {/* speaker chips + the talk-time bar (#10) */}
+            {rows.length > 0 && !showTranscriptEn && speakers.length > 1 ? (
+              <div className="mt-3 space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    aria-pressed={speakerFilter === null}
+                    onClick={() => setSpeakerFilter(null)}
+                    className={`h-7 rounded-full px-2.5 text-xs transition-colors ${
+                      speakerFilter === null
+                        ? "bg-accent-soft font-semibold text-accent"
+                        : "bg-surface-2 text-fg-muted hover:text-fg"
+                    }`}
+                  >
+                    {t("allSpeakers")}
+                  </button>
+                  {speakers.map((sp) => (
                     <button
+                      key={sp.id}
                       type="button"
-                      aria-pressed={speakerFilter === null}
-                      onClick={() => setSpeakerFilter(null)}
+                      aria-pressed={speakerFilter === sp.id}
+                      onClick={() =>
+                        setSpeakerFilter((prev) => (prev === sp.id ? null : sp.id))
+                      }
                       className={`h-7 rounded-full px-2.5 text-xs transition-colors ${
-                        speakerFilter === null
+                        speakerFilter === sp.id
                           ? "bg-accent-soft font-semibold text-accent"
                           : "bg-surface-2 text-fg-muted hover:text-fg"
                       }`}
                     >
-                      {t("allSpeakers")}
+                      {sp.person_name ?? sp.label}
                     </button>
-                    {speakers.map((sp) => (
-                      <button
-                        key={sp.id}
-                        type="button"
-                        aria-pressed={speakerFilter === sp.id}
-                        onClick={() =>
-                          setSpeakerFilter((prev) => (prev === sp.id ? null : sp.id))
-                        }
-                        className={`h-7 rounded-full px-2.5 text-xs transition-colors ${
-                          speakerFilter === sp.id
-                            ? "bg-accent-soft font-semibold text-accent"
-                            : "bg-surface-2 text-fg-muted hover:text-fg"
-                        }`}
-                      >
-                        {sp.label}
-                      </button>
-                    ))}
-                  </>
-                ) : null}
-                <span className="ms-auto" />
-                {/* exports moved into the summary card's ⋯ (user directive);
-                    the redact stance stays visible because it changes what
-                    every export contains */}
-                <button
-                  type="button"
-                  aria-pressed={redactExports}
-                  title={t("redactHint")}
-                  onClick={() => setRedactExports((v) => !v)}
-                  className={`h-7 rounded-full px-2.5 text-xs transition-colors ${
-                    redactExports
-                      ? "bg-accent-soft font-semibold text-accent"
-                      : "bg-surface-2 text-fg-muted hover:text-fg"
-                  }`}
-                >
-                  {t("redactToggle")}
-                </button>
-                <button
-                  type="button"
-                  aria-pressed={cleanRead}
-                  onClick={() => setCleanRead((v) => !v)}
-                  className={`h-7 rounded-full px-2.5 text-xs transition-colors ${
-                    cleanRead
-                      ? "bg-accent-soft font-semibold text-accent"
-                      : "bg-surface-2 text-fg-muted hover:text-fg"
-                  }`}
-                >
-                  {t("cleanRead")}
-                </button>
+                  ))}
+                </div>
+                <div className="flex h-1.5 w-full max-w-sm overflow-hidden rounded-full bg-surface-2" aria-hidden>
+                  {shares.map((share) => (
+                    <span
+                      key={share.speaker_id ?? "none"}
+                      className={`${["bg-accent", "bg-info", "bg-success", "bg-warning"][speakerIndex(share.speaker_id) % 4]}`}
+                      style={{ width: `${share.share * 100}%` }}
+                      title={`${speakerName(share.speaker_id)} — ${formatClock(share.ms / 1000, locale)}`}
+                    />
+                  ))}
+                </div>
               </div>
             ) : null}
           </div>
+
           {showTranscriptEn && transcriptEn === "loading" ? (
             <p className="p-4 text-sm text-fg-muted">{t("translating")}</p>
           ) : showTranscriptEn && typeof transcriptEn === "string" ? (
-            /* the whole transcript as one English document — timestamps
-               survive translation because the prompt preserves structure */
             <p className="ltr whitespace-pre-wrap p-4 text-start text-sm leading-8 text-fg">
               {transcriptEn}
             </p>
           ) : rows.length === 0
             && call.provisional_transcript
             && !transcriptionComplete(call.status) ? (
-            /* M40: the live-caption preview — readable SECONDS after finish,
-               loudly provisional, replaced (and schema-cleared) the moment
-               the checked transcript lands */
             <div className="p-4">
               <Chip tone="warning">{t("provisionalChip")}</Chip>
               <p dir="auto" className="mt-3 whitespace-pre-wrap text-sm leading-8 text-fg">
@@ -1015,14 +1274,48 @@ export default function CallDetailPage({
               <p className="mt-3 text-xs text-fg-muted">{t("provisionalHint")}</p>
             </div>
           ) : (
+          /* #the 5-line window (user directive): the transcript scrolls in
+             its own box instead of stretching the page to infinity */
+          <div
+            ref={listRef}
+            className="max-h-[24rem] overflow-y-auto"
+            onMouseUp={onListMouseUp}
+          >
+          {paragraphMode ? (
+            /* #8: consecutive same-speaker lines flow as paragraphs */
+            <ul className="divide-y divide-border">
+              {mergeParagraphs(visibleRows).map((block) => (
+                <li
+                  key={block.ids[0]}
+                  data-row={block.ids[0]}
+                  data-start={block.start_ms}
+                  className="flex cursor-pointer gap-3 px-5 py-3 hover:bg-surface-2"
+                  onClick={() => seekWithReturn(block.start_ms)}
+                >
+                  <span className="w-14 shrink-0 pt-0.5 text-xs text-fg-muted ltr">
+                    {formatClock(block.start_ms / 1000, locale)}
+                  </span>
+                  <div className="min-w-0">
+                    <span className={`text-xs font-semibold ${SPEAKER_TEXT[speakerIndex(block.speaker_id) % 4]}`}>
+                      {speakerName(block.speaker_id)}
+                    </span>
+                    <p className="mt-0.5 text-sm leading-7 text-fg">
+                      {faDisplay(
+                        block.texts
+                          .map((x) => (cleanRead ? stripFillers(x) : x))
+                          .join(" "),
+                      )}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
           <ul className="divide-y divide-border">
-            {(speakerFilter === null
-              ? rows
-              : rows.filter((row) => row.speaker_id === speakerFilter)
-            ).map((row) => (
+            {visibleRows.map((row) => (
               <Fragment key={row.id}>
               {(chaptersBefore.get(row.id) ?? []).map((chapter) => (
-                <li key={`ch-${chapter.id}`} className="bg-surface-2/60 px-4 py-2">
+                <li key={`ch-${chapter.id}`} className="bg-surface-2/60 px-5 py-2">
                   <span className="text-xs font-bold text-fg">
                     {chapter.body.split("\n")[0]}
                   </span>
@@ -1032,16 +1325,22 @@ export default function CallDetailPage({
                 </li>
               ))}
               <li
-                className={`group flex gap-3 px-4 py-3 transition-colors ${
-                  activeRowId === row.id ? "bg-accent-soft" : ""
+                data-row={row.id}
+                data-start={row.start_ms}
+                className={`group flex gap-3 border-s-2 px-5 py-3 transition-colors ${
+                  speakers.length > 1 && row.speaker_id !== null
+                    ? SPEAKER_BORDER[speakerIndex(row.speaker_id) % 4]
+                    : "border-transparent"
+                } ${
+                  findCurrent === row.id
+                    ? "bg-warning/10"
+                    : activeRowId === row.id
+                      ? "bg-accent-soft"
+                      : ""
                 } ${rowSeekable(row) ? "cursor-pointer hover:bg-surface-2" : "cursor-default"}`}
                 onClick={() => {
-                  // Backend ruling: with no usable timing, do NOT silently
-                  // seek to 0 — offer no seek at all. And an open editor
-                  // must not turn a click into a seek.
                   if (!rowSeekable(row) || editRowId === row.id) return;
-                  setPlayheadMs(row.start_ms);
-                  void playFrom(row.start_ms);
+                  seekWithReturn(row.start_ms);
                 }}
               >
                 <span className="w-14 shrink-0 pt-0.5 text-xs text-fg-muted ltr">
@@ -1053,19 +1352,17 @@ export default function CallDetailPage({
                       className="relative flex items-center gap-1"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <span className="text-xs font-semibold text-accent">
+                      <span className={`text-xs font-semibold ${
+                        speakers.length > 1 ? SPEAKER_TEXT[speakerIndex(row.speaker_id) % 4] : "text-accent"
+                      }`}>
                         {speakerName(row.speaker_id)}
                       </span>
-                      {/* the pencil ON the speaker (user directive): rename
-                          the label or link a directory person right here —
-                          the side roster card is gone */}
                       {row.speaker_id !== null ? (
                         <IconAction
                           label={t("editSpeaker")}
                           className="h-5 w-5 opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
                           onClick={() => {
-                            setEditSpeakerId((prev) =>
-                              prev === row.speaker_id ? null : row.speaker_id);
+                            setEditSpeakerRow((prev) => (prev === row.id ? null : row.id));
                             setSpeakerDraft(
                               speakers.find((s) => s.id === row.speaker_id)?.label ?? "");
                           }}
@@ -1073,8 +1370,10 @@ export default function CallDetailPage({
                           <IconPencil width={12} height={12} />
                         </IconAction>
                       ) : null}
-                      {editSpeakerId !== null && editSpeakerId === row.speaker_id ? (
-                        <span className="absolute start-0 top-6 z-20 block w-64 rounded-lg border border-border bg-surface p-3 shadow-xl">
+                      {/* ONE row's popover — keyed by the row, never the
+                          speaker (user report: they all opened together) */}
+                      {editSpeakerRow === row.id && row.speaker_id !== null ? (
+                        <span className="absolute start-0 top-6 z-40 block w-64 rounded-lg border border-border bg-surface p-3 shadow-xl">
                           <input
                             className="input h-8 min-h-0 w-full py-0 text-xs"
                             aria-label={t("speakerLabel")}
@@ -1085,9 +1384,9 @@ export default function CallDetailPage({
                             onKeyDown={(e) => {
                               if (e.key === "Enter") {
                                 void saveSpeakerEdit(row.speaker_id!, undefined);
-                                setEditSpeakerId(null);
+                                setEditSpeakerRow(null);
                               }
-                              if (e.key === "Escape") setEditSpeakerId(null);
+                              if (e.key === "Escape") setEditSpeakerRow(null);
                             }}
                           />
                           <select
@@ -1110,7 +1409,7 @@ export default function CallDetailPage({
                               className="text-xs text-accent underline-offset-2 hover:underline"
                               onClick={() => {
                                 void saveSpeakerEdit(row.speaker_id!, undefined);
-                                setEditSpeakerId(null);
+                                setEditSpeakerRow(null);
                               }}
                             >
                               {tCommon("save")}
@@ -1131,17 +1430,41 @@ export default function CallDetailPage({
                     {row.edited ? (
                       <span className="chip bg-surface-2 text-fg-muted">{t("edited")}</span>
                     ) : null}
-                    {/* the LINE is editable too (0092) */}
-                    <IconAction
-                      label={t("editLine")}
-                      className="ms-auto h-5 w-5 opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
-                      onClick={() => {
-                        setEditRowId(row.id);
-                        setRowDraft(row.text);
-                      }}
+                    <span
+                      className="ms-auto flex items-center gap-0.5"
+                      onClick={(e) => e.stopPropagation()}
                     >
-                      <IconPencil width={12} height={12} />
-                    </IconAction>
+                      {/* #3 copy the line · #15 copy a timestamp link · 0092 edit */}
+                      <IconAction
+                        label={t("copyLine")}
+                        className="h-5 w-5 opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
+                        onClick={() => {
+                          void navigator.clipboard.writeText(row.text).then(() => notify(t("copied")));
+                        }}
+                      >
+                        <IconFileText width={12} height={12} />
+                      </IconAction>
+                      <IconAction
+                        label={t("copyLink")}
+                        className="h-5 w-5 opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
+                        onClick={() => {
+                          const url = `${window.location.origin}${window.location.pathname}?t=${Math.floor(row.start_ms / 1000)}`;
+                          void navigator.clipboard.writeText(url).then(() => notify(t("copied")));
+                        }}
+                      >
+                        <IconShare width={12} height={12} />
+                      </IconAction>
+                      <IconAction
+                        label={t("editLine")}
+                        className="h-5 w-5 opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
+                        onClick={() => {
+                          setEditRowId(row.id);
+                          setRowDraft(row.text);
+                        }}
+                      >
+                        <IconPencil width={12} height={12} />
+                      </IconAction>
+                    </span>
                   </div>
                   {editRowId === row.id ? (
                     <span className="block" onClick={(e) => e.stopPropagation()}>
@@ -1178,15 +1501,16 @@ export default function CallDetailPage({
                       ).map((word, i) => (
                         <span
                           key={`${row.id}-${i}`}
-                          className="cursor-pointer rounded px-0.5 hover:bg-accent/20"
+                          /* #20: the transcriber's own uncertainty, visible —
+                             dimmed only when a confidence EXISTS and is low */
+                          className={`cursor-pointer rounded px-0.5 hover:bg-accent/20 ${
+                            word.confidence !== undefined && word.confidence < 0.6
+                              ? "opacity-60"
+                              : ""
+                          }`}
                           onClick={(e) => {
                             e.stopPropagation();
-                            // actually SEEK AND PLAY — this handler used to
-                            // set two state flags and never touch the audio
-                            // element: click-a-word looked wired and did
-                            // nothing audible
-                            setPlayheadMs(word.start_ms);
-                            void playFrom(word.start_ms);
+                            seekWithReturn(word.start_ms);
                           }}
                         >
                           {faDisplay(word.w)}{" "}
@@ -1204,16 +1528,13 @@ export default function CallDetailPage({
             ))}
           </ul>
           )}
-        </Card>
+          </div>
+          )}
+        </section>
 
-        {/* the speaker roster CARD is gone (user directive, 2026-08-24):
-            speakers are edited on their labels inside the transcript */}
-
-        {/* notes & chapters (0079) — annotations of the call, never the
-            record; author-attributed, delete = own only (the server's rule,
-            mirrored as button visibility) */}
+        {/* ── notes & chapters ─────────────────────────────────────────── */}
         {notes.length > 0 ? (
-          <Card>
+          <section className="border-t border-border px-5 py-4">
             <h2 className="mb-3 text-sm font-semibold text-fg">{t("notesHeading")}</h2>
             <ul className="space-y-2">
               {notes.map((note) => (
@@ -1232,7 +1553,7 @@ export default function CallDetailPage({
                   {me && note.created_by === me.id ? (
                     <button
                       type="button"
-                      className="tap shrink-0 rounded px-1.5 text-xs text-fg-muted hover:text-danger"
+                      className="tap no-print shrink-0 rounded px-1.5 text-xs text-fg-muted hover:text-danger"
                       onClick={() => {
                         void api
                           .deleteCallNote(note.id)
@@ -1247,21 +1568,63 @@ export default function CallDetailPage({
                 </li>
               ))}
             </ul>
-          </Card>
+          </section>
         ) : null}
-      </div>
+
+        {/* ── #16 related records (shared tags) ────────────────────────── */}
+        {related.length > 0 ? (
+          <section className="no-print border-t border-border px-5 py-4">
+            <h2 className="mb-2 text-sm font-semibold text-fg">{t("relatedHeading")}</h2>
+            <ul className="flex flex-wrap items-center gap-2">
+              {related.map((c) => (
+                <li key={c.id}>
+                  <Link
+                    href={`/calls/${c.id}`}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-surface-2 px-3 py-1 text-xs text-fg-muted hover:text-fg"
+                  >
+                    <span className="max-w-40 truncate">{c.title || tCalls("untitled")}</span>
+                    <span className="text-fg-subtle">{formatDate(c.started_at, locale)}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+      </Card>
+
+      {/* #17: the way back after a far seek */}
+      {jumpBack ? (
+        <button
+          type="button"
+          className="no-print fixed bottom-6 start-1/2 z-40 -translate-x-1/2 rounded-full border border-border bg-surface px-4 py-2 text-xs font-semibold text-fg shadow-xl rtl:translate-x-1/2"
+          onClick={() => {
+            if (listRef.current) listRef.current.scrollTop = jumpBack.scroll;
+            setJumpBack(null);
+          }}
+        >
+          {t("jumpBack")}
+        </button>
+      ) : null}
+
+      {/* #13: keep a selected passage as a note */}
+      {selNote ? (
+        <button
+          type="button"
+          className="no-print fixed z-40 -translate-x-1/2 rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-on-primary shadow-xl"
+          style={{ left: selNote.x, top: Math.max(8, selNote.y - 36) }}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => void saveSelectionNote()}
+        >
+          {t("addSelectionNote")}
+        </button>
+      ) : null}
     </EchoAppShell>
   );
 }
 
 /**
- * The degradation ladder (M20): word → line → span, never "nothing". A
- * prose-only transcription arrives as ONE segment anchored to the speech it
- * came from (first speech → last speech in that part), so this gate passes
- * it and the click seeks into real audio — coarse but true. It only ever
- * refuses a zero-length row, which core/ rejects at its boundary
- * (InvalidTimingError); a click that silently jumps to 0 was a visible
- * quality gap in the predecessor product.
+ * The degradation ladder (M20): word → line → span, never "nothing". Only a
+ * zero-length row refuses a seek (core rejects those at its boundary).
  */
 function rowSeekable(row: TranscriptSegment): boolean {
   return row.end_ms > row.start_ms;

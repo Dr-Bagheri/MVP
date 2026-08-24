@@ -336,6 +336,9 @@ export interface TranscriptWord {
   w: string;
   start_ms: number;
   end_ms: number;
+  /** the transcriber's per-word certainty, 0..1 — ABSENT on rows written
+      before it was stored (2026-08-24); the UI dims only when present */
+  confidence?: number;
 }
 
 export interface TranscriptSegment {

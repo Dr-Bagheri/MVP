@@ -339,6 +339,17 @@ export function PresenceDock() {
       setOpen(true);
       setMinimized(false);
       if (request.sessionId) void loadSession(request.sessionId);
+      if (request.draft) {
+        // the composer is uncontrolled — fill after the pane mounts; a
+        // DRAFT only: the person sends it, or doesn't
+        const draft = request.draft;
+        setTimeout(() => {
+          if (inputRef.current) {
+            inputRef.current.value = draft;
+            inputRef.current.focus();
+          }
+        }, 80);
+      }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

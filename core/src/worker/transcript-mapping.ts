@@ -104,7 +104,7 @@ export interface MappedSegment {
   endMs: number;
   text: string;
   speaker: string | null;
-  words: { w: string; startMs: number; endMs: number }[];
+  words: { w: string; startMs: number; endMs: number; confidence?: number }[];
 }
 
 export interface MappedTranscript {
@@ -258,7 +258,16 @@ export function mapWordsToSegments(result: MlResult, part: PartRef): MappedTrans
     // them; on a degraded part the "words" are the anchored span, and
     // storing them would fake click-a-word precision we don't have.
     if (hasWordTimestamps) {
-      current.words.push({ w: word.text, startMs, endMs });
+      current.words.push({
+        w: word.text,
+        startMs,
+        endMs,
+        // #20 (2026-08-24): the transcriber's own certainty rides along —
+        // rounded to 2 decimals so a float doesn't bloat the jsonb
+        ...(typeof word.confidence === "number" && Number.isFinite(word.confidence)
+          ? { confidence: Math.round(word.confidence * 100) / 100 }
+          : {}),
+      });
     }
   }
 

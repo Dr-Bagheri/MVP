@@ -393,7 +393,10 @@ async function writeTranscript(
           segment.endMs,
           segment.speaker ? (speakerIds.get(segment.speaker) ?? null) : null,
           segment.text,
-          toJsonb(segment.words.map((w) => ({ w: w.w, s: w.startMs, e: w.endMs }))),
+          toJsonb(segment.words.map((w) => ({
+            w: w.w, s: w.startMs, e: w.endMs,
+            ...(w.confidence !== undefined ? { c: w.confidence } : {}),
+          }))),
           toJsonb(provenance),
         ],
       );

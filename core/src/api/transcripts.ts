@@ -37,11 +37,14 @@ export interface TranscriptSegment {
   edited: boolean;
 }
 
-/** Wire shape. Storage uses `{w, s, e}` — see `toWords` for why they differ. */
+/** Wire shape. Storage uses `{w, s, e, c?}` — see `toWords` for why they differ. */
 export interface TranscriptWord {
   w: string;
   start_ms: number;
   end_ms: number;
+  /** the transcriber's per-word confidence, 0..1 — ABSENT on rows written
+      before it was stored, and never fabricated for them */
+  confidence?: number;
 }
 
 /** What the worker actually writes into `transcript_segment.words`. */
@@ -49,6 +52,7 @@ interface StoredWord {
   w: string;
   s: number;
   e: number;
+  c?: number;
 }
 
 /**
@@ -85,7 +89,16 @@ export function toWords(raw: unknown): TranscriptWord[] {
     ) {
       return [];   // degrade the row, do not fabricate
     }
-    words.push({ w: item.w, start_ms: item.s, end_ms: item.e });
+    words.push({
+      w: item.w,
+      start_ms: item.s,
+      end_ms: item.e,
+      // optional and validated: a malformed confidence is dropped, never a
+      // reason to degrade the row — timing is load-bearing, confidence isn't
+      ...(typeof item.c === "number" && item.c >= 0 && item.c <= 1
+        ? { confidence: item.c }
+        : {}),
+    });
   }
   return words;
 }

@@ -55,12 +55,66 @@ export interface KebabItem {
   key: string;
   label: string;
   icon?: ReactNode;
-  onSelect: () => void;
+  onSelect?: () => void;
   danger?: boolean;
   disabled?: boolean;
+  /** a toggle stays IN the menu when pressed (redact, view modes) */
+  keepOpen?: boolean;
+  /** a SUB-menu (2026-08-24, the export group): expands inline under the
+      item — flyouts fight small screens; indentation doesn't */
+  sub?: KebabItem[];
 }
 
 const MENU_W = 176; // matches min-w-44
+
+function MenuEntry({
+  item, depth, expanded, setExpanded, close,
+}: {
+  item: KebabItem;
+  depth: number;
+  expanded: string | null;
+  setExpanded: (key: string | null) => void;
+  close: () => void;
+}) {
+  const isOpen = expanded === item.key;
+  return (
+    <>
+      <button
+        type="button"
+        role="menuitem"
+        disabled={item.disabled}
+        onClick={() => {
+          if (item.sub) return setExpanded(isOpen ? null : item.key);
+          item.onSelect?.();
+          if (!item.keepOpen) close();
+        }}
+        className={`flex w-full items-center gap-2.5 py-2 pe-3 text-start text-xs transition-colors ${
+          depth > 0 ? "ps-8" : "ps-3"
+        } ${
+          item.danger
+            ? "text-danger hover:bg-danger/10"
+            : "text-fg-muted hover:bg-surface-2 hover:text-fg"
+        } disabled:pointer-events-none disabled:opacity-40`}
+      >
+        {item.icon ? <span className="shrink-0 opacity-80">{item.icon}</span> : null}
+        <span className="min-w-0 flex-1 truncate">{item.label}</span>
+        {item.sub ? <span aria-hidden className="text-[10px]">{isOpen ? "▾" : "▸"}</span> : null}
+      </button>
+      {item.sub && isOpen
+        ? item.sub.map((child) => (
+            <MenuEntry
+              key={child.key}
+              item={child}
+              depth={depth + 1}
+              expanded={expanded}
+              setExpanded={setExpanded}
+              close={close}
+            />
+          ))
+        : null}
+    </>
+  );
+}
 
 export function KebabMenu({
   label,
@@ -72,6 +126,7 @@ export function KebabMenu({
   /** replaces the ⋯ glyph (e.g. the player's speed readout «۱.۵×») */
   trigger?: ReactNode;
 }) {
+  const [expanded, setExpanded] = useState<string | null>(null);
   /** null = closed; otherwise the VIEWPORT position the portal renders at.
       The menu portals to <body> (user report, 2026-08-24: opening it inside
       a table's overflow container clipped the menu and scrolled the table —
@@ -83,6 +138,7 @@ export function KebabMenu({
 
   function toggle() {
     if (at) return setAt(null);
+    setExpanded(null);
     const rect = rootRef.current?.getBoundingClientRect();
     if (!rect) return;
     const rtl = document.documentElement.dir === "rtl";
@@ -130,24 +186,14 @@ export function KebabMenu({
               onClick={(e) => e.stopPropagation()}
             >
               {items.map((item) => (
-                <button
+                <MenuEntry
                   key={item.key}
-                  type="button"
-                  role="menuitem"
-                  disabled={item.disabled}
-                  onClick={() => {
-                    setAt(null);
-                    item.onSelect();
-                  }}
-                  className={`flex w-full items-center gap-2.5 px-3 py-2 text-start text-xs transition-colors ${
-                    item.danger
-                      ? "text-danger hover:bg-danger/10"
-                      : "text-fg-muted hover:bg-surface-2 hover:text-fg"
-                  } disabled:pointer-events-none disabled:opacity-40`}
-                >
-                  {item.icon ? <span className="shrink-0 opacity-80">{item.icon}</span> : null}
-                  <span className="truncate">{item.label}</span>
-                </button>
+                  item={item}
+                  depth={0}
+                  expanded={expanded}
+                  setExpanded={setExpanded}
+                  close={() => setAt(null)}
+                />
               ))}
             </div>,
             document.body,
