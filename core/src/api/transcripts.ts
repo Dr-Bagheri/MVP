@@ -14,6 +14,7 @@
 import { NotFoundError, ValidationError } from "./errors.ts";
 import { iso } from "./vocabulary.ts";
 import { assertUuid, type Db, type SqlTx } from "../db/identity.ts";
+import { hasSummaryGrounding } from "../db/capabilities.ts";
 import type { Identity } from "../agent/types.ts";
 
 export interface TranscriptSegment {
@@ -111,6 +112,12 @@ export interface SummaryVersion {
   created_at: string;
   created_by: string;
   agent_run_id: string | null;
+  /**
+   * 0087 grounding report. ABSENT until the migration runs on the
+   * deployment; null = this version was never checked; otherwise the
+   * verdict written at insert (clean, checking model, flagged claims).
+   */
+  grounding?: { clean: boolean; model: string; flags: { claim: string; note: string }[] } | null;
 }
 
 export interface SearchHit {
@@ -212,9 +219,10 @@ export function createTranscriptsRepo(db: Db) {
     /** Every version, newest first — a new summary never destroys the old. */
     async summaries(identity: Identity, callId: string): Promise<SummaryVersion[]> {
       const id = assertUuid(callId, "call id");
+      const withGrounding = await hasSummaryGrounding(db);
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<Record<string, unknown>>(
-          `select id, version, body, model, created_at, created_by, agent_run_id
+          `select id, version, body, model, created_at, created_by, agent_run_id${withGrounding ? ", grounding" : ""}
              from echo.summary
             where call_id = $1
             order by version desc`,
@@ -229,6 +237,10 @@ export function createTranscriptsRepo(db: Db) {
         created_at: iso(row.created_at),
         created_by: row.created_by as string,
         agent_run_id: (row.agent_run_id as string | null) ?? null,
+        // absent stays absent on an un-migrated deployment
+        ...(withGrounding
+          ? { grounding: (row.grounding as SummaryVersion["grounding"]) ?? null }
+          : {}),
       }));
     },
 

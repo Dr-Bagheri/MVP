@@ -294,12 +294,27 @@ export function createRunner({ queue, handlers, config, sink, log }: RunnerOptio
         );
         result.claimed += messages.length;
 
-        // Sequential within a queue: these steps are CPU- and network-heavy,
-        // and the concurrency ceiling is a knob rather than an accident of how
-        // many messages happened to arrive together.
+        /*
+         * Bounded concurrency within a queue (speed pass, 2026-08-23).
+         * `config.concurrency` used to size the connection pool and gate
+         * NOTHING — the loop ran strictly one message at a time, so a
+         * three-part call transcribed serially while the knob read as 2.
+         * Parts are independent by construction (deterministic seq ranges,
+         * per-part artifacts, idempotent duration recompute), so running
+         * up to `concurrency` messages of one queue together is safe; a
+         * duplicate delivery still trips the UNIQUE walls loudly.
+         */
+        const inFlight: Promise<void>[] = [];
         for (const message of messages) {
-          await processOne(handler, message, result);
+          const one = processOne(handler, message, result).finally(() => {
+            inFlight.splice(inFlight.indexOf(one), 1);
+          });
+          inFlight.push(one);
+          if (inFlight.length >= Math.max(1, config.concurrency)) {
+            await Promise.race(inFlight);
+          }
         }
+        await Promise.all(inFlight);
       }
 
       return result;

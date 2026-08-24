@@ -372,6 +372,8 @@
     "noPerson": "Not linked",
     "manageSpeakers": "Manage speakers & titles",
     "translateEn": "Translate to EN",
+    "groundingClean": "Checked — every claim has transcript support.",
+    "groundingFlagged": "These parts lack clear support in the transcript:",
     "translating": "Translating…",
     "showOriginal": "Show original",
     "translateFailed": "Translation failed — try again.",

@@ -10,6 +10,7 @@ import { useCrumbTitle } from "@/components/platform/CrumbTitle";
 import { Card, Chip, PageHeader, StatusChip } from "@/components/ui";
 import { formatClock, formatDate, digits, modelLabel } from "@/lib/format";
 import { isFillerWord, stripFillers } from "@/lib/cleanRead";
+import { faDisplay } from "@/lib/faDisplay";
 import {
   canExportSubtitles,
   downloadText,
@@ -446,6 +447,27 @@ export default function CallDetailPage({
             ) : (
               <p className="whitespace-pre-wrap text-sm leading-8 text-fg">{summary.body}</p>
             )}
+            {/* 0087 grounding verdict — rendered ONLY when a verdict exists.
+                Absent field (un-migrated) and null (unchecked) both render
+                nothing: an absent check must not look like a passed one. */}
+            {summary.grounding ? (
+              summary.grounding.clean ? (
+                <p className="mt-2 flex items-center gap-1.5 text-xs text-success">
+                  <span aria-hidden>✓</span> {t("groundingClean")}
+                </p>
+              ) : (
+                <div className="mt-2 rounded-md border border-warning/30 bg-warning/10 px-3 py-2">
+                  <p className="text-xs font-semibold text-warning">{t("groundingFlagged")}</p>
+                  <ul className="mt-1 space-y-1">
+                    {summary.grounding.flags.map((flag, i) => (
+                      <li key={i} className="text-xs leading-5 text-fg-muted">
+                        «{flag.claim}»{flag.note ? ` — ${flag.note}` : ""}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )
+            ) : null}
             <div className="mt-3 flex items-center gap-3">
               <p className="text-xs text-fg-muted ltr">{modelLabel(summary.model)}</p>
               <span className="flex-1" />
@@ -752,13 +774,13 @@ export default function CallDetailPage({
                             void playFrom(word.start_ms);
                           }}
                         >
-                          {word.w}{" "}
+                          {faDisplay(word.w)}{" "}
                         </span>
                       ))}
                     </p>
                   ) : (
                     <p className="text-sm leading-7 text-fg">
-                      {cleanRead ? stripFillers(row.text) : row.text}
+                      {faDisplay(cleanRead ? stripFillers(row.text) : row.text)}
                     </p>
                   )}
                 </div>

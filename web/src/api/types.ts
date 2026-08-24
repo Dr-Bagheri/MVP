@@ -393,6 +393,13 @@ export interface SummaryVersion {
   /** provenance: what produced it */
   model: string;
   agent_run_id: string | null;
+  /**
+   * 0087 grounding verdict. ABSENT = deployment not migrated; null = this
+   * version was never checked; otherwise the second-pass comparison of the
+   * summary against its transcript. Absent/null must render NOTHING — an
+   * unchecked summary must not look like a passed one.
+   */
+  grounding?: { clean: boolean; model: string; flags: { claim: string; note: string }[] } | null;
 }
 
 // ---- speakers & directory ---------------------------------------------------

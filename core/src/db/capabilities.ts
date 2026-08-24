@@ -94,6 +94,11 @@ export async function hasCallTags(db: Db): Promise<boolean> {
   return hasColumn(db, "call", "tags");
 }
 
+/** db/0087: the summary grounding report. */
+export async function hasSummaryGrounding(db: Db): Promise<boolean> {
+  return hasColumn(db, "summary", "grounding");
+}
+
 export async function hasAutonomyColumn(db: Db): Promise<boolean> {
   return hasColumn(db, "app_user", "autonomy");
 }

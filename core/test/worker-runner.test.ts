@@ -221,6 +221,33 @@ describe("runner", () => {
     expect(order).toEqual(["archive", "sink"]);
   });
 
+  it("runs up to `concurrency` messages of one queue TOGETHER — the knob gates now", async () => {
+    // Before 2026-08-23 the config knob sized the pool and gated nothing:
+    // peak would read 1 here. 3 would mean the ceiling is ignored. Only 2
+    // is the knob working.
+    const msgs = [1, 2, 3].map((n) => ({ msgId: n, readCt: 1, body: payload }));
+    const { queue } = fakeQueue(msgs);
+    let active = 0;
+    let peak = 0;
+    const runner = createRunner({
+      queue,
+      handlers: [handlerThat(async () => {
+        active += 1;
+        peak = Math.max(peak, active);
+        await new Promise((resolve) => setTimeout(resolve, 25));
+        active -= 1;
+      })],
+      config: { ...config, concurrency: 2 },
+      sink: { onDeadLetter: vi.fn() },
+      log: silent,
+    });
+
+    const result = await runner.poll();
+
+    expect(result.done).toBe(3);
+    expect(peak).toBe(2);
+  });
+
   it("refuses two handlers on one queue", () => {
     const { queue } = fakeQueue([]);
     expect(() =>

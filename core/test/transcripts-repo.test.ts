@@ -58,7 +58,10 @@ function fakeDb(rowsFor: (sql: string, params?: unknown[]) => unknown[]) {
 const queries = (log: { sql: string; params?: unknown[] | undefined }[]) =>
   log.filter((l) => {
     const sql = l.sql.trim().toLowerCase();
-    return !sql.startsWith("set local") && !sql.includes("set_config('echo.actor_id'");
+    return !sql.startsWith("set local")
+      && !sql.includes("set_config('echo.actor_id'")
+      // the 0087 capability probe is plumbing, not a product statement
+      && !sql.includes("information_schema");
   });
 
 describe("transcript segments", () => {

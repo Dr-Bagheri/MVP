@@ -13,6 +13,8 @@ import { StepError, type StepHandler } from "./runner.ts";
 import { enqueueWebhooks } from "./webhook-enqueue.ts";
 import type { MlClient } from "./ml-client.ts";
 import { matchEnrolledVoices, type StorageSignerLike, type VoiceMatchOptions } from "./voice-match.ts";
+import { hasSummaryGrounding } from "../db/capabilities.ts";
+import { JSONB_PARAM, toJsonb } from "../db/jsonb.ts";
 
 export interface LinkSpeakersOptions {
   db: Db;
@@ -107,6 +109,8 @@ export interface SummaryWritten {
   runId: string;
   skill?: Skill | undefined;
   failed: boolean;
+  /** 0087 grounding report, null = unchecked (advisory, never blocking). */
+  grounding?: { clean: boolean; model: string; flags: { claim: string; note: string }[] } | null;
 }
 
 export interface Summarizer {
@@ -122,6 +126,10 @@ export interface Summarizer {
     template?: string | undefined;
     instruction?: string | undefined;
     figures?: boolean | undefined;
+    /** The call's roster with linked directory names/titles, for the prompt. */
+    speakers?: { name: string; title: string | null }[] | undefined;
+    /** 0087: run the grounding pass (the step gates this on the column). */
+    verify?: boolean | undefined;
   }): Promise<SummaryWritten | SummarySkipped>;
 }
 
@@ -149,13 +157,31 @@ export function createSummarizeStep({
     async handle(payload: JobPayload, { log }) {
       const identity = await resolveJobIdentity(db, payload);
 
+      /*
+       * Speaker-AWARE (2026-08-23 quality pass): a segment speaks under the
+       * LINKED PERSON's name when the roster knows one — the directory and
+       * the M39 voice match already put it there — so the summary says
+       * «سینا» instead of «S1·1». The raw label stays the fallback; the
+       * transcript rows themselves are untouched.
+       */
       const segments = await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<{ text: string; label: string | null }>(
-          `select ts.text, cs.label
+          `select ts.text, coalesce(p.display_name, cs.label) as label
              from echo.transcript_segment ts
              left join echo.call_speaker cs on cs.id = ts.call_speaker_id
+             left join echo.person p on p.id = cs.person_id
             where ts.call_id = $1
          order by ts.seq`,
+          [payload.callId],
+        ),
+      );
+
+      const roster = await db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe<{ name: string; title: string | null }>(
+          `select distinct coalesce(p.display_name, cs.label) as name, p.title
+             from echo.call_speaker cs
+             left join echo.person p on p.id = cs.person_id
+            where cs.call_id = $1`,
           [payload.callId],
         ),
       );
@@ -185,6 +211,9 @@ export function createSummarizeStep({
       // the seed or the actor, where `unexpected` would send them to the logs.
       // Retryable on purpose — restoring the seed heals every queued call
       // without anyone replaying them by hand.
+      // 0087: verify only when the column can hold the verdict — a report
+      // with nowhere to land would be spend for nothing
+      const verify = await hasSummaryGrounding(db);
       let result;
       try {
         result = await summarizer.summarize({
@@ -194,6 +223,8 @@ export function createSummarizeStep({
           template: payload.template,
           instruction: payload.instruction,
           figures: payload.figures,
+          speakers: roster,
+          verify,
         });
       } catch (error) {
         if ((error as Error)?.name === "MissingSystemSkillError") {
@@ -227,15 +258,22 @@ export function createSummarizeStep({
         throw new StepError("summarizer_failed", "summarizer produced nothing", true);
       }
 
+      if (verify && !result.grounding) {
+        // the forfeit said out loud (M21): the summary lands unchecked
+        log.warn({ call_id: payload.callId }, "grounding pass yielded no verdict; summary stored unchecked");
+      }
+
       // Replacing a summary is an INSERT of a new version; nothing is ever
       // edited in place, and the current one is the highest version (db/0008).
+      // The grounding verdict rides the SAME insert — versions stay
+      // append-only, so a verification can never be bolted on later.
       await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe(
-          `insert into echo.summary (call_id, org_id, version, body, model, skill_id, agent_run_id, created_by)
+          `insert into echo.summary (call_id, org_id, version, body, model, skill_id, agent_run_id, created_by${verify ? ", grounding" : ""})
            values (
              $1, $2,
              (select coalesce(max(version), 0) + 1 from echo.summary where call_id = $1),
-             $3, $4, $5, $6, $7
+             $3, $4, $5, $6, $7${verify ? `, ${JSONB_PARAM(8)}` : ""}
            )`,
           [
             payload.callId,
@@ -245,6 +283,9 @@ export function createSummarizeStep({
             result.skill?.id ?? null,
             result.runId,
             identity.userId,
+            // SQL NULL when unchecked — toJsonb(null) would store jsonb
+            // 'null', which the 0087 shape constraint rightly refuses
+            ...(verify ? [result.grounding ? toJsonb(result.grounding) : null] : []),
           ],
         ),
       );

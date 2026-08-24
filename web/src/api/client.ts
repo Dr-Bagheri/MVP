@@ -171,8 +171,10 @@ async function bff<T>(path: string, init?: RequestInit): Promise<T> {
  *
  * The rules that keep it honest:
  *  - only reads whose staleness is harmless for 60s live here (identity,
- *    the model catalogue, skills, tool names) — lists people ACT on
- *    (members, calls, invitations) are never cached;
+ *    the model catalogue, skills, tool names, and — user directive
+ *    2026-08-23 — the BARE member/directory listings used for name
+ *    resolution); QUERIED member listings and every other acted-on list
+ *    (calls, invitations) are never cached;
  *  - any successful non-GET through `bff` clears it, so a saved profile,
  *    changed preference, or fresh sign-in is visible immediately;
  *  - a failed fetch is evicted rather than cached — errors don't linger.
@@ -1034,7 +1036,9 @@ export const api = {
   },
   /** **LIVE** — the people directory (0062): names + titles, RLS-scoped. */
   async directory(): Promise<Person[]> {
-    return bff<Person[]>("/api/directory");
+    // cached like the bare member list (2026-08-23 speed pass): speaker
+    // dropdowns on every call page re-ask this; writes clear the cache
+    return cachedRead("directory", () => bff<Person[]>("/api/directory"));
   },
   async createPerson(displayName: string, title: string): Promise<Person> {
     return bff<Person>("/api/directory", {
@@ -1303,6 +1307,19 @@ export const api = {
     if (query?.role) params.set("role", query.role);
     if (query?.sort) params.set("sort", query.sort);
     const suffix = params.size > 0 ? `?${params}` : "";
+    /*
+     * The BARE listing (no query) is cached briefly (user directive,
+     * 2026-08-23 speed pass): it is what every table re-fetches per
+     * navigation just to resolve owner names. QUERIED listings — the
+     * Management screen someone is acting on — stay uncached, and any
+     * write still clears the whole cache, so acting on the list is
+     * always answered by a fresh read.
+     */
+    if (suffix === "") {
+      const { members } = await cachedRead("members", () =>
+        bff<{ members: User[] }>("/api/admin/members"));
+      return members;
+    }
     const { members } = await bff<{ members: User[] }>(`/api/admin/members${suffix}`);
     return members;
   },
