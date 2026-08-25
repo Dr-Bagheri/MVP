@@ -13,7 +13,7 @@
  */
 import { ConflictError, NotActivatedError, NotFoundError, ValidationError } from "./errors.ts";
 import { assertUuid, type Db, type SqlTx } from "../db/identity.ts";
-import { hasVoiceprints } from "../db/capabilities.ts";
+import { hasPersonTeams, hasVoiceprints } from "../db/capabilities.ts";
 import type { Identity } from "../agent/types.ts";
 
 /** Mirror of 0062's constraint. Codes — the UI localizes. */
@@ -36,6 +36,17 @@ export interface PersonRecord {
    * ABSENT (not false) before 0081 — the capability pattern.
    */
   voice_enrolled_at?: string | null;
+  /**
+   * How many clips are averaged into the stored print (db/0096) — a
+   * recognition quality the person can act on ("add another sample").
+   * ABSENT pre-0096; null when there is no print at all.
+   */
+  voice_samples?: number | null;
+  /**
+   * The person's team/department (db/0096) — free text, the org's own
+   * vocabulary. ABSENT pre-0096; null when unassigned.
+   */
+  team?: string | null;
 }
 
 const PERSON_COLUMNS = "id, display_name, title, app_user_id";
@@ -47,6 +58,12 @@ const toPerson = (row: Record<string, unknown>): PersonRecord => ({
   app_user_id: (row.app_user_id as string | null) ?? null,
   ...(Object.prototype.hasOwnProperty.call(row, "voiceprint_at")
     ? { voice_enrolled_at: row.voiceprint_at ? new Date(row.voiceprint_at as string | Date).toISOString() : null }
+    : {}),
+  ...(Object.prototype.hasOwnProperty.call(row, "voiceprint_samples")
+    ? { voice_samples: (row.voiceprint_samples as number | null) ?? null }
+    : {}),
+  ...(Object.prototype.hasOwnProperty.call(row, "team")
+    ? { team: (row.team as string | null) ?? null }
     : {}),
 });
 
@@ -64,15 +81,43 @@ export function createDirectoryRepo(db: Db) {
     /** Everyone the caller may see, merged tombstones excluded. */
     async list(identity: Identity): Promise<PersonRecord[]> {
       const withVoice = await hasVoiceprints(db);
+      const withTeams = await hasPersonTeams(db);
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<Record<string, unknown>>(
-          `select ${PERSON_COLUMNS}${withVoice ? ", voiceprint_at" : ""}
+          `select ${PERSON_COLUMNS}${withVoice ? ", voiceprint_at" : ""}${
+            withTeams ? ", team, voiceprint_samples" : ""}
              from echo.person
             where merged_into is null
             order by display_name`,
         ),
       );
       return rows.map(toPerson);
+    },
+
+    /**
+     * MERGE two people (db/0096's door): the loser keeps its id and points
+     * at the winner, its voices move, and the directory shows one person
+     * where it showed two. Admin-only — the wall is the door's, in SQL.
+     */
+    async merge(identity: Identity, loserId: string, winnerId: string): Promise<void> {
+      const loser = assertUuid(loserId, "person id");
+      const winner = assertUuid(winnerId, "person id");
+      try {
+        await db.withIdentity(identity, (tx: SqlTx) =>
+          tx.unsafe(`select echo.merge_person($1, $2)`, [loser, winner]),
+        );
+      } catch (error) {
+        const code = (error as { code?: string }).code;
+        if (code === "42501") {
+          throw new NotActivatedError("only an org admin or owner may merge people");
+        }
+        if (code === "P0002") throw new NotFoundError("no such person");
+        if (code === "23514") throw new ValidationError("a person cannot be merged into themselves");
+        if (code === "42883") {
+          throw new ConflictError("not_migrated"); // deployment predates 0096
+        }
+        throw error;
+      }
     },
 
     /**
@@ -90,16 +135,45 @@ export function createDirectoryRepo(db: Db) {
       if (input.vector.length < 8 || input.vector.some((v) => !Number.isFinite(v))) {
         throw new ValidationError("degenerate embedding vector");
       }
+      /*
+       * IMPROVE, don't replace (db/0096): a second clip from the same
+       * person under the SAME extractor is averaged into the stored
+       * vector — a centroid is the standard multi-sample representation of
+       * a voice, and each sample narrows it. A DIFFERENT model replaces
+       * outright: vectors from two extractors live in different spaces and
+       * averaging them yields confident nonsense (0081's own rule).
+       */
+      const withSamples = await hasPersonTeams(db);
+      let vector = input.vector;
+      let samples = 1;
+      if (withSamples) {
+        const [prior] = await db.withIdentity(identity, (tx: SqlTx) =>
+          tx.unsafe<{ voiceprint: number[] | null; voiceprint_model: string | null; voiceprint_samples: number | null }>(
+            `select voiceprint, voiceprint_model, voiceprint_samples
+               from echo.person where id = $1 and merged_into is null`,
+            [id],
+          ),
+        );
+        if (prior?.voiceprint
+          && prior.voiceprint_model === input.model
+          && prior.voiceprint.length === input.vector.length) {
+          const n = prior.voiceprint_samples ?? 1;
+          samples = Math.min(50, n + 1);
+          vector = input.vector.map((v, i) => ((prior.voiceprint![i]! * n) + v) / (n + 1));
+        }
+      }
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<{ id: string }>(
           `update echo.person
               set voiceprint = $2::float8[],
                   voiceprint_model = $3,
                   voiceprint_at = now(),
-                  voiceprint_by = $4
+                  voiceprint_by = $4${withSamples ? ", voiceprint_samples = $5" : ""}
             where id = $1 and merged_into is null
             returning id`,
-          [id, input.vector, input.model, identity.userId],
+          withSamples
+            ? [id, vector, input.model, identity.userId, samples]
+            : [id, vector, input.model, identity.userId],
         ),
       );
       if (!rows[0]) throw new NotFoundError("no such person");
@@ -108,11 +182,16 @@ export function createDirectoryRepo(db: Db) {
     async clearVoiceprint(identity: Identity, personId: string): Promise<void> {
       const id = assertUuid(personId, "person id");
       if (!(await hasVoiceprints(db))) throw new ConflictError("not_migrated");
+      /* the sample count goes WITH the print: db/0097 refuses a count
+         without one, so clearing must clear both (capability-gated — a
+         pre-0096 deployment has no such column to null) */
+      const withSamples = await hasPersonTeams(db);
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<{ id: string }>(
           `update echo.person
               set voiceprint = null, voiceprint_model = null,
-                  voiceprint_at = null, voiceprint_by = null
+                  voiceprint_at = null, voiceprint_by = null${
+                    withSamples ? ", voiceprint_samples = null" : ""}
             where id = $1
             returning id`,
           [id],
@@ -168,22 +247,40 @@ export function createDirectoryRepo(db: Db) {
     async update(
       identity: Identity,
       personId: string,
-      patch: { displayName?: string | undefined; title?: string | undefined },
+      patch: {
+        displayName?: string | undefined;
+        title?: string | undefined;
+        /** db/0096: "" CLEARS the team, undefined leaves it alone */
+        team?: string | undefined;
+      },
     ): Promise<PersonRecord> {
       const id = assertUuid(personId, "person id");
       if (patch.displayName !== undefined && !patch.displayName.trim()) {
         throw new ValidationError("a name cannot be blank");
       }
       if (patch.title !== undefined) assertTitle(patch.title);
+      if (patch.team !== undefined && patch.team.trim().length > 60) {
+        throw new ValidationError("a team name is at most 60 characters",
+          { code: "team_too_long", params: { max: 60 } });
+      }
+      const withTeams = await hasPersonTeams(db);
+      if (patch.team !== undefined && !withTeams) {
+        throw new ConflictError("not_migrated");
+      }
+      const setTeam = patch.team !== undefined && withTeams;
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<Record<string, unknown>>(
           `update echo.person set
              display_name = coalesce($2, display_name),
-             title        = coalesce($3, title),
+             title        = coalesce($3, title),${
+               setTeam ? "\n             team         = $4," : ""}
              updated_at   = now()
            where id = $1 and merged_into is null
-           returning ${PERSON_COLUMNS}`,
-          [id, patch.displayName?.trim() ?? null, patch.title ?? null],
+           returning ${PERSON_COLUMNS}${withTeams ? ", team, voiceprint_samples" : ""}`,
+          setTeam
+            ? [id, patch.displayName?.trim() ?? null, patch.title ?? null,
+               patch.team!.trim() || null]
+            : [id, patch.displayName?.trim() ?? null, patch.title ?? null],
         ),
       );
       if (!rows[0]) throw new NotFoundError("no such person");

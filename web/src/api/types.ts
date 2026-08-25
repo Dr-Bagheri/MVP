@@ -423,6 +423,11 @@ export interface Person {
   /** Voice enrollment (M39/db-0081): WHEN, never the vector. ABSENT before
    *  the migration; null = not enrolled. */
   voice_enrolled_at?: string | null;
+  /** db/0096: clips averaged into the print — ABSENT pre-migration, null
+   *  when there is no print. More samples = a sharper match. */
+  voice_samples?: number | null;
+  /** db/0096: free-text team/department. ABSENT pre-migration; null = none. */
+  team?: string | null;
 }
 
 export interface Speaker {

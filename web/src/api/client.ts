@@ -1084,12 +1084,21 @@ export const api = {
   },
   async updatePerson(
     id: string,
-    patch: { display_name?: string; title?: string },
+    /** db/0096: `team: ""` clears it, an absent team leaves it alone */
+    patch: { display_name?: string; title?: string; team?: string },
   ): Promise<Person> {
     return bff<Person>(`/api/directory/${id}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(patch),
+    });
+  },
+  /** **LIVE** — merge a duplicate into the person who stays (db/0096). */
+  async mergePerson(loserId: string, winnerId: string): Promise<void> {
+    await bff(`/api/directory/${loserId}/merge`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ into: winnerId }),
     });
   },
   /** admin/owner-only true delete (db/0076); 409 not_migrated pre-0076 */

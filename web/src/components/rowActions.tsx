@@ -503,15 +503,24 @@ export function ConfirmDialog({
   cancelLabel,
   danger = true,
   busy = false,
+  confirmDisabled = false,
+  wide = false,
   onConfirm,
   onCancel,
 }: {
   title: string;
-  body?: string;
+  /** prose, or a whole form when the confirmation needs an ANSWER (merge
+      asks which person this one becomes) — a dialog that only ever holds a
+      sentence forces the second dialog nobody styles */
+  body?: ReactNode;
   confirmLabel: string;
   cancelLabel: string;
   danger?: boolean;
   busy?: boolean;
+  /** the answer is missing — the button is there and says why by staying off */
+  confirmDisabled?: boolean;
+  /** a body holding a LIST needs the room; prose does not */
+  wide?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
@@ -532,11 +541,15 @@ export function ConfirmDialog({
         role="alertdialog"
         aria-modal="true"
         aria-label={title}
-        className="w-full max-w-sm rounded-2xl border border-border bg-surface p-5 shadow-2xl"
+        className={`w-full ${wide ? "max-w-lg" : "max-w-sm"} rounded-2xl border border-border bg-surface p-5 shadow-2xl`}
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-base font-semibold text-fg">{title}</h2>
-        {body ? <p className="mt-2 text-sm leading-6 text-fg-muted">{body}</p> : null}
+        {body ? (
+          typeof body === "string"
+            ? <p className="mt-2 text-sm leading-6 text-fg-muted">{body}</p>
+            : <div className="mt-3">{body}</div>
+        ) : null}
         <div className="mt-5 flex items-center justify-end gap-2">
           <button type="button" className="btn-secondary h-9 min-h-0 px-4 text-sm" onClick={onCancel}>
             {cancelLabel}
@@ -544,7 +557,7 @@ export function ConfirmDialog({
           <button
             type="button"
             className={`${danger ? "btn-danger" : "btn-primary"} h-9 min-h-0 px-4 text-sm`}
-            disabled={busy}
+            disabled={busy || confirmDisabled}
             onClick={onConfirm}
           >
             {confirmLabel}

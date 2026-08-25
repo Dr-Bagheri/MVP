@@ -1402,11 +1402,27 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
   app.patch("/v1/directory/:id", async (request, reply) => {
     const identity = await auth.requireAdmin(request);
     const { id } = request.params as { id: string };
-    const body = (request.body ?? {}) as { display_name?: unknown; title?: unknown };
+    const body = (request.body ?? {}) as {
+      display_name?: unknown; title?: unknown; team?: unknown;
+    };
     return reply.send(await directory.update(identity, id, {
       displayName: typeof body.display_name === "string" ? body.display_name : undefined,
       title: typeof body.title === "string" ? body.title : undefined,
+      // 0096: "" clears the team; absent leaves it alone
+      team: typeof body.team === "string" ? body.team : undefined,
     }));
+  });
+
+  /** 0096's door: merge a duplicate person into the one that stays. */
+  app.post("/v1/directory/:id/merge", async (request, reply) => {
+    const identity = await auth.requireAdmin(request);
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { into?: unknown };
+    if (typeof body.into !== "string") {
+      throw new ValidationError("into must be the surviving person's id");
+    }
+    await directory.merge(identity, id, body.into);
+    return reply.code(204).send();
   });
 
   app.delete("/v1/directory/:id", async (request, reply) => {

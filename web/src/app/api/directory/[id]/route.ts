@@ -4,7 +4,9 @@ import { coreFetch, errorResponse } from "@/server/core";
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   try {
-    const body = (await request.json()) as { display_name?: string; title?: string };
+    const body = (await request.json()) as {
+      display_name?: string; title?: string; team?: string;
+    };
     return Response.json(
       await coreFetch(`/v1/directory/${id}`, { method: "PATCH", body }),
     );

@@ -20,6 +20,7 @@ import { SectionMenu } from "@/components/scaffold";
 import { SummaryBody, parseSummary } from "@/components/echo/SummaryBody";
 import { summaryLanes } from "@/lib/summaryLanes";
 import { faDisplay } from "@/lib/faDisplay";
+import { suggestSpeakerPeople } from "@/lib/speakerSuggest";
 import {
   canExportSubtitles,
   downloadText,
@@ -254,6 +255,17 @@ export default function CallDetailPage({
     };
   }, [editSpeakerRow]);
   const [speakerDraft, setSpeakerDraft] = useState("");
+  /**
+   * BULK LINK (user directive, 2026-08-25): the whole roster in one panel.
+   * Linking speakers one at a time means hunting the transcript for a turn
+   * by each voice — the panel puts every speaker in the call side by side,
+   * with the transcript's own suggestion pre-filled where there is one.
+   * `bulkDraft` is speaker id → person id ("" = leave unlinked); only the
+   * rows that actually CHANGED are sent.
+   */
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkDraft, setBulkDraft] = useState<Record<string, string>>({});
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   /** an edit that fails because 0092 hasn't run yet says WHICH failure */
   function editFailNotify(cause: unknown): void {
@@ -369,6 +381,51 @@ export default function CallDetailPage({
       return false;
     }
   }
+
+  /**
+   * Open the roster panel with every speaker's CURRENT link, plus the
+   * transcript's suggestion where the speaker has none. Pre-filling a
+   * suggestion is the point — but it is pre-filled, never saved: the person
+   * pressing the button is the one making the claim.
+   */
+  function openBulkLink(): void {
+    const suggested = suggestSpeakerPeople(
+      rows.map((r) => ({ speaker_id: r.speaker_id, text: r.text, start_ms: r.start_ms })),
+      speakers.map((s) => ({ id: s.id, label: s.label, person_id: s.person_id })),
+      directory.map((p) => ({ id: p.id, display_name: p.display_name })),
+    );
+    const draft: Record<string, string> = {};
+    for (const speaker of speakers) {
+      draft[speaker.id] = speaker.person_id ?? suggested.get(speaker.id) ?? "";
+    }
+    setBulkDraft(draft);
+    setBulkOpen(true);
+  }
+
+  /** Send only the rows that changed; one refusal does not undo the rest. */
+  async function saveBulkLink(): Promise<void> {
+    setBulkBusy(true);
+    let changed = 0;
+    let refused = 0;
+    for (const speaker of speakers) {
+      const next = bulkDraft[speaker.id] ?? "";
+      if (next === (speaker.person_id ?? "")) continue;
+      try {
+        await api.linkSpeaker(id, speaker.id, next || null);
+        changed += 1;
+      } catch {
+        refused += 1;
+      }
+    }
+    setSpeakers(await api.getSpeakers(id).catch(() => speakers));
+    setBulkBusy(false);
+    setBulkOpen(false);
+    /* the two counts are separate facts — "3 saved" while one was refused
+       reads as a success that was not one */
+    if (refused > 0) notify(t("bulkRefused", { n: digits(refused, locale) }), "warn");
+    if (changed > 0) notify(t("bulkSaved", { n: digits(changed, locale) }));
+  }
+
   /** Signed playback URLs, one per part. `null` = no audio to offer. */
   const [audioParts, setAudioParts] = useState<
     { idx: number; offset_ms: number; url: string }[] | null
@@ -1521,6 +1578,18 @@ export default function CallDetailPage({
                       {sp.person_name ?? sp.label}
                     </button>
                   ))}
+                  {/* BULK LINK: the whole roster at once, for the owner —
+                      offered only while there is still someone unlinked */}
+                  {ownsCall && directory.length > 0
+                    && speakers.some((s) => s.person_id === null) ? (
+                    <button
+                      type="button"
+                      className="h-7 rounded-full border border-dashed border-border px-2.5 text-xs text-fg-muted transition-colors hover:border-accent hover:text-accent"
+                      onClick={openBulkLink}
+                    >
+                      {t("bulkLink")}
+                    </button>
+                  ) : null}
                 </div>
                 <div className="flex h-1.5 w-full max-w-sm overflow-hidden rounded-full bg-surface-2" aria-hidden>
                   {shares.map((share) => (
@@ -2017,6 +2086,59 @@ export default function CallDetailPage({
                 notify(detail || tCommon("actionFailed"), "warn");
               });
           }}
+        />
+      ) : null}
+
+      {/* BULK LINK — the record's whole roster in one panel, with the
+          transcript's suggestions pre-filled and marked AS suggestions */}
+      {bulkOpen ? (
+        <ConfirmDialog
+          wide
+          danger={false}
+          busy={bulkBusy}
+          title={t("bulkTitle")}
+          body={
+            <div className="space-y-3">
+              <p className="text-sm text-fg-muted">{t("bulkBody")}</p>
+              <ul className="space-y-2">
+                {speakers.map((speaker) => (
+                  <li key={speaker.id} className="flex items-center gap-3">
+                    <span className="w-28 shrink-0 truncate text-sm text-fg" title={speaker.label}>
+                      {speaker.label}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <SelectMenu
+                        className="h-9 min-h-0 w-full py-0 text-sm"
+                        ariaLabel={t("linkSpeaker")}
+                        value={bulkDraft[speaker.id] ?? ""}
+                        onChange={(next) =>
+                          setBulkDraft((prev) => ({ ...prev, [speaker.id]: next }))
+                        }
+                        options={[
+                          { value: "", label: t("noPerson") },
+                          ...directory.map((person) => ({
+                            value: person.id,
+                            label: person.display_name,
+                          })),
+                        ]}
+                      />
+                    </span>
+                    {/* the guess says it is a guess — an unmarked pre-fill
+                        would read as something the record already knew */}
+                    {speaker.person_id === null && (bulkDraft[speaker.id] ?? "") !== "" ? (
+                      <span className="shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-[11px] text-accent">
+                        {t("bulkSuggested")}
+                      </span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          }
+          confirmLabel={tCommon("save")}
+          cancelLabel={tCommon("cancel")}
+          onCancel={() => setBulkOpen(false)}
+          onConfirm={() => void saveBulkLink()}
         />
       ) : null}
 

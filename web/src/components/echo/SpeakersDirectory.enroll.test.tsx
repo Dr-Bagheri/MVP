@@ -18,6 +18,12 @@ vi.mock("@/api/client", () => ({
     directory: () => directory(),
     me: async () => ({ role: "owner" }),
     enrollVoice: (id: string, clip: Blob) => enrollVoice(id, clip),
+    /* the presence read (2026-08-25): this suite is about enrollment, but a
+       mock that omits a method the component calls does not fake "no
+       records" — it throws, and the failure arrives as whatever rendered
+       last. Both stubs answer with the empty case on purpose. */
+    listCalls: async () => [],
+    getSpeakers: async () => [],
   },
 }));
 vi.mock("@/lib/notify", () => ({ notify: vi.fn() }));

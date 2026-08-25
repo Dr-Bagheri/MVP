@@ -16,12 +16,19 @@ insert into echo.person (id, org_id, display_name, title, created_by) values
 
 -- link the doomed person to a speaker on an org-scoped call, so the unlink
 -- half has something REAL to prove (a delete that only works on unlinked
--- people would pass a lazier fixture)
+-- people would pass a lazier fixture).
+--
+-- SEEDED AS THE CALL'S OWNER (bob owns c2): since db/0093 tightened the
+-- link guard, linking a voice is the owner's act even when the actor is an
+-- admin — this fixture used to seed as alice and only started failing when
+-- the rule it was quietly breaking grew teeth. The seed now obeys M11.
+select set_config('echo.actor_id', '02000000-0000-4000-8000-000000000002', true);
 insert into echo.call_speaker (id, call_id, org_id, label, person_id, linked_by, linked_at)
 values ('76100000-0000-4000-8000-000000000001', 'c2000000-0000-4000-8000-000000000002',
         '0a000000-0000-4000-8000-00000000000a', 'S9',
         '76000000-0000-4000-8000-000000000001',
-        '01000000-0000-4000-8000-000000000001', now());
+        '02000000-0000-4000-8000-000000000002', now());
+select set_config('echo.actor_id', '01000000-0000-4000-8000-000000000001', true);
 
 -- ── a MEMBER is refused at the door ───────────────────────────────────────
 select set_config('echo.actor_id', '02000000-0000-4000-8000-000000000002', true);  -- bob, member
