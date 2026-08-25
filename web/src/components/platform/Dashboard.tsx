@@ -1,85 +1,155 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
-import type { AgentCardItem, Call, Me } from "@/api/types";
-import { Link } from "@/i18n/routing";
-import { digits, formatDate, personName } from "@/lib/format";
-import { openAssistant } from "@/lib/assistantBus";
-import { useRefreshEpoch } from "@/lib/refreshBus";
+import type { Me } from "@/api/types";
+import { personName } from "@/lib/format";
+import { KebabMenu } from "@/components/rowActions";
+import {
+  DEFAULT_LAYOUT, WIDGETS, WIDGET_SPAN, moveWidget, readLayout, writeLayout,
+  type DashboardLayout, type WidgetKey,
+} from "@/lib/dashboardLayout";
+import { useDashboardData } from "./dashboard/useDashboardData";
+import {
+  AskWidget, BriefingWidget, LaneWidget, PeopleWidget, PipelineWidget, PulseWidget,
+  RecentWidget, TilesWidget, TopicsWidget,
+} from "./dashboard/widgets";
 
 /**
- * THE DASHBOARD — the platform's landing page (user directive, 2026-08-25:
- * "from now on the dashboard should be our landing page").
+ * THE DASHBOARD — the platform's landing page, as a real BENTO GRID (user
+ * directive, 2026-08-25): every block can be moved, expanded in place,
+ * removed, and brought back.
  *
- * It answers one question on arrival: *what happened while I was away, and
- * what wants me now.* Everything on it is derived from what the wire
- * already serves — records, the assistant's signal cards, the roster — so
- * no tile is a promise: a number that cannot be computed renders as «—»
- * (the history_since rule), never as a confident zero.
+ * Three decisions worth keeping:
  *
- * AI-native means the assistant is present as an ACTION, not as a widget:
- * every block can be handed to the dock with a question already drafted,
- * and the signals lane is the agent speaking first.
+ * · **Expand in place, never navigate.** A card's ⤢ makes it span the grid
+ *   and show its deeper rows — the Linear/Datadog pattern. Losing the page
+ *   to see one more row is what a dashboard exists to avoid.
+ * · **Drag OR keyboard.** Cards are draggable, and the same reordering
+ *   lives in each card's ⋯ menu (move up / move down). A drag-only grid is
+ *   a grid half the people cannot use.
+ * · **The layout is a per-person preference**, stored locally and marked
+ *   INTERIM in `lib/dashboardLayout` — a device copy of a convenience, not
+ *   a second source for a record.
  */
 export function Dashboard() {
   const t = useTranslations("dashboard");
-  const tCalls = useTranslations("calls");
   const locale = useLocale();
-
   const [me, setMe] = useState<Me | null>(null);
-  /** null = not fetched yet — the tiles say «—» rather than «۰» */
-  const [calls, setCalls] = useState<Call[] | null>(null);
-  const [cards, setCards] = useState<AgentCardItem[]>([]);
-  const callsEpoch = useRefreshEpoch("calls");
+  const [layout, setLayout] = useState<DashboardLayout>(DEFAULT_LAYOUT);
+  const [expanded, setExpanded] = useState<WidgetKey | null>(null);
+  const [dragging, setDragging] = useState<WidgetKey | null>(null);
+  const data = useDashboardData();
 
-  useEffect(() => {
-    void api.me().then(setMe).catch(() => setMe(null));
-  }, []);
-  useEffect(() => {
-    void api.listCalls({ includeArchived: false })
-      .then((rows) => setCalls(rows.filter((c) => c.deleted_at === null)))
-      .catch(() => setCalls([]));
-    void api.cards().then((res) => setCards(res.cards)).catch(() => setCards([]));
-  }, [callsEpoch]);
+  useEffect(() => { setLayout(readLayout()); }, []);
+  useEffect(() => { void api.me().then(setMe).catch(() => setMe(null)); }, []);
 
-  const rows = calls ?? [];
-  const weekAgo = Date.now() - 7 * 24 * 3600 * 1000;
-  const thisWeek = rows.filter((c) => new Date(c.started_at).getTime() >= weekAgo);
-  const minutes = Math.round(
-    thisWeek.reduce((ms, c) => ms + (c.duration_ms ?? 0), 0) / 60_000);
-  const unread = cards.filter((c) => !c.read).length;
-  const processing = rows.filter(
-    (c) => c.status !== "ready" && c.status !== "failed").length;
-  const recent = rows.slice().sort((a, b) => b.started_at.localeCompare(a.started_at));
+  function update(next: DashboardLayout): void {
+    setLayout(next);
+    writeLayout(next);
+  }
+  const toggleWidget = (key: WidgetKey) =>
+    update({
+      ...layout,
+      widgets: layout.widgets.includes(key)
+        ? layout.widgets.filter((w) => w !== key)
+        : [...layout.widgets, key],
+    });
+  const move = (key: WidgetKey, delta: number) => {
+    const at = layout.widgets.indexOf(key);
+    if (at < 0) return;
+    update({ ...layout, widgets: moveWidget(layout.widgets, key, at + delta) });
+  };
 
-  /** records per day for the last 14 — the week's shape, not a claim */
-  const spark = Array.from({ length: 14 }, (_, i) => {
-    const day = new Date();
-    day.setHours(0, 0, 0, 0);
-    day.setDate(day.getDate() - (13 - i));
-    const next = day.getTime() + 24 * 3600 * 1000;
-    return rows.filter((c) => {
-      const at = new Date(c.started_at).getTime();
-      return at >= day.getTime() && at < next;
-    }).length;
-  });
-  const sparkMax = Math.max(1, ...spark);
+  const compact = layout.density === "compact";
 
-  const tile = (label: string, value: number) => (
-    <div className="rounded-2xl border border-border bg-surface p-4">
-      <p className="text-xs text-fg-muted">{label}</p>
-      <p className="mt-1 text-3xl font-bold text-fg">
-        {calls === null ? "—" : digits(value, locale)}
-      </p>
-    </div>
-  );
+  /** one card's chrome: title, its ⋯, drag handling, and the expand door */
+  function Card({ id, children }: { id: WidgetKey; children: ReactNode }) {
+    const isOpen = expanded === id;
+    const span = isOpen ? 6 : WIDGET_SPAN[id];
+    return (
+      <section
+        draggable
+        onDragStart={(e) => {
+          setDragging(id);
+          e.dataTransfer.effectAllowed = "move";
+        }}
+        onDragEnd={() => setDragging(null)}
+        onDragOver={(e) => { if (dragging && dragging !== id) e.preventDefault(); }}
+        onDrop={(e) => {
+          e.preventDefault();
+          if (!dragging || dragging === id) return;
+          update({ ...layout, widgets: moveWidget(layout.widgets, dragging, layout.widgets.indexOf(id)) });
+          setDragging(null);
+        }}
+        style={{ gridColumn: `span ${span} / span ${span}` }}
+        className={`glass-card group/card rounded-2xl ${compact ? "p-3" : "p-4"} transition-all ${
+          dragging === id ? "opacity-40" : ""
+        } ${isOpen ? "ring-1 ring-accent/40" : ""}`}
+        aria-label={t(`widget.${id}` as "widget.tiles")}
+      >
+        <header className="mb-3 flex items-center justify-between gap-2">
+          <h2 className="cursor-grab select-none text-sm font-semibold text-fg active:cursor-grabbing">
+            {t(`widget.${id}` as "widget.tiles")}
+          </h2>
+          <span className="flex items-center gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover/card:opacity-100">
+            <button
+              type="button"
+              className="tap grid h-7 w-7 place-items-center rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg"
+              aria-label={isOpen ? t("collapse") : t("expand")}
+              title={isOpen ? t("collapse") : t("expand")}
+              onClick={() => setExpanded(isOpen ? null : id)}
+            >
+              <span aria-hidden className="text-xs">{isOpen ? "⤡" : "⤢"}</span>
+            </button>
+            <KebabMenu
+              label={t("cardMenu")}
+              items={[
+                { key: "up", label: t("moveUp"), onSelect: () => move(id, -1) },
+                { key: "down", label: t("moveDown"), onSelect: () => move(id, 1) },
+                { key: "hide", label: t("hide"), danger: true, onSelect: () => toggleWidget(id) },
+              ]}
+            />
+          </span>
+        </header>
+        {children}
+      </section>
+    );
+  }
+
+  const render = (key: WidgetKey): ReactNode => {
+    const open = expanded === key;
+    switch (key) {
+      case "tiles": return <TilesWidget data={data} expanded={open} />;
+      case "briefing": return <BriefingWidget data={data} />;
+      case "ask": return <AskWidget />;
+      case "pulse": return <PulseWidget data={data} expanded={open} />;
+      case "commitments":
+        return (
+          <LaneWidget
+            items={data.actions} depth={data.laneDepth} expanded={open}
+            empty={t("commitmentsEmpty")}
+          />
+        );
+      case "decisions":
+        return (
+          <LaneWidget
+            items={data.decisions} depth={data.laneDepth} expanded={open} numbered
+            empty={t("decisionsEmpty")}
+          />
+        );
+      case "topics": return <TopicsWidget data={data} />;
+      case "people": return <PeopleWidget data={data} />;
+      case "pipeline": return <PipelineWidget data={data} />;
+      case "recent": return <RecentWidget data={data} expanded={open} />;
+    }
+  };
+
+  const hidden = WIDGETS.filter((w) => !layout.widgets.includes(w));
 
   return (
     <div className="space-y-4">
-      {/* the greeting: who, and when — the same personName resolver the hub
-          uses, so a Latin-named person is greeted as they wrote themselves */}
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
           <h1 className="text-2xl font-bold leading-tight text-fg">
@@ -87,103 +157,54 @@ export function Dashboard() {
           </h1>
           <p className="mt-1 text-sm text-fg-muted">{t("subtitle")}</p>
         </div>
-        <button
-          type="button"
-          className="btn-secondary h-9 min-h-0 px-3 text-xs"
-          onClick={() => openAssistant({ draft: t("askDraft") })}
-        >
-          {t("askAbout")}
-        </button>
+        <span className="flex items-center gap-2">
+          {/* DENSITY — the same board for a phone glance and a wall display */}
+          <span className="flex overflow-hidden rounded-lg border border-border" role="group" aria-label={t("density")}>
+            {(["comfortable", "compact"] as const).map((d) => (
+              <button
+                key={d}
+                type="button"
+                aria-pressed={layout.density === d}
+                className={`h-8 px-2.5 text-xs transition-colors ${
+                  layout.density === d
+                    ? "bg-accent-soft font-semibold text-accent"
+                    : "bg-surface text-fg-muted hover:text-fg"
+                }`}
+                onClick={() => update({ ...layout, density: d })}
+              >
+                {t(d)}
+              </button>
+            ))}
+          </span>
+          {/* ADD a widget back — the catalogue, minus what is already up */}
+          <KebabMenu
+            label={t("addWidget")}
+            trigger={<span className="text-xs">＋ {t("addWidget")}</span>}
+            items={
+              hidden.length === 0
+                ? [{ key: "none", label: t("allShown"), disabled: true }]
+                : hidden.map((key) => ({
+                    key,
+                    label: t(`widget.${key}` as "widget.tiles"),
+                    onSelect: () => toggleWidget(key),
+                  }))
+            }
+          />
+        </span>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {tile(t("tileRecordsWeek"), thisWeek.length)}
-        {tile(t("tileMinutes"), minutes)}
-        {tile(t("tileProcessing"), processing)}
-        {tile(t("tileSignals"), unread)}
+      {/* the BENTO: six columns, each card claiming the span it wants */}
+      <div className={`grid grid-cols-1 md:grid-cols-6 ${compact ? "gap-2" : "gap-3"}`}>
+        {layout.widgets.map((key) => (
+          <Card key={key} id={key}>{render(key)}</Card>
+        ))}
       </div>
 
-      {/* the fortnight's shape — bars, not a number: an empty stretch is
-          information too, and a chart says it without claiming a trend */}
-      <div className="rounded-2xl border border-border bg-surface p-4">
-        <p className="mb-3 text-xs font-semibold text-fg-muted">{t("activity")}</p>
-        <div className="flex h-20 items-end gap-1.5" aria-hidden>
-          {spark.map((n, i) => (
-            <span
-              key={i}
-              className={`flex-1 rounded-t transition-[height] ${
-                n === 0 ? "bg-surface-2" : "bg-accent/70"
-              }`}
-              style={{ height: `${Math.max(6, (n / sparkMax) * 100)}%` }}
-            />
-          ))}
-        </div>
-        <p className="mt-2 text-[11px] text-fg-subtle">{t("activityNote")}</p>
-      </div>
-
-      <div className="grid gap-3 lg:grid-cols-2">
-        {/* the freshest records — the thing people come back for */}
-        <section className="rounded-2xl border border-border bg-surface p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-fg">{t("recent")}</h2>
-            <Link href="/echo/records" className="text-xs text-accent underline-offset-2 hover:underline">
-              {t("seeAll")}
-            </Link>
-          </div>
-          {calls === null ? (
-            <p className="text-sm text-fg-muted">…</p>
-          ) : recent.length === 0 ? (
-            <p className="text-sm leading-7 text-fg-muted">{t("noRecords")}</p>
-          ) : (
-            <ul className="divide-y divide-border">
-              {recent.slice(0, 5).map((c) => (
-                <li key={c.id} className="py-2 first:pt-0 last:pb-0">
-                  <Link href={`/calls/${c.id}`} className="group flex items-center justify-between gap-3">
-                    <span className="min-w-0 truncate text-sm text-fg group-hover:text-accent">
-                      {c.title.trim() === "" ? tCalls("untitled") : c.title}
-                    </span>
-                    <span className="shrink-0 text-xs text-fg-subtle">
-                      {formatDate(c.started_at, locale)}
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        {/* the agent speaking FIRST — its unread briefs, opened in the dock
-            where the conversation that produced them already lives */}
-        <section className="rounded-2xl border border-border bg-surface p-4">
-          <h2 className="mb-3 text-sm font-semibold text-fg">{t("signals")}</h2>
-          {cards.length === 0 ? (
-            <p className="text-sm leading-7 text-fg-muted">{t("noSignals")}</p>
-          ) : (
-            <ul className="space-y-1.5">
-              {cards.slice(0, 5).map((card) => (
-                <li key={card.id}>
-                  <button
-                    type="button"
-                    className={`tap block w-full rounded-lg border px-3 py-2 text-start text-sm transition-colors ${
-                      card.read
-                        ? "border-border text-fg-muted hover:text-fg"
-                        : "border-accent/40 bg-accent-soft text-fg"
-                    }`}
-                    onClick={() => {
-                      if (card.session_id) openAssistant({ sessionId: card.session_id });
-                    }}
-                  >
-                    {!card.read ? (
-                      <span className="me-1.5 inline-block h-1.5 w-1.5 rounded-full bg-accent align-middle" aria-hidden />
-                    ) : null}
-                    <span className="align-middle">{card.title}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      </div>
+      {layout.widgets.length === 0 ? (
+        <p className="rounded-2xl border border-dashed border-border-strong p-6 text-center text-sm text-fg-muted">
+          {t("emptyBoard")}
+        </p>
+      ) : null}
     </div>
   );
 }

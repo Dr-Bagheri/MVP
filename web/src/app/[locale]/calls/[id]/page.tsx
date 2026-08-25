@@ -18,6 +18,7 @@ import {
 } from "@/components/icons";
 import { SectionMenu } from "@/components/scaffold";
 import { SummaryBody, parseSummary } from "@/components/echo/SummaryBody";
+import { summaryLanes } from "@/lib/summaryLanes";
 import { faDisplay } from "@/lib/faDisplay";
 import {
   canExportSubtitles,
@@ -691,29 +692,11 @@ export default function CallDetailPage({
     && (call.owner_id === me.id || me.role === "admin" || me.role === "owner");
   const ownsCall = me !== null && call.owner_id === me.id;
   /**
-   * The ACTIONS & DECISIONS lanes, extracted from the shown summary's own
-   * structure: a heading naming actions/decisions claims the bullets under
-   * it. Display-only over the record — the summary stays the source.
+   * The ACTIONS & DECISIONS lanes of the shown summary — read through the
+   * ONE shared rule (lib/summaryLanes), which the dashboard's cross-record
+   * lanes read too. Display-only over the record; the summary is the source.
    */
-  const lanes = (() => {
-    const actions: string[] = [];
-    const decisions: string[] = [];
-    if (!summary) return { actions, decisions };
-    let mode: "a" | "d" | null = null;
-    for (const block of parseSummary(summary.body)) {
-      if (block.kind === "heading") {
-        const h = block.text ?? "";
-        mode = /اقدام|کارها|وظیف|action|next step/i.test(h)
-          ? "a"
-          : /تصمیم|مصوب|decision/i.test(h)
-            ? "d"
-            : null;
-      } else if (block.kind === "bullets" && mode !== null) {
-        (mode === "a" ? actions : decisions).push(...block.items);
-      }
-    }
-    return { actions, decisions };
-  })();
+  const lanes = summary ? summaryLanes(summary.body) : { actions: [], decisions: [] };
   const genericTitle = isGenericTitle(call.title);
   const titleSuggestion = genericTitle && summary ? suggestTitleFrom(summary.body) : null;
 

@@ -1,5 +1,5 @@
-import { AssistantMenu } from "@/components/platform/AssistantMenu";
 import { Dashboard } from "@/components/platform/Dashboard";
+import { DashboardMenu } from "@/components/platform/DashboardMenu";
 import { PlatformShell } from "@/components/platform/PlatformShell";
 import { MenuLayout, PageContainer } from "@/components/scaffold";
 
@@ -19,8 +19,10 @@ import { MenuLayout, PageContainer } from "@/components/scaffold";
 export default function DashboardPage() {
   return (
     <PlatformShell>
-      <MenuLayout menu={<AssistantMenu activeSlug="dashboard" />}>
-        <PageContainer>
+      {/* the dashboard's OWN menu (2026-08-25): the assistant's destinations
+          belong to the assistant's page, not to the briefing */}
+      <MenuLayout menu={<DashboardMenu />}>
+        <PageContainer width="wide">
           <Dashboard />
         </PageContainer>
       </MenuLayout>

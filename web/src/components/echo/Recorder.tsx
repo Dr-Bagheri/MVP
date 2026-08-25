@@ -24,6 +24,7 @@ import { digits, formatClock } from "@/lib/format";
 import { resumePoint } from "./uploadRules";
 import { RecorderNotes } from "./RecorderNotes";
 import { SelectMenu } from "@/components/rowActions";
+import { DeviceCheck } from "./DeviceCheck";
 import { customTemplates, type CustomTemplate } from "@/lib/summaryTemplates";
 import { SUMMARY_TEMPLATES, type SummaryTemplate } from "@echo/core/vocabulary";
 
@@ -79,9 +80,11 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
   useEffect(() => { setCustoms(customTemplates()); }, []);
   /** the red stop-and-delete asks AGAIN before acting (user directive) */
   const [confirmDiscard, setConfirmDiscard] = useState(false);
-  /** cleanup #5 (2026-08-24): the four device/language selects fold behind
-      a disclosure — returning users see a title and two buttons */
-  const [showSettings, setShowSettings] = useState(false);
+  /** loudness enhance: a gain stage between the mic and the recorder */
+  const [boost, setBoost] = useState(false);
+  /** the CHECK's own monitoring gain — how loud the meter reads, so a
+      far mic can be judged before the take (it does not change the take) */
+  const [monitorGain, setMonitorGain] = useState(1);
   /** speak «این جلسه ضبط می‌شود» into the room — and into the record */
   const [announceOn, setAnnounceOn] = useState(false);
   /**
@@ -157,6 +160,7 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
         : template
           ? { summaryTemplate: template }
           : {}),
+      boost,
     }).then(() => {
       void refreshDevices(); // labels exist once permission does
       /* consent announcement (user Persian-moat item, 2026-08-23): spoken
@@ -262,17 +266,11 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
               renaming is one pencil away on the record. `title` state stays:
               the agent's start_recording can still carry a name, and a
               resumed take keeps the one it already has. */}
-          <button
-            type="button"
-            className="mt-3 flex items-center gap-1.5 text-xs text-fg-muted underline-offset-2 hover:text-fg hover:underline"
-            aria-expanded={showSettings}
-            onClick={() => setShowSettings((v) => !v)}
-          >
-            <span aria-hidden>{showSettings ? "▾" : "▸"}</span>
-            {t("recordSettings")}
-          </button>
-          {showSettings ? (
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          {/* the settings no longer HIDE (user directive, 2026-08-25): the
+              disclosure saved four rows and cost people the one check that
+              prevents a silent recording — everything is visible now */}
+          <p className="mb-2 mt-1 text-xs font-medium text-fg-subtle">{t("recordSettings")}</p>
+          <div className="grid gap-3 sm:grid-cols-2">
             {/* the platform dropdown (2026-08-25): every select is the
                 kebab-styled SelectMenu now — no native option lists */}
             <Field label={t("micField")}>
@@ -340,7 +338,17 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
               />
             </Field>
           </div>
-          ) : null}
+          {/* hear yourself BEFORE the meeting, not after it (2026-08-25) */}
+          <div className="mt-3">
+            <DeviceCheck
+              micId={micId}
+              speakerId={speakerId}
+              boost={boost}
+              onBoostChange={setBoost}
+              gain={monitorGain}
+              onGainChange={setMonitorGain}
+            />
+          </div>
           <label className="mt-3 flex cursor-pointer items-center gap-2 text-sm text-fg">
             <input
               type="checkbox"

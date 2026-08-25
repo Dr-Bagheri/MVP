@@ -71,7 +71,17 @@ export interface StartOptions {
       custom template's name + prompt; the pipeline's summarize applies it */
   summaryTemplate?: string | undefined;
   summaryInstruction?: string | undefined;
+  /**
+   * LOUDNESS ENHANCE (user directive, 2026-08-25): a quiet room, a far
+   * microphone. The mic is routed through a gain stage before it reaches
+   * the recorder — off by default, because amplifying a healthy signal
+   * only amplifies its noise floor with it.
+   */
+  boost?: boolean | undefined;
 }
+
+/** the enhance stage's gain — ~+7dB, enough for a far mic, short of clipping */
+export const BOOST_GAIN = 2.2;
 
 // ---- module state -----------------------------------------------------------
 
@@ -472,8 +482,26 @@ export async function startRecording(opts: StartOptions): Promise<void> {
     audioCtx = ctx;
     const dest = ctx.createMediaStreamDestination();
     mixDest = dest;
-    ctx.createMediaStreamSource(micStream).connect(dest);
+    const micNode = ctx.createMediaStreamSource(micStream);
+    if (opts.boost) {
+      const gain = ctx.createGain();
+      gain.gain.value = BOOST_GAIN;
+      micNode.connect(gain).connect(dest);
+    } else {
+      micNode.connect(dest);
+    }
+    // the shared audio is NOT boosted: it arrives at the sender's own level
     ctx.createMediaStreamSource(new MediaStream(shareAudio)).connect(dest);
+    stream = dest.stream;
+  } else if (opts.boost) {
+    /* mic-only WITH the enhance stage: one node between the device and the
+       recorder, so the raw track keeps living in rawTracks for cleanup */
+    const ctx = new AudioContext();
+    audioCtx = ctx;
+    const dest = ctx.createMediaStreamDestination();
+    const gain = ctx.createGain();
+    gain.gain.value = BOOST_GAIN;
+    ctx.createMediaStreamSource(micStream).connect(gain).connect(dest);
     stream = dest.stream;
   } else {
     stream = micStream;

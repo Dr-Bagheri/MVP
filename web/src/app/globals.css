@@ -483,6 +483,27 @@
  * marks page-level chrome; the shell pieces are addressed by their own
  * hooks so no page has to remember them.
  */
+/*
+ * GLASS DEPTH (2026-08-25, the dashboard's bento): a translucent layer over
+ * the page ground with a hairline edge — depth without a second colour, and
+ * deliberately SUBTLE (heavy blur is the 2021 version of this idea). The
+ * tokens do the work, so it lands correctly in both themes: on the dark
+ * ground it reads as lifted glass, on the light one as a soft card.
+ */
+.glass-card {
+  background: rgb(var(--surface) / 0.72);
+  border: 1px solid rgb(var(--border) / 0.9);
+  backdrop-filter: blur(10px) saturate(1.1);
+  box-shadow: 0 1px 0 0 rgb(255 255 255 / 0.04) inset;
+}
+.glass-tile {
+  background: rgb(var(--surface-2) / 0.5);
+  border: 1px solid rgb(var(--border) / 0.7);
+}
+@media (prefers-reduced-transparency: reduce) {
+  .glass-card { background: rgb(var(--surface)); backdrop-filter: none; }
+}
+
 /* the Word-like summary editor's page: headings and lists render as the
    reader will see them (the reset strips list styles globally) */
 .rte h3 {
