@@ -270,6 +270,140 @@ export function KebabMenu({
   );
 }
 
+export interface SelectMenuOption {
+  value: string;
+  label: string;
+  disabled?: boolean;
+}
+
+/**
+ * THE platform dropdown (user directive, 2026-08-25): every select opens a
+ * panel styled EXACTLY like the kebab menu — same border, surface, shadow,
+ * item hover — instead of the browser's native option list. A theme
+ * STRUCTURE item beside KebabMenu: new dropdowns use this; remaining native
+ * selects (AuditLogs, OrgFields, profile — their tests grip the native
+ * element) swap as they are next touched.
+ *
+ * Same discipline as the kebab: portal to <body>, fixed position, opens
+ * COMPLETELY (flips up when the viewport ends, never scrolls internally),
+ * closes on outside click / Escape / scroll / resize.
+ */
+export function SelectMenu({
+  value,
+  onChange,
+  options,
+  ariaLabel,
+  className = "",
+  disabled = false,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  options: SelectMenuOption[];
+  ariaLabel: string;
+  /** sizing/spacing for the TRIGGER (defaults to the input look) */
+  className?: string;
+  disabled?: boolean;
+}) {
+  const [at, setAt] = useState<{ top: number; left: number; width: number } | null>(null);
+  const rootRef = useRef<HTMLButtonElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const current = options.find((o) => o.value === value);
+
+  function toggle() {
+    if (at) return setAt(null);
+    const rect = rootRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const width = Math.max(rect.width, 160);
+    const rtl = document.documentElement.dir === "rtl";
+    const left = rtl ? rect.right - width : rect.left;
+    const height = options.length * ITEM_H + 10;
+    const below = rect.bottom + 4;
+    const top = below + height <= window.innerHeight - 8
+      ? below
+      : Math.max(8, rect.top - 4 - height);
+    setAt({
+      top,
+      left: Math.max(8, Math.min(left, window.innerWidth - width - 8)),
+      width,
+    });
+  }
+
+  useEffect(() => {
+    if (!at) return;
+    const close = () => setAt(null);
+    const onDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (!rootRef.current?.contains(target) && !panelRef.current?.contains(target)) close();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [at]);
+
+  return (
+    <>
+      <button
+        type="button"
+        ref={rootRef}
+        aria-label={ariaLabel}
+        aria-haspopup="listbox"
+        aria-expanded={at !== null}
+        disabled={disabled}
+        onClick={(e) => { e.stopPropagation(); toggle(); }}
+        className={`input flex items-center justify-between gap-2 text-start ${className}`}
+      >
+        <span className="min-w-0 flex-1 truncate">{current?.label ?? ""}</span>
+        <span aria-hidden className="shrink-0 text-[10px] text-fg-muted">▾</span>
+      </button>
+      {at
+        ? createPortal(
+            <div
+              ref={panelRef}
+              role="listbox"
+              aria-label={ariaLabel}
+              style={{ position: "fixed", top: at.top, left: at.left, minWidth: at.width }}
+              className="z-50 rounded-lg border border-border bg-surface py-1 shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {options.map((o) => (
+                <button
+                  key={o.value}
+                  type="button"
+                  role="option"
+                  aria-selected={o.value === value}
+                  disabled={o.disabled}
+                  onClick={() => {
+                    setAt(null);
+                    if (o.value !== value) onChange(o.value);
+                  }}
+                  className={`flex w-full items-center gap-2.5 py-2 pe-3 ps-3 text-start text-xs transition-colors ${
+                    o.value === value
+                      ? "bg-surface-2 font-semibold text-fg"
+                      : "text-fg-muted hover:bg-surface-2 hover:text-fg"
+                  } disabled:pointer-events-none disabled:opacity-40`}
+                >
+                  <span className="min-w-0 flex-1 truncate">{o.label}</span>
+                  {o.value === value ? <span aria-hidden className="text-[10px]">✓</span> : null}
+                </button>
+              ))}
+            </div>,
+            document.body,
+          )
+        : null}
+    </>
+  );
+}
+
 export function ConfirmDialog({
   title,
   body,

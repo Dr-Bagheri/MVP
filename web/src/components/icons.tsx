@@ -92,6 +92,12 @@ export const IconShare = (p: SVGProps<SVGSVGElement>) => (
 export const IconChevronEnd = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><path d="m9 5.5 6.5 6.5L9 18.5" /></svg>
 );
+export const IconGavel = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><path d="m13 6 5 5" /><path d="m10.5 8.5 5 5" /><path d="m14.5 4.5 5 5-2 2-5-5 2-2Z" /><path d="m8.5 10.5 5 5-2 2-5-5 2-2Z" /><path d="M3.5 20.5h9" /><path d="m9.5 13.5-5 5" /></svg>
+);
+export const IconPeople3 = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><circle cx="12" cy="7" r="2.5" /><circle cx="5.5" cy="9.5" r="2" /><circle cx="18.5" cy="9.5" r="2" /><path d="M8 19c.5-3 2-4.5 4-4.5s3.5 1.5 4 4.5" /><path d="M2.5 17c.4-2.2 1.5-3.4 3-3.4.8 0 1.5.3 2 .9" /><path d="M21.5 17c-.4-2.2-1.5-3.4-3-3.4-.8 0-1.5.3-2 .9" /></svg>
+);
 export const IconTag = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><path d="M3.5 11V4.5A1 1 0 0 1 4.5 3.5H11a2 2 0 0 1 1.4.6l7.5 7.5a2 2 0 0 1 0 2.8l-5.5 5.5a2 2 0 0 1-2.8 0L4.1 12.4a2 2 0 0 1-.6-1.4Z" /><circle cx="8" cy="8" r="1.3" fill="currentColor" stroke="none" /></svg>
 );

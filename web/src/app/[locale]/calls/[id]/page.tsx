@@ -10,9 +10,10 @@ import { useCrumbTitle } from "@/components/platform/CrumbTitle";
 import { Card, Chip } from "@/components/ui";
 import { formatClock, formatDate, formatDuration, digits } from "@/lib/format";
 import { isFillerWord, stripFillers } from "@/lib/cleanRead";
-import { IconAction, KebabMenu } from "@/components/rowActions";
+import { IconAction, KebabMenu, SelectMenu } from "@/components/rowActions";
 import {
-  IconArchive, IconFileText, IconGlobe, IconPencil, IconRows, IconShare, IconSparkle, IconTag,
+  IconArchive, IconChip, IconFileText, IconGavel, IconGlobe, IconMic, IconPencil,
+  IconPeople3, IconRows, IconShare, IconSparkle, IconTag, IconUsers,
 } from "@/components/icons";
 import { SectionMenu } from "@/components/scaffold";
 import { SummaryBody, parseSummary } from "@/components/echo/SummaryBody";
@@ -46,14 +47,14 @@ const TEMPLATE_LABEL_KEY: Record<SummaryTemplate, "templateBoard" | "templateGro
   interview: "templateInterview",
 };
 
-/** Each ruled card shows an editable PREVIEW of what its template asks for —
-    product strings, typed against the producer's union like the labels. */
-const TEMPLATE_PREVIEW_KEY: Record<SummaryTemplate, "templatePreviewBoard" | "templatePreviewGroup" | "templatePreviewTeam" | "templatePreviewItTeam" | "templatePreviewInterview"> = {
-  board: "templatePreviewBoard",
-  group: "templatePreviewGroup",
-  team: "templatePreviewTeam",
-  it_team: "templatePreviewItTeam",
-  interview: "templatePreviewInterview",
+/** Each ruled card is an ICON + name (user directive, 2026-08-25) — the
+    image names the meeting kind at a glance, typed against the union. */
+const TEMPLATE_ICON: Record<SummaryTemplate, typeof IconGavel> = {
+  board: IconGavel,
+  group: IconPeople3,
+  team: IconUsers,
+  it_team: IconChip,
+  interview: IconMic,
 };
 
 /**
@@ -152,9 +153,7 @@ export default function CallDetailPage({
    * INTERIM local store (lib/summaryTemplates).
    */
   const [customs, setCustoms] = useState<CustomTemplate[]>([]);
-  const [previews, setPreviews] = useState<Record<string, string>>({});
   const [newTpl, setNewTpl] = useState<{ name: string; prompt: string } | null>(null);
-  const [regenFigures, setRegenFigures] = useState(false);
   const [regenBusy, setRegenBusy] = useState(false);
   useEffect(() => { setCustoms(customTemplates()); }, []);
 
@@ -174,7 +173,6 @@ export default function CallDetailPage({
         ...(opts.template ? { template: opts.template } : {}),
         ...(opts.instruction?.trim() ? { instruction: opts.instruction.trim() } : {}),
         ...(opts.label ? { label: opts.label } : {}),
-        ...(regenFigures ? { figures: true } : {}),
       });
       notify(t("regenStarted"));
       const fresh = await api.getCall(id).catch(() => null);
@@ -235,7 +233,10 @@ export default function CallDetailPage({
   useEffect(() => {
     if (editSpeakerRow === null) return;
     const onDown = (e: MouseEvent) => {
-      if (!(e.target as Element | null)?.closest?.("[data-speaker-pop]")) {
+      const el = e.target as Element | null;
+      // the person-select's option panel PORTALS to <body> — a click in it
+      // is inside the popover's conversation, not outside it
+      if (!el?.closest?.("[data-speaker-pop]") && !el?.closest?.('[role="listbox"]')) {
         setEditSpeakerRow(null);
       }
     };
@@ -704,6 +705,11 @@ export default function CallDetailPage({
   const mayEditCall = me !== null
     && (call.owner_id === me.id || me.role === "admin" || me.role === "owner");
   const ownsCall = me !== null && call.owner_id === me.id;
+  /** the menu's recents: newest three, this record excluded */
+  const recentCalls = allCalls
+    .filter((c) => c.deleted_at === null && c.archived_at === null && c.id !== id)
+    .sort((a, b) => b.started_at.localeCompare(a.started_at))
+    .slice(0, 3);
   const genericTitle = isGenericTitle(call.title);
   const titleSuggestion = genericTitle && summary ? suggestTitleFrom(summary.body) : null;
 
@@ -793,40 +799,8 @@ export default function CallDetailPage({
       },
     },
     { key: "print", label: t("printLabel"), icon: <IconFileText />, onSelect: () => window.print() },
-    /* view toggles — grouped into a FLYOUT (2026-08-25: a long kebab never
-       scrolls; too many items become a sub-menu instead) */
-    {
-      key: "view",
-      label: t("viewMenu"),
-      icon: <IconRows />,
-      sub: [
-        {
-          key: "view-follow",
-          label: `${t("followPlayback")}${followPlayback ? " ✓" : ""}`,
-          keepOpen: true,
-          onSelect: () => setFollowPlayback((v) => !v),
-        },
-        {
-          key: "view-paragraphs",
-          label: `${t("paragraphMode")}${paragraphMode ? " ✓" : ""}`,
-          keepOpen: true,
-          onSelect: () => setParagraphMode((v) => !v),
-        },
-        {
-          key: "view-fillers",
-          label: `${t("cleanRead")}${cleanRead ? " ✓" : ""}`,
-          keepOpen: true,
-          onSelect: () => setCleanRead((v) => !v),
-        },
-        {
-          key: "view-outline",
-          label: `${t("outlineMode")}${outlineMode ? " ✓" : ""}`,
-          keepOpen: true,
-          disabled: headings.length < 2,
-          onSelect: () => setOutlineMode((v) => !v),
-        },
-      ],
-    },
+    /* the VIEW toggles left this menu (user directive, 2026-08-25) — they
+       are transcript facts, so they live on the transcript's own header */
     {
       key: "scope",
       label: call.scope === "org" ? tCalls("makePrivate") : tCalls("makeOrg"),
@@ -868,28 +842,45 @@ export default function CallDetailPage({
              this page lives under «ضبط‌ها», and its own crumb carries the title */
           heading={tEcho("section.records")}
           activeSlug={section}
-          groups={[{
-            key: "doc",
-            title: t("docSections"),
-            items: [
-              {
-                slug: "summary",
-                href: `/calls/${id}`,
-                label: t("summary"),
-                icon: <IconFileText />,
-                preventNavigation: true,
-                onSelect: () => setSection("summary"),
-              },
-              {
-                slug: "transcript",
-                href: `/calls/${id}`,
-                label: t("transcript"),
-                icon: <IconRows />,
-                preventNavigation: true,
-                onSelect: () => setSection("transcript"),
-              },
-            ],
-          }]}
+          groups={[
+            {
+              key: "doc",
+              title: t("docSections"),
+              items: [
+                {
+                  slug: "summary",
+                  href: `/calls/${id}`,
+                  label: t("summary"),
+                  icon: <IconFileText />,
+                  preventNavigation: true,
+                  onSelect: () => setSection("summary"),
+                },
+                {
+                  slug: "transcript",
+                  href: `/calls/${id}`,
+                  label: t("transcript"),
+                  icon: <IconRows />,
+                  preventNavigation: true,
+                  onSelect: () => setSection("transcript"),
+                },
+              ],
+            },
+            /* the 3 MOST RECENT records as small sub-items (user directive,
+               2026-08-25 — the History-recents pattern): one hop between
+               fresh records without going back to the table */
+            ...(recentCalls.length > 0
+              ? [{
+                  key: "recent",
+                  title: t("recentRecords"),
+                  items: recentCalls.map((c) => ({
+                    slug: `recent-${c.id}`,
+                    href: `/calls/${c.id}`,
+                    label: c.title.trim() === "" ? tCalls("untitled") : c.title,
+                    sub: true,
+                  })),
+                }]
+              : []),
+          ]}
         />
       }
     >
@@ -1140,30 +1131,28 @@ export default function CallDetailPage({
 
         {/* ── the summary document (its own SECTION since 2026-08-25) ──── */}
         {section === "summary" ? (
+        <>
         <section className="border-t border-border px-5 py-4">
           <div className="no-print mb-3 flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-sm font-semibold text-fg">{t("summary")}</h2>
             <div className="flex flex-wrap items-center gap-1.5">
               {versions.length > 0 ? (
-                <select
-                  className="input h-8 min-h-0 w-auto py-0 text-xs"
-                  value={shownVersion ?? ""}
-                  aria-label={t("versions")}
-                  onChange={(e) => {
-                    setShownVersion(Number(e.target.value));
+                /* named by TEMPLATE alone (user directive, 2026-08-25: no
+                   date, no model) — the kebab-styled SelectMenu is the
+                   platform's dropdown now */
+                <SelectMenu
+                  className="h-8 min-h-0 w-auto py-0 text-xs"
+                  ariaLabel={t("versions")}
+                  value={String(shownVersion ?? "")}
+                  onChange={(next) => {
+                    setShownVersion(Number(next));
                     setCompareOpen(false);
                   }}
-                >
-                  {/* named by TEMPLATE (user directive) with provenance:
-                      «صورت‌جلسه · ۳ شهریور · gemini» — the first is Original */}
-                  {[...versions].reverse().map((v) => (
-                    <option key={v.version} value={v.version}>
-                      {versionName(v)}
-                      {` · ${formatDate(v.created_at, locale)}`}
-                      {v.model !== "human" ? ` · ${v.model.split("/").pop()}` : " ✎"}
-                    </option>
-                  ))}
-                </select>
+                  options={[...versions].reverse().map((v) => ({
+                    value: String(v.version),
+                    label: versionName(v),
+                  }))}
+                />
               ) : null}
               {/* #6: what changed against the previous version */}
               {prevVersion ? (
@@ -1330,139 +1319,105 @@ export default function CallDetailPage({
             </p>
           ) : null}
 
-          {/* ── REGENERATE (user directive, 2026-08-25): template CARDS under
-              the summary — each press = one new version, named by its card;
-              previews are editable prompts; «+» authors a new template ──── */}
-          {call.status === "ready" ? (
-            <div className="no-print mt-6 border-t border-border pt-4">
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <h3 className="text-sm font-semibold text-fg">{t("regenTitle")}</h3>
-                <label className="flex cursor-pointer items-center gap-2 text-xs text-fg-muted">
-                  <input
-                    type="checkbox"
-                    checked={regenFigures}
-                    onChange={(e) => setRegenFigures(e.target.checked)}
-                  />
-                  {t("regenFigures")}
-                </label>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                {SUMMARY_TEMPLATES.map((k) => {
-                  const fallback = t(TEMPLATE_PREVIEW_KEY[k]);
-                  const value = previews[k] ?? fallback;
-                  return (
-                    <div key={k} className="flex flex-col rounded-xl border border-border bg-surface-2/40 p-3">
-                      <p className="mb-2 text-sm font-semibold text-fg">{t(TEMPLATE_LABEL_KEY[k])}</p>
-                      <textarea
-                        className="input min-h-20 flex-1 resize-none py-1.5 text-xs leading-6"
-                        aria-label={t("templatePromptLabel")}
-                        value={value}
-                        onChange={(e) => setPreviews((p) => ({ ...p, [k]: e.target.value }))}
-                      />
-                      <button
-                        className="btn-primary mt-2 h-9 min-h-0 text-xs"
-                        disabled={regenBusy}
-                        onClick={() => void regenerate({
-                          template: k,
-                          // an edited preview rides as the instruction; the
-                          // untouched default stays the template's own shape
-                          ...(value.trim() !== fallback.trim()
-                            ? { instruction: value }
-                            : {}),
-                          label: k,
-                        })}
-                      >
-                        {t("regenGo")}
-                      </button>
-                    </div>
-                  );
-                })}
-                {customs.map((c) => {
-                  const key = `custom:${c.name}`;
-                  const value = previews[key] ?? c.prompt;
-                  return (
-                    <div key={key} className="flex flex-col rounded-xl border border-accent/40 bg-surface-2/40 p-3">
-                      <p className="mb-2 flex items-center justify-between text-sm font-semibold text-fg">
-                        <span className="truncate">{c.name}</span>
-                        <button
-                          className="text-xs font-normal text-fg-muted hover:text-danger"
-                          aria-label={t("templateDelete")}
-                          title={t("templateDelete")}
-                          onClick={() => setCustoms(deleteCustomTemplate(c.name))}
-                        >
-                          ✕
-                        </button>
-                      </p>
-                      <textarea
-                        className="input min-h-20 flex-1 resize-none py-1.5 text-xs leading-6"
-                        aria-label={t("templatePromptLabel")}
-                        value={value}
-                        onChange={(e) => setPreviews((p) => ({ ...p, [key]: e.target.value }))}
-                        onBlur={() => {
-                          if (value.trim() && value !== c.prompt) {
-                            setCustoms(saveCustomTemplate({ name: c.name, prompt: value }));
-                          }
-                        }}
-                      />
-                      <button
-                        className="btn-primary mt-2 h-9 min-h-0 text-xs"
-                        disabled={regenBusy || value.trim() === ""}
-                        onClick={() => void regenerate({ instruction: value, label: c.name })}
-                      >
-                        {t("regenGo")}
-                      </button>
-                    </div>
-                  );
-                })}
-                {newTpl ? (
-                  <div className="flex flex-col rounded-xl border border-dashed border-border-strong p-3">
-                    <input
-                      className="input mb-2 h-8 min-h-0 py-0 text-xs"
-                      maxLength={60}
-                      placeholder={t("templateNameHint")}
-                      value={newTpl.name}
-                      autoFocus
-                      onChange={(e) => setNewTpl({ ...newTpl, name: e.target.value })}
-                    />
-                    <textarea
-                      className="input min-h-20 flex-1 resize-none py-1.5 text-xs leading-6"
-                      maxLength={500}
-                      placeholder={t("templatePromptHint")}
-                      value={newTpl.prompt}
-                      onChange={(e) => setNewTpl({ ...newTpl, prompt: e.target.value })}
-                    />
-                    <span className="mt-2 flex items-center gap-2">
-                      <button
-                        className="btn-primary h-9 min-h-0 flex-1 text-xs"
-                        disabled={!newTpl.name.trim() || !newTpl.prompt.trim()}
-                        onClick={() => {
-                          setCustoms(saveCustomTemplate(newTpl));
-                          setNewTpl(null);
-                        }}
-                      >
-                        {t("templateSave")}
-                      </button>
-                      <button
-                        className="text-xs text-fg-muted underline-offset-2 hover:underline"
-                        onClick={() => setNewTpl(null)}
-                      >
-                        {t("regenCancel")}
-                      </button>
-                    </span>
-                  </div>
-                ) : (
-                  <button
-                    className="tap flex min-h-32 flex-col items-center justify-center rounded-xl border border-dashed border-border-strong text-fg-muted transition-colors hover:border-accent hover:text-fg"
-                    onClick={() => setNewTpl({ name: "", prompt: "" })}
-                  >
-                    <span className="text-2xl leading-none" aria-hidden>＋</span>
-                    <span className="mt-1 text-xs">{t("templateAdd")}</span>
-                  </button>
-                )}
-              </div>
-            </div>
-          ) : null}
         </section>
+
+        {/* ── REGENERATE — its OWN section (user directive, 2026-08-25):
+            icon + name cards, the WHOLE card is the button; «+» authors a
+            new template (name + prompt); one press = one new version ───── */}
+        {call.status === "ready" ? (
+          <section className="no-print border-t border-border px-5 py-4">
+            <h2 className="mb-3 text-sm font-semibold text-fg">{t("regenTitle")}</h2>
+            <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-6">
+              {SUMMARY_TEMPLATES.map((k) => {
+                const Icon = TEMPLATE_ICON[k];
+                return (
+                  <button
+                    key={k}
+                    type="button"
+                    disabled={regenBusy}
+                    title={t(TEMPLATE_LABEL_KEY[k])}
+                    onClick={() => void regenerate({ template: k, label: k })}
+                    className="tap flex min-h-28 flex-col items-center justify-center gap-2.5 rounded-xl border border-border bg-surface-2/40 px-3 py-4 text-fg-muted transition-colors hover:border-accent hover:text-fg disabled:opacity-50"
+                  >
+                    <Icon width={26} height={26} />
+                    <span className="text-xs font-semibold">{t(TEMPLATE_LABEL_KEY[k])}</span>
+                  </button>
+                );
+              })}
+              {customs.map((c) => (
+                <span key={c.name} className="relative">
+                  <button
+                    type="button"
+                    disabled={regenBusy}
+                    title={c.name}
+                    onClick={() => void regenerate({ instruction: c.prompt, label: c.name })}
+                    className="tap flex min-h-28 w-full flex-col items-center justify-center gap-2.5 rounded-xl border border-accent/40 bg-surface-2/40 px-3 py-4 text-fg-muted transition-colors hover:border-accent hover:text-fg disabled:opacity-50"
+                  >
+                    <IconSparkle width={26} height={26} />
+                    <span className="max-w-full truncate text-xs font-semibold">{c.name}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="absolute end-1.5 top-1.5 text-xs text-fg-muted hover:text-danger"
+                    aria-label={t("templateDelete")}
+                    title={t("templateDelete")}
+                    onClick={() => setCustoms(deleteCustomTemplate(c.name))}
+                  >
+                    ✕
+                  </button>
+                </span>
+              ))}
+              {newTpl ? (
+                <div className="col-span-full flex flex-col rounded-xl border border-dashed border-border-strong p-3 sm:col-span-2">
+                  <input
+                    className="input mb-2 h-8 min-h-0 py-0 text-xs"
+                    maxLength={60}
+                    placeholder={t("templateNameHint")}
+                    value={newTpl.name}
+                    autoFocus
+                    onChange={(e) => setNewTpl({ ...newTpl, name: e.target.value })}
+                  />
+                  <textarea
+                    className="input min-h-20 flex-1 resize-none py-1.5 text-xs leading-6"
+                    aria-label={t("templatePromptLabel")}
+                    maxLength={500}
+                    placeholder={t("templatePromptHint")}
+                    value={newTpl.prompt}
+                    onChange={(e) => setNewTpl({ ...newTpl, prompt: e.target.value })}
+                  />
+                  <span className="mt-2 flex items-center gap-2">
+                    <button
+                      className="btn-primary h-9 min-h-0 flex-1 text-xs"
+                      disabled={!newTpl.name.trim() || !newTpl.prompt.trim()}
+                      onClick={() => {
+                        setCustoms(saveCustomTemplate(newTpl));
+                        setNewTpl(null);
+                      }}
+                    >
+                      {t("templateSave")}
+                    </button>
+                    <button
+                      className="text-xs text-fg-muted underline-offset-2 hover:underline"
+                      onClick={() => setNewTpl(null)}
+                    >
+                      {t("regenCancel")}
+                    </button>
+                  </span>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="tap flex min-h-28 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-border-strong text-fg-muted transition-colors hover:border-accent hover:text-fg"
+                  onClick={() => setNewTpl({ name: "", prompt: "" })}
+                >
+                  <span className="text-2xl leading-none" aria-hidden>＋</span>
+                  <span className="text-xs">{t("templateAdd")}</span>
+                </button>
+              )}
+            </div>
+          </section>
+        ) : null}
+        </>
         ) : null}
 
         {/* ── the transcript (the menu's second section) ────────────────── */}
@@ -1513,6 +1468,38 @@ export default function CallDetailPage({
                     ? t("seekHintMixed")
                     : t("seekHintLine")}
               </span>
+              {/* the reading modes, HOME at last: transcript facts on the
+                  transcript's header (moved out of the title kebab) */}
+              <KebabMenu
+                label={t("viewMenu")}
+                items={[
+                  {
+                    key: "view-follow",
+                    label: `${t("followPlayback")}${followPlayback ? " ✓" : ""}`,
+                    keepOpen: true,
+                    onSelect: () => setFollowPlayback((v) => !v),
+                  },
+                  {
+                    key: "view-paragraphs",
+                    label: `${t("paragraphMode")}${paragraphMode ? " ✓" : ""}`,
+                    keepOpen: true,
+                    onSelect: () => setParagraphMode((v) => !v),
+                  },
+                  {
+                    key: "view-fillers",
+                    label: `${t("cleanRead")}${cleanRead ? " ✓" : ""}`,
+                    keepOpen: true,
+                    onSelect: () => setCleanRead((v) => !v),
+                  },
+                  {
+                    key: "view-outline",
+                    label: `${t("outlineMode")}${outlineMode ? " ✓" : ""}`,
+                    keepOpen: true,
+                    disabled: headings.length < 2,
+                    onSelect: () => setOutlineMode((v) => !v),
+                  },
+                ]}
+              />
             </div>
             {/* speaker chips + the talk-time bar (#10) */}
             {rows.length > 0 && !showTranscriptEn && speakers.length > 1 ? (
@@ -1599,11 +1586,12 @@ export default function CallDetailPage({
               <p className="mt-3 text-xs text-fg-muted">{t("provisionalHint")}</p>
             </div>
           ) : (
-          /* #the 5-line window (user directive): the transcript scrolls in
-             its own box instead of stretching the page to infinity */
+          /* a FULL-SCREEN window before any scrolling (user directive,
+             2026-08-25 — superseding the 5-line box): the transcript fills
+             the viewport's height first, then scrolls inside its own box */
           <div
             ref={listRef}
-            className="max-h-[24rem] overflow-y-auto"
+            className="max-h-[calc(100dvh-13rem)] overflow-y-auto"
             onMouseUp={onListMouseUp}
             onScroll={(e) => {
               const el = e.currentTarget;
@@ -1728,22 +1716,24 @@ export default function CallDetailPage({
                             }}
                           />
                           {ownsCall ? (
-                            <select
-                              className="input mt-2 h-8 min-h-0 w-full py-0 text-xs"
-                              aria-label={t("linkSpeaker")}
-                              value={speakers.find((s) => s.id === row.speaker_id)?.person_id ?? ""}
-                              onChange={(e) =>
-                                void saveSpeakerEdit(row.speaker_id!, e.target.value || null)
-                                  .then((ok) => { if (ok) setEditSpeakerRow(null); })
-                              }
-                            >
-                              <option value="">{t("noPerson")}</option>
-                              {directory.map((person) => (
-                                <option key={person.id} value={person.id}>
-                                  {person.display_name}
-                                </option>
-                              ))}
-                            </select>
+                            <span className="mt-2 block">
+                              <SelectMenu
+                                className="h-8 min-h-0 w-full py-0 text-xs"
+                                ariaLabel={t("linkSpeaker")}
+                                value={speakers.find((s) => s.id === row.speaker_id)?.person_id ?? ""}
+                                onChange={(next) =>
+                                  void saveSpeakerEdit(row.speaker_id!, next || null)
+                                    .then((ok) => { if (ok) setEditSpeakerRow(null); })
+                                }
+                                options={[
+                                  { value: "", label: t("noPerson") },
+                                  ...directory.map((person) => ({
+                                    value: person.id,
+                                    label: person.display_name,
+                                  })),
+                                ]}
+                              />
+                            </span>
                           ) : (
                             /* the directory link is the OWNER's act (M11 +
                                0093) — say so instead of rendering a select

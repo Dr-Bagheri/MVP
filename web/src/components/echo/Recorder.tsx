@@ -23,6 +23,7 @@ import { Link } from "@/i18n/routing";
 import { digits, formatClock } from "@/lib/format";
 import { resumePoint } from "./uploadRules";
 import { RecorderNotes } from "./RecorderNotes";
+import { SelectMenu } from "@/components/rowActions";
 import { customTemplates, type CustomTemplate } from "@/lib/summaryTemplates";
 import { SUMMARY_TEMPLATES, type SummaryTemplate } from "@echo/core/vocabulary";
 
@@ -279,70 +280,71 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
           </button>
           {showSettings ? (
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            {/* the platform dropdown (2026-08-25): every select is the
+                kebab-styled SelectMenu now — no native option lists */}
             <Field label={t("micField")}>
-              <select className="input" value={micId} onChange={(e) => setMicId(e.target.value)}>
-                {mics.length === 0 ? <option value="">{t("micDefault")}</option> : null}
-                {mics.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.label}
-                  </option>
-                ))}
-              </select>
+              <SelectMenu
+                ariaLabel={t("micField")}
+                value={micId}
+                onChange={setMicId}
+                options={
+                  mics.length === 0
+                    ? [{ value: "", label: t("micDefault") }]
+                    : mics.map((d) => ({ value: d.id, label: d.label }))
+                }
+              />
             </Field>
             <Field label={t("speakerField")}>
-              <select
-                className="input"
+              <SelectMenu
+                ariaLabel={t("speakerField")}
                 value={speakerId}
-                onChange={(e) => setSpeakerId(e.target.value)}
-              >
-                {speakers.length === 0 ? <option value="">{t("speakerDefault")}</option> : null}
-                {speakers.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.label}
-                  </option>
-                ))}
-              </select>
+                onChange={setSpeakerId}
+                options={
+                  speakers.length === 0
+                    ? [{ value: "", label: t("speakerDefault") }]
+                    : speakers.map((d) => ({ value: d.id, label: d.label }))
+                }
+              />
             </Field>
             <Field label={t("languageField")}>
               {/* the transcriber's hint — set at creation */}
-              <select
-                className="input"
+              <SelectMenu
+                ariaLabel={t("languageField")}
                 value={language}
-                onChange={(e) => setLanguage(e.target.value as "fa" | "en" | "mixed")}
+                onChange={(v) => setLanguage(v as "fa" | "en" | "mixed")}
                 disabled={resuming}
-              >
-                <option value="mixed">{t("languageMixed")}</option>
-                <option value="fa">{t("languageFa")}</option>
-                <option value="en">{t("languageEn")}</option>
-              </select>
+                options={[
+                  { value: "mixed", label: t("languageMixed") },
+                  { value: "fa", label: t("languageFa") },
+                  { value: "en", label: t("languageEn") },
+                ]}
+              />
             </Field>
             <Field label={t("sourceField")}>
-              <select
-                className="input"
+              <SelectMenu
+                ariaLabel={t("sourceField")}
                 value={source}
-                onChange={(e) => setSource(e.target.value as "mic" | "system")}
-              >
-                <option value="mic">{t("sourceMic")}</option>
-                <option value="system">{t("sourceSystem")}</option>
-              </select>
+                onChange={(v) => setSource(v as "mic" | "system")}
+                options={[
+                  { value: "mic", label: t("sourceMic") },
+                  { value: "system", label: t("sourceSystem") },
+                ]}
+              />
             </Field>
             <Field label={t("templateField")}>
               {/* 0094: the summary's SHAPE chosen before the meeting — the
                   ruled five plus this person's own templates */}
-              <select
-                className="input"
+              <SelectMenu
+                ariaLabel={t("templateField")}
                 value={template}
-                onChange={(e) => setTemplate(e.target.value)}
+                onChange={setTemplate}
                 disabled={resuming}
-              >
-                <option value="">{t("templateNone")}</option>
-                {SUMMARY_TEMPLATES.map((k) => (
-                  <option key={k} value={k}>{t(TEMPLATE_KEY[k])}</option>
-                ))}
-                {customs.map((c) => (
-                  <option key={`c:${c.name}`} value={`custom:${c.name}`}>{c.name}</option>
-                ))}
-              </select>
+                options={[
+                  { value: "", label: t("templateNone") },
+                  ...SUMMARY_TEMPLATES.map((k) => ({ value: k, label: t(TEMPLATE_KEY[k]) })),
+                  ...customs.map((c) => ({ value: `custom:${c.name}`, label: c.name })),
+                ]}
+              />
             </Field>
           </div>
           ) : null}
