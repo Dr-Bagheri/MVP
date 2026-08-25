@@ -32,6 +32,9 @@ import { notify } from "@/lib/notify";
 import { openAssistant } from "@/lib/assistantBus";
 import { redactSensitive } from "@/lib/redact";
 import { SUMMARY_TEMPLATES, type SummaryTemplate } from "@echo/core/vocabulary";
+import {
+  customTemplates, deleteCustomTemplate, saveCustomTemplate, type CustomTemplate,
+} from "@/lib/summaryTemplates";
 
 /** Template → its literal message key: typed against the producer's union,
     so a new ruled template breaks this build until it gets a label. */
@@ -41,6 +44,16 @@ const TEMPLATE_LABEL_KEY: Record<SummaryTemplate, "templateBoard" | "templateGro
   team: "templateTeam",
   it_team: "templateItTeam",
   interview: "templateInterview",
+};
+
+/** Each ruled card shows an editable PREVIEW of what its template asks for —
+    product strings, typed against the producer's union like the labels. */
+const TEMPLATE_PREVIEW_KEY: Record<SummaryTemplate, "templatePreviewBoard" | "templatePreviewGroup" | "templatePreviewTeam" | "templatePreviewItTeam" | "templatePreviewInterview"> = {
+  board: "templatePreviewBoard",
+  group: "templatePreviewGroup",
+  team: "templatePreviewTeam",
+  it_team: "templatePreviewItTeam",
+  interview: "templatePreviewInterview",
 };
 
 /**
@@ -74,6 +87,7 @@ export default function CallDetailPage({
   const tStatus = useTranslations("status");
   const tCalls = useTranslations("calls");
   const tCommon = useTranslations("common");
+  const tEcho = useTranslations("echo");
   const locale = useLocale();
 
   const [call, setCall] = useState<Call | null>(null);
@@ -131,24 +145,37 @@ export default function CallDetailPage({
   }
   /** redact identifier-shaped digit runs in EXPORTS — display stays verbatim */
   const [redactExports, setRedactExports] = useState(false);
-  /** Regenerate-summary panel: template + optional instruction. */
-  const [regenOpen, setRegenOpen] = useState(false);
-  const [regenTemplate, setRegenTemplate] = useState<string>("");
-  const [regenInstruction, setRegenInstruction] = useState("");
+  /**
+   * The regenerate CARDS (user directive, 2026-08-25): the five ruled
+   * templates plus the person's own, each with an editable preview of its
+   * prompt; pressing one adds a new version. Custom templates live in the
+   * INTERIM local store (lib/summaryTemplates).
+   */
+  const [customs, setCustoms] = useState<CustomTemplate[]>([]);
+  const [previews, setPreviews] = useState<Record<string, string>>({});
+  const [newTpl, setNewTpl] = useState<{ name: string; prompt: string } | null>(null);
   const [regenFigures, setRegenFigures] = useState(false);
   const [regenBusy, setRegenBusy] = useState(false);
+  useEffect(() => { setCustoms(customTemplates()); }, []);
 
-  async function regenerate(): Promise<void> {
+  /**
+   * One template card pressed = one NEW VERSION (user directive,
+   * 2026-08-25). Ruled cards send their key (edited preview rides as the
+   * instruction); custom cards send their prompt, and their NAME becomes
+   * the version's stored label (0094).
+   */
+  async function regenerate(opts: {
+    template?: string; instruction?: string; label?: string;
+  }): Promise<void> {
     if (regenBusy) return;
     setRegenBusy(true);
     try {
       await api.resummarize(id, {
-        ...(regenTemplate ? { template: regenTemplate } : {}),
-        ...(regenInstruction.trim() ? { instruction: regenInstruction.trim() } : {}),
+        ...(opts.template ? { template: opts.template } : {}),
+        ...(opts.instruction?.trim() ? { instruction: opts.instruction.trim() } : {}),
+        ...(opts.label ? { label: opts.label } : {}),
         ...(regenFigures ? { figures: true } : {}),
       });
-      setRegenOpen(false);
-      setRegenInstruction("");
       notify(t("regenStarted"));
       const fresh = await api.getCall(id).catch(() => null);
       if (fresh) setCall(fresh);
@@ -157,6 +184,18 @@ export default function CallDetailPage({
     } finally {
       setRegenBusy(false);
     }
+  }
+
+  /** the version picker's NAME for a version: v1 = the original; then the
+      stored template label (ruled keys translate; custom names as authored) */
+  function versionName(v: SummaryVersion): string {
+    if (v.model === "human") return `${t("versionEdited")}`;
+    if (v.version === 1) return t("versionOriginal");
+    const label = v.template ?? null;
+    if (label && (SUMMARY_TEMPLATES as readonly string[]).includes(label)) {
+      return t(TEMPLATE_LABEL_KEY[label as SummaryTemplate]);
+    }
+    return label ?? t("version", { n: digits(v.version, locale) });
   }
 
   async function translate(what: "summary" | "transcript"): Promise<void> {
@@ -192,6 +231,24 @@ export default function CallDetailPage({
   /** speaker inline editor — keyed by the ROW (user report: keying by the
       speaker opened every popover of that speaker at once) */
   const [editSpeakerRow, setEditSpeakerRow] = useState<string | null>(null);
+  /** the popover closes like every menu: Esc anywhere, click outside */
+  useEffect(() => {
+    if (editSpeakerRow === null) return;
+    const onDown = (e: MouseEvent) => {
+      if (!(e.target as Element | null)?.closest?.("[data-speaker-pop]")) {
+        setEditSpeakerRow(null);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setEditSpeakerRow(null);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [editSpeakerRow]);
   const [speakerDraft, setSpeakerDraft] = useState("");
 
   /** an edit that fails because 0092 hasn't run yet says WHICH failure */
@@ -279,6 +336,30 @@ export default function CallDetailPage({
     );
   }
 
+  /** Minutes as a Word file (.doc = HTML Word opens natively): title, date,
+      summary, then the transcript — RTL, redaction honoured like every
+      export. A real letterhead .docx is the named upgrade; this ships the
+      workflow today with zero dependencies. */
+  function exportDoc(): void {
+    if (!call) return;
+    const esc = (s: string) =>
+      s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const mask = (s: string) => (redactExports ? redactSensitive(s) : s);
+    const title = call.title.trim() === "" ? tCalls("untitled") : call.title;
+    const lines = rows.map((r) =>
+      `<p style="margin:0 0 8px"><b>${esc(speakerName(r.speaker_id))}</b>
+       <span style="color:#888">[${formatClock(r.start_ms / 1000, locale)}]</span><br/>
+       ${esc(mask(r.text))}</p>`).join("\n");
+    const html = `<html dir="rtl"><head><meta charset="utf-8"><title>${esc(title)}</title></head>
+      <body style="font-family:Vazirmatn,Tahoma,sans-serif;line-height:1.9">
+      <h1 style="margin:0">${esc(title)}</h1>
+      <p style="color:#666;margin:4px 0 18px">${formatDate(call.started_at, locale)}</p>
+      ${summary ? `<h2>${esc(t("summary"))}</h2><div>${esc(mask(summary.body)).replace(/\n/g, "<br/>")}</div>` : ""}
+      ${rows.length > 0 ? `<h2>${esc(t("transcript"))}</h2>${lines}` : ""}
+      </body></html>`;
+    downloadText(exportFilename(title, "doc"), html, "application/msword");
+  }
+
   /** true = saved (the caller closes the popover); false = refused, and the
       refusal was said out loud — the popover stays for another try */
   async function saveSpeakerEdit(speakerId: string, personId: string | null | undefined): Promise<boolean> {
@@ -333,11 +414,34 @@ export default function CallDetailPage({
       void translate("summary");
       void translate("transcript");
     }
-    /* #15: ?t=<seconds> — a shared link opens seeked, never auto-playing */
+    /* #15: ?t=<seconds> — a shared link opens seeked, never auto-playing.
+       A timestamp link is ABOUT the transcript — open that section. */
     const tSec = Number(params.get("t"));
-    if (Number.isFinite(tSec) && tSec > 0) setPlayheadMs(tSec * 1000);
+    if (Number.isFinite(tSec) && tSec > 0) {
+      setPlayheadMs(tSec * 1000);
+      setSection("transcript");
+    }
+    /* ?section= — the section survives sharing and the back button */
+    if (params.get("section") === "transcript") setSection("transcript");
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-once per call
   }, [id]);
+
+  /** the chosen section rides the URL (replace, not push — switching
+      sections is not a navigation someone should have to back out of) */
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (section === "transcript") url.searchParams.set("section", "transcript");
+    else url.searchParams.delete("section");
+    window.history.replaceState(null, "", url);
+  }, [section]);
+
+  /** PRINT = the summary document, nothing else (user report: menu fragments
+      printed) — printing from the transcript flips to summary first */
+  useEffect(() => {
+    const onBefore = () => setSection("summary");
+    window.addEventListener("beforeprint", onBefore);
+    return () => window.removeEventListener("beforeprint", onBefore);
+  }, []);
 
   /** pipeline polling — the page re-reads while the worker moves the call */
   useEffect(() => {
@@ -481,7 +585,24 @@ export default function CallDetailPage({
     if (q === "") return [];
     return visibleRows.filter((r) => r.text.includes(q)).map((r) => r.id);
   }, [findQ, visibleRows]);
-  const findCurrent = findMatches.length > 0 ? findMatches[findIdx % findMatches.length] : null;
+  const findCurrent = findMatches.length > 0
+    ? findMatches[((findIdx % findMatches.length) + findMatches.length) % findMatches.length]
+    : null;
+
+  /**
+   * PROGRESSIVE transcript (user directive, 2026-08-25): the first 10 lines
+   * render at once; scrolling the box reveals the rest in slabs. A seek or
+   * a find whose target sits past the frontier pulls the frontier to it —
+   * "show me 0:41" must never answer with ten lines from the beginning.
+   */
+  const [rowLimit, setRowLimit] = useState(10);
+  const shownRows = useMemo(() => visibleRows.slice(0, rowLimit), [visibleRows, rowLimit]);
+  useEffect(() => {
+    const targetId = findCurrent ?? activeRowId;
+    if (!targetId) return;
+    const idx = visibleRows.findIndex((r) => r.id === targetId);
+    if (idx >= rowLimit) setRowLimit(idx + 20);
+  }, [findCurrent, activeRowId, visibleRows, rowLimit]);
   useEffect(() => {
     if (!findCurrent) return;
     listRef.current
@@ -612,14 +733,8 @@ export default function CallDetailPage({
         void translate("transcript");
       },
     },
-    ...(call.status === "ready"
-      ? [{
-          key: "regenerate",
-          label: t("regenerate"),
-          icon: <IconSparkle />,
-          onSelect: () => setRegenOpen(true),
-        }]
-      : []),
+    /* regenerate LEFT the kebab (user directive, 2026-08-25): it lives as
+       the template cards under the summary now */
     ...(call.status === "failed"
       ? [{
           key: "retry",
@@ -651,6 +766,13 @@ export default function CallDetailPage({
           key: "export-md", label: "Markdown",
           disabled: rows.length === 0,
           onSelect: () => exportMarkdown(),
+        },
+        {
+          /* minutes as a Word file: an HTML .doc — Word opens it natively,
+             letterhead-light (title · date · summary · transcript), RTL */
+          key: "export-doc", label: "Word (.doc)",
+          disabled: rows.length === 0 && !summary,
+          onSelect: () => exportDoc(),
         },
         {
           key: "export-redact",
@@ -742,7 +864,9 @@ export default function CallDetailPage({
       menu={
         <SectionMenu
           navLabel={t("docSections")}
-          heading={call.title.trim() === "" ? tCalls("untitled") : call.title}
+          /* the pane title names the PLACE, not the record (user directive):
+             this page lives under «ضبط‌ها», and its own crumb carries the title */
+          heading={tEcho("section.records")}
           activeSlug={section}
           groups={[{
             key: "doc",
@@ -987,6 +1111,22 @@ export default function CallDetailPage({
             aria-label={t("volume")}
             onChange={(e) => setVolumeBoth(Number(e.target.value))}
           />
+          {/* a CHAPTER minted at the playhead — it joins the seekbar's marks
+              and the notes list; native prompt is the honest v1 name box */}
+          <IconAction
+            label={t("chapterAdd")}
+            onClick={() => {
+              const name = window.prompt(t("chapterPrompt"))?.trim();
+              if (!name) return;
+              void api
+                .addCallNote(id, { kind: "chapter", at_ms: Math.floor(playheadMs), body: name })
+                .then(() => api.callNotes(id)).then(setNotes)
+                .then(() => notify(t("noteAdded")))
+                .catch(() => notify(tCommon("actionFailed"), "warn"));
+            }}
+          >
+            <IconTag width={14} height={14} />
+          </IconAction>
           <KebabMenu
             label={t("speed")}
             trigger={<span className="ltr text-xs font-semibold">{rate}×</span>}
@@ -1014,10 +1154,13 @@ export default function CallDetailPage({
                     setCompareOpen(false);
                   }}
                 >
+                  {/* named by TEMPLATE (user directive) with provenance:
+                      «صورت‌جلسه · ۳ شهریور · gemini» — the first is Original */}
                   {[...versions].reverse().map((v) => (
                     <option key={v.version} value={v.version}>
-                      {t("version", { n: digits(v.version, locale) })}
-                      {v.model === "human" ? " ✎" : ""}
+                      {versionName(v)}
+                      {` · ${formatDate(v.created_at, locale)}`}
+                      {v.model !== "human" ? ` · ${v.model.split("/").pop()}` : " ✎"}
                     </option>
                   ))}
                 </select>
@@ -1050,56 +1193,6 @@ export default function CallDetailPage({
               ) : null}
             </div>
           </div>
-
-          {regenOpen && call.status === "ready" ? (
-            <div className="no-print mb-3 space-y-2 rounded-lg border border-border bg-surface-2/40 p-3">
-              <div className="grid gap-2 sm:grid-cols-2">
-                <select
-                  className="input h-9 min-h-0 py-0 text-xs"
-                  value={regenTemplate}
-                  onChange={(e) => setRegenTemplate(e.target.value)}
-                >
-                  <option value="">{t("templateDefault")}</option>
-                  {SUMMARY_TEMPLATES.map((k) => (
-                    <option key={k} value={k}>
-                      {t(TEMPLATE_LABEL_KEY[k])}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  className="input h-9 min-h-0 py-0 text-xs"
-                  maxLength={500}
-                  placeholder={t("regenInstructionHint")}
-                  value={regenInstruction}
-                  onChange={(e) => setRegenInstruction(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") void regenerate(); }}
-                />
-              </div>
-              <label className="flex cursor-pointer items-center gap-2 text-xs text-fg">
-                <input
-                  type="checkbox"
-                  checked={regenFigures}
-                  onChange={(e) => setRegenFigures(e.target.checked)}
-                />
-                {t("regenFigures")}
-              </label>
-              <div className="flex items-center gap-3">
-                <button
-                  className="btn-primary h-8 min-h-0 px-3 text-xs"
-                  disabled={regenBusy}
-                  onClick={() => void regenerate()}
-                >
-                  {t("regenGo")}
-                </button>
-                <button
-                  className="text-xs text-fg-muted underline-offset-2 hover:underline"
-                  onClick={() => setRegenOpen(false)}
-                >
-                  {t("regenCancel")}
-                </button>
-              </div>
-            </div>
-          ) : null}
 
           {summary ? (
             <>
@@ -1172,9 +1265,13 @@ export default function CallDetailPage({
               ) : showSummaryEn && summaryEn === "loading" ? (
                 <p className="text-sm text-fg-muted">{t("translating")}</p>
               ) : showSummaryEn && typeof summaryEn === "string" ? (
-                <p className="ltr whitespace-pre-wrap text-start text-sm leading-8 text-fg">
-                  {summaryEn}
-                </p>
+                /* SIDE-BY-SIDE: the Persian summary stays beside the English */
+                <div className="grid gap-6 md:grid-cols-2">
+                  <SummaryBody text={summary.body} />
+                  <p className="ltr whitespace-pre-wrap border-t border-border pt-4 text-start text-sm leading-8 text-fg md:border-s md:border-t-0 md:ps-6 md:pt-0">
+                    {summaryEn}
+                  </p>
+                </div>
               ) : outlineMode && headings.length >= 2 ? (
                 /* #18: the document as its chapter list */
                 <ul className="space-y-1.5">
@@ -1232,6 +1329,139 @@ export default function CallDetailPage({
               {translateError}
             </p>
           ) : null}
+
+          {/* ── REGENERATE (user directive, 2026-08-25): template CARDS under
+              the summary — each press = one new version, named by its card;
+              previews are editable prompts; «+» authors a new template ──── */}
+          {call.status === "ready" ? (
+            <div className="no-print mt-6 border-t border-border pt-4">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <h3 className="text-sm font-semibold text-fg">{t("regenTitle")}</h3>
+                <label className="flex cursor-pointer items-center gap-2 text-xs text-fg-muted">
+                  <input
+                    type="checkbox"
+                    checked={regenFigures}
+                    onChange={(e) => setRegenFigures(e.target.checked)}
+                  />
+                  {t("regenFigures")}
+                </label>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {SUMMARY_TEMPLATES.map((k) => {
+                  const fallback = t(TEMPLATE_PREVIEW_KEY[k]);
+                  const value = previews[k] ?? fallback;
+                  return (
+                    <div key={k} className="flex flex-col rounded-xl border border-border bg-surface-2/40 p-3">
+                      <p className="mb-2 text-sm font-semibold text-fg">{t(TEMPLATE_LABEL_KEY[k])}</p>
+                      <textarea
+                        className="input min-h-20 flex-1 resize-none py-1.5 text-xs leading-6"
+                        aria-label={t("templatePromptLabel")}
+                        value={value}
+                        onChange={(e) => setPreviews((p) => ({ ...p, [k]: e.target.value }))}
+                      />
+                      <button
+                        className="btn-primary mt-2 h-9 min-h-0 text-xs"
+                        disabled={regenBusy}
+                        onClick={() => void regenerate({
+                          template: k,
+                          // an edited preview rides as the instruction; the
+                          // untouched default stays the template's own shape
+                          ...(value.trim() !== fallback.trim()
+                            ? { instruction: value }
+                            : {}),
+                          label: k,
+                        })}
+                      >
+                        {t("regenGo")}
+                      </button>
+                    </div>
+                  );
+                })}
+                {customs.map((c) => {
+                  const key = `custom:${c.name}`;
+                  const value = previews[key] ?? c.prompt;
+                  return (
+                    <div key={key} className="flex flex-col rounded-xl border border-accent/40 bg-surface-2/40 p-3">
+                      <p className="mb-2 flex items-center justify-between text-sm font-semibold text-fg">
+                        <span className="truncate">{c.name}</span>
+                        <button
+                          className="text-xs font-normal text-fg-muted hover:text-danger"
+                          aria-label={t("templateDelete")}
+                          title={t("templateDelete")}
+                          onClick={() => setCustoms(deleteCustomTemplate(c.name))}
+                        >
+                          ✕
+                        </button>
+                      </p>
+                      <textarea
+                        className="input min-h-20 flex-1 resize-none py-1.5 text-xs leading-6"
+                        aria-label={t("templatePromptLabel")}
+                        value={value}
+                        onChange={(e) => setPreviews((p) => ({ ...p, [key]: e.target.value }))}
+                        onBlur={() => {
+                          if (value.trim() && value !== c.prompt) {
+                            setCustoms(saveCustomTemplate({ name: c.name, prompt: value }));
+                          }
+                        }}
+                      />
+                      <button
+                        className="btn-primary mt-2 h-9 min-h-0 text-xs"
+                        disabled={regenBusy || value.trim() === ""}
+                        onClick={() => void regenerate({ instruction: value, label: c.name })}
+                      >
+                        {t("regenGo")}
+                      </button>
+                    </div>
+                  );
+                })}
+                {newTpl ? (
+                  <div className="flex flex-col rounded-xl border border-dashed border-border-strong p-3">
+                    <input
+                      className="input mb-2 h-8 min-h-0 py-0 text-xs"
+                      maxLength={60}
+                      placeholder={t("templateNameHint")}
+                      value={newTpl.name}
+                      autoFocus
+                      onChange={(e) => setNewTpl({ ...newTpl, name: e.target.value })}
+                    />
+                    <textarea
+                      className="input min-h-20 flex-1 resize-none py-1.5 text-xs leading-6"
+                      maxLength={500}
+                      placeholder={t("templatePromptHint")}
+                      value={newTpl.prompt}
+                      onChange={(e) => setNewTpl({ ...newTpl, prompt: e.target.value })}
+                    />
+                    <span className="mt-2 flex items-center gap-2">
+                      <button
+                        className="btn-primary h-9 min-h-0 flex-1 text-xs"
+                        disabled={!newTpl.name.trim() || !newTpl.prompt.trim()}
+                        onClick={() => {
+                          setCustoms(saveCustomTemplate(newTpl));
+                          setNewTpl(null);
+                        }}
+                      >
+                        {t("templateSave")}
+                      </button>
+                      <button
+                        className="text-xs text-fg-muted underline-offset-2 hover:underline"
+                        onClick={() => setNewTpl(null)}
+                      >
+                        {t("regenCancel")}
+                      </button>
+                    </span>
+                  </div>
+                ) : (
+                  <button
+                    className="tap flex min-h-32 flex-col items-center justify-center rounded-xl border border-dashed border-border-strong text-fg-muted transition-colors hover:border-accent hover:text-fg"
+                    onClick={() => setNewTpl({ name: "", prompt: "" })}
+                  >
+                    <span className="text-2xl leading-none" aria-hidden>＋</span>
+                    <span className="mt-1 text-xs">{t("templateAdd")}</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : null}
         </section>
         ) : null}
 
@@ -1253,7 +1483,8 @@ export default function CallDetailPage({
                       setFindIdx(0);
                     }}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter") setFindIdx((i) => i + 1);
+                      // Enter cycles forward, Shift+Enter backward
+                      if (e.key === "Enter") setFindIdx((i) => i + (e.shiftKey ? -1 : 1));
                       if (e.key === "Escape") setFindQ("");
                     }}
                   />
@@ -1261,7 +1492,7 @@ export default function CallDetailPage({
                     <span className="ltr text-xs tabular-nums text-fg-muted">
                       {findMatches.length === 0
                         ? "0"
-                        : `${(findIdx % findMatches.length) + 1}/${findMatches.length}`}
+                        : `${(((findIdx % findMatches.length) + findMatches.length) % findMatches.length) + 1}/${findMatches.length}`}
                     </span>
                   ) : null}
                 </span>
@@ -1334,9 +1565,29 @@ export default function CallDetailPage({
           {showTranscriptEn && transcriptEn === "loading" ? (
             <p className="p-4 text-sm text-fg-muted">{t("translating")}</p>
           ) : showTranscriptEn && typeof transcriptEn === "string" ? (
-            <p className="ltr whitespace-pre-wrap p-4 text-start text-sm leading-8 text-fg">
-              {transcriptEn}
-            </p>
+            /* SIDE-BY-SIDE (user directive): the Persian record stays on
+               screen beside its English rendering — a translation is a lens,
+               not a replacement */
+            <div className="grid divide-y divide-border md:grid-cols-2 md:divide-x md:divide-y-0">
+              <div className="max-h-[24rem] overflow-y-auto p-4">
+                {rows.slice(0, 200).map((r) => (
+                  <p key={r.id} dir="auto" className="mb-2 text-sm leading-8 text-fg">
+                    <span className="me-2 text-xs text-fg-muted ltr">
+                      {formatClock(r.start_ms / 1000, locale)}
+                    </span>
+                    {r.text}
+                  </p>
+                ))}
+              </div>
+              <p className="ltr max-h-[24rem] overflow-y-auto whitespace-pre-wrap p-4 text-start text-sm leading-8 text-fg">
+                {transcriptEn}
+              </p>
+            </div>
+          ) : rows.length === 0
+            && !call.provisional_transcript
+            && transcriptionComplete(call.status) ? (
+            /* WHICH nothing: transcription finished and found no speech */
+            <p className="p-4 text-sm text-fg-muted">{t("noTranscriptRows")}</p>
           ) : rows.length === 0
             && call.provisional_transcript
             && !transcriptionComplete(call.status) ? (
@@ -1354,11 +1605,18 @@ export default function CallDetailPage({
             ref={listRef}
             className="max-h-[24rem] overflow-y-auto"
             onMouseUp={onListMouseUp}
+            onScroll={(e) => {
+              const el = e.currentTarget;
+              if (el.scrollTop + el.clientHeight > el.scrollHeight - 200
+                  && rowLimit < visibleRows.length) {
+                setRowLimit((n) => n + 30);
+              }
+            }}
           >
           {paragraphMode ? (
             /* #8: consecutive same-speaker lines flow as paragraphs */
             <ul className="divide-y divide-border">
-              {mergeParagraphs(visibleRows).map((block) => (
+              {mergeParagraphs(shownRows).map((block) => (
                 <li
                   key={block.ids[0]}
                   data-row={block.ids[0]}
@@ -1386,7 +1644,7 @@ export default function CallDetailPage({
             </ul>
           ) : (
           <ul className="divide-y divide-border">
-            {visibleRows.map((row) => (
+            {shownRows.map((row) => (
               <Fragment key={row.id}>
               {(chaptersBefore.get(row.id) ?? []).map((chapter) => (
                 <li key={`ch-${chapter.id}`} className="bg-surface-2/60 px-5 py-2">
@@ -1408,9 +1666,11 @@ export default function CallDetailPage({
                 } ${
                   findCurrent === row.id
                     ? "bg-warning/10"
-                    : activeRowId === row.id
-                      ? "bg-accent-soft"
-                      : ""
+                    : findMatches.includes(row.id)
+                      ? "bg-warning/5" // every match marked; the current one darker
+                      : activeRowId === row.id
+                        ? "bg-accent-soft"
+                        : ""
                 } ${rowSeekable(row) ? "cursor-pointer hover:bg-surface-2" : "cursor-default"}`}
                 onClick={() => {
                   if (!rowSeekable(row) || editRowId === row.id) return;
@@ -1423,6 +1683,7 @@ export default function CallDetailPage({
                 <div className="min-w-0 flex-1">
                   <div className="mb-0.5 flex items-center gap-2">
                     <span
+                      data-speaker-pop
                       className="relative flex items-center gap-1"
                       onClick={(e) => e.stopPropagation()}
                     >
@@ -1447,7 +1708,10 @@ export default function CallDetailPage({
                       {/* ONE row's popover — keyed by the row, never the
                           speaker (user report: they all opened together) */}
                       {editSpeakerRow === row.id && row.speaker_id !== null ? (
-                        <span className="absolute start-0 top-6 z-40 block w-64 rounded-lg border border-border bg-surface p-3 shadow-xl">
+                        <span
+                          data-speaker-pop
+                          className="absolute start-0 top-6 z-40 block w-64 rounded-lg border border-border bg-surface p-3 shadow-xl"
+                        >
                           <input
                             className="input h-8 min-h-0 w-full py-0 text-xs"
                             aria-label={t("speakerLabel")}
@@ -1547,6 +1811,25 @@ export default function CallDetailPage({
                         }}
                       >
                         <IconPencil width={12} height={12} />
+                      </IconAction>
+                      {/* comment on a LINE: a note anchored at its moment,
+                          quoting it — lands in the notes section below */}
+                      <IconAction
+                        label={t("noteLine")}
+                        className="h-5 w-5 opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
+                        onClick={() => {
+                          void api
+                            .addCallNote(id, {
+                              kind: "note",
+                              at_ms: row.start_ms,
+                              body: `«${row.text.slice(0, 120)}»`,
+                            })
+                            .then(() => api.callNotes(id)).then(setNotes)
+                            .then(() => notify(t("noteAdded")))
+                            .catch(() => notify(tCommon("actionFailed"), "warn"));
+                        }}
+                      >
+                        <IconTag width={12} height={12} />
                       </IconAction>
                     </span>
                   </div>

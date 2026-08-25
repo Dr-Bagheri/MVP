@@ -26,7 +26,7 @@ import { assertUuid, type Db, type SqlTx } from "../db/identity.ts";
 import { createStorageSigner } from "../storage/signer.ts";
 import { createQueue, Q_LINK_SPEAKERS, Q_PROCESS_PART, Q_SUMMARIZE } from "../worker/queue.ts";
 import { SUMMARY_INSTRUCTION_MAX, SUMMARY_TEMPLATES } from "./vocabulary.ts";
-import { hasProvisionalTranscript } from "../db/capabilities.ts";
+import { hasCallSummaryPrefs, hasProvisionalTranscript } from "../db/capabilities.ts";
 import type { Identity } from "../agent/types.ts";
 
 export interface UploadsConfig {
@@ -65,10 +65,36 @@ export function createUploadsRepo(db: Db, config: UploadsConfig) {
         scope?: string | undefined;
         source: "web" | "upload";
         language?: string | undefined;
+        /** 0094: the template chosen on the new-meeting form — a ruled key,
+            applied by the pipeline's own summarize. */
+        summaryTemplate?: string | undefined;
+        /** 0094: a custom template's prompt, same bound as regenerate's. */
+        summaryInstruction?: string | undefined;
       },
     ): Promise<{ id: string }> {
       if (input.scope !== undefined && input.scope !== "private" && input.scope !== "org") {
         throw new ValidationError("scope must be private or org");
+      }
+      /*
+       * 0094 contract: `summary_template` is the LABEL the version will be
+       * named by. Without an instruction it must be a ruled key (the worker
+       * applies that template's structure); WITH an instruction it is a
+       * custom template's own name and the instruction is the prompt.
+       */
+      const summaryInstruction = input.summaryInstruction?.trim() || undefined;
+      if (summaryInstruction && summaryInstruction.length > SUMMARY_INSTRUCTION_MAX) {
+        throw new ValidationError("instruction too long",
+          { code: "instruction_too_long", params: { max: SUMMARY_INSTRUCTION_MAX } });
+      }
+      const summaryTemplate = input.summaryTemplate?.trim() || undefined;
+      if (summaryTemplate && summaryTemplate.length > 60) {
+        throw new ValidationError("template label too long",
+          { code: "label_too_long", params: { max: 60 } });
+      }
+      if (summaryTemplate !== undefined && summaryInstruction === undefined
+        && !(SUMMARY_TEMPLATES as readonly string[]).includes(summaryTemplate)) {
+        throw new ValidationError("unknown summary template",
+          { code: "unknown_template", params: { template: summaryTemplate } });
       }
       /*
        * The LANGUAGE HINT (user directive, 2026-08-22): set at creation,
@@ -84,10 +110,15 @@ export function createUploadsRepo(db: Db, config: UploadsConfig) {
       ) {
         throw new ValidationError("language must be fa, en or mixed");
       }
+      // 0094 columns ride only where the migration has landed (the autonomy
+      // capability pattern) — a pre-0094 deployment keeps working, minus the
+      // template choice, and never fabricates one
+      const withPrefs = (summaryTemplate !== undefined || summaryInstruction !== undefined)
+        && await hasCallSummaryPrefs(db);
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<{ id: string }>(
-          `insert into echo.call (org_id, owner_id, title, scope, status, source, language)
-           values ($1, $2, $3, coalesce($4, 'private')::echo.call_scope, 'recording', $5::echo.call_source, coalesce($6, 'fa'))
+          `insert into echo.call (org_id, owner_id, title, scope, status, source, language${withPrefs ? ", summary_template, summary_instruction" : ""})
+           values ($1, $2, $3, coalesce($4, 'private')::echo.call_scope, 'recording', $5::echo.call_source, coalesce($6, 'fa')${withPrefs ? ", $7, $8" : ""})
            returning id`,
           [
             identity.orgId,
@@ -96,6 +127,7 @@ export function createUploadsRepo(db: Db, config: UploadsConfig) {
             input.scope ?? null,
             input.source,
             input.language ?? null,
+            ...(withPrefs ? [summaryTemplate ?? null, summaryInstruction ?? null] : []),
           ],
         ),
       );
@@ -541,7 +573,7 @@ export function createUploadsRepo(db: Db, config: UploadsConfig) {
     async resummarize(
       identity: Identity,
       callId: string,
-      opts: { template?: string; instruction?: string; figures?: boolean },
+      opts: { template?: string; instruction?: string; figures?: boolean; label?: string },
     ): Promise<{ id: string; status: string }> {
       const id = assertUuid(callId, "call id");
       if (opts.template !== undefined
@@ -553,6 +585,13 @@ export function createUploadsRepo(db: Db, config: UploadsConfig) {
       if (instruction && instruction.length > SUMMARY_INSTRUCTION_MAX) {
         throw new ValidationError("instruction too long",
           { code: "instruction_too_long", params: { max: SUMMARY_INSTRUCTION_MAX } });
+      }
+      /* 0094: the display name the version will carry — a custom template's
+         own name, or (defaulted below) the ruled key it was shaped by */
+      const label = opts.label?.trim() || opts.template || undefined;
+      if (label && label.length > 60) {
+        throw new ValidationError("template label too long",
+          { code: "label_too_long", params: { max: 60 } });
       }
       const call = await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<{ id: string; status: string; owner_id: string }>(
@@ -582,6 +621,7 @@ export function createUploadsRepo(db: Db, config: UploadsConfig) {
           ...(opts.template ? { template: opts.template } : {}),
           ...(instruction ? { instruction } : {}),
           ...(opts.figures ? { figures: true } : {}),
+          ...(label ? { label } : {}),
         });
       }
       return { id, status: "summarizing" };

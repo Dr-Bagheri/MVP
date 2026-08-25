@@ -397,6 +397,12 @@ export interface SummaryVersion {
   model: string;
   agent_run_id: string | null;
   /**
+   * 0094: display label of the template that shaped this version — a ruled
+   * key (translated client-side) or a custom template's own name. ABSENT =
+   * deployment not migrated; null = the plain summarizer.
+   */
+  template?: string | null;
+  /**
    * 0087 grounding verdict. ABSENT = deployment not migrated; null = this
    * version was never checked; otherwise the second-pass comparison of the
    * summary against its transcript. Absent/null must render NOTHING — an

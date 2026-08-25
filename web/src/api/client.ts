@@ -760,7 +760,7 @@ export const api = {
       optionally shaped by a ruled template and/or an instruction. */
   async resummarize(
     callId: string,
-    opts: { template?: string; instruction?: string; figures?: boolean } = {},
+    opts: { template?: string; instruction?: string; figures?: boolean; label?: string } = {},
   ): Promise<{ id: string; status: string }> {
     return bff<{ id: string; status: string }>(`/api/calls/${callId}/summaries`, {
       method: "POST",
@@ -814,6 +814,10 @@ export const api = {
     scope?: "private" | "org";
     source: "web" | "upload";
     language?: "fa" | "en" | "mixed";
+    /** 0094: ruled template key, or a custom template's NAME when
+        `summary_instruction` carries its prompt */
+    summary_template?: string;
+    summary_instruction?: string;
   }): Promise<{ id: string }> {
     return bff<{ id: string }>("/api/calls", {
       method: "POST",

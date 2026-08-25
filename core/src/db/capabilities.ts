@@ -130,6 +130,16 @@ export async function hasOrgGlossary(db: Db): Promise<boolean> {
   return hasColumn(db, "org", "glossary");
 }
 
+/** db/0094: the version-shaping template's label stored on the summary. */
+export async function hasSummaryTemplate(db: Db): Promise<boolean> {
+  return hasColumn(db, "summary", "template");
+}
+
+/** db/0094: the new-meeting form's template choice riding the call. */
+export async function hasCallSummaryPrefs(db: Db): Promise<boolean> {
+  return hasColumn(db, "call", "summary_template");
+}
+
 /** db/0089: the provisional (live-caption) transcript on the call. */
 export async function hasProvisionalTranscript(db: Db): Promise<boolean> {
   return hasColumn(db, "call", "provisional_transcript");

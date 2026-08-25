@@ -67,6 +67,10 @@ export interface StartOptions {
   title: string;
   locale: string;
   resume: { callId: string; title: string | null; nextIdx: number; offsetMs: number } | null;
+  /** 0094: the summary template chosen on the form — a ruled key, or a
+      custom template's name + prompt; the pipeline's summarize applies it */
+  summaryTemplate?: string | undefined;
+  summaryInstruction?: string | undefined;
 }
 
 // ---- module state -----------------------------------------------------------
@@ -497,6 +501,8 @@ export async function startRecording(opts: StartOptions): Promise<void> {
         title,
         source: "web",
         language: opts.language,
+        ...(opts.summaryTemplate ? { summary_template: opts.summaryTemplate } : {}),
+        ...(opts.summaryInstruction ? { summary_instruction: opts.summaryInstruction } : {}),
       });
       callId = created.id;
     } catch {

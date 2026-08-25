@@ -486,7 +486,14 @@
 @media print {
   [data-platform-topbar],
   nav,
-  .no-print {
+  .no-print,
+  /* the whole shell chrome (user report, 2026-08-25: menu fragments and the
+     resize handle printed beside the summary) — rail, section menus, the
+     resizable separators, the assistant, the audio player */
+  [data-presence-cradle],
+  [role="separator"],
+  aside,
+  audio {
     display: none !important;
   }
   body {

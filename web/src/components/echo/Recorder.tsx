@@ -23,6 +23,17 @@ import { Link } from "@/i18n/routing";
 import { digits, formatClock } from "@/lib/format";
 import { resumePoint } from "./uploadRules";
 import { RecorderNotes } from "./RecorderNotes";
+import { customTemplates, type CustomTemplate } from "@/lib/summaryTemplates";
+import { SUMMARY_TEMPLATES, type SummaryTemplate } from "@echo/core/vocabulary";
+
+/** ruled key → its label's message key (typed against the producer's union) */
+const TEMPLATE_KEY: Record<SummaryTemplate, "tplBoard" | "tplGroup" | "tplTeam" | "tplItTeam" | "tplInterview"> = {
+  board: "tplBoard",
+  group: "tplGroup",
+  team: "tplTeam",
+  it_team: "tplItTeam",
+  interview: "tplInterview",
+};
 
 /**
  * The browser recorder — a VIEW over the module-level recording engine
@@ -60,6 +71,11 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
    *  both-languages hint; narrowing is an explicit act. */
   const [language, setLanguage] = useState<"fa" | "en" | "mixed">("mixed");
   const [source, setSource] = useState<"mic" | "system">("mic");
+  /** 0094: the summary's template, chosen before the take — "" = none,
+      a ruled key, or "custom:<name>" from the local template store */
+  const [template, setTemplate] = useState<string>("");
+  const [customs, setCustoms] = useState<CustomTemplate[]>([]);
+  useEffect(() => { setCustoms(customTemplates()); }, []);
   /** the red stop-and-delete asks AGAIN before acting (user directive) */
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   /** cleanup #5 (2026-08-24): the four device/language selects fold behind
@@ -123,6 +139,11 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
     const resume = typeof resumeTarget === "object" && resumeTarget !== null
       ? resumeTarget
       : null;
+    /* the template choice resolves here: ruled key rides as-is; a custom
+       choice sends its NAME + prompt (createCall's 0094 contract) */
+    const custom = template.startsWith("custom:")
+      ? customs.find((c) => `custom:${c.name}` === template)
+      : undefined;
     void startRecording({
       micId,
       language,
@@ -130,6 +151,11 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
       title: titleOverride ?? title,
       locale,
       resume,
+      ...(custom
+        ? { summaryTemplate: custom.name, summaryInstruction: custom.prompt }
+        : template
+          ? { summaryTemplate: template }
+          : {}),
     }).then(() => {
       void refreshDevices(); // labels exist once permission does
       /* consent announcement (user Persian-moat item, 2026-08-23): spoken
@@ -298,6 +324,24 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
               >
                 <option value="mic">{t("sourceMic")}</option>
                 <option value="system">{t("sourceSystem")}</option>
+              </select>
+            </Field>
+            <Field label={t("templateField")}>
+              {/* 0094: the summary's SHAPE chosen before the meeting — the
+                  ruled five plus this person's own templates */}
+              <select
+                className="input"
+                value={template}
+                onChange={(e) => setTemplate(e.target.value)}
+                disabled={resuming}
+              >
+                <option value="">{t("templateNone")}</option>
+                {SUMMARY_TEMPLATES.map((k) => (
+                  <option key={k} value={k}>{t(TEMPLATE_KEY[k])}</option>
+                ))}
+                {customs.map((c) => (
+                  <option key={`c:${c.name}`} value={`custom:${c.name}`}>{c.name}</option>
+                ))}
               </select>
             </Field>
           </div>

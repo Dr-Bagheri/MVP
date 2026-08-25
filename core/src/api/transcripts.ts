@@ -14,7 +14,7 @@
 import { NotFoundError, ValidationError } from "./errors.ts";
 import { iso } from "./vocabulary.ts";
 import { assertUuid, type Db, type SqlTx } from "../db/identity.ts";
-import { hasSummaryGrounding } from "../db/capabilities.ts";
+import { hasSummaryGrounding, hasSummaryTemplate } from "../db/capabilities.ts";
 import type { Identity } from "../agent/types.ts";
 
 export interface TranscriptSegment {
@@ -126,6 +126,12 @@ export interface SummaryVersion {
   created_by: string;
   agent_run_id: string | null;
   /**
+   * 0094: the display label of the template that shaped this version — a
+   * ruled key (the client translates) or a custom template's own name.
+   * ABSENT pre-migration; null = the plain summarizer wrote it.
+   */
+  template?: string | null;
+  /**
    * 0087 grounding report. ABSENT until the migration runs on the
    * deployment; null = this version was never checked; otherwise the
    * verdict written at insert (clean, checking model, flagged claims).
@@ -233,9 +239,10 @@ export function createTranscriptsRepo(db: Db) {
     async summaries(identity: Identity, callId: string): Promise<SummaryVersion[]> {
       const id = assertUuid(callId, "call id");
       const withGrounding = await hasSummaryGrounding(db);
+      const withTemplate = await hasSummaryTemplate(db);
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<Record<string, unknown>>(
-          `select id, version, body, model, created_at, created_by, agent_run_id${withGrounding ? ", grounding" : ""}
+          `select id, version, body, model, created_at, created_by, agent_run_id${withTemplate ? ", template" : ""}${withGrounding ? ", grounding" : ""}
              from echo.summary
             where call_id = $1
             order by version desc`,
@@ -251,6 +258,7 @@ export function createTranscriptsRepo(db: Db) {
         created_by: row.created_by as string,
         agent_run_id: (row.agent_run_id as string | null) ?? null,
         // absent stays absent on an un-migrated deployment
+        ...(withTemplate ? { template: (row.template as string | null) ?? null } : {}),
         ...(withGrounding
           ? { grounding: (row.grounding as SummaryVersion["grounding"]) ?? null }
           : {}),

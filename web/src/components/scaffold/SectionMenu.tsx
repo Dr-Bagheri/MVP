@@ -175,7 +175,7 @@ export function MenuLayout({ menu, children }: { menu: ReactNode; children: Reac
            read as missing — a slim strip, the full height of the row */
         <button
           type="button"
-          className="tap hidden w-6 shrink-0 items-start justify-center border-e border-border bg-surface pt-4 text-fg-muted hover:text-fg md:flex"
+          className="tap no-print hidden w-6 shrink-0 items-start justify-center border-e border-border bg-surface pt-4 text-fg-muted hover:text-fg md:flex"
           aria-label={t("openMenu")}
           title={t("openMenu")}
           onClick={() => setAndStore(false)}

@@ -30,6 +30,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const body = (await request.json().catch(() => ({}))) as {
       template?: string;
       instruction?: string;
+      figures?: boolean;
+      label?: string;
     };
     return Response.json(
       await coreFetch<{ id: string; status: string }>(

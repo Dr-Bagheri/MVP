@@ -13,7 +13,7 @@ import { StepError, type StepHandler } from "./runner.ts";
 import { enqueueWebhooks } from "./webhook-enqueue.ts";
 import type { MlClient } from "./ml-client.ts";
 import { matchEnrolledVoices, type StorageSignerLike, type VoiceMatchOptions } from "./voice-match.ts";
-import { hasSummaryGrounding } from "../db/capabilities.ts";
+import { hasCallSummaryPrefs, hasSummaryGrounding, hasSummaryTemplate } from "../db/capabilities.ts";
 import { JSONB_PARAM, toJsonb } from "../db/jsonb.ts";
 
 export interface LinkSpeakersOptions {
@@ -201,6 +201,30 @@ export function createSummarizeStep({
         .join("\n")
         .slice(0, maxTranscriptChars);
 
+      /*
+       * 0094: the PIPELINE's own summarize (no template on the message)
+       * honours the choice made on the new-meeting form — it rides the
+       * call row. A regenerate message's own template/instruction wins:
+       * the requester is standing right there.
+       */
+      let template = payload.template;
+      let instruction = payload.instruction;
+      let label = payload.label ?? payload.template;
+      if (template === undefined && instruction === undefined && await hasCallSummaryPrefs(db)) {
+        const [prefs] = await db.withIdentity(identity, (tx: SqlTx) =>
+          tx.unsafe<{ summary_template: string | null; summary_instruction: string | null }>(
+            `select summary_template, summary_instruction from echo.call where id = $1`,
+            [payload.callId],
+          ),
+        );
+        // the stored label is a ruled KEY only when no custom prompt rides
+        // beside it (createCall's 0094 contract) — a custom name must never
+        // be sent to the summarizer as a template key
+        instruction = prefs?.summary_instruction ?? undefined;
+        template = instruction === undefined ? (prefs?.summary_template ?? undefined) : undefined;
+        label = prefs?.summary_template ?? undefined;
+      }
+
       // The summarizer SKILL failing to resolve is a broken deployment, not a
       // configuration state — so it fails loudly rather than silently falling
       // back to the runtime's own prompt (a summary written on the wrong
@@ -220,8 +244,8 @@ export function createSummarizeStep({
           identity,
           callId: payload.callId,
           transcript,
-          template: payload.template,
-          instruction: payload.instruction,
+          template,
+          instruction,
           figures: payload.figures,
           speakers: roster,
           verify,
@@ -267,13 +291,17 @@ export function createSummarizeStep({
       // edited in place, and the current one is the highest version (db/0008).
       // The grounding verdict rides the SAME insert — versions stay
       // append-only, so a verification can never be bolted on later.
+      // 0094: the version carries the label of what shaped it — provenance
+      // written by the same insert, never remembered client-side
+      const withTemplate = await hasSummaryTemplate(db);
+      const groundingParam = withTemplate ? 9 : 8;
       await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe(
-          `insert into echo.summary (call_id, org_id, version, body, model, skill_id, agent_run_id, created_by${verify ? ", grounding" : ""})
+          `insert into echo.summary (call_id, org_id, version, body, model, skill_id, agent_run_id, created_by${withTemplate ? ", template" : ""}${verify ? ", grounding" : ""})
            values (
              $1, $2,
              (select coalesce(max(version), 0) + 1 from echo.summary where call_id = $1),
-             $3, $4, $5, $6, $7${verify ? `, ${JSONB_PARAM(8)}` : ""}
+             $3, $4, $5, $6, $7${withTemplate ? ", $8" : ""}${verify ? `, ${JSONB_PARAM(groundingParam)}` : ""}
            )`,
           [
             payload.callId,
@@ -283,6 +311,7 @@ export function createSummarizeStep({
             result.skill?.id ?? null,
             result.runId,
             identity.userId,
+            ...(withTemplate ? [label ?? null] : []),
             // SQL NULL when unchecked — toJsonb(null) would store jsonb
             // 'null', which the 0087 shape constraint rightly refuses
             ...(verify ? [result.grounding ? toJsonb(result.grounding) : null] : []),

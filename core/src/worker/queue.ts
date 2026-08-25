@@ -53,6 +53,9 @@ export interface JobPayload {
   instruction?: string;
   /** Append the «ارقام و تاریخ‌ها» ledger section to the summary. */
   figures?: boolean;
+  /** 0094: the display name the produced version stores (a ruled key or a
+      custom template's own name) — provenance, never a prompt. */
+  label?: string;
 }
 
 /**

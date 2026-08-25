@@ -309,6 +309,7 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     const identity = await auth.requireActive(request);
     const body = (request.body ?? {}) as {
       title?: unknown; scope?: unknown; source?: unknown; language?: unknown;
+      summary_template?: unknown; summary_instruction?: unknown;
     };
     const source = body.source === "upload" ? "upload" : "web";
     const created = await uploads.createCall(identity, {
@@ -316,6 +317,10 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       scope: typeof body.scope === "string" ? body.scope : undefined,
       source,
       language: typeof body.language === "string" ? body.language : undefined,
+      summaryTemplate:
+        typeof body.summary_template === "string" ? body.summary_template : undefined,
+      summaryInstruction:
+        typeof body.summary_instruction === "string" ? body.summary_instruction : undefined,
     });
     return reply.code(201).send(created);
   });
@@ -419,12 +424,14 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       template?: string;
       instruction?: string;
       figures?: boolean;
+      label?: string;
     };
     return reply.send(
       await uploads.resummarize(identity, id, {
         ...(typeof body.template === "string" ? { template: body.template } : {}),
         ...(typeof body.instruction === "string" ? { instruction: body.instruction } : {}),
         ...(body.figures === true ? { figures: true } : {}),
+        ...(typeof body.label === "string" ? { label: body.label } : {}),
       }),
     );
   });

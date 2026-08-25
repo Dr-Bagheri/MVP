@@ -51,6 +51,8 @@ export async function POST(request: Request) {
       scope?: string;
       source?: string;
       language?: string;
+      summary_template?: string;
+      summary_instruction?: string;
     };
     const created = await coreFetch<{ id: string }>("/v1/calls", {
       method: "POST",
@@ -59,6 +61,8 @@ export async function POST(request: Request) {
         scope: body.scope,
         source: body.source,
         language: body.language,
+        summary_template: body.summary_template,
+        summary_instruction: body.summary_instruction,
       },
     });
     return Response.json(created, { status: 201 });
