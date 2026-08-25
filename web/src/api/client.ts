@@ -758,6 +758,10 @@ export const api = {
 
   /** Regenerate a READY call's summary as a NEW version (2026-08-23) —
       optionally shaped by a ruled template and/or an instruction. */
+  /** **LIVE** — delete ONE summary version (db/0095: owner or admin). */
+  async deleteSummaryVersion(callId: string, version: number): Promise<void> {
+    await bff(`/api/calls/${callId}/summaries/${version}`, { method: "DELETE" });
+  },
   async resummarize(
     callId: string,
     opts: { template?: string; instruction?: string; figures?: boolean; label?: string } = {},

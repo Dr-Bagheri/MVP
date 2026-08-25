@@ -10,7 +10,7 @@ import { useCrumbTitle } from "@/components/platform/CrumbTitle";
 import { Card, Chip } from "@/components/ui";
 import { formatClock, formatDate, formatDuration, digits } from "@/lib/format";
 import { isFillerWord, stripFillers } from "@/lib/cleanRead";
-import { IconAction, KebabMenu, SelectMenu } from "@/components/rowActions";
+import { ConfirmDialog, IconAction, KebabMenu, SelectMenu } from "@/components/rowActions";
 import {
   IconArchive, IconChip, IconFileText, IconGavel, IconGlobe, IconMic, IconPencil,
   IconPeople3, IconRows, IconShare, IconSparkle, IconTag, IconUsers, IconZap,
@@ -154,6 +154,8 @@ export default function CallDetailPage({
    */
   const [customs, setCustoms] = useState<CustomTemplate[]>([]);
   const [newTpl, setNewTpl] = useState<{ name: string; prompt: string } | null>(null);
+  /** the version about to be deleted (0095) — armed by the picker's ✕ */
+  const [confirmVersionDelete, setConfirmVersionDelete] = useState<number | null>(null);
   const [regenBusy, setRegenBusy] = useState(false);
   useEffect(() => { setCustoms(customTemplates()); }, []);
 
@@ -1172,6 +1174,11 @@ export default function CallDetailPage({
                   options={[...versions].reverse().map((v) => ({
                     value: String(v.version),
                     label: versionName(v),
+                    // deletion is the 0095 door's — offered only to whoever
+                    // the door lets through, behind the are-you-sure popup
+                    ...(mayEditCall
+                      ? { onRemove: () => setConfirmVersionDelete(v.version) }
+                      : {}),
                   }))}
                 />
               ) : null}
@@ -2028,6 +2035,33 @@ export default function CallDetailPage({
           </section>
         ) : null}
       </Card>
+
+      {/* deleting a summary VERSION (0095) — the same are-you-sure shape
+          every product delete wears */}
+      {confirmVersionDelete !== null ? (
+        <ConfirmDialog
+          title={t("deleteVersionTitle", { n: digits(confirmVersionDelete, locale) })}
+          body={t("deleteVersionBody")}
+          confirmLabel={tCalls("delete")}
+          cancelLabel={tCommon("cancel")}
+          onCancel={() => setConfirmVersionDelete(null)}
+          onConfirm={() => {
+            const version = confirmVersionDelete;
+            setConfirmVersionDelete(null);
+            void api.deleteSummaryVersion(id, version)
+              .then(() => api.getSummaries(id))
+              .then((all) => {
+                setVersions(all);
+                setShownVersion(all.at(-1)?.version ?? null);
+                notify(t("versionDeleted"));
+              })
+              .catch((cause) => {
+                const detail = (cause as { detail?: string }).detail;
+                notify(detail || tCommon("actionFailed"), "warn");
+              });
+          }}
+        />
+      ) : null}
 
       {/* #17: the way back after a far seek */}
       {jumpBack ? (

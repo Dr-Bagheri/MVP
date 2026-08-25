@@ -93,9 +93,13 @@ describe("breadcrumb trail", () => {
      * perfectly and only the extra crumb gives it away.
      */
     const trail = trailFor("/calls/0c5c0e02-1111-2222-3333-444455556666");
+    // 2026-08-25 (user report): the chain names Records between Echo and the
+    // record — Home / Echo / Records / <title> — via the STATIC
+    // /echo/records entry (a parent must never be a dynamic pattern)
     expect(trail.map((c) => c.href)).toEqual([
       "/",
       "/echo",
+      "/echo/records",
       "/calls/0c5c0e02-1111-2222-3333-444455556666",
     ]);
     expect(trail.map((c) => c.href)).not.toContain("/calls");

@@ -11,7 +11,7 @@
  * matching. Queries go through the same fa_fold + websearch_to_tsquery, or
  * the query and the index would disagree about what a word is.
  */
-import { NotFoundError, ValidationError } from "./errors.ts";
+import { NotActivatedError, NotFoundError, ValidationError } from "./errors.ts";
 import { iso } from "./vocabulary.ts";
 import { assertUuid, type Db, type SqlTx } from "../db/identity.ts";
 import { hasSummaryGrounding, hasSummaryTemplate } from "../db/capabilities.ts";
@@ -263,6 +263,36 @@ export function createTranscriptsRepo(db: Db) {
           ? { grounding: (row.grounding as SummaryVersion["grounding"]) ?? null }
           : {}),
       }));
+    },
+
+    /**
+     * Delete ONE version through the 0095 door (owner or admin). Versions
+     * stay append-only for writers; the door repoints the current-summary
+     * pointer itself. The trigger's refusals map to legible statuses.
+     */
+    async deleteSummaryVersion(identity: Identity, callId: string, version: number): Promise<void> {
+      const id = assertUuid(callId, "call id");
+      if (!Number.isInteger(version) || version < 1) {
+        throw new ValidationError("version must be a positive integer");
+      }
+      try {
+        await db.withIdentity(identity, (tx: SqlTx) =>
+          tx.unsafe(`select echo.delete_summary_version($1, $2)`, [id, version]),
+        );
+      } catch (error) {
+        const code = (error as { code?: string }).code;
+        if (code === "42501") {
+          throw new NotActivatedError(
+            "only the record's owner or an admin may delete a summary version");
+        }
+        if (code === "P0002") throw new NotFoundError("no such summary version");
+        if (code === "42883") {
+          // undefined_function: the deployment predates db/0095
+          throw new ValidationError("version deletion needs a database migration not yet applied",
+            { code: "not_migrated" });
+        }
+        throw error;
+      }
     },
 
     async currentSummary(identity: Identity, callId: string): Promise<SummaryVersion> {

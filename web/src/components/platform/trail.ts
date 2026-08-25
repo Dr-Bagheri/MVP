@@ -63,6 +63,11 @@ export const TRAIL: Readonly<Record<string, TrailEntry>> = {
   /** Echo's sections (Part 5): the same anatomy as Settings, so the same
    *  trail shape — the slug builds the leaf label. */
   "/echo/[section]": { labelPrefix: "echo.section", parent: "/echo" },
+  /* static twin of the [section] entry so a RECORD's trail can name it as
+     an ancestor (user report, 2026-08-25: Home / Echo / <title> skipped
+     Records) — parents must be static keys, and patternFor prefers the
+     static match, so visiting /echo/records lands here with the same label */
+  "/echo/records": { label: "echo.section.records", parent: "/echo" },
   /**
    * **`/calls/[id]`'s parent is `/echo`, not `/calls`.**
    *
@@ -72,7 +77,7 @@ export const TRAIL: Readonly<Record<string, TrailEntry>> = {
    * that no longer exists, and a link whose destination disagrees with its
    * label. The list of calls IS the Echo surface now, so the trail says so.
    */
-  "/calls/[id]": { entity: true, parent: "/echo" },
+  "/calls/[id]": { entity: true, parent: "/echo/records" },
   "/search": { label: "search.title", parent: "/echo" },
 
   "/management": { label: "platform.management", parent: "/" },

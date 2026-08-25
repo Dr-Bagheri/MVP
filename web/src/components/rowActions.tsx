@@ -346,6 +346,9 @@ export interface SelectMenuOption {
   value: string;
   label: string;
   disabled?: boolean;
+  /** an option-level DELETE (2026-08-25, the version picker): a small ✕ at
+      the option's end — pressing it fires this instead of selecting */
+  onRemove?: () => void;
 }
 
 /**
@@ -448,25 +451,42 @@ export function SelectMenu({
               onClick={(e) => e.stopPropagation()}
             >
               {options.map((o) => (
-                <button
-                  key={o.value}
-                  type="button"
-                  role="option"
-                  aria-selected={o.value === value}
-                  disabled={o.disabled}
-                  onClick={() => {
-                    setAt(null);
-                    if (o.value !== value) onChange(o.value);
-                  }}
-                  className={`flex w-full items-center gap-2.5 py-2 pe-3 ps-3 text-start text-xs transition-colors ${
-                    o.value === value
-                      ? "bg-surface-2 font-semibold text-fg"
-                      : "text-fg-muted hover:bg-surface-2 hover:text-fg"
-                  } disabled:pointer-events-none disabled:opacity-40`}
-                >
-                  <span className="min-w-0 flex-1 truncate">{o.label}</span>
-                  {o.value === value ? <span aria-hidden className="text-[10px]">✓</span> : null}
-                </button>
+                <span key={o.value} className="group/opt flex items-center">
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={o.value === value}
+                    disabled={o.disabled}
+                    onClick={() => {
+                      setAt(null);
+                      if (o.value !== value) onChange(o.value);
+                    }}
+                    className={`flex min-w-0 flex-1 items-center gap-2.5 py-2 ps-3 text-start text-xs transition-colors ${
+                      o.onRemove ? "pe-1" : "pe-3"
+                    } ${
+                      o.value === value
+                        ? "bg-surface-2 font-semibold text-fg"
+                        : "text-fg-muted hover:bg-surface-2 hover:text-fg"
+                    } disabled:pointer-events-none disabled:opacity-40`}
+                  >
+                    <span className="min-w-0 flex-1 truncate">{o.label}</span>
+                    {o.value === value ? <span aria-hidden className="text-[10px]">✓</span> : null}
+                  </button>
+                  {o.onRemove ? (
+                    <button
+                      type="button"
+                      aria-label={`✕ ${o.label}`}
+                      className="me-1.5 grid h-6 w-6 shrink-0 place-items-center rounded text-[10px] text-fg-muted opacity-0 transition-opacity hover:bg-danger/10 hover:text-danger focus-visible:opacity-100 group-hover/opt:opacity-100"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setAt(null);
+                        o.onRemove?.();
+                      }}
+                    >
+                      ✕
+                    </button>
+                  ) : null}
+                </span>
               ))}
             </div>,
             document.body,

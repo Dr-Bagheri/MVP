@@ -1505,6 +1505,14 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     return reply.send({ summaries: await transcripts.summaries(identity, id) });
   });
 
+  /** …and the ONE exit: delete a single version through the 0095 door. */
+  app.delete("/v1/calls/:id/summaries/:version", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id, version } = request.params as { id: string; version: string };
+    await transcripts.deleteSummaryVersion(identity, id, Number(version));
+    return reply.code(204).send();
+  });
+
   app.get("/v1/search", async (request, reply) => {
     const identity = await auth.requireActive(request);
     const query = request.query as { q?: string; limit?: string; call_id?: string };
