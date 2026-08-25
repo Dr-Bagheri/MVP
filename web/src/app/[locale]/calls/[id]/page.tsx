@@ -11,6 +11,7 @@ import { Card, Chip } from "@/components/ui";
 import { formatClock, formatDate, formatDuration, digits } from "@/lib/format";
 import { isFillerWord, stripFillers } from "@/lib/cleanRead";
 import { ConfirmDialog, IconAction, KebabMenu, SelectMenu } from "@/components/rowActions";
+import { RichTextEditor } from "@/components/RichTextEditor";
 import {
   IconArchive, IconChip, IconFileText, IconGavel, IconGlobe, IconMic, IconPencil,
   IconPeople3, IconRows, IconShare, IconSparkle, IconTag, IconUsers, IconZap,
@@ -225,7 +226,6 @@ export default function CallDetailPage({
   const [summaryDraft, setSummaryDraft] = useState("");
   /** Word-like EDITOR controls (user directive): size + markdown shape */
   const [editFontSize, setEditFontSize] = useState(1);
-  const draftRef = useRef<HTMLTextAreaElement | null>(null);
   const [editRowId, setEditRowId] = useState<string | null>(null);
   const [rowDraft, setRowDraft] = useState("");
   /** speaker inline editor — keyed by the ROW (user report: keying by the
@@ -287,23 +287,6 @@ export default function CallDetailPage({
     } catch (cause) {
       editFailNotify(cause);
     }
-  }
-
-  /** wrap the SELECTION (or insert at caret) — the editor's Bold/Heading/
-      bullet controls write the same light markdown the document renders */
-  function wrapDraftSelection(before: string, after = "", linePrefix = ""): void {
-    const el = draftRef.current;
-    if (!el) return;
-    const { selectionStart: s, selectionEnd: e, value } = el;
-    let next: string;
-    if (linePrefix) {
-      const lineStart = value.lastIndexOf("\n", s - 1) + 1;
-      next = value.slice(0, lineStart) + linePrefix + value.slice(lineStart);
-    } else {
-      next = value.slice(0, s) + before + value.slice(s, e) + after + value.slice(e);
-    }
-    setSummaryDraft(next);
-    el.focus();
   }
 
   function exportSubtitles(kind: "srt" | "vtt"): void {
@@ -1215,35 +1198,26 @@ export default function CallDetailPage({
             <>
               {editingSummary ? (
                 <div className="space-y-2">
-                  {/* the WORD-like editor bar (user directive): size + shape */}
+                  {/* the WORD-like editor (user directive, 2026-08-25):
+                      formatted page, ribbon of honest operations — what the
+                      ribbon writes, SummaryBody can render */}
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <select
-                      className="input h-8 min-h-0 w-auto py-0 text-xs"
-                      value={editFontSize}
-                      aria-label={t("editorSize")}
-                      onChange={(e) => setEditFontSize(Number(e.target.value))}
-                    >
-                      <option value={0.875}>{t("sizeSmall")}</option>
-                      <option value={1}>{t("sizeNormal")}</option>
-                      <option value={1.2}>{t("sizeLarge")}</option>
-                    </select>
-                    <IconAction label={t("editorBold")} onClick={() => wrapDraftSelection("**", "**")}>
-                      <span className="text-xs font-black">B</span>
-                    </IconAction>
-                    <IconAction label={t("editorHeading")} onClick={() => wrapDraftSelection("", "", "### ")}>
-                      <span className="text-xs font-bold">H</span>
-                    </IconAction>
-                    <IconAction label={t("editorBullet")} onClick={() => wrapDraftSelection("", "", "- ")}>
-                      <span className="text-xs font-bold">•</span>
-                    </IconAction>
+                    <SelectMenu
+                      className="h-8 min-h-0 w-auto py-0 text-xs"
+                      ariaLabel={t("editorSize")}
+                      value={String(editFontSize)}
+                      onChange={(v) => setEditFontSize(Number(v))}
+                      options={[
+                        { value: "0.875", label: t("sizeSmall") },
+                        { value: "1", label: t("sizeNormal") },
+                        { value: "1.2", label: t("sizeLarge") },
+                      ]}
+                    />
                   </div>
-                  <textarea
-                    ref={draftRef}
-                    className="input min-h-64 w-full py-2 leading-7"
-                    style={{ fontSize: `${0.875 * editFontSize}rem` }}
+                  <RichTextEditor
                     value={summaryDraft}
-                    autoFocus
-                    onChange={(e) => setSummaryDraft(e.target.value)}
+                    onChange={setSummaryDraft}
+                    fontScale={editFontSize}
                   />
                   <div className="flex items-center gap-2">
                     <button

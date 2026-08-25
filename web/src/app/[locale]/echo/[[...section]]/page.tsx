@@ -1,14 +1,14 @@
 "use client";
 
-import { use, useEffect, useState, type ReactNode } from "react";
+import { use, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { EchoAppShell } from "@/components/echo/EchoAppShell";
-import { IconArchive, IconFileText, IconMic, IconRows, IconVoice } from "@/components/icons";
+import { EchoSectionMenu } from "@/components/echo/EchoSectionMenu";
 import { RecordsSection } from "@/components/echo/RecordsSection";
 import { SpeakersDirectory } from "@/components/echo/SpeakersDirectory";
 import { SummariesSection } from "@/components/echo/SummariesSection";
 import { NewMeetingSection } from "@/components/echo/NewMeetingSection";
-import { SectionMenu, PageContainer, PageHeader } from "@/components/scaffold";
+import { PageContainer, PageHeader } from "@/components/scaffold";
 import { useRouter } from "@/i18n/routing";
 
 /**
@@ -43,14 +43,11 @@ const SECTIONS: readonly { slug: Slug; group: "capture" | "review" }[] = [
   { slug: "speakers", group: "review" },
 ];
 
-const GROUPS = ["capture", "review"] as const;
-
 export default function EchoPage({
   params,
 }: {
   params: Promise<{ section?: string[] }>;
 }) {
-  const t = useTranslations("platform");
   const tEcho = useTranslations("echo");
   const router = useRouter();
   const { section } = use(params);
@@ -75,37 +72,11 @@ export default function EchoPage({
    */
   const [recordsEpoch, setRecordsEpoch] = useState(0);
 
-  /* menu icons (2026-08-24, sana reference) — keyed here beside the slugs
-     so a new section without an icon is a visible gap, not a crash */
-  const SECTION_ICONS: Record<Slug, ReactNode> = {
-    "new-meeting": <IconMic />,
-    records: <IconRows />,
-    summaries: <IconFileText />,
-    archive: <IconArchive />,
-    speakers: <IconVoice />,
-  };
-
-  const groups = GROUPS.map((group) => ({
-    key: group,
-    title: tEcho(`group.${group}`),
-    items: SECTIONS.filter((s) => s.group === group).map((s) => ({
-      slug: s.slug,
-      href: s.slug === "new-meeting" ? "/echo" : `/echo/${s.slug}`,
-      label: tEcho(`section.${s.slug}`),
-      icon: SECTION_ICONS[s.slug],
-    })),
-  }));
-
   return (
     <EchoAppShell
-      menu={
-        <SectionMenu
-          navLabel={t("echo")}
-          heading={t("echo")}
-          groups={groups}
-          activeSlug={slug}
-        />
-      }
+      /* summaries stays reachable by URL but has no row of its own now —
+         the menu highlights its parent place */
+      menu={<EchoSectionMenu activeSlug={slug === "summaries" ? "records" : slug} />}
     >
       {/* ONE width for every section (user directive, 2026-08-25: Records
           rendered wider than Summaries) — the narrow column is the rule */}

@@ -483,6 +483,35 @@
  * marks page-level chrome; the shell pieces are addressed by their own
  * hooks so no page has to remember them.
  */
+/* the Word-like summary editor's page: headings and lists render as the
+   reader will see them (the reset strips list styles globally) */
+.rte h3 {
+  font-size: 1.05em;
+  font-weight: 700;
+  margin: 0.9em 0 0.35em;
+}
+.rte p {
+  margin: 0.35em 0;
+}
+.rte ul {
+  list-style: disc;
+  padding-inline-start: 1.4em;
+  margin: 0.35em 0;
+}
+.rte ol {
+  list-style: decimal;
+  padding-inline-start: 1.6em;
+  margin: 0.35em 0;
+}
+[dir="rtl"] .rte ol {
+  /* digits follow the language (the axes ruling) */
+  list-style: persian;
+}
+.rte:empty::before {
+  content: "…";
+  color: rgb(var(--fg-muted));
+}
+
 @media print {
   [data-platform-topbar],
   nav,

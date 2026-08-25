@@ -92,6 +92,9 @@ export const IconShare = (p: SVGProps<SVGSVGElement>) => (
 export const IconChevronEnd = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><path d="m9 5.5 6.5 6.5L9 18.5" /></svg>
 );
+export const IconGauge = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><path d="M4 14a8 8 0 1 1 16 0" /><path d="M12 14 15.5 9" /><path d="M4 18h16" /></svg>
+);
 export const IconGavel = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><path d="m13 6 5 5" /><path d="m10.5 8.5 5 5" /><path d="m14.5 4.5 5 5-2 2-5-5 2-2Z" /><path d="m8.5 10.5 5 5-2 2-5-5 2-2Z" /><path d="M3.5 20.5h9" /><path d="m9.5 13.5-5 5" /></svg>
 );

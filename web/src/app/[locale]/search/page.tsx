@@ -5,7 +5,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
 import { api } from "@/api/client";
 import type { SearchHit } from "@/api/types";
-import { AssistantMenu } from "@/components/platform/AssistantMenu";
+import { EchoSectionMenu } from "@/components/echo/EchoSectionMenu";
 import { PlatformShell } from "@/components/platform/PlatformShell";
 import { MenuLayout, PageContainer, PageHeader } from "@/components/scaffold";
 import { Card, Chip, EmptyState } from "@/components/ui";
@@ -61,11 +61,10 @@ export default function SearchPage() {
   }
 
   return (
-    /* the assistant domain's two-pane (user directive, 2026-08-18): Search
-       joined the rail beside History, and both wear the platform's standard
-       sub-menu — the Echo shell it rode before belonged to a different app */
+    /* search searches the RECORDS, so it wears Echo's menu (user directive,
+       2026-08-25 — reversing 2026-08-18's assistant placement) */
     <PlatformShell>
-      <MenuLayout menu={<AssistantMenu activeSlug="search" />}>
+      <MenuLayout menu={<EchoSectionMenu activeSlug="search" />}>
         <PageContainer>
       <PageHeader title={t("title")} subtitle={t("scopeNote")} />
 

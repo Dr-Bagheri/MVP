@@ -40,6 +40,11 @@ export interface MenuItem {
    * is empty by opening it is the experience the marker exists to prevent.
    */
   badge?: string;
+  /**
+   * A small icon-link at the item's END (2026-08-25: the archive door on
+   * the Records row) — its own destination, never part of the item's click.
+   */
+  trailing?: { href: string; label: string; icon: ReactNode };
 }
 
 export interface MenuGroup {
@@ -100,23 +105,37 @@ export function SectionMenu({
                       ) : null}
                     </button>
                   ) : (
-                    <Link
-                      href={item.href}
-                      aria-current={active ? "page" : undefined}
-                      className={itemClass}
-                      onClick={item.preventNavigation || item.onSelect ? (event) => {
-                        if (item.preventNavigation) event.preventDefault();
-                        item.onSelect?.();
-                      } : undefined}
-                    >
-                      <span className="flex min-w-0 items-center gap-2.5">
-                        {item.icon ? <span className="shrink-0 opacity-80">{item.icon}</span> : null}
-                        <span className="truncate">{item.label}</span>
-                      </span>
-                      {item.badge ? (
-                        <span className="chip bg-surface-2 text-[10px] text-fg-muted">{item.badge}</span>
+                    /* the trailing icon-link is a SIBLING anchor — an anchor
+                       inside an anchor is invalid HTML and browsers split it */
+                    <span className="relative block">
+                      <Link
+                        href={item.href}
+                        aria-current={active ? "page" : undefined}
+                        className={`${itemClass} ${item.trailing ? "pe-9" : ""}`}
+                        onClick={item.preventNavigation || item.onSelect ? (event) => {
+                          if (item.preventNavigation) event.preventDefault();
+                          item.onSelect?.();
+                        } : undefined}
+                      >
+                        <span className="flex min-w-0 items-center gap-2.5">
+                          {item.icon ? <span className="shrink-0 opacity-80">{item.icon}</span> : null}
+                          <span className="truncate">{item.label}</span>
+                        </span>
+                        {item.badge ? (
+                          <span className="chip bg-surface-2 text-[10px] text-fg-muted">{item.badge}</span>
+                        ) : null}
+                      </Link>
+                      {item.trailing ? (
+                        <Link
+                          href={item.trailing.href}
+                          aria-label={item.trailing.label}
+                          title={item.trailing.label}
+                          className="absolute end-1.5 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-md text-fg-muted opacity-70 transition-opacity hover:bg-surface-2 hover:text-fg hover:opacity-100"
+                        >
+                          {item.trailing.icon}
+                        </Link>
                       ) : null}
-                    </Link>
+                    </span>
                   )}
                 </li>
               );
