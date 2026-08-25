@@ -270,6 +270,78 @@ export function KebabMenu({
   );
 }
 
+/**
+ * A RIGHT-CLICK menu (user directive, 2026-08-25): table rows stopped
+ * showing a ⋯ trigger — the same items open as a context menu at the
+ * pointer instead. Same panel, same discipline (portal, full open with a
+ * flip, outside/Escape/scroll closes). The caller owns the open state:
+ * `onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX,
+ * y: e.clientY }); }}`.
+ */
+export function ContextMenu({
+  at,
+  items,
+  onClose,
+}: {
+  at: { x: number; y: number };
+  items: KebabItem[];
+  onClose: () => void;
+}) {
+  const panelRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => {
+      if (!panelRef.current?.contains(e.target as Node)) onClose();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", onClose, true);
+    window.addEventListener("resize", onClose);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", onClose, true);
+      window.removeEventListener("resize", onClose);
+    };
+  }, [onClose]);
+
+  const height = items.length * ITEM_H + 10;
+  const rtl = typeof document !== "undefined" && document.documentElement.dir === "rtl";
+  const left = rtl ? at.x - MENU_W : at.x;
+  const top = at.y + height <= window.innerHeight - 8
+    ? at.y
+    : Math.max(8, at.y - height);
+
+  return createPortal(
+    <div
+      ref={panelRef}
+      role="menu"
+      style={{
+        position: "fixed",
+        top,
+        left: Math.max(8, Math.min(left, window.innerWidth - MENU_W - 8)),
+        minWidth: MENU_W,
+      }}
+      className="z-50 rounded-lg border border-border bg-surface py-1 shadow-xl"
+      onClick={(e) => e.stopPropagation()}
+    >
+      {items.map((item) => (
+        <MenuEntry
+          key={item.key}
+          item={item}
+          expanded={null}
+          setExpanded={() => undefined}
+          close={onClose}
+        />
+      ))}
+    </div>,
+    document.body,
+  );
+}
+
 export interface SelectMenuOption {
   value: string;
   label: string;

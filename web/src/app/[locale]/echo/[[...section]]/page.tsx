@@ -107,7 +107,9 @@ export default function EchoPage({
         />
       }
     >
-      <PageContainer width={slug === "records" || slug === "archive" || slug === "new-meeting" ? "wide" : "default"}>
+      {/* ONE width for every section (user directive, 2026-08-25: Records
+          rendered wider than Summaries) — the narrow column is the rule */}
+      <PageContainer width="default">
         <PageHeader title={tEcho(`section.${slug}`)} subtitle={tEcho(`desc.${slug}`)} />
         {slug === "new-meeting" ? (
           <NewMeetingSection

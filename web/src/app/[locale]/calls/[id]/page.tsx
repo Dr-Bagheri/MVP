@@ -13,7 +13,7 @@ import { isFillerWord, stripFillers } from "@/lib/cleanRead";
 import { IconAction, KebabMenu, SelectMenu } from "@/components/rowActions";
 import {
   IconArchive, IconChip, IconFileText, IconGavel, IconGlobe, IconMic, IconPencil,
-  IconPeople3, IconRows, IconShare, IconSparkle, IconTag, IconUsers,
+  IconPeople3, IconRows, IconShare, IconSparkle, IconTag, IconUsers, IconZap,
 } from "@/components/icons";
 import { SectionMenu } from "@/components/scaffold";
 import { SummaryBody, parseSummary } from "@/components/echo/SummaryBody";
@@ -96,7 +96,7 @@ export default function CallDetailPage({
       the default page, Transcript the second — the same two-pane anatomy
       every other sub page has. Local state, not routing: both sections are
       one record, and the player keeps playing across the switch. */
-  const [section, setSection] = useState<"summary" | "transcript">("summary");
+  const [section, setSection] = useState<"summary" | "transcript" | "actions" | "notes">("summary");
   const [rows, setRows] = useState<TranscriptSegment[]>([]);
   const [speakers, setSpeakers] = useState<Speaker[]>([]);
   /** The Echo speakers directory — the dropdown's option list. */
@@ -705,11 +705,30 @@ export default function CallDetailPage({
   const mayEditCall = me !== null
     && (call.owner_id === me.id || me.role === "admin" || me.role === "owner");
   const ownsCall = me !== null && call.owner_id === me.id;
-  /** the menu's recents: newest three, this record excluded */
-  const recentCalls = allCalls
-    .filter((c) => c.deleted_at === null && c.archived_at === null && c.id !== id)
-    .sort((a, b) => b.started_at.localeCompare(a.started_at))
-    .slice(0, 3);
+  /**
+   * The ACTIONS & DECISIONS lanes, extracted from the shown summary's own
+   * structure: a heading naming actions/decisions claims the bullets under
+   * it. Display-only over the record — the summary stays the source.
+   */
+  const lanes = (() => {
+    const actions: string[] = [];
+    const decisions: string[] = [];
+    if (!summary) return { actions, decisions };
+    let mode: "a" | "d" | null = null;
+    for (const block of parseSummary(summary.body)) {
+      if (block.kind === "heading") {
+        const h = block.text ?? "";
+        mode = /اقدام|کارها|وظیف|action|next step/i.test(h)
+          ? "a"
+          : /تصمیم|مصوب|decision/i.test(h)
+            ? "d"
+            : null;
+      } else if (block.kind === "bullets" && mode !== null) {
+        (mode === "a" ? actions : decisions).push(...block.items);
+      }
+    }
+    return { actions, decisions };
+  })();
   const genericTitle = isGenericTitle(call.title);
   const titleSuggestion = genericTitle && summary ? suggestTitleFrom(summary.body) : null;
 
@@ -863,23 +882,24 @@ export default function CallDetailPage({
                   preventNavigation: true,
                   onSelect: () => setSection("transcript"),
                 },
+                {
+                  slug: "actions",
+                  href: `/calls/${id}`,
+                  label: t("sectionActions"),
+                  icon: <IconZap />,
+                  preventNavigation: true,
+                  onSelect: () => setSection("actions"),
+                },
+                {
+                  slug: "notes",
+                  href: `/calls/${id}`,
+                  label: t("sectionNotes"),
+                  icon: <IconTag />,
+                  preventNavigation: true,
+                  onSelect: () => setSection("notes"),
+                },
               ],
             },
-            /* the 3 MOST RECENT records as small sub-items (user directive,
-               2026-08-25 — the History-recents pattern): one hop between
-               fresh records without going back to the table */
-            ...(recentCalls.length > 0
-              ? [{
-                  key: "recent",
-                  title: t("recentRecords"),
-                  items: recentCalls.map((c) => ({
-                    slug: `recent-${c.id}`,
-                    href: `/calls/${c.id}`,
-                    label: c.title.trim() === "" ? tCalls("untitled") : c.title,
-                    sub: true,
-                  })),
-                }]
-              : []),
           ]}
         />
       }
@@ -889,7 +909,8 @@ export default function CallDetailPage({
           stack of separate cards. Since 2026-08-25 the summary and the
           transcript are SECTIONS picked in the side menu; the header and
           the player stay above both. */}
-      <Card className="!m-5 !p-0">
+      {/* the record shares the platform's ONE content width (2026-08-25) */}
+      <Card className="!mx-auto !my-5 w-[calc(100%-2.5rem)] max-w-content !p-0">
         {/* ── header: title · date · ⋯ ─────────────────────────────────── */}
         <div className="px-5 pb-4 pt-5">
           <div className="flex items-start justify-between gap-3">
@@ -1323,8 +1344,10 @@ export default function CallDetailPage({
 
         {/* ── REGENERATE — its OWN section (user directive, 2026-08-25):
             icon + name cards, the WHOLE card is the button; «+» authors a
-            new template (name + prompt); one press = one new version ───── */}
-        {call.status === "ready" ? (
+            new template (name + prompt); one press = one new version.
+            While the new version is being written the section STAYS,
+            deactivated — it must not vanish under the person's pointer. */}
+        {call.status === "ready" || call.status === "summarizing" ? (
           <section className="no-print border-t border-border px-5 py-4">
             <h2 className="mb-3 text-sm font-semibold text-fg">{t("regenTitle")}</h2>
             <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-6">
@@ -1334,7 +1357,7 @@ export default function CallDetailPage({
                   <button
                     key={k}
                     type="button"
-                    disabled={regenBusy}
+                    disabled={regenBusy || call.status !== "ready"}
                     title={t(TEMPLATE_LABEL_KEY[k])}
                     onClick={() => void regenerate({ template: k, label: k })}
                     className="tap flex min-h-28 flex-col items-center justify-center gap-2.5 rounded-xl border border-border bg-surface-2/40 px-3 py-4 text-fg-muted transition-colors hover:border-accent hover:text-fg disabled:opacity-50"
@@ -1348,7 +1371,7 @@ export default function CallDetailPage({
                 <span key={c.name} className="relative">
                   <button
                     type="button"
-                    disabled={regenBusy}
+                    disabled={regenBusy || call.status !== "ready"}
                     title={c.name}
                     onClick={() => void regenerate({ instruction: c.prompt, label: c.name })}
                     className="tap flex min-h-28 w-full flex-col items-center justify-center gap-2.5 rounded-xl border border-accent/40 bg-surface-2/40 px-3 py-4 text-fg-muted transition-colors hover:border-accent hover:text-fg disabled:opacity-50"
@@ -1890,8 +1913,59 @@ export default function CallDetailPage({
         </section>
         ) : null}
 
-        {/* ── notes & chapters (the summary page carries the extras) ───── */}
-        {section === "summary" && notes.length > 0 ? (
+        {/* ── ACTIONS & DECISIONS — its own section (user directive,
+            2026-08-25): the lanes the summary's own structure declares,
+            read as checklists; ticking is a reading aid, not a write ──── */}
+        {section === "actions" ? (
+          <section className="border-t border-border px-5 py-4">
+            {lanes.actions.length === 0 && lanes.decisions.length === 0 ? (
+              <p className="text-sm leading-7 text-fg-muted">{t("actionsEmpty")}</p>
+            ) : (
+              <div className="grid gap-6 md:grid-cols-2">
+                <div>
+                  <h2 className="mb-3 text-sm font-semibold text-fg">{t("actionsHeading")}</h2>
+                  {lanes.actions.length === 0 ? (
+                    <p className="text-sm text-fg-muted">{t("laneEmpty")}</p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {lanes.actions.map((item, i) => (
+                        <li key={i} className="flex items-start gap-2 text-sm leading-7 text-fg">
+                          <input type="checkbox" className="mt-1.5" aria-label={item} />
+                          <span dir="auto">{faDisplay(item)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                <div>
+                  <h2 className="mb-3 text-sm font-semibold text-fg">{t("decisionsHeading")}</h2>
+                  {lanes.decisions.length === 0 ? (
+                    <p className="text-sm text-fg-muted">{t("laneEmpty")}</p>
+                  ) : (
+                    <ol className="list-inside list-decimal space-y-2">
+                      {lanes.decisions.map((item, i) => (
+                        <li key={i} className="text-sm leading-7 text-fg" dir="auto">
+                          {faDisplay(item)}
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                </div>
+              </div>
+            )}
+          </section>
+        ) : null}
+
+        {/* ── NOTES & ATTACHMENTS — its own section (user directive) ───── */}
+        {section === "notes" && notes.length === 0 ? (
+          <section className="border-t border-border px-5 py-4">
+            <p className="text-sm leading-7 text-fg-muted">{t("notesEmpty")}</p>
+            <p className="mt-3 text-xs text-fg-muted">
+              <Chip tone="neutral">{t("attachmentsSoon")}</Chip>
+            </p>
+          </section>
+        ) : null}
+        {section === "notes" && notes.length > 0 ? (
           <section className="border-t border-border px-5 py-4">
             <h2 className="mb-3 text-sm font-semibold text-fg">{t("notesHeading")}</h2>
             <ul className="space-y-2">
@@ -1926,6 +2000,11 @@ export default function CallDetailPage({
                 </li>
               ))}
             </ul>
+            <p className="mt-4 text-xs text-fg-muted">
+              {/* named-but-not-yet (the Management honest-inactive pattern):
+                  file/photo attachments arrive with the storage lane */}
+              <Chip tone="neutral">{t("attachmentsSoon")}</Chip>
+            </p>
           </section>
         ) : null}
 

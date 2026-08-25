@@ -13,8 +13,8 @@ import { Card, EmptyState, StatusChip } from "@/components/ui";
 // copy of that arithmetic beside the table is how two countdowns disagree.
 import { formatDate, formatDuration, formatRelativeDate, digits } from "@/lib/format";
 import { DeletedCallsCard } from "./DeletedCallsCard";
-import { ConfirmDialog, IconAction, KebabMenu } from "@/components/rowActions";
-import { IconArchive, IconChevronEnd, IconGlobe, IconPencil, IconShare, IconTag, IconTrash } from "@/components/icons";
+import { ConfirmDialog, ContextMenu, IconAction } from "@/components/rowActions";
+import { IconArchive, IconGlobe, IconPencil, IconShare, IconTag, IconTrash } from "@/components/icons";
 
 /**
  * 0085 + the 2026-08-24 cleanup: the delete popup's confirm IS the consent,
@@ -55,6 +55,8 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
   /** 2026-08-24: delete confirms in a POPUP (no typed reason — the ledger
       gets the fixed UI_DELETE_REASON); null = no dialog showing. */
   const [confirmDelete, setConfirmDelete] = useState<null | { id: string; title: string }>(null);
+  /** the right-click menu's position + which row it speaks for */
+  const [ctxMenu, setCtxMenu] = useState<null | { x: number; y: number; id: string }>(null);
   const [confirmBulk, setConfirmBulk] = useState(false);
   /** cleanup #10: rows FADE before the reload removes them — a state change
       reads as motion, not as a table flicker */
@@ -357,8 +359,12 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
                       lives in the row's ⋯ menu; an org-shared row says so
                       with a chip beside its title */}
                   <th className="table-head px-4 py-3">{t("columnStatus")}</th>
-                  <th className="table-head px-4 py-3">{t("columnActions")}</th>
-                  <th className="w-6" aria-hidden />{/* the row chevron */}
+                  {/* the actions column keeps its space and loses its TITLE
+                      (user directive, 2026-08-25) — the header stays for
+                      screen readers only; the chevron column is retired */}
+                  <th className="table-head px-4 py-3">
+                    <span className="sr-only">{t("columnActions")}</span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -372,6 +378,13 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
                       leaving.has(call.id) ? "opacity-0" : ""
                     }`}
                     onClick={() => router.push(`/calls/${call.id}`)}
+                    /* the ⋯ retired from the row (user directive, 2026-08-25):
+                       RIGHT-CLICK opens the same menu at the pointer */
+                    onContextMenu={(e) => {
+                      if (!mayEdit(call)) return;
+                      e.preventDefault();
+                      setCtxMenu({ x: e.clientX, y: e.clientY, id: call.id });
+                    }}
                   >
                     <td className="w-10 px-3 py-3" onClick={(e) => e.stopPropagation()}>
                       {mayEdit(call) ? (
@@ -555,70 +568,22 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
                               </button>
                             </span>
                           ) : null}
-                          {/* delete = a trash icon and an are-you-sure popup
-                              (2026-08-24 — the typed reason retired; the
-                              ledger receives the fixed consent line) */}
+                          {/* delete = LAST, and only under the pointer (user
+                              directive, 2026-08-25); the are-you-sure popup
+                              stays — the ledger receives the consent line */}
                           <IconAction
                             label={t("delete")}
                             danger
                             disabled={busy}
+                            className="opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
                             onClick={() =>
                               setConfirmDelete({ id: call.id, title: call.title || t("untitled") })
                             }
                           >
                             <IconTrash />
                           </IconAction>
-                          {/* everything secondary folds into ⋯ (2026-08-24):
-                              translate, scope, archive, tags */}
-                          <KebabMenu
-                            label={t("moreActions")}
-                            items={[
-                              {
-                                key: "translate",
-                                label: t("translate"),
-                                icon: <IconGlobe />,
-                                onSelect: () => router.push(`/calls/${call.id}?translate=1`),
-                              },
-                              {
-                                key: "scope",
-                                label: call.scope === "org" ? t("makePrivate") : t("makeOrg"),
-                                icon: <IconShare />,
-                                disabled: busy,
-                                onSelect: () =>
-                                  void act(() =>
-                                    api.setScope(call.id, call.scope === "org" ? "private" : "org"),
-                                  ),
-                              },
-                              {
-                                key: "archive",
-                                label: call.archived_at === null ? t("archive") : t("unarchive"),
-                                icon: <IconArchive />,
-                                disabled: busy,
-                                onSelect: () =>
-                                  leaveThen([call.id], () =>
-                                    api.setArchived(call.id, call.archived_at === null),
-                                  ),
-                              },
-                              ...(tagsReady
-                                ? [{
-                                    key: "tags",
-                                    label: t("tags"),
-                                    icon: <IconTag />,
-                                    disabled: busy,
-                                    onSelect: () => {
-                                      setTaggingId(call.id);
-                                      setTagsDraft((call.tags ?? []).join("، "));
-                                    },
-                                  }]
-                                : []),
-                            ]}
-                          />
                         </span>
                       ) : null}
-                    </td>
-                    <td className="pe-3 ps-0 py-3 text-fg-subtle">
-                      {/* cleanup #9: the whole row navigates — say so */}
-                      <IconChevronEnd className="rtl:-scale-x-100" width={14} height={14} />
                     </td>
                   </tr>
                 ))}
@@ -637,6 +602,68 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
       {view === "live" && me?.role === "admin" && deleted.length > 0 ? (
         <DeletedCallsCard deleted={deleted} onChanged={() => void load()} />
       ) : null}
+
+      {/* the RIGHT-CLICK menu (2026-08-25): the row's secondary actions,
+          at the pointer — the ⋯ trigger retired from the cells */}
+      {ctxMenu !== null ? (() => {
+        const call = shown.find((c) => c.id === ctxMenu.id);
+        if (!call) return null;
+        return (
+          <ContextMenu
+            at={ctxMenu}
+            onClose={() => setCtxMenu(null)}
+            items={[
+              {
+                key: "translate",
+                label: t("translate"),
+                icon: <IconGlobe />,
+                onSelect: () => router.push(`/calls/${call.id}?translate=1`),
+              },
+              {
+                key: "scope",
+                label: call.scope === "org" ? t("makePrivate") : t("makeOrg"),
+                icon: <IconShare />,
+                disabled: busy,
+                onSelect: () =>
+                  void act(() =>
+                    api.setScope(call.id, call.scope === "org" ? "private" : "org"),
+                  ),
+              },
+              {
+                key: "archive",
+                label: call.archived_at === null ? t("archive") : t("unarchive"),
+                icon: <IconArchive />,
+                disabled: busy,
+                onSelect: () =>
+                  leaveThen([call.id], () =>
+                    api.setArchived(call.id, call.archived_at === null),
+                  ),
+              },
+              ...(tagsReady
+                ? [{
+                    key: "tags",
+                    label: t("tags"),
+                    icon: <IconTag />,
+                    disabled: busy,
+                    onSelect: () => {
+                      setTaggingId(call.id);
+                      setTagsDraft((call.tags ?? []).join("، "));
+                    },
+                  }]
+                : []),
+              {
+                key: "delete",
+                label: t("delete"),
+                icon: <IconTrash />,
+                danger: true,
+                disabled: busy,
+                onSelect: () =>
+                  setConfirmDelete({ id: call.id, title: call.title || t("untitled") }),
+              },
+            ]}
+          />
+        );
+      })() : null}
 
       {/* the are-you-sure popups (2026-08-24): confirm is the consent; the
           ledger receives the fixed line, and the body says it stays
