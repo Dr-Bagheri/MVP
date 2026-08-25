@@ -675,7 +675,10 @@ export default function UsersPage() {
                         {t("colLastAction")}
                       </th>
                     ) : null}
-                    <th className="table-head py-2">{t("colMemberActions")}</th>
+                    {/* no visible ACTIONS title (2026-08-25, all tables) */}
+                    <th className="table-head py-2">
+                      <span className="sr-only">{t("colMemberActions")}</span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">

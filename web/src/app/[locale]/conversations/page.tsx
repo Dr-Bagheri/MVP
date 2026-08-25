@@ -65,7 +65,10 @@ export default function ConversationsPage() {
                       <th className="table-head px-4 py-3 text-start">{t("colTitle")}</th>
                       <th className="table-head px-4 py-3 text-start">{t("colDate")}</th>
                       <th className="table-head px-4 py-3 text-start">{t("colMessages")}</th>
-                      <th className="table-head px-4 py-3 text-start">{t("colActions")}</th>
+                      {/* no visible ACTIONS title (2026-08-25, all tables) */}
+                      <th className="table-head px-4 py-3 text-start">
+                        <span className="sr-only">{t("colActions")}</span>
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">

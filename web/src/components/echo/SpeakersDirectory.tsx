@@ -286,7 +286,10 @@ export function SpeakersDirectory() {
                     <th className="table-head px-4 py-3 text-start">{t("colVoice")}</th>
                   ) : null}
                   {canManage ? (
-                    <th className="table-head px-4 py-3 text-start">{t("colActions")}</th>
+                    /* no visible ACTIONS title (2026-08-25, all tables) */
+                    <th className="table-head px-4 py-3 text-start">
+                      <span className="sr-only">{t("colActions")}</span>
+                    </th>
                   ) : null}
                 </tr>
               </thead>
