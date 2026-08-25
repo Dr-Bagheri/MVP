@@ -7,7 +7,7 @@ import { notify } from "@/lib/notify";
 import { useRefreshEpoch } from "@/lib/refreshBus";
 import type { Me, Person } from "@/api/types";
 import { Card, EmptyState } from "@/components/ui";
-import { ConfirmDialog, IconAction } from "@/components/rowActions";
+import { ConfirmDialog, IconAction, SelectMenu } from "@/components/rowActions";
 import { IconPencil, IconTrash } from "@/components/icons";
 
 /** 2026-08-24 cleanup: popup-confirmed deletes; the ledger's fixed line. */
@@ -37,10 +37,13 @@ export const TITLE_CODES = [
 export function SpeakersDirectory() {
   const t = useTranslations("speakersDir");
   const tTitles = useTranslations("titles");
+  const tCommon = useTranslations("common");
   const locale = useLocale();
   const [people, setPeople] = useState<Person[] | null>(null);
   const [name, setName] = useState("");
   const [title, setTitle] = useState("");
+  /** the ＋ form's visibility (2026-08-25: the permanent add card retired) */
+  const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState(false);
   /** role wall (user ruling, 2026-08-22): members ADD and SEE; edit,
       retitle and delete are the admins' and the owner's. The real wall is
@@ -214,6 +217,7 @@ export function SpeakersDirectory() {
       await api.createPerson(name.trim(), title);
       setName("");
       setTitle("");
+      setAdding(false); // the row landed — the form's work is done
       setPeople(await api.directory());
     } catch {
       notify(t("addFailed"), "warn");
@@ -236,41 +240,64 @@ export function SpeakersDirectory() {
 
   return (
     <div className="space-y-4">
-      <Card>
-        <div className="flex flex-wrap items-center gap-2">
-          <input
-            className="input min-w-[12rem] flex-1"
-            placeholder={t("namePlaceholder")}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") void add();
-            }}
-          />
-          <select
-            className="input h-11 min-h-0 w-auto py-0 text-sm md:h-10"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-          >
-            <option value="">{t("noTitle")}</option>
-            {TITLE_CODES.map((code) => (
-              <option key={code} value={code}>
-                {tTitles(code)}
-              </option>
-            ))}
-          </select>
+      {/* the ADD CARD retired (user directive, 2026-08-25): a permanent form
+          above a table is chrome for a once-a-month act — the ＋ over the
+          table opens the SAME form, right where the new row will land */}
+      {canManage ? (
+        <div className="flex items-center justify-end">
           <button
-            className="btn-primary h-10 min-h-0 px-4 text-sm"
-            disabled={busy || !name.trim()}
-            onClick={() => void add()}
+            type="button"
+            className="tap inline-flex h-9 items-center gap-1.5 rounded-lg border border-border px-3 text-xs text-fg-muted transition-colors hover:border-accent hover:text-fg"
+            aria-expanded={adding}
+            onClick={() => setAdding((v) => !v)}
           >
+            <span aria-hidden className="text-base leading-none">＋</span>
             {t("add")}
           </button>
         </div>
-        {/* failures announce on the notification system now (orb + bell) */}
-      </Card>
+      ) : null}
 
       <Card className="!p-0">
+        {adding && canManage ? (
+          /* the add row, INSIDE the table's box and above its header — the
+             new person appears directly beneath where it was typed */
+          <div className="flex flex-wrap items-center gap-2 border-b border-border p-3">
+            <input
+              className="input min-w-[12rem] flex-1"
+              placeholder={t("namePlaceholder")}
+              value={name}
+              autoFocus
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void add();
+                if (e.key === "Escape") setAdding(false);
+              }}
+            />
+            <SelectMenu
+              className="h-10 min-h-0 w-44 py-0 text-sm"
+              ariaLabel={t("colTitle")}
+              value={title}
+              onChange={setTitle}
+              options={[
+                { value: "", label: t("noTitle") },
+                ...TITLE_CODES.map((code) => ({ value: code, label: tTitles(code) })),
+              ]}
+            />
+            <button
+              className="btn-primary h-10 min-h-0 px-4 text-sm"
+              disabled={busy || !name.trim()}
+              onClick={() => void add()}
+            >
+              {t("add")}
+            </button>
+            <button
+              className="text-xs text-fg-muted underline-offset-2 hover:underline"
+              onClick={() => setAdding(false)}
+            >
+              {tCommon("cancel")}
+            </button>
+          </div>
+        ) : null}
         {people === null ? null : people.length === 0 ? (
           <div className="p-4">
             <EmptyState text={t("empty")} />
@@ -362,17 +389,25 @@ export function SpeakersDirectory() {
                              controls — a twin here is how they disagree */
                           <span className="text-fg-muted" aria-hidden>…</span>
                         ) : person.voice_enrolled_at ? (
-                          <span className="flex items-center gap-2">
-                            <span className="chip bg-success/15 text-success">{t("voiceOn")}</span>
+                          <span className="flex items-center gap-1.5">
+                            {/* the same quiet dot the records table gives
+                                READY (user directive, 2026-08-25): an
+                                ordinary good state, said once, softly */}
+                            <span className="inline-flex items-center gap-1.5 text-xs text-fg-muted">
+                              <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden />
+                              {t("voiceOn")}
+                            </span>
                             {canManage ? (
-                              <button
-                                type="button"
-                                className="text-fg-muted underline-offset-2 hover:text-danger hover:underline"
+                              /* removal is a red ✕, on hover — the word left */
+                              <IconAction
+                                label={t("voiceRemove")}
+                                danger
                                 disabled={busy}
+                                className="h-6 w-6 opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
                                 onClick={() => void clearVoiceFor(person)}
                               >
-                                {t("voiceRemove")}
-                              </button>
+                                <span aria-hidden className="text-xs">✕</span>
+                              </IconAction>
                             ) : null}
                           </span>
                         ) : canManage ? (
@@ -397,6 +432,8 @@ export function SpeakersDirectory() {
                           label={t("delete")}
                           danger
                           disabled={busy}
+                          /* under the pointer only (2026-08-25, every table) */
+                          className="opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
                           onClick={() => setConfirmDelete(person)}
                         >
                           <IconTrash />
