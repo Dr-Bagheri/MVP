@@ -57,9 +57,6 @@ export default function EchoPage({
   const isLegacyCapture = requested === "record" || requested === "upload";
   const effective = isLegacyCalls ? "records" : isLegacyCapture ? "new-meeting" : requested;
   const slug: Slug = (SECTIONS.find((s) => s.slug === effective)?.slug ?? "new-meeting") as Slug;
-  /** which tab the merged section opens on — the alias carries the intent
-      (the agent's start_recording lands on /echo/record → the recorder) */
-  const captureTab: "record" | "upload" = requested === "upload" ? "upload" : "record";
 
   useEffect(() => {
     if (isLegacyCalls) router.replace("/echo/records");
@@ -83,11 +80,7 @@ export default function EchoPage({
       <PageContainer width="default">
         <PageHeader title={tEcho(`section.${slug}`)} subtitle={tEcho(`desc.${slug}`)} />
         {slug === "new-meeting" ? (
-          <NewMeetingSection
-            key={captureTab}
-            initialTab={captureTab}
-            onFinished={() => setRecordsEpoch((n) => n + 1)}
-          />
+          <NewMeetingSection onFinished={() => setRecordsEpoch((n) => n + 1)} />
         ) : null}
         {slug === "records" ? <RecordsSection key={recordsEpoch} /> : null}
         {slug === "summaries" ? <SummariesSection /> : null}

@@ -115,6 +115,24 @@
     "ready": "Ready",
     "failed": "Failed"
   },
+  "dashboard": {
+    "greeting": "Hi, {name}",
+    "greetingPlain": "Your day at a glance",
+    "subtitle": "What happened while you were away, and what wants you now.",
+    "askAbout": "Ask about this week",
+    "askDraft": "Summarise what happened across my records this week: decisions, action items, and anything waiting on me.",
+    "tileRecordsWeek": "Records this week",
+    "tileMinutes": "Minutes recorded",
+    "tileProcessing": "Still processing",
+    "tileSignals": "Unread signals",
+    "activity": "Last 14 days",
+    "activityNote": "One bar per day — records started.",
+    "recent": "Recent records",
+    "seeAll": "See all",
+    "noRecords": "No records yet. Start a meeting from Echo and this fills in.",
+    "signals": "Assistant signals",
+    "noSignals": "Nothing new from the assistant."
+  },
   "conversations": {
     "title": "History",
     "searchPlaceholder": "Search conversations",
@@ -215,8 +233,9 @@
       "speakers": "People and their titles — every call page picks speakers from this list.",
       "records": "Your recordings, transcripts and summaries.",
       "summaries": "Each recording's summary, gathered for reading.",
-      "new-meeting": "Record in the browser or upload an audio file — both in one place."
-    }
+      "new-meeting": "Record the meeting in your browser. To upload a file instead, use the upload icon on this menu row."
+    },
+    "uploadHere": "Upload an audio file"
   },
   "speakersDir": {
     "namePlaceholder": "Person's name",
@@ -644,7 +663,7 @@
   "platform": {
     "name": "NeurAI",
     "primaryNav": "Main sections",
-    "hub": "Home",
+    "assistant": "Assistant",
     "echo": "Echo",
     "echoDesc": "Calls, transcripts and summaries",
     "management": "Management",

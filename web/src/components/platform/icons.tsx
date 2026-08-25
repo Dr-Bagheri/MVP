@@ -144,7 +144,35 @@ export const PlugIcon = (p: SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
+/**
+ * The rail's DASHBOARD tile (2026-08-25) — a four-pane board, the shape
+ * every dashboard in every product wears; it reads as "the overview" at
+ * 18px where a gauge needle does not.
+ */
+export const BoardIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden {...p}>
+    <rect x="3.5" y="3.5" width="7" height="8.5" rx="1.6" />
+    <rect x="13.5" y="3.5" width="7" height="5" rx="1.6" />
+    <rect x="3.5" y="15" width="7" height="5.5" rx="1.6" />
+    <rect x="13.5" y="11.5" width="7" height="9" rx="1.6" />
+  </svg>
+);
+
+/**
+ * The ASSISTANT's own tile (2026-08-25, replacing the house): a spark —
+ * the orb's grammar in a line icon, and unmistakably "the intelligence"
+ * rather than "home".
+ */
+export const AssistantIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden {...p}>
+    <path d="M12 3.5 13.7 8.3 18.5 10 13.7 11.7 12 16.5 10.3 11.7 5.5 10 10.3 8.3 12 3.5Z" />
+    <path d="M18 16.5 18.7 18.3 20.5 19 18.7 19.7 18 21.5 17.3 19.7 15.5 19 17.3 18.3 18 16.5Z" />
+  </svg>
+);
+
 export const NAV_ICON: Record<string, (p: SVGProps<SVGSVGElement>) => ReactElement> = {
+  dashboard: BoardIcon,
+  assistant: AssistantIcon,
   hub: HomeIcon,
   history: HistoryIcon,
   search: SearchIcon,

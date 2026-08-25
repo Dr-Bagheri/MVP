@@ -40,10 +40,13 @@ describe("AssistantMenu", () => {
     expect(screen.getByRole("link", { name: "history" }).getAttribute("href")).toBe("/conversations");
   });
 
-  it("keeps New conversation on assistant subpages and lets it navigate Home", () => {
+  it("keeps New conversation on assistant subpages and lets it navigate to the hub", () => {
     render(<AssistantMenu activeSlug="history" />);
     const fresh = screen.getByRole("link", { name: "newConversation" });
-    expect(fresh.getAttribute("href")).toBe("/");
+    // 2026-08-25: the hub moved off `/` when the dashboard became the
+    // landing page — the item still NAVIGATES from a subpage, which is the
+    // property this test exists for
+    expect(fresh.getAttribute("href")).toBe("/assistant");
 
     const click = createEvent.click(fresh);
     fireEvent(fresh, click);

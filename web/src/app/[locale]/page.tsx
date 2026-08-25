@@ -1,46 +1,29 @@
-import { Suspense } from "react";
 import { AssistantMenu } from "@/components/platform/AssistantMenu";
-import { AssistantConversationProvider } from "@/components/platform/AssistantConversationState";
-import { Hub } from "@/components/platform/Hub";
+import { Dashboard } from "@/components/platform/Dashboard";
 import { PlatformShell } from "@/components/platform/PlatformShell";
-import { MenuLayout } from "@/components/scaffold";
+import { MenuLayout, PageContainer } from "@/components/scaffold";
 
 /**
- * NeurAI's first page IS the assistant hub (M22) — this route used to redirect
- * to /calls, which was correct when Echo was the product and is wrong now that
- * Echo is an app inside a platform.
+ * NeurAI's landing page is the DASHBOARD (user directive, 2026-08-25).
  *
- * No assistant pane is rendered here, and that is the point rather than an
- * omission: on the hub the assistant is the page. See `PlatformShell` for why
- * the shell never places one.
+ * The route's history in one line: `/` redirected to `/calls` while Echo
+ * was the product, became the assistant hub when Echo became an app inside
+ * a platform, and is now the platform's own first answer — what happened
+ * while you were away. The hub kept its approved anatomy and moved to
+ * `/assistant`; the two are separate pages precisely because one is a
+ * conversation and the other is a briefing.
+ *
+ * No Suspense boundary here: this page reads no search params, so nothing
+ * forces a client bailout the way the hub's `?c=` resume does.
  */
-export default function HubPage() {
+export default function DashboardPage() {
   return (
     <PlatformShell>
-      {/*
-        **The Suspense boundary is required, not decorative.**
-
-        `Hub` reads `?c=<sessionId>` through `useSearchParams()` to resume a
-        conversation. Next prerenders this route, and a component reading search
-        params forces a client bailout — without a boundary ABOVE it, the
-        production build fails outright while the dev server renders the page
-        perfectly. It did: `next build` errored on `/[locale]` while the suite,
-        the typechecker and every dev-mode screenshot stayed green.
-
-        The fallback is `null` rather than a skeleton hub: the hub's own idle
-        state is the approved first impression, and a placeholder that
-        approximates it would flash a second, wrong version of the screen the
-        user signed off.
-      */}
-      <Suspense fallback={null}>
-        <AssistantConversationProvider>
-          {/* New conversation stays in the Assistant submenu everywhere. On
-              Home it clears a live hub and remains an enabled no-op when blank. */}
-          <MenuLayout menu={<AssistantMenu activeSlug="new" />}>
-            <Hub />
-          </MenuLayout>
-        </AssistantConversationProvider>
-      </Suspense>
+      <MenuLayout menu={<AssistantMenu activeSlug="dashboard" />}>
+        <PageContainer>
+          <Dashboard />
+        </PageContainer>
+      </MenuLayout>
     </PlatformShell>
   );
 }

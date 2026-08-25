@@ -257,18 +257,11 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
               })}
             </p>
           ) : null}
-          <Field label={t("titleField")}>
-            <input
-              className="input placeholder:text-fg-subtle/70"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder={t("titlePlaceholder")}
-              /* on resume the call already has its name — renames live in the
-                 Calls table, and a silently-ignored edit here would be a
-                 control that reads as wired and does nothing */
-              disabled={resuming}
-            />
-          </Field>
+          {/* the TITLE field left the form (user directive, 2026-08-25): the
+              engine names an untitled take («جلسه ۳» — nextMeetingTitle), and
+              renaming is one pencil away on the record. `title` state stays:
+              the agent's start_recording can still carry a name, and a
+              resumed take keeps the one it already has. */}
           <button
             type="button"
             className="mt-3 flex items-center gap-1.5 text-xs text-fg-muted underline-offset-2 hover:text-fg hover:underline"

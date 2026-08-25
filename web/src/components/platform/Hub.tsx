@@ -1,13 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api, BffError } from "@/api/client";
-import type { AgentCard, AgentCardItem, AgentEvent, AgentMessage, Call, ConnectorProvider, ModelInfo, SearchHit, Skill, User } from "@/api/types";
+import type { AgentCard, AgentEvent, AgentMessage, ConnectorProvider, ModelInfo, SearchHit, Skill, User } from "@/api/types";
 import { Link, useRouter } from "@/i18n/routing";
 import { useSearchParams } from "next/navigation";
-import { digits, personName, modelLabel } from "@/lib/format";
-import { getHubView, getServerHubView, setHubView, subscribeHubView } from "@/lib/hubView";
+import { personName, modelLabel } from "@/lib/format";
 import { useDictation } from "@/lib/dictation";
 import { deliverDoc } from "@/lib/deliver";
 import { useSkillName, useSkillStarters } from "@/lib/skillName";
@@ -342,40 +341,9 @@ export function Hub() {
 
   const idle = messages.length === 0;
 
-  /**
-   * The HYBRID DASHBOARD view (2026-08-25): a view of this same screen —
-   * the composer stays — switched from the menu through the shared store,
-   * or arrived at via /?view=dashboard from any other page.
-   */
-  const hubView = useSyncExternalStore(subscribeHubView, getHubView, getServerHubView);
-  const [dashCalls, setDashCalls] = useState<Call[] | null>(null);
-  const [dashCards, setDashCards] = useState<AgentCardItem[]>([]);
-  useEffect(() => {
-    if (new URLSearchParams(window.location.search).get("view") === "dashboard") {
-      setHubView("dashboard");
-    }
-  }, []);
-  useEffect(() => {
-    if (hubView !== "dashboard") return;
-    void api.listCalls({ includeArchived: false })
-      .then((rows) => setDashCalls(rows.filter((c) => c.deleted_at === null)))
-      .catch(() => setDashCalls([]));
-    void api.cards().then((res) => setDashCards(res.cards)).catch(() => setDashCards([]));
-  }, [hubView]);
-  const dashRecent = (dashCalls ?? [])
-    .slice()
-    .sort((a, b) => b.started_at.localeCompare(a.started_at))
-    .slice(0, 5);
-  const dashStats = (() => {
-    const week = Date.now() - 7 * 24 * 3600 * 1000;
-    const recent = (dashCalls ?? []).filter((c) => new Date(c.started_at).getTime() >= week);
-    return {
-      weekCount: recent.length,
-      weekMinutes: Math.round(
-        recent.reduce((ms, c) => ms + (c.duration_ms ?? 0), 0) / 60_000),
-      unread: dashCards.filter((c) => !c.read).length,
-    };
-  })();
+  /* the dashboard LEFT this component (user directive, 2026-08-25): it is
+     the landing PAGE now (components/platform/Dashboard.tsx), not a view of
+     the hub — a briefing and a conversation are different screens */
 
   /** One reducer for ask and regenerate — same events, same thread. */
   async function consume(stream: AsyncGenerator<AgentEvent>, replyId: string) {
@@ -1155,70 +1123,7 @@ export function Hub() {
           by the product's own skills rather than an invented catalogue. A
           press selects the skill AND fills the composer; sending stays the
           person's act (the shipped rule, unchanged). */}
-      {/* ── the HYBRID DASHBOARD (user directive, 2026-08-25): the composer
-          stays the hero; the strip beneath answers "what happened since I
-          left" — tiles from the live records, the freshest records, the
-          assistant's unread signals ─────────────────────────────────── */}
-      {idle && hubView === "dashboard" ? (
-        <section className="mt-7 w-full max-w-[660px] self-start text-start" aria-label={t("dashboardLabel")}>
-          <div className="grid grid-cols-3 gap-3">
-            {[
-              { key: "dashRecordsWeek", value: dashStats.weekCount },
-              { key: "dashMinutes", value: dashStats.weekMinutes },
-              { key: "dashSignals", value: dashStats.unread },
-            ].map((tile) => (
-              <div key={tile.key} className="rounded-xl border border-border bg-surface p-3">
-                <p className="text-xs text-fg-muted">{t(tile.key as "dashRecordsWeek")}</p>
-                <p className="mt-1 text-2xl font-bold text-fg">
-                  {dashCalls === null ? "—" : digits(tile.value, locale)}
-                </p>
-              </div>
-            ))}
-          </div>
-          <div className="mt-3 grid gap-3 md:grid-cols-2">
-            <div className="rounded-xl border border-border bg-surface p-3">
-              <p className="mb-2 text-xs font-semibold text-fg-muted">{t("dashRecent")}</p>
-              {dashCalls === null ? (
-                <p className="text-sm text-fg-muted">…</p>
-              ) : dashRecent.length === 0 ? (
-                <p className="text-sm text-fg-muted">{t("dashNoRecords")}</p>
-              ) : (
-                <ul className="space-y-1.5">
-                  {dashRecent.map((c) => (
-                    <li key={c.id}>
-                      <Link
-                        href={`/calls/${c.id}`}
-                        className="block truncate text-sm text-fg hover:text-accent"
-                      >
-                        {c.title.trim() === "" ? t("dashUntitled") : c.title}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-            <div className="rounded-xl border border-border bg-surface p-3">
-              <p className="mb-2 text-xs font-semibold text-fg-muted">{t("dashSignalsList")}</p>
-              {dashCards.length === 0 ? (
-                <p className="text-sm text-fg-muted">{t("dashNoSignals")}</p>
-              ) : (
-                <ul className="space-y-1.5">
-                  {dashCards.slice(0, 3).map((card) => (
-                    <li key={card.id} className="truncate text-sm text-fg">
-                      {!card.read ? (
-                        <span className="me-1.5 inline-block h-1.5 w-1.5 rounded-full bg-accent align-middle" aria-hidden />
-                      ) : null}
-                      {card.title}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </div>
-        </section>
-      ) : null}
-
-      {idle && hubView !== "dashboard" && !selectedAgent && !workflowSlug && skills.some((s) => s.starter_questions.length > 0) ? (
+      {idle && !selectedAgent && !workflowSlug && skills.some((s) => s.starter_questions.length > 0) ? (
         <section className="mt-7 w-full max-w-[660px] self-start text-start" aria-label={t("suggestions")}>
           <p className="mb-1 px-1 text-group-label font-medium text-fg-subtle">
             {t("suggestions")}

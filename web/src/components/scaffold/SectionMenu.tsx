@@ -41,10 +41,16 @@ export interface MenuItem {
    */
   badge?: string;
   /**
-   * A small icon-link at the item's END (2026-08-25: the archive door on
-   * the Records row) — its own destination, never part of the item's click.
+   * A small icon at the item's END (2026-08-25: the archive door on the
+   * Records row, the file picker on New meeting) — its own action, never
+   * part of the item's click. `href` navigates; `onSelect` acts in place.
    */
-  trailing?: { href: string; label: string; icon: ReactNode };
+  trailing?: {
+    label: string;
+    icon: ReactNode;
+    href?: string;
+    onSelect?: () => void;
+  };
 }
 
 export interface MenuGroup {
@@ -52,6 +58,10 @@ export interface MenuGroup {
   title: string;
   items: readonly MenuItem[];
 }
+
+/** the trailing icon's box — one class, two renderings (link and button) */
+const TRAILING_CLASS =
+  "tap absolute end-1.5 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-md text-fg-muted opacity-70 transition-opacity hover:bg-surface-2 hover:text-fg hover:opacity-100";
 
 export function SectionMenu({
   navLabel,
@@ -125,15 +135,25 @@ export function SectionMenu({
                           <span className="chip bg-surface-2 text-[10px] text-fg-muted">{item.badge}</span>
                         ) : null}
                       </Link>
-                      {item.trailing ? (
+                      {item.trailing?.href ? (
                         <Link
                           href={item.trailing.href}
                           aria-label={item.trailing.label}
                           title={item.trailing.label}
-                          className="absolute end-1.5 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-md text-fg-muted opacity-70 transition-opacity hover:bg-surface-2 hover:text-fg hover:opacity-100"
+                          className={TRAILING_CLASS}
                         >
                           {item.trailing.icon}
                         </Link>
+                      ) : item.trailing ? (
+                        <button
+                          type="button"
+                          aria-label={item.trailing.label}
+                          title={item.trailing.label}
+                          className={TRAILING_CLASS}
+                          onClick={item.trailing.onSelect}
+                        >
+                          {item.trailing.icon}
+                        </button>
                       ) : null}
                     </span>
                   )}

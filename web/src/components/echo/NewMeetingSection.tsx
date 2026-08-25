@@ -1,55 +1,22 @@
 "use client";
 
-import { useState } from "react";
-import { useTranslations } from "next-intl";
 import { Recorder } from "./Recorder";
-import { UploadPanel } from "./UploadPanel";
 import { UnfinishedTakes } from "./UnfinishedTakes";
 
 /**
- * Echo · New meeting (user directive, 2026-08-22): "Record in browser"
- * and "Upload a file" merged into ONE place with two tabs — the two ways
- * a meeting enters the platform are one decision, not two destinations.
- * The old /echo/record and /echo/upload addresses alias here (the page
- * picks the opening tab from them), so nothing bookmarked breaks and the
- * agent's start_recording path lands on the recorder exactly as before.
+ * Echo · New meeting — the RECORDER, and nothing else (user directive,
+ * 2026-08-25). The two-tab bar retired: uploading a file is a trailing
+ * icon on this very menu row now, and it never opens a page. The section's
+ * own title says what this is, so the panel repeats no heading — and the
+ * call title left the form entirely: the engine names an untitled take
+ * («جلسه ۳»), and renaming it later takes one pencil on the record.
  */
-export function NewMeetingSection({
-  initialTab = "record",
-  onFinished,
-}: {
-  initialTab?: "record" | "upload";
-  onFinished?: () => void;
-}) {
-  const t = useTranslations("echo");
-  const [tab, setTab] = useState<"record" | "upload">(initialTab);
-
+export function NewMeetingSection({ onFinished }: { onFinished?: () => void }) {
   return (
     <div className="space-y-5">
       {/* unfinished takes come FIRST — continuing beats starting over */}
       <UnfinishedTakes />
-      <div className="flex w-fit overflow-hidden rounded-lg border border-border" role="tablist">
-        {(["record", "upload"] as const).map((key) => (
-          <button
-            key={key}
-            type="button"
-            role="tab"
-            aria-selected={tab === key}
-            className={`h-10 px-4 text-sm transition-colors ${
-              tab === key
-                ? "bg-accent-soft font-semibold text-accent"
-                : "bg-surface text-fg-muted hover:text-fg"
-            }`}
-            onClick={() => setTab(key)}
-          >
-            {t(`section.${key}`)}
-          </button>
-        ))}
-      </div>
-
-      {tab === "record"
-        ? <Recorder {...(onFinished ? { onFinished } : {})} />
-        : <UploadPanel {...(onFinished ? { onFinished } : {})} />}
+      <Recorder {...(onFinished ? { onFinished } : {})} />
     </div>
   );
 }

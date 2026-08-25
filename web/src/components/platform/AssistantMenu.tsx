@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import type { AssistantSession } from "@/api/types";
 import { api } from "@/api/client";
 import { SectionMenu } from "@/components/scaffold";
 import { IconAgent, IconGauge, IconHistory, IconPlus, IconZap } from "@/components/icons";
 import { openAssistant } from "@/lib/assistantBus";
-import { getHubView, getServerHubView, setHubView, subscribeHubView } from "@/lib/hubView";
 import { useRefreshEpoch } from "@/lib/refreshBus";
 import { useAssistantConversation } from "./AssistantConversationState";
 
@@ -25,16 +24,12 @@ import { useAssistantConversation } from "./AssistantConversationState";
 export function AssistantMenu({
   activeSlug,
 }: {
-  activeSlug: "new" | "hub" | "history" | "workflows" | "agents";
+  activeSlug: "dashboard" | "new" | "hub" | "history" | "workflows" | "agents";
 }) {
   const t = useTranslations("platform");
   const tConversations = useTranslations("conversations");
   const { started, startNewConversation } = useAssistantConversation();
   const isHub = activeSlug === "new" || activeSlug === "hub";
-  /* the DASHBOARD is a view of the hub, not a route — the menu highlights
-     it from the shared store so switching never remounts the composer */
-  const hubView = useSyncExternalStore(subscribeHubView, getHubView, getServerHubView);
-  const shownSlug = isHub && hubView === "dashboard" ? "dashboard" : activeSlug;
 
   /* the TWO latest conversations, right in the menu (user directive,
      2026-08-22) — refreshed whenever any session changes anywhere, orb
@@ -52,40 +47,33 @@ export function AssistantMenu({
       heading={t("assistantMenuHeading")}
       groups={[
         {
-          /* the OVERVIEW (user directive, 2026-08-25): the hybrid dashboard
-             joins the home menu — a view of the hub, composer kept */
+          /* the OVERVIEW (user directive, 2026-08-25): the dashboard is the
+             landing PAGE now — its own route, never a view of the hub */
           key: "overview",
           title: t("assistantMenuOverview"),
           items: [
             {
               slug: "dashboard",
-              href: "/?view=dashboard",
+              href: "/",
               label: t("dashboard"),
               icon: <IconGauge />,
-              preventNavigation: isHub,
-              onSelect: isHub ? () => setHubView("dashboard") : undefined,
             },
           ],
         },
         {
           /* the ASSISTANCE section (user directive, 2026-08-25) — the
-             conversation lives under its own name */
+             conversation lives under its own name, at /assistant */
           key: "assistance",
           title: t("assistantMenuAssistance"),
           items: [
             {
               slug: "new",
-              href: "/",
+              href: "/assistant",
               label: t("newConversation"),
               icon: <IconPlus />,
-              /* On Home this stays put; on every subpage it returns to Home. */
+              /* On the hub this stays put; elsewhere it goes to a blank one. */
               preventNavigation: isHub,
-              onSelect: isHub
-                ? () => {
-                    setHubView("chat");
-                    if (started) startNewConversation();
-                  }
-                : undefined,
+              onSelect: isHub && started ? startNewConversation : undefined,
             },
             { slug: "history", href: "/conversations", label: t("history"), icon: <IconHistory /> },
             ...recent.map((session) => ({
@@ -114,7 +102,7 @@ export function AssistantMenu({
           ],
         },
       ]}
-      activeSlug={shownSlug}
+      activeSlug={activeSlug}
     />
   );
 }

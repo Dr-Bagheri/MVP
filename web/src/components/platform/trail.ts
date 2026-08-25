@@ -46,7 +46,10 @@ interface TrailEntry {
  * the filesystem by `breadcrumbs.test.ts` rather than trusted.
  */
 export const TRAIL: Readonly<Record<string, TrailEntry>> = {
-  "/": { label: "platform.hub" },
+  /* the landing page is the DASHBOARD (2026-08-25); the assistant hub is a
+     destination under it, at its own address */
+  "/": { label: "platform.dashboard" },
+  "/assistant": { label: "platform.assistant", parent: "/" },
 
   /*
    * Echo is an app inside the platform (the pivot), so everything of Echo's

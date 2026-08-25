@@ -33,8 +33,19 @@ export const GITHUB_HREF = process.env.NEXT_PUBLIC_GITHUB_URL ?? "https://github
  * (AssistantMenu), where the assistant's own destinations belong. The rail
  * names apps and surfaces; the sub-menu names what you do inside one.
  */
+/*
+ * 2026-08-25 (user directive): the DASHBOARD is the landing page and the
+ * rail's first tile; the assistant moved off `/` to its own address and
+ * its own icon (the house never named it well).
+ *
+ * The assistant is deliberately NOT in the mobile bar: the presence orb is
+ * on every screen at every width, so a bar slot would be a second door to
+ * the same room — and M22's four-item ceiling (asserted in nav.test.ts)
+ * has no room to spare.
+ */
 export const NAV_PRIMARY: readonly NavItem[] = [
-  { href: "/", key: "hub", inBar: true },
+  { href: "/", key: "dashboard", inBar: true },
+  { href: "/assistant", key: "assistant", inBar: false },
   { href: "/echo", key: "echo", inBar: true },
   { href: "/management", key: "management", inBar: true },
 ];
