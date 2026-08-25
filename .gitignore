@@ -51,3 +51,7 @@ Thumbs.db
 # machine-move staging must never live in the tree (a private key sat here 2026-08-25)
 /ssh/
 /repo-local/
+
+# the Playwright MCP tool's per-session dumps (console logs, page trees) —
+# scratch by construction, and it recreates them every run
+/.playwright-mcp/

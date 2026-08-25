@@ -82,6 +82,18 @@ export function EchoSectionMenu({ activeSlug }: { activeSlug: EchoMenuSlug }) {
         activeSlug={activeSlug === "archive" ? "records" : activeSlug}
         groups={[
           {
+            /* SEARCH first, unlabelled (user directive, 2026-08-26): it is
+               the way IN to everything below it, and a heading over one row
+               that already says «جست‌وجو» is a word spent twice */
+            key: "find",
+            items: [{
+              slug: "search",
+              href: "/search",
+              label: t("search"),
+              icon: ICONS.search,
+            }],
+          },
+          {
             key: "capture",
             title: tEcho("group.capture"),
             items: [{
@@ -116,12 +128,6 @@ export function EchoSectionMenu({ activeSlug }: { activeSlug: EchoMenuSlug }) {
                 href: "/echo/speakers",
                 label: tEcho("section.speakers"),
                 icon: ICONS.speakers,
-              },
-              {
-                slug: "search",
-                href: "/search",
-                label: t("search"),
-                icon: ICONS.search,
               },
             ],
           },

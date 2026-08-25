@@ -1,7 +1,6 @@
 import { Dashboard } from "@/components/platform/Dashboard";
-import { DashboardMenu } from "@/components/platform/DashboardMenu";
 import { PlatformShell } from "@/components/platform/PlatformShell";
-import { MenuLayout, PageContainer } from "@/components/scaffold";
+import { PageContainer } from "@/components/scaffold";
 
 /**
  * NeurAI's landing page is the DASHBOARD (user directive, 2026-08-25).
@@ -13,19 +12,20 @@ import { MenuLayout, PageContainer } from "@/components/scaffold";
  * `/assistant`; the two are separate pages precisely because one is a
  * conversation and the other is a briefing.
  *
- * No Suspense boundary here: this page reads no search params, so nothing
- * forces a client bailout the way the hub's `?c=` resume does.
+ * NO SECTION MENU (user directive, 2026-08-26). A dashboard is a board, and
+ * a column of links beside it competes with the tiles for the same job —
+ * every destination the menu offered is a tile away, and the board wants
+ * the full width to look like a board rather than a page with a sidebar.
+ *
+ * No Suspense boundary here either: this page reads no search params, so
+ * nothing forces a client bailout the way the hub's `?c=` resume does.
  */
 export default function DashboardPage() {
   return (
     <PlatformShell>
-      {/* the dashboard's OWN menu (2026-08-25): the assistant's destinations
-          belong to the assistant's page, not to the briefing */}
-      <MenuLayout menu={<DashboardMenu />}>
-        <PageContainer width="wide">
-          <Dashboard />
-        </PageContainer>
-      </MenuLayout>
+      <PageContainer width="wide">
+        <Dashboard />
+      </PageContainer>
     </PlatformShell>
   );
 }

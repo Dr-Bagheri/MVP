@@ -140,6 +140,15 @@ export interface CallSummary {
   /** Pointer to the current summary row, or null if none has been written. */
   current_summary_id: string | null;
   /**
+   * The row's OWN last write — 0004 has maintained it by trigger since the
+   * table existed, and this wire never carried it (the fifth
+   * stored-and-never-served field on this project). It moves on a rename, a
+   * scope change, an archive, a summary landing: "when did this record last
+   * change", which is a different question from "when was it recorded".
+   * Never null — the column is `not null default now()`.
+   */
+  updated_at: string;
+  /**
    * Provenance summary, NOT a gate (steward-ratified).
    *   "full"  — every part has word timing
    *   "mixed" — some parts do, some fell back to a timing-less lane
@@ -220,7 +229,7 @@ const PART_HAS_SEGMENTS = `
 const CALL_COLUMNS = `
   c.id, c.title, c.scope, c.status, c.language, c.started_at,
   c.duration_ms, c.owner_id, c.source, c.archived_at, c.deleted_at,
-  c.purge_after, c.current_summary_id,
+  c.purge_after, c.current_summary_id, c.updated_at,
   (select count(*) from echo.call_part p
     where p.call_id = c.id and ${PART_HAS_SEGMENTS}) as transcribed_part_count,
   (select count(*) from echo.call_part p
@@ -236,6 +245,7 @@ interface CallRow {
   deleted_at: unknown;
   purge_after: unknown;
   current_summary_id: string | null;
+  updated_at: unknown;
   transcribed_part_count: number | string;
   timed_part_count: number | string;
   /** present only when the 0086 column exists and was selected */
@@ -285,6 +295,7 @@ const toSummary = (row: CallRow): CallSummary => ({
   deleted_at: isoOrNull(row.deleted_at),
   purge_after: isoOrNull(row.purge_after),
   current_summary_id: row.current_summary_id,
+  updated_at: iso(row.updated_at),
   transcript_timing: timingFromCounts(
     Number(row.transcribed_part_count), Number(row.timed_part_count),
   ),

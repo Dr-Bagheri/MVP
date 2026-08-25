@@ -17,6 +17,15 @@ import { clearNotifications, notifyHistory, subscribeNotify, type PlatformNotice
  * the agent's cards (M35 — server-side, survive reload) and the session's
  * local notices from the bus (saves, tool runs, mic state — transient by
  * design; the durable record of an action is the audit log, not a toast).
+ *
+ * CLEAR covers the WHOLE panel (user directive, 2026-08-26: "clear must be
+ * for all parts of the notification, even assistant messages"), and it
+ * means two different things because the two halves are different kinds of
+ * thing. Local notices are DROPPED — they were never a record. Cards are
+ * MARKED READ on the server, and the panel lists only unread ones, so the
+ * bell empties without anything being destroyed: the card itself still
+ * lives in the conversation it came from. A dismiss that deleted the
+ * agent's message would be the bell deciding what the record says.
  */
 export function NotificationBell() {
   const t = useTranslations("presence");
@@ -45,7 +54,23 @@ export function NotificationBell() {
     return () => document.removeEventListener("mousedown", onDown);
   }, [open]);
 
-  const unread = cards.filter((c) => !c.read).length;
+  /* the panel shows what is NEW; the read ones live on in /conversations */
+  const shownCards = cards.filter((c) => !c.read);
+  const unread = shownCards.length;
+
+  /** empty the whole panel — see the note at the top for why it is two acts */
+  async function clearAll(): Promise<void> {
+    clearNotifications();
+    setNotices([]);
+    const toMark = cards.filter((c) => !c.read);
+    setCards((prev) => prev.map((c) => ({ ...c, read: true })));
+    /* a refusal leaves that card unread on the server; the next open will
+       show it again, which is the honest outcome — better a card that
+       comes back than a bell that lies about having cleared it */
+    await Promise.all(
+      toMark.map((c) => api.markCardRead(c.id).catch(() => undefined)),
+    );
+  }
 
   function openCard(card: AgentCardItem) {
     if (!card.read) {
@@ -79,14 +104,24 @@ export function NotificationBell() {
 
       {open ? (
         <div className="absolute end-0 top-11 z-50 max-h-[60dvh] w-[min(90vw,20rem)] overflow-y-auto rounded-xl border border-border bg-surface p-2 shadow-xl">
-          {cards.length === 0 && notices.length === 0 ? (
+          {shownCards.length === 0 && notices.length === 0 ? (
             <p className="px-2 py-3 text-xs text-fg-muted">{t("bellEmpty")}</p>
           ) : (
             <>
-              {cards.length > 0 ? (
+              {/* ONE Clear, at the top, for the whole panel */}
+              <div className="flex items-center justify-end border-b border-border pb-1.5">
+                <button
+                  type="button"
+                  className="tap rounded-md px-2 py-1 text-[11px] text-fg-muted hover:bg-surface-2 hover:text-fg"
+                  onClick={() => void clearAll()}
+                >
+                  {t("bellClear")}
+                </button>
+              </div>
+              {shownCards.length > 0 ? (
                 <div className="mb-1">
                   <p className="px-2 pb-1 pt-1 text-[11px] font-semibold text-fg-subtle">{t("bellCards")}</p>
-                  {cards.slice(0, 8).map((card) => (
+                  {shownCards.slice(0, 8).map((card) => (
                     <button
                       key={card.id}
                       type="button"
@@ -104,19 +139,7 @@ export function NotificationBell() {
               ) : null}
               {notices.length > 0 ? (
                 <div>
-                  <div className="flex items-center justify-between">
-                    <p className="px-2 pb-1 pt-1 text-[11px] font-semibold text-fg-subtle">{t("bellRecent")}</p>
-                    <button
-                      type="button"
-                      className="tap rounded-md px-2 py-1 text-[11px] text-fg-muted hover:bg-surface-2 hover:text-fg"
-                      onClick={() => {
-                        clearNotifications();
-                        setNotices([]);
-                      }}
-                    >
-                      {t("bellClear")}
-                    </button>
-                  </div>
+                  <p className="px-2 pb-1 pt-1 text-[11px] font-semibold text-fg-subtle">{t("bellRecent")}</p>
                   {notices.slice(0, 8).map((notice) => (
                     <p
                       key={notice.id}

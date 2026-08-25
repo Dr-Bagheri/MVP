@@ -97,7 +97,10 @@ describe("Management · Users — member detail", () => {
     render(<UsersPage />);
     await screen.findByText("نیما");
 
-    await user.click(screen.getByRole("button", { name: "نیما" }));
+    /* the whole ROW opens the detail now (2026-08-26, the shared table):
+       the name stopped being its own button when every table got one way
+       in and one menu out */
+    await user.click(screen.getByText("نیما"));
     const panel = await screen.findByRole("dialog", { name: "جزئیات عضو" });
     expect(panel.textContent).toContain("nima@example.test");
     expect(panel.textContent).toContain("@nima");

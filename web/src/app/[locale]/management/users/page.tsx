@@ -18,7 +18,8 @@ import { ManagementPane } from "@/components/platform/ManagementPane";
 import { PageHeader } from "@/components/scaffold";
 import { MemberDetail } from "@/components/platform/MemberDetail";
 import { Card, Chip, EmptyState } from "@/components/ui";
-import { ConfirmDialog, IconAction } from "@/components/rowActions";
+import { ConfirmDialog, SelectMenu } from "@/components/rowActions";
+import { DataTable, StatusDot } from "@/components/DataTable";
 import { IconPencil, IconTrash } from "@/components/icons";
 import { digits, formatDate, personName } from "@/lib/format";
 
@@ -185,18 +186,8 @@ export default function UsersPage() {
 
   /** The rows bulk actions may touch: never the owner, never yourself. */
   const selectable = listed.filter((u) => u.role !== "owner" && u.id !== me?.id);
-  const allSelected = selectable.length > 0 && selectable.every((u) => selected.has(u.id));
   /** Derived from the live rows so the panel refreshes with every load(). */
   const detailUser = detailId === null ? null : (rows.find((u) => u.id === detailId) ?? null);
-
-  function toggleSelected(id: string): void {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
 
   /** ONE mutation path for role — the table row and the detail panel share it. */
   async function setRoleFor(id: string, newRole: Role): Promise<void> {
@@ -647,167 +638,138 @@ export default function UsersPage() {
           {listed.length === 0 ? (
             <EmptyState text={t("noMatches")} />
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[40rem] border-collapse text-sm">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="w-10 py-2 pe-2">
-                      {/* select-all covers the SELECTABLE rows — owner and
-                          self are not silently included by a header click */}
-                      <input
-                        type="checkbox"
-                        aria-label={t("bulkSelectAll")}
-                        checked={allSelected}
-                        disabled={selectable.length === 0}
-                        onChange={() =>
-                          setSelected(allSelected ? new Set() : new Set(selectable.map((u) => u.id)))
-                        }
+            /* the theme's ONE table (2026-08-26): the members list wears
+               exactly the records table — hover-revealed selection, no
+               action icons in the row, every action in the right-click
+               menu, the quiet dot for the ordinary good state */
+            <DataTable
+              rows={listed}
+              rowKey={(u) => u.id}
+              selected={selected}
+              onSelect={setSelected}
+              selectableRow={(u) => u.role !== "owner" && u.id !== me?.id}
+              selectLabel={(u) => t("bulkSelectRow", { name: personName(u, locale) })}
+              onRowClick={(u) => setDetailId(u.id)}
+              menuItems={(u) => [
+                {
+                  key: "edit",
+                  label: t("memberEdit"),
+                  icon: <IconPencil />,
+                  onSelect: () => setDetailId(u.id),
+                },
+                ...(u.role !== "owner" && u.id !== me?.id
+                  ? [{
+                      key: "status",
+                      label: tAdmin(u.status === "disabled" ? "enable" : "disable"),
+                      disabled: busy,
+                      onSelect: () => void toggleStatusFor(u),
+                    }]
+                  : []),
+                ...(me?.role === "owner" && u.role !== "owner" && u.id !== me?.id
+                  ? [{
+                      key: "delete",
+                      label: t("deleteMember"),
+                      icon: <IconTrash />,
+                      danger: true,
+                      disabled: busy,
+                      onSelect: () => setConfirmDeleteMember(u),
+                    }]
+                  : []),
+              ]}
+              columns={[
+                {
+                  key: "name",
+                  header: t("colName"),
+                  cell: (u) => (
+                    <span className="font-medium text-fg">{personName(u, locale)}</span>
+                  ),
+                },
+                {
+                  key: "email",
+                  header: t("colEmail"),
+                  className: "text-xs text-fg-muted",
+                  cell: (u) => <span className="ltr">{u.email}</span>,
+                },
+                {
+                  key: "username",
+                  header: t("colUsername"),
+                  className: "text-xs text-fg-muted",
+                  /* a column keeps its placeholder so the rows stay
+                     aligned; "@" with nothing after it is not a handle */
+                  cell: (u) => (u.username ? `@${u.username}` : "—"),
+                },
+                {
+                  key: "status",
+                  header: t("colStatus"),
+                  /* ACTIVE is the ordinary good state and now says so the
+                     way READY does — a quiet dot, no chip fill. The
+                     ON/OFF switch retired to the row menu with every
+                     other action (user directive, 2026-08-26). */
+                  cell: (u) =>
+                    u.status === "active" ? (
+                      <StatusDot label={statusLabel(u.status)} />
+                    ) : (
+                      <Chip tone={statusTone(u.status)}>{statusLabel(u.status)}</Chip>
+                    ),
+                },
+                {
+                  key: "role",
+                  header: t("colRole"),
+                  stopClick: true,
+                  cell: (u) =>
+                    u.role === "owner" ? (
+                      <Chip tone="accent">{t("roleOwner")}</Chip>
+                    ) : (
+                      <SelectMenu
+                        className="h-9 min-h-0 w-32 py-0 text-xs"
+                        ariaLabel={t("colRole")}
+                        value={u.role}
+                        disabled={busy}
+                        onChange={(next) => void setRoleFor(u.id, next as Role)}
+                        options={ASSIGNABLE_ROLES.map((r) => ({
+                          value: r,
+                          label: tAdmin(r === "admin" ? "roleAdmin" : "roleMember"),
+                        }))}
                       />
-                    </th>
-                    <th className="table-head py-2 pe-3">{t("colName")}</th>
-                    <th className="table-head py-2 pe-3">{t("colEmail")}</th>
-                    <th className="table-head py-2 pe-3">{t("colUsername")}</th>
-                    <th className="table-head py-2 pe-3">{t("colStatus")}</th>
-                    <th className="table-head py-2 pe-3">{t("colRole")}</th>
-                    <th className="table-head py-2 pe-3">{t("colAdded")}</th>
-                    {lastSeenServed ? (
-                      <th className="table-head py-2 pe-3" title={t("lastActionMeaning")}>
-                        {t("colLastAction")}
-                      </th>
-                    ) : null}
-                    {/* no visible ACTIONS title (2026-08-25, all tables) */}
-                    <th className="table-head py-2">
-                      <span className="sr-only">{t("colMemberActions")}</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {listed.map((u) => (
-                    <tr key={u.id}>
-                      <td className="w-10 py-3 pe-2 align-top">
-                        {u.role !== "owner" && u.id !== me?.id ? (
-                          <input
-                            type="checkbox"
-                            aria-label={t("bulkSelectRow", { name: personName(u, locale) })}
-                            checked={selected.has(u.id)}
-                            onChange={() => toggleSelected(u.id)}
-                          />
-                        ) : null}
-                      </td>
-                      <td className="py-3 pe-3 align-top">
-                        {/* the name opens the detail panel — a magnified row,
-                            not a navigation */}
-                        <button
-                          type="button"
-                          className="font-medium text-fg underline-offset-2 hover:text-accent hover:underline"
-                          onClick={() => setDetailId(u.id)}
-                        >
-                          {personName(u, locale)}
-                        </button>
-                      </td>
-                      <td className="py-3 pe-3 align-top text-xs text-fg-muted">
-                        <span className="ltr">{u.email}</span>
-                      </td>
-                      <td className="py-3 pe-3 align-top text-xs text-fg-muted">
-                        {/* a column keeps its placeholder so the rows stay
-                            aligned; "@" with nothing after it is not a handle */}
-                        {u.username ? `@${u.username}` : "—"}
-                      </td>
-                      <td className="py-3 pe-3 align-top">
-                        <div className="flex items-center gap-2">
-                          {/* an ON/OFF switch (user directive) — on = active,
-                              off = disabled; the chip stays for the WORD.
-                              Not on the owner (M23), not on yourself (core
-                              409s it). */}
-                          {u.role !== "owner" && u.id !== me?.id ? (
-                            <button
-                              type="button"
-                              role="switch"
-                              aria-checked={u.status === "active"}
-                              aria-label={tAdmin(u.status === "disabled" ? "enable" : "disable")}
-                              disabled={busy}
-                              className={`tap flex h-5 w-9 shrink-0 items-center rounded-full px-0.5 transition-colors ${
-                                u.status === "active"
-                                  ? "justify-end bg-accent"
-                                  : "justify-start border border-border-strong bg-surface-2"
-                              }`}
-                              onClick={() => void toggleStatusFor(u)}
-                            >
-                              <span
-                                className={`h-3.5 w-3.5 rounded-full ${
-                                  u.status === "active" ? "bg-on-accent" : "bg-fg-muted"
-                                }`}
-                              />
-                            </button>
-                          ) : null}
-                          <Chip tone={statusTone(u.status)}>{statusLabel(u.status)}</Chip>
-                        </div>
-                      </td>
-                      <td className="py-3 pe-3 align-top">
-                        {u.role === "owner" ? (
-                          <Chip tone="accent">{t("roleOwner")}</Chip>
+                    ),
+                },
+                {
+                  key: "added",
+                  header: t("colAdded"),
+                  className: "text-xs text-fg-muted",
+                  cell: (u) => formatDate(u.created_at, locale),
+                },
+                ...(lastSeenServed
+                  ? [{
+                      key: "lastSeen",
+                      header: t("colLastAction"),
+                      headClassName: "whitespace-nowrap",
+                      className: "text-xs",
+                      cell: (u: User) =>
+                        u.last_seen_at ? (
+                          <span className="text-fg-muted">
+                            {formatDate(u.last_seen_at, locale)}
+                          </span>
                         ) : (
-                          <select
-                            className="input h-11 min-h-0 w-32 py-0 text-xs md:h-9"
-                            value={u.role}
-                            disabled={busy}
-                            onChange={(e) => void setRoleFor(u.id, e.target.value as Role)}
-                          >
-                            {ASSIGNABLE_ROLES.map((r) => (
-                              <option key={r} value={r}>
-                                {tAdmin(r === "admin" ? "roleAdmin" : "roleMember")}
-                              </option>
-                            ))}
-                          </select>
-                        )}
-                      </td>
-                      <td className="py-3 pe-3 align-top text-xs text-fg-muted">
-                        {formatDate(u.created_at, locale)}
-                      </td>
-                      {lastSeenServed ? (
-                        <td className="py-3 align-top text-xs">
-                          {u.last_seen_at ? (
-                            <span className="text-fg-muted">
-                              {formatDate(u.last_seen_at, locale)}
-                            </span>
-                          ) : (
-                            /*
-                             * `null` is "never seen", said in words. A dash
-                             * would read as data — the same mistake as an
-                             * em-dash for a null response code, where "no
-                             * answer ever came back" became indistinguishable
-                             * from "nothing to show".
-                             */
-                            <span className="text-fg-muted/70">{t("neverSeen")}</span>
-                          )}
-                        </td>
-                      ) : null}
-                      <td className="py-3 align-top">
-                        <span className="flex items-center gap-1.5 text-xs">
-                          {/* Edit = the detail panel, where every editable
-                              fact lives — a pencil now (2026-08-24) */}
-                          <IconAction label={t("memberEdit")} onClick={() => setDetailId(u.id)}>
-                            <IconPencil />
-                          </IconAction>
-                          {me?.role === "owner" && u.role !== "owner" && u.id !== me?.id ? (
-                            /* delete = trash + are-you-sure popup; the typed
-                               reason retired for the inline path (2026-08-24) */
-                            <IconAction
-                              label={t("deleteMember")}
-                              danger
-                              disabled={busy}
-                              onClick={() => setConfirmDeleteMember(u)}
-                            >
-                              <IconTrash />
-                            </IconAction>
-                          ) : null}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                          /*
+                           * `null` is "never seen", said in words. A dash
+                           * would read as data — the same mistake as an
+                           * em-dash for a null response code, where "no
+                           * answer ever came back" became
+                           * indistinguishable from "nothing to show".
+                           */
+                          <span className="text-fg-muted/70">{t("neverSeen")}</span>
+                        ),
+                    }]
+                  : []),
+                {
+                  key: "actions",
+                  header: t("colMemberActions"),
+                  srOnly: true,
+                  cell: () => null,
+                },
+              ]}
+            />
           )}
         </Card>
 

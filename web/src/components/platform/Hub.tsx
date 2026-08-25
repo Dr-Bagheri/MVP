@@ -12,7 +12,7 @@ import { deliverDoc } from "@/lib/deliver";
 import { useSkillName, useSkillStarters } from "@/lib/skillName";
 import { ConversationThread } from "./ConversationThread";
 import { useAssistantConversation } from "./AssistantConversationState";
-import { DocumentIcon, EchoMark, MicIcon, PlusIcon, SendIcon, ToolsIcon } from "./icons";
+import { DocumentIcon, MicIcon, PlusIcon, SendIcon, ToolsIcon } from "./icons";
 
 type CreateKind = "doc" | "pdf";
 
@@ -1096,27 +1096,12 @@ export function Hub() {
         </div>
       </div>
 
-      {/* The Echo card sits DIRECTLY under the prompt box (user directive,
-          2026-08-18 — it replaces the Conversations pill, which is renamed
-          History and lives in the left rail with the platform's other
-          destinations). The apps are the hub's second sentence: ask above,
-          open an app below. */}
-      {idle ? (
-        <div className="mt-4 grid w-full max-w-[660px] grid-cols-[repeat(auto-fill,minmax(226px,1fr))] gap-3">
-          <Link
-            href="/echo"
-            className="flex items-center gap-3 rounded-2xl border border-border bg-surface p-3.5 text-start transition-colors hover:border-border-strong"
-          >
-            <span className="grid h-[42px] w-[42px] shrink-0 place-items-center rounded-xl bg-surface-2">
-              <EchoMark size={28} />
-            </span>
-            <span className="min-w-0">
-              <span className="block text-sm font-semibold text-fg">{t("echo")}</span>
-              <span className="block text-xs text-fg-muted">{t("echoDesc")}</span>
-            </span>
-          </Link>
-        </div>
-      ) : null}
+      {/* The Echo card MOVED to the dashboard (user directive, 2026-08-26).
+          It sat under the prompt box from 2026-08-18, when the hub was the
+          landing page and "ask above, open an app below" was that page's
+          whole sentence. The dashboard is the landing page now, so the app
+          launcher belongs there — and the assistant's own page is a
+          conversation, which an app card interrupts rather than completes. */}
 
       {/* SUGGESTIONS (user directive, 2026-08-18): one row per skill that
           ships starter questions — the reference hub's suggestion list, fed

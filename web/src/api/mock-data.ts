@@ -189,6 +189,9 @@ export const CALLS: Call[] = [
     status: "ready",
     duration_ms: 2940000,
     started_at: iso(day),
+    /* the row's own last write (0004's trigger); a fixture whose
+       last change is its recording is the ordinary case */
+    updated_at: iso(day),
     archived_at: null,
     deleted_at: null,
     purge_after: null,
@@ -208,6 +211,9 @@ export const CALLS: Call[] = [
     status: "summarizing",
     duration_ms: 1320000,
     started_at: iso(3 * 3_600_000),
+    /* the row's own last write (0004's trigger); a fixture whose
+       last change is its recording is the ordinary case */
+    updated_at: iso(3 * 3_600_000),
     archived_at: null,
     deleted_at: null,
     purge_after: null,
@@ -242,6 +248,9 @@ export const CALLS: Call[] = [
     status: "ready",
     duration_ms: 2100000,
     started_at: iso(5 * day),
+    /* the row's own last write (0004's trigger); a fixture whose
+       last change is its recording is the ordinary case */
+    updated_at: iso(5 * day),
     archived_at: iso(9 * day),
     deleted_at: null,
     purge_after: null,
@@ -302,6 +311,9 @@ export const CALLS: Call[] = [
     status: "failed",
     duration_ms: 420000,
     started_at: iso(8 * day),
+    /* the row's own last write (0004's trigger); a fixture whose
+       last change is its recording is the ordinary case */
+    updated_at: iso(8 * day),
     archived_at: null,
     deleted_at: null,
     purge_after: null,
@@ -343,6 +355,9 @@ export const CALLS: Call[] = [
     status: "ready",
     duration_ms: 180000,
     started_at: iso(12 * day),
+    /* the row's own last write (0004's trigger); a fixture whose
+       last change is its recording is the ordinary case */
+    updated_at: iso(12 * day),
     archived_at: null,
     deleted_at: iso(4 * day),
     purge_after: null,
@@ -385,6 +400,9 @@ export const CALLS: Call[] = [
     status: "processing",
     duration_ms: 2400000,
     started_at: iso(2 * 3_600_000),
+    /* the row's own last write (0004's trigger); a fixture whose
+       last change is its recording is the ordinary case */
+    updated_at: iso(2 * 3_600_000),
     archived_at: null,
     deleted_at: null,
     purge_after: null,

@@ -69,6 +69,8 @@
     "columnLength": "Length",
     "columnScope": "Scope",
     "columnStatus": "Status",
+    "columnLastAction": "Last action",
+    "openRecord": "Open",
     "scopePrivate": "Private",
     "scopeOrg": "Organization",
     "makePrivate": "Make private",
@@ -134,6 +136,21 @@
     "expand": "Expand",
     "collapse": "Collapse",
     "emptyBoard": "The board is empty — add a card to begin.",
+    "sizeLabel": "Size",
+    "size": { "small": "Small", "wide": "Wide", "large": "Large", "hero": "Full width" },
+    "moveTile": "Move",
+    "moveFirst": "Move to the start",
+    "moveLast": "Move to the end",
+    "watchEmpty": "Add a word or a name to watch for — a competitor, a product, a phrase that matters.",
+    "watchAdd": "Add a term…",
+    "watchRemove": "Stop watching “{term}”",
+    "watchNote": "Counted across the last {n} records.",
+    "ledgerNote": "Decisions in the order they were made. Nothing here checks whether a later decision reverses an earlier one.",
+    "nextPick": "Who are you meeting?",
+    "nextHint": "Pick someone and see what you agreed with them last time.",
+    "nextNone": "No record with them in the ones read.",
+    "nextNothingAgreed": "Nothing was recorded as agreed in that meeting.",
+    "nextNoCalendar": "No calendar is connected, so the person is chosen by hand.",
     "widget": {
       "tiles": "This week",
       "briefing": "Your briefing",
@@ -144,7 +161,10 @@
       "topics": "Topics",
       "people": "People you met",
       "pipeline": "Processing",
-      "recent": "Recent records"
+      "recent": "Recent records",
+      "watchlist": "Watchlist",
+      "ledger": "Decision ledger",
+      "next": "Next meeting"
     },
     "tileRecordsWeek": "Records this week",
     "tileMinutes": "Minutes recorded",
@@ -337,6 +357,12 @@
     "mergeWarn": "“{loser}” leaves the directory and everything moves to “{winner}”. This cannot be undone.",
     "mergeDone": "Merged.",
     "mergeFailed": "The merge did not go through."
+  },
+  "table": {
+    "selectAll": "Select all rows",
+    "selectRow": "Select this row",
+    "actions": "Actions",
+    "menuHint": "Right-click a row for its actions"
   },
   "titles": {
     "ceo": "CEO",

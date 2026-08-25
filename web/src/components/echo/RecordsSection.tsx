@@ -13,7 +13,8 @@ import { Card, EmptyState, StatusChip } from "@/components/ui";
 // copy of that arithmetic beside the table is how two countdowns disagree.
 import { formatDate, formatDuration, formatRelativeDate, digits } from "@/lib/format";
 import { DeletedCallsCard } from "./DeletedCallsCard";
-import { ConfirmDialog, ContextMenu, IconAction } from "@/components/rowActions";
+import { ConfirmDialog } from "@/components/rowActions";
+import { DataTable } from "@/components/DataTable";
 import { IconArchive, IconGlobe, IconPencil, IconShare, IconTag, IconTrash } from "@/components/icons";
 
 /**
@@ -55,8 +56,6 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
   /** 2026-08-24: delete confirms in a POPUP (no typed reason — the ledger
       gets the fixed UI_DELETE_REASON); null = no dialog showing. */
   const [confirmDelete, setConfirmDelete] = useState<null | { id: string; title: string }>(null);
-  /** the right-click menu's position + which row it speaks for */
-  const [ctxMenu, setCtxMenu] = useState<null | { x: number; y: number; id: string }>(null);
   const [confirmBulk, setConfirmBulk] = useState(false);
   /** cleanup #10: rows FADE before the reload removes them — a state change
       reads as motion, not as a table flicker */
@@ -182,9 +181,6 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
   const shown =
     tagFilter === null ? live : live.filter((call) => call.tags?.includes(tagFilter));
 
-  const selectable = shown.filter((call) => mayEdit(call));
-  const allSelected =
-    selectable.length > 0 && selectable.every((call) => selected.has(call.id));
 
   async function saveTags(call: Call): Promise<void> {
     const tags = [...new Set(
@@ -202,15 +198,6 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
         }
         throw cause;
       }
-    });
-  }
-
-  function toggleSelect(id: string): void {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
     });
   }
 
@@ -323,296 +310,71 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
       ) : (
         <Card className="!p-0">
           {/*
-            The table scrolls INSIDE the card rather than being clipped by it.
-            Without this, ~198px of every row was unreachable at 375 — and it
-            was invisible to the obvious test: clipping keeps
-            `document.scrollWidth` equal to the viewport, so a page-level
-            overflow check certifies the screen as clean while a third of each
-            row cannot be read. `min-w-max` makes the table keep its width and
-            scroll, instead of crushing its columns to fit.
+            The theme's ONE table (2026-08-26). Every convention this table
+            earned now lives in DataTable and arrives with it: the wrapper
+            scrolls instead of the card clipping (~198px of every row was
+            unreachable at 375, and it was invisible to the obvious test —
+            clipping keeps `document.scrollWidth` equal to the viewport, so a
+            page-level overflow check certifies the screen as clean while a
+            third of each row cannot be read), the actions column keeps its
+            space and loses its title, selection appears under the pointer,
+            and every action lives in the right-click menu.
           */}
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-max">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="w-10 px-3 py-3">
-                    {selectable.length > 0 ? (
-                      <input
-                        type="checkbox"
-                        aria-label={t("selectAll")}
-                        checked={allSelected}
-                        onChange={() =>
-                          setSelected(
-                            allSelected
-                              ? new Set()
-                              : new Set(selectable.map((call) => call.id)),
-                          )
-                        }
-                      />
-                    ) : null}
-                  </th>
-                  <th className="table-head px-4 py-3">{t("columnTitle")}</th>
-                  <th className="table-head px-4 py-3">{t("columnOwner")}</th>
-                  <th className="table-head px-4 py-3">{t("columnDate")}</th>
-                  <th className="table-head px-4 py-3">{t("columnLength")}</th>
-                  {/* the Scope COLUMN retired (2026-08-24 cleanup): scope
-                      lives in the row's ⋯ menu; an org-shared row says so
-                      with a chip beside its title */}
-                  <th className="table-head px-4 py-3">{t("columnStatus")}</th>
-                  {/* the actions column keeps its space and loses its TITLE
-                      (user directive, 2026-08-25) — the header stays for
-                      screen readers only; the chevron column is retired */}
-                  <th className="table-head px-4 py-3">
-                    <span className="sr-only">{t("columnActions")}</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {shown.map((call) => (
-                  <tr
-                    key={call.id}
-                    /* the whole ROW is the way in (user directive) — the
-                       interactive cells stop the bubble so a toggle is never
-                       also a navigation */
-                    className={`group row-link border-b border-border transition-opacity duration-200 last:border-0 ${
-                      leaving.has(call.id) ? "opacity-0" : ""
-                    }`}
-                    onClick={() => router.push(`/calls/${call.id}`)}
-                    /* the ⋯ retired from the row (user directive, 2026-08-25):
-                       RIGHT-CLICK opens the same menu at the pointer */
-                    onContextMenu={(e) => {
-                      if (!mayEdit(call)) return;
-                      e.preventDefault();
-                      setCtxMenu({ x: e.clientX, y: e.clientY, id: call.id });
-                    }}
-                  >
-                    <td className="w-10 px-3 py-3" onClick={(e) => e.stopPropagation()}>
-                      {mayEdit(call) ? (
-                        <input
-                          type="checkbox"
-                          aria-label={t("selectRow", { title: call.title || t("untitled") })}
-                          checked={selected.has(call.id)}
-                          onChange={() => toggleSelect(call.id)}
-                        />
-                      ) : null}
-                    </td>
-                    <td
-                      className="px-4 py-3"
-                      onClick={(e) => {
-                        // renaming happens IN this cell; a click there must
-                        // not also be a navigation
-                        if (renamingId === call.id) e.stopPropagation();
-                      }}
-                    >
-                      {renamingId === call.id ? (
-                        <span className="flex items-center gap-1.5">
-                          <input
-                            className="input h-8 min-h-0 w-44 py-0 text-sm"
-                            value={renameDraft}
-                            autoFocus
-                            onChange={(e) => setRenameDraft(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                void act(() => api.setCallTitle(call.id, renameDraft.trim()));
-                                setRenamingId(null);
-                              }
-                              if (e.key === "Escape") setRenamingId(null);
-                            }}
-                          />
-                          <button
-                            className="text-xs text-accent underline-offset-2 hover:underline"
-                            disabled={busy}
-                            onClick={() => {
-                              void act(() => api.setCallTitle(call.id, renameDraft.trim()));
-                              setRenamingId(null);
-                            }}
-                          >
-                            {tCommon("save")}
-                          </button>
-                        </span>
-                      ) : (
-                        <span className="flex items-center gap-1.5">
-                          <Link
-                            href={`/calls/${call.id}`}
-                            className="font-medium text-fg hover:text-accent"
-                          >
-                            {/* an empty title renders as a WORD, not as a blank
-                                link nobody can click on purpose */}
-                            {call.title.trim() === "" ? (
-                              <span className="text-fg-muted">{t("untitled")}</span>
-                            ) : (
-                              call.title
-                            )}
-                          </Link>
-                          {call.scope === "org" ? (
-                            <span className="chip bg-accent-soft text-[10px] text-accent">
-                              {t("scopeOrg")}
-                            </span>
-                          ) : null}
-                          {/* rename lives ON the title now — a pencil that
-                              appears when the pointer arrives (2026-08-24) */}
-                          {mayEdit(call) ? (
-                            <IconAction
-                              label={t("rename")}
-                              className="opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
-                              disabled={busy}
-                              onClick={() => {
-                                setRenamingId(call.id);
-                                setRenameDraft(call.title);
-                              }}
-                            >
-                              <IconPencil width={14} height={14} />
-                            </IconAction>
-                          ) : null}
-                        </span>
-                      )}
-                      <div className="mt-1 flex flex-wrap items-center gap-2">
-                        {/* `parts` is not on the wire yet — absent means "not
-                            told", which renders as nothing rather than as "1
-                            part". */}
-                        {(call.parts?.length ?? 0) > 1 ? (
-                          <span className="text-xs text-fg-muted">
-                            {t("parts", { count: digits(call.parts?.length ?? 0, locale) })}
-                          </span>
-                        ) : null}
-                        {(call.tags ?? []).map((tag) => (
-                          <span key={tag} className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] text-fg-muted">
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-fg-muted">
-                      {/* the wire carries owner_id only; the name is resolved
-                          from the member list where we have it */}
-                      {call.owner_id === me?.id
-                        ? tCommon("you")
-                        : (call.owner_name ?? ownerName(call.owner_id))}
-                    </td>
-                    <td
-                      className="px-4 py-3 text-sm text-fg-muted"
-                      /* cleanup #3: relative in the cell, exact on hover */
-                      title={formatDate(call.started_at, locale)}
-                    >
-                      {formatRelativeDate(call.started_at, locale)}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-fg-muted">
-                      {/* null duration is UNKNOWN, not zero — live rows carry
-                          null today. Saying «نامعلوم» is the honest render; a
-                          dash would read as "nothing to show". */}
-                      {call.duration_ms === null
-                        ? t("durationUnknown")
-                        : formatDuration(call.duration_ms / 1000, locale)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <StatusChip status={call.status} label={tStatus(call.status)} />
-                    </td>
-                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                      {mayEdit(call) ? (
-                        <span className="flex items-center gap-3 text-xs">
-                          {/* An unfinished take continues where its audio
-                              ends (user directive, 2026-08-20). OWNER-only,
-                              stricter than mayEdit: resuming records through
-                              the resumer's OWN microphone into the take —
-                              an admin "resuming" a colleague's call would
-                              splice their voice into someone else's
-                              recording. */}
-                          {call.status === "recording" && call.owner_id === me?.id ? (
-                            <Link
-                              href={`/echo/record?resume=${call.id}`}
-                              className="font-semibold text-accent underline-offset-2 hover:underline"
-                            >
-                              {t("resumeCall")}
-                            </Link>
-                          ) : null}
-                          {/* the RETRY door (user directive, 2026-08-22:
-                              "we got the voice — add an option to retry"):
-                              a failed call re-enters the pipeline where its
-                              artifacts say it stopped — parts without
-                              transcripts re-transcribe, otherwise straight
-                              to speakers+summary. Failed rows only. */}
-                          {call.status === "failed" ? (
-                            <button
-                              className="font-semibold text-accent underline-offset-2 hover:underline"
-                              disabled={busy}
-                              onClick={() =>
-                                void act(async () => {
-                                  await api.retryCall(call.id);
-                                  notify(t("retryStarted"));
-                                })
-                              }
-                            >
-                              {t("retry")}
-                            </button>
-                          ) : null}
-                          {/* tags editor stays inline; the ⋯ menu opens it */}
-                          {taggingId === call.id ? (
-                            <span className="flex items-center gap-2">
-                              <input
-                                className="input h-8 min-h-0 w-44 py-0 text-xs"
-                                autoFocus
-                                placeholder={t("tagsHint")}
-                                value={tagsDraft}
-                                onChange={(e) => setTagsDraft(e.target.value)}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter") void saveTags(call);
-                                  if (e.key === "Escape") setTaggingId(null);
-                                }}
-                              />
-                              <button
-                                className="text-accent underline-offset-2 hover:underline"
-                                disabled={busy}
-                                onClick={() => void saveTags(call)}
-                              >
-                                {tCommon("save")}
-                              </button>
-                            </span>
-                          ) : null}
-                          {/* delete = LAST, and only under the pointer (user
-                              directive, 2026-08-25); the are-you-sure popup
-                              stays — the ledger receives the consent line */}
-                          <IconAction
-                            label={t("delete")}
-                            danger
-                            disabled={busy}
-                            className="opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
-                            onClick={() =>
-                              setConfirmDelete({ id: call.id, title: call.title || t("untitled") })
-                            }
-                          >
-                            <IconTrash />
-                          </IconAction>
-                        </span>
-                      ) : null}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      )}
-
-      {/*
-        Rendered only for an admin AND only when there is something in it.
-        Not "always visible, empty when clean": a permanently empty «حذف‌شده‌ها»
-        card on every visit trains people to ignore the one place a pending
-        purge would announce itself.
-      */}
-      {view === "live" && me?.role === "admin" && deleted.length > 0 ? (
-        <DeletedCallsCard deleted={deleted} onChanged={() => void load()} />
-      ) : null}
-
-      {/* the RIGHT-CLICK menu (2026-08-25): the row's secondary actions,
-          at the pointer — the ⋯ trigger retired from the cells */}
-      {ctxMenu !== null ? (() => {
-        const call = shown.find((c) => c.id === ctxMenu.id);
-        if (!call) return null;
-        return (
-          <ContextMenu
-            at={ctxMenu}
-            onClose={() => setCtxMenu(null)}
-            items={[
+          <DataTable
+            rows={shown}
+            rowKey={(call) => call.id}
+            selected={selected}
+            onSelect={setSelected}
+            selectableRow={(call) => mayEdit(call)}
+            selectLabel={(call) => t("selectRow", { title: call.title || t("untitled") })}
+            rowClassName={(call) =>
+              `transition-opacity duration-200 ${leaving.has(call.id) ? "opacity-0" : ""}`}
+            onRowClick={(call) => router.push(`/calls/${call.id}`)}
+            menuItems={(call) => (!mayEdit(call) ? [] : [
+              {
+                key: "open",
+                label: t("openRecord"),
+                onSelect: () => router.push(`/calls/${call.id}`),
+              },
+              /* An unfinished take continues where its audio ends (user
+                 directive, 2026-08-20). OWNER-only, stricter than mayEdit:
+                 resuming records through the resumer's OWN microphone into
+                 the take — an admin "resuming" a colleague's call would
+                 splice their voice into someone else's recording. */
+              ...(call.status === "recording" && call.owner_id === me?.id
+                ? [{
+                    key: "resume",
+                    label: t("resumeCall"),
+                    onSelect: () => router.push(`/echo/record?resume=${call.id}`),
+                  }]
+                : []),
+              /* the RETRY door (user directive, 2026-08-22: "we got the
+                 voice — add an option to retry"): a failed call re-enters
+                 the pipeline where its artifacts say it stopped — parts
+                 without transcripts re-transcribe, otherwise straight to
+                 speakers+summary. Failed rows only. */
+              ...(call.status === "failed"
+                ? [{
+                    key: "retry",
+                    label: t("retry"),
+                    disabled: busy,
+                    onSelect: () =>
+                      void act(async () => {
+                        await api.retryCall(call.id);
+                        notify(t("retryStarted"));
+                      }),
+                  }]
+                : []),
+              {
+                key: "rename",
+                label: t("rename"),
+                icon: <IconPencil width={14} height={14} />,
+                disabled: busy,
+                onSelect: () => {
+                  setRenamingId(call.id);
+                  setRenameDraft(call.title);
+                },
+              },
               {
                 key: "translate",
                 label: t("translate"),
@@ -660,10 +422,193 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
                 onSelect: () =>
                   setConfirmDelete({ id: call.id, title: call.title || t("untitled") }),
               },
+            ])}
+            /* the tags editor is an inline EDITOR, opened from the menu —
+               it belongs under its own row, not in an actions cell */
+            rowDetail={(call) =>
+              taggingId === call.id ? (
+                <span className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                  <input
+                    className="input h-8 min-h-0 w-44 py-0 text-xs"
+                    autoFocus
+                    placeholder={t("tagsHint")}
+                    value={tagsDraft}
+                    onChange={(e) => setTagsDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") void saveTags(call);
+                      if (e.key === "Escape") setTaggingId(null);
+                    }}
+                  />
+                  <button
+                    className="text-xs text-accent underline-offset-2 hover:underline"
+                    disabled={busy}
+                    onClick={() => void saveTags(call)}
+                  >
+                    {tCommon("save")}
+                  </button>
+                  <button
+                    className="text-xs text-fg-muted underline-offset-2 hover:underline"
+                    onClick={() => setTaggingId(null)}
+                  >
+                    {tCommon("cancel")}
+                  </button>
+                </span>
+              ) : null
+            }
+            columns={[
+              {
+                key: "title",
+                header: t("columnTitle"),
+                stopClick: renamingId !== null,
+                cell: (call) => (
+                  <>
+                    {renamingId === call.id ? (
+                      <span className="flex items-center gap-1.5">
+                        <input
+                          className="input h-8 min-h-0 w-44 py-0 text-sm"
+                          value={renameDraft}
+                          autoFocus
+                          onChange={(e) => setRenameDraft(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              void act(() => api.setCallTitle(call.id, renameDraft.trim()));
+                              setRenamingId(null);
+                            }
+                            if (e.key === "Escape") setRenamingId(null);
+                          }}
+                        />
+                        <button
+                          className="text-xs text-accent underline-offset-2 hover:underline"
+                          disabled={busy}
+                          onClick={() => {
+                            void act(() => api.setCallTitle(call.id, renameDraft.trim()));
+                            setRenamingId(null);
+                          }}
+                        >
+                          {tCommon("save")}
+                        </button>
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1.5">
+                        <span className="font-medium text-fg">
+                          {/* an empty title renders as a WORD, not as a blank
+                              link nobody can click on purpose */}
+                          {call.title.trim() === "" ? (
+                            <span className="text-fg-muted">{t("untitled")}</span>
+                          ) : (
+                            call.title
+                          )}
+                        </span>
+                        {call.scope === "org" ? (
+                          <span className="chip bg-accent-soft text-[10px] text-accent">
+                            {t("scopeOrg")}
+                          </span>
+                        ) : null}
+                      </span>
+                    )}
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      {/* `parts` is not on the wire yet — absent means "not
+                          told", which renders as nothing rather than as "1
+                          part". */}
+                      {(call.parts?.length ?? 0) > 1 ? (
+                        <span className="text-xs text-fg-muted">
+                          {t("parts", { count: digits(call.parts?.length ?? 0, locale) })}
+                        </span>
+                      ) : null}
+                      {(call.tags ?? []).map((tag) => (
+                        <span key={tag} className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] text-fg-muted">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </>
+                ),
+              },
+              {
+                key: "owner",
+                header: t("columnOwner"),
+                className: "text-sm text-fg-muted",
+                /* the wire carries owner_id only; the name is resolved from
+                   the member list where we have it */
+                cell: (call) =>
+                  call.owner_id === me?.id
+                    ? tCommon("you")
+                    : (call.owner_name ?? ownerName(call.owner_id)),
+              },
+              {
+                key: "date",
+                header: t("columnDate"),
+                className: "text-sm text-fg-muted",
+                /* cleanup #3: relative in the cell, exact on hover */
+                cell: (call) => (
+                  <span title={formatDate(call.started_at, locale)}>
+                    {formatRelativeDate(call.started_at, locale)}
+                  </span>
+                ),
+              },
+              {
+                key: "length",
+                header: t("columnLength"),
+                className: "text-sm text-fg-muted",
+                /* null duration is UNKNOWN, not zero — live rows carry null
+                   today. Saying «نامعلوم» is the honest render; a dash would
+                   read as "nothing to show". */
+                cell: (call) =>
+                  call.duration_ms === null
+                    ? t("durationUnknown")
+                    : formatDuration(call.duration_ms / 1000, locale),
+              },
+              {
+                key: "lastAction",
+                header: t("columnLastAction"),
+                headClassName: "whitespace-nowrap",
+                className: "text-sm text-fg-muted",
+                /**
+                 * WHEN THIS RECORD LAST MOVED (user directive, 2026-08-26).
+                 * `updated_at` is the row's own last write — a rename, a
+                 * scope change, an archive, a summary landing. When the wire
+                 * does not carry it the column says "not told" by rendering
+                 * nothing, because a fallback to `started_at` would put the
+                 * recording's date under a heading that promises the last
+                 * change, and it would look right every time nothing had
+                 * happened since.
+                 */
+                cell: (call) =>
+                  call.updated_at ? (
+                    <span title={formatDate(call.updated_at, locale)}>
+                      {formatRelativeDate(call.updated_at, locale)}
+                    </span>
+                  ) : (
+                    <span className="text-fg-subtle">—</span>
+                  ),
+              },
+              {
+                key: "status",
+                header: t("columnStatus"),
+                cell: (call) => (
+                  <StatusChip status={call.status} label={tStatus(call.status)} />
+                ),
+              },
+              {
+                key: "actions",
+                header: t("columnActions"),
+                srOnly: true,
+                cell: () => null,
+              },
             ]}
           />
-        );
-      })() : null}
+        </Card>
+      )}
+
+      {/*
+        Rendered only for an admin AND only when there is something in it.
+        Not "always visible, empty when clean": a permanently empty «حذف‌شده‌ها»
+        card on every visit trains people to ignore the one place a pending
+        purge would announce itself.
+      */}
+      {view === "live" && me?.role === "admin" && deleted.length > 0 ? (
+        <DeletedCallsCard deleted={deleted} onChanged={() => void load()} />
+      ) : null}
 
       {/* the are-you-sure popups (2026-08-24): confirm is the consent; the
           ledger receives the fixed line, and the body says it stays

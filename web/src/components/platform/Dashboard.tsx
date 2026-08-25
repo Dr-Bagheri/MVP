@@ -5,41 +5,54 @@ import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { Me } from "@/api/types";
 import { personName } from "@/lib/format";
+import { Link } from "@/i18n/routing";
 import { KebabMenu } from "@/components/rowActions";
+import { EchoMark } from "./icons";
 import {
-  DEFAULT_LAYOUT, WIDGETS, WIDGET_SPAN, moveWidget, readLayout, writeLayout,
-  type DashboardLayout, type WidgetKey,
+  DEFAULT_LAYOUT, SIZE_SPAN, TILE_SIZES, WIDGETS, WIDGET_SIZES,
+  moveWidget, readLayout, sizeOf, writeLayout,
+  type DashboardLayout, type TileSize, type WidgetKey,
 } from "@/lib/dashboardLayout";
 import { useDashboardData } from "./dashboard/useDashboardData";
 import {
-  AskWidget, BriefingWidget, LaneWidget, PeopleWidget, PipelineWidget, PulseWidget,
-  RecentWidget, TilesWidget, TopicsWidget,
+  AskWidget, BriefingWidget, LaneWidget, LedgerWidget, NextWidget, PeopleWidget,
+  PipelineWidget, PulseWidget, RecentWidget, TilesWidget, TopicsWidget, WatchlistWidget,
 } from "./dashboard/widgets";
 
 /**
- * THE DASHBOARD — the platform's landing page, as a real BENTO GRID (user
- * directive, 2026-08-25): every block can be moved, expanded in place,
- * removed, and brought back.
+ * THE DASHBOARD — the platform's landing page, as a HOME SCREEN (user
+ * directives, 2026-08-25 and 2026-08-26: a grid you arrange, then "four
+ * sizes for each … like a screen of an android, easy to use").
  *
- * Three decisions worth keeping:
+ * The decisions that make it feel like one, and why:
  *
- * · **Expand in place, never navigate.** A card's ⤢ makes it span the grid
- *   and show its deeper rows — the Linear/Datadog pattern. Losing the page
- *   to see one more row is what a dashboard exists to avoid.
- * · **Drag OR keyboard.** Cards are draggable, and the same reordering
- *   lives in each card's ⋯ menu (move up / move down). A drag-only grid is
- *   a grid half the people cannot use.
+ * · **Four sizes, chosen from a menu.** Not a drag handle: with a closed set
+ *   of tiers a handle implies continuous resize and then snaps, which reads
+ *   as broken. Windows 11 uses a per-widget menu for exactly this; iOS 18
+ *   added a tap-to-pick menu on top of its handle. Unsupported tiers are
+ *   greyed, never hidden — that is how a person learns a widget's range.
+ * · **A bigger tile says MORE, never the same thing larger.** Each widget
+ *   takes its tier as a prop and branches; none of them measures itself.
+ *   Measuring is what free-form responsive does, and it is why responsive
+ *   cards all end up looking like one card at three widths.
+ * · **No gravity.** A home screen does not compact upward — an icon left at
+ *   the bottom stays at the bottom. Cards keep the order you put them in;
+ *   nothing flies up to fill a gap you left on purpose.
+ * · **Drag OR menu.** WCAG 2.2's dragging-movements rule is not optional and
+ *   rearranging is not "essential", so every drag has a menu twin (move up /
+ *   move down). It is also simply better on a phone.
  * · **The layout is a per-person preference**, stored locally and marked
  *   INTERIM in `lib/dashboardLayout` — a device copy of a convenience, not
  *   a second source for a record.
  */
 export function Dashboard() {
   const t = useTranslations("dashboard");
+  const tPlatform = useTranslations("platform");
   const locale = useLocale();
   const [me, setMe] = useState<Me | null>(null);
   const [layout, setLayout] = useState<DashboardLayout>(DEFAULT_LAYOUT);
-  const [expanded, setExpanded] = useState<WidgetKey | null>(null);
   const [dragging, setDragging] = useState<WidgetKey | null>(null);
+  const [over, setOver] = useState<WidgetKey | null>(null);
   const data = useDashboardData();
 
   useEffect(() => { setLayout(readLayout()); }, []);
@@ -61,13 +74,16 @@ export function Dashboard() {
     if (at < 0) return;
     update({ ...layout, widgets: moveWidget(layout.widgets, key, at + delta) });
   };
+  const resize = (key: WidgetKey, size: TileSize) =>
+    update({ ...layout, sizes: { ...layout.sizes, [key]: size } });
 
   const compact = layout.density === "compact";
 
-  /** one card's chrome: title, its ⋯, drag handling, and the expand door */
-  function Card({ id, children }: { id: WidgetKey; children: ReactNode }) {
-    const isOpen = expanded === id;
-    const span = isOpen ? 6 : WIDGET_SPAN[id];
+  /** one tile's chrome: title, the size picker, drag handling, the ⋯ */
+  function Tile({ id, children }: { id: WidgetKey; children: ReactNode }) {
+    const size = sizeOf(layout, id);
+    const { cols, rows } = SIZE_SPAN[size];
+    const allowed = WIDGET_SIZES[id];
     return (
       <section
         draggable
@@ -75,74 +91,110 @@ export function Dashboard() {
           setDragging(id);
           e.dataTransfer.effectAllowed = "move";
         }}
-        onDragEnd={() => setDragging(null)}
-        onDragOver={(e) => { if (dragging && dragging !== id) e.preventDefault(); }}
+        onDragEnd={() => { setDragging(null); setOver(null); }}
+        onDragOver={(e) => {
+          if (!dragging || dragging === id) return;
+          e.preventDefault();
+          setOver(id);
+        }}
+        onDragLeave={() => setOver((prev) => (prev === id ? null : prev))}
         onDrop={(e) => {
           e.preventDefault();
+          setOver(null);
           if (!dragging || dragging === id) return;
-          update({ ...layout, widgets: moveWidget(layout.widgets, dragging, layout.widgets.indexOf(id)) });
+          update({
+            ...layout,
+            widgets: moveWidget(layout.widgets, dragging, layout.widgets.indexOf(id)),
+          });
           setDragging(null);
         }}
-        style={{ gridColumn: `span ${span} / span ${span}` }}
-        className={`glass-card group/card rounded-2xl ${compact ? "p-3" : "p-4"} transition-all ${
-          dragging === id ? "opacity-40" : ""
-        } ${isOpen ? "ring-1 ring-accent/40" : ""}`}
+        style={{
+          gridColumn: `span ${cols} / span ${cols}`,
+          gridRow: `span ${rows} / span ${rows}`,
+        }}
+        className={`glass-card group/card flex flex-col overflow-hidden rounded-2xl ${
+          compact ? "p-3" : "p-4"
+        } transition-[opacity,box-shadow,transform] duration-150 ${
+          dragging === id ? "scale-[0.98] opacity-40" : ""
+        } ${over === id ? "ring-2 ring-accent" : ""}`}
         aria-label={t(`widget.${id}` as "widget.tiles")}
       >
-        <header className="mb-3 flex items-center justify-between gap-2">
-          <h2 className="cursor-grab select-none text-sm font-semibold text-fg active:cursor-grabbing">
+        <header className="mb-2 flex items-center justify-between gap-2">
+          <h2 className="cursor-grab select-none truncate text-sm font-semibold text-fg active:cursor-grabbing">
             {t(`widget.${id}` as "widget.tiles")}
           </h2>
-          <span className="flex items-center gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover/card:opacity-100">
-            <button
-              type="button"
-              className="tap grid h-7 w-7 place-items-center rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg"
-              aria-label={isOpen ? t("collapse") : t("expand")}
-              title={isOpen ? t("collapse") : t("expand")}
-              onClick={() => setExpanded(isOpen ? null : id)}
-            >
-              <span aria-hidden className="text-xs">{isOpen ? "⤡" : "⤢"}</span>
-            </button>
+          <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover/card:opacity-100">
             <KebabMenu
               label={t("cardMenu")}
               items={[
-                { key: "up", label: t("moveUp"), onSelect: () => move(id, -1) },
-                { key: "down", label: t("moveDown"), onSelect: () => move(id, 1) },
+                {
+                  /* the SIZE picker, as a flyout: four named tiers, the
+                     unsupported ones disabled rather than absent */
+                  key: "size",
+                  label: t("sizeLabel"),
+                  sub: TILE_SIZES.map((s) => ({
+                    key: s,
+                    label: t(`size.${s}` as "size.small"),
+                    disabled: !allowed.includes(s) || size === s,
+                    onSelect: () => resize(id, s),
+                  })),
+                },
+                {
+                  /* the drag's twin — WCAG 2.2 SC 2.5.7 wants a single-pointer
+                     path to anything a drag can do, and this is also just the
+                     way to move a tile on a phone */
+                  key: "move",
+                  label: t("moveTile"),
+                  sub: [
+                    { key: "up", label: t("moveUp"), onSelect: () => move(id, -1) },
+                    { key: "down", label: t("moveDown"), onSelect: () => move(id, 1) },
+                    { key: "first", label: t("moveFirst"), onSelect: () => move(id, -layout.widgets.length) },
+                    { key: "last", label: t("moveLast"), onSelect: () => move(id, layout.widgets.length) },
+                  ],
+                },
                 { key: "hide", label: t("hide"), danger: true, onSelect: () => toggleWidget(id) },
               ]}
             />
           </span>
         </header>
-        {children}
+        <div className="min-h-0 flex-1">{children}</div>
       </section>
     );
   }
 
+  /**
+   * The tier reaches every widget as a PROP. A widget that read its own
+   * width would be doing free-form responsive with extra steps — and the
+   * whole point of a closed set of sizes is that each one is designed.
+   */
   const render = (key: WidgetKey): ReactNode => {
-    const open = expanded === key;
+    const size = sizeOf(layout, key);
     switch (key) {
-      case "tiles": return <TilesWidget data={data} expanded={open} />;
-      case "briefing": return <BriefingWidget data={data} />;
-      case "ask": return <AskWidget />;
-      case "pulse": return <PulseWidget data={data} expanded={open} />;
+      case "tiles": return <TilesWidget data={data} size={size} />;
+      case "briefing": return <BriefingWidget data={data} size={size} />;
+      case "ask": return <AskWidget size={size} />;
+      case "pulse": return <PulseWidget data={data} size={size} />;
       case "commitments":
         return (
           <LaneWidget
-            items={data.actions} depth={data.laneDepth} expanded={open}
+            items={data.actions} depth={data.laneDepth} size={size}
             empty={t("commitmentsEmpty")}
           />
         );
       case "decisions":
         return (
           <LaneWidget
-            items={data.decisions} depth={data.laneDepth} expanded={open} numbered
+            items={data.decisions} depth={data.laneDepth} size={size} numbered
             empty={t("decisionsEmpty")}
           />
         );
-      case "topics": return <TopicsWidget data={data} />;
-      case "people": return <PeopleWidget data={data} />;
-      case "pipeline": return <PipelineWidget data={data} />;
-      case "recent": return <RecentWidget data={data} expanded={open} />;
+      case "topics": return <TopicsWidget data={data} size={size} />;
+      case "people": return <PeopleWidget data={data} size={size} />;
+      case "pipeline": return <PipelineWidget data={data} size={size} />;
+      case "recent": return <RecentWidget data={data} size={size} />;
+      case "watchlist": return <WatchlistWidget data={data} size={size} />;
+      case "ledger": return <LedgerWidget data={data} size={size} />;
+      case "next": return <NextWidget data={data} size={size} />;
     }
   };
 
@@ -193,10 +245,24 @@ export function Dashboard() {
         </span>
       </div>
 
-      {/* the BENTO: six columns, each card claiming the span it wants */}
-      <div className={`grid grid-cols-1 md:grid-cols-6 ${compact ? "gap-2" : "gap-3"}`}>
+      {/*
+        THE BOARD. Six columns, a fixed row height so a tier means the same
+        thing everywhere, and `grid-flow-dense` so a small tile fills the
+        hole a large one leaves beside it — the packing an Android home
+        screen does, without ever reordering the tiles themselves.
+
+        One column below `md`: the narrow answer is a single column in
+        source order, which is what Notion does and what never surprises
+        anyone. Auto rows there, because a fixed row height on a phone
+        turns every tier into the same box.
+      */}
+      <div
+        className={`grid auto-rows-min grid-cols-1 md:auto-rows-[9.5rem] md:grid-flow-dense md:grid-cols-6 ${
+          compact ? "gap-2 md:auto-rows-[8rem]" : "gap-3"
+        }`}
+      >
         {layout.widgets.map((key) => (
-          <Card key={key} id={key}>{render(key)}</Card>
+          <Tile key={key} id={key}>{render(key)}</Tile>
         ))}
       </div>
 
@@ -205,6 +271,27 @@ export function Dashboard() {
           {t("emptyBoard")}
         </p>
       ) : null}
+
+      {/*
+        THE APP LAUNCHER (user directive, 2026-08-26: the Echo card moves
+        off the assistant's prompt box and onto the dashboard). It sits
+        under the board rather than in it: an app is a place you leave for,
+        and the tiles above are things you read without leaving.
+      */}
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(226px,1fr))] gap-3 pt-1">
+        <Link
+          href="/echo"
+          className="glass-tile flex items-center gap-3 rounded-2xl p-3.5 text-start transition-colors hover:border-border-strong"
+        >
+          <span className="grid h-[42px] w-[42px] shrink-0 place-items-center rounded-xl bg-surface-2">
+            <EchoMark size={28} />
+          </span>
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold text-fg">{tPlatform("echo")}</span>
+            <span className="block text-xs text-fg-muted">{tPlatform("echoDesc")}</span>
+          </span>
+        </Link>
+      </div>
     </div>
   );
 }

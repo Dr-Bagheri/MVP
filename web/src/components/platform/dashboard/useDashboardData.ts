@@ -27,12 +27,34 @@ export interface LaneItem {
   text: string;
   callId: string;
   callTitle: string;
+  /** the record's own date — what puts a decision in TIME (the ledger) */
+  at: string;
+}
+
+/**
+ * One record as the deep read saw it. The flattened lanes below are built
+ * from these; widgets that need a record's own shape — the ledger's
+ * grouping by day, the watchlist's search, the next-meeting recap — read
+ * these instead of a fifth parallel array.
+ */
+export interface DeepRecord {
+  callId: string;
+  callTitle: string;
+  at: string;
+  /** the current summary's text, or "" when the record has none */
+  body: string;
+  actions: string[];
+  decisions: string[];
+  /** the directory people linked to a speaker in this record */
+  personIds: string[];
 }
 
 export interface DashboardData {
   /** null until the first fetch resolves */
   calls: Call[] | null;
   directory: Person[];
+  /** the newest DEPTH ready records, read in full */
+  records: DeepRecord[];
   /** action items / decisions across the newest DEPTH ready records */
   actions: LaneItem[];
   decisions: LaneItem[];
@@ -49,6 +71,7 @@ export interface DashboardData {
 export function useDashboardData(): DashboardData {
   const [calls, setCalls] = useState<Call[] | null>(null);
   const [directory, setDirectory] = useState<Person[]>([]);
+  const [records, setRecords] = useState<DeepRecord[]>([]);
   const [actions, setActions] = useState<LaneItem[]>([]);
   const [decisions, setDecisions] = useState<LaneItem[]>([]);
   const [laneDepth, setLaneDepth] = useState(0);
@@ -73,36 +96,42 @@ export function useDashboardData(): DashboardData {
       .slice(0, DEPTH);
     setLaneDepth(deep.length);
     if (deep.length === 0) {
+      setRecords([]);
       setActions([]);
       setDecisions([]);
       setAppearances([]);
       return;
     }
-    void Promise.all(deep.map(async (call) => {
+    void Promise.all(deep.map(async (call): Promise<DeepRecord> => {
       const [summaries, speakers] = await Promise.all([
         api.getSummaries(call.id).catch(() => []),
         api.getSpeakers(call.id).catch(() => []),
       ]);
       const current = summaries.at(-1);
       const lanes = current ? summaryLanes(current.body) : { actions: [], decisions: [] };
-      return { call, lanes, speakers };
+      return {
+        callId: call.id,
+        callTitle: call.title,
+        at: call.started_at,
+        body: current?.body ?? "",
+        actions: lanes.actions,
+        decisions: lanes.decisions,
+        // one record counts a person ONCE however often they spoke
+        personIds: [...new Set(
+          speakers.map((s) => s.person_id).filter((id): id is string => id !== null))],
+      };
     })).then((read) => {
       if (!live) return;
       const nextActions: LaneItem[] = [];
       const nextDecisions: LaneItem[] = [];
       const seen = new Map<string, number>();
-      for (const { call, lanes, speakers } of read) {
-        for (const text of lanes.actions) {
-          nextActions.push({ text, callId: call.id, callTitle: call.title });
-        }
-        for (const text of lanes.decisions) {
-          nextDecisions.push({ text, callId: call.id, callTitle: call.title });
-        }
-        // one record counts a person ONCE however often they spoke
-        const people = new Set(
-          speakers.map((s) => s.person_id).filter((id): id is string => id !== null));
-        for (const id of people) seen.set(id, (seen.get(id) ?? 0) + 1);
+      for (const record of read) {
+        const where = { callId: record.callId, callTitle: record.callTitle, at: record.at };
+        for (const text of record.actions) nextActions.push({ text, ...where });
+        for (const text of record.decisions) nextDecisions.push({ text, ...where });
+        for (const id of record.personIds) seen.set(id, (seen.get(id) ?? 0) + 1);
       }
+      setRecords(read);
       setActions(nextActions);
       setDecisions(nextDecisions);
       setAppearances(
@@ -136,6 +165,7 @@ export function useDashboardData(): DashboardData {
     .slice(0, 8);
 
   return {
-    calls, directory, actions, decisions, laneDepth, appearances, topics, tagsAvailable,
+    calls, directory, records, actions, decisions, laneDepth, appearances,
+    topics, tagsAvailable,
   };
 }

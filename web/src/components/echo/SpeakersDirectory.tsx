@@ -1,13 +1,14 @@
 "use client";
 
-import { Fragment, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import { notify } from "@/lib/notify";
 import { useRefreshEpoch } from "@/lib/refreshBus";
 import type { Me, Person } from "@/api/types";
 import { Card, EmptyState } from "@/components/ui";
-import { ConfirmDialog, ContextMenu, IconAction, SelectMenu } from "@/components/rowActions";
+import { ConfirmDialog, IconAction, SelectMenu } from "@/components/rowActions";
+import { DataTable, StatusDot } from "@/components/DataTable";
 import { IconPencil, IconTrash } from "@/components/icons";
 import { digits } from "@/lib/format";
 
@@ -87,7 +88,6 @@ export function SpeakersDirectory() {
   const [mergeInto, setMergeInto] = useState("");
   const [editingTeamId, setEditingTeamId] = useState<string | null>(null);
   const [teamDraft, setTeamDraft] = useState("");
-  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; id: string } | null>(null);
   /* null until the read lands — "we have not counted" renders as a dash,
      never as a zero someone would read as "never in a meeting" */
   const [presence, setPresence] = useState<Record<string, number> | null>(null);
@@ -345,30 +345,117 @@ export function SpeakersDirectory() {
     }
   }
 
+  /**
+   * The scripted enrollment panel, rendered under its own row. It lives in
+   * a function rather than inline because the table now owns row layout —
+   * and because reading it beside the columns made both harder to follow.
+   */
+  function enrollPanel(person: Person) {
+    if (!enroll || enroll.personId !== person.id) return null;
+    return (
+      <div className="max-w-xl space-y-2" data-enroll-panel>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="text-xs font-medium text-fg">{t("voiceScriptTitle")}</span>
+          {/* both languages ALWAYS offered, small — reading one of them is
+              enough to save */}
+          <span
+            className="flex overflow-hidden rounded-lg border border-border"
+            role="group"
+            aria-label={t("voiceScriptTitle")}
+          >
+            {(["fa", "en"] as const).map((l) => (
+              <button
+                key={l}
+                type="button"
+                disabled={enroll.phase !== "ready"}
+                aria-pressed={enroll.lang === l}
+                className={`h-7 px-2.5 text-xs transition-colors ${
+                  enroll.lang === l
+                    ? "bg-accent-soft font-semibold text-accent"
+                    : "bg-surface text-fg-muted hover:text-fg"
+                }`}
+                onClick={() => setEnroll((prev) => (prev ? { ...prev, lang: l } : prev))}
+              >
+                {l === "fa" ? "فارسی" : "English"}
+              </button>
+            ))}
+          </span>
+        </div>
+        <p
+          dir={enroll.lang === "fa" ? "rtl" : "ltr"}
+          className="rounded-lg border border-border bg-surface p-3 text-sm leading-7 text-fg"
+        >
+          {ENROLLMENT_SCRIPTS[enroll.lang]}
+        </p>
+        <p className="text-[11px] text-fg-subtle">{t("voiceScriptHint")}</p>
+        <div className="flex flex-wrap items-center gap-3 text-xs">
+          {enroll.phase === "ready" ? (
+            <>
+              <button
+                type="button"
+                className="btn-primary h-8 min-h-0 px-3 text-xs"
+                onClick={() => void startEnrollRecording(person)}
+              >
+                {t("voiceStart")}
+              </button>
+              <button
+                type="button"
+                className="text-fg-muted underline-offset-2 hover:text-fg hover:underline"
+                onClick={closeEnroll}
+              >
+                {t("voiceCancel")}
+              </button>
+            </>
+          ) : enroll.phase === "recording" ? (
+            <>
+              <span className="flex items-center gap-2">
+                <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-danger" aria-hidden />
+                <span className="ltr tabular-nums text-fg">
+                  {t("voiceRecording", { s: enroll.seconds })}
+                </span>
+              </span>
+              <button
+                type="button"
+                className="btn-primary h-8 min-h-0 px-3 text-xs"
+                disabled={enroll.seconds < MIN_ENROLL_SECONDS}
+                title={
+                  enroll.seconds < MIN_ENROLL_SECONDS
+                    ? t("voiceKeepReading", { s: MIN_ENROLL_SECONDS - enroll.seconds })
+                    : undefined
+                }
+                onClick={() => enrollControls.finish?.()}
+              >
+                {t("voiceFinish")}
+              </button>
+              <button
+                type="button"
+                className="text-fg-muted underline-offset-2 hover:text-fg hover:underline"
+                onClick={closeEnroll}
+              >
+                {t("voiceCancel")}
+              </button>
+            </>
+          ) : (
+            <span className="text-fg-muted">{t("voiceSending")}</span>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
-      {/* the ADD CARD retired (user directive, 2026-08-25): a permanent form
-          above a table is chrome for a once-a-month act — the ＋ over the
-          table opens the SAME form, right where the new row will land */}
-      {canManage ? (
-        <div className="flex items-center justify-end">
-          <button
-            type="button"
-            className="tap inline-flex h-9 items-center gap-1.5 rounded-lg border border-border px-3 text-xs text-fg-muted transition-colors hover:border-accent hover:text-fg"
-            aria-expanded={adding}
-            onClick={() => setAdding((v) => !v)}
-          >
-            <span aria-hidden className="text-base leading-none">＋</span>
-            {t("add")}
-          </button>
-        </div>
-      ) : null}
-
       {/* the directory's own controls (2026-08-25): three readings of one
           list, and the team filter the labels make possible */}
-      {people !== null && people.length > 0 ? (
+      {people !== null && (people.length > 0 || canManage) ? (
         <div className="flex flex-wrap items-center gap-2">
-          <span className="flex overflow-hidden rounded-lg border border-border" role="group" aria-label={t("viewLabel")}>
+          <span
+            className={`flex overflow-hidden rounded-lg border border-border ${
+              people.length === 0 ? "hidden" : ""
+            }`}
+            role="group"
+            aria-label={t("viewLabel")}
+          >
             {(["table", "cards", "chart"] as const).map((v) => (
               <button
                 key={v}
@@ -404,51 +491,29 @@ export function SpeakersDirectory() {
               ))}
             </span>
           ) : null}
+          {/* the ＋ sits WITH the table's own controls (user directive,
+              2026-08-26: "the plus for the add must be on the table") and
+              opens a row INSIDE the table, where the new person will land */}
+          {canManage && (view === "table" || people.length === 0) ? (
+            <button
+              type="button"
+              className="tap ms-auto inline-flex h-8 items-center gap-1.5 rounded-lg border border-border px-2.5 text-xs text-fg-muted transition-colors hover:border-accent hover:text-fg"
+              aria-expanded={adding}
+              onClick={() => {
+                setAdding(true);
+                setName("");
+                setTitle("");
+              }}
+            >
+              <span aria-hidden className="text-base leading-none">＋</span>
+              {t("add")}
+            </button>
+          ) : null}
         </div>
       ) : null}
 
       <Card className="!p-0">
-        {adding && canManage ? (
-          /* the add row, INSIDE the table's box and above its header — the
-             new person appears directly beneath where it was typed */
-          <div className="flex flex-wrap items-center gap-2 border-b border-border p-3">
-            <input
-              className="input min-w-[12rem] flex-1"
-              placeholder={t("namePlaceholder")}
-              value={name}
-              autoFocus
-              onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") void add();
-                if (e.key === "Escape") setAdding(false);
-              }}
-            />
-            <SelectMenu
-              className="h-10 min-h-0 w-44 py-0 text-sm"
-              ariaLabel={t("colTitle")}
-              value={title}
-              onChange={setTitle}
-              options={[
-                { value: "", label: t("noTitle") },
-                ...TITLE_CODES.map((code) => ({ value: code, label: tTitles(code) })),
-              ]}
-            />
-            <button
-              className="btn-primary h-10 min-h-0 px-4 text-sm"
-              disabled={busy || !name.trim()}
-              onClick={() => void add()}
-            >
-              {t("add")}
-            </button>
-            <button
-              className="text-xs text-fg-muted underline-offset-2 hover:underline"
-              onClick={() => setAdding(false)}
-            >
-              {tCommon("cancel")}
-            </button>
-          </div>
-        ) : null}
-        {people === null ? null : people.length === 0 ? (
+        {people === null ? null : people.length === 0 && !adding ? (
           <div className="p-4">
             <EmptyState text={t("empty")} />
           </div>
@@ -550,343 +615,66 @@ export function SpeakersDirectory() {
             <p className="text-[11px] text-fg-subtle">{t("chartNote")}</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[28rem] border-collapse text-sm">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="table-head px-4 py-3 text-start">{t("colName")}</th>
-                  <th className="table-head px-4 py-3 text-start">{t("colTitle")}</th>
-                  {teamsAvailable ? (
-                    <th className="table-head px-4 py-3 text-start">{t("colTeam")}</th>
-                  ) : null}
-                  {voiceReady ? (
-                    <th className="table-head px-4 py-3 text-start">{t("colVoice")}</th>
-                  ) : null}
-                  {canManage ? (
-                    /* no visible ACTIONS title (2026-08-25, all tables) */
-                    <th className="table-head px-4 py-3 text-start">
-                      <span className="sr-only">{t("colActions")}</span>
-                    </th>
-                  ) : null}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {shown.map((person) => (
-                  <Fragment key={person.id}>
-                  <tr
-                    className="group transition-colors hover:bg-surface-2"
-                    /* the theme's row menu (2026-08-25): right-click, at the
-                       pointer — this table's secondary actions live here */
-                    onContextMenu={(e) => {
-                      if (!canManage) return;
-                      e.preventDefault();
-                      setCtxMenu({ x: e.clientX, y: e.clientY, id: person.id });
-                    }}
-                  >
-                    <td className="px-4 py-2.5 font-medium text-fg">
-                      {editingId === person.id ? (
-                        <input
-                          className="input h-9 min-h-0 w-48 py-0 text-sm"
-                          value={editName}
-                          autoFocus
-                          disabled={busy}
-                          onChange={(e) => setEditName(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") void renameFor(person);
-                            if (e.key === "Escape") setEditingId(null);
-                          }}
-                          onBlur={() => void renameFor(person)}
-                        />
-                      ) : (
-                        <span className="flex items-center gap-1.5">
-                          <span>{person.display_name}</span>
-                          {/* rename ON the name — pencil on hover (2026-08-24) */}
-                          {canManage ? (
-                            <IconAction
-                              label={t("edit")}
-                              className="opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
-                              disabled={busy}
-                              onClick={() => {
-                                setEditingId(person.id);
-                                setEditName(person.display_name);
-                              }}
-                            >
-                              <IconPencil width={14} height={14} />
-                            </IconAction>
-                          ) : null}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5">
-                      {canManage ? (
-                        /* the title is editable IN PLACE — a directory you
-                            must leave to correct stops being corrected */
-                        <select
-                          className="input h-9 min-h-0 w-44 py-0 text-xs"
-                          value={person.title}
-                          disabled={busy}
-                          onChange={(e) => void retitle(person, e.target.value)}
-                        >
-                          <option value="">{t("noTitle")}</option>
-                          {TITLE_CODES.map((code) => (
-                            <option key={code} value={code}>
-                              {tTitles(code)}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        /* members SEE, never edit (user ruling, 2026-08-22) */
-                        <span className="text-fg-muted">
-                          {person.title ? tTitles(person.title) : t("noTitle")}
-                        </span>
-                      )}
-                    </td>
-                    {teamsAvailable ? (
-                      <td className="px-4 py-2.5 text-xs">
-                        {editingTeamId === person.id ? (
-                          <input
-                            className="input h-8 min-h-0 w-32 py-0 text-xs"
-                            value={teamDraft}
-                            autoFocus
-                            maxLength={60}
-                            placeholder={t("teamPlaceholder")}
-                            onChange={(e) => setTeamDraft(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") void saveTeam(person);
-                              if (e.key === "Escape") setEditingTeamId(null);
-                            }}
-                            onBlur={() => void saveTeam(person)}
-                          />
-                        ) : canManage ? (
-                          <button
-                            type="button"
-                            className="text-fg-muted underline-offset-2 hover:text-fg hover:underline"
-                            onClick={() => {
-                              setEditingTeamId(person.id);
-                              setTeamDraft(person.team ?? "");
-                            }}
-                          >
-                            {person.team || t("noTeam")}
-                          </button>
-                        ) : (
-                          <span className="text-fg-muted">{person.team || t("noTeam")}</span>
-                        )}
-                      </td>
-                    ) : null}
-                    {voiceReady ? (
-                      <td className="px-4 py-2.5 text-xs">
-                        {enroll?.personId === person.id ? (
-                          /* the open panel below carries the ONE set of
-                             controls — a twin here is how they disagree */
-                          <span className="text-fg-muted" aria-hidden>…</span>
-                        ) : person.voice_enrolled_at ? (
-                          <span className="flex items-center gap-1.5">
-                            {/* the same quiet dot the records table gives
-                                READY (user directive, 2026-08-25): an
-                                ordinary good state, said once, softly —
-                                with the SAMPLE COUNT when there is more
-                                than one, because that is the number that
-                                says how sharp the match is */}
-                            <span className="inline-flex items-center gap-1.5 text-xs text-fg-muted">
-                              <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden />
-                              {person.voice_samples && person.voice_samples > 1
-                                ? t("voiceSamples", { n: digits(person.voice_samples, locale) })
-                                : t("voiceOn")}
-                            </span>
-                            {canManage ? (
-                              /* ADD a sample — averaged into the print, not
-                                 a replacement (db/0096) */
-                              <button
-                                type="button"
-                                className="text-[11px] text-accent underline-offset-2 hover:underline"
-                                disabled={busy || enroll !== null}
-                                onClick={() => openEnroll(person)}
-                              >
-                                {t("voiceImprove")}
-                              </button>
-                            ) : null}
-                            {canManage ? (
-                              /* removal is a red ✕, on hover — the word left */
-                              <IconAction
-                                label={t("voiceRemove")}
-                                danger
-                                disabled={busy}
-                                className="h-6 w-6 opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
-                                onClick={() => void clearVoiceFor(person)}
-                              >
-                                <span aria-hidden className="text-xs">✕</span>
-                              </IconAction>
-                            ) : null}
-                          </span>
-                        ) : canManage ? (
-                          <button
-                            type="button"
-                            className="text-accent underline-offset-2 hover:underline"
-                            disabled={busy || enroll !== null}
-                            onClick={() => openEnroll(person)}
-                          >
-                            {t("voiceEnroll")}
-                          </button>
-                        ) : (
-                          <span className="text-fg-subtle">—</span>
-                        )}
-                      </td>
-                    ) : null}
-                    {canManage ? (
-                      <td className="px-4 py-2.5">
-                        {/* delete = trash icon + are-you-sure popup; the
-                            typed reason retired (2026-08-24) */}
-                        <IconAction
-                          label={t("delete")}
-                          danger
-                          disabled={busy}
-                          /* under the pointer only (2026-08-25, every table) */
-                          className="opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
-                          onClick={() => setConfirmDelete(person)}
-                        >
-                          <IconTrash />
-                        </IconAction>
-                      </td>
-                    ) : null}
-                  </tr>
-                  {enroll?.personId === person.id ? (
-                    <tr className="bg-surface-2/50">
-                      <td
-                        colSpan={2 + (voiceReady ? 1 : 0) + (canManage ? 1 : 0)}
-                        className="px-4 py-3"
+          <DataTable<Person>
+            rows={shown}
+            rowKey={(person) => person.id}
+            rowDetail={(person) =>
+              enroll?.personId === person.id ? enrollPanel(person) : null
+            }
+            /* the ＋ opens a real ROW at the top of the body (user directive,
+               2026-08-26: "when pressed a new row appears … the row is in the
+               table not on top of it") */
+            leadRow={
+              adding && canManage ? (
+                <tr className="border-b border-border bg-surface-2/40">
+                  <td className="px-4 py-2.5">
+                    <input
+                      className="input h-9 min-h-0 w-48 py-0 text-sm"
+                      placeholder={t("namePlaceholder")}
+                      value={name}
+                      autoFocus
+                      onChange={(e) => setName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") void add();
+                        if (e.key === "Escape") setAdding(false);
+                      }}
+                    />
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <SelectMenu
+                      className="h-9 min-h-0 w-40 py-0 text-xs"
+                      ariaLabel={t("colTitle")}
+                      value={title}
+                      onChange={setTitle}
+                      options={[
+                        { value: "", label: t("noTitle") },
+                        ...TITLE_CODES.map((code) => ({ value: code, label: tTitles(code) })),
+                      ]}
+                    />
+                  </td>
+                  {teamsAvailable ? <td className="px-4 py-2.5" /> : null}
+                  {voiceReady ? <td className="px-4 py-2.5" /> : null}
+                  <td className="px-4 py-2.5">
+                    <span className="flex items-center gap-3 text-xs">
+                      <button
+                        className="btn-primary h-8 min-h-0 px-3 text-xs"
+                        disabled={busy || !name.trim()}
+                        onClick={() => void add()}
                       >
-                        <div className="max-w-xl space-y-2" data-enroll-panel>
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <span className="text-xs font-medium text-fg">
-                              {t("voiceScriptTitle")}
-                            </span>
-                            {/* both languages ALWAYS offered, small — reading
-                                one of them is enough to save */}
-                            <span
-                              className="flex overflow-hidden rounded-lg border border-border"
-                              role="group"
-                              aria-label={t("voiceScriptTitle")}
-                            >
-                              {(["fa", "en"] as const).map((l) => (
-                                <button
-                                  key={l}
-                                  type="button"
-                                  disabled={enroll.phase !== "ready"}
-                                  aria-pressed={enroll.lang === l}
-                                  className={`h-7 px-2.5 text-xs transition-colors ${
-                                    enroll.lang === l
-                                      ? "bg-accent-soft font-semibold text-accent"
-                                      : "bg-surface text-fg-muted hover:text-fg"
-                                  }`}
-                                  onClick={() =>
-                                    setEnroll((prev) => (prev ? { ...prev, lang: l } : prev))
-                                  }
-                                >
-                                  {l === "fa" ? "فارسی" : "English"}
-                                </button>
-                              ))}
-                            </span>
-                          </div>
-                          <p
-                            dir={enroll.lang === "fa" ? "rtl" : "ltr"}
-                            className="rounded-lg border border-border bg-surface p-3 text-sm leading-7 text-fg"
-                          >
-                            {ENROLLMENT_SCRIPTS[enroll.lang]}
-                          </p>
-                          <p className="text-[11px] text-fg-subtle">{t("voiceScriptHint")}</p>
-                          <div className="flex flex-wrap items-center gap-3 text-xs">
-                            {enroll.phase === "ready" ? (
-                              <>
-                                <button
-                                  type="button"
-                                  className="btn-primary h-8 min-h-0 px-3 text-xs"
-                                  onClick={() => void startEnrollRecording(person)}
-                                >
-                                  {t("voiceStart")}
-                                </button>
-                                <button
-                                  type="button"
-                                  className="text-fg-muted underline-offset-2 hover:text-fg hover:underline"
-                                  onClick={closeEnroll}
-                                >
-                                  {t("voiceCancel")}
-                                </button>
-                              </>
-                            ) : enroll.phase === "recording" ? (
-                              <>
-                                <span className="flex items-center gap-2">
-                                  <span
-                                    className="inline-block h-2 w-2 animate-pulse rounded-full bg-danger"
-                                    aria-hidden
-                                  />
-                                  <span className="ltr tabular-nums text-fg">
-                                    {t("voiceRecording", { s: enroll.seconds })}
-                                  </span>
-                                </span>
-                                <button
-                                  type="button"
-                                  className="btn-primary h-8 min-h-0 px-3 text-xs"
-                                  disabled={enroll.seconds < MIN_ENROLL_SECONDS}
-                                  title={
-                                    enroll.seconds < MIN_ENROLL_SECONDS
-                                      ? t("voiceKeepReading", {
-                                          s: MIN_ENROLL_SECONDS - enroll.seconds,
-                                        })
-                                      : undefined
-                                  }
-                                  onClick={() => enrollControls.finish?.()}
-                                >
-                                  {t("voiceFinish")}
-                                </button>
-                                <button
-                                  type="button"
-                                  className="text-fg-muted underline-offset-2 hover:text-fg hover:underline"
-                                  onClick={closeEnroll}
-                                >
-                                  {t("voiceCancel")}
-                                </button>
-                              </>
-                            ) : (
-                              <span className="text-fg-muted">{t("voiceSending")}</span>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                  ) : null}
-                  </Fragment>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Card>
-
-      {confirmDelete !== null ? (
-        <ConfirmDialog
-          title={t("deleteConfirmTitle", { name: confirmDelete.display_name })}
-          body={t("deleteConfirmBody")}
-          confirmLabel={t("delete")}
-          cancelLabel={t("voiceCancel")}
-          busy={busy}
-          onCancel={() => setConfirmDelete(null)}
-          onConfirm={() => {
-            const person = confirmDelete;
-            setConfirmDelete(null);
-            void deleteFor(person, UI_DELETE_REASON);
-          }}
-        />
-      ) : null}
-
-      {/* the row's secondary actions, at the pointer (theme default) */}
-      {ctxMenu !== null ? (() => {
-        const person = people?.find((p) => p.id === ctxMenu.id);
-        if (!person) return null;
-        return (
-          <ContextMenu
-            at={ctxMenu}
-            onClose={() => setCtxMenu(null)}
-            items={[
+                        {t("add")}
+                      </button>
+                      <button
+                        className="text-fg-muted underline-offset-2 hover:underline"
+                        onClick={() => setAdding(false)}
+                      >
+                        {tCommon("cancel")}
+                      </button>
+                    </span>
+                  </td>
+                </tr>
+              ) : null
+            }
+            menuItems={(person) => (!canManage ? [] : [
               {
                 key: "rename",
                 label: t("edit"),
@@ -906,13 +694,30 @@ export function SpeakersDirectory() {
                     },
                   }]
                 : []),
-              ...(voiceReady && person.voice_enrolled_at
-                ? [{
-                    key: "improve",
-                    label: t("voiceImprove"),
-                    disabled: enroll !== null,
-                    onSelect: () => openEnroll(person),
-                  }]
+              /* the voice actions moved OFF the row (user directive,
+                 2026-08-26): the red ✕ and the add-a-sample link were two
+                 more things in a cell that only ever needed to say whether
+                 a voice is on file */
+              ...(voiceReady
+                ? [
+                    {
+                      key: "voice",
+                      label: person.voice_enrolled_at
+                        ? t("voiceImprove")
+                        : t("voiceEnroll"),
+                      disabled: enroll !== null,
+                      onSelect: () => openEnroll(person),
+                    },
+                    ...(person.voice_enrolled_at
+                      ? [{
+                          key: "voiceClear",
+                          label: t("voiceRemove"),
+                          danger: true,
+                          disabled: busy,
+                          onSelect: () => void clearVoiceFor(person),
+                        }]
+                      : []),
+                  ]
                 : []),
               {
                 key: "merge",
@@ -930,12 +735,162 @@ export function SpeakersDirectory() {
                 label: t("delete"),
                 icon: <IconTrash />,
                 danger: true,
+                disabled: busy,
                 onSelect: () => setConfirmDelete(person),
+              },
+            ])}
+            columns={[
+              {
+                key: "name",
+                header: t("colName"),
+                className: "font-medium text-fg",
+                stopClick: true,
+                cell: (person) =>
+                  editingId === person.id ? (
+                    <input
+                      className="input h-9 min-h-0 w-48 py-0 text-sm"
+                      value={editName}
+                      autoFocus
+                      disabled={busy}
+                      onChange={(e) => setEditName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") void renameFor(person);
+                        if (e.key === "Escape") setEditingId(null);
+                      }}
+                      onBlur={() => void renameFor(person)}
+                    />
+                  ) : (
+                    <span className="flex items-center gap-1.5">
+                      <span>{person.display_name}</span>
+                      {/* rename ON the name — pencil on hover (2026-08-24) */}
+                      {canManage ? (
+                        <IconAction
+                          label={t("edit")}
+                          className="opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
+                          disabled={busy}
+                          onClick={() => {
+                            setEditingId(person.id);
+                            setEditName(person.display_name);
+                          }}
+                        >
+                          <IconPencil width={14} height={14} />
+                        </IconAction>
+                      ) : null}
+                    </span>
+                  ),
+              },
+              {
+                key: "title",
+                header: t("colTitle"),
+                stopClick: true,
+                cell: (person) =>
+                  canManage ? (
+                    <SelectMenu
+                      className="h-9 min-h-0 w-40 py-0 text-xs"
+                      ariaLabel={t("colTitle")}
+                      value={person.title}
+                      disabled={busy}
+                      onChange={(next) => void retitle(person, next)}
+                      options={[
+                        { value: "", label: t("noTitle") },
+                        ...TITLE_CODES.map((code) => ({ value: code, label: tTitles(code) })),
+                      ]}
+                    />
+                  ) : (
+                    /* members SEE, never edit (user ruling, 2026-08-22) */
+                    <span className="text-fg-muted">
+                      {person.title ? tTitles(person.title) : t("noTitle")}
+                    </span>
+                  ),
+              },
+              ...(teamsAvailable
+                ? [{
+                    key: "team",
+                    header: t("colTeam"),
+                    className: "text-xs",
+                    stopClick: true,
+                    cell: (person: Person) =>
+                      editingTeamId === person.id ? (
+                        <input
+                          className="input h-8 min-h-0 w-32 py-0 text-xs"
+                          value={teamDraft}
+                          autoFocus
+                          maxLength={60}
+                          placeholder={t("teamPlaceholder")}
+                          onChange={(e) => setTeamDraft(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") void saveTeam(person);
+                            if (e.key === "Escape") setEditingTeamId(null);
+                          }}
+                          onBlur={() => void saveTeam(person)}
+                        />
+                      ) : canManage ? (
+                        <button
+                          type="button"
+                          className="text-fg-muted underline-offset-2 hover:text-fg hover:underline"
+                          onClick={() => {
+                            setEditingTeamId(person.id);
+                            setTeamDraft(person.team ?? "");
+                          }}
+                        >
+                          {person.team || t("noTeam")}
+                        </button>
+                      ) : (
+                        <span className="text-fg-muted">{person.team || t("noTeam")}</span>
+                      ),
+                  }]
+                : []),
+              ...(voiceReady
+                ? [{
+                    key: "voice",
+                    header: t("colVoice"),
+                    className: "text-xs",
+                    cell: (person: Person) =>
+                      enroll?.personId === person.id ? (
+                        <span className="text-fg-muted">{t("voiceRecording", { s: enroll.seconds })}</span>
+                      ) : person.voice_enrolled_at ? (
+                        /* the same quiet dot READY wears — an ordinary good
+                           state, said once, softly, with the SAMPLE COUNT
+                           when there is more than one because that is the
+                           number that says how sharp the match is */
+                        <StatusDot
+                          label={
+                            person.voice_samples && person.voice_samples > 1
+                              ? t("voiceSamples", { n: digits(person.voice_samples, locale) })
+                              : t("voiceOn")
+                          }
+                        />
+                      ) : (
+                        <span className="text-fg-subtle">{t("voiceNone")}</span>
+                      ),
+                  }]
+                : []),
+              {
+                key: "actions",
+                header: t("colActions"),
+                srOnly: true,
+                cell: () => null,
               },
             ]}
           />
-        );
-      })() : null}
+        )}
+      </Card>
+
+      {confirmDelete !== null ? (
+        <ConfirmDialog
+          title={t("deleteConfirmTitle", { name: confirmDelete.display_name })}
+          body={t("deleteConfirmBody")}
+          confirmLabel={t("delete")}
+          cancelLabel={t("voiceCancel")}
+          busy={busy}
+          onCancel={() => setConfirmDelete(null)}
+          onConfirm={() => {
+            const person = confirmDelete;
+            setConfirmDelete(null);
+            void deleteFor(person, UI_DELETE_REASON);
+          }}
+        />
+      ) : null}
 
       {/* MERGE (db/0096's door): pick the person this one becomes. The
           direction is stated in words, not implied by an arrow — a merge

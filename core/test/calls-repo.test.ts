@@ -20,6 +20,9 @@ const row = (over: Record<string, unknown> = {}) => ({
   duration_ms: 1_800_000, owner_id: ALICE,
   source: null, archived_at: null, deleted_at: null,
   purge_after: null, current_summary_id: null,
+  /* deliberately LATER than started_at: a fixture where the two are equal
+     cannot tell "we sent updated_at" from "we sent started_at twice" */
+  updated_at: "2026-08-12T11:30:00.000Z",
   transcribed_part_count: 2, timed_part_count: 2, ...over,
 });
 
@@ -109,6 +112,12 @@ describe("list", () => {
       // "not exposed" are indistinguishable from outside.
       source: null, archived_at: null, deleted_at: null,
       purge_after: null, current_summary_id: null,
+      /* 0004 has maintained this by trigger since the table existed and the
+         wire never carried it — the fifth stored-and-never-served field.
+         "When did this record last change" is a different question from
+         "when was it recorded", and the fixture's two timestamps differ so
+         that a mix-up cannot pass. */
+      updated_at: "2026-08-12T11:30:00.000Z",
     });
   });
 });

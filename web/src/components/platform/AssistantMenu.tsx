@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import type { AssistantSession } from "@/api/types";
 import { api } from "@/api/client";
 import { SectionMenu } from "@/components/scaffold";
-import { IconAgent, IconGauge, IconHistory, IconPlus, IconZap } from "@/components/icons";
+import { IconAgent, IconHistory, IconPlus, IconZap } from "@/components/icons";
 import { openAssistant } from "@/lib/assistantBus";
 import { useRefreshEpoch } from "@/lib/refreshBus";
 import { useAssistantConversation } from "./AssistantConversationState";
@@ -24,7 +24,7 @@ import { useAssistantConversation } from "./AssistantConversationState";
 export function AssistantMenu({
   activeSlug,
 }: {
-  activeSlug: "dashboard" | "new" | "hub" | "history" | "workflows" | "agents";
+  activeSlug: "new" | "hub" | "history" | "workflows" | "agents";
 }) {
   const t = useTranslations("platform");
   const tConversations = useTranslations("conversations");
@@ -46,20 +46,10 @@ export function AssistantMenu({
       navLabel={t("assistantMenuLabel")}
       heading={t("assistantMenuHeading")}
       groups={[
-        {
-          /* the OVERVIEW (user directive, 2026-08-25): the dashboard is the
-             landing PAGE now — its own route, never a view of the hub */
-          key: "overview",
-          title: t("assistantMenuOverview"),
-          items: [
-            {
-              slug: "dashboard",
-              href: "/",
-              label: t("dashboard"),
-              icon: <IconGauge />,
-            },
-          ],
-        },
+        /* the OVERVIEW row retired (user directive, 2026-08-26): the
+           dashboard is the landing page and has its own rail icon, so a
+           link to it inside the assistant's menu was a third door to a
+           place already reachable from everywhere */
         {
           /* the ASSISTANCE section (user directive, 2026-08-25) — the
              conversation lives under its own name, at /assistant */

@@ -55,7 +55,12 @@ export interface MenuItem {
 
 export interface MenuGroup {
   key: string;
-  title: string;
+  /**
+   * Omit for a group that needs no label (user directive, 2026-08-26:
+   * Search sits at the top of Echo's menu "with no heading, just search").
+   * A one-item group whose title would only repeat the item is chrome.
+   */
+  title?: string;
   items: readonly MenuItem[];
 }
 
@@ -87,9 +92,15 @@ export function SectionMenu({
       {groups.map((group, i) => (
         <div key={group.key}>
           {i > 0 ? <hr className="mx-3 my-3.5 border-border" /> : null}
-          <p className="mb-1.5 mt-4 px-3 text-group-label font-medium text-fg-subtle">
-            {group.title}
-          </p>
+          {group.title ? (
+            <p className="mb-1.5 mt-4 px-3 text-group-label font-medium text-fg-subtle">
+              {group.title}
+            </p>
+          ) : (
+            /* an untitled group still needs its top margin — dropping the
+               label must not also drop the space that separates it */
+            <div className="mt-3" />
+          )}
           <ul>
             {group.items.map((item) => {
               const active = item.slug === activeSlug;
