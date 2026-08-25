@@ -12,8 +12,9 @@ import { formatClock, formatDate, formatDuration, digits } from "@/lib/format";
 import { isFillerWord, stripFillers } from "@/lib/cleanRead";
 import { IconAction, KebabMenu } from "@/components/rowActions";
 import {
-  IconArchive, IconFileText, IconGlobe, IconPencil, IconShare, IconSparkle, IconTag,
+  IconArchive, IconFileText, IconGlobe, IconPencil, IconRows, IconShare, IconSparkle, IconTag,
 } from "@/components/icons";
+import { SectionMenu } from "@/components/scaffold";
 import { SummaryBody, parseSummary } from "@/components/echo/SummaryBody";
 import { faDisplay } from "@/lib/faDisplay";
 import {
@@ -76,6 +77,11 @@ export default function CallDetailPage({
   const locale = useLocale();
 
   const [call, setCall] = useState<Call | null>(null);
+  /** the record's own side menu (user directive, 2026-08-25): Summary is
+      the default page, Transcript the second — the same two-pane anatomy
+      every other sub page has. Local state, not routing: both sections are
+      one record, and the player keeps playing across the switch. */
+  const [section, setSection] = useState<"summary" | "transcript">("summary");
   const [rows, setRows] = useState<TranscriptSegment[]>([]);
   const [speakers, setSpeakers] = useState<Speaker[]>([]);
   /** The Echo speakers directory — the dropdown's option list. */
@@ -273,7 +279,9 @@ export default function CallDetailPage({
     );
   }
 
-  async function saveSpeakerEdit(speakerId: string, personId: string | null | undefined): Promise<void> {
+  /** true = saved (the caller closes the popover); false = refused, and the
+      refusal was said out loud — the popover stays for another try */
+  async function saveSpeakerEdit(speakerId: string, personId: string | null | undefined): Promise<boolean> {
     try {
       const label = speakerDraft.trim();
       const current = speakers.find((s) => s.id === speakerId);
@@ -284,8 +292,13 @@ export default function CallDetailPage({
         await api.linkSpeaker(id, speakerId, personId);
       }
       setSpeakers(await api.getSpeakers(id));
-    } catch {
-      notify(t("editFailed"), "warn");
+      notify(t("speakerSaved"));
+      return true;
+    } catch (cause) {
+      // the server's own sentence when it gave one (owner-only link, etc.)
+      const detail = (cause as { detail?: string }).detail;
+      notify(detail || t("editFailed"), "warn");
+      return false;
     }
   }
   /** Signed playback URLs, one per part. `null` = no audio to offer. */
@@ -564,6 +577,12 @@ export default function CallDetailPage({
 
   const durMs = call.duration_ms ?? 0;
   const stepIdx = PIPELINE_LADDER.indexOf(call.status);
+  /** what the WALL actually allows (0093): rename = owner or admin;
+      directory LINK = the owner alone. The UI renders exactly that —
+      a pencil the database refuses is how this page's speaker bug felt. */
+  const mayEditCall = me !== null
+    && (call.owner_id === me.id || me.role === "admin" || me.role === "owner");
+  const ownsCall = me !== null && call.owner_id === me.id;
   const genericTitle = isGenericTitle(call.title);
   const titleSuggestion = genericTitle && summary ? suggestTitleFrom(summary.body) : null;
 
@@ -652,31 +671,39 @@ export default function CallDetailPage({
       },
     },
     { key: "print", label: t("printLabel"), icon: <IconFileText />, onSelect: () => window.print() },
-    /* view toggles — they stay in the menu when pressed */
+    /* view toggles — grouped into a FLYOUT (2026-08-25: a long kebab never
+       scrolls; too many items become a sub-menu instead) */
     {
-      key: "view-follow",
-      label: `${t("followPlayback")}${followPlayback ? " ✓" : ""}`,
-      keepOpen: true,
-      onSelect: () => setFollowPlayback((v) => !v),
-    },
-    {
-      key: "view-paragraphs",
-      label: `${t("paragraphMode")}${paragraphMode ? " ✓" : ""}`,
-      keepOpen: true,
-      onSelect: () => setParagraphMode((v) => !v),
-    },
-    {
-      key: "view-fillers",
-      label: `${t("cleanRead")}${cleanRead ? " ✓" : ""}`,
-      keepOpen: true,
-      onSelect: () => setCleanRead((v) => !v),
-    },
-    {
-      key: "view-outline",
-      label: `${t("outlineMode")}${outlineMode ? " ✓" : ""}`,
-      keepOpen: true,
-      disabled: headings.length < 2,
-      onSelect: () => setOutlineMode((v) => !v),
+      key: "view",
+      label: t("viewMenu"),
+      icon: <IconRows />,
+      sub: [
+        {
+          key: "view-follow",
+          label: `${t("followPlayback")}${followPlayback ? " ✓" : ""}`,
+          keepOpen: true,
+          onSelect: () => setFollowPlayback((v) => !v),
+        },
+        {
+          key: "view-paragraphs",
+          label: `${t("paragraphMode")}${paragraphMode ? " ✓" : ""}`,
+          keepOpen: true,
+          onSelect: () => setParagraphMode((v) => !v),
+        },
+        {
+          key: "view-fillers",
+          label: `${t("cleanRead")}${cleanRead ? " ✓" : ""}`,
+          keepOpen: true,
+          onSelect: () => setCleanRead((v) => !v),
+        },
+        {
+          key: "view-outline",
+          label: `${t("outlineMode")}${outlineMode ? " ✓" : ""}`,
+          keepOpen: true,
+          disabled: headings.length < 2,
+          onSelect: () => setOutlineMode((v) => !v),
+        },
+      ],
     },
     {
       key: "scope",
@@ -711,11 +738,43 @@ export default function CallDetailPage({
   ];
 
   return (
-    <EchoAppShell>
+    <EchoAppShell
+      menu={
+        <SectionMenu
+          navLabel={t("docSections")}
+          heading={call.title.trim() === "" ? tCalls("untitled") : call.title}
+          activeSlug={section}
+          groups={[{
+            key: "doc",
+            title: t("docSections"),
+            items: [
+              {
+                slug: "summary",
+                href: `/calls/${id}`,
+                label: t("summary"),
+                icon: <IconFileText />,
+                preventNavigation: true,
+                onSelect: () => setSection("summary"),
+              },
+              {
+                slug: "transcript",
+                href: `/calls/${id}`,
+                label: t("transcript"),
+                icon: <IconRows />,
+                preventNavigation: true,
+                onSelect: () => setSection("transcript"),
+              },
+            ],
+          }]}
+        />
+      }
+    >
       {/* ONE document card (user directive, 2026-08-24): header, player,
           summary, transcript, notes — divisions inside one box, not a
-          stack of separate cards */}
-      <Card className="!p-0">
+          stack of separate cards. Since 2026-08-25 the summary and the
+          transcript are SECTIONS picked in the side menu; the header and
+          the player stay above both. */}
+      <Card className="!m-5 !p-0">
         {/* ── header: title · date · ⋯ ─────────────────────────────────── */}
         <div className="px-5 pb-4 pt-5">
           <div className="flex items-start justify-between gap-3">
@@ -751,10 +810,22 @@ export default function CallDetailPage({
                   </button>
                 </span>
               ) : (
-                <h1 className="flex items-center gap-2 text-2xl font-bold leading-tight text-fg">
+                <h1 className="group flex items-center gap-2 text-2xl font-bold leading-tight text-fg">
                   <span className="truncate">
                     {call.title.trim() === "" ? tCalls("untitled") : call.title}
                   </span>
+                  {/* pencil-on-hover (user directive, 2026-08-25): the title
+                      is always editable to whoever the wall lets edit — the
+                      sparkle stays for recorder-invented names only */}
+                  {mayEditCall ? (
+                    <IconAction
+                      label={tCalls("rename")}
+                      className="no-print opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
+                      onClick={() => setTitleDraft(call.title)}
+                    >
+                      <IconPencil width={14} height={14} />
+                    </IconAction>
+                  ) : null}
                   {/* #14: only a recorder-invented name gets second-guessed */}
                   {titleSuggestion ? (
                     <IconAction
@@ -927,7 +998,8 @@ export default function CallDetailPage({
           />
         </div>
 
-        {/* ── the summary document ─────────────────────────────────────── */}
+        {/* ── the summary document (its own SECTION since 2026-08-25) ──── */}
+        {section === "summary" ? (
         <section className="border-t border-border px-5 py-4">
           <div className="no-print mb-3 flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-sm font-semibold text-fg">{t("summary")}</h2>
@@ -1161,8 +1233,10 @@ export default function CallDetailPage({
             </p>
           ) : null}
         </section>
+        ) : null}
 
-        {/* ── the transcript ───────────────────────────────────────────── */}
+        {/* ── the transcript (the menu's second section) ────────────────── */}
+        {section === "transcript" ? (
         <section className="border-t border-border">
           <div className="no-print border-b border-border px-5 py-3">
             <div className="flex items-center gap-3">
@@ -1357,7 +1431,7 @@ export default function CallDetailPage({
                       }`}>
                         {speakerName(row.speaker_id)}
                       </span>
-                      {row.speaker_id !== null ? (
+                      {row.speaker_id !== null && mayEditCall ? (
                         <IconAction
                           label={t("editSpeaker")}
                           className="h-5 w-5 opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
@@ -1383,33 +1457,43 @@ export default function CallDetailPage({
                             onChange={(e) => setSpeakerDraft(e.target.value)}
                             onKeyDown={(e) => {
                               if (e.key === "Enter") {
-                                void saveSpeakerEdit(row.speaker_id!, undefined);
-                                setEditSpeakerRow(null);
+                                void saveSpeakerEdit(row.speaker_id!, undefined)
+                                  .then((ok) => { if (ok) setEditSpeakerRow(null); });
                               }
                               if (e.key === "Escape") setEditSpeakerRow(null);
                             }}
                           />
-                          <select
-                            className="input mt-2 h-8 min-h-0 w-full py-0 text-xs"
-                            aria-label={t("linkSpeaker")}
-                            value={speakers.find((s) => s.id === row.speaker_id)?.person_id ?? ""}
-                            onChange={(e) =>
-                              void saveSpeakerEdit(row.speaker_id!, e.target.value || null)
-                            }
-                          >
-                            <option value="">{t("noPerson")}</option>
-                            {directory.map((person) => (
-                              <option key={person.id} value={person.id}>
-                                {person.display_name}
-                              </option>
-                            ))}
-                          </select>
+                          {ownsCall ? (
+                            <select
+                              className="input mt-2 h-8 min-h-0 w-full py-0 text-xs"
+                              aria-label={t("linkSpeaker")}
+                              value={speakers.find((s) => s.id === row.speaker_id)?.person_id ?? ""}
+                              onChange={(e) =>
+                                void saveSpeakerEdit(row.speaker_id!, e.target.value || null)
+                                  .then((ok) => { if (ok) setEditSpeakerRow(null); })
+                              }
+                            >
+                              <option value="">{t("noPerson")}</option>
+                              {directory.map((person) => (
+                                <option key={person.id} value={person.id}>
+                                  {person.display_name}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            /* the directory link is the OWNER's act (M11 +
+                               0093) — say so instead of rendering a select
+                               the wall would refuse */
+                            <span className="mt-2 block text-[11px] leading-5 text-fg-muted">
+                              {t("linkOwnerOnly")}
+                            </span>
+                          )}
                           <span className="mt-2 flex items-center justify-between">
                             <button
                               className="text-xs text-accent underline-offset-2 hover:underline"
                               onClick={() => {
-                                void saveSpeakerEdit(row.speaker_id!, undefined);
-                                setEditSpeakerRow(null);
+                                void saveSpeakerEdit(row.speaker_id!, undefined)
+                                  .then((ok) => { if (ok) setEditSpeakerRow(null); });
                               }}
                             >
                               {tCommon("save")}
@@ -1531,9 +1615,10 @@ export default function CallDetailPage({
           </div>
           )}
         </section>
+        ) : null}
 
-        {/* ── notes & chapters ─────────────────────────────────────────── */}
-        {notes.length > 0 ? (
+        {/* ── notes & chapters (the summary page carries the extras) ───── */}
+        {section === "summary" && notes.length > 0 ? (
           <section className="border-t border-border px-5 py-4">
             <h2 className="mb-3 text-sm font-semibold text-fg">{t("notesHeading")}</h2>
             <ul className="space-y-2">
@@ -1572,7 +1657,7 @@ export default function CallDetailPage({
         ) : null}
 
         {/* ── #16 related records (shared tags) ────────────────────────── */}
-        {related.length > 0 ? (
+        {section === "summary" && related.length > 0 ? (
           <section className="no-print border-t border-border px-5 py-4">
             <h2 className="mb-2 text-sm font-semibold text-fg">{t("relatedHeading")}</h2>
             <ul className="flex flex-wrap items-center gap-2">

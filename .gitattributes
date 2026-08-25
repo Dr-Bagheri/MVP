@@ -1,0 +1,2 @@
+db/migrations/*.sql text eol=lf
+db/test/*.sql text eol=lf

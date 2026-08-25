@@ -47,3 +47,7 @@ Thumbs.db
 .idea/
 .vercel
 .env*
+
+# machine-move staging must never live in the tree (a private key sat here 2026-08-25)
+/ssh/
+/repo-local/

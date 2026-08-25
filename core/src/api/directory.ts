@@ -240,20 +240,33 @@ export function createDirectoryRepo(db: Db) {
         throw new ValidationError("a speaker label cannot be blank");
       }
       const setPerson = patch.personId !== undefined;
-      const rows = await db.withIdentity(identity, (tx: SqlTx) =>
-        tx.unsafe<Record<string, unknown>>(
-          `update echo.call_speaker set
-             person_id = case when $3 then $4::uuid else person_id end,
-             linked_by = case when $3 then $5::uuid else linked_by end,
-             linked_at = case when $3 then now() else linked_at end,
-             label     = coalesce($6, label),
-             updated_at = now()
-           where id = $2 and call_id = $1
-           returning id, label, person_id`,
-          [call, speaker, setPerson, patch.personId ?? null,
-           identity.userId, patch.label?.trim() ?? null],
-        ),
-      );
+      let rows: Record<string, unknown>[];
+      try {
+        rows = await db.withIdentity(identity, (tx: SqlTx) =>
+          tx.unsafe<Record<string, unknown>>(
+            `update echo.call_speaker set
+               person_id = case when $3 then $4::uuid else person_id end,
+               linked_by = case when $3 then $5::uuid else linked_by end,
+               linked_at = case when $3 then now() else linked_at end,
+               label     = coalesce($6, label),
+               updated_at = now()
+             where id = $2 and call_id = $1
+             returning id, label, person_id`,
+            [call, speaker, setPerson, patch.personId ?? null,
+             identity.userId, patch.label?.trim() ?? null],
+          ),
+        );
+      } catch (error) {
+        /* 0093: an admin may RENAME a voice, but the directory link is the
+           OWNER's act — the db trigger raises 42501 for anyone else. That is
+           a legible refusal, not a miswired pool: map it to a 403 instead of
+           letting it fall through as a 500 (found live, 2026-08-25). */
+        if ((error as { code?: string }).code === "42501") {
+          throw new NotActivatedError(
+            "only the call's owner may change a voice's directory link");
+        }
+        throw error;
+      }
       if (!rows[0]) throw new NotFoundError("no such speaker on that call");
       return {
         id: rows[0].id as string,

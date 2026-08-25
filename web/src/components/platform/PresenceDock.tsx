@@ -1,6 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import {
+  useCallback, useEffect, useRef, useState, useSyncExternalStore,
+  type CSSProperties, type PointerEvent as ReactPointerEvent,
+} from "react";
 import { createPortal } from "react-dom";
 import { useLocale, useTranslations } from "next-intl";
 import { usePathname } from "next/navigation";
@@ -205,6 +208,92 @@ export function PresenceDock() {
     }
   }
   const [toasts, setToasts] = useState<PlatformNotice[]>([]);
+  /**
+   * DRAG-TO-PIN (user directive, 2026-08-25): the orb's home is the top
+   * bar's cradle, and dragging it anywhere else pins it there — remembered
+   * across loads. Dragging it back ONTO the bar clears the pin: the default
+   * position is the top menu, not wherever it happened to be released.
+   */
+  const [pin, setPin] = useState<{ x: number; y: number } | null>(null);
+  const [drag, setDrag] = useState<{ x: number; y: number } | null>(null);
+  const dragCleanupRef = useRef<(() => void) | null>(null);
+  const suppressClickRef = useRef(false);
+  useEffect(() => () => dragCleanupRef.current?.(), []);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("neurai-orb-pin");
+      if (raw) {
+        const parsed = JSON.parse(raw) as { x: number; y: number };
+        // clamp a pin saved on a larger screen back into this viewport
+        setPin({
+          x: Math.min(Math.max(parsed.x, 32), window.innerWidth - 32),
+          y: Math.min(Math.max(parsed.y, 80), window.innerHeight - 32),
+        });
+      }
+    } catch { /* storage unavailable — the cradle is home */ }
+  }, []);
+
+  /**
+   * The drag rides WINDOW listeners, not pointer capture: lifting the orb
+   * out of the cradle moves the button between a portal and a fixed node —
+   * a REMOUNT — and captured pointer events die with the old node.
+   */
+  function onOrbPointerDown(e: ReactPointerEvent<HTMLButtonElement>) {
+    if (e.button !== 0) return;
+    const start = { x: e.clientX, y: e.clientY };
+    let moved = false;
+    const onMove = (ev: PointerEvent) => {
+      if (!moved
+          && Math.abs(ev.clientX - start.x) < 6 && Math.abs(ev.clientY - start.y) < 6) {
+        return; // a jittery click is still a click
+      }
+      moved = true;
+      setDrag({ x: ev.clientX, y: ev.clientY });
+      setPin((p) => p ?? { x: ev.clientX, y: ev.clientY }); // lift out of the cradle
+    };
+    const cleanup = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      dragCleanupRef.current = null;
+    };
+    const onUp = (ev: PointerEvent) => {
+      cleanup();
+      if (!moved) return; // plain click — onClick handles it
+      suppressClickRef.current = true;
+      setDrag(null);
+      // released on the top bar = re-dock (the default home wins)
+      if (ev.clientY < 72) {
+        setPin(null);
+        try { localStorage.removeItem("neurai-orb-pin"); } catch { /* fine */ }
+        return;
+      }
+      const next = {
+        x: Math.min(Math.max(ev.clientX, 32), window.innerWidth - 32),
+        y: Math.min(Math.max(ev.clientY, 80), window.innerHeight - 32),
+      };
+      setPin(next);
+      try { localStorage.setItem("neurai-orb-pin", JSON.stringify(next)); } catch { /* fine */ }
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    dragCleanupRef.current = cleanup;
+  }
+
+  /** the open panel hangs off the pin, on whichever side has room */
+  function pinnedPanelStyle(): CSSProperties {
+    if (!pin) return {};
+    const below = pin.y < window.innerHeight / 2;
+    const startHalf = pin.x < window.innerWidth / 2;
+    return {
+      position: "fixed",
+      ...(below
+        ? { top: Math.min(pin.y + 44, window.innerHeight - 160) }
+        : { bottom: Math.min(window.innerHeight - pin.y + 44, window.innerHeight - 160) }),
+      ...(startHalf
+        ? { left: Math.max(8, pin.x - 32) }
+        : { right: Math.max(8, window.innerWidth - pin.x - 32) }),
+    };
+  }
   const sessionId = useRef<string | undefined>(undefined);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
@@ -649,43 +738,24 @@ export function PresenceDock() {
      control") — no assistant presence there. The loop keeps running so
      the ears survive a visit; only the rendering stands down. */
   if (/^\/(fa|en)\/platform(\/|$)/.test(pathname)) return null;
+  /* NO presence before the product (user directive, 2026-08-25: the orb was
+     rendering in the sign-in page's corner): auth surfaces are the door,
+     not the room — a signed-in person passing through sign-in/reset still
+     gets no orb there, and nothing renders in any corner anywhere. */
+  if (/^\/(fa|en)\/(sign-in|sign-up|reset|forgot|pending|suspended)(\/|$)/.test(pathname)) {
+    return null;
+  }
 
-  const anchoredToTopbar = topbarPresenceHost !== null;
   /* the small ring pokes ~21/24px below the 56px bar — surfaces hang just
-     under that (user redesign, 2026-08-22) */
-  const surfacePosition = anchoredToTopbar
-    ? "left-1/2 top-[88px] -translate-x-1/2 md:top-[92px]"
-    : "bottom-[142px] end-4 md:bottom-[192px] md:end-6";
-  const panelHeight = anchoredToTopbar
-    ? "max-h-[calc(100dvh-7rem)]"
-    : "max-h-[70dvh]";
+     under that (user redesign, 2026-08-22). A PINNED orb gets its panel
+     beside wherever it was dragged (computed at open time). */
+  const surfacePosition = pin
+    ? "" // inline style below
+    : "left-1/2 top-[88px] -translate-x-1/2 md:top-[92px]";
+  const panelHeight = "max-h-[calc(100dvh-7rem)]";
 
-  const assistantButton = (
-    <button
-      type="button"
-      aria-label={t("openLabel")}
-      title={`${t("openLabel")} (Ctrl+E)`}
-      className={
-        anchoredToTopbar
-          ? "tap relative z-10 block h-full w-full rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-          : "tap fixed bottom-4 end-4 z-40 block h-[76px] w-[76px] rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg md:bottom-6 md:end-6 md:h-[104px] md:w-[104px]"
-      }
-      onClick={() => {
-        setMinimized(false);
-        setOpen((v) => {
-          const next = !v;
-          if (next) setTimeout(() => inputRef.current?.focus(), 0);
-          return next;
-        });
-      }}
-    >
-      {/* The particle field is decorative; this button remains the single
-          accessible and interactive assistant control in either location.
-          Silent mode deliberately does NOT reach the orb (user ruling,
-          2026-08-22: "the particles must move all the time — it does not
-          depend on anything"): silent is about the VOICE, and the frozen
-          orb read as a dead assistant. The orb's "muted" state stays in
-          its contract, unused by this consumer. */}
+  const orbVisual = (
+    <>
       <AuroraOrb
         state={
           (speaking
@@ -704,6 +774,40 @@ export function PresenceDock() {
           {unread}
         </span>
       ) : null}
+    </>
+  );
+
+  const assistantButton = (
+    <button
+      type="button"
+      aria-label={t("openLabel")}
+      title={`${t("openLabel")} (Ctrl+E)`}
+      className={
+        pin
+          ? "tap fixed z-40 block h-16 w-16 -translate-x-1/2 -translate-y-1/2 cursor-grab touch-none rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+          : "tap relative z-10 block h-full w-full touch-none rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+      }
+      style={pin ? { left: drag?.x ?? pin.x, top: drag?.y ?? pin.y } : undefined}
+      onPointerDown={onOrbPointerDown}
+      onClick={() => {
+        // a drag's mouse-up must not also open the panel
+        if (suppressClickRef.current) { suppressClickRef.current = false; return; }
+        setMinimized(false);
+        setOpen((v) => {
+          const next = !v;
+          if (next) setTimeout(() => inputRef.current?.focus(), 0);
+          return next;
+        });
+      }}
+    >
+      {/* The particle field is decorative; this button remains the single
+          accessible and interactive assistant control in either location.
+          Silent mode deliberately does NOT reach the orb (user ruling,
+          2026-08-22: "the particles must move all the time — it does not
+          depend on anything"): silent is about the VOICE, and the frozen
+          orb read as a dead assistant. The orb's "muted" state stays in
+          its contract, unused by this consumer. */}
+      {orbVisual}
     </button>
   );
 
@@ -711,7 +815,10 @@ export function PresenceDock() {
     <>
       {open && minimized ? (
         /* the MINIMIZED pill: the conversation lives, the screen is yours */
-        <div className={`fixed z-40 flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-1.5 shadow-lg ${surfacePosition}`}>
+        <div
+          className={`fixed z-40 flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-1.5 shadow-lg ${surfacePosition}`}
+          style={pin ? pinnedPanelStyle() : undefined}
+        >
           <span className="h-2 w-2 rounded-full bg-accent" aria-hidden />
           <span className="text-xs font-semibold text-fg">{t("title")}</span>
           <button
@@ -735,7 +842,10 @@ export function PresenceDock() {
       ) : null}
 
       {open && !minimized ? (
-        <div className={`fixed z-40 flex w-[min(92vw,24rem)] flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-xl ${surfacePosition} ${panelHeight}`}>
+        <div
+          className={`fixed z-40 flex w-[min(92vw,24rem)] flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-xl ${surfacePosition} ${panelHeight}`}
+          style={pin ? pinnedPanelStyle() : undefined}
+        >
           <div className="flex items-center gap-2 border-b border-border px-3 py-2">
             <span className="h-2 w-2 rounded-full bg-accent" aria-hidden />
             <span className="text-sm font-semibold text-fg">{t("title")}</span>
@@ -918,11 +1028,15 @@ export function PresenceDock() {
           listening/speaking, and the panel header shows the word when open. */}
 
       {/* Portal the complete control—not only its canvas—so accessibility,
-          unread state and interaction have one owner. Routes without the
-          platform shell retain the exact fixed-corner fallback. */}
-      {topbarPresenceHost
-        ? createPortal(assistantButton, topbarPresenceHost)
-        : assistantButton}
+          unread state and interaction have one owner. A PINNED orb renders
+          fixed at its pin instead. The old fixed-corner fallback is GONE
+          (user directive, 2026-08-25): no anchor and no pin = no orb —
+          "any trace of it beside the right position it has at the top". */}
+      {pin
+        ? assistantButton
+        : topbarPresenceHost
+          ? createPortal(assistantButton, topbarPresenceHost)
+          : null}
     </>
   );
 }

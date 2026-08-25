@@ -60,59 +60,55 @@ export interface KebabItem {
   disabled?: boolean;
   /** a toggle stays IN the menu when pressed (redact, view modes) */
   keepOpen?: boolean;
-  /** a SUB-menu (2026-08-24, the export group): expands inline under the
-      item — flyouts fight small screens; indentation doesn't */
+  /** a SUB-menu (2026-08-25 redesign, the Supabase reference): a FLYOUT
+      panel that steps a little OUT of the parent menu — overlapping its
+      edge — instead of indenting inside it. This is the theme's default
+      for every kebab everywhere; grouping into subs is also how a long
+      menu stays scroll-free (the menu itself never scrolls). */
   sub?: KebabItem[];
 }
 
 const MENU_W = 176; // matches min-w-44
+const ITEM_H = 34;  // one row's height — the no-scroll placement math
 
 function MenuEntry({
-  item, depth, expanded, setExpanded, close,
+  item, expanded, setExpanded, close,
 }: {
   item: KebabItem;
-  depth: number;
   expanded: string | null;
-  setExpanded: (key: string | null) => void;
+  setExpanded: (key: string | null, anchor?: DOMRect) => void;
   close: () => void;
 }) {
   const isOpen = expanded === item.key;
   return (
-    <>
-      <button
-        type="button"
-        role="menuitem"
-        disabled={item.disabled}
-        onClick={() => {
-          if (item.sub) return setExpanded(isOpen ? null : item.key);
-          item.onSelect?.();
-          if (!item.keepOpen) close();
-        }}
-        className={`flex w-full items-center gap-2.5 py-2 pe-3 text-start text-xs transition-colors ${
-          depth > 0 ? "ps-8" : "ps-3"
-        } ${
-          item.danger
-            ? "text-danger hover:bg-danger/10"
-            : "text-fg-muted hover:bg-surface-2 hover:text-fg"
-        } disabled:pointer-events-none disabled:opacity-40`}
-      >
-        {item.icon ? <span className="shrink-0 opacity-80">{item.icon}</span> : null}
-        <span className="min-w-0 flex-1 truncate">{item.label}</span>
-        {item.sub ? <span aria-hidden className="text-[10px]">{isOpen ? "▾" : "▸"}</span> : null}
-      </button>
-      {item.sub && isOpen
-        ? item.sub.map((child) => (
-            <MenuEntry
-              key={child.key}
-              item={child}
-              depth={depth + 1}
-              expanded={expanded}
-              setExpanded={setExpanded}
-              close={close}
-            />
-          ))
-        : null}
-    </>
+    <button
+      type="button"
+      role="menuitem"
+      aria-haspopup={item.sub ? "menu" : undefined}
+      aria-expanded={item.sub ? isOpen : undefined}
+      disabled={item.disabled}
+      onClick={(e) => {
+        if (item.sub) {
+          return setExpanded(
+            isOpen ? null : item.key,
+            (e.currentTarget as HTMLElement).getBoundingClientRect(),
+          );
+        }
+        item.onSelect?.();
+        if (!item.keepOpen) close();
+      }}
+      className={`flex w-full items-center gap-2.5 py-2 pe-3 ps-3 text-start text-xs transition-colors ${
+        item.danger
+          ? "text-danger hover:bg-danger/10"
+          : "text-fg-muted hover:bg-surface-2 hover:text-fg"
+      } ${isOpen ? "bg-surface-2 text-fg" : ""} disabled:pointer-events-none disabled:opacity-40`}
+    >
+      {item.icon ? <span className="shrink-0 opacity-80">{item.icon}</span> : null}
+      <span className="min-w-0 flex-1 truncate">{item.label}</span>
+      {item.sub ? (
+        <span aria-hidden className="inline-block text-[10px] rtl:-scale-x-100">▸</span>
+      ) : null}
+    </button>
   );
 }
 
@@ -126,7 +122,9 @@ export function KebabMenu({
   /** replaces the ⋯ glyph (e.g. the player's speed readout «۱.۵×») */
   trigger?: ReactNode;
 }) {
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const [expanded, setExpandedKey] = useState<string | null>(null);
+  /** where the open flyout sits — computed from its parent item's rect */
+  const [flyoutAt, setFlyoutAt] = useState<{ top: number; left: number } | null>(null);
   /** null = closed; otherwise the VIEWPORT position the portal renders at.
       The menu portals to <body> (user report, 2026-08-24: opening it inside
       a table's overflow container clipped the menu and scrolled the table —
@@ -135,26 +133,71 @@ export function KebabMenu({
   const [at, setAt] = useState<{ top: number; left: number } | null>(null);
   const rootRef = useRef<HTMLSpanElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const flyoutRef = useRef<HTMLDivElement | null>(null);
 
+  /**
+   * NO-SCROLL PLACEMENT (user directive, 2026-08-25): the menu always opens
+   * COMPLETELY — below the trigger when it fits, flipped above it when it
+   * doesn't, and it never grows a scrollbar of its own. When a menu wants
+   * more rows than a viewport holds, the caller groups them into `sub`
+   * flyouts — that is the theme's answer, not scrolling.
+   */
   function toggle() {
-    if (at) return setAt(null);
-    setExpanded(null);
+    if (at) return closeAll();
+    setExpandedKey(null);
+    setFlyoutAt(null);
     const rect = rootRef.current?.getBoundingClientRect();
     if (!rect) return;
     const rtl = document.documentElement.dir === "rtl";
     const left = rtl ? rect.left : rect.right - MENU_W;
+    const height = items.length * ITEM_H + 10;
+    const below = rect.bottom + 4;
+    const top = below + height <= window.innerHeight - 8
+      ? below
+      : Math.max(8, rect.top - 4 - height);
     setAt({
-      top: Math.min(rect.bottom + 4, window.innerHeight - 8),
+      top,
       left: Math.max(8, Math.min(left, window.innerWidth - MENU_W - 8)),
+    });
+  }
+
+  function closeAll() {
+    setAt(null);
+    setExpandedKey(null);
+    setFlyoutAt(null);
+  }
+
+  /**
+   * The flyout steps OUT of the parent menu — outward in the reading
+   * direction, overlapping the parent's edge by ~12px (the Supabase-style
+   * reference the user pointed at) — and flips to the other side when the
+   * viewport ends. Its top clamps so it, too, opens completely.
+   */
+  function setExpanded(key: string | null, anchor?: DOMRect) {
+    setExpandedKey(key);
+    if (!key || !anchor || !at) return setFlyoutAt(null);
+    const item = items.find((i) => i.key === key);
+    const height = (item?.sub?.length ?? 0) * ITEM_H + 10;
+    const rtl = document.documentElement.dir === "rtl";
+    const outward = rtl ? at.left - MENU_W + 12 : at.left + MENU_W - 12;
+    const fits = outward >= 8 && outward + MENU_W <= window.innerWidth - 8;
+    const flipped = rtl ? at.left + MENU_W - 12 : at.left - MENU_W + 12;
+    setFlyoutAt({
+      top: Math.max(8, Math.min(anchor.top - 5, window.innerHeight - height - 8)),
+      left: fits ? outward : Math.max(8, Math.min(flipped, window.innerWidth - MENU_W - 8)),
     });
   }
 
   useEffect(() => {
     if (!at) return;
-    const close = () => setAt(null);
+    const close = () => closeAll();
     const onDown = (e: MouseEvent) => {
       const target = e.target as Node;
-      if (!rootRef.current?.contains(target) && !menuRef.current?.contains(target)) close();
+      if (
+        !rootRef.current?.contains(target)
+        && !menuRef.current?.contains(target)
+        && !flyoutRef.current?.contains(target)
+      ) close();
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") close();
@@ -169,7 +212,10 @@ export function KebabMenu({
       window.removeEventListener("scroll", close, true);
       window.removeEventListener("resize", close);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- closeAll is stable in spirit
   }, [at]);
+
+  const openSub = expanded ? items.find((i) => i.key === expanded)?.sub : undefined;
 
   return (
     <span ref={rootRef} className="relative inline-flex" onClick={(e) => e.stopPropagation()}>
@@ -182,17 +228,38 @@ export function KebabMenu({
               ref={menuRef}
               role="menu"
               style={{ position: "fixed", top: at.top, left: at.left, minWidth: MENU_W }}
-              className="z-50 max-h-80 overflow-y-auto rounded-lg border border-border bg-surface py-1 shadow-xl"
+              className="z-50 rounded-lg border border-border bg-surface py-1 shadow-xl"
               onClick={(e) => e.stopPropagation()}
             >
               {items.map((item) => (
                 <MenuEntry
                   key={item.key}
                   item={item}
-                  depth={0}
                   expanded={expanded}
                   setExpanded={setExpanded}
-                  close={() => setAt(null)}
+                  close={closeAll}
+                />
+              ))}
+            </div>,
+            document.body,
+          )
+        : null}
+      {at && openSub && flyoutAt
+        ? createPortal(
+            <div
+              ref={flyoutRef}
+              role="menu"
+              style={{ position: "fixed", top: flyoutAt.top, left: flyoutAt.left, minWidth: MENU_W }}
+              className="z-[51] rounded-lg border border-border bg-surface py-1 shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {openSub.map((child) => (
+                <MenuEntry
+                  key={child.key}
+                  item={child}
+                  expanded={null}
+                  setExpanded={() => undefined}
+                  close={closeAll}
                 />
               ))}
             </div>,

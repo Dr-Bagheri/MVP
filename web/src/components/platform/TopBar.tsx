@@ -152,7 +152,12 @@ export function TopBar({ me, isPlatformRoot = false }: { me: User | null; isPlat
         ref={setPresenceAnchorRef}
         id="neurai-topbar-presence"
         data-presence-cradle
-        className="pointer-events-auto absolute left-1/2 top-[17px] z-30 h-[60px] w-[60px] -translate-x-1/2 rounded-full border border-border-strong bg-surface md:top-[12px] md:h-[68px] md:w-[68px]"
+        /* empty:invisible — when the orb is pinned elsewhere (2026-08-25
+           drag-to-pin) nothing portals in here, and an empty ring would be
+           exactly the "trace" the directive removes; invisible keeps the
+           element (the anchor registration and the drop target) without
+           the visual */
+        className="pointer-events-auto absolute left-1/2 top-[17px] z-30 h-[60px] w-[60px] -translate-x-1/2 rounded-full border border-border-strong bg-surface empty:invisible md:top-[12px] md:h-[68px] md:w-[68px]"
       />
     </header>
   );
