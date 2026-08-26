@@ -22,15 +22,27 @@ import { Card, Chip } from "@/components/ui";
 import { Link } from "@/i18n/routing";
 import { digits, formatClock, modelLabel } from "@/lib/format";
 import { resumePoint } from "./uploadRules";
-import { RecorderNotes } from "./RecorderNotes";
+import { AgendaPanel, RecorderNotes } from "./RecorderNotes";
 import { SelectMenu } from "@/components/rowActions";
 import {
-  IconChip, IconFileText, IconGlobe, IconMic, IconPulse, IconSpeaker,
+  IconCheck, IconChip, IconClock, IconFileText, IconGlobe, IconMic,
+  IconPause, IconPlay, IconPulse, IconSpeaker, IconTrash,
 } from "@/components/icons";
 import { playTestChime } from "@/lib/deviceTest";
 import { useAudioLevel } from "@/lib/useAudioLevel";
+import { extractKeywords } from "@/lib/keywords";
 import { customTemplates, type CustomTemplate } from "@/lib/summaryTemplates";
 import { SUMMARY_TEMPLATES, type SummaryTemplate } from "@echo/core/vocabulary";
+
+/** the record's tabs (user directive, 2026-08-26) — summary is
+    deliberately absent: it is written when the take is processed, and a
+    live tab for it would be an empty promise */
+const TABS = ["transcript", "notes", "keywords"] as const;
+const TAB_KEY = {
+  transcript: "tabTranscript",
+  notes: "tabNotes",
+  keywords: "tabKeywords",
+} as const;
 
 /** ruled key → its label's message key (typed against the producer's union) */
 const TEMPLATE_KEY: Record<SummaryTemplate, "tplBoard" | "tplGroup" | "tplTeam" | "tplItTeam" | "tplInterview"> = {
@@ -100,6 +112,7 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
   /** the CHECK's own monitoring gain — how loud the meter reads, so a
       far mic can be judged before the take (it does not change the take) */
   const [monitorGain, setMonitorGain] = useState(1);
+  const [tab, setTab] = useState<(typeof TABS)[number]>("transcript");
   /** speak «این جلسه ضبط می‌شود» into the room — and into the record */
   /**
    * RESUME mode: `?resume=<id>` — the call continues on the same id, next
@@ -417,7 +430,22 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
                 );
               })
             : null}
+          {/* NOW — the newest bar's edge (the reference's playhead) */}
+          {s.wave.length > 0 ? (
+            <span className="absolute bottom-0 right-0 top-0 w-0.5 rounded bg-accent">
+              <span className="absolute -top-1 right-1/2 h-2.5 w-2.5 translate-x-1/2 rounded-full bg-accent" />
+            </span>
+          ) : null}
         </div>
+        {/* the ruler: the rolling window's own clock, start → now */}
+        {msPerSample > 0 ? (
+          <div className="mt-1 flex justify-between text-[10px] tabular-nums text-fg-subtle">
+            {Array.from({ length: 5 }, (_, i) => {
+              const ms = visibleStartMs + ((s.recordedMs - visibleStartMs) * i) / 4;
+              return <span key={i}>{formatClock(Math.floor(ms / 1000), locale)}</span>;
+            })}
+          </div>
+        ) : null}
       </div>
     );
   };
@@ -500,32 +528,156 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
                   ? t("finishing")
                   : t("recordingState")}
             </span>
-            <span className="ltr ms-auto text-sm text-fg-muted">
+            <span className="ltr text-sm font-semibold tabular-nums text-fg">
               {formatClock(recordedSec, locale)}
             </span>
           </div>
 
           {waveBand()}
 
-          {/* M38: live captions — the relay's rolling transcript. Interim
-              words render muted; finals accumulate. Absence says so. */}
-          {s.captions !== null ? (
-            <div className="mt-4 rounded-md border border-border bg-surface p-3">
-              <p className="text-xs font-semibold text-fg-subtle">{t("liveTitle")}</p>
-              <p dir="auto" className="mt-1 max-h-36 overflow-y-auto whitespace-pre-wrap text-sm leading-6 text-fg">
-                {s.captions.finals === "" && s.captions.interim === "" ? (
-                  <span className="text-fg-muted">{t("liveWaiting")}</span>
-                ) : (
-                  <>
-                    {s.captions.finals}
-                    <span className="text-fg-muted">{s.captions.interim}</span>
-                  </>
-                )}
-              </p>
+          {/* the reference transport, with OUR real actions in its order:
+              mark, discard, the big pause/resume, finish — skip and speed
+              belong to playback, and a control that does nothing on a live
+              take would be a lie */}
+          {live ? (
+            <div className="mt-4 flex items-center justify-center gap-3" dir="ltr">
+              <button
+                type="button"
+                title={t("markButton")}
+                aria-label={t("markButton")}
+                className="tap grid h-10 w-10 place-items-center rounded-full border border-border bg-surface text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
+                onClick={() => { addChapterMark(s.recordedMs); notify(t("marked")); }}
+              >
+                <IconClock width={16} height={16} />
+              </button>
+              {confirmDiscard ? (
+                /* stop WITHOUT saving asks again — the first press only arms */
+                <span className="flex items-center gap-2">
+                  <button
+                    className="btn-danger h-9 px-3 text-xs"
+                    onClick={() => {
+                      setConfirmDiscard(false);
+                      void discardRecording().then(({ deleted }) => {
+                        notify(
+                          deleted ? t("discarded") : t("discardDeleteFailed"),
+                          deleted ? undefined : "warn",
+                        );
+                      });
+                    }}
+                  >
+                    {t("discardConfirm")}
+                  </button>
+                  <button className="btn-ghost h-9 px-2 text-xs" onClick={() => setConfirmDiscard(false)}>
+                    {t("discardKeep")}
+                  </button>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  title={t("discard")}
+                  aria-label={t("discard")}
+                  className="tap grid h-10 w-10 place-items-center rounded-full border border-danger/40 bg-surface text-danger transition-colors hover:bg-danger/10"
+                  onClick={() => setConfirmDiscard(true)}
+                >
+                  <IconTrash width={16} height={16} />
+                </button>
+              )}
+              <button
+                type="button"
+                title={phase === "recording" ? t("pause") : t("resume")}
+                aria-label={phase === "recording" ? t("pause") : t("resume")}
+                className="tap grid h-14 w-14 place-items-center rounded-full bg-fg text-surface shadow-lg transition-transform hover:scale-105 active:scale-95"
+                onClick={phase === "recording" ? pause : resume}
+              >
+                {phase === "recording"
+                  ? <IconPause width={22} height={22} />
+                  : <IconPlay width={22} height={22} />}
+              </button>
+              <button
+                type="button"
+                title={t("finish")}
+                aria-label={t("finish")}
+                className="tap grid h-10 w-10 place-items-center rounded-full bg-accent text-on-accent shadow transition-transform hover:scale-105"
+                onClick={() => void finish()}
+              >
+                <IconCheck width={16} height={16} />
+              </button>
             </div>
-          ) : s.captionsDown ? (
-            <p className="mt-4 text-xs text-fg-muted">{t("liveUnavailable")}</p>
           ) : null}
+
+          {/* the record's own tabs: transcript, notes, keywords — all of it
+              coming OUT of the take (user directive, 2026-08-26) */}
+          <div role="tablist" className="mt-5 flex gap-1 border-b border-border">
+            {TABS.map((k) => (
+              <button
+                key={k}
+                type="button"
+                role="tab"
+                aria-selected={tab === k}
+                className={`tap -mb-px border-b-2 px-3 py-2 text-sm transition-colors ${
+                  tab === k
+                    ? "border-accent font-semibold text-fg"
+                    : "border-transparent text-fg-muted hover:text-fg"
+                }`}
+                onClick={() => setTab(k)}
+              >
+                {t(TAB_KEY[k])}
+              </button>
+            ))}
+          </div>
+          <div className="mt-3">
+            {tab === "transcript" ? (
+              /* M38 live captions as stamped ROWS. Interim renders muted at
+                 the tail; absence still says so. */
+              s.captions !== null ? (
+                s.captionRows.length === 0 && s.captions.interim === "" ? (
+                  <p className="text-sm text-fg-muted">{t("liveWaiting")}</p>
+                ) : (
+                  <div className="max-h-72 space-y-2 overflow-y-auto pe-1">
+                    {s.captionRows.map((row, i) => (
+                      <div key={i} className="flex gap-3 text-sm leading-6">
+                        <span className="ltr shrink-0 pt-0.5 text-xs tabular-nums text-fg-subtle">
+                          {formatClock(Math.floor(row.atMs / 1000), locale)}
+                        </span>
+                        <p dir="auto" className="min-w-0 flex-1 whitespace-pre-wrap text-fg">
+                          {row.text}
+                        </p>
+                      </div>
+                    ))}
+                    {s.captions.interim !== "" ? (
+                      <p dir="auto" className="ps-12 text-sm leading-6 text-fg-muted">
+                        {s.captions.interim}
+                      </p>
+                    ) : null}
+                  </div>
+                )
+              ) : s.captionsDown ? (
+                <p className="text-xs text-fg-muted">{t("liveUnavailable")}</p>
+              ) : null
+            ) : tab === "notes" ? (
+              s.callId ? (
+                <RecorderNotes callId={s.callId} atMs={s.recordedMs} onChapter={addChapterMark} />
+              ) : null
+            ) : (
+              (() => {
+                /* derived LIVE from the transcript so far — counted, never
+                   guessed (lib/keywords) */
+                const words = extractKeywords(s.captions?.finals ?? "");
+                return words.length === 0 ? (
+                  <p className="text-sm text-fg-muted">{t("keywordsEmpty")}</p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {words.map(({ word, count }) => (
+                      <span key={word} dir="auto" className="rounded-full bg-surface-2 px-3 py-1 text-sm text-fg">
+                        {word}
+                        <span className="ms-1.5 text-xs text-fg-subtle">{digits(count, locale)}</span>
+                      </span>
+                    ))}
+                  </div>
+                );
+              })()
+            )}
+          </div>
 
           {/* input-quality watch: fixable NOW, so it surfaces now. A lost
               mic shows while PAUSED too — the auto-pause is the state the
@@ -552,60 +704,11 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
             </p>
           ) : null}
 
-          {live ? (
-            <div className="mt-5 flex flex-wrap items-center gap-3">
-              {phase === "recording" ? (
-                <button className="btn-secondary h-12 px-6" onClick={pause}>
-                  {t("pause")}
-                </button>
-              ) : (
-                <button className="btn-secondary h-12 px-6" onClick={resume}>
-                  {t("resume")}
-                </button>
-              )}
-              <button className="btn-primary h-12 px-6" onClick={() => void finish()}>
-                {t("finish")}
-              </button>
-              {/* stop WITHOUT saving (user directive, 2026-08-23): red solid
-                  fill, and it asks again — the first press only arms it */}
-              {confirmDiscard ? (
-                <span className="flex items-center gap-2">
-                  <button
-                    className="btn-danger h-12 px-6"
-                    onClick={() => {
-                      setConfirmDiscard(false);
-                      void discardRecording().then(({ deleted }) => {
-                        notify(
-                          deleted ? t("discarded") : t("discardDeleteFailed"),
-                          deleted ? undefined : "warn",
-                        );
-                      });
-                    }}
-                  >
-                    {t("discardConfirm")}
-                  </button>
-                  <button
-                    className="btn-ghost h-12 px-4"
-                    onClick={() => setConfirmDiscard(false)}
-                  >
-                    {t("discardKeep")}
-                  </button>
-                </span>
-              ) : (
-                <button
-                  className="btn-danger h-12 px-6"
-                  onClick={() => setConfirmDiscard(true)}
-                >
-                  {t("discard")}
-                </button>
-              )}
-            </div>
-          ) : null}
         </div>
 
         {live && s.callId ? (
           <div className="mt-4 lg:mt-0">
-            <RecorderNotes
+            <AgendaPanel
               callId={s.callId}
               atMs={s.recordedMs}
               onChapter={addChapterMark}

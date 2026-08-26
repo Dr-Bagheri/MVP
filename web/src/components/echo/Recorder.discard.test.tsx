@@ -12,7 +12,7 @@ const snapshot = {
   phase: "recording", callId: "c-1", title: "Meeting 2", recordedMs: 26_000,
   level: 0, wave: [], waveStartMs: 0, chapterMarks: [], quality: null,
   progress: { done: 0, pending: 0, failed: 0 }, error: null,
-  captions: null, captionsDown: false, previews: [],
+  captions: null, captionRows: [], captionsDown: false, previews: [],
 };
 vi.mock("@/lib/recordingEngine", () => ({
   subscribeRecorder: () => () => undefined,
@@ -36,7 +36,7 @@ vi.mock("@/api/client", () => ({
     models: async () => ({ models: [], preferred_model: null, curated: false }),
   },
 }));
-vi.mock("./RecorderNotes", () => ({ RecorderNotes: () => null }));
+vi.mock("./RecorderNotes", () => ({ RecorderNotes: () => null, AgendaPanel: () => null }));
 vi.mock("next-intl", () => ({
   useLocale: () => "en",
   useTranslations: () => (key: string) => key,
@@ -56,9 +56,13 @@ beforeEach(() => {
 });
 
 describe("stop-and-delete confirm flow", () => {
+  /* the trigger is an ICON in the transport row now (2026-08-26) — its
+     accessible NAME is the grip, so the flow's contract survives restyles */
+  const trigger = () => screen.getByRole("button", { name: "discard" });
+
   it("the first press only ARMS — nothing is discarded", () => {
     render(<Recorder />);
-    fireEvent.click(screen.getByText("discard"));
+    fireEvent.click(trigger());
     expect(discardRecording).not.toHaveBeenCalled();
     // armed state: the confirm wording and the way back are both offered
     expect(screen.getByText("discardConfirm")).toBeInTheDocument();
@@ -67,16 +71,16 @@ describe("stop-and-delete confirm flow", () => {
 
   it("'keep recording' disarms — still nothing discarded", () => {
     render(<Recorder />);
-    fireEvent.click(screen.getByText("discard"));
+    fireEvent.click(trigger());
     fireEvent.click(screen.getByText("discardKeep"));
     expect(discardRecording).not.toHaveBeenCalled();
     expect(screen.queryByText("discardConfirm")).toBeNull();
-    expect(screen.getByText("discard")).toBeInTheDocument();
+    expect(trigger()).toBeInTheDocument();
   });
 
   it("the confirmed press discards, exactly once, on the red solid style", async () => {
     render(<Recorder />);
-    fireEvent.click(screen.getByText("discard"));
+    fireEvent.click(trigger());
     const confirm = screen.getByText("discardConfirm");
     expect(confirm.className).toContain("btn-danger");
     fireEvent.click(confirm);

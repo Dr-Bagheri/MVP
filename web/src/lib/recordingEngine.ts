@@ -27,6 +27,7 @@
  */
 
 import { api } from "@/api/client";
+import { appendCaptionRow, type CaptionRow } from "@/lib/captionRows";
 import { announceRecordingLive } from "@/lib/assistantBus";
 import { nextMeetingTitle } from "@/lib/meetingTitle";
 import { PartUploader, type UploaderProgress } from "@/lib/callUpload";
@@ -56,6 +57,8 @@ export interface RecorderSnapshot {
   progress: UploaderProgress;
   error: RecorderErrorCode | null;
   captions: { finals: string; interim: string } | null;
+  /** the finals broken into stamped rows — the transcript tab's lines */
+  captionRows: CaptionRow[];
   captionsDown: boolean;
   previews: { idx: number; url: string }[];
 }
@@ -92,7 +95,7 @@ let snapshot: RecorderSnapshot = {
   phase: "idle", callId: null, title: "", recordedMs: 0, level: 0,
   wave: [], waveStartMs: 0, chapterMarks: [], quality: null,
   progress: { done: 0, pending: 0, failed: 0 }, error: null,
-  captions: null, captionsDown: false, previews: [],
+  captions: null, captionRows: [], captionsDown: false, previews: [],
 };
 
 const listeners = new Set<() => void>();
@@ -143,6 +146,7 @@ let liveId: string | null = null;
 let liveRec: MediaRecorder | null = null;
 let liveEs: EventSource | null = null;
 let liveFinals = "";
+let liveRows: CaptionRow[] = [];
 
 // ---- phase + the things that ride on it ------------------------------------
 
@@ -204,7 +208,8 @@ async function startLiveCaptions(mime: string): Promise<void> {
     return;
   }
   liveFinals = "";
-  patch({ captions: { finals: "", interim: "" }, captionsDown: false });
+  liveRows = [];
+  patch({ captions: { finals: "", interim: "" }, captionRows: [], captionsDown: false });
   const rec = new MediaRecorder(stream!, { mimeType: mime });
   rec.ondataavailable = (event) => {
     if (event.data.size > 0 && liveId) {
@@ -228,8 +233,13 @@ async function startLiveCaptions(mime: string): Promise<void> {
       if (body.type === "tokens" && body.tokens) {
         const finalText = body.tokens.filter((t) => t.is_final).map((t) => t.text).join("");
         const interim = body.tokens.filter((t) => !t.is_final).map((t) => t.text).join("");
-        if (finalText) liveFinals += finalText;
-        patch({ captions: { finals: liveFinals, interim } });
+        if (finalText) {
+          liveFinals += finalText;
+          // stamped with the take's clock as the fragment ARRIVES — the
+          // lane itself carries no timestamps (see lib/captionRows)
+          liveRows = appendCaptionRow(liveRows, finalText, recordedMs);
+        }
+        patch({ captions: { finals: liveFinals, interim }, captionRows: liveRows });
       }
     } catch { /* not a caption frame */ }
   };
@@ -725,7 +735,7 @@ export async function discardRecording(): Promise<{ deleted: boolean }> {
     phase: "idle", callId: null, title: "", recordedMs: 0, level: 0,
     wave: [], waveStartMs: 0, chapterMarks: [], quality: null,
     progress: { done: 0, pending: 0, failed: 0 }, error: null,
-    captions: null, captionsDown: false, previews: [],
+    captions: null, captionRows: [], captionsDown: false, previews: [],
   });
   return { deleted };
 }
@@ -762,6 +772,6 @@ export function resetRecorder(): void {
     phase: "idle", callId: null, title: "", recordedMs: 0, level: 0,
     wave: [], waveStartMs: 0, chapterMarks: [], quality: null,
     progress: { done: 0, pending: 0, failed: 0 }, error: null,
-    captions: null, captionsDown: false, previews: [],
+    captions: null, captionRows: [], captionsDown: false, previews: [],
   });
 }

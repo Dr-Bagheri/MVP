@@ -123,6 +123,18 @@ export const IconOpen = (p: SVGProps<SVGSVGElement>) => (
 export const IconPlay = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><path d="M8 5.5v13l10-6.5-10-6.5Z" /></svg>
 );
+/** pause — two bars */
+export const IconPause = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><path d="M9 5.5v13" /><path d="M15 5.5v13" /></svg>
+);
+/** a mark on the take's clock */
+export const IconClock = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" /></svg>
+);
+/** confirm / finish */
+export const IconCheck = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>
+);
 /** retry — a circular arrow */
 export const IconRetry = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><path d="M20 12a8 8 0 1 1-2.3-5.6" /><path d="M20.5 3.5V8H16" /></svg>

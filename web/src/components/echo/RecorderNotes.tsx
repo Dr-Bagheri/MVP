@@ -52,35 +52,6 @@ export function RecorderNotes({
   const [entries, setEntries] = useState<CallNote[]>([]);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
-  /**
-   * Agenda checklist (user backlog, 2026-08-23): items live in CLIENT
-   * state while pending — a plan is a draft; ticking one is the event
-   * worth keeping, and THAT persists as a stamped chapter («✓ item»), so
-   * the transcript gains an anchor at the moment the topic was covered.
-   */
-  const [agenda, setAgenda] = useState<string[]>([]);
-  const [agendaDraft, setAgendaDraft] = useState("");
-
-  async function tickAgenda(index: number): Promise<void> {
-    const item = agenda[index];
-    if (!item || busy) return;
-    setBusy(true);
-    const stamp = atMs;
-    try {
-      const saved = await api.addCallNote(callId, {
-        kind: "chapter",
-        at_ms: stamp,
-        body: `✓ ${item}`,
-      });
-      onChapter?.(stamp);
-      setEntries((prev) => [...prev, saved]);
-      setAgenda((prev) => prev.filter((_, i) => i !== index));
-    } catch {
-      notify(t("noteFailed"), "warn");
-    } finally {
-      setBusy(false);
-    }
-  }
 
   async function add(): Promise<void> {
     const { title, body } = splitEntry(draft);
@@ -116,43 +87,6 @@ export function RecorderNotes({
 
   return (
     <div className="flex h-full flex-col">
-      {/* the agenda strip — pending items wait here; a tick becomes a
-          stamped ✓-chapter below and a marker on the waveform */}
-      <div className="mb-3">
-        <p className="text-xs font-semibold text-fg-subtle">{t("agendaTitle")}</p>
-        {agenda.length > 0 ? (
-          <ul className="mt-1 space-y-1">
-            {agenda.map((item, i) => (
-              <li key={`${item}-${i}`} className="flex items-center gap-2 text-sm text-fg">
-                <input
-                  type="checkbox"
-                  checked={false}
-                  disabled={busy}
-                  aria-label={t("agendaTick", { item })}
-                  onChange={() => void tickAgenda(i)}
-                />
-                <span className="min-w-0 truncate">{item}</span>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-        <input
-          dir="auto"
-          className="input mt-1 h-8 min-h-0 py-0 text-xs"
-          placeholder={t("agendaPlaceholder")}
-          value={agendaDraft}
-          onChange={(e) => setAgendaDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && agendaDraft.trim()) {
-              setAgenda((prev) => [...prev, agendaDraft.trim()]);
-              setAgendaDraft("");
-            }
-          }}
-        />
-      </div>
-
-      <p className="text-xs font-semibold text-fg-subtle">{t("notesTitle")}</p>
-
       {entries.length > 0 ? (
         <div className="mt-2 max-h-44 overflow-y-auto pe-1" style={ruled}>
           {entries.map((entry) => (
@@ -195,6 +129,83 @@ export function RecorderNotes({
         </button>
         <span className="text-[11px] leading-4 text-fg-subtle">{t("notebookHint")}</span>
       </div>
+    </div>
+  );
+}
+
+/**
+ * The ACTION-ITEMS panel (the reference recorder's right card; user
+ * directive, 2026-08-26). It IS the agenda, relocated out of the notebook:
+ * pending items live in client state — a plan is a draft — and ticking one
+ * is the event worth keeping: it persists as a stamped «✓ item» chapter,
+ * anchoring the transcript at the moment the topic was covered, and drops
+ * a marker on the wave.
+ */
+export function AgendaPanel({
+  callId,
+  atMs,
+  onChapter,
+}: {
+  callId: string;
+  atMs: number;
+  onChapter?: (atMs: number) => void;
+}) {
+  const t = useTranslations("capture");
+  const [items, setItems] = useState<string[]>([]);
+  const [draft, setDraft] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function tick(index: number): Promise<void> {
+    const item = items[index];
+    if (!item || busy) return;
+    setBusy(true);
+    const stamp = atMs;
+    try {
+      await api.addCallNote(callId, { kind: "chapter", at_ms: stamp, body: `✓ ${item}` });
+      onChapter?.(stamp);
+      setItems((prev) => prev.filter((_, i) => i !== index));
+    } catch {
+      notify(t("noteFailed"), "warn");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-border bg-surface p-3">
+      <p className="text-sm font-semibold text-fg">{t("agendaTitle")}</p>
+      {items.length > 0 ? (
+        <ul className="mt-2 space-y-1.5">
+          {items.map((item, i) => (
+            <li
+              key={`${item}-${i}`}
+              className="flex items-center gap-2 rounded-lg border border-border px-2.5 py-1.5 text-sm text-fg"
+            >
+              <input
+                type="checkbox"
+                checked={false}
+                disabled={busy}
+                aria-label={t("agendaTick", { item })}
+                onChange={() => void tick(i)}
+              />
+              <span className="min-w-0 flex-1 truncate">{item}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      <input
+        dir="auto"
+        className="input mt-2 h-8 min-h-0 py-0 text-xs"
+        placeholder={t("agendaPlaceholder")}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && draft.trim()) {
+            setItems((prev) => [...prev, draft.trim()]);
+            setDraft("");
+          }
+        }}
+      />
     </div>
   );
 }
