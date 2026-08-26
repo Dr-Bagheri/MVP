@@ -55,3 +55,8 @@ Thumbs.db
 # the Playwright MCP tool's per-session dumps (console logs, page trees) —
 # scratch by construction, and it recreates them every run
 /.playwright-mcp/
+
+# built deliverables (decks, their render pipelines, rendered slide images) —
+# same class as *.docx and docs/*.pdf: the SOURCE that builds them belongs in
+# the repo, the 34MB of output does not
+/deliverables/
