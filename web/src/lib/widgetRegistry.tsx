@@ -76,6 +76,13 @@ export interface WidgetSpec {
   needs: "records" | "people" | "nothing";
   /** in the default board, and in what order */
   defaultOrder?: number;
+  /**
+   * A decorative mark for the card's corner — white line-art on
+   * transparency, drawn from `web/public/art/marks.html`. Only the
+   * gradient families carry one: on a plain surface a white flourish is
+   * invisible, and a tinted one competes with the content.
+   */
+  art?: string;
 }
 
 /**
@@ -86,6 +93,7 @@ export const WIDGET_SPECS = [
   {
     key: "tiles",
     labelKey: "tiles",
+    art: "tiles",
     icon: <IconGauge />,
     look: "feature",
     group: "overview",
@@ -97,6 +105,7 @@ export const WIDGET_SPECS = [
   {
     key: "briefing",
     labelKey: "briefing",
+    art: "briefing",
     icon: <IconSparkle />,
     look: "warm",
     group: "ai",
@@ -163,6 +172,7 @@ export const WIDGET_SPECS = [
   {
     key: "pipeline",
     labelKey: "pipeline",
+    art: "pipeline",
     icon: <IconArchive />,
     look: "cool",
     group: "overview",
@@ -174,6 +184,7 @@ export const WIDGET_SPECS = [
   {
     key: "ask",
     labelKey: "ask",
+    art: "ask",
     icon: <IconAsk />,
     look: "feature",
     group: "ai",

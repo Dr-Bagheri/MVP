@@ -1,0 +1,95 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Widget marks</title>
+<style>
+  /* Source for the decorative PNGs in web/public/art.
+     Rendered at 2× and dropped into the corner of a gradient tile as a
+     background flourish. White line-art on transparent, so one file works
+     on all three gradient families and in both themes.
+     Render:  node docs/diagrams/shoot.mjs style pages — or the MCP browser. */
+  * { box-sizing: border-box; }
+  body { margin: 0; background: transparent; }
+  .mark {
+    width: 260px;
+    height: 260px;
+    background: transparent;
+  }
+  svg { display: block; width: 100%; height: 100%; }
+  .s { fill: none; stroke: #fff; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+  .s-thin { fill: none; stroke: #fff; stroke-width: 1.4; stroke-linecap: round; }
+  .f { fill: #fff; }
+</style>
+</head>
+<body>
+
+<!-- THIS WEEK — a rising stack of bars inside a soft ring -->
+<div class="mark" id="mark-tiles">
+  <svg viewBox="0 0 120 120">
+    <circle cx="60" cy="60" r="46" class="s-thin" opacity=".28"/>
+    <circle cx="60" cy="60" r="34" class="s-thin" opacity=".18"/>
+    <rect x="40" y="66" width="9" height="20" rx="3" class="f" opacity=".55"/>
+    <rect x="55" y="52" width="9" height="34" rx="3" class="f" opacity=".8"/>
+    <rect x="70" y="40" width="9" height="46" rx="3" class="f"/>
+    <path d="M36 34 L48 34 M42 28 L42 40" class="s" opacity=".5"/>
+  </svg>
+</div>
+
+<!-- THE BRIEFING — a sheet with a spark, the agent writing -->
+<div class="mark" id="mark-briefing">
+  <svg viewBox="0 0 120 120">
+    <path d="M38 24 h34 l14 14 v58 a4 4 0 0 1-4 4 H38 a4 4 0 0 1-4-4 V28 a4 4 0 0 1 4-4Z" class="s" opacity=".45"/>
+    <path d="M72 24 v14 h14" class="s" opacity=".45"/>
+    <path d="M46 56 h28 M46 66 h28 M46 76 h18" class="s-thin" opacity=".55"/>
+    <path d="M84 62 l3.4 8.6 L96 74 l-8.6 3.4 L84 86 l-3.4-8.6 L72 74 l8.6-3.4 Z" class="f"/>
+  </svg>
+</div>
+
+<!-- ASK — a bubble with a cursor, the question -->
+<div class="mark" id="mark-ask">
+  <svg viewBox="0 0 120 120">
+    <path d="M94 56a30 30 0 0 1-44 26.5L30 88l5.6-16.8A30 30 0 1 1 94 56Z" class="s" opacity=".5"/>
+    <path d="M50 50 h24 M50 62 h14" class="s" opacity=".75"/>
+    <circle cx="86" cy="90" r="16" class="s-thin" opacity=".3"/>
+    <path d="M80 84 l3 8.4 L91 96 l-8 3-3 8.4 L77 99 l-8-3 8-3Z" class="f" opacity=".85" transform="translate(6,-6) scale(0.72) translate(30,26)"/>
+  </svg>
+</div>
+
+<!-- PIPELINE — a flow through three gates -->
+<div class="mark" id="mark-pipeline">
+  <svg viewBox="0 0 120 120">
+    <circle cx="34" cy="60" r="11" class="s"/>
+    <circle cx="60" cy="60" r="11" class="s" opacity=".7"/>
+    <circle cx="86" cy="60" r="11" class="s" opacity=".45"/>
+    <path d="M45 60 h4 M71 60 h4" class="s" opacity=".6"/>
+    <path d="M34 60 l4 4 7-8" class="s"/>
+    <path d="M60 32 v10 M60 78 v10" class="s-thin" opacity=".28"/>
+  </svg>
+</div>
+
+<!-- RECORDS — stacked sheets -->
+<div class="mark" id="mark-recent">
+  <svg viewBox="0 0 120 120">
+    <rect x="30" y="38" width="52" height="16" rx="5" class="s-thin" opacity=".3"/>
+    <rect x="34" y="56" width="56" height="18" rx="5" class="s-thin" opacity=".55"/>
+    <rect x="38" y="76" width="52" height="18" rx="5" class="s"/>
+    <circle cx="47" cy="85" r="3" class="f"/>
+    <path d="M56 85 h26" class="s-thin" opacity=".7"/>
+  </svg>
+</div>
+
+<!-- PEOPLE — three figures, one forward -->
+<div class="mark" id="mark-people">
+  <svg viewBox="0 0 120 120">
+    <circle cx="60" cy="46" r="12" class="s"/>
+    <path d="M38 92c2-14 10-22 22-22s20 8 22 22" class="s"/>
+    <circle cx="32" cy="54" r="8" class="s-thin" opacity=".4"/>
+    <path d="M18 88c1.5-10 6.5-16 14-16" class="s-thin" opacity=".4"/>
+    <circle cx="88" cy="54" r="8" class="s-thin" opacity=".4"/>
+    <path d="M102 88c-1.5-10-6.5-16-14-16" class="s-thin" opacity=".4"/>
+  </svg>
+</div>
+
+</body>
+</html>

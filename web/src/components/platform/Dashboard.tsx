@@ -7,14 +7,11 @@ import type { Me } from "@/api/types";
 import { personName } from "@/lib/format";
 import { Link } from "@/i18n/routing";
 import { KebabMenu } from "@/components/rowActions";
-import {
-  IconArrowDown, IconArrowUp, IconHide, IconMove, IconPlus, IconResize,
-} from "@/components/icons";
+import { IconPlus, IconTrash } from "@/components/icons";
 import { EchoMark } from "./icons";
 import {
-  SIZE_SPAN, TILE_SIZES, WIDGET_GROUPS, WIDGET_SPECS, TILE_LOOKS,
-  clampSize, defaultLayout, defaultSizeFor, nextFreeSpot, readLayout, writeLayout,
-  specFor,
+  WIDGET_GROUPS, WIDGET_SPECS, TILE_LOOKS,
+  defaultLayout, defaultSizeFor, nextFreeSpot, readLayout, writeLayout, specFor,
   type DashboardLayout, type TilePlacement, type TileSize, type WidgetKey,
 } from "@/lib/dashboardLayout";
 import { WidgetBoard } from "./dashboard/WidgetBoard";
@@ -91,28 +88,6 @@ export function Dashboard() {
   };
   const removeWidget = (key: WidgetKey) =>
     update({ ...layout, tiles: layout.tiles.filter((tile) => tile.key !== key) });
-  const resize = (key: WidgetKey, size: TileSize) =>
-    update({
-      ...layout,
-      tiles: layout.tiles.map((tile) =>
-        tile.key === key ? { ...tile, size: clampSize(key, size) } : tile),
-    });
-  /** the menu twin of a drag: move a card a whole row up or down */
-  const nudge = (key: WidgetKey, dy: number) =>
-    update({
-      ...layout,
-      tiles: layout.tiles.map((tile) =>
-        tile.key === key ? { ...tile, y: Math.max(0, tile.y + dy) } : tile),
-    });
-  const nudgeX = (key: WidgetKey, dx: number) =>
-    update({
-      ...layout,
-      tiles: layout.tiles.map((tile) => {
-        if (tile.key !== key) return tile;
-        const span = SIZE_SPAN[tile.size];
-        return { ...tile, x: Math.max(0, Math.min(12 - span.w, tile.x + dx)) };
-      }),
-    });
 
   /** one card's chrome — the chip, the title, the ⋯, and the drag grip */
   function Tile({ tile }: { tile: TilePlacement }) {
@@ -128,49 +103,42 @@ export function Dashboard() {
         }`}
         aria-label={label}
       >
-        <header className="tile-grip mb-2.5 flex items-center gap-2.5">
+        {/* the card's mark — decorative, so it is aria-hidden and sits
+            behind everything with pointer events off */}
+        {spec.art ? (
+          <img
+            src={`/art/${spec.art}.png`}
+            alt=""
+            aria-hidden
+            className="tile-art"
+            width={260}
+            height={260}
+          />
+        ) : null}
+        <header className="mb-2.5 flex items-center gap-3">
           <span className="tile-chip">{spec.icon}</span>
-          <h2 className="min-w-0 flex-1 select-none truncate text-sm font-semibold">
+          <h2 className="min-w-0 flex-1 select-none truncate text-[0.95rem] font-semibold">
             {label}
           </h2>
-          <span className="shrink-0 opacity-0 transition-opacity focus-within:opacity-100 group-hover/card:opacity-100">
-            <KebabMenu
-              label={t("cardMenu")}
-              items={[
-                {
-                  key: "size",
-                  label: t("sizeLabel"),
-                  icon: <IconResize />,
-                  sub: TILE_SIZES.map((s) => ({
-                    key: s,
-                    label: t(`size.${s}` as "size.small"),
-                    /* a size is a VALUE, not an action */
-                    icon: null,
-                    disabled: !spec.sizes.includes(s) || tile.size === s,
-                    onSelect: () => resize(tile.key, s),
-                  })),
-                },
-                {
-                  key: "move",
-                  label: t("moveTile"),
-                  icon: <IconMove />,
-                  sub: [
-                    { key: "up", label: t("moveUp"), icon: <IconArrowUp />, onSelect: () => nudge(tile.key, -2) },
-                    { key: "down", label: t("moveDown"), icon: <IconArrowDown />, onSelect: () => nudge(tile.key, 2) },
-                    { key: "start", label: t("moveStart"), icon: null, onSelect: () => nudgeX(tile.key, -3) },
-                    { key: "end", label: t("moveEnd"), icon: null, onSelect: () => nudgeX(tile.key, 3) },
-                  ],
-                },
-                {
-                  key: "hide",
-                  label: t("hide"),
-                  icon: <IconHide />,
-                  danger: true,
-                  onSelect: () => removeWidget(tile.key),
-                },
-              ]}
-            />
-          </span>
+          {/*
+            One control, not a menu (user directive, 2026-08-26). Moving is
+            press-and-hold on the card; resizing is the corner grip. Neither
+            needs a menu entry, and a menu holding only "remove" is a menu
+            that should have been a button.
+
+            `data-nodrag` keeps a press here from becoming a drag — the
+            engine's cancel list reads it.
+          */}
+          <button
+            type="button"
+            data-nodrag
+            aria-label={t("hide")}
+            title={t("hide")}
+            className="tile-remove"
+            onClick={() => removeWidget(tile.key)}
+          >
+            <IconTrash width={17} height={17} />
+          </button>
         </header>
         <div className="min-h-0 flex-1">{renderBody(tile.key, tile.size)}</div>
       </section>

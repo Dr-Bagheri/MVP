@@ -212,7 +212,8 @@
       "people": "People",
       "ai": "Assistant"
     },
-    "readFailed": "Could not read your records just now."
+    "readFailed": "Could not read your records just now.",
+    "pulseRange": "Last {n} days"
   },
   "conversations": {
     "title": "History",

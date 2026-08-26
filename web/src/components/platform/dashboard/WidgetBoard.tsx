@@ -5,7 +5,7 @@ import { useLocale } from "next-intl";
 import { GridStack, type GridStackNode } from "gridstack";
 import "gridstack/dist/gridstack.min.css";
 import {
-  COLUMNS, SIZE_SPAN, sizeFromSpan,
+  COLUMNS, SIZE_SPAN, clampSize, sizeFromSpan,
   type DashboardLayout, type TilePlacement, type WidgetKey,
 } from "@/lib/dashboardLayout";
 
@@ -14,72 +14,100 @@ import {
  *
  * Why an engine at all: free placement needs real collision and reflow
  * maths. A CSS grid can express "these tiles in this order"; it cannot
- * express "this tile stays in the bottom-right corner where I put it, and
- * dragging another one near it pushes that one aside". gridstack is MIT,
- * has zero runtime dependencies, and — the deciding factor for a
- * Persian-first product — handles RTL in the drag and resize COORDINATE
- * MATH, not merely in a stylesheet. Its resize handles invert on RTL and
- * its drag offsets measure from the right edge. The obvious alternative
- * gets the second part wrong: react-grid-layout has an open issue where
- * shrinking a tile in RTL grows it instead.
+ * express "this one stays where I put it, and dragging another one near it
+ * pushes that one aside". gridstack is MIT, has zero runtime dependencies,
+ * and — the deciding factor for a Persian-first product — handles RTL in
+ * the drag and resize COORDINATE MATH, not merely in a stylesheet.
  *
  * ⚠ THE LANDMINE, handled below: gridstack's `rtl: 'auto'` reads
  * `el.style.direction` — the INLINE style. Next sets `dir` on <html>, so
  * auto-detect resolves to FALSE and you get an LTR grid under perfectly
- * correct Persian text: a silent wrong-direction failure that looks fine
- * until someone drags something. `rtl` is therefore passed EXPLICITLY from
- * the locale, and asserted in the tests.
+ * correct Persian text. Measured in the running app: the host element's
+ * inline direction is empty. `rtl` is passed EXPLICITLY from the locale.
  *
- * The adapter's contract with React: gridstack owns positions, React owns
- * content. Children are rendered by React into stable wrapper elements;
- * the engine only ever moves those wrappers. Layout changes come back out
- * through `onChange` as plain data, and the parent stores it. No React
- * state drives geometry, so the two never fight over the same DOM.
+ * The contract with React: gridstack owns positions, React owns content.
+ * Children render into stable wrappers; the engine only ever moves those
+ * wrappers. Changes come back out through `onChange` as plain data.
  */
 
 export interface WidgetBoardProps {
   layout: DashboardLayout;
   /** every change the ENGINE made — drags, resizes, and its own reflow */
   onChange: (tiles: TilePlacement[]) => void;
-  /** the tile's content, by key */
   renderTile: (key: WidgetKey) => ReactNode;
-  /** locked = no drag, no resize (the narrow-screen and read-only case) */
   locked?: boolean;
 }
+
+/**
+ * How long the pointer must rest before the engine resolves a collision.
+ *
+ * This is the fix for "it pushes everyone away even when it fits". Without
+ * a pause, every pixel of a drag re-runs the collision solver, so passing
+ * OVER a tile on the way to an empty gap shoves it aside — and the shove is
+ * kept. With a pause, the board only rearranges where the pointer actually
+ * settles, which is also what makes a press-and-hold read as "pick up".
+ */
+const COLLIDE_PAUSE_MS = 130;
+
+/** controls inside a tile that must never start a drag */
+const NO_DRAG = "input,textarea,button,select,option,a,[role=\"menu\"],[data-nodrag]";
 
 export function WidgetBoard({ layout, onChange, renderTile, locked = false }: WidgetBoardProps) {
   const locale = useLocale();
   const hostRef = useRef<HTMLDivElement | null>(null);
   const gridRef = useRef<GridStack | null>(null);
-  /** the latest onChange, so the engine's handler never closes over a stale one */
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+
+  /**
+   * THE FEEDBACK LOOP, and why this ref exists.
+   *
+   * The engine emits a change → the parent stores it → `layout.tiles`
+   * changes → the reconcile effect runs → it calls `grid.update()` on every
+   * tile → which re-runs collision → which emits another change. The board
+   * fought itself: tiles that had been dropped cleanly ended up shuffled,
+   * and gaps appeared that nothing had asked for.
+   *
+   * A layout change that CAME FROM the engine must not be pushed back into
+   * it. The engine already has that state; re-applying it is what scrambles.
+   */
+  const fromEngine = useRef(false);
 
   const rtl = locale === "fa";
   const compact = layout.density === "compact";
 
-  /* ---- create once, per direction/density ------------------------------
-     Re-creating on a locale flip is deliberate: `rtl` is a construction
-     option, and a grid built LTR cannot be talked into RTL afterwards. */
+  /* ---- create once, per direction/density ---------------------------- */
   useEffect(() => {
     if (!hostRef.current) return;
     const grid = GridStack.init(
       {
         column: COLUMNS,
-        cellHeight: compact ? 58 : 74,
+        cellHeight: compact ? 62 : 78,
         margin: compact ? 5 : 7,
         /* NEVER 'auto' — see the landmine note above */
         rtl,
         /* a home screen does NOT gravity-compact: a tile left low stays
-           low. `float: true` is what makes the board feel like a home
-           screen rather than a report that reflows under you. */
+           low, and a gap you left is a gap you meant */
         float: true,
         animate: true,
-        draggable: { handle: ".tile-grip" },
-        resizable: { handles: "se, sw" },
+        /**
+         * THE WHOLE TILE IS THE HANDLE (user directive): press and hold
+         * anywhere on a card to move it. The grip strip is gone. `cancel`
+         * is what keeps a card's own controls usable — a click on the menu,
+         * a link or an input must not become a drag.
+         */
+        draggable: {
+          handle: ".grid-stack-item-content",
+          cancel: NO_DRAG,
+          pause: COLLIDE_PAUSE_MS,
+        },
+        /* both bottom corners: `se` is natural in LTR, `sw` in RTL, and
+           offering both means the grip is always on the side the eye
+           expects without branching on direction */
+        resizable: { handles: "se,sw" },
+        alwaysShowResizeHandle: false,
         disableDrag: locked,
         disableResize: locked,
-        /* the board grows downward; it must never scroll sideways */
         columnOpts: {
           breakpointForWindow: true,
           breakpoints: [
@@ -92,45 +120,53 @@ export function WidgetBoard({ layout, onChange, renderTile, locked = false }: Wi
       },
       hostRef.current,
     );
-    /* `init` is typed as possibly null — it returns nothing when the host
-       element has already been initialised. A board that could not be
-       created renders as a plain stack of tiles rather than throwing. */
     if (!grid) return;
     gridRef.current = grid;
 
     const emit = () => {
-      const tiles = grid.save(false) as GridStackNode[];
+      const nodes = grid.save(false) as GridStackNode[];
+      fromEngine.current = true;
       onChangeRef.current(
-        tiles
+        nodes
           .filter((node): node is GridStackNode & { id: string } => typeof node.id === "string")
-          .map((node) => ({
-            key: node.id as WidgetKey,
-            x: node.x ?? 0,
-            y: node.y ?? 0,
-            /* a drag-resize lands between tiers; it SNAPS to the nearest
-               one, so the four sizes stay four sizes however the handle
-               was dragged */
-            size: sizeFromSpan(node.w ?? 3, node.h ?? 2),
-          })),
+          .map((node) => {
+            const key = node.id as WidgetKey;
+            return {
+              key,
+              x: node.x ?? 0,
+              y: node.y ?? 0,
+              /**
+               * A drag-resize lands between tiers, so it SNAPS to the
+               * nearest — and then to one this widget actually supports.
+               * Without the clamp a card could be left at a size nobody
+               * designed it at, which is how a tile ends up with its
+               * content spilling out of the bottom.
+               */
+              size: clampSize(key, sizeFromSpan(node.w ?? 3, node.h ?? 2)),
+            };
+          }),
       );
     };
     grid.on("change", emit);
     grid.on("resizestop", emit);
+    grid.on("dragstop", emit);
 
     return () => {
       grid.off("change");
       grid.off("resizestop");
+      grid.off("dragstop");
       grid.destroy(false);
       gridRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- geometry options are construction-time
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- geometry is construction-time
   }, [rtl, compact, locked]);
 
-  /* ---- reconcile: the engine is told about tiles React has rendered ----
-     React puts the wrapper in the DOM; this hands it to the engine, moves
-     it if the stored placement changed, and removes it when the card is
-     hidden. `batchUpdate` keeps a multi-tile change to one reflow. */
+  /* ---- reconcile: only for changes React made, never the engine's ---- */
   useEffect(() => {
+    if (fromEngine.current) {
+      fromEngine.current = false;
+      return;
+    }
     const grid = gridRef.current;
     const host = hostRef.current;
     if (grid === null || host === null) return;

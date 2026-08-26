@@ -70,11 +70,16 @@ export function TilesWidget({ data, size }: { data: DashboardData; size: TileSiz
     [t("tileProcessing"), processing],
     [t("tileActions"), data.actions.length],
   ];
-  /* `wide` is one row tall: two numbers fit, four would be four small
-     numbers nobody reads. The tier drops tiles rather than shrinking them. */
+  /**
+   * The tier DROPS tiles rather than shrinking them, and it lays them in
+   * ONE row at every size. The previous version wrapped to two rows at
+   * `hero`, which needed more height than the tier has — the numbers
+   * spilled out of the bottom of the card, which is the bug that made
+   * "resize it and the content disappears" true.
+   */
   const tiles = size === "wide" ? all.slice(0, 2) : all;
   return (
-    <div className={`grid h-full gap-2.5 ${size === "wide" ? "grid-cols-2" : "grid-cols-2 xl:grid-cols-4"}`}>
+    <div className={`grid h-full min-h-0 gap-2.5 ${size === "wide" ? "grid-cols-2" : "grid-cols-4"}`}>
       {tiles.map(([label, n]) => (
         <div
           key={label}
@@ -82,8 +87,10 @@ export function TilesWidget({ data, size }: { data: DashboardData; size: TileSiz
              than bordered boxes — a hairline over a wash reads as a seam */
           className="tile-cell flex flex-col justify-center p-3"
         >
-          <p className="ink-muted text-[11px] leading-snug">{label}</p>
-          <p className="mt-0.5 text-[1.7rem] font-bold leading-none tabular-nums">{value(n)}</p>
+          <p className="ink-muted truncate text-[11px] leading-snug">{label}</p>
+          <p className={`mt-1 font-bold leading-none tabular-nums ${
+            size === "wide" ? "text-[1.6rem]" : "text-[2rem]"
+          }`}>{value(n)}</p>
         </div>
       ))}
     </div>
@@ -255,11 +262,25 @@ export function AskWidget({ size }: { size: TileSize }) {
   );
 }
 
-/** the fortnight's shape: bars for records, a line for minutes */
+/**
+ * ACTIVITY — a real chart rather than a row of bars.
+ *
+ * Drawn as one SVG with a `viewBox`, so it scales to whatever the tier
+ * gives it instead of being measured in pixels the tile may not have. Four
+ * layers, each doing a job the bars could not:
+ *
+ *   · a faint baseline grid, so a height means something;
+ *   · minutes as a smooth AREA with a gradient falling to nothing, which
+ *     is the shape people read as "volume over time";
+ *   · records as slim columns underneath it, so the two series are
+ *     distinguishable without a legend having to explain them;
+ *   · an emphasised endpoint — the most recent day gets a dot and its
+ *     value, because "where are we now" is the question a trend is asked.
+ */
 export function PulseWidget({ data, size }: { data: DashboardData; size: TileSize }) {
   const t = useTranslations("dashboard");
   const locale = useLocale();
-  /* the RANGE is what grows with the tier — same bars, more history */
+  /* the RANGE grows with the tier — same chart, more history */
   const days = { small: 7, wide: 14, large: 21, hero: 45 }[size];
   const rows = data.calls ?? [];
   const buckets = Array.from({ length: days }, (_, i) => {
@@ -278,42 +299,143 @@ export function PulseWidget({ data, size }: { data: DashboardData; size: TileSiz
       minutes: inDay.reduce((ms, c) => ms + (c.duration_ms ?? 0), 0) / 60_000,
     };
   });
+
+  if (data.failed) return <Unreadable />;
+
   const maxCount = Math.max(1, ...buckets.map((b) => b.count));
   const maxMinutes = Math.max(1, ...buckets.map((b) => b.minutes));
+
+  /* the drawing space. Nothing here is a pixel: the SVG scales. */
+  const W = 100;
+  const H = 42;
+  const PAD = 3;
+  const step = buckets.length > 1 ? (W - PAD * 2) / (buckets.length - 1) : 0;
+  const x = (i: number) => PAD + i * step;
+  const y = (v: number, max: number) => H - PAD - (v / max) * (H - PAD * 2);
+
+  /**
+   * A CATMULL-ROM spline converted to cubic béziers. A polyline through
+   * daily counts reads as jagged noise; a curve reads as a trend, which is
+   * what the card is for. The tension keeps it from overshooting into
+   * negative territory on a spike, which would draw minutes nobody spent.
+   */
+  const curve = (points: { cx: number; cy: number }[]): string => {
+    if (points.length === 0) return "";
+    if (points.length === 1) return `M ${points[0]!.cx} ${points[0]!.cy}`;
+    let d = `M ${points[0]!.cx} ${points[0]!.cy}`;
+    for (let i = 0; i < points.length - 1; i += 1) {
+      const p0 = points[Math.max(0, i - 1)]!;
+      const p1 = points[i]!;
+      const p2 = points[i + 1]!;
+      const p3 = points[Math.min(points.length - 1, i + 2)]!;
+      const c1x = p1.cx + (p2.cx - p0.cx) / 6;
+      const c1y = p1.cy + (p2.cy - p0.cy) / 6;
+      const c2x = p2.cx - (p3.cx - p1.cx) / 6;
+      const c2y = p2.cy - (p3.cy - p1.cy) / 6;
+      d += ` C ${c1x.toFixed(2)} ${c1y.toFixed(2)}, ${c2x.toFixed(2)} ${c2y.toFixed(2)}, ${p2.cx.toFixed(2)} ${p2.cy.toFixed(2)}`;
+    }
+    return d;
+  };
+
+  const points = buckets.map((b, i) => ({ cx: x(i), cy: y(b.minutes, maxMinutes) }));
+  const line = curve(points);
+  const area = points.length > 1
+    ? `${line} L ${x(points.length - 1)} ${H - PAD} L ${x(0)} ${H - PAD} Z`
+    : "";
+  const last = buckets.at(-1);
+  const lastPoint = points.at(-1);
+  /* one id per instance — two charts on one board must not share a gradient */
+  const gid = `pulse-${size}-${buckets.length}`;
+
   return (
-    <div className="flex h-full flex-col justify-end">
-      <div className={`relative flex items-end gap-1 ${isShort(size) ? "h-14" : "h-24"}`}>
-        {buckets.map((b, i) => (
-          <span key={i} className="group/bar relative flex-1" title={formatDate(b.date.toISOString(), locale)}>
-            <span
-              className={`block w-full rounded-t transition-[height] ${
-                b.count === 0 ? "bg-surface-2" : "bg-accent/70 group-hover/bar:bg-accent"
-              }`}
-              style={{ height: `${Math.max(4, (b.count / maxCount) * (isShort(size) ? 48 : 88))}px` }}
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="relative min-h-0 flex-1">
+        <svg
+          viewBox={`0 0 ${W} ${H}`}
+          preserveAspectRatio="none"
+          className="h-full w-full overflow-visible"
+          role="img"
+          aria-label={t("widget.pulse")}
+        >
+          <defs>
+            <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="currentColor" stopOpacity="0.34" />
+              <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+
+          {/* the baseline grid — three rules, so a height is readable */}
+          {[0.25, 0.5, 0.75].map((f) => (
+            <line
+              key={f}
+              x1={PAD} x2={W - PAD}
+              y1={PAD + (H - PAD * 2) * f} y2={PAD + (H - PAD * 2) * f}
+              stroke="currentColor"
+              strokeOpacity="0.09"
+              strokeWidth="0.4"
+              vectorEffect="non-scaling-stroke"
             />
-            {/* the minutes line rides the same bars as a dot */}
-            {b.minutes > 0 ? (
-              <span
-                className="absolute inset-x-0 mx-auto block h-1 w-1 rounded-full bg-info"
-                style={{ bottom: `${Math.max(4, (b.minutes / maxMinutes) * (isShort(size) ? 48 : 88)) + 2}px` }}
-                aria-hidden
+          ))}
+
+          {/* records started, as slim columns under the area */}
+          {buckets.map((b, i) => (
+            b.count > 0 ? (
+              <rect
+                key={i}
+                x={x(i) - Math.max(0.7, step * 0.22)}
+                width={Math.max(1.4, step * 0.44)}
+                y={y(b.count, maxCount)}
+                height={Math.max(0.8, H - PAD - y(b.count, maxCount))}
+                rx="0.7"
+                fill="currentColor"
+                fillOpacity="0.22"
               />
-            ) : null}
-          </span>
-        ))}
+            ) : null
+          ))}
+
+          {/* minutes recorded, as the area and its edge */}
+          {area ? <path d={area} fill={`url(#${gid})`} /> : null}
+          {line ? (
+            <path
+              d={line}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              vectorEffect="non-scaling-stroke"
+              opacity="0.95"
+            />
+          ) : null}
+
+          {/* the endpoint — "where are we now" is the question a trend asks */}
+          {lastPoint ? (
+            <>
+              <circle cx={lastPoint.cx} cy={lastPoint.cy} r="3.2"
+                      fill="currentColor" fillOpacity="0.18" />
+              <circle cx={lastPoint.cx} cy={lastPoint.cy} r="1.5" fill="currentColor" />
+            </>
+          ) : null}
+        </svg>
       </div>
-      {/* the legend is the tier's extra layer — at one row tall the bars
-          have to speak for themselves */}
-      {isShort(size) ? null : (
-        <p className="mt-2 flex items-center gap-3 text-[11px] ink-subtle">
+
+      <div className="mt-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <p className="flex items-center gap-3 text-[11px] ink-subtle">
           <span className="flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-sm bg-accent/70" aria-hidden /> {t("pulseBars")}
+            <span className="h-[3px] w-3.5 rounded-full bg-current opacity-90" aria-hidden />
+            {t("pulseDots")}
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="h-1.5 w-1.5 rounded-full bg-info" aria-hidden /> {t("pulseDots")}
+            <span className="h-2.5 w-1.5 rounded-[1px] bg-current opacity-30" aria-hidden />
+            {t("pulseBars")}
           </span>
         </p>
-      )}
+        {isShort(size) || !last ? null : (
+          <p className="text-[11px] ink-subtle">
+            {t("pulseRange", { n: digits(days, locale) })}
+          </p>
+        )}
+      </div>
     </div>
   );
 }
