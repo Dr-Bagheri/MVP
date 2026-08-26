@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { KebabMenu, type KebabItem } from "./rowActions";
+import { KebabMenu, SelectMenu, type KebabItem } from "./rowActions";
 
 vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => key,
@@ -85,5 +85,65 @@ describe("the danger group", () => {
     // above the first row is a line under the menu's own top edge
     open([{ key: "del", label: "Delete", icon: dot, danger: true }]);
     expect(document.querySelectorAll("[role='menu'] hr")).toHaveLength(0);
+  });
+});
+
+/**
+ * The TILE face (user directive, 2026-08-26: "big buttons with icons inside
+ * that have an arrow down"). Its defining property is what the button does
+ * NOT contain: the chosen value lives in a caption under the button and in
+ * the panel's checked row, never inside the glyph button. The third test is
+ * the discriminating control — the same value that must be absent from a
+ * tile trigger must be PRESENT in an input trigger, so a regression that
+ * collapses the two faces into either one fails one of the pair.
+ */
+function renderTile() {
+  render(
+    <SelectMenu
+      variant="tile"
+      ariaLabel="Microphone"
+      panelHeading="Microphone"
+      icon={<svg data-testid="tile-glyph" />}
+      value="a"
+      onChange={() => {}}
+      options={[
+        { value: "a", label: "Default mic" },
+        { value: "b", label: "USB mic" },
+      ]}
+    />,
+  );
+}
+
+describe("the SelectMenu tile face", () => {
+  it("keeps the value OUT of the button — glyph only, caption below", () => {
+    renderTile();
+    const btn = screen.getByRole("button", { name: /Microphone/ });
+    expect(btn.textContent).not.toContain("Default mic");
+    expect(btn.querySelector("[data-testid='tile-glyph']")).not.toBeNull();
+    expect(screen.getByTitle("Default mic").textContent).toBe("Default mic");
+  });
+
+  it("names the open panel with its heading and checks only the chosen row", () => {
+    renderTile();
+    fireEvent.click(screen.getByRole("button", { name: /Microphone/ }));
+    // the tile shows no field name, so the panel must say what is picked
+    expect(screen.getByRole("listbox").textContent).toContain("Microphone");
+    const chosen = screen.getByRole("option", { name: "Default mic" });
+    expect(chosen.getAttribute("aria-selected")).toBe("true");
+    expect(chosen.textContent).toContain("✓");
+    // negative control: the mark distinguishes, it does not decorate
+    expect(screen.getByRole("option", { name: "USB mic" }).textContent).not.toContain("✓");
+  });
+
+  it("the INPUT face still carries its value inside the trigger", () => {
+    render(
+      <SelectMenu
+        ariaLabel="Language"
+        value="fa"
+        onChange={() => {}}
+        options={[{ value: "fa", label: "Persian" }]}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Language" }).textContent).toContain("Persian");
   });
 });

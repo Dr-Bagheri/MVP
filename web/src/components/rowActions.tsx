@@ -448,6 +448,8 @@ export function SelectMenu({
   disabled = false,
   icon,
   panelFooter,
+  panelHeading,
+  variant = "input",
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -466,6 +468,18 @@ export function SelectMenu({
    * its device on open and releases it on close.
    */
   panelFooter?: ReactNode;
+  /** small accent heading at the panel's top, naming what is being picked —
+      the tile trigger shows no field name, so the open panel says it (the
+      call-bar reference: «Microphone» over the device list) */
+  panelHeading?: string;
+  /**
+   * "input" (default) = the form-field face. "tile" = the CALL-BAR face
+   * (user directive, 2026-08-26: "big buttons with icons inside that have
+   * an arrow down"): a big rounded button holding only the glyph and a
+   * chevron, the chosen value captioned underneath — the panel is the same
+   * kebab-family menu either way.
+   */
+  variant?: "input" | "tile";
 }) {
   const [at, setAt] = useState<{ top: number; left: number; width: number } | null>(null);
   const rootRef = useRef<HTMLButtonElement | null>(null);
@@ -476,7 +490,7 @@ export function SelectMenu({
     if (at) return setAt(null);
     const rect = rootRef.current?.getBoundingClientRect();
     if (!rect) return;
-    const width = Math.max(rect.width, 160);
+    const width = Math.max(rect.width, variant === "tile" ? 240 : 160);
     const rtl = document.documentElement.dir === "rtl";
     const left = rtl ? rect.right - width : rect.left;
     const height = options.length * ITEM_H + 10;
@@ -513,8 +527,60 @@ export function SelectMenu({
     };
   }, [at]);
 
+  const chevron = (size: number) => (
+    <svg
+      aria-hidden
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={`shrink-0 text-fg-muted transition-transform duration-150 ${
+        at !== null ? "rotate-180" : ""
+      }`}
+    >
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  );
+
   return (
     <>
+      {variant === "tile" ? (
+        /* the CALL-BAR face: a big glyph button, arrow under the glyph,
+           the chosen value captioned below the button — the value never
+           crowds the button, and the caption's truncation is honest (the
+           full name is one press away, checked, in the panel) */
+        <div className="flex w-20 flex-col items-center gap-1.5">
+          <button
+            type="button"
+            ref={rootRef}
+            aria-label={current ? `${ariaLabel}: ${current.label}` : ariaLabel}
+            aria-haspopup="listbox"
+            aria-expanded={at !== null}
+            disabled={disabled}
+            onClick={(e) => { e.stopPropagation(); toggle(); }}
+            className={`tap grid h-14 w-16 place-items-center rounded-2xl border transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+              at !== null
+                ? "border-accent bg-accent-soft ring-1 ring-accent/30"
+                : "border-border bg-surface hover:border-border-strong hover:bg-surface-2"
+            }`}
+          >
+            <span className="flex flex-col items-center gap-1">
+              <span className="text-fg [&_svg]:h-5 [&_svg]:w-5">{icon}</span>
+              {chevron(12)}
+            </span>
+          </button>
+          <span
+            className="w-full truncate text-center text-[11px] leading-4 text-fg-muted"
+            title={current?.label}
+          >
+            {current?.label ?? ""}
+          </span>
+        </div>
+      ) : (
       <button
         type="button"
         ref={rootRef}
@@ -534,23 +600,9 @@ export function SelectMenu({
       >
         {icon ? <span className="shrink-0 text-fg-muted">{icon}</span> : null}
         <span className="min-w-0 flex-1 truncate">{current?.label ?? ""}</span>
-        <svg
-          aria-hidden
-          viewBox="0 0 24 24"
-          width="14"
-          height="14"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className={`shrink-0 text-fg-muted transition-transform duration-150 ${
-            at !== null ? "rotate-180" : ""
-          }`}
-        >
-          <path d="m6 9 6 6 6-6" />
-        </svg>
+        {chevron(14)}
       </button>
+      )}
       {at
         ? createPortal(
             <div
@@ -561,6 +613,11 @@ export function SelectMenu({
               className="z-50 rounded-lg border border-border bg-surface py-1 shadow-xl"
               onClick={(e) => e.stopPropagation()}
             >
+              {panelHeading ? (
+                <p className="px-3 pb-1 pt-1.5 text-[11px] font-semibold text-accent">
+                  {panelHeading}
+                </p>
+              ) : null}
               {options.map((o) => (
                 <span key={o.value} className="group/opt flex items-center">
                   <button

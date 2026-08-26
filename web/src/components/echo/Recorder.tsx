@@ -18,7 +18,7 @@ import {
 } from "@/lib/recordingEngine";
 import { notify } from "@/lib/notify";
 import { speakQueued } from "@/lib/voice";
-import { Card, Chip, Field } from "@/components/ui";
+import { Card, Chip } from "@/components/ui";
 import { Link } from "@/i18n/routing";
 import { digits, formatClock, modelLabel } from "@/lib/format";
 import { resumePoint } from "./uploadRules";
@@ -292,60 +292,59 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
             <legend className="px-1.5 text-xs font-semibold uppercase tracking-wide text-fg-subtle">
               {t("groupDevices")}
             </legend>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label={t("micField")}>
-                {/* the Meet reading (user directive, 2026-08-26): the pick
-                    and the PROOF in one place — the open menu carries a
-                    live level meter of whichever mic is selected */}
-                <SelectMenu
-                  ariaLabel={t("micField")}
-                  icon={<IconMic />}
-                  value={micId}
-                  onChange={setMicId}
-                  options={
-                    mics.length === 0
-                      ? [{ value: "", label: t("micDefault") }]
-                      : mics.map((d) => ({ value: d.id, label: d.label }))
-                  }
-                  panelFooter={<MicLevelFooter micId={micId} label={t("menuLevel")} />}
-                />
-              </Field>
-              <Field label={t("speakerField")}>
-                {/* …and the speaker menu proves ITSELF: a test chime
-                    through exactly the output being picked */}
-                <SelectMenu
-                  ariaLabel={t("speakerField")}
-                  icon={<IconSpeaker />}
-                  value={speakerId}
-                  onChange={setSpeakerId}
-                  options={
-                    speakers.length === 0
-                      ? [{ value: "", label: t("speakerDefault") }]
-                      : speakers.map((d) => ({ value: d.id, label: d.label }))
-                  }
-                  panelFooter={
-                    <button
-                      type="button"
-                      className="tap w-full rounded-md px-1 py-1 text-start text-xs text-accent hover:bg-surface-2"
-                      onClick={() => void playTestChime(speakerId)}
-                    >
-                      {t("menuPlayTest")}
-                    </button>
-                  }
-                />
-              </Field>
-              <Field label={t("sourceField")}>
-                <SelectMenu
-                  ariaLabel={t("sourceField")}
-                  icon={<IconPulse />}
-                  value={source}
-                  onChange={(v) => setSource(v as "mic" | "system")}
-                  options={[
-                    { value: "mic", label: t("sourceMic") },
-                    { value: "system", label: t("sourceSystem") },
-                  ]}
-                />
-              </Field>
+            {/* the CALL-BAR row (user directive, 2026-08-26): big glyph
+                buttons with the arrow inside — press one and the kebab-style
+                panel opens, named by its heading, carrying the live proof
+                (mic meter / speaker chime) at its foot */}
+            <div className="flex flex-wrap items-start gap-3">
+              <SelectMenu
+                variant="tile"
+                ariaLabel={t("micField")}
+                panelHeading={t("micField")}
+                icon={<IconMic />}
+                value={micId}
+                onChange={setMicId}
+                options={
+                  mics.length === 0
+                    ? [{ value: "", label: t("micDefault") }]
+                    : mics.map((d) => ({ value: d.id, label: d.label }))
+                }
+                panelFooter={<MicLevelFooter micId={micId} label={t("menuLevel")} />}
+              />
+              <SelectMenu
+                variant="tile"
+                ariaLabel={t("speakerField")}
+                panelHeading={t("speakerField")}
+                icon={<IconSpeaker />}
+                value={speakerId}
+                onChange={setSpeakerId}
+                options={
+                  speakers.length === 0
+                    ? [{ value: "", label: t("speakerDefault") }]
+                    : speakers.map((d) => ({ value: d.id, label: d.label }))
+                }
+                panelFooter={
+                  <button
+                    type="button"
+                    className="tap w-full rounded-md px-1 py-1 text-start text-xs text-accent hover:bg-surface-2"
+                    onClick={() => void playTestChime(speakerId)}
+                  >
+                    {t("menuPlayTest")}
+                  </button>
+                }
+              />
+              <SelectMenu
+                variant="tile"
+                ariaLabel={t("sourceField")}
+                panelHeading={t("sourceField")}
+                icon={<IconPulse />}
+                value={source}
+                onChange={(v) => setSource(v as "mic" | "system")}
+                options={[
+                  { value: "mic", label: t("sourceMic") },
+                  { value: "system", label: t("sourceSystem") },
+                ]}
+              />
             </div>
             {/* hear yourself BEFORE the meeting, not after it (2026-08-25) */}
             <div className="mt-3">
@@ -364,55 +363,55 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
             <legend className="px-1.5 text-xs font-semibold uppercase tracking-wide text-fg-subtle">
               {t("groupMeeting")}
             </legend>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label={t("languageField")}>
-                {/* the transcriber's hint — set at creation */}
-                <SelectMenu
-                  ariaLabel={t("languageField")}
-                  icon={<IconGlobe />}
-                  value={language}
-                  onChange={(v) => setLanguage(v as "fa" | "en" | "mixed")}
-                  disabled={resuming}
-                  options={[
-                    { value: "mixed", label: t("languageMixed") },
-                    { value: "fa", label: t("languageFa") },
-                    { value: "en", label: t("languageEn") },
-                  ]}
-                />
-              </Field>
-              <Field label={t("templateField")}>
-                {/* 0094: the summary's SHAPE chosen before the meeting — the
-                    ruled five plus this person's own templates */}
-                <SelectMenu
-                  ariaLabel={t("templateField")}
-                  icon={<IconFileText />}
-                  value={template}
-                  onChange={setTemplate}
-                  disabled={resuming}
-                  options={[
-                    { value: "", label: t("templateNone") },
-                    ...SUMMARY_TEMPLATES.map((k) => ({ value: k, label: t(TEMPLATE_KEY[k]) })),
-                    ...customs.map((c) => ({ value: `custom:${c.name}`, label: c.name })),
-                  ]}
-                />
-              </Field>
-              <Field label={t("modelField")}>
-                {/* 0099: the model for this meeting's summaries. The empty
-                    choice is NAMED — the default is the worker's own ladder,
-                    and pre-selecting a model here would destroy the "has
-                    not chosen" state M5 protects. */}
-                <SelectMenu
-                  ariaLabel={t("modelField")}
-                  icon={<IconChip />}
-                  value={summaryModel}
-                  onChange={setSummaryModel}
-                  disabled={resuming}
-                  options={[
-                    { value: "", label: t("modelDefault") },
-                    ...modelOptions,
-                  ]}
-                />
-              </Field>
+            <div className="flex flex-wrap items-start gap-3">
+              {/* the transcriber's hint — set at creation */}
+              <SelectMenu
+                variant="tile"
+                ariaLabel={t("languageField")}
+                panelHeading={t("languageField")}
+                icon={<IconGlobe />}
+                value={language}
+                onChange={(v) => setLanguage(v as "fa" | "en" | "mixed")}
+                disabled={resuming}
+                options={[
+                  { value: "mixed", label: t("languageMixed") },
+                  { value: "fa", label: t("languageFa") },
+                  { value: "en", label: t("languageEn") },
+                ]}
+              />
+              {/* 0094: the summary's SHAPE chosen before the meeting — the
+                  ruled five plus this person's own templates */}
+              <SelectMenu
+                variant="tile"
+                ariaLabel={t("templateField")}
+                panelHeading={t("templateField")}
+                icon={<IconFileText />}
+                value={template}
+                onChange={setTemplate}
+                disabled={resuming}
+                options={[
+                  { value: "", label: t("templateNone") },
+                  ...SUMMARY_TEMPLATES.map((k) => ({ value: k, label: t(TEMPLATE_KEY[k]) })),
+                  ...customs.map((c) => ({ value: `custom:${c.name}`, label: c.name })),
+                ]}
+              />
+              {/* 0099: the model for this meeting's summaries. The empty
+                  choice is NAMED — the default is the worker's own ladder,
+                  and pre-selecting a model here would destroy the "has
+                  not chosen" state M5 protects. */}
+              <SelectMenu
+                variant="tile"
+                ariaLabel={t("modelField")}
+                panelHeading={t("modelField")}
+                icon={<IconChip />}
+                value={summaryModel}
+                onChange={setSummaryModel}
+                disabled={resuming}
+                options={[
+                  { value: "", label: t("modelDefault") },
+                  ...modelOptions,
+                ]}
+              />
             </div>
           </fieldset>
           <label className="mt-3 flex cursor-pointer items-center gap-2 text-sm text-fg">
