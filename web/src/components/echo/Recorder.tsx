@@ -786,7 +786,7 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
                   setStopAsk(true);
                 }}
               >
-                <span aria-hidden className="block h-5 w-5 rounded-[4px] bg-danger" />
+                <span aria-hidden className="block h-5 w-5 rounded-[4px] bg-record" />
               </button>
             ) : (
               <button
@@ -794,7 +794,7 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
                 type="button"
                 title={resuming ? t("resumeStart") : t("start")}
                 aria-label={resuming ? t("resumeStart") : t("start")}
-                className="tap grid h-16 w-16 place-items-center rounded-full bg-danger text-white shadow-lg transition-transform hover:scale-105 active:scale-95 disabled:opacity-60"
+                className="tap grid h-16 w-16 place-items-center rounded-full bg-record text-white shadow-lg transition-transform hover:scale-105 active:scale-95 disabled:opacity-60"
                 disabled={phase === "starting" || phase === "finishing"}
                 onClick={() => start()}
               >

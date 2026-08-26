@@ -54,6 +54,9 @@ const config: Config = {
         danger: "rgb(var(--danger) / <alpha-value>)",
         "on-danger": "rgb(var(--on-danger) / <alpha-value>)",
         info: "rgb(var(--info) / <alpha-value>)",
+        /* the record button's own red — softer than danger, which has to
+           stay loud because it marks destructive choices */
+        record: "rgb(var(--record) / <alpha-value>)",
       },
       /*
        * M26 shape: controls 6 / panels 8 / tiles 12 / modals 16. The class

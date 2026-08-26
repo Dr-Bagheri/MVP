@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { useTheme } from "@/lib/useTheme";
 import {
   AdditiveBlending,
+  NormalBlending,
   BufferAttribute,
   BufferGeometry,
   OrthographicCamera,
@@ -55,16 +57,19 @@ const fragmentShader = /* glsl */ `
   varying float vHue;
 
   /* the violet family left with the palette (user directive, 2026-08-26:
-     "remove all purple") — the orb now runs cyan → blue → the accent's own
-     light blue, so it reads as the same instrument as every focus ring */
+     "remove all purple"), and the first blue-only ramp ended on a near-white
+     pale that read as grey specks rather than as colour ("give it more
+     colour", same day). The ramp now stays SATURATED end to end — teal,
+     cyan, azure, deep blue — so every particle carries hue instead of
+     fading toward the background it sits on. */
   vec3 palette(float t) {
-    vec3 cyan = vec3(0.10, 0.88, 1.00);
-    vec3 blue = vec3(0.18, 0.45, 1.00);
-    vec3 sky  = vec3(0.49, 0.71, 1.00);
-    vec3 pale = vec3(0.78, 0.89, 1.00);
-    if (t < 0.33) return mix(cyan, blue, t / 0.33);
-    if (t < 0.68) return mix(blue, sky, (t - 0.33) / 0.35);
-    return mix(sky, pale, (t - 0.68) / 0.32);
+    vec3 teal  = vec3(0.00, 0.85, 0.78);
+    vec3 cyan  = vec3(0.08, 0.72, 1.00);
+    vec3 azure = vec3(0.16, 0.48, 1.00);
+    vec3 deep  = vec3(0.25, 0.30, 0.95);
+    if (t < 0.33) return mix(teal, cyan, t / 0.33);
+    if (t < 0.68) return mix(cyan, azure, (t - 0.33) / 0.35);
+    return mix(azure, deep, (t - 0.68) / 0.32);
   }
 
   void main() {
@@ -103,6 +108,10 @@ function ParticleField({ state, level }: { state: AuroraState; level: number }) 
   const levelRef = useRef(level);
   stateRef.current = state;
   levelRef.current = level;
+  /* the blending mode is chosen at build time for the material, so the
+     field REBUILDS when the theme changes — it is in the effect's deps
+     for that reason, not by habit */
+  const dark = useTheme() !== "light";
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -134,7 +143,15 @@ function ParticleField({ state, level }: { state: AuroraState; level: number }) 
     const material = new ShaderMaterial({
       transparent: true,
       depthWrite: false,
-      blending: AdditiveBlending,
+      /*
+       * ADDITIVE ONLY ON DARK (user report, 2026-08-26: "the orb colour is
+       * not as designed in light"). Additive blending ADDS light to what is
+       * behind it: on a near-black ground that is what makes the particles
+       * glow, and on a white one it adds to white and returns white, so the
+       * orb washed out to grey specks. Normal blending on light paints the
+       * particle's own colour instead — the same design, arriving.
+       */
+      blending: dark ? AdditiveBlending : NormalBlending,
       uniforms,
       vertexShader,
       fragmentShader,
@@ -194,7 +211,7 @@ function ParticleField({ state, level }: { state: AuroraState; level: number }) 
       material.dispose();
       renderer.dispose();
     };
-  }, []);
+  }, [dark]);
 
   return (
     <canvas

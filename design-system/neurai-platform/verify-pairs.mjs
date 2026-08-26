@@ -88,6 +88,10 @@ export const DARK = {
      the on-accent role-flip pattern */
   onDanger: "#000000",
   success: "#4ADE80", warning: "#FBBF24", danger: "#FB7185", info: "#7DD3FC",
+  /* the RECORD button's own red (user report, 2026-08-26: "too intense in
+     both modes"). Its own token, not a softened --danger: the danger tone
+     marks destructive choices and has to stay loud. */
+  record: "#DB6060",
 };
 
 export const LIGHT = {
@@ -108,6 +112,7 @@ export const LIGHT = {
   onPrimary: "#FFFFFF",
   onDanger: "#FFFFFF",      // light's danger is a deep red — white ink
   success: "#166534", warning: "#92400E", danger: "#BE123C", info: "#075985",
+  record: "#C54A4A",
 };
 
 /**
@@ -144,6 +149,10 @@ for (const [name, T] of [["DARK (primary)", DARK], ["LIGHT (derived)", LIGHT]]) 
   check("ON-ACCENT on accent fill", T.onAccent, T.accent);
   check("ON-PRIMARY on primary fill (solid CTA)", T.onPrimary, T.primary);
   check("ON-DANGER on danger fill (solid danger button)", T.onDanger, T.danger);
+  /* the record button's glyph is a white RING, not text — WCAG asks 3:1 of
+     a graphic. Checked so the next "make it softer" cannot quietly cross
+     the floor: the point of softening was intensity, never legibility. */
+  check("white glyph on the record fill (graphic)", "#FFFFFF", T.record, 3);
   for (const k of ["success", "warning", "danger", "info"]) check(`${k} on surface`, T[k], T.surface);
   for (const k of ["success", "warning", "danger", "info", "accent"]) {
     check(`${k} on its ${TINT * 100}% chip (composited)`, T[k], over(T[k], T.surface, TINT));
