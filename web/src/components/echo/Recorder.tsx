@@ -396,22 +396,34 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
    * a band whose whole content is transient.
    */
   const waveBand = () => {
-    const SLOTS = 96;
+    /* the numbers follow the open-source consensus (react-voice-visualizer,
+       react-audio-visualize, wavesurfer's record plugin — researched
+       2026-08-26): thin pills at a ~2:1 bar:gap ratio, mirrored around the
+       vertical centre, a 2px hairline floor when silent (never zero, never
+       boxes), history slightly dimmer than the newest bars, and the band
+       sitting directly on the page — no frame around a waveform */
+    const SLOTS = 160;
     const shown = s.wave.slice(-SLOTS);
     const pad = SLOTS - shown.length;
     const span = s.recordedMs - s.waveStartMs;
     const msPerSample = s.wave.length > 0 && span > 0 ? span / s.wave.length : 0;
     const visibleStartMs = s.recordedMs - shown.length * msPerSample;
+    const windowSpan = s.recordedMs - visibleStartMs;
     return (
-      <div className="mt-4 rounded-xl border border-border bg-surface px-3 py-2" dir="ltr" aria-hidden>
-        <div className="relative flex h-24 items-center gap-[2px]">
+      <div className="mt-3" dir="ltr" aria-hidden>
+        <div className="relative flex h-28 items-center gap-px">
           {Array.from({ length: SLOTS }, (_, i) => {
             const v = i < pad ? 0 : shown[i - pad]!;
+            const active = v > 0.02;
             return (
               <span
                 key={i}
-                className={`min-w-px flex-1 rounded-full ${v > 0.02 ? "bg-accent/80" : "bg-surface-2"}`}
-                style={{ height: `${Math.max(4, Math.min(100, v * 120))}%` }}
+                className={`min-w-px flex-1 rounded-full ${
+                  active
+                    ? i >= SLOTS - 12 ? "bg-accent" : "bg-accent/65"
+                    : "bg-fg-subtle/30"
+                }`}
+                style={{ height: active ? `${Math.min(100, 6 + v * 110)}%` : "2px" }}
               />
             );
           })}
@@ -437,11 +449,13 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
             </span>
           ) : null}
         </div>
-        {/* the ruler: the rolling window's own clock, start → now */}
-        {msPerSample > 0 ? (
-          <div className="mt-1 flex justify-between text-[10px] tabular-nums text-fg-subtle">
+        {/* the ruler: the rolling window's own clock, start → now — held
+            back until the window spans 5s (below that every label reads
+            the same second, a ruler that measures nothing) */}
+        {windowSpan >= 5_000 ? (
+          <div className="mt-1.5 flex select-none justify-between text-[10px] leading-none tabular-nums text-fg-subtle">
             {Array.from({ length: 5 }, (_, i) => {
-              const ms = visibleStartMs + ((s.recordedMs - visibleStartMs) * i) / 4;
+              const ms = visibleStartMs + (windowSpan * i) / 4;
               return <span key={i}>{formatClock(Math.floor(ms / 1000), locale)}</span>;
             })}
           </div>
@@ -463,9 +477,15 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
 
   return (
     <Card>
-      {phase === "idle" || phase === "starting" ? (
-        <>
-          {resuming ? (
+      {phase !== "done" ? (
+        /* ONE surface for every state (user directive, 2026-08-26: "remove
+           this page, just keep the second one") — idle, starting, live and
+           finishing all wear the same anatomy; only the transport's centre
+           and the tabs' moods change. The pad rides BESIDE the take on
+           wide screens, under it on small. */
+        <div className="gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <div>
+          {resuming && (phase === "idle" || phase === "starting") ? (
             /* the resume banner: WHICH take, and how much of it exists —
                the person is re-checking devices, not starting a new call */
             <p
@@ -483,53 +503,40 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
               renaming is one pencil away on the record. `title` state stays:
               the agent's start_recording can still carry a name, and a
               resumed take keeps the one it already has. */}
-          {pickers(false)}
-          {waveBand()}
-          {/* the reference recorder's bottom bar: the take starts from one
-              big red circle (user directive, 2026-08-26), its clock already
-              showing where a resumed take will pick up */}
-          <div className="mt-5 flex items-center gap-4">
-            <button
-              data-tour="rec-start"
-              aria-label={resuming ? t("resumeStart") : t("start")}
-              className="tap grid h-16 w-16 shrink-0 place-items-center rounded-full bg-danger text-white shadow-lg transition-transform hover:scale-105 active:scale-95 disabled:opacity-60"
-              disabled={phase === "starting"}
-              onClick={() => start()}
-            >
-              <span aria-hidden className="block h-5 w-5 rounded-full border-2 border-white" />
-            </button>
-            <span className="text-sm font-medium text-fg">
-              {phase === "starting" ? t("starting") : resuming ? t("resumeStart") : t("start")}
-            </span>
-            <span className="ltr ms-auto text-sm text-fg-muted">
-              {formatClock(resuming ? Math.floor(resumeTarget.offsetMs / 1000) : 0, locale)}
-            </span>
-          </div>
-        </>
-      ) : null}
-
-      {live || phase === "finishing" ? (
-        /* the pad rides BESIDE the take on wide screens, under it on small —
-           a thought lands in the pad instead of interrupting the meeting */
-        <div className="gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_20rem]">
-        <div>
-          {pickers(true)}
-          <div className="mt-4 flex items-center gap-4">
+          {pickers(live || phase === "finishing")}
+          <div className="mt-4 flex items-center gap-3">
+            {/* the REC treatment measured off Riverside: while recording
+                the state wears a danger-tint pill; other states stay quiet */}
             <span
-              className={`inline-block h-3 w-3 rounded-full ${
-                phase === "recording" ? "animate-pulse bg-danger" : "bg-fg-subtle"
+              className={`flex items-center gap-2 ${
+                phase === "recording"
+                  ? "rounded-lg bg-danger/10 px-2.5 py-1 text-danger"
+                  : "text-fg"
               }`}
-              aria-hidden
-            />
-            <span className="text-sm font-medium text-fg">
-              {phase === "paused"
-                ? t("pausedState")
-                : phase === "finishing"
-                  ? t("finishing")
-                  : t("recordingState")}
+            >
+              <span
+                className={`inline-block h-2.5 w-2.5 rounded-full ${
+                  phase === "recording" ? "animate-pulse bg-danger" : "bg-fg-subtle"
+                }`}
+                aria-hidden
+              />
+              <span className="text-sm font-medium">
+                {phase === "paused"
+                  ? t("pausedState")
+                  : phase === "finishing"
+                    ? t("finishing")
+                    : phase === "recording"
+                      ? t("recordingState")
+                      : t("readyState")}
+              </span>
             </span>
             <span className="ltr text-sm font-semibold tabular-nums text-fg">
-              {formatClock(recordedSec, locale)}
+              {formatClock(
+                live || phase === "finishing"
+                  ? recordedSec
+                  : resuming ? Math.floor(resumeTarget.offsetMs / 1000) : 0,
+                locale,
+              )}
             </span>
           </div>
 
@@ -586,12 +593,12 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
                 type="button"
                 title={phase === "recording" ? t("pause") : t("resume")}
                 aria-label={phase === "recording" ? t("pause") : t("resume")}
-                className="tap grid h-14 w-14 place-items-center rounded-full bg-fg text-surface shadow-lg transition-transform hover:scale-105 active:scale-95"
+                className="tap grid h-16 w-16 place-items-center rounded-full bg-fg text-surface shadow-lg transition-transform hover:scale-105 active:scale-95"
                 onClick={phase === "recording" ? pause : resume}
               >
                 {phase === "recording"
-                  ? <IconPause width={22} height={22} />
-                  : <IconPlay width={22} height={22} />}
+                  ? <IconPause width={24} height={24} />
+                  : <IconPlay width={24} height={24} />}
               </button>
               <button
                 type="button"
@@ -603,18 +610,35 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
                 <IconCheck width={16} height={16} />
               </button>
             </div>
+          ) : phase === "idle" || phase === "starting" ? (
+            /* the transport's centre before the take exists: ONE big red
+               record circle (the reference's), label under it */
+            <div className="mt-4 flex flex-col items-center gap-2" dir="ltr">
+              <button
+                data-tour="rec-start"
+                aria-label={resuming ? t("resumeStart") : t("start")}
+                className="tap grid h-16 w-16 place-items-center rounded-full bg-danger text-white shadow-lg transition-transform hover:scale-105 active:scale-95 disabled:opacity-60"
+                disabled={phase === "starting"}
+                onClick={() => start()}
+              >
+                <span aria-hidden className="block h-5 w-5 rounded-full border-2 border-white" />
+              </button>
+              <span className="text-sm font-medium text-fg-muted">
+                {phase === "starting" ? t("starting") : resuming ? t("resumeStart") : t("start")}
+              </span>
+            </div>
           ) : null}
 
           {/* the record's own tabs: transcript, notes, keywords — all of it
               coming OUT of the take (user directive, 2026-08-26) */}
-          <div role="tablist" className="mt-5 flex gap-1 border-b border-border">
+          <div role="tablist" className="mt-5 flex gap-6 border-b border-border">
             {TABS.map((k) => (
               <button
                 key={k}
                 type="button"
                 role="tab"
                 aria-selected={tab === k}
-                className={`tap -mb-px border-b-2 px-3 py-2 text-sm transition-colors ${
+                className={`tap -mb-px border-b-[3px] px-0.5 py-2 text-sm transition-colors ${
                   tab === k
                     ? "border-accent font-semibold text-fg"
                     : "border-transparent text-fg-muted hover:text-fg"
@@ -633,10 +657,10 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
                 s.captionRows.length === 0 && s.captions.interim === "" ? (
                   <p className="text-sm text-fg-muted">{t("liveWaiting")}</p>
                 ) : (
-                  <div className="max-h-72 space-y-2 overflow-y-auto pe-1">
+                  <div className="max-h-80 space-y-3 overflow-y-auto pe-1">
                     {s.captionRows.map((row, i) => (
-                      <div key={i} className="flex gap-3 text-sm leading-6">
-                        <span className="ltr shrink-0 pt-0.5 text-xs tabular-nums text-fg-subtle">
+                      <div key={i} className="flex gap-3 text-sm leading-7">
+                        <span className="ltr w-10 shrink-0 pt-0.5 text-end text-xs tabular-nums text-fg-subtle">
                           {formatClock(Math.floor(row.atMs / 1000), locale)}
                         </span>
                         <p dir="auto" className="min-w-0 flex-1 whitespace-pre-wrap text-fg">
@@ -645,7 +669,7 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
                       </div>
                     ))}
                     {s.captions.interim !== "" ? (
-                      <p dir="auto" className="ps-12 text-sm leading-6 text-fg-muted">
+                      <p dir="auto" className="ps-[3.25rem] text-sm leading-7 text-fg-muted">
                         {s.captions.interim}
                       </p>
                     ) : null}
@@ -653,11 +677,18 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
                 )
               ) : s.captionsDown ? (
                 <p className="text-xs text-fg-muted">{t("liveUnavailable")}</p>
-              ) : null
+              ) : (
+                /* no lane and no failure = the take has not started */
+                <p className="text-sm text-fg-muted">
+                  {t(live || phase === "finishing" ? "liveWaiting" : "transcriptIdle")}
+                </p>
+              )
             ) : tab === "notes" ? (
               s.callId ? (
                 <RecorderNotes callId={s.callId} atMs={s.recordedMs} onChapter={addChapterMark} />
-              ) : null
+              ) : (
+                <p className="text-sm text-fg-muted">{t("notesIdle")}</p>
+              )
             ) : (
               (() => {
                 /* derived LIVE from the transcript so far — counted, never
@@ -706,15 +737,15 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
 
         </div>
 
-        {live && s.callId ? (
-          <div className="mt-4 lg:mt-0">
-            <AgendaPanel
-              callId={s.callId}
-              atMs={s.recordedMs}
-              onChapter={addChapterMark}
-            />
-          </div>
-        ) : null}
+        <div className="mt-4 lg:mt-0">
+          {/* items can be planned BEFORE the take (client state); ticking
+              one persists a stamped chapter, so it waits for the call */}
+          <AgendaPanel
+            callId={s.callId}
+            atMs={s.recordedMs}
+            onChapter={addChapterMark}
+          />
+        </div>
         </div>
       ) : null}
 

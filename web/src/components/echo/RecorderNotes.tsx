@@ -146,7 +146,8 @@ export function AgendaPanel({
   atMs,
   onChapter,
 }: {
-  callId: string;
+  /** null before the take exists — items can be planned, not yet ticked */
+  callId: string | null;
   atMs: number;
   onChapter?: (atMs: number) => void;
 }) {
@@ -157,11 +158,11 @@ export function AgendaPanel({
 
   async function tick(index: number): Promise<void> {
     const item = items[index];
-    if (!item || busy) return;
+    if (!item || busy || callId === null) return;
     setBusy(true);
     const stamp = atMs;
     try {
-      await api.addCallNote(callId, { kind: "chapter", at_ms: stamp, body: `✓ ${item}` });
+      await api.addCallNote(callId!, { kind: "chapter", at_ms: stamp, body: `✓ ${item}` });
       onChapter?.(stamp);
       setItems((prev) => prev.filter((_, i) => i !== index));
     } catch {
@@ -175,16 +176,19 @@ export function AgendaPanel({
     <div className="rounded-xl border border-border bg-surface p-3">
       <p className="text-sm font-semibold text-fg">{t("agendaTitle")}</p>
       {items.length > 0 ? (
-        <ul className="mt-2 space-y-1.5">
+        /* the measured Otter/Fireflies anatomy: bare rows on a ~40px
+           pitch, no box around each item — the checkbox IS the row's
+           chrome */
+        <ul className="mt-1">
           {items.map((item, i) => (
             <li
               key={`${item}-${i}`}
-              className="flex items-center gap-2 rounded-lg border border-border px-2.5 py-1.5 text-sm text-fg"
+              className="flex min-h-10 items-center gap-2.5 text-sm text-fg"
             >
               <input
                 type="checkbox"
                 checked={false}
-                disabled={busy}
+                disabled={busy || callId === null}
                 aria-label={t("agendaTick", { item })}
                 onChange={() => void tick(i)}
               />
@@ -193,10 +197,12 @@ export function AgendaPanel({
           ))}
         </ul>
       ) : null}
+      {/* the ghost add-row (Otter's «＋ Add action item»): an input wearing
+          placeholder gray, no field chrome until it holds text */}
       <input
         dir="auto"
-        className="input mt-2 h-8 min-h-0 py-0 text-xs"
-        placeholder={t("agendaPlaceholder")}
+        className="mt-1 h-9 w-full border-0 bg-transparent p-0 text-sm text-fg outline-none placeholder:text-fg-subtle"
+        placeholder={`＋ ${t("agendaPlaceholder")}`}
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={(e) => {

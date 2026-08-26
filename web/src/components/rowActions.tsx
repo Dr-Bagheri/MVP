@@ -581,7 +581,7 @@ export function SelectMenu({
            sizes are clamp()ed to the viewport so the row breathes on a
            wide screen and tightens on a small one; the chosen value stays
            captioned below, never crowding the button. */
-        <div className="flex w-[clamp(4.5rem,8vw,6rem)] flex-col items-center gap-1.5">
+        <div className="flex w-[clamp(3.5rem,5.5vw,4.5rem)] flex-col items-center gap-1.5">
           <button
             type="button"
             ref={rootRef}
@@ -604,13 +604,13 @@ export function SelectMenu({
               if (at && Date.now() - hoverOpenedAt.current < 400) return;
               toggle();
             }}
-            className={`tap grid h-[clamp(3.5rem,6vw,4.75rem)] w-full place-items-center rounded-2xl border transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+            className={`tap grid h-[clamp(2.75rem,4.2vw,3.5rem)] w-full place-items-center rounded-xl border transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
               at !== null
                 ? "border-accent bg-accent-soft ring-1 ring-accent/30"
                 : "border-border bg-surface hover:border-border-strong hover:bg-surface-2"
             }`}
           >
-            <span className="grid place-items-center text-fg [&_svg]:h-[clamp(1.5rem,2.6vw,2rem)] [&_svg]:w-[clamp(1.5rem,2.6vw,2rem)]">
+            <span className="grid place-items-center text-fg [&_svg]:h-[clamp(1.05rem,1.7vw,1.35rem)] [&_svg]:w-[clamp(1.05rem,1.7vw,1.35rem)]">
               {icon}
             </span>
           </button>
