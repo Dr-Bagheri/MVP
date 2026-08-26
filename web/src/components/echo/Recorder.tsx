@@ -30,7 +30,9 @@ import {
 } from "@/components/icons";
 import { playTestChime } from "@/lib/deviceTest";
 import { useAudioLevel } from "@/lib/useAudioLevel";
+import { establishedSpeakers } from "@/lib/liveSpeakers";
 import { customTemplates, type CustomTemplate } from "@/lib/summaryTemplates";
+import type { Person } from "@/api/types";
 import { SUMMARY_TEMPLATES, type SummaryTemplate } from "@echo/core/vocabulary";
 
 /**
@@ -114,6 +116,20 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
   const [monitorGain, setMonitorGain] = useState(1);
   /** the stop button's question: save this take, or delete it? */
   const [stopAsk, setStopAsk] = useState(false);
+  /**
+   * Naming a live voice (user ask, 2026-08-26: "can we do the voice naming
+   * during the recording as well?"). label → directory person id.
+   *
+   * LIVE ONLY, and the card says so: the realtime lane's labels ("1", "2")
+   * are its own numbering and do not correspond to the speaker rows the
+   * pipeline creates from the finished audio, so persisting this map would
+   * attach a name to the wrong voice on the record. What it does buy is
+   * real: a transcript you can read while the meeting is happening.
+   */
+  const [voiceNames, setVoiceNames] = useState<Record<string, string>>({});
+  const [namingVoice, setNamingVoice] = useState<string | null>(null);
+  const [namePick, setNamePick] = useState("");
+  const [people, setPeople] = useState<Person[] | null>(null);
   /** speak «این جلسه ضبط می‌شود» into the room — and into the record */
   /**
    * RESUME mode: `?resume=<id>` — the call continues on the same id, next
@@ -375,6 +391,34 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
    * engine's occasional 2:1 wave compaction makes approximate — fine for
    * a band whose whole content is transient.
    */
+  /**
+   * The voices we are willing to CALL voices, and what to call them.
+   *
+   * `s.liveSpeakers` is the raw truth from the wire — every label the
+   * provider attached. What the screen shows is the subset with enough
+   * evidence behind it (lib/liveSpeakers): a stray "Uh." at the top of a
+   * take is not a second participant, and saying "2" when one person is
+   * in the room is the screen lying about the room.
+   */
+  const voices = establishedSpeakers(s.liveSpeakers, s.captionRows);
+  const personFor = (label: string): Person | undefined => {
+    const id = voiceNames[label];
+    return id ? people?.find((candidate) => candidate.id === id) : undefined;
+  };
+  /** initials for the circle — the product's avatar since M24 */
+  const initialsOf = (name: string): string =>
+    name.trim().split(/\s+/).slice(0, 2).map((part) => [...part][0] ?? "").join("");
+  function openNaming(label: string): void {
+    setNamePick(voiceNames[label] ?? "");
+    setNamingVoice(label);
+    /* the directory is a member-visible read, so anybody recording can
+       name a voice — unlike the account link, which is an admin's claim
+       about who somebody IS */
+    if (people === null) {
+      void api.directory().then(setPeople).catch(() => setPeople([]));
+    }
+  }
+
   const waveBand = () => {
     const SLOTS = 96;
     const shown = s.wave.slice(-SLOTS);
@@ -507,7 +551,60 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
             },
           }}
           onConfirm={() => { setStopAsk(false); void finish(); }}
-          onCancel={() => setStopAsk(false)}
+          onCancel={() => {
+            setStopAsk(false);
+            /* dismissal = "keep recording": the take that stop paused
+               picks up again, so the pause is invisible unless a decision
+               was actually made */
+            if (recorderSnapshot().phase === "paused") resume();
+          }}
+        />
+      ) : null}
+      {/* NAMING A LIVE VOICE (user ask, 2026-08-26). The directory is the
+          list, because these are the people this org records; the hint is
+          honest about the reach — this labels the live transcript, and the
+          record's own attribution is decided after processing. */}
+      {namingVoice !== null ? (
+        <ConfirmDialog
+          title={t("nameVoiceTitle", { n: digits(namingVoice, locale) })}
+          body={
+            <div className="space-y-3">
+              <p className="text-sm text-fg-muted">{t("nameVoiceBody")}</p>
+              <SelectMenu
+                ariaLabel={t("nameVoicePick")}
+                value={namePick}
+                onChange={setNamePick}
+                options={[
+                  { value: "", label: t("nameVoiceNobody") },
+                  ...(people ?? []).map((candidate) => ({
+                    value: candidate.id,
+                    label: candidate.linked_member_name
+                      ? `${candidate.display_name} · ${candidate.linked_member_name}`
+                      : candidate.display_name,
+                  })),
+                ]}
+              />
+              {people !== null && people.length === 0 ? (
+                <p className="text-xs text-warning">{t("nameVoiceEmpty")}</p>
+              ) : null}
+            </div>
+          }
+          confirmLabel={t("nameVoiceSave")}
+          cancelLabel={t("stopKeep")}
+          danger={false}
+          onConfirm={() => {
+            const label = namingVoice;
+            setVoiceNames((prev) => {
+              const next = { ...prev };
+              /* clearing is an answer: a voice named by mistake must be
+                 un-nameable without reloading the page */
+              if (namePick) next[label] = namePick;
+              else delete next[label];
+              return next;
+            });
+            setNamingVoice(null);
+          }}
+          onCancel={() => setNamingVoice(null)}
         />
       ) : null}
       {phase !== "done" ? (
@@ -628,7 +725,16 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
                 title={t("stopButton")}
                 aria-label={t("stopButton")}
                 className="tap grid h-16 w-16 place-items-center rounded-full bg-fg shadow-lg transition-transform hover:scale-105 active:scale-95"
-                onClick={() => setStopAsk(true)}
+                onClick={() => {
+                  /* STOP stops (user report, 2026-08-26: it kept
+                     recording while the dialog asked). The take pauses
+                     the moment the question is asked — deciding whether
+                     to keep a recording is not a reason to go on
+                     capturing the room — and dismissing the dialog
+                     resumes it, which is what "keep recording" means. */
+                  if (phase === "recording") pause();
+                  setStopAsk(true);
+                }}
               >
                 <span aria-hidden className="block h-5 w-5 rounded-[4px] bg-danger" />
               </button>
@@ -700,20 +806,27 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
               ) : (
                 <div className="max-h-80 space-y-3 overflow-y-auto pe-1">
                   {s.captionRows.map((row, i) => {
-                    const tone = row.speaker
-                      ? SPEAKER_TONE[s.liveSpeakers.indexOf(row.speaker) % SPEAKER_TONE.length]!
-                      : null;
+                    /* a label with too little behind it carries NO badge:
+                       the words were said and stay, but we do not claim
+                       they were somebody else (lib/liveSpeakers) */
+                    const at = row.speaker ? voices.indexOf(row.speaker) : -1;
+                    const tone = at >= 0 ? SPEAKER_TONE[at % SPEAKER_TONE.length]! : null;
+                    const named = row.speaker ? personFor(row.speaker) : undefined;
                     return (
                       <div key={i} className="flex gap-3 text-sm leading-7">
                         <span className="ltr w-10 shrink-0 pt-0.5 text-end text-xs tabular-nums text-fg-subtle">
                           {formatClock(Math.floor(row.atMs / 1000), locale)}
                         </span>
-                        {row.speaker ? (
+                        {at >= 0 && row.speaker ? (
                           <span
-                            className={`mt-1 grid h-5 w-5 shrink-0 place-items-center rounded-full border text-[10px] font-semibold tabular-nums ${tone}`}
-                            title={t("speakerNamed", { n: digits(row.speaker, locale) })}
+                            className={`mt-1 grid h-5 shrink-0 place-items-center rounded-full border text-[10px] font-semibold ${
+                              named ? "px-1.5" : "w-5 tabular-nums"
+                            } ${tone}`}
+                            title={named
+                              ? named.display_name
+                              : t("speakerNamed", { n: digits(row.speaker, locale) })}
                           >
-                            {digits(row.speaker, locale)}
+                            {named ? initialsOf(named.display_name) : digits(row.speaker, locale)}
                           </span>
                         ) : null}
                         <p dir="auto" className="min-w-0 flex-1 whitespace-pre-wrap text-fg">
@@ -808,21 +921,34 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
               not name them — matching a voice to a person in the directory
               happens after the take, and a name here would be a guess
               wearing an avatar. */}
-          {s.liveSpeakers.length > 0 ? (
+          {voices.length > 0 ? (
             <div className="rounded-xl border border-border bg-surface p-3">
               <p className="text-sm font-semibold text-fg">{t("peopleTitle")}</p>
               <div className="mt-2 flex flex-wrap gap-2">
-                {s.liveSpeakers.map((label, i) => (
-                  <span
-                    key={label}
-                    title={t("speakerNamed", { n: digits(label, locale) })}
-                    className={`grid h-8 w-8 place-items-center rounded-full border bg-surface-2 text-xs font-semibold tabular-nums ${
-                      SPEAKER_TONE[i % SPEAKER_TONE.length]
-                    }`}
-                  >
-                    {digits(label, locale)}
-                  </span>
-                ))}
+                {voices.map((label, i) => {
+                  const named = personFor(label);
+                  return (
+                    <button
+                      key={label}
+                      type="button"
+                      title={named ? named.display_name : t("nameVoiceHint")}
+                      aria-label={named
+                        ? named.display_name
+                        : t("speakerNamed", { n: digits(label, locale) })}
+                      onClick={() => openNaming(label)}
+                      className={`tap flex h-8 items-center gap-1.5 rounded-full border bg-surface-2 ps-1 pe-2.5 text-xs font-semibold transition-colors hover:bg-surface ${
+                        SPEAKER_TONE[i % SPEAKER_TONE.length]
+                      }`}
+                    >
+                      <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-surface text-[10px] tabular-nums">
+                        {named ? initialsOf(named.display_name) : digits(label, locale)}
+                      </span>
+                      <span className="max-w-28 truncate text-fg">
+                        {named ? named.display_name : t("nameVoice")}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
               <p className="mt-2 text-[11px] leading-4 text-fg-subtle">{t("peopleHint")}</p>
             </div>

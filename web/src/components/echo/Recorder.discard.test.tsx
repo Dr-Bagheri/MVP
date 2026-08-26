@@ -13,7 +13,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const discardRecording = vi.fn(async () => ({ deleted: true }));
 const finish = vi.fn(async () => undefined);
-const snapshot = {
+const pause = vi.fn();
+const resume = vi.fn();
+const snapshot: { phase: string; [k: string]: unknown } = {
   phase: "recording", callId: "c-1", title: "Meeting 2", recordedMs: 26_000,
   level: 0, wave: [], waveStartMs: 0, chapterMarks: [], quality: null,
   progress: { done: 0, pending: 0, failed: 0 }, error: null,
@@ -26,8 +28,8 @@ vi.mock("@/lib/recordingEngine", () => ({
   discardRecording: () => discardRecording(),
   addChapterMark: vi.fn(),
   finish: () => finish(),
-  pause: vi.fn(),
-  resume: vi.fn(),
+  pause: () => pause(),
+  resume: () => resume(),
   resetRecorder: vi.fn(),
   retryUploads: vi.fn(async () => undefined),
   startRecording: vi.fn(async () => undefined),
@@ -61,6 +63,9 @@ import { Recorder } from "./Recorder";
 beforeEach(() => {
   discardRecording.mockClear();
   finish.mockClear();
+  pause.mockClear();
+  resume.mockClear();
+  snapshot.phase = "recording";
 });
 
 /** the transport's middle button while a take rolls */
@@ -88,6 +93,26 @@ describe("the stop dialog", () => {
     expect(discardRecording).not.toHaveBeenCalled();
     expect(finish).not.toHaveBeenCalled();
     expect(screen.queryByText("stopSave")).toBeNull();
+  });
+
+  it("STOP actually stops the capture while it asks", () => {
+    /* user report, 2026-08-26: the dialog opened and the mic kept
+       rolling. Deciding whether to keep a recording is not a reason to go
+       on capturing the room. */
+    render(<Recorder />);
+    fireEvent.click(stopButton());
+    expect(pause).toHaveBeenCalledTimes(1);
+  });
+
+  it("dismissing RESUMES — that is what 'keep recording' means", () => {
+    render(<Recorder />);
+    fireEvent.click(stopButton());
+    // the engine is paused by now; the component reads it back on dismiss
+    snapshot.phase = "paused";
+    fireEvent.click(screen.getByRole("button", { name: "stopKeep" }));
+    expect(resume).toHaveBeenCalledTimes(1);
+    expect(finish).not.toHaveBeenCalled();
+    expect(discardRecording).not.toHaveBeenCalled();
   });
 
   it("the action row holds exactly the two answers", () => {

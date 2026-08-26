@@ -309,13 +309,28 @@ export function KebabMenu({
 
   return (
     <span ref={rootRef} className="relative inline-flex" onClick={(e) => e.stopPropagation()}>
-      <IconAction
-        label={label}
-        onClick={toggle}
-        className={triggerClassName ?? (trigger ? "w-auto px-1.5" : "")}
-      >
-        {trigger ?? <IconDots />}
-      </IconAction>
+      {triggerClassName ? (
+        /* a caller-shaped trigger renders its OWN button rather than
+           overriding IconAction's (user report, 2026-08-26: the recorder's
+           gear stayed a rounded square among circles). Two utilities from
+           the same group — rounded-md and rounded-full — do not resolve by
+           the order they are written in a className; the stylesheet's own
+           order decides, which is a coin toss. Owning the element is the
+           fix that cannot lose that toss. */
+        <button
+          type="button"
+          aria-label={label}
+          title={label}
+          onClick={(e) => { e.stopPropagation(); toggle(); }}
+          className={`tap grid place-items-center transition-colors ${triggerClassName}`}
+        >
+          {trigger ?? <IconDots />}
+        </button>
+      ) : (
+        <IconAction label={label} onClick={toggle} className={trigger ? "w-auto px-1.5" : ""}>
+          {trigger ?? <IconDots />}
+        </IconAction>
+      )}
       {at
         ? createPortal(
             <div
