@@ -306,7 +306,7 @@
       "speakers": "Speakers",
       "records": "Records",
       "summaries": "Summaries",
-      "new-meeting": "New meeting"
+      "new-meeting": "New record"
     },
     "desc": {
       "record": "Record a session with your device microphone — 30-minute parts, uploaded as you go.",
@@ -315,7 +315,7 @@
       "speakers": "People and their titles — every call page picks speakers from this list.",
       "records": "Your recordings, transcripts and summaries.",
       "summaries": "Each recording's summary, gathered for reading.",
-      "new-meeting": "Record the meeting in your browser. To upload a file instead, use the upload icon on this menu row."
+      "new-meeting": "Record in your browser — the transcript, your notes and the action items all land on this page. To add a file you already have, use the upload icon on this menu row."
     },
     "uploadHere": "Upload an audio file"
   },
@@ -505,14 +505,23 @@
     "recoverySaved": "Saved — continue from the unfinished-takes list.",
     "recoveryFailed": "Could not save — the record no longer accepts audio or the connection failed; download still works.",
     "readyState": "Ready to record",
+    "settingsMenu": "Recording settings",
+    "stopButton": "Stop",
+    "stopTitle": "Stop the recording?",
+    "stopBody": "Save it and we will transcribe and summarise it — or delete everything captured so far. Deleting cannot be undone.",
+    "stopSave": "Save & process",
+    "stopDelete": "Delete",
+    "stopKeep": "Keep recording",
+    "modelMore": "+{n} more — set a default in Settings",
+    "notesTitle": "Notes",
+    "peopleTitle": "Voices heard",
+    "peopleHint": "Live, voices are only told apart. Names are matched to your people directory after the take.",
+    "speakerNamed": "Speaker {n}",
+    "speakersSeen": "{count} voices heard so far",
     "transcriptIdle": "Press record — the live transcript lands here as you speak.",
     "notesIdle": "The notebook opens with the take — notes are stamped with its clock.",
-    "tabTranscript": "Transcript",
-    "tabNotes": "Notes",
-    "tabKeywords": "Keywords",
     "markButton": "Mark this moment",
     "marked": "Marked.",
-    "keywordsEmpty": "Keywords appear here as the transcript grows.",
     "noteFailed": "The note did not save — try again.",
     "pillOpen": "Open the recorder",
     "notebookPlaceholder": "Write…\nThe first line becomes the chapter title.",

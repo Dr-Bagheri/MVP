@@ -51,6 +51,51 @@ describe("the live-stt relay (M38)", () => {
     expect(config.api_key).toBe("sk-test");
     expect(config.audio_format).toBe("auto");
     expect(config.language_hints).toEqual(["fa", "en"]);
+    // speakers ride the RECORDING lane (2026-08-26)
+    expect(config.enable_speaker_diarization).toBe(true);
+  });
+
+  it("does NOT diarize the wake-word lane", () => {
+    /* the discriminating pair: the same relay, the other format, and the
+       flag must be absent — a diarization flag that is simply always on
+       would pass the test above and quietly bill every idle minute of the
+       always-listening lane */
+    const stt = relay();
+    stt.start(OWNER, "pcm16k");
+    const ws = FakeWs.instances[0]!;
+    ws.open();
+    const config = JSON.parse(ws.sent[0] as string) as Record<string, unknown>;
+    expect(config.audio_format).toBe("pcm_s16le");
+    expect(config.enable_speaker_diarization).toBeUndefined();
+  });
+
+  it("carries the provider's speaker label through, as a string", () => {
+    const stt = relay();
+    const { session_id } = stt.start(OWNER);
+    const ws = FakeWs.instances[0]!;
+    ws.open();
+    const seen: unknown[] = [];
+    stt.subscribe(session_id, OWNER, (event) => seen.push(event));
+    // the provider spells it as a NUMBER (proven on the live probe:
+    // speakers "1", "2", "3"); the wire carries one spelling
+    ws.fire("message", { data: JSON.stringify({ tokens: [{ text: "سلام", is_final: true, speaker: 2 }] }) });
+    expect(seen).toEqual([
+      { type: "tokens", tokens: [{ text: "سلام", is_final: true, speaker: "2" }] },
+    ]);
+  });
+
+  it("a token with no speaker carries NO speaker field", () => {
+    /* absent must stay absent: a defaulted label would make "nobody was
+       identified" indistinguishable from "one person spoke" for every
+       consumer downstream */
+    const stt = relay();
+    const { session_id } = stt.start(OWNER);
+    const ws = FakeWs.instances[0]!;
+    ws.open();
+    const seen: { tokens: { speaker?: string }[] }[] = [];
+    stt.subscribe(session_id, OWNER, (event) => seen.push(event as never));
+    ws.fire("message", { data: JSON.stringify({ tokens: [{ text: "hi", is_final: true }] }) });
+    expect(seen[0]!.tokens[0]!).not.toHaveProperty("speaker");
   });
 
   it("audio that races the handshake WAITS for open instead of dropping", () => {

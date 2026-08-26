@@ -201,11 +201,16 @@ export function KebabMenu({
   label,
   items,
   trigger,
+  triggerClassName,
 }: {
   label: string;
   items: KebabItem[];
   /** replaces the ⋯ glyph (e.g. the player's speed readout «۱.۵×») */
   trigger?: ReactNode;
+  /** shapes the trigger BOX — the recorder's transport wants a round 40px
+      button in a row of round buttons, not the 28px square every table
+      row wants. Overrides the default sizing entirely. */
+  triggerClassName?: string;
 }) {
   const [expanded, setExpandedKey] = useState<string | null>(null);
   /** where the open flyout sits — computed from its parent item's rect */
@@ -304,7 +309,11 @@ export function KebabMenu({
 
   return (
     <span ref={rootRef} className="relative inline-flex" onClick={(e) => e.stopPropagation()}>
-      <IconAction label={label} onClick={toggle} className={trigger ? "w-auto px-1.5" : ""}>
+      <IconAction
+        label={label}
+        onClick={toggle}
+        className={triggerClassName ?? (trigger ? "w-auto px-1.5" : "")}
+      >
         {trigger ?? <IconDots />}
       </IconAction>
       {at
@@ -473,13 +482,14 @@ export function SelectMenu({
       call-bar reference: «Microphone» over the device list) */
   panelHeading?: string;
   /**
-   * "input" (default) = the form-field face. "tile" = the CALL-BAR face
-   * (user directive, 2026-08-26: "big buttons with icons inside that have
-   * an arrow down"): a big rounded button holding only the glyph and a
-   * chevron, the chosen value captioned underneath — the panel is the same
-   * kebab-family menu either way.
+   * "input" (default) = the form-field face. "tile" = the CALL-BAR face:
+   * a big rounded button holding only the glyph, the chosen value
+   * captioned underneath. "round" = the TRANSPORT face (2026-08-26): a
+   * circular icon button that sits in a row of circular controls, its
+   * value spoken only by the accessible name and the panel's own check.
+   * The panel is the same kebab-family menu in every case.
    */
-  variant?: "input" | "tile";
+  variant?: "input" | "tile" | "round";
 }) {
   const [at, setAt] = useState<{ top: number; left: number; width: number } | null>(null);
   const rootRef = useRef<HTMLButtonElement | null>(null);
@@ -494,7 +504,7 @@ export function SelectMenu({
    * panel's edge) never closes it. The input face keeps click-only —
    * a form select that opens under a passing pointer is hostile.
    */
-  const hoverable = variant === "tile";
+  const hoverable = variant !== "input";
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hoverOpenedAt = useRef(0);
   const panelHeld = useRef(false);
@@ -517,7 +527,7 @@ export function SelectMenu({
     if (at) return setAt(null);
     const rect = rootRef.current?.getBoundingClientRect();
     if (!rect) return;
-    const width = Math.max(rect.width, variant === "tile" ? 240 : 160);
+    const width = Math.max(rect.width, variant === "input" ? 160 : 240);
     const rtl = document.documentElement.dir === "rtl";
     const left = rtl ? rect.right - width : rect.left;
     const height = options.length * ITEM_H + 10;
@@ -575,7 +585,40 @@ export function SelectMenu({
 
   return (
     <>
-      {variant === "tile" ? (
+      {variant === "round" ? (
+        /* the TRANSPORT face: one circle among circles. It carries no
+           caption — the row is a transport, not a form, and the chosen
+           device is read from the panel's check (and from the accessible
+           name, which names value as well as field) */
+        <button
+          type="button"
+          ref={rootRef}
+          aria-label={current ? `${ariaLabel}: ${current.label}` : ariaLabel}
+          aria-haspopup="listbox"
+          aria-expanded={at !== null}
+          disabled={disabled}
+          onMouseEnter={hoverable && !disabled ? () => {
+            cancelScheduledClose();
+            if (!at) {
+              hoverOpenedAt.current = Date.now();
+              toggle();
+            }
+          } : undefined}
+          onMouseLeave={hoverable ? scheduleClose : undefined}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (at && Date.now() - hoverOpenedAt.current < 400) return;
+            toggle();
+          }}
+          className={`tap grid h-10 w-10 shrink-0 place-items-center rounded-full border transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+            at !== null
+              ? "border-accent bg-accent-soft text-accent"
+              : "border-border bg-surface text-fg-muted hover:border-border-strong hover:bg-surface-2 hover:text-fg"
+          } ${className}`}
+        >
+          {icon}
+        </button>
+      ) : variant === "tile" ? (
         /* the CALL-BAR face: one big glyph filling the button — the arrow
            left (user directive, 2026-08-26) with hover doing its job. The
            sizes are clamp()ed to the viewport so the row breathes on a
@@ -729,6 +772,7 @@ export function ConfirmDialog({
   busy = false,
   confirmDisabled = false,
   wide = false,
+  alt,
   onConfirm,
   onCancel,
 }: {
@@ -745,6 +789,15 @@ export function ConfirmDialog({
   confirmDisabled?: boolean;
   /** a body holding a LIST needs the room; prose does not */
   wide?: boolean;
+  /**
+   * A SECOND real action beside confirm — the recorder's stop asks
+   * "save it, or delete it?", and both are answers, not dismissals.
+   *
+   * Deliberately its own slot rather than repurposing cancel: cancel also
+   * fires on Escape and on a backdrop click, so an action parked there
+   * would run every time someone dismissed the dialog.
+   */
+  alt?: { label: string; onSelect: () => void; danger?: boolean };
   onConfirm: () => void;
   onCancel: () => void;
 }) {
@@ -778,6 +831,16 @@ export function ConfirmDialog({
           <button type="button" className="btn-secondary h-9 min-h-0 px-4 text-sm" onClick={onCancel}>
             {cancelLabel}
           </button>
+          {alt ? (
+            <button
+              type="button"
+              className={`${alt.danger ? "btn-danger" : "btn-secondary"} h-9 min-h-0 px-4 text-sm`}
+              disabled={busy}
+              onClick={alt.onSelect}
+            >
+              {alt.label}
+            </button>
+          ) : null}
           <button
             type="button"
             className={`${danger ? "btn-danger" : "btn-primary"} h-9 min-h-0 px-4 text-sm`}

@@ -23,26 +23,28 @@ import { Link } from "@/i18n/routing";
 import { digits, formatClock, modelLabel } from "@/lib/format";
 import { resumePoint } from "./uploadRules";
 import { AgendaPanel, RecorderNotes } from "./RecorderNotes";
-import { SelectMenu } from "@/components/rowActions";
+import { ConfirmDialog, KebabMenu, SelectMenu, type KebabItem } from "@/components/rowActions";
 import {
   IconCheck, IconChip, IconClock, IconFileText, IconGlobe, IconMic,
-  IconPause, IconPlay, IconPulse, IconSpeaker, IconTrash,
+  IconPause, IconPeople3, IconPlay, IconPulse, IconSettings, IconSpeaker,
 } from "@/components/icons";
 import { playTestChime } from "@/lib/deviceTest";
 import { useAudioLevel } from "@/lib/useAudioLevel";
-import { extractKeywords } from "@/lib/keywords";
 import { customTemplates, type CustomTemplate } from "@/lib/summaryTemplates";
 import { SUMMARY_TEMPLATES, type SummaryTemplate } from "@echo/core/vocabulary";
 
-/** the record's tabs (user directive, 2026-08-26) — summary is
-    deliberately absent: it is written when the take is processed, and a
-    live tab for it would be an empty promise */
-const TABS = ["transcript", "notes", "keywords"] as const;
-const TAB_KEY = {
-  transcript: "tabTranscript",
-  notes: "tabNotes",
-  keywords: "tabKeywords",
-} as const;
+/**
+ * The live transcript's speaker tones. Four, cycling: the live lane hands
+ * us opaque labels ("1", "2", …) and nothing else, so colour is the only
+ * way one voice reads as continuous down the column. It is deliberately
+ * NOT a name — names are matched to the directory after the take.
+ */
+const SPEAKER_TONE = [
+  "border-accent/50 text-accent",
+  "border-success/50 text-success",
+  "border-warning/50 text-warning",
+  "border-info/50 text-info",
+] as const;
 
 /** ruled key → its label's message key (typed against the producer's union) */
 const TEMPLATE_KEY: Record<SummaryTemplate, "tplBoard" | "tplGroup" | "tplTeam" | "tplItTeam" | "tplInterview"> = {
@@ -105,14 +107,13 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
         res.models.map((m) => ({ value: m.id, label: modelLabel(m.id) }))))
       .catch(() => setModelOptions([]));
   }, []);
-  /** the red stop-and-delete asks AGAIN before acting (user directive) */
-  const [confirmDiscard, setConfirmDiscard] = useState(false);
   /** loudness enhance: a gain stage between the mic and the recorder */
   const [boost, setBoost] = useState(false);
   /** the CHECK's own monitoring gain — how loud the meter reads, so a
       far mic can be judged before the take (it does not change the take) */
   const [monitorGain, setMonitorGain] = useState(1);
-  const [tab, setTab] = useState<(typeof TABS)[number]>("transcript");
+  /** the stop button's question: save this take, or delete it? */
+  const [stopAsk, setStopAsk] = useState(false);
   /** speak «این جلسه ضبط می‌شود» into the room — and into the record */
   /**
    * RESUME mode: `?resume=<id>` — the call continues on the same id, next
@@ -256,133 +257,112 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
     );
   }
   /**
-   * ONE continuous picker row (user directive, 2026-08-26: "together
-   * without separation") — the fieldset boxes and legends are gone. The
-   * two data-tour anchors survive as invisible groups with the SAME gap
-   * inside and between them, so the guided tour can still ring each half
-   * while the eye sees a single row of tiles. While a take is live the
-   * row stays visible but LOCKED — these are the take's settings, and a
-   * picker that still worked mid-take would claim a change it cannot make.
+   * THE SETTINGS MENU (user directive, 2026-08-26: "all the icons for
+   * speaker, language, summary and model must be in a setting icon,
+   * coming up with a kebab menu, with sub kebab menu like the style that
+   * we have in the theme").
+   *
+   * Four rows, each a flyout of its own values — the theme's own nested
+   * kebab, so this menu inherits the placement, the RTL flip and the
+   * never-scrolls rule for free. The chosen value wears the check in the
+   * icon gutter, which is why these rows pass `icon: null` when unchosen:
+   * a value row is not an action (the KebabItem escape hatch).
+   *
+   * The mic and the source do NOT live here — they are the two controls a
+   * person reaches for while looking at the meter, so they keep their own
+   * round buttons in the transport.
    */
-  const pickers = (locked: boolean) => (
-    <div className="flex flex-wrap items-start gap-4">
-      <div data-tour="rec-devices" className="flex flex-wrap items-start gap-4">
-        <SelectMenu
-          variant="tile"
-          ariaLabel={t("micField")}
-          panelHeading={t("micField")}
-          icon={<IconMic />}
-          value={micId}
-          onChange={setMicId}
-          disabled={locked}
-          options={
-            mics.length === 0
-              ? [{ value: "", label: t("micDefault") }]
-              : mics.map((d) => ({ value: d.id, label: d.label }))
-          }
-          panelFooter={
-            <MicLevelFooter
-              micId={micId}
-              label={t("menuLevel")}
-              gain={monitorGain}
-              gainLabel={t("micGain")}
-              onGainChange={setMonitorGain}
-              boost={boost}
-              boostLabel={t("boostOption")}
-              boostHint={t("boostHint")}
-              onBoostChange={setBoost}
-            />
-          }
-        />
-        <SelectMenu
-          variant="tile"
-          ariaLabel={t("speakerField")}
-          panelHeading={t("speakerField")}
-          icon={<IconSpeaker />}
-          value={speakerId}
-          onChange={setSpeakerId}
-          disabled={locked}
-          options={
-            speakers.length === 0
-              ? [{ value: "", label: t("speakerDefault") }]
-              : speakers.map((d) => ({ value: d.id, label: d.label }))
-          }
-          panelFooter={
-            <button
-              type="button"
-              className="tap w-full rounded-md px-1 py-1 text-start text-xs text-accent hover:bg-surface-2"
-              onClick={() => void playTestChime(speakerId)}
-            >
-              {t("menuPlayTest")}
-            </button>
-          }
-        />
-        <SelectMenu
-          variant="tile"
-          ariaLabel={t("sourceField")}
-          panelHeading={t("sourceField")}
-          icon={<IconPulse />}
-          value={source}
-          onChange={(v) => setSource(v as "mic" | "system")}
-          disabled={locked}
-          options={[
-            { value: "mic", label: t("sourceMic") },
-            { value: "system", label: t("sourceSystem") },
-          ]}
-        />
-      </div>
-      <div data-tour="rec-meeting" className="flex flex-wrap items-start gap-4">
-        {/* the transcriber's hint — set at creation */}
-        <SelectMenu
-          variant="tile"
-          ariaLabel={t("languageField")}
-          panelHeading={t("languageField")}
-          icon={<IconGlobe />}
-          value={language}
-          onChange={(v) => setLanguage(v as "fa" | "en" | "mixed")}
-          disabled={locked || resuming}
-          options={[
-            { value: "mixed", label: t("languageMixed") },
-            { value: "fa", label: t("languageFa") },
-            { value: "en", label: t("languageEn") },
-          ]}
-        />
-        {/* 0094: the summary's SHAPE chosen before the meeting — the
-            ruled five plus this person's own templates */}
-        <SelectMenu
-          variant="tile"
-          ariaLabel={t("templateField")}
-          panelHeading={t("templateField")}
-          icon={<IconFileText />}
-          value={template}
-          onChange={setTemplate}
-          disabled={locked || resuming}
-          options={[
-            { value: "", label: t("templateNone") },
-            ...SUMMARY_TEMPLATES.map((k) => ({ value: k, label: t(TEMPLATE_KEY[k]) })),
-            ...customs.map((c) => ({ value: `custom:${c.name}`, label: c.name })),
-          ]}
-        />
-        {/* 0099: the model for this meeting's summaries. The empty
-            choice is NAMED — the default is the worker's own ladder,
-            and pre-selecting a model here would destroy the "has
-            not chosen" state M5 protects. */}
-        <SelectMenu
-          variant="tile"
-          ariaLabel={t("modelField")}
-          panelHeading={t("modelField")}
-          icon={<IconChip />}
-          value={summaryModel}
-          onChange={setSummaryModel}
-          disabled={locked || resuming}
-          options={[
-            { value: "", label: t("modelDefault") },
-            ...modelOptions,
-          ]}
-        />
-      </div>
-    </div>
-  );
+  const MODEL_ROWS = 12;
+  const checked = (on: boolean) => (on ? <IconCheck width={14} height={14} /> : null);
+  const settingsItems: KebabItem[] = [
+    {
+      key: "speaker",
+      label: t("speakerField"),
+      icon: <IconSpeaker width={15} height={15} />,
+      sub: [
+        ...(speakers.length === 0
+          ? [{ value: "", label: t("speakerDefault") }]
+          : speakers.map((d) => ({ value: d.id, label: d.label }))
+        ).map((o) => ({
+          key: `sp-${o.value}`,
+          label: o.label,
+          icon: checked(o.value === speakerId),
+          onSelect: () => setSpeakerId(o.value),
+        })),
+        {
+          key: "sp-test",
+          label: t("menuPlayTest"),
+          icon: <IconPlay width={14} height={14} />,
+          keepOpen: true,
+          onSelect: () => void playTestChime(speakerId),
+        },
+      ],
+    },
+    {
+      key: "language",
+      label: t("languageField"),
+      icon: <IconGlobe width={15} height={15} />,
+      sub: [
+        { value: "mixed", label: t("languageMixed") },
+        { value: "fa", label: t("languageFa") },
+        { value: "en", label: t("languageEn") },
+      ].map((o) => ({
+        key: `lang-${o.value}`,
+        label: o.label,
+        icon: checked(o.value === language),
+        disabled: resuming,
+        onSelect: () => setLanguage(o.value as "fa" | "en" | "mixed"),
+      })),
+    },
+    {
+      key: "template",
+      label: t("templateField"),
+      icon: <IconFileText width={15} height={15} />,
+      sub: [
+        { value: "", label: t("templateNone") },
+        ...SUMMARY_TEMPLATES.map((k) => ({ value: k as string, label: t(TEMPLATE_KEY[k]) })),
+        ...customs.map((c) => ({ value: `custom:${c.name}`, label: c.name })),
+      ].map((o) => ({
+        key: `tpl-${o.value}`,
+        label: o.label,
+        icon: checked(o.value === template),
+        disabled: resuming,
+        onSelect: () => setTemplate(o.value),
+      })),
+    },
+    {
+      key: "model",
+      label: t("modelField"),
+      icon: <IconChip width={15} height={15} />,
+      sub: [
+        {
+          key: "model-",
+          label: t("modelDefault"),
+          icon: checked(summaryModel === ""),
+          disabled: resuming,
+          onSelect: () => setSummaryModel(""),
+        },
+        /* the catalogue runs to hundreds and this menu never scrolls, so
+           the flyout carries the head of the list and SAYS what it left
+           out — a silently truncated list reads as the whole catalogue */
+        ...modelOptions.slice(0, MODEL_ROWS).map((o) => ({
+          key: `model-${o.value}`,
+          label: o.label,
+          icon: checked(o.value === summaryModel),
+          disabled: resuming,
+          onSelect: () => setSummaryModel(o.value),
+        })),
+        ...(modelOptions.length > MODEL_ROWS
+          ? [{
+              key: "model-more",
+              label: t("modelMore", { n: digits(modelOptions.length - MODEL_ROWS, locale) }),
+              icon: null,
+              disabled: true,
+            }]
+          : []),
+      ],
+    },
+  ];
 
   /**
    * THE ROLLING WAVE (user directive, 2026-08-26, from the reference
@@ -396,37 +376,32 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
    * a band whose whole content is transient.
    */
   const waveBand = () => {
-    /* the numbers follow the open-source consensus (react-voice-visualizer,
-       react-audio-visualize, wavesurfer's record plugin — researched
-       2026-08-26): thin pills at a ~2:1 bar:gap ratio, mirrored around the
-       vertical centre, a 2px hairline floor when silent (never zero, never
-       boxes), history slightly dimmer than the newest bars, and the band
-       sitting directly on the page — no frame around a waveform */
-    const SLOTS = 160;
+    const SLOTS = 96;
     const shown = s.wave.slice(-SLOTS);
     const pad = SLOTS - shown.length;
     const span = s.recordedMs - s.waveStartMs;
     const msPerSample = s.wave.length > 0 && span > 0 ? span / s.wave.length : 0;
     const visibleStartMs = s.recordedMs - shown.length * msPerSample;
     const windowSpan = s.recordedMs - visibleStartMs;
+    /* the glow follows the LIVE level, in three steps rather than
+       continuously: a filter that changes every frame re-rasterises the
+       band, and nobody can see more than three steps of a halo anyway */
+    const glow = phase !== "recording" || s.level < 0.08 ? "0" : s.level < 0.35 ? "1" : "2";
     return (
       <div className="mt-3" dir="ltr" aria-hidden>
-        <div className="relative flex h-28 items-center gap-px">
-          {Array.from({ length: SLOTS }, (_, i) => {
-            const v = i < pad ? 0 : shown[i - pad]!;
-            const active = v > 0.02;
-            return (
-              <span
-                key={i}
-                className={`min-w-px flex-1 rounded-full ${
-                  active
-                    ? i >= SLOTS - 12 ? "bg-accent" : "bg-accent/65"
-                    : "bg-fg-subtle/30"
-                }`}
-                style={{ height: active ? `${Math.min(100, 6 + v * 110)}%` : "2px" }}
-              />
-            );
-          })}
+        <div className="wave-band h-28" data-glow={glow}>
+          {s.wave.length === 0 ? <span className="wave-idle" /> : null}
+          {Array.from({ length: SLOTS }, (_, i) => (
+            <span
+              key={i}
+              className="wave-bar"
+              style={{
+                /* the 0.02 floor IS the hairline — see globals.css */
+                "--v": Math.max(0.02, i < pad ? 0 : shown[i - pad]!),
+                "--age": (i / SLOTS).toFixed(3),
+              } as React.CSSProperties}
+            />
+          ))}
           {msPerSample > 0
             ? s.chapterMarks.map((ms, i) => {
                 const denom = s.recordedMs - visibleStartMs;
@@ -477,6 +452,34 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
 
   return (
     <Card>
+      {/* STOP asks (user directive, 2026-08-26): save it, or delete it.
+          Both are real answers, so neither rides the cancel slot — cancel
+          also fires on Escape and on a backdrop click, and an action
+          parked there would run every time somebody dismissed the box. */}
+      {stopAsk ? (
+        <ConfirmDialog
+          title={t("stopTitle")}
+          body={t("stopBody")}
+          cancelLabel={t("stopKeep")}
+          confirmLabel={t("stopSave")}
+          danger={false}
+          alt={{
+            label: t("stopDelete"),
+            danger: true,
+            onSelect: () => {
+              setStopAsk(false);
+              void discardRecording().then(({ deleted }) => {
+                notify(
+                  deleted ? t("discarded") : t("discardDeleteFailed"),
+                  deleted ? undefined : "warn",
+                );
+              });
+            },
+          }}
+          onConfirm={() => { setStopAsk(false); void finish(); }}
+          onCancel={() => setStopAsk(false)}
+        />
+      ) : null}
       {phase !== "done" ? (
         /* ONE surface for every state (user directive, 2026-08-26: "remove
            this page, just keep the second one") — idle, starting, live and
@@ -503,8 +506,7 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
               renaming is one pencil away on the record. `title` state stays:
               the agent's start_recording can still carry a name, and a
               resumed take keeps the one it already has. */}
-          {pickers(live || phase === "finishing")}
-          <div className="mt-4 flex items-center gap-3">
+          <div className="flex items-center gap-3">
             {/* the REC treatment measured off Riverside: while recording
                 the state wears a danger-tint pill; other states stay quiet */}
             <span
@@ -538,175 +540,164 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
                 locale,
               )}
             </span>
+            {/* the voices counted so far (user directive, 2026-08-26). It
+                appears only once the lane has actually attached a label:
+                a "0" or a "—" here would be a claim about the room, and
+                the honest state before the first label is silence. */}
+            {s.liveSpeakers.length > 0 ? (
+              <span
+                className="ms-auto inline-flex items-center gap-1.5 rounded-full border border-border px-2 py-0.5 text-xs text-fg-muted"
+                title={t("speakersSeen", { count: digits(s.liveSpeakers.length, locale) })}
+              >
+                <IconPeople3 width={14} height={14} />
+                <span className="tabular-nums">{digits(s.liveSpeakers.length, locale)}</span>
+              </span>
+            ) : null}
           </div>
 
           {waveBand()}
 
-          {/* the reference transport, with OUR real actions in its order:
-              mark, discard, the big pause/resume, finish — skip and speed
-              belong to playback, and a control that does nothing on a live
-              take would be a lie */}
-          {live ? (
-            <div className="mt-4 flex items-center justify-center gap-3" dir="ltr">
+          {/*
+            THE TRANSPORT (user directive, 2026-08-26), in the order asked
+            for: settings at the far left, pause beside it, the record
+            button in the middle, then the mic and the audio source.
+
+            The middle button is the whole state machine: red circle to
+            begin, white circle with a stop square while a take rolls, and
+            pressing stop ASKS — save it or delete it — because those are
+            two answers, not a confirmation.
+          */}
+          <div className="mt-4 flex items-center justify-center gap-3" dir="ltr">
+            <KebabMenu
+              label={t("settingsMenu")}
+              items={settingsItems}
+              trigger={<IconSettings width={18} height={18} />}
+              triggerClassName="h-10 w-10 rounded-full border border-border bg-surface text-fg-muted hover:border-border-strong hover:bg-surface-2 hover:text-fg"
+            />
+            <button
+              type="button"
+              title={phase === "recording" ? t("pause") : t("resume")}
+              aria-label={phase === "recording" ? t("pause") : t("resume")}
+              disabled={!live}
+              className="tap grid h-10 w-10 place-items-center rounded-full border border-border bg-surface text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg disabled:opacity-40"
+              onClick={phase === "recording" ? pause : resume}
+            >
+              {phase === "recording"
+                ? <IconPause width={18} height={18} />
+                : <IconPlay width={18} height={18} />}
+            </button>
+            {live ? (
               <button
                 type="button"
-                title={t("markButton")}
-                aria-label={t("markButton")}
-                className="tap grid h-10 w-10 place-items-center rounded-full border border-border bg-surface text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
-                onClick={() => { addChapterMark(s.recordedMs); notify(t("marked")); }}
+                title={t("stopButton")}
+                aria-label={t("stopButton")}
+                className="tap grid h-16 w-16 place-items-center rounded-full bg-fg shadow-lg transition-transform hover:scale-105 active:scale-95"
+                onClick={() => setStopAsk(true)}
               >
-                <IconClock width={16} height={16} />
+                <span aria-hidden className="block h-5 w-5 rounded-[4px] bg-danger" />
               </button>
-              {confirmDiscard ? (
-                /* stop WITHOUT saving asks again — the first press only arms */
-                <span className="flex items-center gap-2">
-                  <button
-                    className="btn-danger h-9 px-3 text-xs"
-                    onClick={() => {
-                      setConfirmDiscard(false);
-                      void discardRecording().then(({ deleted }) => {
-                        notify(
-                          deleted ? t("discarded") : t("discardDeleteFailed"),
-                          deleted ? undefined : "warn",
-                        );
-                      });
-                    }}
-                  >
-                    {t("discardConfirm")}
-                  </button>
-                  <button className="btn-ghost h-9 px-2 text-xs" onClick={() => setConfirmDiscard(false)}>
-                    {t("discardKeep")}
-                  </button>
-                </span>
-              ) : (
-                <button
-                  type="button"
-                  title={t("discard")}
-                  aria-label={t("discard")}
-                  className="tap grid h-10 w-10 place-items-center rounded-full border border-danger/40 bg-surface text-danger transition-colors hover:bg-danger/10"
-                  onClick={() => setConfirmDiscard(true)}
-                >
-                  <IconTrash width={16} height={16} />
-                </button>
-              )}
-              <button
-                type="button"
-                title={phase === "recording" ? t("pause") : t("resume")}
-                aria-label={phase === "recording" ? t("pause") : t("resume")}
-                className="tap grid h-16 w-16 place-items-center rounded-full bg-fg text-surface shadow-lg transition-transform hover:scale-105 active:scale-95"
-                onClick={phase === "recording" ? pause : resume}
-              >
-                {phase === "recording"
-                  ? <IconPause width={24} height={24} />
-                  : <IconPlay width={24} height={24} />}
-              </button>
-              <button
-                type="button"
-                title={t("finish")}
-                aria-label={t("finish")}
-                className="tap grid h-10 w-10 place-items-center rounded-full bg-accent text-on-accent shadow transition-transform hover:scale-105"
-                onClick={() => void finish()}
-              >
-                <IconCheck width={16} height={16} />
-              </button>
-            </div>
-          ) : phase === "idle" || phase === "starting" ? (
-            /* the transport's centre before the take exists: ONE big red
-               record circle (the reference's), label under it */
-            <div className="mt-4 flex flex-col items-center gap-2" dir="ltr">
+            ) : (
               <button
                 data-tour="rec-start"
+                type="button"
+                title={resuming ? t("resumeStart") : t("start")}
                 aria-label={resuming ? t("resumeStart") : t("start")}
                 className="tap grid h-16 w-16 place-items-center rounded-full bg-danger text-white shadow-lg transition-transform hover:scale-105 active:scale-95 disabled:opacity-60"
-                disabled={phase === "starting"}
+                disabled={phase === "starting" || phase === "finishing"}
                 onClick={() => start()}
               >
                 <span aria-hidden className="block h-5 w-5 rounded-full border-2 border-white" />
               </button>
-              <span className="text-sm font-medium text-fg-muted">
-                {phase === "starting" ? t("starting") : resuming ? t("resumeStart") : t("start")}
-              </span>
-            </div>
-          ) : null}
-
-          {/* the record's own tabs: transcript, notes, keywords — all of it
-              coming OUT of the take (user directive, 2026-08-26) */}
-          <div role="tablist" className="mt-5 flex gap-6 border-b border-border">
-            {TABS.map((k) => (
-              <button
-                key={k}
-                type="button"
-                role="tab"
-                aria-selected={tab === k}
-                className={`tap -mb-px border-b-[3px] px-0.5 py-2 text-sm transition-colors ${
-                  tab === k
-                    ? "border-accent font-semibold text-fg"
-                    : "border-transparent text-fg-muted hover:text-fg"
-                }`}
-                onClick={() => setTab(k)}
-              >
-                {t(TAB_KEY[k])}
-              </button>
-            ))}
+            )}
+            <SelectMenu
+              variant="round"
+              ariaLabel={t("micField")}
+              panelHeading={t("micField")}
+              icon={<IconMic width={18} height={18} />}
+              value={micId}
+              onChange={setMicId}
+              disabled={live || phase === "finishing"}
+              options={
+                mics.length === 0
+                  ? [{ value: "", label: t("micDefault") }]
+                  : mics.map((d) => ({ value: d.id, label: d.label }))
+              }
+              panelFooter={
+                <MicLevelFooter
+                  micId={micId}
+                  label={t("menuLevel")}
+                  gain={monitorGain}
+                  gainLabel={t("micGain")}
+                  onGainChange={setMonitorGain}
+                  boost={boost}
+                  boostLabel={t("boostOption")}
+                  boostHint={t("boostHint")}
+                  onBoostChange={setBoost}
+                />
+              }
+            />
+            <SelectMenu
+              variant="round"
+              ariaLabel={t("sourceField")}
+              panelHeading={t("sourceField")}
+              icon={<IconPulse width={18} height={18} />}
+              value={source}
+              onChange={(v) => setSource(v as "mic" | "system")}
+              disabled={live || phase === "finishing"}
+              options={[
+                { value: "mic", label: t("sourceMic") },
+                { value: "system", label: t("sourceSystem") },
+              ]}
+            />
           </div>
-          <div className="mt-3">
-            {tab === "transcript" ? (
-              /* M38 live captions as stamped ROWS. Interim renders muted at
-                 the tail; absence still says so. */
-              s.captions !== null ? (
-                s.captionRows.length === 0 && s.captions.interim === "" ? (
-                  <p className="text-sm text-fg-muted">{t("liveWaiting")}</p>
-                ) : (
-                  <div className="max-h-80 space-y-3 overflow-y-auto pe-1">
-                    {s.captionRows.map((row, i) => (
+
+          {/* THE TRANSCRIPT — the surface's main column now that Keywords
+              is gone and Notes moved beside the action items (user
+              directive, 2026-08-26). Stamped rows, one per turn; a
+              speaker change opens a row and wears its own tone. */}
+          <div className="mt-5 border-t border-border pt-4">
+            {s.captions !== null ? (
+              s.captionRows.length === 0 && s.captions.interim === "" ? (
+                <p className="text-sm text-fg-muted">{t("liveWaiting")}</p>
+              ) : (
+                <div className="max-h-80 space-y-3 overflow-y-auto pe-1">
+                  {s.captionRows.map((row, i) => {
+                    const tone = row.speaker
+                      ? SPEAKER_TONE[s.liveSpeakers.indexOf(row.speaker) % SPEAKER_TONE.length]!
+                      : null;
+                    return (
                       <div key={i} className="flex gap-3 text-sm leading-7">
                         <span className="ltr w-10 shrink-0 pt-0.5 text-end text-xs tabular-nums text-fg-subtle">
                           {formatClock(Math.floor(row.atMs / 1000), locale)}
                         </span>
+                        {row.speaker ? (
+                          <span
+                            className={`mt-1 grid h-5 w-5 shrink-0 place-items-center rounded-full border text-[10px] font-semibold tabular-nums ${tone}`}
+                            title={t("speakerNamed", { n: digits(row.speaker, locale) })}
+                          >
+                            {digits(row.speaker, locale)}
+                          </span>
+                        ) : null}
                         <p dir="auto" className="min-w-0 flex-1 whitespace-pre-wrap text-fg">
                           {row.text}
                         </p>
                       </div>
-                    ))}
-                    {s.captions.interim !== "" ? (
-                      <p dir="auto" className="ps-[3.25rem] text-sm leading-7 text-fg-muted">
-                        {s.captions.interim}
-                      </p>
-                    ) : null}
-                  </div>
-                )
-              ) : s.captionsDown ? (
-                <p className="text-xs text-fg-muted">{t("liveUnavailable")}</p>
-              ) : (
-                /* no lane and no failure = the take has not started */
-                <p className="text-sm text-fg-muted">
-                  {t(live || phase === "finishing" ? "liveWaiting" : "transcriptIdle")}
-                </p>
+                    );
+                  })}
+                  {s.captions.interim !== "" ? (
+                    <p dir="auto" className="ps-[3.25rem] text-sm leading-7 text-fg-muted">
+                      {s.captions.interim}
+                    </p>
+                  ) : null}
+                </div>
               )
-            ) : tab === "notes" ? (
-              s.callId ? (
-                <RecorderNotes callId={s.callId} atMs={s.recordedMs} onChapter={addChapterMark} />
-              ) : (
-                <p className="text-sm text-fg-muted">{t("notesIdle")}</p>
-              )
+            ) : s.captionsDown ? (
+              <p className="text-xs text-fg-muted">{t("liveUnavailable")}</p>
             ) : (
-              (() => {
-                /* derived LIVE from the transcript so far — counted, never
-                   guessed (lib/keywords) */
-                const words = extractKeywords(s.captions?.finals ?? "");
-                return words.length === 0 ? (
-                  <p className="text-sm text-fg-muted">{t("keywordsEmpty")}</p>
-                ) : (
-                  <div className="flex flex-wrap gap-2">
-                    {words.map(({ word, count }) => (
-                      <span key={word} dir="auto" className="rounded-full bg-surface-2 px-3 py-1 text-sm text-fg">
-                        {word}
-                        <span className="ms-1.5 text-xs text-fg-subtle">{digits(count, locale)}</span>
-                      </span>
-                    ))}
-                  </div>
-                );
-              })()
+              /* no lane and no failure = the take has not started */
+              <p className="text-sm text-fg-muted">
+                {t(live || phase === "finishing" ? "liveWaiting" : "transcriptIdle")}
+              </p>
             )}
           </div>
 
@@ -737,7 +728,7 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
 
         </div>
 
-        <div className="mt-4 lg:mt-0">
+        <div className="mt-4 space-y-4 lg:mt-0">
           {/* items can be planned BEFORE the take (client state); ticking
               one persists a stamped chapter, so it waits for the call */}
           <AgendaPanel
@@ -745,6 +736,59 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
             atMs={s.recordedMs}
             onChapter={addChapterMark}
           />
+
+          {/* the notebook moved UNDER the action items (user directive,
+              2026-08-26) — and it carries the mark-this-moment button that
+              left the transport, which is where a marker belongs anyway:
+              beside the writing it anchors */}
+          <div className="rounded-xl border border-border bg-surface p-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold text-fg">{t("notesTitle")}</p>
+              {live ? (
+                <button
+                  type="button"
+                  title={t("markButton")}
+                  aria-label={t("markButton")}
+                  className="tap grid h-7 w-7 place-items-center rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg"
+                  onClick={() => { addChapterMark(s.recordedMs); notify(t("marked")); }}
+                >
+                  <IconClock width={15} height={15} />
+                </button>
+              ) : null}
+            </div>
+            {s.callId ? (
+              <div className="mt-2">
+                <RecorderNotes callId={s.callId} atMs={s.recordedMs} onChapter={addChapterMark} />
+              </div>
+            ) : (
+              <p className="mt-2 text-xs leading-5 text-fg-muted">{t("notesIdle")}</p>
+            )}
+          </div>
+
+          {/* the voices the lane has told apart so far. They are NUMBERS,
+              deliberately: live diarization separates speakers, it does
+              not name them — matching a voice to a person in the directory
+              happens after the take, and a name here would be a guess
+              wearing an avatar. */}
+          {s.liveSpeakers.length > 0 ? (
+            <div className="rounded-xl border border-border bg-surface p-3">
+              <p className="text-sm font-semibold text-fg">{t("peopleTitle")}</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {s.liveSpeakers.map((label, i) => (
+                  <span
+                    key={label}
+                    title={t("speakerNamed", { n: digits(label, locale) })}
+                    className={`grid h-8 w-8 place-items-center rounded-full border bg-surface-2 text-xs font-semibold tabular-nums ${
+                      SPEAKER_TONE[i % SPEAKER_TONE.length]
+                    }`}
+                  >
+                    {digits(label, locale)}
+                  </span>
+                ))}
+              </div>
+              <p className="mt-2 text-[11px] leading-4 text-fg-subtle">{t("peopleHint")}</p>
+            </div>
+          ) : null}
         </div>
         </div>
       ) : null}

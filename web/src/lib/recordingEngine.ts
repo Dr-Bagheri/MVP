@@ -57,8 +57,15 @@ export interface RecorderSnapshot {
   progress: UploaderProgress;
   error: RecorderErrorCode | null;
   captions: { finals: string; interim: string } | null;
-  /** the finals broken into stamped rows — the transcript tab's lines */
+  /** the finals broken into stamped rows — the transcript's lines */
   captionRows: CaptionRow[];
+  /**
+   * DISTINCT speaker labels the live lane has attached so far, in the
+   * order they first spoke (M38 + 2026-08-26 diarization). Empty means
+   * the lane attached none — a UI must read it as "nothing to say about
+   * speakers", never as zero people in the room.
+   */
+  liveSpeakers: string[];
   captionsDown: boolean;
   previews: { idx: number; url: string }[];
 }
@@ -95,7 +102,7 @@ let snapshot: RecorderSnapshot = {
   phase: "idle", callId: null, title: "", recordedMs: 0, level: 0,
   wave: [], waveStartMs: 0, chapterMarks: [], quality: null,
   progress: { done: 0, pending: 0, failed: 0 }, error: null,
-  captions: null, captionRows: [], captionsDown: false, previews: [],
+  captions: null, captionRows: [], liveSpeakers: [], captionsDown: false, previews: [],
 };
 
 const listeners = new Set<() => void>();
@@ -147,6 +154,7 @@ let liveRec: MediaRecorder | null = null;
 let liveEs: EventSource | null = null;
 let liveFinals = "";
 let liveRows: CaptionRow[] = [];
+let liveSpeakers: string[] = [];
 
 // ---- phase + the things that ride on it ------------------------------------
 
@@ -209,7 +217,13 @@ async function startLiveCaptions(mime: string): Promise<void> {
   }
   liveFinals = "";
   liveRows = [];
-  patch({ captions: { finals: "", interim: "" }, captionRows: [], captionsDown: false });
+  liveSpeakers = [];
+  patch({
+    captions: { finals: "", interim: "" },
+    captionRows: [],
+    liveSpeakers: [],
+    captionsDown: false,
+  });
   const rec = new MediaRecorder(stream!, { mimeType: mime });
   rec.ondataavailable = (event) => {
     if (event.data.size > 0 && liveId) {
@@ -223,7 +237,7 @@ async function startLiveCaptions(mime: string): Promise<void> {
     try {
       const body = JSON.parse(event.data as string) as {
         type: string;
-        tokens?: { text: string; is_final: boolean }[];
+        tokens?: { text: string; is_final: boolean; speaker?: string }[];
       };
       if (body.type === "closed" || body.type === "error") {
         es.close();
@@ -231,15 +245,28 @@ async function startLiveCaptions(mime: string): Promise<void> {
         return;
       }
       if (body.type === "tokens" && body.tokens) {
-        const finalText = body.tokens.filter((t) => t.is_final).map((t) => t.text).join("");
         const interim = body.tokens.filter((t) => !t.is_final).map((t) => t.text).join("");
-        if (finalText) {
-          liveFinals += finalText;
+        /*
+         * Finals are folded ONE TOKEN AT A TIME, not joined first: a frame
+         * can carry two people's words, and joining before the row rule
+         * sees them would glue a handover into a single stamped line
+         * attributed to whoever spoke last.
+         */
+        for (const token of body.tokens) {
+          if (!token.is_final) continue;
+          liveFinals += token.text;
           // stamped with the take's clock as the fragment ARRIVES — the
           // lane itself carries no timestamps (see lib/captionRows)
-          liveRows = appendCaptionRow(liveRows, finalText, recordedMs);
+          liveRows = appendCaptionRow(liveRows, token.text, recordedMs, token.speaker);
+          if (token.speaker !== undefined && !liveSpeakers.includes(token.speaker)) {
+            liveSpeakers = [...liveSpeakers, token.speaker];
+          }
         }
-        patch({ captions: { finals: liveFinals, interim }, captionRows: liveRows });
+        patch({
+          captions: { finals: liveFinals, interim },
+          captionRows: liveRows,
+          liveSpeakers,
+        });
       }
     } catch { /* not a caption frame */ }
   };
@@ -735,7 +762,7 @@ export async function discardRecording(): Promise<{ deleted: boolean }> {
     phase: "idle", callId: null, title: "", recordedMs: 0, level: 0,
     wave: [], waveStartMs: 0, chapterMarks: [], quality: null,
     progress: { done: 0, pending: 0, failed: 0 }, error: null,
-    captions: null, captionRows: [], captionsDown: false, previews: [],
+    captions: null, captionRows: [], liveSpeakers: [], captionsDown: false, previews: [],
   });
   return { deleted };
 }
@@ -772,6 +799,6 @@ export function resetRecorder(): void {
     phase: "idle", callId: null, title: "", recordedMs: 0, level: 0,
     wave: [], waveStartMs: 0, chapterMarks: [], quality: null,
     progress: { done: 0, pending: 0, failed: 0 }, error: null,
-    captions: null, captionRows: [], captionsDown: false, previews: [],
+    captions: null, captionRows: [], liveSpeakers: [], captionsDown: false, previews: [],
   });
 }

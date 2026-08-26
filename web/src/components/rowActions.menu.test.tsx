@@ -157,6 +157,58 @@ describe("the SelectMenu tile face", () => {
  * select opening under a passing pointer would be a regression, not a
  * feature spreading.
  */
+/**
+ * The nested flyout (`sub`). It has carried the export menu and the
+ * dashboard's add-widget menu since 2026-08-25 with no test at all — and
+ * the recorder's settings gear now depends on it for every device,
+ * language, template and model choice, so it gets one.
+ */
+describe("the sub-menu flyout", () => {
+  it("a sub row opens its flyout instead of acting", () => {
+    const onParent = vi.fn();
+    const onChild = vi.fn();
+    render(
+      <KebabMenu
+        label="menu"
+        items={[{
+          key: "lang",
+          label: "Language",
+          icon: dot,
+          onSelect: onParent,
+          sub: [{ key: "fa", label: "Persian", icon: null, onSelect: onChild }],
+        }]}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "menu" }));
+    // the child is not rendered until its parent row is pressed
+    expect(screen.queryByRole("menuitem", { name: "Persian" })).toBeNull();
+    fireEvent.click(screen.getByRole("menuitem", { name: /Language/ }));
+    expect(screen.getByRole("menuitem", { name: "Persian" })).toBeTruthy();
+    // pressing a row that OWNS a flyout must not also fire its own action
+    expect(onParent).not.toHaveBeenCalled();
+  });
+
+  it("choosing inside the flyout acts and closes everything", () => {
+    const onChild = vi.fn();
+    render(
+      <KebabMenu
+        label="menu"
+        items={[{
+          key: "lang",
+          label: "Language",
+          icon: dot,
+          sub: [{ key: "fa", label: "Persian", icon: null, onSelect: onChild }],
+        }]}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "menu" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /Language/ }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Persian" }));
+    expect(onChild).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("menu")).toBeNull();
+  });
+});
+
 describe("the tile face opens on hover", () => {
   it("opens on enter, closes after the pointer has passed", () => {
     vi.useFakeTimers();

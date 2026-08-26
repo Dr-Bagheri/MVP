@@ -131,6 +131,10 @@ export const IconPause = (p: SVGProps<SVGSVGElement>) => (
 export const IconClock = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" /></svg>
 );
+/** settings — a gear */
+export const IconSettings = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><circle cx="12" cy="12" r="3.2" /><path d="M12 3.5v2M12 18.5v2M20.5 12h-2M5.5 12h-2M18 6l-1.4 1.4M7.4 16.6 6 18M18 18l-1.4-1.4M7.4 7.4 6 6" /></svg>
+);
 /** confirm / finish */
 export const IconCheck = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>

@@ -634,6 +634,63 @@
 }
 .tile > * { position: relative; z-index: 1; }
 
+/* --- the live wave band ----------------------------------------------
+   Drawn from the open-source consensus (elevenlabs/ui live-waveform,
+   react-voice-visualizer, wavesurfer's record plugin — researched
+   2026-08-26). The two techniques that make it read as instrumentation
+   rather than as a row of divs:
+
+   1. the gradient lives in BAND space, not bar space. A per-bar gradient
+      scales with its own bar, so a 4px bar and a 100px bar show the same
+      ramp and the effect disappears. Every bar is full height with the
+      same background, and `clip-path` REVEALS the amplitude — which also
+      keeps the pill caps circular (a scaleY squashes them into ellipses).
+   2. the glow is ONE filter on the container, quantised into three steps
+      by the live level. Per-bar filters would allocate a buffer per bar,
+      and a filter that changes every frame re-rasterises the whole band. */
+.wave-band {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  contain: layout paint;
+  /* the OLD edge fades; the new edge stays crisp because the playhead
+     lives there — a symmetric fade would dim the one bar that is "now" */
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 40px, #000 100%);
+  mask-image: linear-gradient(to right, transparent 0, #000 40px, #000 100%);
+}
+.wave-band[data-glow="1"] { filter: drop-shadow(0 0 6px rgb(var(--accent) / .22)); }
+.wave-band[data-glow="2"] {
+  filter: drop-shadow(0 0 5px rgb(var(--accent) / .40)) drop-shadow(0 0 16px rgb(var(--accent) / .16));
+}
+.wave-bar {
+  flex: 1 1 0%;
+  min-width: 2px;
+  height: 100%;
+  border-radius: 999px;
+  background-image: linear-gradient(
+    to bottom,
+    rgb(var(--accent)) 0%,
+    rgb(var(--accent) / .60) 34%,
+    rgb(var(--accent) / .50) 50%,
+    rgb(var(--accent) / .60) 66%,
+    rgb(var(--accent)) 100%
+  );
+  /* the amplitude reveal, mirrored around the centre line. At the 0.02
+     floor this leaves a ~2px hairline — silence must never render as a
+     gap, which is indistinguishable from a band that crashed. */
+  clip-path: inset(calc((1 - var(--v)) * 50%) 0 round 999px);
+  opacity: calc((0.30 + 0.70 * var(--age)) * (0.45 + 0.55 * var(--v)));
+}
+/* nothing captured yet: a dotted centre rule, which says "ready" without
+   implying a microphone is already listening */
+.wave-idle {
+  position: absolute;
+  inset-inline: 0;
+  top: 50%;
+  border-top: 2px dotted rgb(var(--fg-subtle) / .45);
+}
+
 /* --- an inner cell on a gradient tile --------------------------------
    NOT `bg-white/12`: that utility computes to fully transparent in this
    project (measured — the class was present, on the element, and the

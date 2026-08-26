@@ -26,6 +26,16 @@ const SONIOX_RT_URL = "wss://stt-rt.soniox.com/transcribe-websocket";
 export interface LiveToken {
   text: string;
   is_final: boolean;
+  /**
+   * The provider's speaker label for this token — present only on the
+   * RECORDING lane, which asks for diarization (2026-08-26). Absent means
+   * "this lane does not diarize", never "one speaker": a consumer that
+   * counts must count the labels it actually receives.
+   *
+   * Normalized to a string HERE, at the only layer that knows the
+   * provider spells it as a number: the wire carries one spelling.
+   */
+  speaker?: string;
 }
 
 export type LiveEvent =
@@ -176,7 +186,24 @@ export function createLiveStt(options: LiveSttOptions = {}) {
           model,
           ...(format === "pcm16k"
             ? { audio_format: "pcm_s16le", sample_rate: 16000, num_channels: 1 }
-            : { audio_format: "auto" }),
+            : {
+                audio_format: "auto",
+                /*
+                 * Speakers, on the RECORDING lane only (2026-08-26). The
+                 * wake-word lane (pcm16k) listens for one person saying one
+                 * name — diarizing it would buy nothing and cost provider
+                 * work on every silent minute of the day.
+                 *
+                 * Proven before it shipped, against the real endpoint with
+                 * the multi-voice fixture (scripts/live-stt-probe.mjs):
+                 * captions still stream AND labels arrive (3 distinct on
+                 * that clip). That run is why this is a plain flag and not
+                 * a fallback ladder — the risk it would have hedged was
+                 * measured to be absent, and a ladder nobody can trigger is
+                 * untested code guarding a state that does not occur.
+                 */
+                enable_speaker_diarization: true,
+              }),
           language_hints: ["fa", "en"],
           enable_language_identification: true,
         }));
@@ -184,7 +211,7 @@ export function createLiveStt(options: LiveSttOptions = {}) {
       ws.addEventListener("message", ((event: { data: unknown }) => {
         try {
           const body = JSON.parse(String(event.data)) as {
-            tokens?: { text?: string; is_final?: boolean }[];
+            tokens?: { text?: string; is_final?: boolean; speaker?: number | string }[];
             error_code?: number | string;
           };
           if (body.error_code !== undefined) {
@@ -199,6 +226,11 @@ export function createLiveStt(options: LiveSttOptions = {}) {
               tokens: body.tokens.map((token) => ({
                 text: String(token.text ?? ""),
                 is_final: token.is_final === true,
+                /* absent stays ABSENT — a defaulted "1" would be this
+                   layer inventing a speaker nobody detected */
+                ...(token.speaker === undefined || token.speaker === null
+                  ? {}
+                  : { speaker: String(token.speaker) }),
               })),
             });
           }

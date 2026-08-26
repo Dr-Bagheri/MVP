@@ -38,6 +38,38 @@ describe("appendCaptionRow", () => {
     expect(rows).toHaveLength(2);
   });
 
+  it("a SPEAKER CHANGE opens a row, mid-sentence and all", () => {
+    // the rule that outranks every other: the fragment continues a
+    // sentence and is far under the length cap, and it still must not
+    // join — two people inside one stamped row is the one mistake a
+    // transcript cannot make
+    let rows: CaptionRow[] = [];
+    rows = appendCaptionRow(rows, "من فکر می‌کنم بودجه ", 1_000, "1");
+    rows = appendCaptionRow(rows, "نه، من مخالفم", 4_000, "2");
+    expect(rows).toHaveLength(2);
+    expect(rows[0]!.speaker).toBe("1");
+    expect(rows[1]!.speaker).toBe("2");
+    expect(rows[1]!.atMs).toBe(4_000);
+  });
+
+  it("the SAME speaker still joins the open row", () => {
+    // the discriminating half: if the speaker were compared wrongly (say
+    // by identity of a fresh object) every fragment would open a row and
+    // the transcript would become one line per token
+    let rows: CaptionRow[] = [];
+    rows = appendCaptionRow(rows, "بخش اول ", 1_000, "1");
+    rows = appendCaptionRow(rows, "و بخش دوم", 2_000, "1");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.text).toBe("بخش اول و بخش دوم");
+  });
+
+  it("an undiarized lane keeps rows with NO speaker field", () => {
+    // absent must stay absent all the way to the row: a defaulted label
+    // would let the UI render a speaker badge nobody detected
+    const rows = appendCaptionRow([], "سلام", 0);
+    expect(rows[0]!).not.toHaveProperty("speaker");
+  });
+
   it("never mutates its input", () => {
     const first = appendCaptionRow([], "سلام ", 0);
     const before = JSON.stringify(first);
