@@ -13,6 +13,7 @@ import { useRouter } from "@/i18n/routing";
 import { executeClientTool, SURFACE_TOOLS } from "@/lib/agentSurface";
 import { subscribeAssistantOpen, subscribeRecordingLive } from "@/lib/assistantBus";
 import { notify, subscribeNotify, type PlatformNotice } from "@/lib/notify";
+import { IconClose, IconPlus } from "@/components/icons";
 import { useAudioLevel, useSyntheticPulse } from "@/lib/useAudioLevel";
 import {
   currentSpeechAudio, speak, speakQueued, stopSpeaking, subscribeSpeechPlayback,
@@ -1085,7 +1086,7 @@ export function PresenceDock() {
               title={t("newConversation")}
               onClick={freshConversation}
             >
-              ＋
+              <IconPlus width={16} height={16} />
             </button>
             <button
               type="button"
@@ -1093,7 +1094,7 @@ export function PresenceDock() {
               aria-label={t("close")}
               onClick={closeDock}
             >
-              ✕
+              <IconClose width={16} height={16} />
             </button>
           </div>
 

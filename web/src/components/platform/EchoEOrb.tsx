@@ -54,14 +54,17 @@ const fragmentShader = /* glsl */ `
   varying float vAlpha;
   varying float vHue;
 
+  /* the violet family left with the palette (user directive, 2026-08-26:
+     "remove all purple") — the orb now runs cyan → blue → the accent's own
+     light blue, so it reads as the same instrument as every focus ring */
   vec3 palette(float t) {
     vec3 cyan = vec3(0.10, 0.88, 1.00);
-    vec3 blue = vec3(0.18, 0.38, 1.00);
-    vec3 violet = vec3(0.55, 0.25, 1.00);
-    vec3 pink = vec3(1.00, 0.27, 0.80);
+    vec3 blue = vec3(0.18, 0.45, 1.00);
+    vec3 sky  = vec3(0.49, 0.71, 1.00);
+    vec3 pale = vec3(0.78, 0.89, 1.00);
     if (t < 0.33) return mix(cyan, blue, t / 0.33);
-    if (t < 0.68) return mix(blue, violet, (t - 0.33) / 0.35);
-    return mix(violet, pink, (t - 0.68) / 0.32);
+    if (t < 0.68) return mix(blue, sky, (t - 0.33) / 0.35);
+    return mix(sky, pale, (t - 0.68) / 0.32);
   }
 
   void main() {

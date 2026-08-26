@@ -181,13 +181,13 @@ export default function SearchPage() {
                 {
                   key: "open",
                   label: t("openRecord"),
-                  icon: <IconOpen width={15} height={15} />,
+                  icon: <IconOpen width={16} height={16} />,
                   onSelect: () => router.push(`/calls/${hit.call_id}`),
                 },
                 {
                   key: "copy",
                   label: t("copyText"),
-                  icon: <IconCopy width={15} height={15} />,
+                  icon: <IconCopy width={16} height={16} />,
                   onSelect: () => {
                     void navigator.clipboard
                       .writeText(hit.snippet.replace(/<\/?mark>/g, ""))

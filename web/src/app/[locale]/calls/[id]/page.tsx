@@ -13,10 +13,7 @@ import { isFillerWord, stripFillers } from "@/lib/cleanRead";
 import { ConfirmDialog, IconAction, KebabMenu, SelectMenu } from "@/components/rowActions";
 import { RichTextEditor } from "@/components/RichTextEditor";
 import {
-  IconArchive, IconAsk, IconChip, IconCopy, IconDownload, IconEye, IconFileText,
-  IconFilter, IconGavel, IconGlobe, IconMic, IconOutline, IconParagraph,
-  IconPencil, IconPeople3, IconPrint, IconRedact, IconRetry, IconRows,
-  IconShare, IconSparkle, IconTag, IconUsers, IconZap,
+  IconArchive, IconAsk, IconChip, IconClose, IconCopy, IconDownload, IconEye, IconFileText, IconFilter, IconGavel, IconGlobe, IconMic, IconOutline, IconParagraph, IconPencil, IconPeople3, IconPlus, IconPrint, IconRedact, IconRetry, IconRows, IconShare, IconSparkle, IconTag, IconUsers, IconZap,
 } from "@/components/icons";
 import { SectionMenu } from "@/components/scaffold";
 import { SummaryBody, parseSummary } from "@/components/echo/SummaryBody";
@@ -1388,7 +1385,7 @@ export default function CallDetailPage({
                     onClick={() => void regenerate({ template: k, label: k })}
                     className="tap flex min-h-28 flex-col items-center justify-center gap-2.5 rounded-xl border border-border bg-surface-2/40 px-3 py-4 text-fg-muted transition-colors hover:border-accent hover:text-fg disabled:opacity-50"
                   >
-                    <Icon width={26} height={26} />
+                    <Icon width={24} height={24} />
                     <span className="text-xs font-semibold">{t(TEMPLATE_LABEL_KEY[k])}</span>
                   </button>
                 );
@@ -1402,7 +1399,7 @@ export default function CallDetailPage({
                     onClick={() => void regenerate({ instruction: c.prompt, label: c.name })}
                     className="tap flex min-h-28 w-full flex-col items-center justify-center gap-2.5 rounded-xl border border-accent/40 bg-surface-2/40 px-3 py-4 text-fg-muted transition-colors hover:border-accent hover:text-fg disabled:opacity-50"
                   >
-                    <IconSparkle width={26} height={26} />
+                    <IconSparkle width={24} height={24} />
                     <span className="max-w-full truncate text-xs font-semibold">{c.name}</span>
                   </button>
                   <button
@@ -1412,7 +1409,7 @@ export default function CallDetailPage({
                     title={t("templateDelete")}
                     onClick={() => setCustoms(deleteCustomTemplate(c.name))}
                   >
-                    ✕
+                    <IconClose width={14} height={14} />
                   </button>
                 </span>
               ))}
@@ -1459,7 +1456,7 @@ export default function CallDetailPage({
                   className="tap flex min-h-28 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-border-strong text-fg-muted transition-colors hover:border-accent hover:text-fg"
                   onClick={() => setNewTpl({ name: "", prompt: "" })}
                 >
-                  <span className="text-2xl leading-none" aria-hidden>＋</span>
+                  <span className="text-2xl leading-none" aria-hidden><IconPlus width={14} height={14} /></span>
                   <span className="text-xs">{t("templateAdd")}</span>
                 </button>
               )}

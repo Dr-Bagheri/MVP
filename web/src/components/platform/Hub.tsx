@@ -3,10 +3,10 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api, BffError } from "@/api/client";
-import type { AgentCard, AgentEvent, AgentMessage, ConnectorProvider, ModelInfo, SearchHit, Skill, User } from "@/api/types";
+import type { AgentCard, AgentEvent, AgentMessage, ConnectorProvider, ModelInfo, SearchHit, Skill } from "@/api/types";
 import { Link, useRouter } from "@/i18n/routing";
 import { useSearchParams } from "next/navigation";
-import { personName, modelLabel } from "@/lib/format";
+import { modelLabel } from "@/lib/format";
 import { useDictation } from "@/lib/dictation";
 import { deliverDoc } from "@/lib/deliver";
 import { useSkillName, useSkillStarters } from "@/lib/skillName";
@@ -48,7 +48,6 @@ export function Hub() {
   const locale = useLocale();
   const router = useRouter();
   const { resetVersion, setStarted } = useAssistantConversation();
-  const [me, setMe] = useState<User | null>(null);
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
@@ -136,7 +135,6 @@ export function Hub() {
   const selectedAgent = agentHandle ? agents.find((candidate) => candidate.handle === agentHandle) : undefined;
 
   useEffect(() => {
-    void api.me().then(setMe);
     void api.models().then((res) => {
       setModels(res.models);
       /*
@@ -577,8 +575,18 @@ export function Hub() {
          sections under the composer (suggestions, quick access), so the
          landing page scrolls again WHEN it must: min-h-full centers it on a
          tall screen and lets a short one scroll instead of clipping. */
+      /*
+       * THE COMPOSER SITS AT THE FOOT, always (user directive, 2026-08-26:
+       * "the assistant page should look like this with the prompt box at
+       * the bottom but nothing in the middle").
+       *
+       * The idle state used to centre a greeting and a headline in the
+       * middle of the screen; both are gone. `justify-end` puts the one
+       * control that matters where the hand already is, and the empty
+       * space above it is the point rather than somewhere to put things.
+       */
       className={`relative isolate mx-auto flex w-full max-w-3xl flex-col px-5 ${
-        idle ? "min-h-full items-center justify-center py-6 text-center" : "min-h-full py-6"
+        idle ? "min-h-full justify-end py-6" : "min-h-full py-6"
       }`}
     >
       {/* the conversation controls — visible whenever we are not idle */}
@@ -612,41 +620,27 @@ export function Hub() {
             className="neurai-watermark pointer-events-none absolute inset-0 -z-10 bg-center bg-no-repeat opacity-[0.035] [background-size:min(68vw,680px)]"
           />
           {selectedAgent ? (
-            <section className="mb-1 flex max-w-[660px] items-center gap-4 rounded-3xl border border-border bg-surface/80 p-4 text-start shadow-sm" aria-label={t("activeAgent")}>
+            <section className="mx-auto mb-1 flex w-full max-w-[660px] items-center gap-4 rounded-3xl border border-border bg-surface/80 p-4 text-start shadow-sm" aria-label={t("activeAgent")}>
               <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-accent-soft text-xl text-accent" aria-hidden>✦</span>
               <span className="min-w-0">
                 <span className="block text-base font-semibold text-fg">{selectedAgent.name}</span>
                 <span className="mt-1 block text-sm leading-5 text-fg-muted">{selectedAgent.description}</span>
               </span>
             </section>
-          ) : (
-            <>
-              <p className="min-h-[1.25rem] text-sm text-fg-muted">
-                {me ? t("greeting", { name: personName(me, locale) }) : ""}
-              </p>
-              <h1 className="mt-1.5 text-[25px] font-bold leading-snug tracking-tight text-fg md:text-[34px]">
-                {t("ask")}
-              </h1>
-            </>
-          )}
+          ) : null}
           {workflowSlug ? (
-            <p className="mt-3 rounded-full bg-accent-soft px-3 py-1 text-xs font-medium text-accent">
+            <p className="mx-auto mt-3 w-fit rounded-full bg-accent-soft px-3 py-1 text-xs font-medium text-accent">
               {t("activeWorkflow")}
             </p>
           ) : null}
-          {/* wide enough for the EN sentence in ONE line (55ch); if a longer
-              translation ever wraps, text-wrap:balance splits it evenly
-              instead of orphaning the last word */}
-          <p className="mt-2.5 max-w-[60ch] text-[13px] leading-6 text-fg-muted [text-wrap:balance]">
-            {t("scopePromise")}
-          </p>
+
           {/* the active skill's starter questions (M29) — one press fills
               the composer; sending stays the person's act */}
           {(() => {
             const active = skills.find((s) => s.slug === skill);
             const activeStarters = active ? skillStarters(active) : [];
             return !selectedAgent && !workflowSlug && active && activeStarters.length > 0 ? (
-              <div className="mt-4 flex w-full max-w-[660px] flex-wrap justify-center gap-2">
+              <div className="mx-auto mt-4 flex w-full max-w-[660px] flex-wrap justify-center gap-2">
                 {activeStarters.map((q) => (
                   <button
                     key={q}
@@ -684,7 +678,7 @@ export function Hub() {
            focus affordance — the global :focus-visible ring on the inner
            input drew a box inside a box (the user's report) */
         className={`w-full max-w-[660px] rounded-2xl border border-border-strong bg-surface p-3 text-start transition-colors focus-within:border-accent ${
-          idle ? "mt-7" : "sticky bottom-0 mx-auto"
+          idle ? "mx-auto mt-auto" : "sticky bottom-0 mx-auto"
         }`}
       >
         <div className="flex items-center gap-2">

@@ -84,7 +84,7 @@ export function BottomBar() {
                 active ? "text-accent" : "text-fg-muted"
               }`}
             >
-              {nav.key === "echo" ? <EchoMark size={20} /> : Icon ? <Icon width={19} height={19} /> : null}
+              {nav.key === "echo" ? <EchoMark size={20} /> : Icon ? <Icon width={18} height={18} /> : null}
               <span>{t(nav.key)}</span>
             </Link>
           );

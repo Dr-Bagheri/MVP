@@ -159,7 +159,6 @@
     "widget": {
       "tiles": "This week",
       "briefing": "Your briefing",
-      "ask": "Ask your records",
       "pulse": "Activity",
       "commitments": "Action items",
       "decisions": "Decisions",
@@ -840,7 +839,6 @@
     "account": "Account",
     "greeting": "Hi, {name}",
     "ask": "How can I help today?",
-    "scopePromise": "Anything you ask stays inside what you're allowed to see",
     "activeAgent": "Active agent",
     "activeWorkflow": "Selected workflow source",
     "promptPlaceholder": "Ask or instruct…",

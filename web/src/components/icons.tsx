@@ -4,8 +4,26 @@
  * in-house on a 24px grid, 1.7px stroke, rendered at 16px in menus —
  * `currentColor` throughout so active/hover states color them for free.
  * One file so a new surface can never invent a second visual language.
+ *
+ * THE SIZE SCALE (user directive, 2026-08-26: "I see different sizes of
+ * the same icons … make a solid list and only use them so the whole
+ * platform becomes unified"). Sizes were being passed per call site as
+ * whatever looked right — 12, 14, 15, 17, 18, 26 — which is how one icon
+ * ends up three sizes on one screen. The scale below is CLOSED, and
+ * icons.guard.test.ts fails the build on a size outside it: a rule that
+ * only lives in a comment is a rule the next hurried call site breaks.
+ *
+ * THE OFF STATE: `<Icon off>` renders the same glyph under a red slash
+ * (the `.icon-off` rule in globals.css). Deliberately one overlay rather
+ * than 57 hand-drawn "disabled" twins — a second drawing of every icon is
+ * 57 more chances for the two to disagree, and the slash is the universal
+ * reading of "this one is off".
  */
-import type { SVGProps } from "react";
+import type { ReactNode, SVGProps } from "react";
+
+/** the only sizes an icon may be rendered at */
+export const ICON_SIZE = { xs: 12, sm: 14, md: 16, lg: 18, xl: 24 } as const;
+export type IconSize = keyof typeof ICON_SIZE;
 
 function base(props: SVGProps<SVGSVGElement>) {
   return {
@@ -89,6 +107,15 @@ export const IconShare = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><circle cx="6" cy="12" r="2.5" /><circle cx="17.5" cy="5.5" r="2.5" /><circle cx="17.5" cy="18.5" r="2.5" /><path d="m8.3 10.8 7-4M8.3 13.2l7 4" /></svg>
 );
 /** Points to inline-END; compose with `rtl:-scale-x-100` where rendered. */
+/** close / remove — the X that was a text character in six places */
+export const IconClose = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><path d="M6 6l12 12M18 6 6 18" /></svg>
+);
+/** a flyout's "there is more this way" — reading-direction aware at the
+    call site (rtl:-scale-x-100), which a text arrow could not be */
+export const IconChevronRight = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><path d="m9 5 7 7-7 7" /></svg>
+);
 export const IconChevronEnd = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><path d="m9 5.5 6.5 6.5L9 18.5" /></svg>
 );
@@ -233,3 +260,112 @@ export const IconSpeaker = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><path d="M4 9.5v5h3.5L13 19V5L7.5 9.5H4Z" /><path d="M16.5 9a4.2 4.2 0 0 1 0 6" /><path d="M19 6.8a8 8 0 0 1 0 10.4" /></svg>
 );
 
+/* =========================================================================
+   THE LIST — one registry, one vocabulary
+   =========================================================================
+   Every icon in the platform, by name. A surface that needs a glyph looks
+   it up here rather than importing a component and picking a size, which
+   is how the set drifted into six sizes and a handful of text characters
+   standing in for icons (＋, ✕, ▸ were all doing icon work).
+   =======================================================================*/
+export const ICONS = {
+  "agent": IconAgent,
+  "archive": IconArchive,
+  "arrowDown": IconArrowDown,
+  "arrowUp": IconArrowUp,
+  "ask": IconAsk,
+  "check": IconCheck,
+  "chevronEnd": IconChevronEnd,
+  "chevronRight": IconChevronRight,
+  "chip": IconChip,
+  "clock": IconClock,
+  "close": IconClose,
+  "copy": IconCopy,
+  "dots": IconDots,
+  "download": IconDownload,
+  "eye": IconEye,
+  "fileText": IconFileText,
+  "filter": IconFilter,
+  "gauge": IconGauge,
+  "gavel": IconGavel,
+  "globe": IconGlobe,
+  "hide": IconHide,
+  "history": IconHistory,
+  "merge": IconMerge,
+  "mic": IconMic,
+  "micOff": IconMicOff,
+  "micPlus": IconMicPlus,
+  "move": IconMove,
+  "open": IconOpen,
+  "outline": IconOutline,
+  "paragraph": IconParagraph,
+  "pause": IconPause,
+  "pencil": IconPencil,
+  "people3": IconPeople3,
+  "play": IconPlay,
+  "plug": IconPlug,
+  "plus": IconPlus,
+  "print": IconPrint,
+  "pulse": IconPulse,
+  "redact": IconRedact,
+  "resize": IconResize,
+  "retry": IconRetry,
+  "rows": IconRows,
+  "search": IconSearch,
+  "settings": IconSettings,
+  "share": IconShare,
+  "sparkle": IconSparkle,
+  "speaker": IconSpeaker,
+  "tag": IconTag,
+  "team": IconTeam,
+  "toEnd": IconToEnd,
+  "toStart": IconToStart,
+  "toggleOff": IconToggleOff,
+  "toggleOn": IconToggleOn,
+  "trash": IconTrash,
+  "upload": IconUpload,
+  "user": IconUser,
+  "users": IconUsers,
+  "voice": IconVoice,
+  "zap": IconZap,
+} as const;
+export type IconName = keyof typeof ICONS;
+
+/**
+ * The one way to render an icon.
+ *
+ * `size` comes from the closed scale; `off` draws the disabled state — the
+ * same glyph under a red slash, so "unavailable" reads identically
+ * wherever it appears instead of each surface inventing a grey.
+ *
+ * The slash is drawn by `.icon-off` in globals.css over a wrapper, not
+ * baked into 57 second drawings: two drawings of one icon are two things
+ * to keep in step, and only one of them ever gets updated.
+ */
+export function Icon({
+  name,
+  size = "md",
+  off = false,
+  className = "",
+  title,
+}: {
+  name: IconName;
+  size?: IconSize;
+  /** the DISABLED reading: the glyph, struck through in the danger tone */
+  off?: boolean;
+  className?: string;
+  title?: string;
+}): ReactNode {
+  const Glyph = ICONS[name];
+  const px = ICON_SIZE[size];
+  return (
+    <span
+      className={`icon${off ? " icon-off" : ""} ${className}`}
+      style={{ width: px, height: px }}
+      title={title}
+      data-icon={name}
+    >
+      <Glyph width={px} height={px} />
+    </span>
+  );
+}

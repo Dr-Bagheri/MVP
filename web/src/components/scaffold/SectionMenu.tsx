@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
 import { MENU_PANEL, ResizablePanel } from "./Resizable";
+import { IconChevronRight } from "@/components/icons";
 
 /**
  * M26 scaffold — the section menu: 256px at inline-start of the content,
@@ -261,7 +262,7 @@ export function MenuLayout({ menu, children }: { menu: ReactNode; children: Reac
           title={t("openMenu")}
           onClick={() => setAndStore(false)}
         >
-          <span aria-hidden className="text-xs">⟩</span>
+          <IconChevronRight width={14} height={14} className="rtl:-scale-x-100" />
         </button>
       ) : (
         <ResizablePanel side="start" spec={MENU_PANEL} label={t("resizeMenu")} className="w-full">
@@ -273,7 +274,7 @@ export function MenuLayout({ menu, children }: { menu: ReactNode; children: Reac
               title={t("closeMenu")}
               onClick={() => setAndStore(true)}
             >
-              <span aria-hidden className="text-xs">⟨</span>
+              <IconChevronRight width={14} height={14} className="-scale-x-100 rtl:scale-x-100" />
             </button>
             {menu}
           </div>

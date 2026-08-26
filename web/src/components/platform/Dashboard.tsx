@@ -137,7 +137,7 @@ export function Dashboard() {
             className="tile-remove"
             onClick={() => removeWidget(tile.key)}
           >
-            <IconTrash width={17} height={17} />
+            <IconTrash width={16} height={16} />
           </button>
         </header>
         <div className="min-h-0 flex-1">{renderBody(tile.key, tile.size)}</div>

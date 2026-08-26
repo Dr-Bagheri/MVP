@@ -13,7 +13,7 @@
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { IconDots } from "@/components/icons";
+import { IconChevronRight, IconClose, IconDots } from "@/components/icons";
 
 export function IconAction({
   label,
@@ -191,7 +191,11 @@ function MenuEntry({
       </span>
       <span className="min-w-0 flex-1 truncate">{item.label}</span>
       {item.sub ? (
-        <span aria-hidden className="inline-block text-[10px] rtl:-scale-x-100">▸</span>
+        /* an ICON, not an arrow character: the text arrow did not share
+           the set's stroke or box, and could not mirror for RTL */
+        <span aria-hidden className="inline-flex rtl:-scale-x-100">
+          <IconChevronRight width={12} height={12} />
+        </span>
       ) : null}
     </button>
   );
@@ -752,7 +756,7 @@ export function SelectMenu({
                   {o.onRemove ? (
                     <button
                       type="button"
-                      aria-label={`✕ ${o.label}`}
+                      aria-label={`${o.label} ✕`}
                       className="me-1.5 grid h-6 w-6 shrink-0 place-items-center rounded text-[10px] text-fg-muted opacity-0 transition-opacity hover:bg-danger/10 hover:text-danger focus-visible:opacity-100 group-hover/opt:opacity-100"
                       onClick={(e) => {
                         e.stopPropagation();
@@ -760,7 +764,7 @@ export function SelectMenu({
                         o.onRemove?.();
                       }}
                     >
-                      ✕
+                      <IconClose width={12} height={12} />
                     </button>
                   ) : null}
                 </span>
@@ -856,7 +860,7 @@ export function ConfirmDialog({
               className="tap -me-1 -mt-1 grid h-7 w-7 shrink-0 place-items-center rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg"
               onClick={onCancel}
             >
-              ✕
+              <IconClose width={14} height={14} />
             </button>
           ) : null}
         </div>

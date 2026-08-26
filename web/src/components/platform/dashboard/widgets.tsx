@@ -8,6 +8,7 @@ import { Link } from "@/i18n/routing";
 import { digits, formatDate, formatDuration } from "@/lib/format";
 import { openAssistant } from "@/lib/assistantBus";
 import { SelectMenu } from "@/components/rowActions";
+import { IconClose } from "@/components/icons";
 import type { TileSize } from "@/lib/dashboardLayout";
 import type { DashboardData } from "./useDashboardData";
 
@@ -717,7 +718,7 @@ export function WatchlistWidget({ data, size }: { data: DashboardData; size: Til
                   className="tap grid h-6 w-6 place-items-center rounded ink-subtle opacity-0 hover:text-danger group-hover/w:opacity-100"
                   onClick={() => save(terms.filter((x) => x !== term))}
                 >
-                  <span aria-hidden className="text-xs">✕</span>
+                  <span aria-hidden className="text-xs"><IconClose width={14} height={14} /></span>
                 </button>
               </span>
             </li>

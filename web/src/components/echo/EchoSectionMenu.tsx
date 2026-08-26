@@ -165,14 +165,14 @@ export function EchoSectionMenu({ activeSlug }: { activeSlug: EchoMenuSlug }) {
               trailing: [
                 {
                   label: tEcho("uploadHere"),
-                  icon: <IconUpload width={15} height={15} />,
+                  icon: <IconUpload width={16} height={16} />,
                   onSelect: () => { if (!busy) fileRef.current?.click(); },
                   tourId: "tour-upload",
                 },
                 {
                   href: "/echo",
                   label: tCapture("quickMemo"),
-                  icon: <IconPlus width={15} height={15} />,
+                  icon: <IconPlus width={16} height={16} />,
                   onSelect: quickMemo,
                 },
               ],
@@ -191,7 +191,7 @@ export function EchoSectionMenu({ activeSlug }: { activeSlug: EchoMenuSlug }) {
                 trailing: {
                   href: "/echo/archive",
                   label: tEcho("section.archive"),
-                  icon: <IconArchive width={15} height={15} />,
+                  icon: <IconArchive width={16} height={16} />,
                 },
               },
               {
@@ -213,7 +213,7 @@ export function EchoSectionMenu({ activeSlug }: { activeSlug: EchoMenuSlug }) {
                 slug: "learn-record",
                 href: "/echo",
                 label: tTour("lessonRecord"),
-                icon: <IconAsk width={15} height={15} />,
+                icon: <IconAsk width={16} height={16} />,
                 preventNavigation: true,
                 onSelect: lessonRecord,
               },
@@ -221,7 +221,7 @@ export function EchoSectionMenu({ activeSlug }: { activeSlug: EchoMenuSlug }) {
                 slug: "learn-upload",
                 href: "/echo",
                 label: tTour("lessonUpload"),
-                icon: <IconAsk width={15} height={15} />,
+                icon: <IconAsk width={16} height={16} />,
                 preventNavigation: true,
                 onSelect: lessonUpload,
               },
@@ -229,7 +229,7 @@ export function EchoSectionMenu({ activeSlug }: { activeSlug: EchoMenuSlug }) {
                 slug: "learn-ask",
                 href: "/echo/records",
                 label: tTour("lessonAsk"),
-                icon: <IconAsk width={15} height={15} />,
+                icon: <IconAsk width={16} height={16} />,
                 preventNavigation: true,
                 onSelect: lessonAsk,
               },

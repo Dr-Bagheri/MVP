@@ -304,7 +304,7 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
     {
       key: "speaker",
       label: t("speakerField"),
-      icon: <IconSpeaker width={15} height={15} />,
+      icon: <IconSpeaker width={16} height={16} />,
       sub: [
         ...(speakers.length === 0
           ? [{ value: "", label: t("speakerDefault") }]
@@ -327,7 +327,7 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
     {
       key: "language",
       label: t("languageField"),
-      icon: <IconGlobe width={15} height={15} />,
+      icon: <IconGlobe width={16} height={16} />,
       sub: [
         { value: "mixed", label: t("languageMixed") },
         { value: "fa", label: t("languageFa") },
@@ -343,7 +343,7 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
     {
       key: "template",
       label: t("templateField"),
-      icon: <IconFileText width={15} height={15} />,
+      icon: <IconFileText width={16} height={16} />,
       sub: [
         { value: "", label: t("templateNone") },
         ...SUMMARY_TEMPLATES.map((k) => ({ value: k as string, label: t(TEMPLATE_KEY[k]) })),
@@ -359,7 +359,7 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
     {
       key: "model",
       label: t("modelField"),
-      icon: <IconChip width={15} height={15} />,
+      icon: <IconChip width={16} height={16} />,
       sub: [
         {
           key: "model-",
@@ -869,8 +869,12 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
                         </span>
                         {at >= 0 && row.speaker ? (
                           <span
-                            className={`mt-1 grid h-5 shrink-0 place-items-center rounded-full border text-[10px] font-semibold ${
-                              named ? "px-1.5" : "w-5 tabular-nums"
+                            /* .badge-num: the number sits on the circle's
+                               CENTRE, not on its own baseline — the theme
+                               rule, after this badge rendered visibly low
+                               (user report, 2026-08-26) */
+                            className={`badge-num mt-0.5 h-5 shrink-0 rounded-full border text-[10px] font-semibold ${
+                              named ? "px-1.5" : "w-5"
                             } ${tone}`}
                             title={named
                               ? named.display_name
@@ -953,7 +957,7 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
                   className="tap grid h-7 w-7 place-items-center rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg"
                   onClick={() => { addChapterMark(s.recordedMs); notify(t("marked")); }}
                 >
-                  <IconClock width={15} height={15} />
+                  <IconClock width={16} height={16} />
                 </button>
               ) : null}
             </div>
@@ -990,7 +994,7 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
                         SPEAKER_TONE[i % SPEAKER_TONE.length]
                       }`}
                     >
-                      <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-surface text-[10px] tabular-nums">
+                      <span className="badge-num h-6 w-6 shrink-0 rounded-full bg-surface text-[10px]">
                         {named ? initialsOf(named.display_name) : digits(label, locale)}
                       </span>
                       <span className="max-w-28 truncate text-fg">

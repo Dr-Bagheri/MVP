@@ -10,7 +10,7 @@ import { Card, EmptyState } from "@/components/ui";
 import { ConfirmDialog, IconAction, SelectMenu } from "@/components/rowActions";
 import { DataTable, StatusDot } from "@/components/DataTable";
 import {
-  IconMicOff, IconMicPlus, IconPencil, IconTeam, IconTrash, IconUser,
+  IconMicOff, IconMicPlus, IconPencil, IconPlus, IconTeam, IconTrash, IconUser,
 } from "@/components/icons";
 import { digits, personName } from "@/lib/format";
 
@@ -538,7 +538,7 @@ export function SpeakersDirectory() {
                 setTitle("");
               }}
             >
-              <span aria-hidden className="text-base leading-none">＋</span>
+              <span aria-hidden className="text-base leading-none"><IconPlus width={14} height={14} /></span>
               {t("add")}
             </button>
           ) : null}

@@ -33,7 +33,7 @@ import type { TileSize } from "@/lib/dashboardLayout";
 
 /** the visual families a tile can wear — the board's whole colour story */
 export const TILE_LOOKS = {
-  /** the hero: the brand violet as a full gradient, white ink */
+  /** the hero: the accent blue as a full gradient, white ink */
   feature: {
     className: "tile-feature",
     ink: "on-gradient",

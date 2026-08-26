@@ -63,24 +63,29 @@ export const TINT = 0.12;
  * ever reverts.
  */
 export const DARK = {
-  bg: "#000000",            // the sana ground: black
-  surface: "#141414",       // …and lighter black
-  surface2: "#1F1F1F",
-  border: "#2A2A2A",        // hairline, decorative
-  borderStrong: "#707070",  // control boundaries — clears 3:1
-  fg: "#FAFAFA",
-  fgMuted: "#A6A6A6",
-  fgSubtle: "#858585",     // group labels — recedes toward the surface
-  accent: "#9B85FF",        // the brand violet — the one color left
-  onAccent: "#000000",      // DARK on violet: white fails here, as before
-  /* SOLID-BUTTON revision (user directive, 2026-08-23: "solid theme …
-     look like [sana's] buttons"): the primary CTA is the NEUTRAL pair —
-     a white pill on the black theme, near-black on light — matching the
-     reference; the violet stays the accent, never the button fill. */
+  /* LIGHTER-GROUND revision (user directive, 2026-08-26: "make the dark
+     theme of the whole platform a little lighter, like ChatGPT, and remove
+     all purple"). True black went with it: a black ground makes every
+     surface above it a step of grey nobody can tell apart, and the
+     reference sits its content on a near-charcoal instead. The violet went
+     too — the accent is now a BLUE, which is the one hue that reads as
+     "interactive" without competing with success/warning/danger. */
+  bg: "#171717",            // the ground
+  surface: "#212121",       // panels and cards sit ABOVE it
+  surface2: "#2C2C2C",      // raised: inputs, chips, hovered rows
+  border: "#3A3A3A",        // hairline, decorative
+  borderStrong: "#8A8A8A",  // control boundaries — clears 3:1
+  fg: "#ECECEC",
+  fgMuted: "#B4B4B4",
+  fgSubtle: "#8F8F8F",     // group labels — recedes toward the surface
+  accent: "#7EB6FF",        // the one hue left
+  onAccent: "#000000",      // DARK on a bright accent: white fails here
+  /* the primary CTA stays the NEUTRAL pair — a near-white pill, the
+     reference's own send button; the accent is never a button fill */
   primary: "#FAFAFA",
-  onPrimary: "#000000",
-  /* ink on the danger FILL: the dark theme's danger is a light rose, so
-     the ink is black — the on-accent role-flip pattern again */
+  onPrimary: "#171717",
+  /* ink on the danger FILL: dark's danger is a light rose, so black ink —
+     the on-accent role-flip pattern */
   onDanger: "#000000",
   success: "#4ADE80", warning: "#FBBF24", danger: "#FB7185", info: "#7DD3FC",
 };
@@ -94,7 +99,10 @@ export const LIGHT = {
   fg: "#171717",
   fgMuted: "#595959",
   fgSubtle: "#6E6E6E",     // group labels — recedes toward the surface
-  accent: "#5747E6",        // DERIVED violet ink; fills stay the brand's
+  /* the light theme's ink form of the same blue: the dark accent is a
+     bright surface colour and fails on white, so this is the derived ink.
+     One hue, two roles — the flip the whole palette is built on. */
+  accent: "#1A66C9",
   onAccent: "#FFFFFF",
   primary: "#171717",       // the neutral CTA, mirrored to the light theme
   onPrimary: "#FFFFFF",

@@ -31,7 +31,14 @@ export function PageContainer({
    * pt-12 dropped every page title two lines below the menu heading beside
    * it, and each surface read as its own layout.
    */
-  return <div className={`mx-auto w-full ${max} px-5 pb-16 pt-5 md:px-10 md:pt-4`}>{children}</div>;
+  /*
+   * THE PAGE'S TOP MARGIN (user directive, 2026-08-26: "add a margin from
+   * the top, just a little, for all pages, and add this to the theme").
+   * It lives HERE, on the one container every page renders inside, rather
+   * than as a class each page remembers — a margin that is a convention is
+   * a margin that is missing on the page nobody checked.
+   */
+  return <div className={`mx-auto w-full ${max} px-5 pb-16 pt-8 md:px-10 md:pt-7`}>{children}</div>;
 }
 
 /**

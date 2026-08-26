@@ -42,48 +42,53 @@
  */
 @layer base {
   :root {
-    /* DARK — primary. NEUTRAL-BLACK revision (user directive, 2026-08-22:
-       "sana.ai theme — black and lighter black"). All chroma leaves the
-       ground; the brand violet is the one color left, in the accent. Every
-       value below mirrors design-system/neurai-platform/verify-pairs.mjs —
-       edit THERE first, run it, then copy; a hex that exists only here is
-       a fifth place for the numbers to disagree. */
-    --bg: 0 0 0;                  /* #000000 — the sana ground: black */
-    --surface: 20 20 20;          /* #141414 — …and lighter black */
-    --surface-2: 31 31 31;        /* #1F1F1F */
-    --border: 42 42 42;           /* #2A2A2A — hairline, decorative */
-    --border-strong: 112 112 112; /* #707070 — control edges, 3.72:1 */
-    --fg: 250 250 250;            /* #FAFAFA — neutral, no tint */
-    --fg-muted: 166 166 166;      /* #A6A6A6 */
+    /* DARK — primary. LIGHTER-GROUND revision (user directive,
+       2026-08-26: "make the dark theme of the whole platform a little
+       lighter, like ChatGPT, and remove all purple"). True black went
+       with the violet: on a black ground every surface above it is a step
+       of grey nobody can tell apart, and the reference sits its content on
+       a near-charcoal instead. Every value below mirrors
+       design-system/neurai-platform/verify-pairs.mjs — edit THERE first,
+       run it, then copy; a hex that exists only here is a fifth place for
+       the numbers to disagree. */
+    --bg: 23 23 23;               /* #171717 — the ground */
+    --surface: 33 33 33;          /* #212121 — panels sit above it */
+    --surface-2: 44 44 44;        /* #2C2C2C — inputs, chips, hovered rows */
+    --border: 58 58 58;           /* #3A3A3A — hairline, decorative */
+    --border-strong: 138 138 138; /* #8A8A8A — control edges, 4.66:1 */
+    --fg: 236 236 236;            /* #ECECEC */
+    --fg-muted: 180 180 180;      /* #B4B4B4 */
     /* group LABELS in a menu — recedes toward the surface so a title reads as
-       a label, not a destination. 4.99:1, deliberately below --fg-muted's
-       7.57: the requirement is a relationship, asserted in verify-pairs. */
-    --fg-subtle: 133 133 133;     /* #858585 */
-    --accent: 155 133 255;        /* #9B85FF — the brand violet stays */
+       a label, not a destination. 4.98:1, deliberately below --fg-muted's
+       7.77: the requirement is a relationship, asserted in verify-pairs. */
+    --fg-subtle: 143 143 143;     /* #8F8F8F */
+    /* the one hue left: a blue, which reads as "interactive" without
+       competing with success/warning/danger */
+    --accent: 126 182 255;        /* #7EB6FF */
     /*
-     * DARK on the violet. White FAILS here — the accent is a bright surface
+     * DARK on the accent. White FAILS here — the accent is a bright surface
      * in this theme, not an ink. This token is why the active rail tile and
      * the send button are legible.
      */
     --on-accent: 0 0 0;           /* #000000 */
-    --accent-soft: 36 34 48;      /* #242230 — computed 12% tint over surface */
+    --accent-soft: 44 51 60;      /* #2C333C — computed 12% tint over surface */
     --success: 74 222 128;
     --warning: 251 191 36;
     --danger: 251 113 133;
     --info: 125 211 252;
     /* SOLID-BUTTON revision (user directive, 2026-08-23): the primary CTA
-       is the NEUTRAL pair — a white pill on this theme, per the sana
-       reference. The violet stays the accent; it no longer fills buttons. */
+       is the NEUTRAL pair — a near-white pill on this theme. The accent
+       stays an accent; it never fills buttons. */
     --primary: 250 250 250;
-    --on-primary: 0 0 0;
+    --on-primary: 23 23 23;
     /* ink on the danger FILL — the on-accent role-flip pattern: dark's
        danger is a light rose, so the ink is black */
     --on-danger: 0 0 0;
-    --secondary: 166 166 166;
-    --muted: 31 31 31;
+    --secondary: 180 180 180;
+    --muted: 44 44 44;
     /* retained for the Echo shell until its interior re-derives */
-    --sidebar: 20 20 20;
-    --sidebar-fg: 250 250 250;
+    --sidebar: 33 33 33;
+    --sidebar-fg: 236 236 236;
     --brand-mark-image: url("/brand/neurai-mark.png");
   }
 
@@ -100,12 +105,13 @@
        dark mode. One semantic, opposite directions — the surface moves too. */
     --fg-subtle: 110 110 110;     /* #6E6E6E */
     /*
-     * A DERIVED ink, not the fill violet: the bright accent fails on white.
-     * The brand violet stays for marks and fills; this carries text and CTAs.
+     * The light theme's INK form of the same blue: the dark accent is a
+     * bright surface colour and fails on white. One hue, two roles — the
+     * flip the whole palette is built on.
      */
-    --accent: 87 71 230;          /* #5747E6 */
+    --accent: 26 102 201;         /* #1A66C9 */
     --on-accent: 255 255 255;     /* white — the role flips with theme */
-    --accent-soft: 235 233 252;   /* #EBE9FC — computed 12% tint */
+    --accent-soft: 228 237 249;   /* #E4EDF9 — computed 12% tint */
     --success: 22 101 52;
     --warning: 146 64 14;
     --danger: 190 18 60;
@@ -585,19 +591,21 @@
   color: rgb(var(--fg));
 }
 
-/* the three gradient families. Hue stays inside the brand's own
-   neighbourhood: violet, violet→magenta, violet→cyan. */
+/* the three gradient families. The violet family LEFT with the palette
+   (user directive, 2026-08-26: "remove all purple") — the hues now sit
+   around the accent blue: deep blue, teal, and a warm amber that shares
+   nothing with the danger rose. */
 .tile-feature {
   background:
     radial-gradient(120% 140% at 88% -10%, rgb(var(--accent) / .55) 0%, transparent 55%),
-    linear-gradient(135deg, #6C4BD6 0%, #8B5CF6 46%, #A78BFA 100%);
+    linear-gradient(135deg, #1E4FA3 0%, #2D6FD1 46%, #58A0F0 100%);
   color: #ffffff;
   border: 1px solid rgb(255 255 255 / .12);
 }
 .tile-warm {
   background:
     radial-gradient(120% 140% at 12% -10%, rgb(255 255 255 / .3) 0%, transparent 52%),
-    linear-gradient(135deg, #C0399F 0%, #E05A9B 48%, #F0728E 100%);
+    linear-gradient(135deg, #0E6E63 0%, #12867A 48%, #2AA79A 100%);
   color: #ffffff;
   border: 1px solid rgb(255 255 255 / .14);
 }
@@ -633,6 +641,65 @@
   z-index: 0;
 }
 .tile > * { position: relative; z-index: 1; }
+
+/* --- the icon set's two states ---------------------------------------
+   `<Icon>` renders every glyph in this box, and `off` strikes it through
+   in the danger tone. ONE overlay rather than 57 hand-drawn disabled
+   twins: a second drawing of an icon is a second thing to keep in step,
+   and only one of the pair ever gets updated. */
+.icon {
+  display: inline-grid;
+  place-items: center;
+  position: relative;
+  flex: none;
+  line-height: 0;
+}
+.icon-off > svg { opacity: .5; }
+.icon-off::after {
+  content: "";
+  position: absolute;
+  left: 4%;
+  right: 4%;
+  top: 50%;
+  height: 1.5px;
+  border-radius: 2px;
+  background: rgb(var(--danger));
+  transform: rotate(-45deg);
+  transform-origin: center;
+}
+
+/* --- CENTERED MEANS BOTH WAYS ----------------------------------------
+   (user directive, 2026-08-26: "in lots of buttons the text is not
+   actually centred vertically — if text is centred it must be centred
+   horizontally AND vertically").
+
+   The failure is always the same shape: a fixed height plus default
+   baseline alignment, which centres the line box but not the text within
+   it, so a button reads a pixel or two low. Flex centring fixes both axes
+   at once, and putting it on the theme's own control classes means a new
+   button inherits it instead of re-discovering the bug.
+
+   `.center` is the explicit form for anything that is not a control. */
+.center,
+.btn,
+.btn-primary,
+.btn-secondary,
+.btn-ghost,
+.btn-danger,
+.tap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+/* a badge with a number in it: the same rule, plus a line-height of 1 so
+   the glyph sits on the box's centre rather than on its own baseline —
+   this is the speaker circle in the live transcript */
+.badge-num {
+  display: inline-grid;
+  place-items: center;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
 
 /* --- the live wave SCOPE (cinematic, 2026-08-26) ---------------------
    Rebuilt from a measured study of the techniques film scrubbers use
