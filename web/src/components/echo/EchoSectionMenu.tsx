@@ -44,11 +44,12 @@ export function EchoSectionMenu({ activeSlug }: { activeSlug: EchoMenuSlug }) {
   };
 
   /**
-   * QUICK VOICE MEMO (user directive, 2026-08-26): the page's button moved
-   * here, as the ＋ beside the archive door — one tap from anywhere in
-   * Echo, no form in between. Same engine call the page made: self-naming
-   * title, mic only, both-languages hint. The floating pill keeps the take
-   * visible and stoppable wherever the person goes next.
+   * QUICK VOICE MEMO (user directive, 2026-08-26): the ＋ beside the
+   * upload door on New meeting — both are ways a recording BEGINS, so they
+   * share the row where recordings begin (it sat beside the archive first;
+   * corrected the same day). Same engine call the page made: self-naming
+   * title, mic only, both-languages hint. The row's href then lands the
+   * person on the recording page, watching the take they just started.
    */
   function quickMemo(): void {
     const at = new Intl.DateTimeFormat(
@@ -157,12 +158,24 @@ export function EchoSectionMenu({ activeSlug }: { activeSlug: EchoMenuSlug }) {
               label: tEcho("section.new-meeting"),
               icon: ICONS["new-meeting"],
               tourId: "tour-new-meeting",
-              trailing: {
-                label: tEcho("uploadHere"),
-                icon: <IconUpload width={15} height={15} />,
-                onSelect: () => { if (!busy) fileRef.current?.click(); },
-                tourId: "tour-upload",
-              },
+              /* two doors on one row: upload keeps the very end (it was
+                 there first — a door that moves is a door people reach for
+                 and miss); the quick memo's ＋ sits beside it and BOTH
+                 starts the take and opens this row's page */
+              trailing: [
+                {
+                  label: tEcho("uploadHere"),
+                  icon: <IconUpload width={15} height={15} />,
+                  onSelect: () => { if (!busy) fileRef.current?.click(); },
+                  tourId: "tour-upload",
+                },
+                {
+                  href: "/echo",
+                  label: tCapture("quickMemo"),
+                  icon: <IconPlus width={15} height={15} />,
+                  onSelect: quickMemo,
+                },
+              ],
             }],
           },
           {
@@ -175,23 +188,11 @@ export function EchoSectionMenu({ activeSlug }: { activeSlug: EchoMenuSlug }) {
                 label: tEcho("section.records"),
                 icon: ICONS.records,
                 tourId: "tour-records",
-                /* two doors on one row (2026-08-26): the quick memo's ＋
-                   beside the archive — a memo IS a new record, so its one-tap
-                   start belongs on the row where it will land. The archive
-                   keeps the very end: it was there first, and a door that
-                   moves is a door people reach for and miss. */
-                trailing: [
-                  {
-                    href: "/echo/archive",
-                    label: tEcho("section.archive"),
-                    icon: <IconArchive width={15} height={15} />,
-                  },
-                  {
-                    label: tCapture("quickMemo"),
-                    icon: <IconPlus width={15} height={15} />,
-                    onSelect: quickMemo,
-                  },
-                ],
+                trailing: {
+                  href: "/echo/archive",
+                  label: tEcho("section.archive"),
+                  icon: <IconArchive width={15} height={15} />,
+                },
               },
               {
                 slug: "speakers",

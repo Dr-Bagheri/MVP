@@ -1647,8 +1647,6 @@
     "silentLabel": "Silent mode",
     "silentOn": "Silent — replies are text only.",
     "silentOff": "Voice on — spoken questions get spoken replies.",
-    "minimize": "Minimize",
-    "restore": "Restore",
     "thinkingState": "Thinking…",
     "speakingState": "Speaking…",
     "earsLabel": "Assistant listening",

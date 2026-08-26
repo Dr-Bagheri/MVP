@@ -242,9 +242,6 @@ export function PresenceDock() {
 
   const [member, setMember] = useState(false);
   const [open, setOpen] = useState(false);
-  /** minimized = the conversation stays alive behind a compact pill —
-      distinct from close, which puts everything back into the orb */
-  const [minimized, setMinimized] = useState(false);
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<DockMessage[]>([]);
 
@@ -273,7 +270,6 @@ export function PresenceDock() {
     setMessages([]);
     sessionId.current = undefined;
     setOpen(false);
-    setMinimized(false);
   }
   const [streaming, setStreaming] = useState(false);
   const [consent, setConsent] = useState<
@@ -460,7 +456,6 @@ export function PresenceDock() {
       setPin(next);
       try { localStorage.setItem("neurai-orb-pin", JSON.stringify(next)); } catch { /* fine */ }
       if (seated) {
-        setMinimized(false);
         setOpen(true);
       }
     };
@@ -528,7 +523,6 @@ export function PresenceDock() {
     loopRef.current?.endSession();
     setListening(null);
     setOpen(false);
-    setMinimized(false);
     if (!silentRef.current && !recordingLive()) {
       speak(locale === "fa" ? "باشه." : "Okay.");
     }
@@ -544,7 +538,6 @@ export function PresenceDock() {
       return;
     }
     setOpen(true);
-    setMinimized(false);
     submitRef.current(text, true);
   }
 
@@ -576,7 +569,6 @@ export function PresenceDock() {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "e") {
         e.preventDefault();
-        setMinimized(false);
         setOpen((v) => {
           const next = !v;
           if (next) setTimeout(() => inputRef.current?.focus(), 0);
@@ -613,7 +605,6 @@ export function PresenceDock() {
         stopSpeaking();
         suspendLoop();
         setOpen(false);
-        setMinimized(false);
       } else {
         beginLoopRef.current();
       }
@@ -625,7 +616,6 @@ export function PresenceDock() {
   useEffect(() => {
     return subscribeAssistantOpen((request) => {
       setOpen(true);
-      setMinimized(false);
       if (request.sessionId) void loadSession(request.sessionId);
       if (request.draft) {
         // the composer is uncontrolled — fill after the pane mounts; a
@@ -701,7 +691,6 @@ export function PresenceDock() {
       onWake: () => {
         if (streamingRef.current) return; // one conversation turn at a time
         setOpen(true);
-        setMinimized(false);
         if (!silentRef.current && !recordingLive()) speak(t("wakeAck"));
       },
       onCommand: (command) => routeCommand(command),
@@ -781,7 +770,6 @@ export function PresenceDock() {
     const trimmed = question.trim();
     if (!trimmed || streamingRef.current) return;
     setOpen(true);
-    setMinimized(false);
     setStreaming(true);
     streamingRef.current = true;
     speakReplyRef.current = viaVoice;
@@ -1019,7 +1007,6 @@ export function PresenceDock() {
       onClick={() => {
         // a drag's mouse-up must not also open the panel
         if (suppressClickRef.current) { suppressClickRef.current = false; return; }
-        setMinimized(false);
         setOpen((v) => {
           const next = !v;
           if (next) setTimeout(() => inputRef.current?.focus(), 0);
@@ -1058,35 +1045,10 @@ export function PresenceDock() {
         />
       ) : null}
 
-      {open && minimized ? (
-        /* the MINIMIZED pill: the conversation lives, the screen is yours */
-        <div
-          className={`fixed z-40 flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-1.5 shadow-lg ${surfacePosition}`}
-          style={pin ? pinnedPanelStyle() : undefined}
-        >
-          <span className="h-2 w-2 rounded-full bg-accent" aria-hidden />
-          <span className="text-xs font-semibold text-fg">{t("title")}</span>
-          <button
-            type="button"
-            className="tap h-6 w-6 rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg"
-            aria-label={t("restore")}
-            title={t("restore")}
-            onClick={() => setMinimized(false)}
-          >
-            ▣
-          </button>
-          <button
-            type="button"
-            className="tap h-6 w-6 rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg"
-            aria-label={t("close")}
-            onClick={closeDock}
-          >
-            ✕
-          </button>
-        </div>
-      ) : null}
-
-      {open && !minimized ? (
+      {/* minimize is GONE (user directive, 2026-08-26): the panel is
+          either open or closed — the orb itself is the small state, so a
+          third in-between pill was one idea wearing two controls */}
+      {open ? (
         <div
           className={`fixed z-40 flex flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-xl ${panelShape} ${surfacePosition} ${panelHeight}`}
           style={pin ? pinnedPanelStyle() : undefined}
@@ -1137,15 +1099,6 @@ export function PresenceDock() {
               onClick={freshConversation}
             >
               ＋
-            </button>
-            <button
-              type="button"
-              className="tap h-7 w-7 rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg"
-              aria-label={t("minimize")}
-              title={t("minimize")}
-              onClick={() => setMinimized(true)}
-            >
-              —
             </button>
             <button
               type="button"

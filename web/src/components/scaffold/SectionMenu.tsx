@@ -59,6 +59,9 @@ export interface TrailingIcon {
   label: string;
   icon: ReactNode;
   href?: string;
+  /** with `href` alone the icon navigates; with `onSelect` alone it acts in
+      place; with BOTH it acts, then goes (the quick memo: start the take,
+      land on the recording page watching it) */
   onSelect?: () => void;
   /** rendered as data-tour on the icon itself */
   tourId?: string;
@@ -176,6 +179,7 @@ export function SectionMenu({
                             title={tr.label}
                             data-tour={tr.tourId}
                             className={`${TRAILING_CLASS} ${TRAIL_AT[Math.min(i, 1)]}`}
+                            onClick={tr.onSelect}
                           >
                             {tr.icon}
                           </Link>
