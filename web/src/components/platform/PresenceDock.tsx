@@ -71,42 +71,107 @@ interface DockMessage {
 interface OrbPin {
   x: number;
   y: number;
-  /** float = the popup card; the others take their whole edge */
-  mode: "float" | "side-left" | "side-right" | "bottom";
+  /** float = the popup card; a side mode seats the orb in its holder */
+  mode: "float" | "side-left" | "side-right";
 }
 
-/** how close to an edge a release must land to dock there, in px */
+/** how close to a side a release must land to dock there, in px */
 const EDGE = 72;
 
 /**
+ * THE HOLDER's geometry (user directive, 2026-08-26): a solid circle at the
+ * screen edge, seventy percent of it visible — the socket the orb sits in —
+ * with a rail line running from the top bar to the end of the page,
+ * interrupted by the socket. SOCKET matches the orb's own diameter so the
+ * seated orb fills its holder exactly; SOCKET_CX is the circle's centre
+ * measured from the edge: visible width minus the radius.
+ */
+const SOCKET = 64;
+const SOCKET_CX = Math.round(SOCKET * 0.7 - SOCKET / 2); // 13px in
+
+/**
  * Where a released orb docks. Exported for the tests — the drag itself
- * needs a signed-in member and a real pointer, but THIS is the decision,
- * and it is the part that can be wrong four different ways.
- * The bottom check runs first: in a corner, the wider panel wins.
+ * needs a signed-in member and a real pointer, but THIS is the decision.
+ * The bottom dock was removed (user directive, 2026-08-26): the sides are
+ * the only holders now, and a bottom release simply floats.
  */
 export function dockModeFor(
   x: number,
-  y: number,
+  _y: number,
   width: number,
-  height: number,
+  _height: number,
 ): OrbPin["mode"] {
-  if (y > height - EDGE) return "bottom";
   if (x < EDGE) return "side-left";
   if (x > width - EDGE) return "side-right";
   return "float";
 }
 
-/** the orb's resting spot: docked modes park it ON their edge, so the
-    button and the panel it opens read as one thing */
+/** the orb's resting spot: a side dock SEATS it in the holder's socket —
+    centre on the socket's centre, so orb and holder read as one thing */
 function orbStyle(
   pin: OrbPin,
   drag: { x: number; y: number } | null,
 ): CSSProperties {
   if (drag) return { left: drag.x, top: drag.y };
-  if (pin.mode === "side-left") return { left: 36, top: pin.y };
-  if (pin.mode === "side-right") return { left: undefined, right: 4, top: pin.y };
-  if (pin.mode === "bottom") return { left: pin.x, top: undefined, bottom: 4 };
+  if (pin.mode === "side-left") return { left: SOCKET_CX, top: pin.y };
+  if (pin.mode === "side-right") {
+    return { left: window.innerWidth - SOCKET_CX, top: pin.y };
+  }
   return { left: pin.x, top: pin.y };
+}
+
+/** the socket's y, kept clear of the top bar and the page edge */
+function clampSocketY(y: number): number {
+  return Math.min(Math.max(y, 120), window.innerHeight - 72);
+}
+
+/**
+ * The holder itself: rail line above, socket, rail line below — top bar to
+ * the end of the page. Rendered on BOTH sides while the orb is being
+ * dragged (the drop targets showing themselves), and on the docked side
+ * alone once the orb is seated. Decorative and pointer-transparent: the
+ * drop is decided by the release point, never by hitting this drawing.
+ */
+export function DockHolder({ side, y, active }: {
+  side: "left" | "right";
+  y: number;
+  active: boolean;
+}) {
+  const cy = clampSocketY(y);
+  const cyLocal = cy - 56; // the container starts under the 56px top bar
+  const lineColor = active ? "rgb(var(--accent))" : "rgb(var(--border-strong) / 0.55)";
+  const lineX = { [side]: SOCKET_CX - 1 } as CSSProperties;
+  return (
+    <div
+      aria-hidden
+      className="pointer-events-none fixed bottom-0 top-14 z-30"
+      style={{ [side]: 0, width: 76 } as CSSProperties}
+    >
+      {/* the rail, from the top menu to the socket */}
+      <span
+        className="absolute w-0.5 rounded-full transition-colors"
+        style={{ ...lineX, top: 0, height: Math.max(0, cyLocal - SOCKET / 2 - 6), background: lineColor }}
+      />
+      {/* the socket — a solid circle, 70% of it on screen */}
+      <span
+        className="absolute rounded-full border-2 transition-all"
+        style={{
+          [side]: SOCKET_CX - SOCKET / 2,
+          top: cyLocal - SOCKET / 2,
+          width: SOCKET,
+          height: SOCKET,
+          background: "rgb(var(--surface-2))",
+          borderColor: active ? "rgb(var(--accent))" : "rgb(var(--border-strong) / 0.7)",
+          boxShadow: active ? "0 0 22px rgb(var(--accent) / 0.45)" : "none",
+        } as CSSProperties}
+      />
+      {/* the rail, from the socket to the end of the page */}
+      <span
+        className="absolute w-0.5 rounded-full transition-colors"
+        style={{ ...lineX, top: cyLocal + SOCKET / 2 + 6, bottom: 0, background: lineColor }}
+      />
+    </div>
+  );
 }
 
 function todayKey(): string {
@@ -285,7 +350,9 @@ export function PresenceDock() {
         setPin({
           x: Math.min(Math.max(parsed.x, 32), window.innerWidth - 32),
           y: Math.min(Math.max(parsed.y, 80), window.innerHeight - 32),
-          mode: parsed.mode === "side-left" || parsed.mode === "side-right" || parsed.mode === "bottom"
+          // "bottom" existed for a day and was removed — an old pin
+          // carrying it floats rather than resurrecting the mode
+          mode: parsed.mode === "side-left" || parsed.mode === "side-right"
             ? parsed.mode
             : "float",
         });
@@ -328,21 +395,27 @@ export function PresenceDock() {
         return;
       }
       /*
-       * THE EDGES ARE DOCKS (user directive, 2026-08-26): released against
-       * a side, the assistant becomes a SIDE PANEL there; against the
-       * bottom, a bottom panel — a shape you can work beside, not a popup
-       * you look past. Anywhere else stays the floating pin. The bottom
-       * check runs first: in a corner, the wider panel wins.
+       * THE SIDES ARE HOLDERS (user directive, 2026-08-26): released
+       * against a side, the orb seats into the socket drawn there and the
+       * side panel opens at once — putting it in the holder IS asking for
+       * the menu. Anywhere else stays the floating pin.
        */
       const mode = dockModeFor(
         ev.clientX, ev.clientY, window.innerWidth, window.innerHeight);
+      const seated = mode !== "float";
       const next: OrbPin = {
         x: Math.min(Math.max(ev.clientX, 32), window.innerWidth - 32),
-        y: Math.min(Math.max(ev.clientY, 80), window.innerHeight - 32),
+        y: seated
+          ? clampSocketY(ev.clientY)
+          : Math.min(Math.max(ev.clientY, 80), window.innerHeight - 32),
         mode,
       };
       setPin(next);
       try { localStorage.setItem("neurai-orb-pin", JSON.stringify(next)); } catch { /* fine */ }
+      if (seated) {
+        setMinimized(false);
+        setOpen(true);
+      }
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
@@ -354,15 +427,15 @@ export function PresenceDock() {
   function pinnedPanelStyle(): CSSProperties {
     if (!pin) return {};
     if (pin.mode === "side-left" || pin.mode === "side-right") {
+      /* 76px in from the edge: the holder's strip stays visible, with the
+         seated orb in it — the panel appears BESIDE its holder, not over
+         the thing that opened it */
       return {
         position: "fixed",
         top: 64,
         bottom: 8,
-        ...(pin.mode === "side-left" ? { left: 8 } : { right: 8 }),
+        ...(pin.mode === "side-left" ? { left: 76 } : { right: 76 }),
       };
-    }
-    if (pin.mode === "bottom") {
-      return { position: "fixed", bottom: 8, left: 16, right: 16 };
     }
     const below = pin.y < window.innerHeight / 2;
     const startHalf = pin.x < window.innerWidth / 2;
@@ -836,17 +909,15 @@ export function PresenceDock() {
     : "left-1/2 top-[88px] -translate-x-1/2 md:top-[92px]";
   /*
    * The panel's SHAPE follows the dock mode: a side dock is a full-height
-   * column, the bottom dock a wide shelf, and the float/cradle the compact
-   * card it has always been. The width/height cannot ride the inline style
-   * — they are the difference between "a popup" and "a panel".
+   * column beside its holder; the float/cradle keeps the compact card it
+   * has always been. The width/height cannot ride the inline style — they
+   * are the difference between "a popup" and "a panel".
    */
   const dockMode = pin?.mode ?? "float";
   const panelShape =
     dockMode === "side-left" || dockMode === "side-right"
-      ? "w-[min(92vw,26rem)] h-auto"
-      : dockMode === "bottom"
-        ? "w-auto max-h-[46dvh]"
-        : "w-[min(92vw,24rem)]";
+      ? "w-[min(86vw,26rem)] h-auto"
+      : "w-[min(92vw,24rem)]";
   const panelHeight = dockMode === "float" ? "max-h-[calc(100dvh-7rem)]" : "";
 
   const orbVisual = (
@@ -909,6 +980,22 @@ export function PresenceDock() {
 
   return (
     <>
+      {/* the holders: while the orb is in hand, BOTH sides show their
+          socket at the pointer's height (the near one lit); once seated,
+          the docked side keeps its holder under the orb */}
+      {drag !== null ? (
+        <>
+          <DockHolder side="left" y={drag.y} active={drag.x < EDGE} />
+          <DockHolder side="right" y={drag.y} active={drag.x > window.innerWidth - EDGE} />
+        </>
+      ) : pin && pin.mode !== "float" ? (
+        <DockHolder
+          side={pin.mode === "side-left" ? "left" : "right"}
+          y={pin.y}
+          active={false}
+        />
+      ) : null}
+
       {open && minimized ? (
         /* the MINIMIZED pill: the conversation lives, the screen is yours */
         <div
