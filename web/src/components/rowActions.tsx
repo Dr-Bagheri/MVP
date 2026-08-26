@@ -486,6 +486,33 @@ export function SelectMenu({
   const panelRef = useRef<HTMLDivElement | null>(null);
   const current = options.find((o) => o.value === value);
 
+  /**
+   * HOVER-OPEN, tile face only (user directive, 2026-08-26: "come out
+   * without click, just by mouse hover, and disappear when it passes").
+   * The grace timer lets the pointer cross the gap between button and
+   * panel; a held pointer (dragging the sensitivity slider past the
+   * panel's edge) never closes it. The input face keeps click-only —
+   * a form select that opens under a passing pointer is hostile.
+   */
+  const hoverable = variant === "tile";
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hoverOpenedAt = useRef(0);
+  const panelHeld = useRef(false);
+  function cancelScheduledClose() {
+    if (closeTimer.current !== null) {
+      clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+  }
+  function scheduleClose() {
+    if (panelHeld.current) return;
+    cancelScheduledClose();
+    closeTimer.current = setTimeout(() => setAt(null), 160);
+  }
+  useEffect(() => () => {
+    if (closeTimer.current !== null) clearTimeout(closeTimer.current);
+  }, []);
+
   function toggle() {
     if (at) return setAt(null);
     const rect = rootRef.current?.getBoundingClientRect();
@@ -549,11 +576,12 @@ export function SelectMenu({
   return (
     <>
       {variant === "tile" ? (
-        /* the CALL-BAR face: a big glyph button, arrow under the glyph,
-           the chosen value captioned below the button — the value never
-           crowds the button, and the caption's truncation is honest (the
-           full name is one press away, checked, in the panel) */
-        <div className="flex w-20 flex-col items-center gap-1.5">
+        /* the CALL-BAR face: one big glyph filling the button — the arrow
+           left (user directive, 2026-08-26) with hover doing its job. The
+           sizes are clamp()ed to the viewport so the row breathes on a
+           wide screen and tightens on a small one; the chosen value stays
+           captioned below, never crowding the button. */
+        <div className="flex w-[clamp(4.5rem,8vw,6rem)] flex-col items-center gap-1.5">
           <button
             type="button"
             ref={rootRef}
@@ -561,16 +589,29 @@ export function SelectMenu({
             aria-haspopup="listbox"
             aria-expanded={at !== null}
             disabled={disabled}
-            onClick={(e) => { e.stopPropagation(); toggle(); }}
-            className={`tap grid h-14 w-16 place-items-center rounded-2xl border transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+            onMouseEnter={hoverable && !disabled ? () => {
+              cancelScheduledClose();
+              if (!at) {
+                hoverOpenedAt.current = Date.now();
+                toggle();
+              }
+            } : undefined}
+            onMouseLeave={hoverable ? scheduleClose : undefined}
+            onClick={(e) => {
+              e.stopPropagation();
+              /* a touch tap fires mouseenter+click together — the click
+                 must not instantly close what its own hover just opened */
+              if (at && Date.now() - hoverOpenedAt.current < 400) return;
+              toggle();
+            }}
+            className={`tap grid h-[clamp(3.5rem,6vw,4.75rem)] w-full place-items-center rounded-2xl border transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
               at !== null
                 ? "border-accent bg-accent-soft ring-1 ring-accent/30"
                 : "border-border bg-surface hover:border-border-strong hover:bg-surface-2"
             }`}
           >
-            <span className="flex flex-col items-center gap-1">
-              <span className="text-fg [&_svg]:h-5 [&_svg]:w-5">{icon}</span>
-              {chevron(12)}
+            <span className="grid place-items-center text-fg [&_svg]:h-[clamp(1.5rem,2.6vw,2rem)] [&_svg]:w-[clamp(1.5rem,2.6vw,2rem)]">
+              {icon}
             </span>
           </button>
           <span
@@ -612,6 +653,12 @@ export function SelectMenu({
               style={{ position: "fixed", top: at.top, left: at.left, minWidth: at.width }}
               className="z-50 rounded-lg border border-border bg-surface py-1 shadow-xl"
               onClick={(e) => e.stopPropagation()}
+              onMouseEnter={hoverable ? cancelScheduledClose : undefined}
+              onMouseLeave={hoverable ? scheduleClose : undefined}
+              onPointerDown={hoverable ? () => {
+                panelHeld.current = true;
+                window.addEventListener("pointerup", () => { panelHeld.current = false; }, { once: true });
+              } : undefined}
             >
               {panelHeading ? (
                 <p className="px-3 pb-1 pt-1.5 text-[11px] font-semibold text-accent">

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { act, render, screen, fireEvent } from "@testing-library/react";
 import { KebabMenu, SelectMenu, type KebabItem } from "./rowActions";
 
 vi.mock("next-intl", () => ({
@@ -145,5 +145,60 @@ describe("the SelectMenu tile face", () => {
       />,
     );
     expect(screen.getByRole("button", { name: "Language" }).textContent).toContain("Persian");
+  });
+});
+
+/**
+ * Hover-open (user directive, 2026-08-26: "come out without click just by
+ * mouse hover and disappear when it passes") — tile face only. The grace
+ * window matters: the panel sits a few pixels below the button, and a
+ * close that fires the instant the pointer leaves the button makes the
+ * panel unreachable. The input-face test is the negative control: a form
+ * select opening under a passing pointer would be a regression, not a
+ * feature spreading.
+ */
+describe("the tile face opens on hover", () => {
+  it("opens on enter, closes after the pointer has passed", () => {
+    vi.useFakeTimers();
+    try {
+      renderTile();
+      const btn = screen.getByRole("button", { name: /Microphone/ });
+      fireEvent.mouseEnter(btn);
+      expect(screen.getByRole("listbox")).toBeTruthy();
+      fireEvent.mouseLeave(btn);
+      act(() => { vi.advanceTimersByTime(300); });
+      expect(screen.queryByRole("listbox")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("survives the trip from button to panel", () => {
+    vi.useFakeTimers();
+    try {
+      renderTile();
+      const btn = screen.getByRole("button", { name: /Microphone/ });
+      fireEvent.mouseEnter(btn);
+      const panel = screen.getByRole("listbox");
+      fireEvent.mouseLeave(btn);
+      fireEvent.mouseEnter(panel); // within the grace window
+      act(() => { vi.advanceTimersByTime(300); });
+      expect(screen.getByRole("listbox")).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("the INPUT face never hover-opens", () => {
+    render(
+      <SelectMenu
+        ariaLabel="Language"
+        value="fa"
+        onChange={() => {}}
+        options={[{ value: "fa", label: "Persian" }]}
+      />,
+    );
+    fireEvent.mouseEnter(screen.getByRole("button", { name: "Language" }));
+    expect(screen.queryByRole("listbox")).toBeNull();
   });
 });

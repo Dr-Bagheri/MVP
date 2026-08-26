@@ -142,6 +142,8 @@ export interface SummaryVersion {
 export interface SearchHit {
   call_id: string;
   call_title: string;
+  /** the call's creation time — the result table's date column (2026-08-26) */
+  call_date: string;
   /** "call" = the TITLE matched — the call itself, findable before it has words. */
   kind: "transcript" | "summary" | "call";
   /** Present for transcript hits so the client can seek to the moment. */
@@ -345,7 +347,7 @@ export function createTranscriptsRepo(db: Db) {
         tx.unsafe<Record<string, unknown>>(
           `with q as (select websearch_to_tsquery('simple', echo.fa_fold($1)) as tsq)
            select * from (
-             select s.call_id, c.title as call_title, 'transcript' as kind,
+             select s.call_id, c.title as call_title, c.created_at as call_date, 'transcript' as kind,
                     s.start_ms, s.end_ms,
                     ts_headline('simple', s.text, q.tsq,
                                 'StartSel=<mark>,StopSel=</mark>,MaxWords=30,MinWords=10') as snippet,
@@ -357,7 +359,7 @@ export function createTranscriptsRepo(db: Db) {
                 and c.deleted_at is null
                 and ($2::uuid is null or s.call_id = $2::uuid)
              union all
-             select m.call_id, c.title, 'summary',
+             select m.call_id, c.title, c.created_at, 'summary',
                     null::int, null::int,
                     ts_headline('simple', m.body, q.tsq,
                                 'StartSel=<mark>,StopSel=</mark>,MaxWords=30,MinWords=10'),
@@ -369,7 +371,7 @@ export function createTranscriptsRepo(db: Db) {
                 and c.deleted_at is null
                 and ($2::uuid is null or m.call_id = $2::uuid)
              union all
-             select c.id, c.title, 'call',
+             select c.id, c.title, c.created_at, 'call',
                     null::int, null::int,
                     c.title,
                     1.0::real
@@ -387,6 +389,7 @@ export function createTranscriptsRepo(db: Db) {
       return rows.map((row) => ({
         call_id: row.call_id as string,
         call_title: row.call_title as string,
+        call_date: row.call_date as string,
         kind: row.kind as "transcript" | "summary" | "call",
         start_ms: (row.start_ms as number | null) ?? null,
         end_ms: (row.end_ms as number | null) ?? null,

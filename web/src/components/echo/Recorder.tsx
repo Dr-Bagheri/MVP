@@ -8,6 +8,7 @@ import {
   discardRecording,
   finish,
   pause,
+  BOOST_GAIN,
   recorderSnapshot,
   resetRecorder,
   resume,
@@ -28,7 +29,6 @@ import {
 } from "@/components/icons";
 import { playTestChime } from "@/lib/deviceTest";
 import { useAudioLevel } from "@/lib/useAudioLevel";
-import { DeviceCheck } from "./DeviceCheck";
 import { customTemplates, type CustomTemplate } from "@/lib/summaryTemplates";
 import { SUMMARY_TEMPLATES, type SummaryTemplate } from "@echo/core/vocabulary";
 
@@ -309,6 +309,10 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
                     gain={monitorGain}
                     gainLabel={t("micGain")}
                     onGainChange={setMonitorGain}
+                    boost={boost}
+                    boostLabel={t("boostOption")}
+                    boostHint={t("boostHint")}
+                    onBoostChange={setBoost}
                   />
                 }
               />
@@ -345,14 +349,6 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
                   { value: "mic", label: t("sourceMic") },
                   { value: "system", label: t("sourceSystem") },
                 ]}
-              />
-            </div>
-            {/* hear yourself BEFORE the meeting, not after it (2026-08-25) */}
-            <div className="mt-3">
-              <DeviceCheck
-                speakerId={speakerId}
-                boost={boost}
-                onBoostChange={setBoost}
               />
             </div>
           </fieldset>
@@ -676,6 +672,10 @@ function MicLevelFooter({
   gain,
   gainLabel,
   onGainChange,
+  boost,
+  boostLabel,
+  boostHint,
+  onBoostChange,
 }: {
   micId: string;
   label: string;
@@ -683,6 +683,12 @@ function MicLevelFooter({
   gain: number;
   gainLabel: string;
   onGainChange: (next: number) => void;
+  /** loudness enhance — the one control here that changes the RECORDING
+      itself; the meter previews it with the engine's own multiplier */
+  boost: boolean;
+  boostLabel: string;
+  boostHint: string;
+  onBoostChange: (next: boolean) => void;
 }) {
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [failed, setFailed] = useState(false);
@@ -712,7 +718,9 @@ function MicLevelFooter({
       setStream(null);
     };
   }, [micId]);
-  const level = Math.min(1, useAudioLevel(stream) * gain);
+  /* the same multipliers the engine applies — the bar is a preview of
+     the take, not a decoration */
+  const level = Math.min(1, useAudioLevel(stream) * gain * (boost ? BOOST_GAIN : 1));
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
@@ -744,6 +752,21 @@ function MicLevelFooter({
           value={gain}
           onChange={(e) => onGainChange(Number(e.target.value))}
         />
+      </label>
+      {/* the loudness enhance moved in from the retired device-check card
+          (user directive, 2026-08-26) — everything about the mic in the
+          mic's own menu */}
+      <label className="flex cursor-pointer items-start gap-1.5 text-[10px] leading-4 text-fg">
+        <input
+          type="checkbox"
+          className="mt-0.5"
+          checked={boost}
+          onChange={(e) => onBoostChange(e.target.checked)}
+        />
+        <span>
+          {boostLabel}
+          <span className="block text-fg-subtle">{boostHint}</span>
+        </span>
       </label>
     </div>
   );

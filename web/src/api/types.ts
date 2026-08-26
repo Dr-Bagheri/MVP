@@ -811,6 +811,8 @@ export interface AgentRun {
 export interface SearchHit {
   call_id: string;
   call_title: string;
+  /** the call's creation time — the result table's date column */
+  call_date: string;
   /** "call" = the TITLE matched — a call is findable by name before it has words. */
   kind: "transcript" | "summary" | "call";
   /**

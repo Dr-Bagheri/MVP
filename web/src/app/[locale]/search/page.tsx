@@ -2,14 +2,17 @@
 
 import { useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { Link } from "@/i18n/routing";
+import { useRouter } from "@/i18n/routing";
 import { api } from "@/api/client";
 import type { SearchHit } from "@/api/types";
+import { DataTable, type Column } from "@/components/DataTable";
 import { EchoSectionMenu } from "@/components/echo/EchoSectionMenu";
 import { PlatformShell } from "@/components/platform/PlatformShell";
 import { MenuLayout, PageContainer, PageHeader } from "@/components/scaffold";
 import { Card, Chip, EmptyState } from "@/components/ui";
-import { formatClock, digits } from "@/lib/format";
+import { IconCopy, IconOpen } from "@/components/icons";
+import { digits, formatClock, formatDate } from "@/lib/format";
+import { notify } from "@/lib/notify";
 
 /**
  * Renders core/'s `<mark>` highlights WITHOUT innerHTML.
@@ -46,9 +49,13 @@ function Snippet({ text }: { text: string }) {
   );
 }
 
+/** DataTable wants a per-row key; hits have none, so position provides it */
+type HitRow = SearchHit & { rowId: string };
+
 export default function SearchPage() {
   const t = useTranslations("search");
   const locale = useLocale();
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<SearchHit[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -59,6 +66,69 @@ export default function SearchPage() {
     setHits(await api.search(query));
     setBusy(false);
   }
+
+  const rows: HitRow[] = (hits ?? []).map((hit, i) => ({ ...hit, rowId: String(i) }));
+
+  /* the RECORDS-table anatomy (user directive, 2026-08-26: "make it like a
+     record kinda table") — the theme's one DataTable, right-click menu and
+     all, instead of a column of cards */
+  const columns: Column<HitRow>[] = [
+    {
+      key: "record",
+      header: t("colRecord"),
+      className: "font-medium text-fg",
+      headClassName: "text-start",
+      cell: (hit) => hit.call_title,
+    },
+    {
+      key: "where",
+      header: t("colWhere"),
+      headClassName: "text-start",
+      cell: (hit) => (
+        <Chip tone={hit.kind === "transcript" ? "neutral" : "accent"}>
+          {hit.kind === "summary"
+            ? t("inSummary")
+            : hit.kind === "call"
+              ? t("inTitle")
+              : t("inTranscript")}
+        </Chip>
+      ),
+    },
+    {
+      key: "match",
+      header: t("colMatch"),
+      headClassName: "text-start",
+      /* min-w-max sizes cells to content — a 30-word snippet must wrap in
+         its own box, not stretch the table past every viewport */
+      cell: (hit) => (
+        <div className="max-w-xl whitespace-normal">
+          <Snippet text={hit.snippet} />
+        </div>
+      ),
+    },
+    {
+      key: "moment",
+      header: t("colMoment"),
+      headClassName: "text-start",
+      className: "text-fg-muted",
+      /* a summary hit HAS no moment — "—", never an invented 0:00 */
+      cell: (hit) =>
+        hit.start_ms !== null ? (
+          <span className="ltr text-xs">{formatClock(hit.start_ms / 1000, locale)}</span>
+        ) : (
+          "—"
+        ),
+    },
+    {
+      key: "date",
+      header: t("colDate"),
+      headClassName: "text-start",
+      className: "text-fg-muted",
+      /* a server one deploy behind sends no call_date — "—", never an
+         Invalid Date wearing a date's clothes */
+      cell: (hit) => (hit.call_date ? formatDate(hit.call_date, locale) : "—"),
+    },
+  ];
 
   return (
     /* search searches the RECORDS, so it wears Echo's menu (user directive,
@@ -101,33 +171,31 @@ export default function SearchPage() {
           <p className="mb-2 text-sm text-fg-muted">
             {t("results", { count: digits(hits.length, locale) })}
           </p>
-          <div className="space-y-2">
-            {/* the WHOLE row is the link (user directive, 2026-08-18 — the
-                theme's row-link default): only the title used to navigate,
-                and a result you can only press on one word reads as broken.
-                The Link wraps the card, so no nested anchor exists. */}
-            {hits.map((hit, i) => (
-              <Link key={i} href={`/calls/${hit.call_id}`} className="block">
-                <Card className="row-link">
-                  <div className="mb-1 flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-medium text-fg">{hit.call_title}</span>
-                    <Chip tone={hit.kind === "transcript" ? "neutral" : "accent"}>
-                      {hit.kind === "summary"
-                        ? t("inSummary")
-                        : hit.kind === "call"
-                          ? t("inTitle")
-                          : t("inTranscript")}
-                    </Chip>
-                    {hit.start_ms !== null ? (
-                      <span className="text-xs text-fg-muted ltr">
-                        {formatClock(hit.start_ms / 1000, locale)}
-                      </span>
-                    ) : null}
-                  </div>
-                  <Snippet text={hit.snippet} />
-                </Card>
-              </Link>
-            ))}
+          <div className="rounded-lg border border-border bg-surface">
+            <DataTable
+              rows={rows}
+              rowKey={(hit) => hit.rowId}
+              columns={columns}
+              onRowClick={(hit) => router.push(`/calls/${hit.call_id}`)}
+              menuItems={(hit) => [
+                {
+                  key: "open",
+                  label: t("openRecord"),
+                  icon: <IconOpen width={15} height={15} />,
+                  onSelect: () => router.push(`/calls/${hit.call_id}`),
+                },
+                {
+                  key: "copy",
+                  label: t("copyText"),
+                  icon: <IconCopy width={15} height={15} />,
+                  onSelect: () => {
+                    void navigator.clipboard
+                      .writeText(hit.snippet.replace(/<\/?mark>/g, ""))
+                      .then(() => notify(t("copied")));
+                  },
+                },
+              ]}
+            />
           </div>
         </>
       )}

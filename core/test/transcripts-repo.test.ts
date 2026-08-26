@@ -197,8 +197,8 @@ describe("summaries", () => {
 
 describe("search", () => {
   const hitRows = () => [
-    { call_id: CALL, call_title: "جلسه", kind: "transcript", start_ms: 1_000, end_ms: 2_000, snippet: "…<mark>بودجه</mark>…" },
-    { call_id: CALL, call_title: "جلسه", kind: "summary", start_ms: null, end_ms: null, snippet: "…" },
+    { call_id: CALL, call_title: "جلسه", call_date: "2026-08-20T10:00:00Z", kind: "transcript", start_ms: 1_000, end_ms: 2_000, snippet: "…<mark>بودجه</mark>…" },
+    { call_id: CALL, call_title: "جلسه", call_date: "2026-08-20T10:00:00Z", kind: "summary", start_ms: null, end_ms: null, snippet: "…" },
   ];
 
   it("folds the QUERY with the same function that built the index", async () => {
@@ -228,6 +228,9 @@ describe("search", () => {
     const { db } = fakeDb(() => hitRows());
     const hits = await createTranscriptsRepo(db).search(IDENTITY, "بودجه");
     expect(hits.map((h) => h.kind)).toEqual(["transcript", "summary"]);
+    // the date reaches the wire — a selected-but-unmapped column would
+    // render every result as dated nothing (the stored-and-never-served shape)
+    expect(hits[0]!.call_date).toBe("2026-08-20T10:00:00Z");
   });
 
   it("gives transcript hits a timestamp to seek to and summary hits none", async () => {
@@ -252,7 +255,7 @@ describe("search", () => {
     // found at all. Titles match folded (Arabic-keyboard spellings) and by
     // ILIKE, not tsquery — a name lookup must prefix-match while typing.
     const { db, log } = fakeDb(() => [
-      { call_id: CALL, call_title: "call2", kind: "call", start_ms: null, end_ms: null, snippet: "call2" },
+      { call_id: CALL, call_title: "call2", call_date: "2026-08-20T10:00:00Z", kind: "call", start_ms: null, end_ms: null, snippet: "call2" },
     ]);
     const hits = await createTranscriptsRepo(db).search(IDENTITY, "call2");
     expect(hits[0]!.kind).toBe("call");
