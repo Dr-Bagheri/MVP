@@ -1,0 +1,770 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>NeurAI architecture diagrams</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+  :root {
+    --ink: #16121F;
+    --muted: #6B6478;
+    --line: #DAD4E4;
+    --paper: #FFFFFF;
+    --wash: #F7F4FC;
+    --violet: #7C4DFF;
+    --violet-d: #5B34C7;
+    --violet-pale: #EFE8FF;
+    --pink: #E05A9B;
+    --pink-pale: #FDEAF3;
+    --blue: #4468D8;
+    --blue-pale: #E8EDFC;
+    --green: #1F8A5B;
+    --green-pale: #E4F5EC;
+    --amber: #B4700E;
+    --amber-pale: #FCF1DF;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: #fff;
+    font-family: "IBM Plex Sans", sans-serif;
+    color: var(--ink);
+  }
+  .fig {
+    width: 1600px;
+    padding: 34px 38px 38px;
+    background: var(--paper);
+  }
+  .fig h2 {
+    margin: 0 0 4px;
+    font-size: 21px;
+    font-weight: 700;
+    letter-spacing: -.01em;
+  }
+  .fig p.sub {
+    margin: 0 0 22px;
+    font-size: 13.5px;
+    color: var(--muted);
+    max-width: 105ch;
+  }
+  svg { display: block; }
+  .lbl { font: 600 13px "IBM Plex Sans", sans-serif; fill: var(--ink); }
+  .lbl-sm { font: 500 11.5px "IBM Plex Sans", sans-serif; fill: var(--muted); }
+  .lbl-mono { font: 500 11.5px "IBM Plex Mono", monospace; fill: var(--muted); }
+  .lbl-w { font: 600 13px "IBM Plex Sans", sans-serif; fill: #fff; }
+  .lbl-w-sm { font: 500 11.5px "IBM Plex Sans", sans-serif; fill: rgba(255,255,255,.85); }
+  .lbl-hd { font: 600 11px "IBM Plex Mono", monospace; fill: var(--muted); letter-spacing: .1em; }
+  .edge { stroke: #A79EB8; stroke-width: 1.6; fill: none; }
+  .edge-strong { stroke: var(--violet); stroke-width: 2.2; fill: none; }
+  .edge-dash { stroke: #A79EB8; stroke-width: 1.6; fill: none; stroke-dasharray: 5 4; }
+  .zone { fill: var(--wash); stroke: var(--line); stroke-width: 1.2; }
+  .box { fill: #fff; stroke: var(--line); stroke-width: 1.4; }
+</style>
+</head>
+<body>
+
+<!-- ============================ FIG 1 ============================ -->
+<section class="fig" id="fig-topology">
+  <h2>Figure 1 — Deployment topology</h2>
+  <p class="sub">Every process that runs in production, the host it runs on, and the protocol between them. The browser never reaches the API directly: all traffic goes through the Next.js server, which holds the session and the upstream address.</p>
+  <svg width="1524" height="560" viewBox="0 0 1524 560" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+        <path d="M0 0 L10 5 L0 10 z" fill="#A79EB8"/>
+      </marker>
+      <marker id="av" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+        <path d="M0 0 L10 5 L0 10 z" fill="#7C4DFF"/>
+      </marker>
+    </defs>
+
+    <!-- client -->
+    <rect class="zone" x="0" y="60" width="250" height="200" rx="14"/>
+    <text class="lbl-hd" x="18" y="86">CLIENT</text>
+    <rect x="18" y="100" width="214" height="66" rx="11" fill="var(--violet-pale)" stroke="var(--violet)" stroke-width="1.3"/>
+    <text class="lbl" x="34" y="126">Browser</text>
+    <text class="lbl-sm" x="34" y="146">React 19 · fa/en · RTL</text>
+    <rect x="18" y="178" width="214" height="62" rx="11" class="box"/>
+    <text class="lbl" x="34" y="203">Echo Mobile</text>
+    <text class="lbl-sm" x="34" y="222">Android recorder</text>
+
+    <!-- edge -->
+    <rect class="zone" x="300" y="20" width="290" height="300" rx="14"/>
+    <text class="lbl-hd" x="318" y="46">EDGE — VERCEL</text>
+    <rect x="318" y="60" width="254" height="112" rx="11" fill="var(--violet)" stroke="var(--violet-d)" stroke-width="1.3"/>
+    <text class="lbl-w" x="336" y="86">Next.js 16.3 (App Router)</text>
+    <text class="lbl-w-sm" x="336" y="107">React Server Components</text>
+    <text class="lbl-w-sm" x="336" y="126">Middleware — session gate</text>
+    <text class="lbl-w-sm" x="336" y="145">next-intl · fa and en, RTL-first</text>
+    <rect x="318" y="184" width="254" height="120" rx="11" fill="#fff" stroke="var(--violet)" stroke-width="1.4" stroke-dasharray="4 3"/>
+    <text class="lbl" x="336" y="210">BFF — route handlers</text>
+    <text class="lbl-mono" x="336" y="231">/api/*</text>
+    <text class="lbl-sm" x="336" y="252">Attaches the bearer token</text>
+    <text class="lbl-sm" x="336" y="271">Maps upstream errors</text>
+    <text class="lbl-sm" x="336" y="290">Browser never holds a token</text>
+
+    <!-- tunnel -->
+    <rect x="626" y="140" width="128" height="86" rx="11" fill="var(--amber-pale)" stroke="var(--amber)" stroke-width="1.3"/>
+    <text class="lbl" x="642" y="168">Cloudflare</text>
+    <text class="lbl" x="642" y="187">Tunnel</text>
+    <text class="lbl-mono" x="642" y="209">api.neurai.pt</text>
+
+    <!-- origin -->
+    <rect class="zone" x="800" y="20" width="330" height="420" rx="14"/>
+    <text class="lbl-hd" x="818" y="46">ORIGIN — HETZNER (systemd)</text>
+    <rect x="818" y="60" width="294" height="96" rx="11" fill="#fff" stroke="var(--violet)" stroke-width="1.6"/>
+    <text class="lbl" x="836" y="86">neurai-api</text>
+    <text class="lbl-sm" x="836" y="106">Fastify · :8080 · verifies JWT</text>
+    <text class="lbl-sm" x="836" y="125">Owns every product rule</text>
+    <text class="lbl-mono" x="836" y="145">node --experimental-strip-types</text>
+    <rect x="818" y="172" width="294" height="88" rx="11" class="box"/>
+    <text class="lbl" x="836" y="198">neurai-worker</text>
+    <text class="lbl-sm" x="836" y="218">pgmq consumer</text>
+    <text class="lbl-sm" x="836" y="237">Transcribe · link · summarise</text>
+    <text class="lbl-sm" x="836" y="253">Deliver webhooks</text>
+    <rect x="818" y="276" width="294" height="80" rx="11" class="box"/>
+    <text class="lbl" x="836" y="302">neurai-ml</text>
+    <text class="lbl-sm" x="836" y="322">:7801 · VAD · diarization</text>
+    <text class="lbl-sm" x="836" y="341">sherpa-onnx · Silero</text>
+    <rect x="818" y="372" width="294" height="52" rx="11" class="box"/>
+    <text class="lbl" x="836" y="398">neurai-purge</text>
+    <text class="lbl-sm" x="836" y="415">The only process holding DELETE</text>
+
+    <!-- managed -->
+    <rect class="zone" x="1180" y="20" width="330" height="300" rx="14"/>
+    <text class="lbl-hd" x="1198" y="46">MANAGED — SUPABASE</text>
+    <rect x="1198" y="60" width="294" height="88" rx="11" fill="var(--green-pale)" stroke="var(--green)" stroke-width="1.4"/>
+    <text class="lbl" x="1216" y="86">PostgreSQL</text>
+    <text class="lbl-sm" x="1216" y="106">Row-level security · pgmq</text>
+    <text class="lbl-sm" x="1216" y="125">Definer doors · role grants</text>
+    <text class="lbl-sm" x="1216" y="141">The wall</text>
+    <rect x="1198" y="164" width="294" height="66" rx="11" class="box"/>
+    <text class="lbl" x="1216" y="190">GoTrue — Auth</text>
+    <text class="lbl-sm" x="1216" y="210">ES256 · JWKS · refresh</text>
+    <rect x="1198" y="246" width="294" height="58" rx="11" class="box"/>
+    <text class="lbl" x="1216" y="272">Object storage</text>
+    <text class="lbl-sm" x="1216" y="291">Audio parts · signed URLs only</text>
+
+    <!-- providers -->
+    <rect class="zone" x="1180" y="352" width="330" height="152" rx="14"/>
+    <text class="lbl-hd" x="1198" y="378">PROVIDERS</text>
+    <rect x="1198" y="392" width="140" height="58" rx="11" class="box"/>
+    <text class="lbl" x="1214" y="418">Soniox</text>
+    <text class="lbl-sm" x="1214" y="437">Persian STT</text>
+    <rect x="1352" y="392" width="140" height="58" rx="11" class="box"/>
+    <text class="lbl" x="1368" y="418">OpenRouter</text>
+    <text class="lbl-sm" x="1368" y="437">LLM lanes</text>
+    <text class="lbl-sm" x="1198" y="476">Both reached from the ORIGIN only — no key ever</text>
+    <text class="lbl-sm" x="1198" y="494">reaches the browser.</text>
+
+    <!-- edges -->
+    <path class="edge-strong" d="M232 133 L318 116" marker-end="url(#av)"/>
+    <text class="lbl-mono" x="238" y="112">HTTPS</text>
+    <path class="edge" d="M232 209 L318 244" marker-end="url(#a)"/>
+    <path class="edge-strong" d="M572 244 L626 200" marker-end="url(#av)"/>
+    <text class="lbl-mono" x="574" y="228">bearer</text>
+    <path class="edge-strong" d="M754 183 L818 110" marker-end="url(#av)"/>
+    <path class="edge" d="M1112 108 L1198 100" marker-end="url(#a)"/>
+    <text class="lbl-mono" x="1116" y="90">SQL/TLS</text>
+    <path class="edge" d="M1112 216 L1198 120" marker-end="url(#a)"/>
+    <path class="edge" d="M1112 316 L1198 285" marker-end="url(#a)"/>
+    <path class="edge-dash" d="M1112 220 L1198 420" marker-end="url(#a)"/>
+    <path class="edge-dash" d="M1112 400 L1198 130" marker-end="url(#a)"/>
+    <path class="edge" d="M966 260 L966 276" marker-end="url(#a)"/>
+    <text class="lbl-sm" x="978" y="273">calls</text>
+  </svg>
+</section>
+
+<!-- ============================ FIG 2 ============================ -->
+<section class="fig" id="fig-auth">
+  <h2>Figure 2 — Identity and the request path</h2>
+  <p class="sub">How a signed-in person becomes a database identity. The browser holds a cookie, never a token; the API verifies every token cryptographically against the published key set; the database enforces what that identity may see.</p>
+  <svg width="1524" height="470" viewBox="0 0 1524 470" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+        <path d="M0 0 L10 5 L0 10 z" fill="#A79EB8"/>
+      </marker>
+    </defs>
+
+    <!-- lane headers -->
+    <text class="lbl-hd" x="10" y="24">BROWSER</text>
+    <text class="lbl-hd" x="330" y="24">NEXT.JS SERVER</text>
+    <text class="lbl-hd" x="700" y="24">SUPABASE AUTH</text>
+    <text class="lbl-hd" x="1020" y="24">FASTIFY API</text>
+    <text class="lbl-hd" x="1330" y="24">POSTGRES</text>
+    <line x1="310" y1="36" x2="310" y2="440" stroke="var(--line)"/>
+    <line x1="680" y1="36" x2="680" y2="440" stroke="var(--line)"/>
+    <line x1="1000" y1="36" x2="1000" y2="440" stroke="var(--line)"/>
+    <line x1="1310" y1="36" x2="1310" y2="440" stroke="var(--line)"/>
+
+    <!-- 1 -->
+    <rect x="10" y="52" width="280" height="52" rx="10" class="box"/>
+    <text class="lbl" x="26" y="76">1 · Email + password</text>
+    <text class="lbl-sm" x="26" y="94">Posted to our own server</text>
+    <path class="edge" d="M290 78 L400 78" marker-end="url(#b)"/>
+
+    <!-- 2 -->
+    <rect x="400" y="52" width="262" height="52" rx="10" fill="var(--violet-pale)" stroke="var(--violet)" stroke-width="1.3"/>
+    <text class="lbl" x="416" y="76">2 · Server-side exchange</text>
+    <text class="lbl-sm" x="416" y="94">Credentials never sit in JS</text>
+    <path class="edge" d="M662 78 L760 78" marker-end="url(#b)"/>
+
+    <!-- 3 -->
+    <rect x="760" y="52" width="220" height="70" rx="10" fill="var(--green-pale)" stroke="var(--green)" stroke-width="1.3"/>
+    <text class="lbl" x="776" y="76">3 · Mints a token</text>
+    <text class="lbl-mono" x="776" y="96">ES256 · kid 4800f423</text>
+    <text class="lbl-sm" x="776" y="114">+ refresh token</text>
+
+    <!-- 4 -->
+    <path class="edge" d="M860 122 L860 150 L662 150 L662 166" marker-end="url(#b)"/>
+    <rect x="400" y="166" width="262" height="72" rx="10" fill="var(--violet-pale)" stroke="var(--violet)" stroke-width="1.3"/>
+    <text class="lbl" x="416" y="190">4 · HttpOnly cookie</text>
+    <text class="lbl-mono" x="416" y="210">echo_session</text>
+    <text class="lbl-sm" x="416" y="229">Secure · SameSite · not readable by JS</text>
+
+    <!-- 5 -->
+    <path class="edge" d="M400 202 L290 202" marker-end="url(#b)"/>
+    <rect x="10" y="176" width="280" height="52" rx="10" class="box"/>
+    <text class="lbl" x="26" y="200">5 · The app opens</text>
+    <text class="lbl-sm" x="26" y="218">No token in localStorage, ever</text>
+
+    <!-- 6 -->
+    <path class="edge" d="M150 228 L150 268 L400 268" marker-end="url(#b)"/>
+    <rect x="400" y="248" width="262" height="60" rx="10" class="box"/>
+    <text class="lbl" x="416" y="272">6 · BFF route handler</text>
+    <text class="lbl-sm" x="416" y="291">Reads cookie, attaches bearer</text>
+    <path class="edge" d="M662 278 L1040 278" marker-end="url(#b)"/>
+
+    <!-- 7 -->
+    <rect x="1040" y="248" width="250" height="90" rx="10" fill="var(--violet)" stroke="var(--violet-d)"/>
+    <text class="lbl-w" x="1056" y="272">7 · Verify the token</text>
+    <text class="lbl-w-sm" x="1056" y="292">JWKS by kid · cached</text>
+    <text class="lbl-w-sm" x="1056" y="310">issuer + audience pinned</text>
+    <text class="lbl-w-sm" x="1056" y="328">Refetch on a kid miss</text>
+
+    <!-- 8 -->
+    <path class="edge" d="M1290 293 L1350 293" marker-end="url(#b)"/>
+    <rect x="1350" y="248" width="164" height="90" rx="10" fill="var(--green-pale)" stroke="var(--green)" stroke-width="1.4"/>
+    <text class="lbl" x="1366" y="272">8 · Identity set</text>
+    <text class="lbl-mono" x="1366" y="292">echo.actor_id</text>
+    <text class="lbl-sm" x="1366" y="311">Role: echo_app</text>
+    <text class="lbl-sm" x="1366" y="329">RLS decides the rows</text>
+
+    <!-- footnote row -->
+    <rect x="10" y="358" width="1504" height="86" rx="12" fill="var(--wash)" stroke="var(--line)"/>
+    <text class="lbl" x="30" y="384">Three invariants this path exists to keep</text>
+    <text class="lbl-sm" x="30" y="406">· No database access without a user identity — the API opens no connection that is not already someone.</text>
+    <text class="lbl-sm" x="30" y="426">· The browser holds a cookie, not a credential — an XSS cannot read a token that is not there.</text>
+    <text class="lbl-sm" x="790" y="406">· A refused row and a missing row answer the same way — existence is information.</text>
+    <text class="lbl-sm" x="790" y="426">· The wall is the database, not the prompt or the UI. Both of those are conveniences on top of it.</text>
+  </svg>
+</section>
+
+<!-- ============================ FIG 3 ============================ -->
+<section class="fig" id="fig-pipeline">
+  <h2>Figure 3 — The recording pipeline</h2>
+  <p class="sub">From a microphone to a searchable, summarised record. Each step is a queue message, so a failure retries in place and a part that cannot be transcribed leaves a visible gap rather than failing the whole call.</p>
+  <svg width="1524" height="520" viewBox="0 0 1524 520" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+        <path d="M0 0 L10 5 L0 10 z" fill="#7C4DFF"/>
+      </marker>
+      <marker id="cg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+        <path d="M0 0 L10 5 L0 10 z" fill="#A79EB8"/>
+      </marker>
+    </defs>
+
+    <!-- capture -->
+    <rect x="10" y="60" width="186" height="96" rx="12" fill="var(--violet-pale)" stroke="var(--violet)" stroke-width="1.4"/>
+    <text class="lbl" x="26" y="86">Capture</text>
+    <text class="lbl-sm" x="26" y="106">Browser mic or upload</text>
+    <text class="lbl-sm" x="26" y="125">30-minute parts</text>
+    <text class="lbl-sm" x="26" y="144">Opus / WebM</text>
+
+    <path class="edge-strong" d="M196 108 L246 108" marker-end="url(#c)"/>
+
+    <rect x="246" y="60" width="176" height="96" rx="12" class="box"/>
+    <text class="lbl" x="262" y="86">Object storage</text>
+    <text class="lbl-sm" x="262" y="106">One object per part</text>
+    <text class="lbl-sm" x="262" y="125">No public bucket policy</text>
+    <text class="lbl-sm" x="262" y="144">Signed URL to read</text>
+
+    <path class="edge-strong" d="M422 108 L472 108" marker-end="url(#c)"/>
+
+    <rect x="472" y="52" width="196" height="112" rx="12" fill="var(--amber-pale)" stroke="var(--amber)" stroke-width="1.4"/>
+    <text class="lbl" x="488" y="78">Queue — pgmq</text>
+    <text class="lbl-mono" x="488" y="98">echo_process_part</text>
+    <text class="lbl-mono" x="488" y="116">echo_link_speakers</text>
+    <text class="lbl-mono" x="488" y="134">echo_summarize</text>
+    <text class="lbl-mono" x="488" y="152">echo_deliver_webhook</text>
+
+    <path class="edge-strong" d="M668 108 L718 108" marker-end="url(#c)"/>
+
+    <!-- worker box -->
+    <rect class="zone" x="718" y="40" width="470" height="230" rx="14"/>
+    <text class="lbl-hd" x="736" y="66">WORKER — one message walks the rungs</text>
+
+    <rect x="736" y="80" width="200" height="72" rx="11" class="box"/>
+    <text class="lbl" x="752" y="104">1 · Voice detection</text>
+    <text class="lbl-sm" x="752" y="123">Silero VAD — trims silence</text>
+    <text class="lbl-sm" x="752" y="141">−15% transcription cost</text>
+
+    <rect x="960" y="80" width="210" height="72" rx="11" class="box"/>
+    <text class="lbl" x="976" y="104">2 · Transcription</text>
+    <text class="lbl-sm" x="976" y="123">Soniox — Persian, 2.1% WER</text>
+    <text class="lbl-sm" x="976" y="141">Word-level timing</text>
+
+    <rect x="736" y="170" width="200" height="80" rx="11" class="box"/>
+    <text class="lbl" x="752" y="194">3 · Who spoke</text>
+    <text class="lbl-sm" x="752" y="213">Channel or diarization</text>
+    <text class="lbl-sm" x="752" y="231">Voiceprint match to a person</text>
+    <text class="lbl-sm" x="752" y="246">Owner links the rest</text>
+
+    <rect x="960" y="170" width="210" height="80" rx="11" fill="var(--pink-pale)" stroke="var(--pink)" stroke-width="1.4"/>
+    <text class="lbl" x="976" y="194">4 · Summary</text>
+    <text class="lbl-sm" x="976" y="213">LLM via OpenRouter</text>
+    <text class="lbl-sm" x="976" y="231">Template-driven, versioned</text>
+    <text class="lbl-sm" x="976" y="246">Actions · decisions · tags</text>
+
+    <path class="edge-strong" d="M936 116 L960 116" marker-end="url(#c)"/>
+    <path class="edge-strong" d="M836 152 L836 170" marker-end="url(#c)"/>
+    <path class="edge-strong" d="M936 210 L960 210" marker-end="url(#c)"/>
+
+    <path class="edge-strong" d="M1188 155 L1238 155" marker-end="url(#c)"/>
+    <rect x="1238" y="100" width="276" height="110" rx="12" fill="var(--green-pale)" stroke="var(--green)" stroke-width="1.4"/>
+    <text class="lbl" x="1254" y="126">The record</text>
+    <text class="lbl-sm" x="1254" y="146">Transcript is the source of truth</text>
+    <text class="lbl-sm" x="1254" y="165">Summaries are versioned and rebuildable</text>
+    <text class="lbl-sm" x="1254" y="184">Full-text search, Persian-folded</text>
+    <text class="lbl-sm" x="1254" y="202">Every artifact carries provenance</text>
+
+    <!-- degradation ladder -->
+    <rect x="10" y="304" width="1504" height="184" rx="12" fill="var(--wash)" stroke="var(--line)"/>
+    <text class="lbl" x="30" y="330">What happens when a step cannot do its job — the pipeline degrades, it does not lie</text>
+
+    <rect x="30" y="346" width="350" height="60" rx="10" fill="#fff" stroke="var(--line)"/>
+    <text class="lbl" x="46" y="368">Word timing unavailable</text>
+    <text class="lbl-sm" x="46" y="388">Falls back to line, then to a speech span. Never to nothing.</text>
+
+    <rect x="398" y="346" width="350" height="60" rx="10" fill="#fff" stroke="var(--line)"/>
+    <text class="lbl" x="414" y="368">One part fails</text>
+    <text class="lbl-sm" x="414" y="388">A visible gap in the transcript. The call survives.</text>
+
+    <rect x="766" y="346" width="350" height="60" rx="10" fill="#fff" stroke="var(--line)"/>
+    <text class="lbl" x="782" y="368">No model configured</text>
+    <text class="lbl-sm" x="782" y="388">The summary is skipped with a retryable flag, and says so.</text>
+
+    <rect x="1134" y="346" width="380" height="60" rx="10" fill="#fff" stroke="var(--line)"/>
+    <text class="lbl" x="1150" y="368">Owner not resolvable</text>
+    <text class="lbl-sm" x="1150" y="388">Nothing is written at all. No identity, no write.</text>
+
+    <text class="lbl-sm" x="30" y="432">The rule underneath all four: whatever is forfeited is said out loud. What was INFERRED may degrade; what the user TOLD us never silently changes.</text>
+    <text class="lbl-sm" x="30" y="454">A number a person would act on is never fabricated to fill a gap — an unknown renders as an unknown, in words.</text>
+    <text class="lbl-sm" x="30" y="476">Retries are idempotent: the same message may be delivered twice and the second delivery changes nothing.</text>
+  </svg>
+</section>
+
+<!-- ============================ FIG 4 ============================ -->
+<section class="fig" id="fig-permissions">
+  <h2>Figure 4 — The permission stack</h2>
+  <p class="sub">Four layers, each of which must independently permit an operation. The UI hiding a button is a convenience; the database refusing the row is the rule.</p>
+  <svg width="1524" height="560" viewBox="0 0 1524 560" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+        <path d="M0 0 L10 5 L0 10 z" fill="#A79EB8"/>
+      </marker>
+    </defs>
+
+    <rect x="10" y="50" width="720" height="66" rx="11" fill="#fff" stroke="var(--line)" stroke-width="1.4"/>
+    <text class="lbl" x="30" y="76">Layer 1 · The interface</text>
+    <text class="lbl-sm" x="30" y="98">Hides controls the server would refuse. A convenience — never a wall. Never trusted.</text>
+    <path class="edge" d="M370 116 L370 140" marker-end="url(#d)"/>
+
+    <rect x="10" y="140" width="720" height="66" rx="11" fill="#fff" stroke="var(--line)" stroke-width="1.4"/>
+    <text class="lbl" x="30" y="166">Layer 2 · The API</text>
+    <text class="lbl-sm" x="30" y="188">Verifies the token, checks role for admin routes, validates every field. Refuses early and politely.</text>
+    <path class="edge" d="M370 206 L370 230" marker-end="url(#d)"/>
+
+    <rect x="10" y="230" width="720" height="86" rx="11" fill="var(--violet-pale)" stroke="var(--violet)" stroke-width="1.6"/>
+    <text class="lbl" x="30" y="256">Layer 3 · Role grants</text>
+    <text class="lbl-sm" x="30" y="278">The connection's database role decides which TABLES and COLUMNS are reachable at all.</text>
+    <text class="lbl-sm" x="30" y="298">A role with no grant cannot be talked into an operation by any query.</text>
+    <path class="edge" d="M370 316 L370 340" marker-end="url(#d)"/>
+
+    <rect x="10" y="340" width="720" height="96" rx="11" fill="var(--green-pale)" stroke="var(--green)" stroke-width="1.8"/>
+    <text class="lbl" x="30" y="366">Layer 4 · Row-level security — THE WALL</text>
+    <text class="lbl-sm" x="30" y="388">Every policy is written against the identity in the session, so a query returns only rows that identity may see.</text>
+    <text class="lbl-sm" x="30" y="408">A refusal is indistinguishable from absence: the caller gets 404, not 403, because existence is itself information.</text>
+    <text class="lbl-sm" x="30" y="428">This layer holds even if every layer above it is bypassed.</text>
+
+    <!-- roles -->
+    <rect class="zone" x="770" y="50" width="360" height="386" rx="14"/>
+    <text class="lbl-hd" x="788" y="76">DATABASE ROLES</text>
+
+    <rect x="788" y="90" width="324" height="76" rx="10" fill="#fff" stroke="var(--violet)" stroke-width="1.4"/>
+    <text class="lbl-mono" x="806" y="114" style="font-size:13px;fill:var(--ink)">echo_app</text>
+    <text class="lbl-sm" x="806" y="134">The product. Reads and writes as the signed-in person.</text>
+    <text class="lbl-sm" x="806" y="153">No DELETE on anything.</text>
+
+    <rect x="788" y="180" width="324" height="76" rx="10" class="box"/>
+    <text class="lbl-mono" x="806" y="204" style="font-size:13px;fill:var(--ink)">echo_agent</text>
+    <text class="lbl-sm" x="806" y="224">The assistant. Borrows the caller's authority,</text>
+    <text class="lbl-sm" x="806" y="243">never more. Cannot read human decisions.</text>
+
+    <rect x="788" y="270" width="324" height="72" rx="10" class="box"/>
+    <text class="lbl-mono" x="806" y="294" style="font-size:13px;fill:var(--ink)">echo_purge</text>
+    <text class="lbl-sm" x="806" y="314">The only role holding DELETE, in a separate</text>
+    <text class="lbl-sm" x="806" y="333">process that does nothing else.</text>
+
+    <rect x="788" y="356" width="324" height="66" rx="10" class="box"/>
+    <text class="lbl-mono" x="806" y="380" style="font-size:13px;fill:var(--ink)">echo_vendor</text>
+    <text class="lbl-sm" x="806" y="400">Platform operations: accepting a new</text>
+    <text class="lbl-sm" x="806" y="418">organisation, suspending one.</text>
+
+    <!-- doors -->
+    <rect class="zone" x="1170" y="50" width="344" height="386" rx="14"/>
+    <text class="lbl-hd" x="1188" y="76">NAMED DOORS</text>
+    <text class="lbl-sm" x="1188" y="98">Operations that must do slightly more than the</text>
+    <text class="lbl-sm" x="1188" y="116">caller's own permissions allow do NOT get a</text>
+    <text class="lbl-sm" x="1188" y="134">widened policy. They get a named function that</text>
+    <text class="lbl-sm" x="1188" y="152">does exactly one thing, checks the caller itself,</text>
+    <text class="lbl-sm" x="1188" y="170">and can be listed and audited.</text>
+
+    <rect x="1188" y="188" width="308" height="34" rx="8" fill="#fff" stroke="var(--line)"/>
+    <text class="lbl-mono" x="1204" y="210">soft_delete_call · restore_call</text>
+    <rect x="1188" y="230" width="308" height="34" rx="8" fill="#fff" stroke="var(--line)"/>
+    <text class="lbl-mono" x="1204" y="252">merge_person · delete_person</text>
+    <rect x="1188" y="272" width="308" height="34" rx="8" fill="#fff" stroke="var(--line)"/>
+    <text class="lbl-mono" x="1204" y="294">register_account · redeem_invitation</text>
+    <rect x="1188" y="314" width="308" height="34" rx="8" fill="#fff" stroke="var(--line)"/>
+    <text class="lbl-mono" x="1204" y="336">vendor_accept_org · vendor_set_org_status</text>
+    <rect x="1188" y="356" width="308" height="34" rx="8" fill="#fff" stroke="var(--line)"/>
+    <text class="lbl-mono" x="1204" y="378">tombstone_user · delete_summary_version</text>
+    <text class="lbl-sm" x="1188" y="412">Every door is enumerated with its reason.</text>
+
+    <rect x="10" y="464" width="1504" height="78" rx="12" fill="var(--wash)" stroke="var(--line)"/>
+    <text class="lbl" x="30" y="490">Why a door instead of a broader policy</text>
+    <text class="lbl-sm" x="30" y="512">A widened policy applies to every query forever, including the ones nobody has written yet. A door applies to one operation, states its own conditions,</text>
+    <text class="lbl-sm" x="30" y="532">and appears in a list you can read. Structure makes the wrong state unrepresentable; a predicate only makes it unlikely.</text>
+  </svg>
+</section>
+
+<!-- ============================ FIG 5 ============================ -->
+<section class="fig" id="fig-agent">
+  <h2>Figure 5 — The assistant, and how a write is approved</h2>
+  <p class="sub">The agent answers questions with the caller's own permissions. It cannot change anything by itself: a change is proposed, shown in the conversation that produced it, and applied only when a person confirms.</p>
+  <svg width="1524" height="480" viewBox="0 0 1524 480" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="e" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+        <path d="M0 0 L10 5 L0 10 z" fill="#7C4DFF"/>
+      </marker>
+    </defs>
+
+    <rect x="10" y="56" width="200" height="76" rx="11" fill="var(--violet-pale)" stroke="var(--violet)" stroke-width="1.4"/>
+    <text class="lbl" x="26" y="82">A question</text>
+    <text class="lbl-sm" x="26" y="102">Typed by a person, in</text>
+    <text class="lbl-sm" x="26" y="120">a persistent conversation</text>
+
+    <path class="edge-strong" d="M210 94 L258 94" marker-end="url(#e)"/>
+
+    <rect x="258" y="42" width="230" height="104" rx="11" class="box"/>
+    <text class="lbl" x="274" y="68">Agent loop</text>
+    <text class="lbl-sm" x="274" y="88">Model chosen per org</text>
+    <text class="lbl-sm" x="274" y="106">Skill supplies instructions</text>
+    <text class="lbl-sm" x="274" y="124">Tool-call ceiling per skill</text>
+    <text class="lbl-sm" x="274" y="140">Runs as echo_agent</text>
+
+    <path class="edge-strong" d="M488 94 L536 94" marker-end="url(#e)"/>
+
+    <rect class="zone" x="536" y="30" width="330" height="200" rx="14"/>
+    <text class="lbl-hd" x="554" y="56">TOOLS — read</text>
+    <rect x="554" y="70" width="294" height="34" rx="8" fill="#fff" stroke="var(--line)"/>
+    <text class="lbl-mono" x="570" y="92">search_transcripts</text>
+    <rect x="554" y="112" width="294" height="34" rx="8" fill="#fff" stroke="var(--line)"/>
+    <text class="lbl-mono" x="570" y="134">list_related_calls</text>
+    <rect x="554" y="154" width="294" height="34" rx="8" fill="#fff" stroke="var(--line)"/>
+    <text class="lbl-mono" x="570" y="176">get_summary · get_speakers</text>
+    <text class="lbl-sm" x="554" y="212">Every read passes through the same wall as a human's.</text>
+
+    <path class="edge-strong" d="M866 130 L914 130" marker-end="url(#e)"/>
+
+    <rect class="zone" x="914" y="30" width="290" height="200" rx="14"/>
+    <text class="lbl-hd" x="932" y="56">TOOLS — write</text>
+    <rect x="932" y="70" width="254" height="118" rx="10" fill="var(--amber-pale)" stroke="var(--amber)" stroke-width="1.4"/>
+    <text class="lbl" x="948" y="94">They do not write.</text>
+    <text class="lbl-sm" x="948" y="114">A write tool VALIDATES and</text>
+    <text class="lbl-sm" x="948" y="132">returns a proposal describing</text>
+    <text class="lbl-sm" x="948" y="150">the change in words.</text>
+    <text class="lbl-sm" x="948" y="172">Asserted by test: a write tool</text>
+    <text class="lbl-sm" x="948" y="184">issues no UPDATE or INSERT.</text>
+
+    <path class="edge-strong" d="M1204 130 L1252 130" marker-end="url(#e)"/>
+
+    <rect x="1252" y="56" width="262" height="150" rx="11" fill="var(--pink-pale)" stroke="var(--pink)" stroke-width="1.6"/>
+    <text class="lbl" x="1268" y="82">The approval card</text>
+    <text class="lbl-sm" x="1268" y="102">Rendered in the conversation</text>
+    <text class="lbl-sm" x="1268" y="120">that produced it — a proposal</text>
+    <text class="lbl-sm" x="1268" y="138">outside its own sentence has</text>
+    <text class="lbl-sm" x="1268" y="156">lost what made it approvable.</text>
+    <text class="lbl-sm" x="1268" y="180">Approve or reject. Both are</text>
+    <text class="lbl-sm" x="1268" y="196">recorded as a human decision.</text>
+
+    <rect x="10" y="262" width="1504" height="196" rx="12" fill="var(--wash)" stroke="var(--line)"/>
+    <text class="lbl" x="30" y="288">The guarantees around a confirmed write</text>
+
+    <rect x="30" y="304" width="352" height="66" rx="10" fill="#fff" stroke="var(--line)"/>
+    <text class="lbl" x="46" y="326">Decision first, write second</text>
+    <text class="lbl-sm" x="46" y="346">The human's answer is recorded before anything</text>
+    <text class="lbl-sm" x="46" y="362">is applied, so a replay is refused before it acts.</text>
+
+    <rect x="400" y="304" width="352" height="66" rx="10" fill="#fff" stroke="var(--line)"/>
+    <text class="lbl" x="416" y="326">Approval widens content, not power</text>
+    <text class="lbl-sm" x="416" y="346">The confirmed write still runs as the agent role,</text>
+    <text class="lbl-sm" x="416" y="362">under the same grants and the same wall.</text>
+
+    <rect x="770" y="304" width="352" height="66" rx="10" fill="#fff" stroke="var(--line)"/>
+    <text class="lbl" x="786" y="326">One proposal, one outcome</text>
+    <text class="lbl-sm" x="786" y="346">A second confirmation of the same proposal is</text>
+    <text class="lbl-sm" x="786" y="362">refused by a uniqueness constraint, not a check.</text>
+
+    <rect x="1140" y="304" width="374" height="66" rx="10" fill="#fff" stroke="var(--line)"/>
+    <text class="lbl" x="1156" y="326">The agent never reads the answer</text>
+    <text class="lbl-sm" x="1156" y="346">It has no grant on the decisions table: an agent</text>
+    <text class="lbl-sm" x="1156" y="362">reading a human's answer turns it into a prompt.</text>
+
+    <text class="lbl-sm" x="30" y="398">A conversation is a record. The person's turn is written before the model runs, so a failed answer leaves the question standing rather than erasing it.</text>
+    <text class="lbl-sm" x="30" y="420">An answer that was cut off is MARKED as cut off — an unmarked partial answer is indistinguishable from a complete one a week later.</text>
+    <text class="lbl-sm" x="30" y="442">Tool calls appear in the thread as names only. Their arguments quote transcripts, so they live on the narrower audit surface instead.</text>
+  </svg>
+</section>
+
+<!-- ============================ FIG 6 ============================ -->
+<section class="fig" id="fig-frontend">
+  <h2>Figure 6 — Front-end structure and theme</h2>
+  <p class="sub">One shell, three surfaces, and a token system that resolves in both themes and both writing directions. Every colour on screen comes from a token; no component holds a literal.</p>
+  <svg width="1524" height="540" viewBox="0 0 1524 540" xmlns="http://www.w3.org/2000/svg">
+    <rect class="zone" x="10" y="46" width="470" height="240" rx="14"/>
+    <text class="lbl-hd" x="28" y="72">THE SHELL</text>
+    <rect x="28" y="86" width="120" height="180" rx="10" fill="var(--violet)" stroke="var(--violet-d)"/>
+    <text class="lbl-w" x="44" y="110">Icon rail</text>
+    <text class="lbl-w-sm" x="44" y="130">Dashboard</text>
+    <text class="lbl-w-sm" x="44" y="148">Assistant</text>
+    <text class="lbl-w-sm" x="44" y="166">Echo</text>
+    <text class="lbl-w-sm" x="44" y="184">Management</text>
+    <text class="lbl-w-sm" x="44" y="212">Four items —</text>
+    <text class="lbl-w-sm" x="44" y="228">a fifth would</text>
+    <text class="lbl-w-sm" x="44" y="244">need a ruling</text>
+
+    <rect x="160" y="86" width="140" height="180" rx="10" class="box"/>
+    <text class="lbl" x="176" y="110">Section menu</text>
+    <text class="lbl-sm" x="176" y="130">The app's own</text>
+    <text class="lbl-sm" x="176" y="148">destinations,</text>
+    <text class="lbl-sm" x="176" y="166">grouped</text>
+    <text class="lbl-sm" x="176" y="192">Resizable</text>
+    <text class="lbl-sm" x="176" y="210">Collapses</text>
+    <text class="lbl-sm" x="176" y="228">below md</text>
+
+    <rect x="312" y="86" width="152" height="180" rx="10" class="box"/>
+    <text class="lbl" x="328" y="110">Content</text>
+    <text class="lbl-sm" x="328" y="130">Breadcrumb trail</text>
+    <text class="lbl-sm" x="328" y="148">Page</text>
+    <text class="lbl-sm" x="328" y="174">The assistant</text>
+    <text class="lbl-sm" x="328" y="192">orb floats over</text>
+    <text class="lbl-sm" x="328" y="210">every surface</text>
+
+    <rect class="zone" x="510" y="46" width="480" height="240" rx="14"/>
+    <text class="lbl-hd" x="528" y="72">ROUTES</text>
+    <rect x="528" y="86" width="444" height="42" rx="9" fill="var(--violet-pale)" stroke="var(--violet)" stroke-width="1.3"/>
+    <text class="lbl-mono" x="546" y="106" style="font-size:12.5px;fill:var(--ink)">/[locale]</text>
+    <text class="lbl-sm" x="640" y="106">Dashboard — the landing page</text>
+    <rect x="528" y="136" width="444" height="42" rx="9" fill="#fff" stroke="var(--line)"/>
+    <text class="lbl-mono" x="546" y="156" style="font-size:12.5px;fill:var(--ink)">/[locale]/echo/*</text>
+    <text class="lbl-sm" x="680" y="156">Record · Records · Speakers · Search</text>
+    <rect x="528" y="186" width="444" height="42" rx="9" fill="#fff" stroke="var(--line)"/>
+    <text class="lbl-mono" x="546" y="206" style="font-size:12.5px;fill:var(--ink)">/[locale]/calls/[id]</text>
+    <text class="lbl-sm" x="700" y="206">One record — summary and transcript</text>
+    <rect x="528" y="236" width="444" height="42" rx="9" fill="#fff" stroke="var(--line)"/>
+    <text class="lbl-mono" x="546" y="256" style="font-size:12.5px;fill:var(--ink)">/[locale]/management/*</text>
+    <text class="lbl-sm" x="730" y="256">Users · Org · Server · Models</text>
+
+    <rect class="zone" x="1020" y="46" width="494" height="240" rx="14"/>
+    <text class="lbl-hd" x="1038" y="72">TOKENS — ONE SOURCE</text>
+    <text class="lbl-sm" x="1038" y="96">Every colour is a CSS custom property. A component</text>
+    <text class="lbl-sm" x="1038" y="114">names a role, never a value, so both themes resolve</text>
+    <text class="lbl-sm" x="1038" y="132">as complete sets rather than as an inversion.</text>
+
+    <rect x="1038" y="148" width="220" height="30" rx="7" fill="#000"/>
+    <text class="lbl-w-sm" x="1052" y="168">Dark — the default</text>
+    <rect x="1272" y="148" width="220" height="30" rx="7" fill="#F5F5F5" stroke="var(--line)"/>
+    <text class="lbl-sm" x="1286" y="168">Light — derived, not inverted</text>
+
+    <rect x="1038" y="188" width="52" height="30" rx="7" fill="#9B85FF"/>
+    <rect x="1098" y="188" width="52" height="30" rx="7" fill="#5747E6"/>
+    <rect x="1158" y="188" width="52" height="30" rx="7" fill="#4ADE80"/>
+    <rect x="1218" y="188" width="52" height="30" rx="7" fill="#FBBF24"/>
+    <rect x="1278" y="188" width="52" height="30" rx="7" fill="#FB7185"/>
+    <rect x="1338" y="188" width="52" height="30" rx="7" fill="#7DD3FC"/>
+    <text class="lbl-sm" x="1038" y="240">Contrast pairs are checked by a script that exits</text>
+    <text class="lbl-sm" x="1038" y="258">non-zero: a token change that breaks a pair fails</text>
+    <text class="lbl-sm" x="1038" y="276">the build rather than reaching a screen.</text>
+
+    <rect x="10" y="312" width="1504" height="212" rx="12" fill="var(--wash)" stroke="var(--line)"/>
+    <text class="lbl" x="30" y="338">Persian-first, in practice</text>
+
+    <rect x="30" y="354" width="352" height="76" rx="10" fill="#fff" stroke="var(--line)"/>
+    <text class="lbl" x="46" y="376">Direction is structural</text>
+    <text class="lbl-sm" x="46" y="396">Layout uses logical properties throughout, so a</text>
+    <text class="lbl-sm" x="46" y="414">component is written once and works both ways.</text>
+
+    <rect x="400" y="354" width="352" height="76" rx="10" fill="#fff" stroke="var(--line)"/>
+    <text class="lbl" x="416" y="376">Digits follow the language</text>
+    <text class="lbl-sm" x="416" y="396">Months follow the calendar preference. Two axes,</text>
+    <text class="lbl-sm" x="416" y="414">deliberately separate — Jalali or Gregorian.</text>
+
+    <rect x="770" y="354" width="352" height="76" rx="10" fill="#fff" stroke="var(--line)"/>
+    <text class="lbl" x="786" y="376">Names render as authored</text>
+    <text class="lbl-sm" x="786" y="396">A person's name is never transliterated. A second</text>
+    <text class="lbl-sm" x="786" y="414">Latin name is a separate field, never derived.</text>
+
+    <rect x="1140" y="354" width="374" height="76" rx="10" fill="#fff" stroke="var(--line)"/>
+    <text class="lbl" x="1156" y="376">Text is normalised at both ends</text>
+    <text class="lbl-sm" x="1156" y="396">At ingest and at query, so a search matches</text>
+    <text class="lbl-sm" x="1156" y="414">regardless of which Arabic variant was typed.</text>
+
+    <text class="lbl-sm" x="30" y="456">The table, the menu, the dialog and the dropdown are single shared components. A screen cannot invent its own dialect of a control.</text>
+    <text class="lbl-sm" x="30" y="478">Every action lives in one place — right-click a row — and destructive actions are grouped and coloured apart from the rest.</text>
+    <text class="lbl-sm" x="30" y="500">A byte-level sweep over every tracked text file fails the build on a byte-order mark or a mis-encoded character.</text>
+  </svg>
+</section>
+
+<!-- ============================ FIG 7 ============================ -->
+<section class="fig" id="fig-data">
+  <h2>Figure 7 — The data model</h2>
+  <p class="sub">The tables a record touches, and what each one is for. Everything is scoped to an organisation; nothing crosses that boundary.</p>
+  <svg width="1524" height="500" viewBox="0 0 1524 500" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="f" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+        <path d="M0 0 L10 5 L0 10 z" fill="#A79EB8"/>
+      </marker>
+    </defs>
+
+    <!-- org -->
+    <rect x="10" y="60" width="230" height="110" rx="11" fill="var(--violet-pale)" stroke="var(--violet)" stroke-width="1.6"/>
+    <text class="lbl-mono" x="28" y="86" style="font-size:13px;fill:var(--ink)">org</text>
+    <text class="lbl-sm" x="28" y="108">The tenant. Every other</text>
+    <text class="lbl-sm" x="28" y="126">row belongs to exactly one.</text>
+    <text class="lbl-sm" x="28" y="152">Status gates the whole org.</text>
+
+    <rect x="10" y="196" width="230" height="118" rx="11" class="box"/>
+    <text class="lbl-mono" x="28" y="222" style="font-size:13px;fill:var(--ink)">app_user</text>
+    <text class="lbl-sm" x="28" y="244">A person in an org, with a</text>
+    <text class="lbl-sm" x="28" y="262">role and a status.</text>
+    <text class="lbl-sm" x="28" y="284">Preferences: locale, calendar,</text>
+    <text class="lbl-sm" x="28" y="302">timezone, model.</text>
+
+    <rect x="10" y="340" width="230" height="96" rx="11" class="box"/>
+    <text class="lbl-mono" x="28" y="366" style="font-size:13px;fill:var(--ink)">invitation</text>
+    <text class="lbl-sm" x="28" y="388">Show-once token, stored</text>
+    <text class="lbl-sm" x="28" y="406">only as a hash.</text>
+    <text class="lbl-sm" x="28" y="428">One live per address.</text>
+
+    <!-- call cluster -->
+    <rect x="300" y="60" width="250" height="140" rx="11" fill="var(--green-pale)" stroke="var(--green)" stroke-width="1.6"/>
+    <text class="lbl-mono" x="318" y="86" style="font-size:13px;fill:var(--ink)">call</text>
+    <text class="lbl-sm" x="318" y="108">One recording. Title, scope,</text>
+    <text class="lbl-sm" x="318" y="126">status, owner, duration.</text>
+    <text class="lbl-sm" x="318" y="148">Soft-deleted with a purge date.</text>
+    <text class="lbl-sm" x="318" y="170">Archived separately.</text>
+    <text class="lbl-sm" x="318" y="190">Tags · template · last change.</text>
+
+    <rect x="300" y="228" width="250" height="96" rx="11" class="box"/>
+    <text class="lbl-mono" x="318" y="254" style="font-size:13px;fill:var(--ink)">call_part</text>
+    <text class="lbl-sm" x="318" y="276">A 30-minute slice with its</text>
+    <text class="lbl-sm" x="318" y="294">own audio object and offset.</text>
+    <text class="lbl-sm" x="318" y="314">Carries whether it has timing.</text>
+
+    <rect x="300" y="352" width="250" height="96" rx="11" class="box"/>
+    <text class="lbl-mono" x="318" y="378" style="font-size:13px;fill:var(--ink)">transcript_segment</text>
+    <text class="lbl-sm" x="318" y="400">The record itself. Text, span,</text>
+    <text class="lbl-sm" x="318" y="418">speaker, per-word timing.</text>
+    <text class="lbl-sm" x="318" y="438">Full-text indexed.</text>
+
+    <!-- derived -->
+    <rect x="610" y="60" width="250" height="122" rx="11" fill="var(--pink-pale)" stroke="var(--pink)" stroke-width="1.6"/>
+    <text class="lbl-mono" x="628" y="86" style="font-size:13px;fill:var(--ink)">summary</text>
+    <text class="lbl-sm" x="628" y="108">Versioned. Every version</text>
+    <text class="lbl-sm" x="628" y="126">keeps its model, template</text>
+    <text class="lbl-sm" x="628" y="144">and instruction.</text>
+    <text class="lbl-sm" x="628" y="166">Rebuildable from the transcript.</text>
+
+    <rect x="610" y="210" width="250" height="96" rx="11" class="box"/>
+    <text class="lbl-mono" x="628" y="236" style="font-size:13px;fill:var(--ink)">call_speaker</text>
+    <text class="lbl-sm" x="628" y="258">A voice in one call, and the</text>
+    <text class="lbl-sm" x="628" y="276">person it belongs to.</text>
+    <text class="lbl-sm" x="628" y="296">Linked by the owner only.</text>
+
+    <rect x="610" y="334" width="250" height="114" rx="11" class="box"/>
+    <text class="lbl-mono" x="628" y="360" style="font-size:13px;fill:var(--ink)">person</text>
+    <text class="lbl-sm" x="628" y="382">The directory. Name, title,</text>
+    <text class="lbl-sm" x="628" y="400">team, voiceprint.</text>
+    <text class="lbl-sm" x="628" y="422">A voiceprint is a vector —</text>
+    <text class="lbl-sm" x="628" y="440">never stored audio.</text>
+
+    <!-- assistant -->
+    <rect x="920" y="60" width="250" height="104" rx="11" class="box"/>
+    <text class="lbl-mono" x="938" y="86" style="font-size:13px;fill:var(--ink)">agent_session</text>
+    <text class="lbl-sm" x="938" y="108">A conversation. Titled from</text>
+    <text class="lbl-sm" x="938" y="126">its first question and never</text>
+    <text class="lbl-sm" x="938" y="144">renamed afterwards.</text>
+
+    <rect x="920" y="192" width="250" height="104" rx="11" class="box"/>
+    <text class="lbl-mono" x="938" y="218" style="font-size:13px;fill:var(--ink)">agent_message</text>
+    <text class="lbl-sm" x="938" y="240">One turn. A person's turn has</text>
+    <text class="lbl-sm" x="938" y="258">no run behind it; the</text>
+    <text class="lbl-sm" x="938" y="276">assistant's does.</text>
+
+    <rect x="920" y="324" width="250" height="124" rx="11" class="box"/>
+    <text class="lbl-mono" x="938" y="350" style="font-size:13px;fill:var(--ink)">agent_run</text>
+    <text class="lbl-sm" x="938" y="372">One execution: model, tools</text>
+    <text class="lbl-sm" x="938" y="390">offered, steps taken, tokens,</text>
+    <text class="lbl-sm" x="938" y="408">status.</text>
+    <text class="lbl-sm" x="938" y="430">Append-only once closed.</text>
+
+    <!-- governance -->
+    <rect x="1230" y="60" width="284" height="104" rx="11" fill="var(--amber-pale)" stroke="var(--amber)" stroke-width="1.4"/>
+    <text class="lbl-mono" x="1248" y="86" style="font-size:13px;fill:var(--ink)">proposal_decision</text>
+    <text class="lbl-sm" x="1248" y="108">A human's yes or no, stamped</text>
+    <text class="lbl-sm" x="1248" y="126">with who decided.</text>
+    <text class="lbl-sm" x="1248" y="146">The agent has no grant on it.</text>
+
+    <rect x="1230" y="192" width="284" height="104" rx="11" class="box"/>
+    <text class="lbl-mono" x="1248" y="218" style="font-size:13px;fill:var(--ink)">admin_action</text>
+    <text class="lbl-sm" x="1248" y="240">The audit ledger. Field names,</text>
+    <text class="lbl-sm" x="1248" y="258">never values. Written in the</text>
+    <text class="lbl-sm" x="1248" y="276">same transaction as the act.</text>
+
+    <rect x="1230" y="324" width="284" height="124" rx="11" class="box"/>
+    <text class="lbl-mono" x="1248" y="350" style="font-size:13px;fill:var(--ink)">api_key · webhook</text>
+    <text class="lbl-sm" x="1248" y="372">Integration surface. Keys are</text>
+    <text class="lbl-sm" x="1248" y="390">hashed; secrets are never shown</text>
+    <text class="lbl-sm" x="1248" y="408">twice.</text>
+    <text class="lbl-sm" x="1248" y="430">Deliveries are signed and replayed-guarded.</text>
+
+    <!-- relations -->
+    <path class="edge" d="M240 115 L300 115" marker-end="url(#f)"/>
+    <path class="edge" d="M240 250 L300 250" marker-end="url(#f)"/>
+    <path class="edge" d="M425 200 L425 228" marker-end="url(#f)"/>
+    <path class="edge" d="M425 324 L425 352" marker-end="url(#f)"/>
+    <path class="edge" d="M550 110 L610 110" marker-end="url(#f)"/>
+    <path class="edge" d="M550 260 L610 258" marker-end="url(#f)"/>
+    <path class="edge" d="M735 306 L735 334" marker-end="url(#f)"/>
+    <path class="edge" d="M860 112 L920 112" marker-end="url(#f)"/>
+    <path class="edge" d="M1045 164 L1045 192" marker-end="url(#f)"/>
+    <path class="edge" d="M1045 296 L1045 324" marker-end="url(#f)"/>
+    <path class="edge" d="M1170 112 L1230 112" marker-end="url(#f)"/>
+  </svg>
+</section>
+
+</body>
+</html>

@@ -60,3 +60,7 @@ Thumbs.db
 # same class as *.docx and docs/*.pdf: the SOURCE that builds them belongs in
 # the repo, the 34MB of output does not
 /deliverables/
+*.pptx
+docs/build/deck-render/
+__pycache__/
+*.pyc
