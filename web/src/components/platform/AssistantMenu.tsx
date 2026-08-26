@@ -1,13 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import type { AssistantSession } from "@/api/types";
 import { api } from "@/api/client";
 import { SectionMenu } from "@/components/scaffold";
 import { IconAgent, IconHistory, IconPlus, IconZap } from "@/components/icons";
 import { openAssistant } from "@/lib/assistantBus";
 import { useRefreshEpoch } from "@/lib/refreshBus";
+import { digits } from "@/lib/format";
+import { untitledNumbers } from "@/lib/sessionTitles";
 import { useAssistantConversation } from "./AssistantConversationState";
 
 /**
@@ -28,19 +30,24 @@ export function AssistantMenu({
 }) {
   const t = useTranslations("platform");
   const tConversations = useTranslations("conversations");
+  const locale = useLocale();
   const { started, startNewConversation } = useAssistantConversation();
   const isHub = activeSlug === "new" || activeSlug === "hub";
 
   /* the TWO latest conversations, right in the menu (user directive,
      2026-08-22) — refreshed whenever any session changes anywhere, orb
      talks included. Clicking one opens it in the dock where you stand. */
-  const [recent, setRecent] = useState<AssistantSession[]>([]);
+  const [sessions, setSessions] = useState<AssistantSession[]>([]);
   const sessionsEpoch = useRefreshEpoch("sessions");
   useEffect(() => {
     void api.agentSessions()
-      .then((rows) => setRecent(rows.slice(0, 2)))
-      .catch(() => setRecent([]));
+      .then(setSessions)
+      .catch(() => setSessions([]));
   }, [sessionsEpoch]);
+  const recent = sessions.slice(0, 2);
+  /* numbered over the FULL list so the menu and the history table agree
+     about which conversation is «گفت‌وگوی جدید ۲» */
+  const numbers = untitledNumbers(sessions);
   return (
     <SectionMenu
       navLabel={t("assistantMenuLabel")}
@@ -69,7 +76,8 @@ export function AssistantMenu({
             ...recent.map((session) => ({
               slug: `recent-${session.id}`,
               href: "/conversations",
-              label: session.title ?? tConversations("untitled"),
+              label: session.title
+                ?? tConversations("newChat", { n: digits(numbers.get(session.id) ?? 1, locale) }),
               /* smaller + shifted inward (user directive, 2026-08-24) —
                  the indent says "under History"; the old «· » prefix retired */
               sub: true,

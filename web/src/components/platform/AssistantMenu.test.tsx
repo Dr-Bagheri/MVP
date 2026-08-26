@@ -4,6 +4,7 @@ import { AssistantConversationProvider, useAssistantConversation } from "./Assis
 
 vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => key,
+  useLocale: () => "fa",
 }));
 
 vi.mock("@/i18n/routing", () => ({

@@ -11,6 +11,7 @@ import { openAssistant } from "@/lib/assistantBus";
 import { notify } from "@/lib/notify";
 import { useRefreshEpoch } from "@/lib/refreshBus";
 import { digits, formatDate } from "@/lib/format";
+import { untitledNumbers } from "@/lib/sessionTitles";
 
 /**
  * Conversation history — the records as a TABLE, the same card-table
@@ -40,6 +41,9 @@ export default function ConversationsPage() {
   const shown = (sessions ?? []).filter(
     (s) => search.trim() === "" || (s.title ?? "").includes(search.trim()),
   );
+  /* numbered over the FULL list, not the filtered one — a search must not
+     renumber what it merely hides */
+  const numbers = untitledNumbers(sessions ?? []);
 
   return (
     <PlatformShell>
@@ -79,7 +83,7 @@ export default function ConversationsPage() {
                         onClick={() => openAssistant({ sessionId: s.id })}
                       >
                         <td className="px-4 py-2.5 font-medium text-fg">
-                          {s.title ?? t("untitled")}
+                          {s.title ?? t("newChat", { n: digits(numbers.get(s.id) ?? 1, locale) })}
                         </td>
                         <td className="px-4 py-2.5 text-fg-muted">
                           {formatDate(s.last_message_at ?? s.created_at, locale)}

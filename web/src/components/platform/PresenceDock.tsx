@@ -8,7 +8,7 @@ import { createPortal } from "react-dom";
 import { useLocale, useTranslations } from "next-intl";
 import { usePathname } from "next/navigation";
 import { api } from "@/api/client";
-import type { AgentCardItem, AgentEvent } from "@/api/types";
+import type { AgentEvent } from "@/api/types";
 import { useRouter } from "@/i18n/routing";
 import { executeClientTool, SURFACE_TOOLS } from "@/lib/agentSurface";
 import { subscribeAssistantOpen, subscribeRecordingLive } from "@/lib/assistantBus";
@@ -32,7 +32,7 @@ import {
  * One persistent dock on every route: the collapsed orb sits in the platform
  * top bar's glass cradle, then falls back to the corner on routes without that
  * shell. The dock itself never remounts, so moving its ONE button does not
- * reset the panel, voice wake word, unread state or conversation.
+ * reset the panel or the voice wake word.
  *
  * VOICE (user directive, 2026-08-21): the dock listens for its name —
  * «echo», «hi echo», «salam echo», «سلام اکو». A command in the same
@@ -242,6 +242,8 @@ export function PresenceDock() {
 
   const [member, setMember] = useState(false);
   const [open, setOpen] = useState(false);
+  const openRef = useRef(false);
+  openRef.current = open;
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<DockMessage[]>([]);
 
@@ -271,15 +273,26 @@ export function PresenceDock() {
     sessionId.current = undefined;
     setOpen(false);
   }
+
+  /** a toggle-open starts CLEAN (user report, 2026-08-26: "i still can see
+      ai assistant thread" — a close path that only hid the panel left the
+      thread in memory): unless a reply is mid-stream, whatever the last
+      conversation left behind is dropped — it already lives under
+      Assistant → History. A deliberate open from history loads its
+      session through subscribeAssistantOpen, not through here. */
+  function openFresh(): void {
+    if (!streamingRef.current) {
+      setMessages([]);
+      sessionId.current = undefined;
+    }
+    setOpen(true);
+    setTimeout(() => inputRef.current?.focus(), 0);
+  }
   const [streaming, setStreaming] = useState(false);
   const [consent, setConsent] = useState<
     | null
     | { label: string; resolve: (allowed: boolean) => void }
   >(null);
-  /** M35: the proactivity channel — refreshed whenever the panel opens.
-      The dial and the digest toggle moved to Settings·Assistant (user
-      directive, 2026-08-21) — the dock carries conversation, not config. */
-  const [cards, setCards] = useState<AgentCardItem[]>([]);
   /** voice state: null = idle; "command" = the post-wake / mic-button window */
   const [listening, setListening] = useState<"command" | null>(null);
   /** the assistant's own voice is on the speakers (drives the orb's state) */
@@ -522,6 +535,8 @@ export function PresenceDock() {
     abortRef.current?.abort();
     loopRef.current?.endSession();
     setListening(null);
+    setMessages([]);
+    sessionId.current = undefined;
     setOpen(false);
     if (!silentRef.current && !recordingLive()) {
       speak(locale === "fa" ? "باشه." : "Okay.");
@@ -569,11 +584,8 @@ export function PresenceDock() {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "e") {
         e.preventDefault();
-        setOpen((v) => {
-          const next = !v;
-          if (next) setTimeout(() => inputRef.current?.focus(), 0);
-          return next;
-        });
+        if (openRef.current) closeDock();
+        else openFresh();
       }
     };
     window.addEventListener("keydown", onKey);
@@ -583,12 +595,6 @@ export function PresenceDock() {
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: "end" });
   }, [messages]);
-
-  /** cards ride the panel's open (and once for the orb dot) */
-  useEffect(() => {
-    if (!member) return;
-    void api.cards().then((res) => setCards(res.cards)).catch(() => undefined);
-  }, [member, open]);
 
   /**
    * The RECORDING rule (user, 2026-08-21): a rolling take owns the room.
@@ -748,17 +754,9 @@ export function PresenceDock() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [member]);
 
-  function openCard(card: AgentCardItem) {
-    if (!card.read) {
-      setCards((prev) => prev.map((c) => (c.id === card.id ? { ...c, read: true } : c)));
-      void api.markCardRead(card.id).catch(() => undefined);
-    }
-    // the card's content LIVES in its conversation — load it right here,
-    // where the person already is, instead of routing them away
-    if (card.session_id) void loadSession(card.session_id);
-  }
-
-  const unread = cards.filter((c) => !c.read).length;
+  /* the agent's cards LEFT the dock (user directive, 2026-08-26: "all
+     things done by ai assistant must just go to history") — the bell
+     announces them, history holds them; the panel opens clean. */
 
   const askConsent = useCallback((label: string): Promise<boolean> => {
     return new Promise<boolean>((resolve) => {
@@ -980,14 +978,6 @@ export function PresenceDock() {
         }
         level={orbLevel}
       />
-      {unread > 0 && !open ? (
-        <span
-          className="absolute -end-0.5 -top-0.5 z-10 grid h-5 min-w-5 place-items-center rounded-full bg-danger px-1 text-[10px] font-bold text-white"
-          aria-label={t("unread", { count: unread })}
-        >
-          {unread}
-        </span>
-      ) : null}
     </>
   );
 
@@ -1007,11 +997,8 @@ export function PresenceDock() {
       onClick={() => {
         // a drag's mouse-up must not also open the panel
         if (suppressClickRef.current) { suppressClickRef.current = false; return; }
-        setOpen((v) => {
-          const next = !v;
-          if (next) setTimeout(() => inputRef.current?.focus(), 0);
-          return next;
-        });
+        if (open) closeDock();
+        else openFresh();
       }}
     >
       {/* The particle field is decorative; this button remains the single
@@ -1111,25 +1098,6 @@ export function PresenceDock() {
           </div>
 
           <div className="min-h-24 flex-1 space-y-3 overflow-y-auto px-3 py-3">
-            {cards.length > 0 ? (
-              <div className="space-y-1.5">
-                {cards.slice(0, 4).map((card) => (
-                  <button
-                    key={card.id}
-                    type="button"
-                    className={`tap block w-full rounded-lg border px-2.5 py-1.5 text-start text-xs transition-colors ${
-                      card.read
-                        ? "border-border text-fg-muted hover:text-fg"
-                        : "border-accent/40 bg-accent-soft text-fg"
-                    }`}
-                    onClick={() => openCard(card)}
-                  >
-                    {!card.read ? <span className="me-1.5 inline-block h-1.5 w-1.5 rounded-full bg-accent align-middle" aria-hidden /> : null}
-                    {card.title}
-                  </button>
-                ))}
-              </div>
-            ) : null}
             {messages.length === 0 ? (
               <p className="text-sm leading-6 text-fg-muted">{t("empty")}</p>
             ) : (
@@ -1239,7 +1207,7 @@ export function PresenceDock() {
           listening/speaking, and the panel header shows the word when open. */}
 
       {/* Portal the complete control—not only its canvas—so accessibility,
-          unread state and interaction have one owner. A PINNED orb renders
+          state and interaction have one owner. A PINNED orb renders
           fixed at its pin instead. The old fixed-corner fallback is GONE
           (user directive, 2026-08-25): no anchor and no pin = no orb —
           "any trace of it beside the right position it has at the top". */}
