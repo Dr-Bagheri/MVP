@@ -43,7 +43,6 @@ import type {
   AdminModelRow,
   Me,
   MemberSort,
-  MemberStats,
   ModelsResponse,
   Org,
   Role,
@@ -1411,9 +1410,14 @@ export const api = {
    * history log was not recording, and the UI renders "—" rather than a
    * fabricated zero.
    */
-  async memberStats(): Promise<MemberStats> {
-    return bff<MemberStats>("/api/admin/members/stats");
-  },
+  /* memberStats LEFT the client (user directive, 2026-08-26: the three
+     counter tiles at the top of Management · Users were removed). The
+     SERVER route survives — a count of an org's members is a real
+     question and something will ask it again — but nothing in the product
+     asks it today, and a client method with no caller is the shape this
+     codebase has shipped defects behind before. Recorded here, at the
+     consumer, because that is where the next person looks for it. */
+
   /**
    * **LIVE** — `POST /api/admin/members/:id` → core's accept. Acceptance has
    * its OWN endpoint rather than being `setUserStatus(id, "active")`: core's

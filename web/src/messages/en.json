@@ -1143,6 +1143,7 @@
     },
     "section": {
       "users": "Users",
+      "invitations": "Invitations",
       "skills": "Skills",
       "connectors": "Connectors",
       "models": "Allowed models",
@@ -1150,6 +1151,7 @@
     },
     "desc": {
       "server": "Processing queues, work that keeps failing, gateway keys and storage use.",
+      "invitations": "Invite people to your organization and manage the invitations you have sent.",
       "users": "Add, approve, assign roles and disable members of your organization."
     },
     "notWired": "Not wired yet",

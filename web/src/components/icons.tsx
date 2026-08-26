@@ -108,6 +108,11 @@ export const IconShare = (p: SVGProps<SVGSVGElement>) => (
 );
 /** Points to inline-END; compose with `rtl:-scale-x-100` where rendered. */
 /** close / remove — the X that was a text character in six places */
+/** invite — an envelope with a plus: asking somebody in, which is a
+    different act from listing the people already here */
+export const IconMailPlus = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><path d="M3.5 7.5A1.5 1.5 0 0 1 5 6h10a1.5 1.5 0 0 1 1.5 1.5v6A1.5 1.5 0 0 1 15 15H5a1.5 1.5 0 0 1-1.5-1.5v-6Z" /><path d="m3.8 7 6.2 4.2L16.2 7" /><path d="M19 14v6M16 17h6" /></svg>
+);
 export const IconClose = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><path d="M6 6l12 12M18 6 6 18" /></svg>
 );
@@ -291,6 +296,7 @@ export const ICONS = {
   "globe": IconGlobe,
   "hide": IconHide,
   "history": IconHistory,
+  "mailPlus": IconMailPlus,
   "merge": IconMerge,
   "mic": IconMic,
   "micOff": IconMicOff,

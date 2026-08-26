@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import { TwoPane, type PaneGroup } from "./TwoPane";
-import { IconChip, IconPlug, IconPulse, IconSparkle, IconUser } from "@/components/icons";
+import { IconMailPlus, IconUser } from "@/components/icons";
 
 /**
  * Management's two-pane surface (user directive, review round 2: "Management
@@ -41,7 +41,7 @@ import { IconChip, IconPlug, IconPulse, IconSparkle, IconUser } from "@/componen
  * a reachability check, all to rename a URL nobody complained about.
  */
 const GROUPS: readonly { key: string; slugs: readonly string[] }[] = [
-  { key: "people", slugs: ["users"] },
+  { key: "people", slugs: ["users", "invitations"] },
 ];
 
 /**
@@ -64,10 +64,9 @@ export function ManagementPane({
   /* menu icons (2026-08-24, sana reference) */
   const ICONS: Record<string, ReactNode> = {
     users: <IconUser />,
-    skills: <IconSparkle />,
-    models: <IconChip />,
-    connectors: <IconPlug />,
-    server: <IconPulse />,
+    /* its own icon (user directive): an envelope-shaped door, not a
+       second person glyph — inviting is not the same act as listing */
+    invitations: <IconMailPlus />,
   };
 
   const groups: PaneGroup[] = GROUPS.map((group) => ({
