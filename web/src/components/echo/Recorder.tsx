@@ -568,12 +568,18 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
             two answers, not a confirmation.
           */}
           <div className="mt-4 flex items-center justify-center gap-3" dir="ltr">
-            <KebabMenu
-              label={t("settingsMenu")}
-              items={settingsItems}
-              trigger={<IconSettings width={18} height={18} />}
-              triggerClassName="h-10 w-10 rounded-full border border-border bg-surface text-fg-muted hover:border-border-strong hover:bg-surface-2 hover:text-fg"
-            />
+            {/* the guided lessons ring these two anchors by name (the
+                `rec-meeting` / `rec-devices` targets in EchoSectionMenu).
+                They moved with the controls: a tour target that no longer
+                exists does not fail loudly, it silently skips a step. */}
+            <span data-tour="rec-meeting" className="inline-flex">
+              <KebabMenu
+                label={t("settingsMenu")}
+                items={settingsItems}
+                trigger={<IconSettings width={18} height={18} />}
+                triggerClassName="h-10 w-10 rounded-full border border-border bg-surface text-fg-muted hover:border-border-strong hover:bg-surface-2 hover:text-fg"
+              />
+            </span>
             <button
               type="button"
               title={phase === "recording" ? t("pause") : t("resume")}
@@ -609,6 +615,7 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
                 <span aria-hidden className="block h-5 w-5 rounded-full border-2 border-white" />
               </button>
             )}
+            <span data-tour="rec-devices" className="inline-flex items-center gap-3">
             <SelectMenu
               variant="round"
               ariaLabel={t("micField")}
@@ -649,6 +656,7 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
                 { value: "system", label: t("sourceSystem") },
               ]}
             />
+            </span>
           </div>
 
           {/* THE TRANSCRIPT — the surface's main column now that Keywords
