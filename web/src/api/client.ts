@@ -822,6 +822,8 @@ export const api = {
         `summary_instruction` carries its prompt */
     summary_template?: string;
     summary_instruction?: string;
+    /** 0099: model id for this meeting's summaries; omit = the ladder */
+    summary_model?: string;
   }): Promise<{ id: string }> {
     return bff<{ id: string }>("/api/calls", {
       method: "POST",

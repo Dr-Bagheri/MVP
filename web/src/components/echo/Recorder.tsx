@@ -20,7 +20,7 @@ import { notify } from "@/lib/notify";
 import { speakQueued } from "@/lib/voice";
 import { Card, Chip, Field } from "@/components/ui";
 import { Link } from "@/i18n/routing";
-import { digits, formatClock } from "@/lib/format";
+import { digits, formatClock, modelLabel } from "@/lib/format";
 import { resumePoint } from "./uploadRules";
 import { RecorderNotes } from "./RecorderNotes";
 import { SelectMenu } from "@/components/rowActions";
@@ -78,6 +78,17 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
   const [template, setTemplate] = useState<string>("");
   const [customs, setCustoms] = useState<CustomTemplate[]>([]);
   useEffect(() => { setCustoms(customTemplates()); }, []);
+  /** 0099: the model for this meeting's summaries. "" = the worker's own
+      ladder — a real value, not a missing choice, so the dropdown says so
+      in words rather than pre-selecting a model on the person's behalf. */
+  const [summaryModel, setSummaryModel] = useState<string>("");
+  const [modelOptions, setModelOptions] = useState<{ value: string; label: string }[]>([]);
+  useEffect(() => {
+    void api.models()
+      .then((res) => setModelOptions(
+        res.models.map((m) => ({ value: m.id, label: modelLabel(m.id) }))))
+      .catch(() => setModelOptions([]));
+  }, []);
   /** the red stop-and-delete asks AGAIN before acting (user directive) */
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   /** loudness enhance: a gain stage between the mic and the recorder */
@@ -160,6 +171,7 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
         : template
           ? { summaryTemplate: template }
           : {}),
+      ...(summaryModel ? { summaryModel } : {}),
       boost,
     }).then(() => {
       void refreshDevices(); // labels exist once permission does
@@ -266,89 +278,117 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
               renaming is one pencil away on the record. `title` state stays:
               the agent's start_recording can still carry a name, and a
               resumed take keeps the one it already has. */}
-          {/* the settings no longer HIDE (user directive, 2026-08-25): the
-              disclosure saved four rows and cost people the one check that
-              prevents a silent recording — everything is visible now */}
-          <p className="mb-2 mt-1 text-xs font-medium text-fg-subtle">{t("recordSettings")}</p>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {/* the platform dropdown (2026-08-25): every select is the
-                kebab-styled SelectMenu now — no native option lists */}
-            <Field label={t("micField")}>
-              <SelectMenu
-                ariaLabel={t("micField")}
-                value={micId}
-                onChange={setMicId}
-                options={
-                  mics.length === 0
-                    ? [{ value: "", label: t("micDefault") }]
-                    : mics.map((d) => ({ value: d.id, label: d.label }))
-                }
+          {/* the settings no longer HIDE (user directive, 2026-08-25) — and
+              they read as TWO questions now (2026-08-26): what you record
+              WITH, and what the meeting should BECOME. One flat grid mixed
+              a hardware check with an editorial choice; the grouping is the
+              form's actual structure said out loud. */}
+          <fieldset data-tour="rec-devices" className="rounded-xl border border-border p-4">
+            <legend className="px-1.5 text-xs font-semibold uppercase tracking-wide text-fg-subtle">
+              {t("groupDevices")}
+            </legend>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label={t("micField")}>
+                <SelectMenu
+                  ariaLabel={t("micField")}
+                  value={micId}
+                  onChange={setMicId}
+                  options={
+                    mics.length === 0
+                      ? [{ value: "", label: t("micDefault") }]
+                      : mics.map((d) => ({ value: d.id, label: d.label }))
+                  }
+                />
+              </Field>
+              <Field label={t("speakerField")}>
+                <SelectMenu
+                  ariaLabel={t("speakerField")}
+                  value={speakerId}
+                  onChange={setSpeakerId}
+                  options={
+                    speakers.length === 0
+                      ? [{ value: "", label: t("speakerDefault") }]
+                      : speakers.map((d) => ({ value: d.id, label: d.label }))
+                  }
+                />
+              </Field>
+              <Field label={t("sourceField")}>
+                <SelectMenu
+                  ariaLabel={t("sourceField")}
+                  value={source}
+                  onChange={(v) => setSource(v as "mic" | "system")}
+                  options={[
+                    { value: "mic", label: t("sourceMic") },
+                    { value: "system", label: t("sourceSystem") },
+                  ]}
+                />
+              </Field>
+            </div>
+            {/* hear yourself BEFORE the meeting, not after it (2026-08-25) */}
+            <div className="mt-3">
+              <DeviceCheck
+                micId={micId}
+                speakerId={speakerId}
+                boost={boost}
+                onBoostChange={setBoost}
+                gain={monitorGain}
+                onGainChange={setMonitorGain}
               />
-            </Field>
-            <Field label={t("speakerField")}>
-              <SelectMenu
-                ariaLabel={t("speakerField")}
-                value={speakerId}
-                onChange={setSpeakerId}
-                options={
-                  speakers.length === 0
-                    ? [{ value: "", label: t("speakerDefault") }]
-                    : speakers.map((d) => ({ value: d.id, label: d.label }))
-                }
-              />
-            </Field>
-            <Field label={t("languageField")}>
-              {/* the transcriber's hint — set at creation */}
-              <SelectMenu
-                ariaLabel={t("languageField")}
-                value={language}
-                onChange={(v) => setLanguage(v as "fa" | "en" | "mixed")}
-                disabled={resuming}
-                options={[
-                  { value: "mixed", label: t("languageMixed") },
-                  { value: "fa", label: t("languageFa") },
-                  { value: "en", label: t("languageEn") },
-                ]}
-              />
-            </Field>
-            <Field label={t("sourceField")}>
-              <SelectMenu
-                ariaLabel={t("sourceField")}
-                value={source}
-                onChange={(v) => setSource(v as "mic" | "system")}
-                options={[
-                  { value: "mic", label: t("sourceMic") },
-                  { value: "system", label: t("sourceSystem") },
-                ]}
-              />
-            </Field>
-            <Field label={t("templateField")}>
-              {/* 0094: the summary's SHAPE chosen before the meeting — the
-                  ruled five plus this person's own templates */}
-              <SelectMenu
-                ariaLabel={t("templateField")}
-                value={template}
-                onChange={setTemplate}
-                disabled={resuming}
-                options={[
-                  { value: "", label: t("templateNone") },
-                  ...SUMMARY_TEMPLATES.map((k) => ({ value: k, label: t(TEMPLATE_KEY[k]) })),
-                  ...customs.map((c) => ({ value: `custom:${c.name}`, label: c.name })),
-                ]}
-              />
-            </Field>
-          </div>
-          {/* hear yourself BEFORE the meeting, not after it (2026-08-25) */}
-          <div className="mt-3">
-            <DeviceCheck
-              micId={micId}
-              speakerId={speakerId}
-              boost={boost}
-              onBoostChange={setBoost}
-              gain={monitorGain}
-              onGainChange={setMonitorGain}
-            />
-          </div>
+            </div>
+          </fieldset>
+
+          <fieldset data-tour="rec-meeting" className="mt-4 rounded-xl border border-border p-4">
+            <legend className="px-1.5 text-xs font-semibold uppercase tracking-wide text-fg-subtle">
+              {t("groupMeeting")}
+            </legend>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label={t("languageField")}>
+                {/* the transcriber's hint — set at creation */}
+                <SelectMenu
+                  ariaLabel={t("languageField")}
+                  value={language}
+                  onChange={(v) => setLanguage(v as "fa" | "en" | "mixed")}
+                  disabled={resuming}
+                  options={[
+                    { value: "mixed", label: t("languageMixed") },
+                    { value: "fa", label: t("languageFa") },
+                    { value: "en", label: t("languageEn") },
+                  ]}
+                />
+              </Field>
+              <Field label={t("templateField")}>
+                {/* 0094: the summary's SHAPE chosen before the meeting — the
+                    ruled five plus this person's own templates */}
+                <SelectMenu
+                  ariaLabel={t("templateField")}
+                  value={template}
+                  onChange={setTemplate}
+                  disabled={resuming}
+                  options={[
+                    { value: "", label: t("templateNone") },
+                    ...SUMMARY_TEMPLATES.map((k) => ({ value: k, label: t(TEMPLATE_KEY[k]) })),
+                    ...customs.map((c) => ({ value: `custom:${c.name}`, label: c.name })),
+                  ]}
+                />
+              </Field>
+              <Field label={t("modelField")}>
+                {/* 0099: the model for this meeting's summaries. The empty
+                    choice is NAMED — the default is the worker's own ladder,
+                    and pre-selecting a model here would destroy the "has
+                    not chosen" state M5 protects. */}
+                <SelectMenu
+                  ariaLabel={t("modelField")}
+                  value={summaryModel}
+                  onChange={setSummaryModel}
+                  disabled={resuming}
+                  options={[
+                    { value: "", label: t("modelDefault") },
+                    ...modelOptions,
+                  ]}
+                />
+              </Field>
+            </div>
+          </fieldset>
           <label className="mt-3 flex cursor-pointer items-center gap-2 text-sm text-fg">
             <input
               type="checkbox"
@@ -359,37 +399,16 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
           </label>
           <div className="mt-5 flex flex-wrap items-center gap-3">
             <button
+              data-tour="rec-start"
               className="btn-primary h-12 px-6"
               disabled={phase === "starting"}
               onClick={() => start()}
             >
               {phase === "starting" ? t("starting") : resuming ? t("resumeStart") : t("start")}
             </button>
-            {/* instant voice memo (user directive, 2026-08-23): one tap, no
-                form — records through the same pipeline with a self-naming
-                title, for the thought that won't wait for a form */}
-            {!resuming ? (
-              <button
-                className="btn-secondary h-12 px-6"
-                disabled={phase === "starting"}
-                onClick={() => {
-                  const at = new Intl.DateTimeFormat(
-                    locale === "fa" ? "fa-IR" : "en-GB",
-                    { hour: "2-digit", minute: "2-digit" },
-                  ).format(new Date());
-                  void startRecording({
-                    micId,
-                    language: "mixed",
-                    source: "mic",
-                    title: `${t("memoTitle")} ${at}`,
-                    locale,
-                    resume: null,
-                  });
-                }}
-              >
-                {t("quickMemo")}
-              </button>
-            ) : null}
+            {/* the quick voice memo LEFT this page (user directive,
+                2026-08-26): it lives as the ＋ on the Records menu row —
+                one tap from anywhere in Echo, no form in between */}
           </div>
         </>
       ) : null}

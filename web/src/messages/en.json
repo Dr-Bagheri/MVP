@@ -517,7 +517,12 @@
     "pillOpen": "Open the recorder",
     "notebookPlaceholder": "Write…\nThe first line becomes the chapter title.",
     "notebookAdd": "Add",
-    "notebookHint": "Every entry is stamped with the take's clock; a multi-line entry's first line is the chapter title."
+    "notebookHint": "Every entry is stamped with the take's clock; a multi-line entry's first line is the chapter title.",
+    "groupDevices": "Devices",
+    "groupMeeting": "Meeting & summary",
+    "modelField": "Summary model",
+    "modelDefault": "Default (your preference, then the org's)",
+    "memoStarted": "Voice memo started — the pill up top stops it."
   },
   "call": {
     "summary": "Summary",
@@ -1647,7 +1652,9 @@
     "earsLabel": "Assistant listening",
     "earsOn": "Listening — just say “echo”.",
     "earsOff": "Not listening anymore.",
-    "bellClear": "Clear"
+    "bellClear": "Clear",
+    "newConversation": "New conversation",
+    "newConversationStarted": "Fresh conversation — the old one is under History."
   },
   "summaries": {
     "empty": "No summaries yet — as each recording finishes processing, its summary lands here.",
@@ -1657,5 +1664,25 @@
     "loadFailed": "The summary did not load — try again.",
     "version": "Version {version}",
     "openRecord": "Open the recording"
+  },
+  "tour": {
+    "group": "Learn",
+    "label": "Guided walkthrough",
+    "stepOf": "Step {n} of {of}",
+    "next": "Next",
+    "done": "Done",
+    "leave": "Leave the tour",
+    "lessonRecord": "How do I record a meeting?",
+    "lessonUpload": "How do I add an existing file?",
+    "lessonAsk": "How do I find and ask?",
+    "rec1": "Everything starts here — New meeting is where a recording begins. Press it.",
+    "rec2": "Pick your microphone and test it with the meter, so the meeting is never silent by surprise.",
+    "rec3": "Choose the meeting's language, a summary template, and — if you want — the model that will write the summary.",
+    "rec4": "Press Start recording. You can leave this page: the recording follows you in the top bar.",
+    "up1": "Already have a recording? This icon uploads a file straight into the pipeline — no form in between.",
+    "up2": "It lands in Records with everything else, transcribed and summarised the same way.",
+    "ask1": "Records is where every meeting lives — open any row to read its summary and transcript.",
+    "ask2": "Search looks across every transcript you are allowed to see, and shows the exact sentence.",
+    "ask3": "And this is the assistant — ask it anything about your meetings, in your own words."
   }
 }

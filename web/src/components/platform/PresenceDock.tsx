@@ -67,6 +67,48 @@ interface DockMessage {
   failedDetail?: string;
 }
 
+/** where the orb is pinned, and what SHAPE the assistant takes there */
+interface OrbPin {
+  x: number;
+  y: number;
+  /** float = the popup card; the others take their whole edge */
+  mode: "float" | "side-left" | "side-right" | "bottom";
+}
+
+/** how close to an edge a release must land to dock there, in px */
+const EDGE = 72;
+
+/**
+ * Where a released orb docks. Exported for the tests — the drag itself
+ * needs a signed-in member and a real pointer, but THIS is the decision,
+ * and it is the part that can be wrong four different ways.
+ * The bottom check runs first: in a corner, the wider panel wins.
+ */
+export function dockModeFor(
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+): OrbPin["mode"] {
+  if (y > height - EDGE) return "bottom";
+  if (x < EDGE) return "side-left";
+  if (x > width - EDGE) return "side-right";
+  return "float";
+}
+
+/** the orb's resting spot: docked modes park it ON their edge, so the
+    button and the panel it opens read as one thing */
+function orbStyle(
+  pin: OrbPin,
+  drag: { x: number; y: number } | null,
+): CSSProperties {
+  if (drag) return { left: drag.x, top: drag.y };
+  if (pin.mode === "side-left") return { left: 36, top: pin.y };
+  if (pin.mode === "side-right") return { left: undefined, right: 4, top: pin.y };
+  if (pin.mode === "bottom") return { left: pin.x, top: undefined, bottom: 4 };
+  return { left: pin.x, top: pin.y };
+}
+
 function todayKey(): string {
   return `${PRESENCE_KEY}:${new Date().toISOString().slice(0, 10)}`;
 }
@@ -124,6 +166,21 @@ export function PresenceDock() {
   const [minimized, setMinimized] = useState(false);
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<DockMessage[]>([]);
+
+  /**
+   * A fresh thread, not an erasure: the dock forgets which conversation it
+   * was resuming and starts a new one on the next ask. The old conversation
+   * is untouched — it stays under Assistant → History, where archiving
+   * lives. A "clear" that deleted the record would be the dock deciding
+   * what the history says.
+   */
+  function freshConversation(): void {
+    abortRef.current?.abort();
+    setMessages([]);
+    sessionId.current = undefined;
+    try { localStorage.removeItem(todayKey()); } catch { /* fine */ }
+    notify(t("newConversationStarted"));
+  }
   const [streaming, setStreaming] = useState(false);
   const [consent, setConsent] = useState<
     | null
@@ -214,7 +271,7 @@ export function PresenceDock() {
    * across loads. Dragging it back ONTO the bar clears the pin: the default
    * position is the top menu, not wherever it happened to be released.
    */
-  const [pin, setPin] = useState<{ x: number; y: number } | null>(null);
+  const [pin, setPin] = useState<OrbPin | null>(null);
   const [drag, setDrag] = useState<{ x: number; y: number } | null>(null);
   const dragCleanupRef = useRef<(() => void) | null>(null);
   const suppressClickRef = useRef(false);
@@ -223,11 +280,14 @@ export function PresenceDock() {
     try {
       const raw = localStorage.getItem("neurai-orb-pin");
       if (raw) {
-        const parsed = JSON.parse(raw) as { x: number; y: number };
+        const parsed = JSON.parse(raw) as OrbPin;
         // clamp a pin saved on a larger screen back into this viewport
         setPin({
           x: Math.min(Math.max(parsed.x, 32), window.innerWidth - 32),
           y: Math.min(Math.max(parsed.y, 80), window.innerHeight - 32),
+          mode: parsed.mode === "side-left" || parsed.mode === "side-right" || parsed.mode === "bottom"
+            ? parsed.mode
+            : "float",
         });
       }
     } catch { /* storage unavailable — the cradle is home */ }
@@ -249,7 +309,7 @@ export function PresenceDock() {
       }
       moved = true;
       setDrag({ x: ev.clientX, y: ev.clientY });
-      setPin((p) => p ?? { x: ev.clientX, y: ev.clientY }); // lift out of the cradle
+      setPin((p) => p ?? { x: ev.clientX, y: ev.clientY, mode: "float" }); // lift out of the cradle
     };
     const cleanup = () => {
       window.removeEventListener("pointermove", onMove);
@@ -267,9 +327,19 @@ export function PresenceDock() {
         try { localStorage.removeItem("neurai-orb-pin"); } catch { /* fine */ }
         return;
       }
-      const next = {
+      /*
+       * THE EDGES ARE DOCKS (user directive, 2026-08-26): released against
+       * a side, the assistant becomes a SIDE PANEL there; against the
+       * bottom, a bottom panel — a shape you can work beside, not a popup
+       * you look past. Anywhere else stays the floating pin. The bottom
+       * check runs first: in a corner, the wider panel wins.
+       */
+      const mode = dockModeFor(
+        ev.clientX, ev.clientY, window.innerWidth, window.innerHeight);
+      const next: OrbPin = {
         x: Math.min(Math.max(ev.clientX, 32), window.innerWidth - 32),
         y: Math.min(Math.max(ev.clientY, 80), window.innerHeight - 32),
+        mode,
       };
       setPin(next);
       try { localStorage.setItem("neurai-orb-pin", JSON.stringify(next)); } catch { /* fine */ }
@@ -279,9 +349,21 @@ export function PresenceDock() {
     dragCleanupRef.current = cleanup;
   }
 
-  /** the open panel hangs off the pin, on whichever side has room */
+  /** the open panel hangs off the pin, on whichever side has room —
+      or, in a docked mode, takes the whole edge */
   function pinnedPanelStyle(): CSSProperties {
     if (!pin) return {};
+    if (pin.mode === "side-left" || pin.mode === "side-right") {
+      return {
+        position: "fixed",
+        top: 64,
+        bottom: 8,
+        ...(pin.mode === "side-left" ? { left: 8 } : { right: 8 }),
+      };
+    }
+    if (pin.mode === "bottom") {
+      return { position: "fixed", bottom: 8, left: 16, right: 16 };
+    }
     const below = pin.y < window.innerHeight / 2;
     const startHalf = pin.x < window.innerWidth / 2;
     return {
@@ -752,7 +834,20 @@ export function PresenceDock() {
   const surfacePosition = pin
     ? "" // inline style below
     : "left-1/2 top-[88px] -translate-x-1/2 md:top-[92px]";
-  const panelHeight = "max-h-[calc(100dvh-7rem)]";
+  /*
+   * The panel's SHAPE follows the dock mode: a side dock is a full-height
+   * column, the bottom dock a wide shelf, and the float/cradle the compact
+   * card it has always been. The width/height cannot ride the inline style
+   * — they are the difference between "a popup" and "a panel".
+   */
+  const dockMode = pin?.mode ?? "float";
+  const panelShape =
+    dockMode === "side-left" || dockMode === "side-right"
+      ? "w-[min(92vw,26rem)] h-auto"
+      : dockMode === "bottom"
+        ? "w-auto max-h-[46dvh]"
+        : "w-[min(92vw,24rem)]";
+  const panelHeight = dockMode === "float" ? "max-h-[calc(100dvh-7rem)]" : "";
 
   const orbVisual = (
     <>
@@ -780,6 +875,7 @@ export function PresenceDock() {
   const assistantButton = (
     <button
       type="button"
+      data-tour="orb"
       aria-label={t("openLabel")}
       title={`${t("openLabel")} (Ctrl+E)`}
       className={
@@ -787,7 +883,7 @@ export function PresenceDock() {
           ? "tap fixed z-40 block h-16 w-16 -translate-x-1/2 -translate-y-1/2 cursor-grab touch-none rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
           : "tap relative z-10 block h-full w-full touch-none rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
       }
-      style={pin ? { left: drag?.x ?? pin.x, top: drag?.y ?? pin.y } : undefined}
+      style={pin ? orbStyle(pin, drag) : undefined}
       onPointerDown={onOrbPointerDown}
       onClick={() => {
         // a drag's mouse-up must not also open the panel
@@ -843,7 +939,7 @@ export function PresenceDock() {
 
       {open && !minimized ? (
         <div
-          className={`fixed z-40 flex w-[min(92vw,24rem)] flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-xl ${surfacePosition} ${panelHeight}`}
+          className={`fixed z-40 flex flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-xl ${panelShape} ${surfacePosition} ${panelHeight}`}
           style={pin ? pinnedPanelStyle() : undefined}
         >
           <div className="flex items-center gap-2 border-b border-border px-3 py-2">
@@ -879,6 +975,19 @@ export function PresenceDock() {
               onClick={toggleEars}
             >
               <MicIcon slashed={!ears} />
+            </button>
+            {/* a FRESH conversation (user ask, 2026-08-26: "where can I
+                clean up this history"): the dock's thread resets here —
+                nothing is deleted; the old conversation stays readable
+                under Assistant → History, where archiving lives */}
+            <button
+              type="button"
+              className="tap h-7 w-7 rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg"
+              aria-label={t("newConversation")}
+              title={t("newConversation")}
+              onClick={freshConversation}
+            >
+              ＋
             </button>
             <button
               type="button"

@@ -27,7 +27,15 @@ vi.mock("@/lib/recordingEngine", () => ({
   startRecording: vi.fn(async () => undefined),
 }));
 vi.mock("@/lib/notify", () => ({ notify: vi.fn() }));
-vi.mock("@/api/client", () => ({ api: {} }));
+vi.mock("@/api/client", () => ({
+  api: {
+    /* the model dropdown's read (0099): this suite is about the discard
+       flow, but a mock missing a method the component calls does not fake
+       "no models" — it throws, and the failure arrives as whatever
+       rendered last. The stub answers the empty case on purpose. */
+    models: async () => ({ models: [], preferred_model: null, curated: false }),
+  },
+}));
 vi.mock("./RecorderNotes", () => ({ RecorderNotes: () => null }));
 vi.mock("next-intl", () => ({
   useLocale: () => "en",

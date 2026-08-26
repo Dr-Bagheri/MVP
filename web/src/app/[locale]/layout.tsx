@@ -8,6 +8,7 @@ import { routing, dirFor } from "@/i18n/routing";
 import { CrumbTitleProvider } from "@/components/platform/CrumbTitle";
 import { PresenceDock } from "@/components/platform/PresenceDock";
 import { FloatingRecorder } from "@/components/echo/FloatingRecorder";
+import { TourOverlay } from "@/components/platform/TourOverlay";
 import { themeBootScript } from "@/lib/theme";
 import "../globals.css";
 
@@ -86,6 +87,9 @@ export default async function LocaleLayout({
               clock when a bar is present, floating otherwise; renders
               nothing when no take is rolling */}
           <FloatingRecorder />
+          {/* the guided tours (2026-08-26) — mounted here so a lesson
+              survives the navigations its own steps ask for */}
+          <TourOverlay />
         </NextIntlClientProvider>
       </body>
     </html>

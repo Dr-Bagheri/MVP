@@ -45,12 +45,23 @@ export interface MenuItem {
    * Records row, the file picker on New meeting) — its own action, never
    * part of the item's click. `href` navigates; `onSelect` acts in place.
    */
-  trailing?: {
-    label: string;
-    icon: ReactNode;
-    href?: string;
-    onSelect?: () => void;
-  };
+  trailing?: TrailingIcon | TrailingIcon[];
+  /** rendered as data-tour, so a guided walkthrough can find this row */
+  tourId?: string;
+}
+
+/**
+ * A small icon at a row's end. One or several (2026-08-26: the Records row
+ * carries the quick-memo ＋ beside the archive door) — an array renders
+ * end-to-start, so the FIRST entry sits closest to the label.
+ */
+export interface TrailingIcon {
+  label: string;
+  icon: ReactNode;
+  href?: string;
+  onSelect?: () => void;
+  /** rendered as data-tour on the icon itself */
+  tourId?: string;
 }
 
 export interface MenuGroup {
@@ -64,9 +75,13 @@ export interface MenuGroup {
   items: readonly MenuItem[];
 }
 
-/** the trailing icon's box — one class, two renderings (link and button) */
+/** the trailing icon's box — one class, two renderings (link and button).
+   Position comes from TRAIL_AT: slot 0 hugs the end, slot 1 sits beside it.
+   TRAIL_PAD reserves the label's room for however many slots are used. */
+const TRAIL_AT = ["end-1.5", "end-9"] as const;
+const TRAIL_PAD = ["", "pe-9", "pe-[4.1rem]"] as const;
 const TRAILING_CLASS =
-  "tap absolute end-1.5 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-md text-fg-muted opacity-70 transition-opacity hover:bg-surface-2 hover:text-fg hover:opacity-100";
+  "tap absolute top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-md text-fg-muted opacity-70 transition-opacity hover:bg-surface-2 hover:text-fg hover:opacity-100";
 
 export function SectionMenu({
   navLabel,
@@ -104,6 +119,11 @@ export function SectionMenu({
           <ul>
             {group.items.map((item) => {
               const active = item.slug === activeSlug;
+              /* one shape for zero, one or many trailing icons — the FIRST
+                 entry sits at the very end, later ones step inward */
+              const trailing = item.trailing === undefined
+                ? []
+                : Array.isArray(item.trailing) ? item.trailing : [item.trailing];
               const itemClass = `tap my-px flex w-full items-center justify-between rounded-lg py-[5px] transition-colors ${
                 item.sub ? "ps-8 pe-3 text-xs" : "px-3 text-menu-item"
               } ${
@@ -132,7 +152,8 @@ export function SectionMenu({
                       <Link
                         href={item.href}
                         aria-current={active ? "page" : undefined}
-                        className={`${itemClass} ${item.trailing ? "pe-9" : ""}`}
+                        data-tour={item.tourId}
+                        className={`${itemClass} ${trailing.length > 0 ? TRAIL_PAD[Math.min(trailing.length, 2)] : ""}`}
                         onClick={item.preventNavigation || item.onSelect ? (event) => {
                           if (item.preventNavigation) event.preventDefault();
                           item.onSelect?.();
@@ -146,26 +167,32 @@ export function SectionMenu({
                           <span className="chip bg-surface-2 text-[10px] text-fg-muted">{item.badge}</span>
                         ) : null}
                       </Link>
-                      {item.trailing?.href ? (
-                        <Link
-                          href={item.trailing.href}
-                          aria-label={item.trailing.label}
-                          title={item.trailing.label}
-                          className={TRAILING_CLASS}
-                        >
-                          {item.trailing.icon}
-                        </Link>
-                      ) : item.trailing ? (
-                        <button
-                          type="button"
-                          aria-label={item.trailing.label}
-                          title={item.trailing.label}
-                          className={TRAILING_CLASS}
-                          onClick={item.trailing.onSelect}
-                        >
-                          {item.trailing.icon}
-                        </button>
-                      ) : null}
+                      {trailing.map((tr, i) =>
+                        tr.href ? (
+                          <Link
+                            key={tr.label}
+                            href={tr.href}
+                            aria-label={tr.label}
+                            title={tr.label}
+                            data-tour={tr.tourId}
+                            className={`${TRAILING_CLASS} ${TRAIL_AT[Math.min(i, 1)]}`}
+                          >
+                            {tr.icon}
+                          </Link>
+                        ) : (
+                          <button
+                            key={tr.label}
+                            type="button"
+                            aria-label={tr.label}
+                            title={tr.label}
+                            data-tour={tr.tourId}
+                            className={`${TRAILING_CLASS} ${TRAIL_AT[Math.min(i, 1)]}`}
+                            onClick={tr.onSelect}
+                          >
+                            {tr.icon}
+                          </button>
+                        ),
+                      )}
                     </span>
                   )}
                 </li>

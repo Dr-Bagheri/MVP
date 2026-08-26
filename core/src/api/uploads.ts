@@ -26,7 +26,7 @@ import { assertUuid, type Db, type SqlTx } from "../db/identity.ts";
 import { createStorageSigner } from "../storage/signer.ts";
 import { createQueue, Q_LINK_SPEAKERS, Q_PROCESS_PART, Q_SUMMARIZE } from "../worker/queue.ts";
 import { SUMMARY_INSTRUCTION_MAX, SUMMARY_TEMPLATES } from "./vocabulary.ts";
-import { hasCallSummaryPrefs, hasProvisionalTranscript } from "../db/capabilities.ts";
+import { hasCallSummaryModel, hasCallSummaryPrefs, hasProvisionalTranscript } from "../db/capabilities.ts";
 import type { Identity } from "../agent/types.ts";
 
 export interface UploadsConfig {
@@ -70,6 +70,9 @@ export function createUploadsRepo(db: Db, config: UploadsConfig) {
         summaryTemplate?: string | undefined;
         /** 0094: a custom template's prompt, same bound as regenerate's. */
         summaryInstruction?: string | undefined;
+        /** 0099: the model TOLD for this meeting's summaries — already
+            validated against the catalogue by the route (the ask wall). */
+        summaryModel?: string | undefined;
       },
     ): Promise<{ id: string }> {
       if (input.scope !== undefined && input.scope !== "private" && input.scope !== "org") {
@@ -110,15 +113,29 @@ export function createUploadsRepo(db: Db, config: UploadsConfig) {
       ) {
         throw new ValidationError("language must be fa, en or mixed");
       }
-      // 0094 columns ride only where the migration has landed (the autonomy
-      // capability pattern) — a pre-0094 deployment keeps working, minus the
-      // template choice, and never fabricates one
+      // 0094/0099 columns ride only where their migration has landed (the
+      // autonomy capability pattern) — an older deployment keeps working,
+      // minus the choice, and never fabricates one
       const withPrefs = (summaryTemplate !== undefined || summaryInstruction !== undefined)
         && await hasCallSummaryPrefs(db);
+      const summaryModel = input.summaryModel?.trim() || undefined;
+      const withModel = summaryModel !== undefined && await hasCallSummaryModel(db);
+      /* the columns and their placeholders are built TOGETHER — a column
+         list and a values list assembled separately is how $7 ends up
+         meaning two different things on two branches */
+      const extraCols = [
+        ...(withPrefs ? ["summary_template", "summary_instruction"] : []),
+        ...(withModel ? ["summary_model"] : []),
+      ];
+      const extraVals = [
+        ...(withPrefs ? [summaryTemplate ?? null, summaryInstruction ?? null] : []),
+        ...(withModel ? [summaryModel] : []),
+      ];
+      const placeholders = extraCols.map((_, i) => `$${7 + i}`).join(", ");
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<{ id: string }>(
-          `insert into echo.call (org_id, owner_id, title, scope, status, source, language${withPrefs ? ", summary_template, summary_instruction" : ""})
-           values ($1, $2, $3, coalesce($4, 'private')::echo.call_scope, 'recording', $5::echo.call_source, coalesce($6, 'fa')${withPrefs ? ", $7, $8" : ""})
+          `insert into echo.call (org_id, owner_id, title, scope, status, source, language${extraCols.length ? ", " + extraCols.join(", ") : ""})
+           values ($1, $2, $3, coalesce($4, 'private')::echo.call_scope, 'recording', $5::echo.call_source, coalesce($6, 'fa')${extraCols.length ? ", " + placeholders : ""})
            returning id`,
           [
             identity.orgId,
@@ -127,7 +144,7 @@ export function createUploadsRepo(db: Db, config: UploadsConfig) {
             input.scope ?? null,
             input.source,
             input.language ?? null,
-            ...(withPrefs ? [summaryTemplate ?? null, summaryInstruction ?? null] : []),
+            ...extraVals,
           ],
         ),
       );

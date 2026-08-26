@@ -71,6 +71,9 @@ export interface StartOptions {
       custom template's name + prompt; the pipeline's summarize applies it */
   summaryTemplate?: string | undefined;
   summaryInstruction?: string | undefined;
+  /** 0099: the model for this meeting's summaries — "" / undefined = the
+      worker's own ladder (owner pref → org first choice → operator) */
+  summaryModel?: string | undefined;
   /**
    * LOUDNESS ENHANCE (user directive, 2026-08-25): a quiet room, a far
    * microphone. The mic is routed through a gain stage before it reaches
@@ -531,6 +534,7 @@ export async function startRecording(opts: StartOptions): Promise<void> {
         language: opts.language,
         ...(opts.summaryTemplate ? { summary_template: opts.summaryTemplate } : {}),
         ...(opts.summaryInstruction ? { summary_instruction: opts.summaryInstruction } : {}),
+        ...(opts.summaryModel ? { summary_model: opts.summaryModel } : {}),
       });
       callId = created.id;
     } catch {

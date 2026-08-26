@@ -511,10 +511,32 @@ export function SelectMenu({
         aria-expanded={at !== null}
         disabled={disabled}
         onClick={(e) => { e.stopPropagation(); toggle(); }}
-        className={`input flex items-center justify-between gap-2 text-start ${className}`}
+        /* the trigger is the theme's ONE dropdown face (user directive,
+           2026-08-26: "more professional and clean"): the input base plus a
+           real chevron that turns when open, a hover border, and the accent
+           ring while the list is up — so an open dropdown is findable after
+           the eye wandered to its panel */
+        className={`input flex items-center justify-between gap-2 text-start transition-colors hover:border-border-strong ${
+          at !== null ? "border-accent ring-1 ring-accent/30" : ""
+        } ${className}`}
       >
         <span className="min-w-0 flex-1 truncate">{current?.label ?? ""}</span>
-        <span aria-hidden className="shrink-0 text-[10px] text-fg-muted">▾</span>
+        <svg
+          aria-hidden
+          viewBox="0 0 24 24"
+          width="14"
+          height="14"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className={`shrink-0 text-fg-muted transition-transform duration-150 ${
+            at !== null ? "rotate-180" : ""
+          }`}
+        >
+          <path d="m6 9 6 6 6-6" />
+        </svg>
       </button>
       {at
         ? createPortal(

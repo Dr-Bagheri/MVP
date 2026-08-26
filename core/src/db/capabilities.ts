@@ -145,6 +145,11 @@ export async function hasCallSummaryPrefs(db: Db): Promise<boolean> {
   return hasColumn(db, "call", "summary_template");
 }
 
+/** db/0099: the new-meeting form's MODEL choice riding the call. */
+export async function hasCallSummaryModel(db: Db): Promise<boolean> {
+  return hasColumn(db, "call", "summary_model");
+}
+
 /** db/0089: the provisional (live-caption) transcript on the call. */
 export async function hasProvisionalTranscript(db: Db): Promise<boolean> {
   return hasColumn(db, "call", "provisional_transcript");

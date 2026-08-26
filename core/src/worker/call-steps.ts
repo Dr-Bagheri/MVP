@@ -13,7 +13,7 @@ import { StepError, type StepHandler } from "./runner.ts";
 import { enqueueWebhooks } from "./webhook-enqueue.ts";
 import type { MlClient } from "./ml-client.ts";
 import { matchEnrolledVoices, type StorageSignerLike, type VoiceMatchOptions } from "./voice-match.ts";
-import { hasCallSummaryPrefs, hasSummaryGrounding, hasSummaryTemplate } from "../db/capabilities.ts";
+import { hasCallSummaryModel, hasCallSummaryPrefs, hasSummaryGrounding, hasSummaryTemplate } from "../db/capabilities.ts";
 import { JSONB_PARAM, toJsonb } from "../db/jsonb.ts";
 
 export interface LinkSpeakersOptions {
@@ -130,6 +130,10 @@ export interface Summarizer {
     speakers?: { name: string; title: string | null }[] | undefined;
     /** 0087: run the grounding pass (the step gates this on the column). */
     verify?: boolean | undefined;
+    /** 0099: the model TOLD on the new-meeting form — the ladder's top
+        rung, outranking even a skill's pin (an instruction beats
+        configuration). Undefined = climb the ladder as before. */
+    model?: string | undefined;
   }): Promise<SummaryWritten | SummarySkipped>;
 }
 
@@ -225,6 +229,24 @@ export function createSummarizeStep({
         label = prefs?.summary_template ?? undefined;
       }
 
+      /*
+       * 0099: the model chosen on the new-meeting form. Read UNCONDITIONALLY
+       * of the template branch above — a regenerate carries its own template
+       * in the payload and skips that read, but the meeting's model choice
+       * holds for regenerates too: the person picked it for this CALL, not
+       * for one run of the summarizer.
+       */
+      let chosenModel: string | undefined;
+      if (await hasCallSummaryModel(db)) {
+        const [row] = await db.withIdentity(identity, (tx: SqlTx) =>
+          tx.unsafe<{ summary_model: string | null }>(
+            `select summary_model from echo.call where id = $1`,
+            [payload.callId],
+          ),
+        );
+        chosenModel = row?.summary_model ?? undefined;
+      }
+
       // The summarizer SKILL failing to resolve is a broken deployment, not a
       // configuration state — so it fails loudly rather than silently falling
       // back to the runtime's own prompt (a summary written on the wrong
@@ -249,6 +271,7 @@ export function createSummarizeStep({
           figures: payload.figures,
           speakers: roster,
           verify,
+          model: chosenModel,
         });
       } catch (error) {
         if ((error as Error)?.name === "MissingSystemSkillError") {

@@ -242,13 +242,23 @@ export function createSummarizer<TDeps>({
   fallbackModel,
 }: SummarizerOptions<TDeps>): Summarizer {
   return {
-    async summarize({ identity, callId, transcript, template, instruction, figures, speakers, verify }) {
+    async summarize({ identity, callId, transcript, template, instruction, figures, speakers, verify, model }) {
       // Bound to the call owner: the summary is authored by the person whose
       // call it is, never by a service account.
       const runs = createAgentRunStore({ db, identity });
       const runtime = createAgentRuntime({ runs });
-      const skill = await resolveSkill(identity);
-      const callerModel = skill?.model ? undefined : await resolveModel(db, identity, fallbackModel);
+      const resolved = await resolveSkill(identity);
+      /*
+       * 0099: a model TOLD for this meeting outranks the whole ladder,
+       * including the skill's pin — the skill is configuration, the form's
+       * choice is an instruction (M21's told-beats-inferred, applied to
+       * model selection). `modelForRun` prefers the skill's pin, so the pin
+       * is removed from the run's view of the skill; the skill's prompt and
+       * tools ride unchanged.
+       */
+      const skill = model && resolved ? { ...resolved, model: null } : resolved;
+      const callerModel = model
+        ?? (skill?.model ? undefined : await resolveModel(db, identity, fallbackModel));
 
       // Nothing on the ladder resolved: no model pinned by the skill, none
       // chosen by the owner, none curated by the org, none configured by the

@@ -310,8 +310,17 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     const body = (request.body ?? {}) as {
       title?: unknown; scope?: unknown; source?: unknown; language?: unknown;
       summary_template?: unknown; summary_instruction?: unknown;
+      summary_model?: unknown;
     };
     const source = body.source === "upload" ? "upload" : "web";
+    /* 0099: the per-meeting summary model passes the SAME wall the ask
+       route uses — catalogue membership plus the product exclusion. Free
+       text here would reopen the choose-by-name hole one route over. */
+    const summaryModel =
+      typeof body.summary_model === "string" && body.summary_model.trim() !== ""
+        ? body.summary_model.trim()
+        : undefined;
+    if (summaryModel !== undefined) models.assertAskable(summaryModel);
     const created = await uploads.createCall(identity, {
       title: typeof body.title === "string" ? body.title : undefined,
       scope: typeof body.scope === "string" ? body.scope : undefined,
@@ -321,6 +330,7 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
         typeof body.summary_template === "string" ? body.summary_template : undefined,
       summaryInstruction:
         typeof body.summary_instruction === "string" ? body.summary_instruction : undefined,
+      summaryModel,
     });
     return reply.code(201).send(created);
   });
