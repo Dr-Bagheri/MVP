@@ -9,10 +9,11 @@ import { useSearchParams } from "next/navigation";
 import { modelLabel } from "@/lib/format";
 import { useDictation } from "@/lib/dictation";
 import { deliverDoc } from "@/lib/deliver";
+import { subscribeComposer, takePendingDraft } from "@/lib/assistantBus";
 import { useSkillName, useSkillStarters } from "@/lib/skillName";
 import { ConversationThread } from "./ConversationThread";
 import { useAssistantConversation } from "./AssistantConversationState";
-import { DocumentIcon, MicIcon, PlusIcon, SendIcon, ToolsIcon } from "./icons";
+import { DocumentIcon, MicIcon, PlusIcon, SendIcon } from "./icons";
 
 type CreateKind = "doc" | "pdf";
 
@@ -110,6 +111,20 @@ export function Hub() {
   );
   /* system skills localize (shipped product content); authored names never do */
   const skillName = useSkillName();
+
+  /* a suggestion pressed in the sub-menu: applied on arrival (the mailbox)
+     and while already here (the subscription). Selecting the skill with it
+     matters — the starter question is written for that skill's prompt. */
+  useEffect(() => {
+    const apply = (draft: { text: string; skillSlug?: string }) => {
+      if (draft.skillSlug) setSkill(draft.skillSlug);
+      setInput(draft.text);
+      promptRef.current?.focus();
+    };
+    const waiting = takePendingDraft();
+    if (waiting) apply(waiting);
+    return subscribeComposer(apply);
+  }, []);
   /* starters localize by the same shipped-content line as system names */
   const skillStarters = useSkillStarters();
   /** Held in a ref, not state: it is read inside the stream loop, where a
@@ -1097,42 +1112,10 @@ export function Hub() {
           launcher belongs there — and the assistant's own page is a
           conversation, which an app card interrupts rather than completes. */}
 
-      {/* SUGGESTIONS (user directive, 2026-08-18): one row per skill that
-          ships starter questions — the reference hub's suggestion list, fed
-          by the product's own skills rather than an invented catalogue. A
-          press selects the skill AND fills the composer; sending stays the
-          person's act (the shipped rule, unchanged). */}
-      {idle && !selectedAgent && !workflowSlug && skills.some((s) => s.starter_questions.length > 0) ? (
-        <section className="mt-7 w-full max-w-[660px] self-start text-start" aria-label={t("suggestions")}>
-          <p className="mb-1 px-1 text-group-label font-medium text-fg-subtle">
-            {t("suggestions")}
-          </p>
-          <ul>
-            {skills
-              .filter((s) => s.starter_questions.length > 0)
-              .slice(0, 6)
-              .map((s) => (
-                <li key={s.id} className="border-t border-border first:border-t-0">
-                  <button
-                    type="button"
-                    className="tap flex w-full items-center justify-start gap-3 px-1 py-3 text-start text-sm text-fg-muted transition-colors hover:text-fg"
-                    onClick={() => {
-                      setSkill(s.slug);
-                      setInput(skillStarters(s)[0] ?? "");
-                      promptRef.current?.focus();
-                    }}
-                  >
-                    <ToolsIcon width={15} height={15} className="shrink-0 text-fg-subtle" />
-                    <span className="min-w-0 truncate">
-                      {skillStarters(s)[0]}
-                      <span className="ms-2 text-xs text-fg-subtle">{skillName(s)}</span>
-                    </span>
-                  </button>
-                </li>
-              ))}
-          </ul>
-        </section>
-      ) : null}
+      {/* SUGGESTIONS moved to the SUB-MENU (user directive, 2026-08-26).
+          They arrive back here through the composer mailbox: the press
+          usually happens on another page, so the draft waits in
+          assistantBus until this page mounts and takes it. */}
 
       {/* Quick access LEFT the hub's face (user directive, 2026-08-18): its
           destinations live in the left rail beside History now. The

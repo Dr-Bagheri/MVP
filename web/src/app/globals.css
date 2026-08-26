@@ -669,31 +669,30 @@
 }
 
 /* --- CENTERED MEANS BOTH WAYS ----------------------------------------
-   (user directive, 2026-08-26: "in lots of buttons the text is not
-   actually centred vertically — if text is centred it must be centred
-   horizontally AND vertically").
+   (user directive, 2026-08-26: "if text is centred it must be centred
+   horizontally AND vertically" — and its correction the same day: "the
+   rule was for the BUTTONS, not the items in the sub menu".)
 
-   The failure is always the same shape: a fixed height plus default
-   baseline alignment, which centres the line box but not the text within
-   it, so a button reads a pixel or two low. Flex centring fixes both axes
-   at once, and putting it on the theme's own control classes means a new
-   button inherits it instead of re-discovering the bug.
+   The first version of this rule listed `.tap` and the `.btn-*` family.
+   Both were wrong, for opposite reasons. `.btn` already centres itself
+   (see its own definition above) — restating that here bought nothing.
+   And `.tap` is not a button at all: it is the 44px hit-area utility,
+   worn by section-menu rows, table cells and icon buttons alike, so
+   `justify-content: center` reached straight into every sub-menu row and
+   pulled its label off the start edge.
 
-   `.center` is the explicit form for anything that is not a control. */
-.center,
-.btn,
-.btn-primary,
-.btn-secondary,
-.btn-ghost,
-.btn-danger,
-.tap {
+   The lesson kept where it happened: a rule that names a UTILITY reaches
+   everything that utility touches, which is never the list you had in
+   mind. `.center` is the explicit opt-in, and it is the only thing here.
+
+   `.badge-num` is the case that prompted the directive: a number in a
+   circle, which needs line-height 1 so the glyph sits on the box's centre
+   rather than on its own baseline. */
+.center {
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
-/* a badge with a number in it: the same rule, plus a line-height of 1 so
-   the glyph sits on the box's centre rather than on its own baseline —
-   this is the speaker circle in the live transcript */
 .badge-num {
   display: inline-grid;
   place-items: center;

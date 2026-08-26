@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import type { AssistantSession } from "@/api/types";
+import type { AssistantSession, Skill } from "@/api/types";
 import { api } from "@/api/client";
 import { SectionMenu } from "@/components/scaffold";
-import { IconAgent, IconHistory, IconPlus, IconZap } from "@/components/icons";
-import { openAssistant } from "@/lib/assistantBus";
+import { IconAgent, IconAsk, IconHistory, IconPlus, IconZap } from "@/components/icons";
+import { fillComposer, openAssistant } from "@/lib/assistantBus";
 import { useRefreshEpoch } from "@/lib/refreshBus";
 import { digits } from "@/lib/format";
 import { untitledNumbers } from "@/lib/sessionTitles";
@@ -45,6 +45,19 @@ export function AssistantMenu({
       .catch(() => setSessions([]));
   }, [sessionsEpoch]);
   const recent = sessions.slice(0, 2);
+
+  /* SUGGESTIONS (user directive, 2026-08-26): they left the hub's middle
+     for this menu. One row per skill that ships starter questions — the
+     product's own skills, never an invented catalogue. Pressing one fills
+     the composer and selects that skill; SENDING stays the person's act,
+     which is the rule these rows have carried since they existed. */
+  const [skills, setSkills] = useState<Skill[]>([]);
+  useEffect(() => {
+    void api.skills().then(setSkills).catch(() => setSkills([]));
+  }, []);
+  const suggestions = skills
+    .filter((skill) => skill.starter_questions.length > 0)
+    .slice(0, 6);
   /* numbered over the FULL list so the menu and the history table agree
      about which conversation is «گفت‌وگوی جدید ۲» */
   const numbers = untitledNumbers(sessions);
@@ -86,6 +99,25 @@ export function AssistantMenu({
             })),
           ],
         },
+        ...(suggestions.length > 0
+          ? [{
+              key: "suggestions",
+              title: t("suggestions"),
+              items: suggestions.map((skill) => ({
+                slug: `suggest-${skill.slug}`,
+                /* the href is real: pressed from another page this has to
+                   ARRIVE at the assistant, and the draft waits for it in
+                   the composer mailbox */
+                href: "/assistant",
+                label: skill.starter_questions[0] ?? "",
+                icon: <IconAsk />,
+                onSelect: () => fillComposer({
+                  text: skill.starter_questions[0] ?? "",
+                  skillSlug: skill.slug,
+                }),
+              })),
+            }]
+          : []),
         /* Search LEFT this menu for Echo's (user directive, 2026-08-25) —
            it searches the records, so it lives with them */
         {

@@ -47,3 +47,44 @@ export function subscribeRecordingLive(listener: RecordingListener): () => void 
   recordingListeners.add(listener);
   return () => recordingListeners.delete(listener);
 }
+
+/**
+ * THE COMPOSER MAILBOX (user directive, 2026-08-26: "put the suggestions
+ * on the sub menu").
+ *
+ * A suggestion pressed in the assistant's sub-menu has to reach the hub's
+ * composer — and the press usually happens on ANOTHER page, so the hub is
+ * not mounted yet to hear it. A plain fire-and-forget event would be
+ * delivered to nobody and the suggestion would silently do nothing.
+ *
+ * So this channel keeps ONE pending draft: subscribers get it live when
+ * they are already mounted, and a page that arrives afterwards takes it
+ * from the mailbox. Taking it clears it — a draft is consumed once, or the
+ * next visit to the page would refill the composer out of nowhere.
+ */
+export interface ComposerDraft {
+  text: string;
+  /** the skill the suggestion belongs to, selected with it */
+  skillSlug?: string;
+}
+
+type ComposerListener = (draft: ComposerDraft) => void;
+const composerListeners = new Set<ComposerListener>();
+let pendingDraft: ComposerDraft | null = null;
+
+export function fillComposer(draft: ComposerDraft): void {
+  pendingDraft = draft;
+  for (const listener of composerListeners) listener(draft);
+}
+
+/** consume the waiting draft, if any — clears it on the way out */
+export function takePendingDraft(): ComposerDraft | null {
+  const draft = pendingDraft;
+  pendingDraft = null;
+  return draft;
+}
+
+export function subscribeComposer(listener: ComposerListener): () => void {
+  composerListeners.add(listener);
+  return () => composerListeners.delete(listener);
+}
