@@ -354,6 +354,48 @@ function startPartRecorder(idx: number, offsetMs: number): void {
 
 // ---- meter + waveform + quality --------------------------------------------
 
+/**
+ * THE VOICE RING (2026-08-26): the last ~60 seconds of the take as raw
+ * 16 kHz mono PCM, in blocks stamped with the take's own clock.
+ *
+ * It exists so the recorder can ask "whose voice is this?" mid-take: the
+ * live lane says WHICH label is speaking, and a matcher needs the AUDIO of
+ * a stretch that label owned. Cutting that out of the uploaded webm would
+ * mean parsing a container mid-stream; a parallel PCM tap is what the wake
+ * lane already does, so it is the pattern here too.
+ *
+ * Bounded on purpose: 60s at 16 kHz mono is ~1.9 MB and it never grows.
+ * Nothing is written to disk, nothing is uploaded on its own — a snippet
+ * leaves only when a match is asked for, and the server stores no audio.
+ * It fills ONLY while recording, so a pause leaves no phantom seconds.
+ */
+const RING_RATE = 16_000;
+const RING_MS = 60_000;
+let ringBlocks: { atMs: number; samples: Float32Array }[] = [];
+let ringNode: ScriptProcessorNode | null = null;
+
+function resetRing(): void {
+  ringBlocks = [];
+  try { ringNode?.disconnect(); } catch { /* already gone */ }
+  ringNode = null;
+}
+
+/** the newest samples covering [startMs, endMs), or null if the ring has
+    rolled past them — a window that no longer exists is a nothing worth
+    naming, not an empty buffer that looks like silence */
+export function ringSlice(startMs: number, endMs: number): Float32Array | null {
+  const blocks = ringBlocks.filter((b) => b.atMs >= startMs && b.atMs < endMs);
+  if (blocks.length === 0) return null;
+  const total = blocks.reduce((n, b) => n + b.samples.length, 0);
+  if (total < RING_RATE) return null; // under a second is not a voice
+  const out = new Float32Array(total);
+  let at = 0;
+  for (const b of blocks) { out.set(b.samples, at); at += b.samples.length; }
+  return out;
+}
+
+export const RING_SAMPLE_RATE = RING_RATE;
+
 function startMeter(): void {
   const ctx = audioCtx ?? new AudioContext();
   audioCtx = ctx;
@@ -361,6 +403,34 @@ function startMeter(): void {
   const analyser = ctx.createAnalyser();
   analyser.fftSize = 1024;
   source.connect(analyser);
+  /* ScriptProcessor: deprecated but universal, and the wake lane already
+     depends on it — an AudioWorklet would need its own served module to
+     do the same job. Downsampled by picking every Nth sample rather than
+     filtering: a voice signature is robust to that, and the alternative
+     is a resampler nobody here needs. */
+  try {
+    const proc = ctx.createScriptProcessor(4096, 1, 1);
+    const step = Math.max(1, Math.round(ctx.sampleRate / RING_RATE));
+    proc.onaudioprocess = (event) => {
+      if (snapshot.phase !== "recording") return;
+      const input = event.inputBuffer.getChannelData(0);
+      const out = new Float32Array(Math.floor(input.length / step));
+      for (let i = 0; i < out.length; i += 1) out[i] = input[i * step]!;
+      ringBlocks.push({ atMs: recordedMs, samples: out });
+      const cutoff = recordedMs - RING_MS;
+      while (ringBlocks.length > 0 && ringBlocks[0]!.atMs < cutoff) ringBlocks.shift();
+    };
+    source.connect(proc);
+    // a ScriptProcessor only runs when it reaches a destination; a zeroed
+    // gain keeps it silent so the tap never plays the room back at itself
+    const mute = ctx.createGain();
+    mute.gain.value = 0;
+    proc.connect(mute).connect(ctx.destination);
+    ringNode = proc;
+  } catch {
+    /* no ScriptProcessor (or a context that refuses one) = no live
+       matching on this browser; recording is untouched */
+  }
   const data = new Uint8Array(analyser.fftSize);
   let last = 0;
   const loop = (now: number) => {
@@ -599,6 +669,7 @@ export async function startRecording(opts: StartOptions): Promise<void> {
   partIdx = base.nextIdx;
   partsEnqueued = 0;
   waveSamples = [];
+  resetRing();
   quietSince = null;
   clipUntil = 0;
   patch({
@@ -660,6 +731,8 @@ export async function finish(): Promise<void> {
   if (timer) clearInterval(timer);
   timer = null;
   cancelAnimationFrame(meterRaf);
+  // the ring holds a minute of the room; it goes when the take does
+  resetRing();
   patch({ level: 0 });
   // WAIT for onstop to enqueue the final part before settling the barrier
   await new Promise<void>((resolve) => {
@@ -728,6 +801,8 @@ export async function discardRecording(): Promise<{ deleted: boolean }> {
   if (timer) clearInterval(timer);
   timer = null;
   cancelAnimationFrame(meterRaf);
+  // the ring holds a minute of the room; it goes when the take does
+  resetRing();
   patch({ level: 0 });
   await new Promise<void>((resolve) => {
     if (!recorder || recorder.state === "inactive") {

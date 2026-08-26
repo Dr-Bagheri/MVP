@@ -10,6 +10,8 @@ import {
   pause,
   BOOST_GAIN,
   recorderSnapshot,
+  ringSlice,
+  RING_SAMPLE_RATE,
   resetRecorder,
   resume,
   retryUploads,
@@ -31,6 +33,8 @@ import {
 import { playTestChime } from "@/lib/deviceTest";
 import { useAudioLevel } from "@/lib/useAudioLevel";
 import { establishedSpeakers } from "@/lib/liveSpeakers";
+import { planSnippet } from "@/lib/voiceSnippet";
+import { encodeWav } from "@/lib/wav";
 import { customTemplates, type CustomTemplate } from "@/lib/summaryTemplates";
 import type { Person } from "@/api/types";
 import { SUMMARY_TEMPLATES, type SummaryTemplate } from "@echo/core/vocabulary";
@@ -127,6 +131,12 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
    * real: a transcript you can read while the meeting is happening.
    */
   const [voiceNames, setVoiceNames] = useState<Record<string, string>>({});
+  /** labels the matcher has already answered for — asked once, not on a
+      loop: a second opinion on the same voice costs money and changes
+      nothing, and a label that came back unknown stays unknown until the
+      person names it themselves */
+  const asked = useRef<Set<string>>(new Set());
+  const matching = useRef(false);
   const [namingVoice, setNamingVoice] = useState<string | null>(null);
   const [namePick, setNamePick] = useState("");
   const [people, setPeople] = useState<Person[] | null>(null);
@@ -391,6 +401,46 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
    * engine's occasional 2:1 wave compaction makes approximate — fine for
    * a band whose whole content is transient.
    */
+  /**
+   * LIVE VOICE MATCHING (user ask, 2026-08-26). Once a voice has plainly
+   * held the floor for a stretch, a few seconds of it go to the matcher,
+   * and a confident answer names it on screen — the same question M39
+   * asks after a call, asked while the call is still happening.
+   *
+   * Every guard here exists because a WRONG name is worse than a number:
+   *  · the window comes from planSnippet, which refuses anything near a
+   *    handover — recognition runs behind the room, so audio cut at a
+   *    caption's timestamp lands late;
+   *  · one attempt per label, ever (`asked`), and one in flight at a time;
+   *  · a label the person already named is left alone — a human's answer
+   *    outranks the machine's;
+   *  · silence about it when the server is unsure or unreachable: the
+   *    voice simply stays numbered.
+   */
+  useEffect(() => {
+    if (phase !== "recording" || matching.current) return;
+    const plan = planSnippet(s.captionRows, s.recordedMs);
+    if (!plan || asked.current.has(plan.label) || voiceNames[plan.label]) return;
+    const samples = ringSlice(plan.startMs, plan.endMs);
+    if (!samples) return;              // the ring rolled past it
+    asked.current.add(plan.label);
+    matching.current = true;
+    const label = plan.label;
+    void api.matchVoice(encodeWav(samples, RING_SAMPLE_RATE))
+      .then(async (verdict) => {
+        if (!verdict.person_id) return;
+        setVoiceNames((prev) => (prev[label] ? prev : { ...prev, [label]: verdict.person_id! }));
+        /* the name has to be renderable: the card reads it out of the
+           directory, so make sure the directory is loaded before the
+           chip goes looking for it */
+        if (people === null) {
+          await api.directory().then(setPeople).catch(() => setPeople([]));
+        }
+      })
+      .catch(() => undefined)          // a convenience that failed is not an error the take must show
+      .finally(() => { matching.current = false; });
+  }, [phase, s.captionRows, s.recordedMs, voiceNames, people]);
+
   /**
    * The voices we are willing to CALL voices, and what to call them.
    *

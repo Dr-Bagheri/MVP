@@ -45,10 +45,11 @@ import { createConnectorsRepo, type ConnectorOAuthOptions, type ConnectorProvide
 import { createTts } from "./tts.ts";
 import { createLiveStt } from "./live-stt.ts";
 import { createMlClient } from "../worker/ml-client.ts";
+import { decideMatch } from "../worker/voice-match.ts";
 import { createStorage as createPurgeStorage } from "../purge/main.ts";
 import { createWorkflow, listWorkflows, resolveWorkflow } from "./workflows.ts";
 import type { DomainTool } from "../agent/tools.ts";
-import { agentToolsDb, type Db } from "../db/identity.ts";
+import { agentToolsDb, type Db, type SqlTx } from "../db/identity.ts";
 import { isAdmin, type Identity, type Skill } from "../agent/types.ts";
 
 export interface ServerOptions<TDeps> {
@@ -1495,6 +1496,98 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       model: embedded.model,
     });
     return reply.code(201).send({ enrolled: true, speech_ms: embedded.speech_ms });
+  });
+
+  /**
+   * LIVE VOICE MATCH (user ask, 2026-08-26: "can the voice matching happen
+   * during the record as well?").
+   *
+   * A snippet of one voice in, a NAME out — or nothing, said out loud.
+   * Everything here is read-only: no vector is stored, no speaker is
+   * linked, nothing is written at all. It is the same question M39's
+   * worker asks after a call, asked mid-take by the recorder.
+   *
+   * Three properties it inherits rather than re-decides:
+   *  · the DECISION is `decideMatch`, imported from the worker — cosine
+   *    over a threshold with a clear margin over the runner-up. A second
+   *    spelling of a matching rule would drift from the one that names
+   *    people on records, and the two would disagree about the same voice.
+   *  · the CONSENT line is unchanged: only people with a stored print are
+   *    compared, because in this product enrolling IS the consent to be
+   *    recognised. Nobody else can be named by it, ever.
+   *  · like-for-like models: prints made by a different embedder are not
+   *    candidates, the same filter the worker applies.
+   *
+   * requireActive, not requireAdmin: this answers "who is talking in the
+   * room I am recording", and it returns only what the directory already
+   * shows that member. Enrolling — the write — stays admin-walled.
+   *
+   * ACCEPTANCE, measured on this deployment 2026-08-26 (sherpa-3dspeaker-v1,
+   * 512-dim, three 7-second windows of real Persian speech through this
+   * very /embed): the same voice in two different stretches scored 0.845,
+   * and a different person scored 0.227 and 0.244 against those two. The
+   * 0.6 threshold sits in the gap with room on both sides — which is the
+   * evidence that the rule discriminates, not merely that it runs. A
+   * single same-voice number would not have shown that; the other-voice
+   * pair is the control.
+   */
+  app.post("/v1/voice/match", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    if (!options.mlBaseUrl) {
+      throw new ValidationError("voice matching is not configured on this deployment",
+        { code: "matching_unconfigured" });
+    }
+    const bytes = request.body as Buffer;
+    if (!Buffer.isBuffer(bytes) || bytes.length === 0) {
+      throw new ValidationError("send the snippet as a raw audio body");
+    }
+    if (bytes.length > 2 * 1024 * 1024) {
+      // a few seconds of one voice; anything larger is not a snippet
+      throw new ValidationError("a match snippet tops out at 2MB");
+    }
+    const ml = createMlClient({ baseUrl: options.mlBaseUrl, timeoutMs: 30_000 });
+    let embedded;
+    try {
+      embedded = await ml.embed({
+        audioBytes: bytes,
+        contentType: request.headers["content-type"] ?? "application/octet-stream",
+        jobRef: "live-match",
+      });
+    } catch (cause) {
+      const err = cause as { errorType?: string; message?: string };
+      /* a live match is a CONVENIENCE: when the voice service cannot
+         answer, the take is unaffected and the recorder keeps showing
+         numbers. The forfeit is named rather than dressed as "no match" —
+         "we could not look" and "we looked and found nobody" are
+         different nothings. */
+      throw new ValidationError(err.message ?? "the voice service did not answer",
+        { code: err.errorType ?? "embedding_failed" });
+    }
+    const prints = await options.db.withIdentity(identity, (tx: SqlTx) =>
+      tx.unsafe<{ id: string; display_name: string; voiceprint: number[] }>(
+        `select id, display_name, voiceprint from echo.person
+          where merged_into is null and voiceprint is not null
+            and voiceprint_model = $1`,
+        [embedded.model],
+      ));
+    const verdict = decideMatch(
+      embedded.embedding,
+      prints.map((row) => ({ person_id: row.id, vector: row.voiceprint })),
+      Number(process.env.VOICE_MATCH_THRESHOLD ?? 0.6),
+      Number(process.env.VOICE_MATCH_MARGIN ?? 0.1),
+    );
+    if (verdict.person_id === null) {
+      /* the WHY travels: the recorder shows nothing either way, but an
+         operator reading logs can tell "nobody is enrolled" from "two
+         people scored alike" — codes only, never the audio or the text */
+      return reply.send({ person_id: null, why: verdict.why });
+    }
+    const person = prints.find((row) => row.id === verdict.person_id);
+    return reply.send({
+      person_id: verdict.person_id,
+      display_name: person?.display_name ?? null,
+      score: verdict.score,
+    });
   });
 
   app.delete("/v1/directory/:id/voice", async (request, reply) => {

@@ -1137,6 +1137,26 @@ export const api = {
     await bff(`/api/directory/${personId}/voice`, { method: "DELETE" });
   },
 
+  /**
+   * **LIVE** — whose voice is this? A snippet in, a directory person out,
+   * or `person_id: null` with the reason. Read-only on the server: it
+   * stores no audio, no vector, and links nothing. Only people who
+   * enrolled can come back from it — a print IS the consent to be
+   * recognised.
+   */
+  async matchVoice(clip: Blob): Promise<{
+    person_id: string | null;
+    display_name?: string | null;
+    score?: number;
+    why?: string;
+  }> {
+    return bff("/api/voice/match", {
+      method: "POST",
+      headers: { "content-type": clip.type || "application/octet-stream" },
+      body: clip,
+    });
+  },
+
   // ---- summaries --------------------------------------------------------------
   /**
    * **LIVE** — `GET /api/calls/{id}/summaries`, newest first.

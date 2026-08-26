@@ -528,7 +528,7 @@
     "nameVoiceSave": "Name it",
     "nameVoiceEmpty": "Your people directory is empty — add people under Echo · Speakers.",
     "peopleTitle": "Voices heard",
-    "peopleHint": "Live, voices are only told apart. Names are matched to your people directory after the take.",
+    "peopleHint": "Enrolled voices are recognised as they speak. Tap any voice to name it yourself — that name stays on this live transcript.",
     "speakerNamed": "Speaker {n}",
     "speakersSeen": "{count} voices heard so far",
     "transcriptIdle": "Press record — the live transcript lands here as you speak.",
