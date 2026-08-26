@@ -17,7 +17,6 @@ import {
   type RecorderErrorCode,
 } from "@/lib/recordingEngine";
 import { notify } from "@/lib/notify";
-import { speakQueued } from "@/lib/voice";
 import { Card, Chip } from "@/components/ui";
 import { Link } from "@/i18n/routing";
 import { digits, formatClock, modelLabel } from "@/lib/format";
@@ -102,7 +101,6 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
       far mic can be judged before the take (it does not change the take) */
   const [monitorGain, setMonitorGain] = useState(1);
   /** speak «این جلسه ضبط می‌شود» into the room — and into the record */
-  const [announceOn, setAnnounceOn] = useState(false);
   /**
    * RESUME mode: `?resume=<id>` — the call continues on the same id, next
    * part index, offset where the audio ends. `null` = fresh; "loading"
@@ -180,12 +178,6 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
       boost,
     }).then(() => {
       void refreshDevices(); // labels exist once permission does
-      /* consent announcement (user Persian-moat item, 2026-08-23): spoken
-         AFTER the take starts, so the announcement itself lands IN the
-         recording — an announcement outside the record proves nothing */
-      if (announceOn && recorderSnapshot().phase === "recording") {
-        speakQueued(t("announceLine"));
-      }
     });
   }
 
@@ -285,9 +277,10 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
               resumed take keeps the one it already has. */}
           {/* the settings no longer HIDE (user directive, 2026-08-25) — and
               they read as TWO questions now (2026-08-26): what you record
-              WITH, and what the meeting should BECOME. One flat grid mixed
-              a hardware check with an editorial choice; the grouping is the
-              form's actual structure said out loud. */}
+              WITH, and what the meeting should BECOME. The two sit SIDE BY
+              SIDE from lg up (user directive, same day): two questions,
+              two columns, one glance. */}
+          <div className="grid items-start gap-4 lg:grid-cols-2">
           <fieldset data-tour="rec-devices" className="rounded-xl border border-border p-4">
             <legend className="px-1.5 text-xs font-semibold uppercase tracking-wide text-fg-subtle">
               {t("groupDevices")}
@@ -309,7 +302,15 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
                     ? [{ value: "", label: t("micDefault") }]
                     : mics.map((d) => ({ value: d.id, label: d.label }))
                 }
-                panelFooter={<MicLevelFooter micId={micId} label={t("menuLevel")} />}
+                panelFooter={
+                  <MicLevelFooter
+                    micId={micId}
+                    label={t("menuLevel")}
+                    gain={monitorGain}
+                    gainLabel={t("micGain")}
+                    onGainChange={setMonitorGain}
+                  />
+                }
               />
               <SelectMenu
                 variant="tile"
@@ -349,17 +350,14 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
             {/* hear yourself BEFORE the meeting, not after it (2026-08-25) */}
             <div className="mt-3">
               <DeviceCheck
-                micId={micId}
                 speakerId={speakerId}
                 boost={boost}
                 onBoostChange={setBoost}
-                gain={monitorGain}
-                onGainChange={setMonitorGain}
               />
             </div>
           </fieldset>
 
-          <fieldset data-tour="rec-meeting" className="mt-4 rounded-xl border border-border p-4">
+          <fieldset data-tour="rec-meeting" className="rounded-xl border border-border p-4">
             <legend className="px-1.5 text-xs font-semibold uppercase tracking-wide text-fg-subtle">
               {t("groupMeeting")}
             </legend>
@@ -414,14 +412,7 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
               />
             </div>
           </fieldset>
-          <label className="mt-3 flex cursor-pointer items-center gap-2 text-sm text-fg">
-            <input
-              type="checkbox"
-              checked={announceOn}
-              onChange={(e) => setAnnounceOn(e.target.checked)}
-            />
-            {t("announceOption")}
-          </label>
+          </div>
           <div className="mt-5 flex flex-wrap items-center gap-3">
             <button
               data-tour="rec-start"
@@ -679,7 +670,20 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
  * the panel is gone. A moving bar is the only honest answer to "is this
  * the right microphone": a device name proves nothing.
  */
-function MicLevelFooter({ micId, label }: { micId: string; label: string }) {
+function MicLevelFooter({
+  micId,
+  label,
+  gain,
+  gainLabel,
+  onGainChange,
+}: {
+  micId: string;
+  label: string;
+  /** the meter's own multiplier (0.5–3) — display only, never the take */
+  gain: number;
+  gainLabel: string;
+  onGainChange: (next: number) => void;
+}) {
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
@@ -708,22 +712,39 @@ function MicLevelFooter({ micId, label }: { micId: string; label: string }) {
       setStream(null);
     };
   }, [micId]);
-  const level = useAudioLevel(stream);
+  const level = Math.min(1, useAudioLevel(stream) * gain);
   return (
-    <div className="flex items-center gap-2">
-      <span className="shrink-0 text-[10px] text-fg-subtle">{label}</span>
-      <span className="flex h-2 flex-1 items-center gap-[2px]" aria-hidden>
-        {Array.from({ length: 16 }, (_, i) => (
-          <span
-            key={i}
-            className={`h-full flex-1 rounded-[1px] transition-colors ${
-              !failed && level * 16 > i
-                ? i > 12 ? "bg-warning" : "bg-success"
-                : "bg-surface-2"
-            }`}
-          />
-        ))}
-      </span>
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <span className="shrink-0 text-[10px] text-fg-subtle">{label}</span>
+        <span className="flex h-2 flex-1 items-center gap-[2px]" aria-hidden>
+          {Array.from({ length: 16 }, (_, i) => (
+            <span
+              key={i}
+              className={`h-full flex-1 rounded-[1px] transition-colors ${
+                !failed && level * 16 > i
+                  ? i > 12 ? "bg-warning" : "bg-success"
+                  : "bg-surface-2"
+              }`}
+            />
+          ))}
+        </span>
+      </div>
+      {/* the sensitivity slider, moved here from the retired mic-test card
+          (user directive, 2026-08-26): tune the meter where the meter is */}
+      <label className="flex items-center gap-2">
+        <span className="shrink-0 text-[10px] text-fg-subtle">{gainLabel}</span>
+        <input
+          type="range"
+          dir="ltr"
+          className="h-1 flex-1 accent-accent"
+          min={0.5}
+          max={3}
+          step={0.1}
+          value={gain}
+          onChange={(e) => onGainChange(Number(e.target.value))}
+        />
+      </label>
     </div>
   );
 }
