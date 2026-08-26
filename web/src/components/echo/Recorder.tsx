@@ -242,6 +242,186 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
       </Card>
     );
   }
+  /**
+   * ONE continuous picker row (user directive, 2026-08-26: "together
+   * without separation") — the fieldset boxes and legends are gone. The
+   * two data-tour anchors survive as invisible groups with the SAME gap
+   * inside and between them, so the guided tour can still ring each half
+   * while the eye sees a single row of tiles. While a take is live the
+   * row stays visible but LOCKED — these are the take's settings, and a
+   * picker that still worked mid-take would claim a change it cannot make.
+   */
+  const pickers = (locked: boolean) => (
+    <div className="flex flex-wrap items-start gap-4">
+      <div data-tour="rec-devices" className="flex flex-wrap items-start gap-4">
+        <SelectMenu
+          variant="tile"
+          ariaLabel={t("micField")}
+          panelHeading={t("micField")}
+          icon={<IconMic />}
+          value={micId}
+          onChange={setMicId}
+          disabled={locked}
+          options={
+            mics.length === 0
+              ? [{ value: "", label: t("micDefault") }]
+              : mics.map((d) => ({ value: d.id, label: d.label }))
+          }
+          panelFooter={
+            <MicLevelFooter
+              micId={micId}
+              label={t("menuLevel")}
+              gain={monitorGain}
+              gainLabel={t("micGain")}
+              onGainChange={setMonitorGain}
+              boost={boost}
+              boostLabel={t("boostOption")}
+              boostHint={t("boostHint")}
+              onBoostChange={setBoost}
+            />
+          }
+        />
+        <SelectMenu
+          variant="tile"
+          ariaLabel={t("speakerField")}
+          panelHeading={t("speakerField")}
+          icon={<IconSpeaker />}
+          value={speakerId}
+          onChange={setSpeakerId}
+          disabled={locked}
+          options={
+            speakers.length === 0
+              ? [{ value: "", label: t("speakerDefault") }]
+              : speakers.map((d) => ({ value: d.id, label: d.label }))
+          }
+          panelFooter={
+            <button
+              type="button"
+              className="tap w-full rounded-md px-1 py-1 text-start text-xs text-accent hover:bg-surface-2"
+              onClick={() => void playTestChime(speakerId)}
+            >
+              {t("menuPlayTest")}
+            </button>
+          }
+        />
+        <SelectMenu
+          variant="tile"
+          ariaLabel={t("sourceField")}
+          panelHeading={t("sourceField")}
+          icon={<IconPulse />}
+          value={source}
+          onChange={(v) => setSource(v as "mic" | "system")}
+          disabled={locked}
+          options={[
+            { value: "mic", label: t("sourceMic") },
+            { value: "system", label: t("sourceSystem") },
+          ]}
+        />
+      </div>
+      <div data-tour="rec-meeting" className="flex flex-wrap items-start gap-4">
+        {/* the transcriber's hint — set at creation */}
+        <SelectMenu
+          variant="tile"
+          ariaLabel={t("languageField")}
+          panelHeading={t("languageField")}
+          icon={<IconGlobe />}
+          value={language}
+          onChange={(v) => setLanguage(v as "fa" | "en" | "mixed")}
+          disabled={locked || resuming}
+          options={[
+            { value: "mixed", label: t("languageMixed") },
+            { value: "fa", label: t("languageFa") },
+            { value: "en", label: t("languageEn") },
+          ]}
+        />
+        {/* 0094: the summary's SHAPE chosen before the meeting — the
+            ruled five plus this person's own templates */}
+        <SelectMenu
+          variant="tile"
+          ariaLabel={t("templateField")}
+          panelHeading={t("templateField")}
+          icon={<IconFileText />}
+          value={template}
+          onChange={setTemplate}
+          disabled={locked || resuming}
+          options={[
+            { value: "", label: t("templateNone") },
+            ...SUMMARY_TEMPLATES.map((k) => ({ value: k, label: t(TEMPLATE_KEY[k]) })),
+            ...customs.map((c) => ({ value: `custom:${c.name}`, label: c.name })),
+          ]}
+        />
+        {/* 0099: the model for this meeting's summaries. The empty
+            choice is NAMED — the default is the worker's own ladder,
+            and pre-selecting a model here would destroy the "has
+            not chosen" state M5 protects. */}
+        <SelectMenu
+          variant="tile"
+          ariaLabel={t("modelField")}
+          panelHeading={t("modelField")}
+          icon={<IconChip />}
+          value={summaryModel}
+          onChange={setSummaryModel}
+          disabled={locked || resuming}
+          options={[
+            { value: "", label: t("modelDefault") },
+            ...modelOptions,
+          ]}
+        />
+      </div>
+    </div>
+  );
+
+  /**
+   * THE ROLLING WAVE (user directive, 2026-08-26, from the reference
+   * recorder): a fixed window over the take's NEWEST samples — new bars
+   * enter at the end, old ones fall off the start, so the band moves with
+   * the recording instead of compressing forever. Idle it is a quiet
+   * baseline; paused it holds still (nothing is being written, so nothing
+   * moves). Chapter marks ride the window at their moment while visible;
+   * their placement uses the window's average sample duration, which the
+   * engine's occasional 2:1 wave compaction makes approximate — fine for
+   * a band whose whole content is transient.
+   */
+  const waveBand = () => {
+    const SLOTS = 96;
+    const shown = s.wave.slice(-SLOTS);
+    const pad = SLOTS - shown.length;
+    const span = s.recordedMs - s.waveStartMs;
+    const msPerSample = s.wave.length > 0 && span > 0 ? span / s.wave.length : 0;
+    const visibleStartMs = s.recordedMs - shown.length * msPerSample;
+    return (
+      <div className="mt-4 rounded-xl border border-border bg-surface px-3 py-2" dir="ltr" aria-hidden>
+        <div className="relative flex h-24 items-center gap-[2px]">
+          {Array.from({ length: SLOTS }, (_, i) => {
+            const v = i < pad ? 0 : shown[i - pad]!;
+            return (
+              <span
+                key={i}
+                className={`min-w-px flex-1 rounded-full ${v > 0.02 ? "bg-accent/80" : "bg-surface-2"}`}
+                style={{ height: `${Math.max(4, Math.min(100, v * 120))}%` }}
+              />
+            );
+          })}
+          {msPerSample > 0
+            ? s.chapterMarks.map((ms, i) => {
+                const denom = s.recordedMs - visibleStartMs;
+                if (denom <= 0) return null;
+                const frac = (ms - visibleStartMs) / denom;
+                if (frac < 0 || frac > 1) return null;
+                return (
+                  <span
+                    key={`c-${i}`}
+                    className="absolute bottom-1 top-1 w-0.5 rounded bg-warning"
+                    style={{ left: `${frac * 100}%` }}
+                  />
+                );
+              })
+            : null}
+        </div>
+      </div>
+    );
+  };
+
   if (resumeTarget === "gone") {
     return (
       <Card>
@@ -275,152 +455,27 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
               renaming is one pencil away on the record. `title` state stays:
               the agent's start_recording can still carry a name, and a
               resumed take keeps the one it already has. */}
-          {/* the settings no longer HIDE (user directive, 2026-08-25) — and
-              they read as TWO questions now (2026-08-26): what you record
-              WITH, and what the meeting should BECOME. The two sit SIDE BY
-              SIDE from lg up (user directive, same day): two questions,
-              two columns, one glance. */}
-          <div className="grid items-start gap-4 lg:grid-cols-2">
-          <fieldset data-tour="rec-devices" className="rounded-xl border border-border p-4">
-            <legend className="px-1.5 text-xs font-semibold uppercase tracking-wide text-fg-subtle">
-              {t("groupDevices")}
-            </legend>
-            {/* the CALL-BAR row (user directive, 2026-08-26): big glyph
-                buttons with the arrow inside — press one and the kebab-style
-                panel opens, named by its heading, carrying the live proof
-                (mic meter / speaker chime) at its foot */}
-            <div className="flex flex-wrap items-start gap-3">
-              <SelectMenu
-                variant="tile"
-                ariaLabel={t("micField")}
-                panelHeading={t("micField")}
-                icon={<IconMic />}
-                value={micId}
-                onChange={setMicId}
-                options={
-                  mics.length === 0
-                    ? [{ value: "", label: t("micDefault") }]
-                    : mics.map((d) => ({ value: d.id, label: d.label }))
-                }
-                panelFooter={
-                  <MicLevelFooter
-                    micId={micId}
-                    label={t("menuLevel")}
-                    gain={monitorGain}
-                    gainLabel={t("micGain")}
-                    onGainChange={setMonitorGain}
-                    boost={boost}
-                    boostLabel={t("boostOption")}
-                    boostHint={t("boostHint")}
-                    onBoostChange={setBoost}
-                  />
-                }
-              />
-              <SelectMenu
-                variant="tile"
-                ariaLabel={t("speakerField")}
-                panelHeading={t("speakerField")}
-                icon={<IconSpeaker />}
-                value={speakerId}
-                onChange={setSpeakerId}
-                options={
-                  speakers.length === 0
-                    ? [{ value: "", label: t("speakerDefault") }]
-                    : speakers.map((d) => ({ value: d.id, label: d.label }))
-                }
-                panelFooter={
-                  <button
-                    type="button"
-                    className="tap w-full rounded-md px-1 py-1 text-start text-xs text-accent hover:bg-surface-2"
-                    onClick={() => void playTestChime(speakerId)}
-                  >
-                    {t("menuPlayTest")}
-                  </button>
-                }
-              />
-              <SelectMenu
-                variant="tile"
-                ariaLabel={t("sourceField")}
-                panelHeading={t("sourceField")}
-                icon={<IconPulse />}
-                value={source}
-                onChange={(v) => setSource(v as "mic" | "system")}
-                options={[
-                  { value: "mic", label: t("sourceMic") },
-                  { value: "system", label: t("sourceSystem") },
-                ]}
-              />
-            </div>
-          </fieldset>
-
-          <fieldset data-tour="rec-meeting" className="rounded-xl border border-border p-4">
-            <legend className="px-1.5 text-xs font-semibold uppercase tracking-wide text-fg-subtle">
-              {t("groupMeeting")}
-            </legend>
-            <div className="flex flex-wrap items-start gap-3">
-              {/* the transcriber's hint — set at creation */}
-              <SelectMenu
-                variant="tile"
-                ariaLabel={t("languageField")}
-                panelHeading={t("languageField")}
-                icon={<IconGlobe />}
-                value={language}
-                onChange={(v) => setLanguage(v as "fa" | "en" | "mixed")}
-                disabled={resuming}
-                options={[
-                  { value: "mixed", label: t("languageMixed") },
-                  { value: "fa", label: t("languageFa") },
-                  { value: "en", label: t("languageEn") },
-                ]}
-              />
-              {/* 0094: the summary's SHAPE chosen before the meeting — the
-                  ruled five plus this person's own templates */}
-              <SelectMenu
-                variant="tile"
-                ariaLabel={t("templateField")}
-                panelHeading={t("templateField")}
-                icon={<IconFileText />}
-                value={template}
-                onChange={setTemplate}
-                disabled={resuming}
-                options={[
-                  { value: "", label: t("templateNone") },
-                  ...SUMMARY_TEMPLATES.map((k) => ({ value: k, label: t(TEMPLATE_KEY[k]) })),
-                  ...customs.map((c) => ({ value: `custom:${c.name}`, label: c.name })),
-                ]}
-              />
-              {/* 0099: the model for this meeting's summaries. The empty
-                  choice is NAMED — the default is the worker's own ladder,
-                  and pre-selecting a model here would destroy the "has
-                  not chosen" state M5 protects. */}
-              <SelectMenu
-                variant="tile"
-                ariaLabel={t("modelField")}
-                panelHeading={t("modelField")}
-                icon={<IconChip />}
-                value={summaryModel}
-                onChange={setSummaryModel}
-                disabled={resuming}
-                options={[
-                  { value: "", label: t("modelDefault") },
-                  ...modelOptions,
-                ]}
-              />
-            </div>
-          </fieldset>
-          </div>
-          <div className="mt-5 flex flex-wrap items-center gap-3">
+          {pickers(false)}
+          {waveBand()}
+          {/* the reference recorder's bottom bar: the take starts from one
+              big red circle (user directive, 2026-08-26), its clock already
+              showing where a resumed take will pick up */}
+          <div className="mt-5 flex items-center gap-4">
             <button
               data-tour="rec-start"
-              className="btn-primary h-12 px-6"
+              aria-label={resuming ? t("resumeStart") : t("start")}
+              className="tap grid h-16 w-16 shrink-0 place-items-center rounded-full bg-danger text-white shadow-lg transition-transform hover:scale-105 active:scale-95 disabled:opacity-60"
               disabled={phase === "starting"}
               onClick={() => start()}
             >
-              {phase === "starting" ? t("starting") : resuming ? t("resumeStart") : t("start")}
+              <span aria-hidden className="block h-5 w-5 rounded-full border-2 border-white" />
             </button>
-            {/* the quick voice memo LEFT this page (user directive,
-                2026-08-26): it lives as the ＋ on the Records menu row —
-                one tap from anywhere in Echo, no form in between */}
+            <span className="text-sm font-medium text-fg">
+              {phase === "starting" ? t("starting") : resuming ? t("resumeStart") : t("start")}
+            </span>
+            <span className="ltr ms-auto text-sm text-fg-muted">
+              {formatClock(resuming ? Math.floor(resumeTarget.offsetMs / 1000) : 0, locale)}
+            </span>
           </div>
         </>
       ) : null}
@@ -430,7 +485,8 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
            a thought lands in the pad instead of interrupting the meeting */
         <div className="gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div>
-          <div className="flex items-center gap-4">
+          {pickers(true)}
+          <div className="mt-4 flex items-center gap-4">
             <span
               className={`inline-block h-3 w-3 rounded-full ${
                 phase === "recording" ? "animate-pulse bg-danger" : "bg-fg-subtle"
@@ -449,29 +505,7 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
             </span>
           </div>
 
-          {/* live input-level meter — an LED-segment strip (user directive,
-              2026-08-23: "technical and stronger but more compact"): fixed
-              thin segments that LIGHT left-to-right with the signal, the
-              last stretch in the warning tone — the professional-console
-              anatomy, half the old height */}
-          <div
-            className="mt-4 flex h-5 items-center gap-[3px] rounded-md border border-border bg-surface px-2"
-            dir="ltr"
-            aria-hidden
-          >
-            {Array.from({ length: 36 }).map((_, i) => {
-              const lit = phase === "recording" && s.level > i / 36;
-              const hot = i >= 30;
-              return (
-                <span
-                  key={i}
-                  className={`h-2.5 flex-1 rounded-[1px] transition-colors duration-75 ${
-                    lit ? (hot ? "bg-warning" : "bg-accent") : "bg-surface-2"
-                  }`}
-                />
-              );
-            })}
-          </div>
+          {waveBand()}
 
           {/* M38: live captions — the relay's rolling transcript. Interim
               words render muted; finals accumulate. Absence says so. */}
@@ -491,35 +525,6 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
             </div>
           ) : s.captionsDown ? (
             <p className="mt-4 text-xs text-fg-muted">{t("liveUnavailable")}</p>
-          ) : null}
-
-          {/* the take's waveform timeline — one bar per RMS sample, chapter
-              marks as vertical lines at their moment */}
-          {s.wave.length > 1 ? (
-            <div className="mt-4 rounded-md bg-surface-2 p-3" dir="ltr" aria-hidden>
-              <div className="relative flex h-10 items-center gap-px">
-                {s.wave.map((v, i) => (
-                  <span
-                    key={i}
-                    className="min-w-px flex-1 rounded-full bg-accent/80"
-                    style={{ height: `${Math.max(4, v * 100)}%` }}
-                  />
-                ))}
-                {s.chapterMarks.map((ms, i) => {
-                  const span = s.recordedMs - s.waveStartMs;
-                  if (span <= 0) return null;
-                  const frac = (ms - s.waveStartMs) / span;
-                  if (frac < 0 || frac > 1) return null;
-                  return (
-                    <span
-                      key={`c-${i}`}
-                      className="absolute bottom-0 top-0 w-0.5 rounded bg-warning"
-                      style={{ left: `${frac * 100}%` }}
-                    />
-                  );
-                })}
-              </div>
-            </div>
           ) : null}
 
           {/* input-quality watch: fixable NOW, so it surfaces now. A lost
