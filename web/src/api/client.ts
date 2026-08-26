@@ -1086,8 +1086,19 @@ export const api = {
   },
   async updatePerson(
     id: string,
-    /** db/0096: `team: ""` clears it, an absent team leaves it alone */
-    patch: { display_name?: string; title?: string; team?: string },
+    /**
+     * db/0096: `team: ""` clears it, an absent team leaves it alone.
+     * db/0005's link (written since 2026-08-26): `app_user_id: null`
+     * CLEARS it — "not a member after all" is an answer — and an absent
+     * one leaves it alone. JSON.stringify keeps an explicit null and
+     * drops nothing, so the two states survive the wire.
+     */
+    patch: {
+      display_name?: string;
+      title?: string;
+      team?: string;
+      app_user_id?: string | null;
+    },
   ): Promise<Person> {
     return bff<Person>(`/api/directory/${id}`, {
       method: "PATCH",
@@ -1095,14 +1106,13 @@ export const api = {
       body: JSON.stringify(patch),
     });
   },
-  /** **LIVE** — merge a duplicate into the person who stays (db/0096). */
-  async mergePerson(loserId: string, winnerId: string): Promise<void> {
-    await bff(`/api/directory/${loserId}/merge`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ into: winnerId }),
-    });
-  },
+  /* mergePerson LEFT the client (user directive, 2026-08-26: "remove the
+     merge option"). The server op and its definer door survive — a merge
+     is still the right repair for a genuine duplicate, and support can
+     run it — but the product no longer offers it, so nothing here calls
+     it. Recorded HERE, at the consumer, because a deliberate absence
+     noted only where it was removed is invisible to whoever comes looking
+     for the method. */
   /** admin/owner-only true delete (db/0076); 409 not_migrated pre-0076 */
   async deletePerson(id: string, reason: string): Promise<void> {
     await bff(`/api/directory/${id}`, {

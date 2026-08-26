@@ -47,9 +47,36 @@ export interface PersonRecord {
    * vocabulary. ABSENT pre-0096; null when unassigned.
    */
   team?: string | null;
+  /**
+   * The linked member's NAME, resolved server-side (2026-08-26).
+   *
+   * The link itself is a uuid, and a uuid is not a thing to put on a
+   * screen. Resolving it in the client was the obvious move and the wrong
+   * one: this route is requireActive but the members list is requireAdmin,
+   * so an ordinary member would receive an id they cannot resolve and
+   * render a blank where a name belongs. LEFT join, never inner — an inner
+   * join would silently hide a person whose link points at a row they
+   * cannot see, which is the M15 401-bounce shape.
+   */
+  linked_member_name?: string | null;
+  /**
+   * A SUGGESTION, never an application (2026-08-26): the org member whose
+   * name folds to this person's name. Present only when EXACTLY one member
+   * matches — two candidates is not a suggestion, it is a question, and
+   * the honest answer to it is silence.
+   *
+   * The fold is `echo.fa_fold`, the same function the name index is built
+   * on, so «محمّدی» and «محمدی» compare equal. Deliberately the database's
+   * own normalizer rather than a JavaScript twin: a second spelling of a
+   * normalisation rule drifts from the one it mirrors.
+   */
+  suggested_app_user_id?: string | null;
+  suggested_member_name?: string | null;
 }
 
 const PERSON_COLUMNS = "id, display_name, title, app_user_id";
+/** the same four, qualified — the list query joins and needs the alias */
+const PERSON_COLUMNS_P = "p.id, p.display_name, p.title, p.app_user_id";
 
 const toPerson = (row: Record<string, unknown>): PersonRecord => ({
   id: row.id as string,
@@ -64,6 +91,15 @@ const toPerson = (row: Record<string, unknown>): PersonRecord => ({
     : {}),
   ...(Object.prototype.hasOwnProperty.call(row, "team")
     ? { team: (row.team as string | null) ?? null }
+    : {}),
+  ...(Object.prototype.hasOwnProperty.call(row, "linked_member_name")
+    ? { linked_member_name: (row.linked_member_name as string | null) ?? null }
+    : {}),
+  ...(Object.prototype.hasOwnProperty.call(row, "suggested_app_user_id")
+    ? {
+        suggested_app_user_id: (row.suggested_app_user_id as string | null) ?? null,
+        suggested_member_name: (row.suggested_member_name as string | null) ?? null,
+      }
     : {}),
 });
 
@@ -84,11 +120,25 @@ export function createDirectoryRepo(db: Db) {
       const withTeams = await hasPersonTeams(db);
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<Record<string, unknown>>(
-          `select ${PERSON_COLUMNS}${withVoice ? ", voiceprint_at" : ""}${
-            withTeams ? ", team, voiceprint_samples" : ""}
-             from echo.person
-            where merged_into is null
-            order by display_name`,
+          `select ${PERSON_COLUMNS_P}${withVoice ? ", p.voiceprint_at" : ""}${
+            withTeams ? ", p.team, p.voiceprint_samples" : ""},
+                  lu.display_name as linked_member_name,
+                  (select case when count(*) = 1 then min(u2.id::text) end
+                     from echo.app_user u2
+                    where u2.org_id = p.org_id
+                      and btrim(u2.display_name) <> ''
+                      and echo.fa_fold(u2.display_name) = echo.fa_fold(p.display_name)
+                  ) as suggested_app_user_id,
+                  (select case when count(*) = 1 then min(u2.display_name) end
+                     from echo.app_user u2
+                    where u2.org_id = p.org_id
+                      and btrim(u2.display_name) <> ''
+                      and echo.fa_fold(u2.display_name) = echo.fa_fold(p.display_name)
+                  ) as suggested_member_name
+             from echo.person p
+             left join echo.app_user lu on lu.id = p.app_user_id
+            where p.merged_into is null
+            order by p.display_name`,
         ),
       );
       return rows.map(toPerson);
@@ -252,6 +302,14 @@ export function createDirectoryRepo(db: Db) {
         title?: string | undefined;
         /** db/0096: "" CLEARS the team, undefined leaves it alone */
         team?: string | undefined;
+        /**
+         * db/0005's column, written for the first time (2026-08-26).
+         * `null` CLEARS the link — "not a member after all" is a real
+         * answer — and `undefined` leaves it alone. Never coalesce: that
+         * is the save-button-does-nothing trap, where exactly one
+         * interaction (clearing) silently does nothing.
+         */
+        appUserId?: string | null | undefined;
       },
     ): Promise<PersonRecord> {
       const id = assertUuid(personId, "person id");
@@ -268,21 +326,54 @@ export function createDirectoryRepo(db: Db) {
         throw new ConflictError("not_migrated");
       }
       const setTeam = patch.team !== undefined && withTeams;
-      const rows = await db.withIdentity(identity, (tx: SqlTx) =>
-        tx.unsafe<Record<string, unknown>>(
-          `update echo.person set
-             display_name = coalesce($2, display_name),
-             title        = coalesce($3, title),${
-               setTeam ? "\n             team         = $4," : ""}
-             updated_at   = now()
-           where id = $1 and merged_into is null
-           returning ${PERSON_COLUMNS}${withTeams ? ", team, voiceprint_samples" : ""}`,
-          setTeam
-            ? [id, patch.displayName?.trim() ?? null, patch.title ?? null,
-               patch.team!.trim() || null]
-            : [id, patch.displayName?.trim() ?? null, patch.title ?? null],
-        ),
-      );
+      const setLink = patch.appUserId !== undefined;
+      if (typeof patch.appUserId === "string") assertUuid(patch.appUserId, "app_user_id");
+      /* columns and values are built TOGETHER — the placeholder-drift guard:
+         two lists maintained apart is how $4 ends up meaning $5 */
+      const params: unknown[] = [id, patch.displayName?.trim() ?? null, patch.title ?? null];
+      const sets = [
+        "display_name = coalesce($2, display_name)",
+        "title        = coalesce($3, title)",
+      ];
+      if (setTeam) {
+        params.push(patch.team!.trim() || null);
+        sets.push(`team = $${params.length}`);
+      }
+      if (setLink) {
+        params.push(patch.appUserId);
+        sets.push(`app_user_id = $${params.length}::uuid`);
+      }
+      sets.push("updated_at = now()");
+      /* try/catch around the AWAIT, not `.catch()` on the call: a driver
+         that throws synchronously (or any layer between here and it) would
+         sail straight past a promise-tail handler, and the mapping below
+         would silently never run. Caught by its own test. */
+      let rows: Record<string, unknown>[];
+      try {
+        rows = await db.withIdentity(identity, (tx: SqlTx) =>
+          tx.unsafe<Record<string, unknown>>(
+            `update echo.person set ${sets.join(", ")}
+             where id = $1 and merged_into is null
+             returning ${PERSON_COLUMNS}${withTeams ? ", team, voiceprint_samples" : ""}`,
+            params,
+          ),
+        );
+      } catch (error: unknown) {
+        const code = (error as { code?: string }).code;
+        /* db/0100's partial unique index: another ACTIVE person already
+           claims this account. The refusal names the rule rather than
+           leaking which row holds it — the directory is visible to the
+           caller anyway, but the message is about THIS write. */
+        if (code === "23505") throw new ConflictError("account_already_linked");
+        /* the composite FK (app_user_id, org_id): the account is not a
+           member of this org. Structurally unrepresentable, so this is a
+           caller mistake worth naming, not a server fault. */
+        if (code === "23503") {
+          throw new ValidationError("that account is not a member of this organization",
+            { code: "not_a_member" });
+        }
+        throw error;
+      }
       if (!rows[0]) throw new NotFoundError("no such person");
       return toPerson(rows[0]);
     },

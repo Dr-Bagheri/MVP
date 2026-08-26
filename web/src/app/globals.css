@@ -634,34 +634,78 @@
 }
 .tile > * { position: relative; z-index: 1; }
 
-/* --- the live wave band ----------------------------------------------
-   Drawn from the open-source consensus (elevenlabs/ui live-waveform,
-   react-voice-visualizer, wavesurfer's record plugin — researched
-   2026-08-26). The two techniques that make it read as instrumentation
-   rather than as a row of divs:
+/* --- the live wave SCOPE (cinematic, 2026-08-26) ---------------------
+   Rebuilt from a measured study of the techniques film scrubbers use
+   (Chrome, 96 bars, per-frame writes — the numbers that follow are the
+   ones that came back FREE; the ones that did not are named so nobody
+   reaches for them again).
 
-   1. the gradient lives in BAND space, not bar space. A per-bar gradient
-      scales with its own bar, so a 4px bar and a 100px bar show the same
-      ramp and the effect disappears. Every bar is full height with the
-      same background, and `clip-path` REVEALS the amplitude — which also
-      keeps the pill caps circular (a scaleY squashes them into ellipses).
-   2. the glow is ONE filter on the container, quantised into three steps
-      by the live level. Per-bar filters would allocate a buffer per bar,
-      and a filter that changes every frame re-rasterises the whole band. */
-.wave-band {
+   Four devices do the work, and none of them is the waveform itself:
+   a HORIZON (an axis at 58% with a squashed reflection under it, so the
+   signal sits in a space rather than standing on a baseline), a GRADED
+   GROUND (never flat, never #000 — a key light above, a vignette
+   around), ATMOSPHERE (grain between the eye and the signal), and
+   FRAMING (letterbox edges and a dissolve, so the wave never butts a
+   rectangle).
+
+   MEASURED, so it is not re-litigated: `-webkit-box-reflect` dropped 24
+   frames in 72 and does not exist in Firefox — the reflection here is a
+   second real lane. A per-bar `filter: drop-shadow` HALVED the frame
+   rate; the glow is therefore one filter on the container, quantised
+   into three steps. Grain as one overlay is free; as a per-bar filter it
+   also halves the rate. */
+.wave-scope {
   position: relative;
-  display: flex;
-  align-items: center;
-  gap: 1px;
+  border-radius: 14px;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 80% at 50% 0%, rgb(var(--accent) / .10) 0%, transparent 62%),
+    linear-gradient(180deg, rgb(var(--surface-2) / .55) 0%, rgb(var(--bg) / .92) 100%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / .06),
+    inset 0 0 90px 24px rgb(0 0 0 / .45);
   contain: layout paint;
-  /* the OLD edge fades; the new edge stays crisp because the playhead
-     lives there — a symmetric fade would dim the one bar that is "now" */
-  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 40px, #000 100%);
-  mask-image: linear-gradient(to right, transparent 0, #000 40px, #000 100%);
 }
-.wave-band[data-glow="1"] { filter: drop-shadow(0 0 6px rgb(var(--accent) / .22)); }
-.wave-band[data-glow="2"] {
-  filter: drop-shadow(0 0 5px rgb(var(--accent) / .40)) drop-shadow(0 0 16px rgb(var(--accent) / .16));
+/* the letterbox: asymmetric on purpose — equal bars read as a border,
+   uneven ones read as vignetting */
+.wave-scope::before,
+.wave-scope::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0;
+  height: 14px;
+  pointer-events: none;
+  z-index: 3;
+}
+.wave-scope::before { top: 0; background: linear-gradient(180deg, rgb(0 0 0 / .55), transparent); }
+.wave-scope::after { bottom: 0; background: linear-gradient(0deg, rgb(0 0 0 / .40), transparent); }
+
+.wave-scope[data-glow="1"] { filter: drop-shadow(0 0 6px rgb(var(--accent) / .20)); }
+.wave-scope[data-glow="2"] {
+  filter: drop-shadow(0 0 5px rgb(var(--accent) / .38)) drop-shadow(0 0 18px rgb(var(--accent) / .14));
+}
+
+/* both lanes dissolve at the OLD edge; the new edge stays crisp because
+   the playhead lives there. The scope is rendered dir="ltr" always — a
+   transport is physical, so these gradients need no logical twin. */
+.wave-lane {
+  position: absolute;
+  left: 0; right: 0;
+  display: flex;
+  gap: 1px;
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 44px, #000 100%);
+  mask-image: linear-gradient(to right, transparent 0, #000 44px, #000 100%);
+}
+.wave-lane-up { top: 0; height: 58%; align-items: flex-end; }
+/* the reflection: squashed, dimmed, and fading out — a true mirror looks
+   like an inkblot, which is why the axis is at 58% and not at half */
+.wave-lane-down {
+  top: 58%;
+  height: 38%;
+  align-items: flex-start;
+  opacity: .5;
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, rgb(0 0 0 / .5) 45%, transparent 92%);
+  mask-image: linear-gradient(180deg, #000 0%, rgb(0 0 0 / .5) 45%, transparent 92%);
 }
 .wave-bar {
   flex: 1 1 0%;
@@ -671,24 +715,80 @@
   background-image: linear-gradient(
     to bottom,
     rgb(var(--accent)) 0%,
-    rgb(var(--accent) / .60) 34%,
-    rgb(var(--accent) / .50) 50%,
-    rgb(var(--accent) / .60) 66%,
-    rgb(var(--accent)) 100%
+    rgb(var(--accent) / .55) 60%,
+    rgb(var(--accent) / .35) 100%
   );
-  /* the amplitude reveal, mirrored around the centre line. At the 0.02
-     floor this leaves a ~2px hairline — silence must never render as a
-     gap, which is indistinguishable from a band that crashed. */
-  clip-path: inset(calc((1 - var(--v)) * 50%) 0 round 999px);
   opacity: calc((0.30 + 0.70 * var(--age)) * (0.45 + 0.55 * var(--v)));
 }
-/* nothing captured yet: a dotted centre rule, which says "ready" without
-   implying a microphone is already listening */
+/* clip-path rather than height or scaleY: height reflows every frame,
+   scaleY squashes both the pill caps and the gradient, and the gradient
+   living in BAND space is what makes a quiet bar show a different part
+   of the ramp than a loud one. The 0.02 floor leaves a hairline —
+   silence in a film timeline is a flat line, never a gap. */
+.wave-lane-up .wave-bar { clip-path: inset(calc((1 - var(--v)) * 100%) 0 0 0 round 999px); }
+.wave-lane-down .wave-bar {
+  clip-path: inset(0 0 calc((1 - var(--v)) * 100%) 0 round 999px);
+  background-image: linear-gradient(
+    to bottom,
+    rgb(var(--accent) / .45) 0%,
+    rgb(var(--accent) / .12) 100%
+  );
+}
+/* one static grain layer — fractalNoise (not turbulence: turbulence
+   ripples, fractalNoise grains), desaturated so it reads as film rather
+   than as JPEG artefacts, and stitched so the tile never seams */
+.wave-grain {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  opacity: .07;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='160' height='160' filter='url(%23n)'/></svg>");
+}
+/* nothing captured yet: a dotted horizon on the axis, which says "ready"
+   without implying a microphone is already listening */
 .wave-idle {
   position: absolute;
   inset-inline: 0;
-  top: 50%;
+  top: 58%;
   border-top: 2px dotted rgb(var(--fg-subtle) / .45);
+}
+
+/* --- the time rail under the scope ----------------------------------
+   Ticks hang from the top edge (background-size + no-repeat is what makes
+   them hang rather than stripe the full height), major every 1/12 at 9px
+   and minor every 1/48 at 5px — differentiated by HEIGHT, never by colour
+   alone. The elapsed region re-tints the same two gradients and is
+   clipped, so played and unplayed are the same instrument in two moods. */
+.wave-rail {
+  position: relative;
+  height: 22px;
+  border-top: 1px solid rgb(var(--border));
+  background-image:
+    repeating-linear-gradient(90deg, rgb(var(--fg-subtle) / .55) 0 1px, transparent 1px calc(100% / 12)),
+    repeating-linear-gradient(90deg, rgb(var(--fg-subtle) / .25) 0 1px, transparent 1px calc(100% / 48));
+  background-size: 100% 9px, 100% 5px;
+  background-repeat: no-repeat;
+}
+.wave-rail-past {
+  position: absolute;
+  inset: 0;
+  background-image:
+    repeating-linear-gradient(90deg, rgb(var(--accent) / .75) 0 1px, transparent 1px calc(100% / 12)),
+    repeating-linear-gradient(90deg, rgb(var(--accent) / .35) 0 1px, transparent 1px calc(100% / 48));
+  background-size: 100% 9px, 100% 5px;
+  background-repeat: no-repeat;
+}
+/* the 1px line riding the rail's own top border is what ties the rail to
+   the wave — it reads as the elapsed region's underline continuing */
+.wave-rail-fill {
+  position: absolute;
+  left: 0;
+  top: -1px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgb(var(--accent)));
+  box-shadow: 0 0 8px rgb(var(--accent) / .6);
 }
 
 /* --- an inner cell on a gradient tile --------------------------------

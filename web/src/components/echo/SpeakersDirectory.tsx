@@ -5,14 +5,14 @@ import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import { notify } from "@/lib/notify";
 import { useRefreshEpoch } from "@/lib/refreshBus";
-import type { Me, Person } from "@/api/types";
+import type { Me, Person, User } from "@/api/types";
 import { Card, EmptyState } from "@/components/ui";
 import { ConfirmDialog, IconAction, SelectMenu } from "@/components/rowActions";
 import { DataTable, StatusDot } from "@/components/DataTable";
 import {
-  IconMerge, IconMicOff, IconMicPlus, IconPencil, IconTeam, IconTrash,
+  IconMicOff, IconMicPlus, IconPencil, IconTeam, IconTrash, IconUser,
 } from "@/components/icons";
-import { digits } from "@/lib/format";
+import { digits, personName } from "@/lib/format";
 
 /** 2026-08-24 cleanup: popup-confirmed deletes; the ledger's fixed line. */
 const UI_DELETE_REASON = "حذف با تأیید کاربر در پنجرهٔ تأیید";
@@ -73,21 +73,24 @@ export function SpeakersDirectory() {
   /** popup-confirmed delete (2026-08-24) — the dialog is the second click */
   const [confirmDelete, setConfirmDelete] = useState<Person | null>(null);
   /**
-   * The 2026-08-25 batch: three views of one directory, a team filter, the
-   * merge door, and presence.
+   * The 2026-08-25 batch: three views of one directory, a team filter, and
+   * presence. (The merge door left the UI on 2026-08-26 — see the kebab.)
    *
    * `view` — table (dense), cards (the bento reading of the same rows), or
    * chart (the org tree the stored titles already describe).
    * `teamFilter` — null = everyone; "" = the people with no team yet.
-   * `merging` — the person about to be folded into another.
+   * `identifying` — the person whose platform account is being decided.
    * `presence` — person id → how many of the RECENT records they appear in,
    * read bounded (the dashboard's rule: a directory page must not fan out
    * one request per record in the org).
    */
   const [view, setView] = useState<"table" | "cards" | "chart">("table");
   const [teamFilter, setTeamFilter] = useState<string | null>(null);
-  const [merging, setMerging] = useState<Person | null>(null);
-  const [mergeInto, setMergeInto] = useState("");
+  /** the identify dialog: which person, and the account being proposed */
+  const [identifying, setIdentifying] = useState<Person | null>(null);
+  const [identifyTo, setIdentifyTo] = useState("");
+  /** org members, fetched when the dialog first opens (admin-only route) */
+  const [members, setMembers] = useState<User[] | null>(null);
   const [editingTeamId, setEditingTeamId] = useState<string | null>(null);
   const [teamDraft, setTeamDraft] = useState("");
   /* null until the read lands — "we have not counted" renders as a dash,
@@ -287,21 +290,49 @@ export function SpeakersDirectory() {
     }
   }
 
-  /** MERGE (db/0096): the loser folds into the winner, voices and all */
-  async function doMerge(): Promise<void> {
-    if (!merging || !mergeInto) return;
+  /**
+   * IDENTIFY (db/0005's column, written since 2026-08-26): this directory
+   * person IS this platform member. `""` means "not a member" and CLEARS
+   * the link — a real answer, not a missing one, which is why the patch
+   * sends an explicit null rather than omitting the field.
+   */
+  async function doIdentify(): Promise<void> {
+    if (!identifying) return;
     setBusy(true);
     try {
-      await api.mergePerson(merging.id, mergeInto);
+      await api.updatePerson(identifying.id, { app_user_id: identifyTo || null });
       setPeople(await api.directory());
-      notify(t("mergeDone"));
+      notify(identifyTo ? t("identifyDone") : t("identifyCleared"));
     } catch (cause) {
-      const detail = (cause as { detail?: string }).detail;
-      notify(detail || t("mergeFailed"), "warn");
+      /* the server's refusals are CODES, and two of them mean something a
+         person can act on: another row already claims this account, or the
+         account is not in this org at all */
+      const code = (cause as { code?: string }).code;
+      notify(
+        code === "account_already_linked"
+          ? t("identifyTaken")
+          : code === "not_a_member"
+            ? t("identifyNotMember")
+            : t("editFailed"),
+        "warn",
+      );
     } finally {
-      setMerging(null);
-      setMergeInto("");
+      setIdentifying(null);
+      setIdentifyTo("");
       setBusy(false);
+    }
+  }
+
+  /** the members list is admin-only, so it is fetched on first need */
+  function openIdentify(person: Person): void {
+    /* the SUGGESTION is the server's — it folded the two names with the
+       same function the name index is built on. It is pre-selected, never
+       applied: a common Persian surname must not silently attach a
+       colleague's identity to a voice. */
+    setIdentifyTo(person.app_user_id ?? person.suggested_app_user_id ?? "");
+    setIdentifying(person);
+    if (members === null) {
+      void api.members().then(setMembers).catch(() => setMembers([]));
     }
   }
 
@@ -725,16 +756,18 @@ export function SpeakersDirectory() {
                   ]
                 : []),
               {
-                key: "merge",
-                label: t("merge"),
-                icon: <IconMerge />,
-                /* a person can only fold into SOMEONE — with nobody else in
-                   the directory the action has no other half */
-                disabled: (people?.length ?? 0) < 2,
-                onSelect: () => {
-                  setMergeInto("");
-                  setMerging(person);
-                },
+                /* MERGE left this menu (user directive, 2026-08-26) and
+                   this took its place: who, on the platform, is this
+                   voice? The server op for merging survives for support —
+                   the product simply no longer offers it. */
+                key: "identify",
+                label: person.app_user_id ? t("identifyChange") : t("identify"),
+                icon: <IconUser />,
+                /* the server's wall is requireAdmin, and the members list
+                   this dialog needs is admin-only too — offering the row
+                   to a member would be a promise that 403s on press */
+                disabled: busy || !canManage,
+                onSelect: () => openIdentify(person),
               },
               {
                 key: "delete",
@@ -898,52 +931,53 @@ export function SpeakersDirectory() {
         />
       ) : null}
 
-      {/* MERGE (db/0096's door): pick the person this one becomes. The
-          direction is stated in words, not implied by an arrow — a merge
-          that folds the wrong way is not undoable, and the loser's NAME is
-          what disappears from the directory. */}
-      {merging !== null ? (
+      {/* IDENTIFY: which platform account is this person? The suggestion
+          arrives pre-selected and SAYS it is a suggestion — the admin is
+          the one who decides, because a link made on a name match is a
+          claim about who someone is. */}
+      {identifying !== null ? (
         <ConfirmDialog
-          title={t("mergeTitle", { name: merging.display_name })}
+          title={t("identifyTitle", { name: identifying.display_name })}
           body={
             <div className="space-y-3">
-              <p className="text-sm text-fg-muted">{t("mergeBody")}</p>
+              <p className="text-sm text-fg-muted">{t("identifyBody")}</p>
               <SelectMenu
-                ariaLabel={t("mergeInto")}
-                value={mergeInto}
-                onChange={setMergeInto}
+                ariaLabel={t("identifyPick")}
+                value={identifyTo}
+                onChange={setIdentifyTo}
                 options={[
-                  { value: "", label: t("mergePick") },
-                  ...(people ?? [])
-                    .filter((p) => p.id !== merging.id)
-                    .map((p) => ({
-                      value: p.id,
-                      label: p.title
-                        ? `${p.display_name} · ${tTitles(p.title)}`
-                        : p.display_name,
-                    })),
+                  { value: "", label: t("identifyNobody") },
+                  ...(members ?? []).map((m) => ({
+                    value: m.id,
+                    label: m.username
+                      ? `${personName(m, locale)} · ${m.username}`
+                      : personName(m, locale),
+                  })),
                 ]}
               />
-              {mergeInto ? (
-                <p className="text-xs text-warning">
-                  {t("mergeWarn", {
-                    loser: merging.display_name,
-                    winner:
-                      people?.find((p) => p.id === mergeInto)?.display_name ?? "",
+              {identifying.suggested_app_user_id
+                && identifyTo === identifying.suggested_app_user_id
+                && identifying.app_user_id !== identifying.suggested_app_user_id ? (
+                <p className="text-xs text-accent">
+                  {t("identifySuggested", {
+                    name: identifying.suggested_member_name ?? "",
                   })}
                 </p>
               ) : null}
+              {members !== null && members.length === 0 ? (
+                <p className="text-xs text-warning">{t("identifyNoMembers")}</p>
+              ) : null}
             </div>
           }
-          confirmLabel={t("merge")}
+          confirmLabel={t("identifySave")}
           cancelLabel={t("voiceCancel")}
+          danger={false}
           busy={busy}
-          confirmDisabled={mergeInto === ""}
           onCancel={() => {
-            setMerging(null);
-            setMergeInto("");
+            setIdentifying(null);
+            setIdentifyTo("");
           }}
-          onConfirm={() => void doMerge()}
+          onConfirm={() => void doIdentify()}
         />
       ) : null}
     </div>

@@ -773,6 +773,7 @@ export function ConfirmDialog({
   confirmDisabled = false,
   wide = false,
   alt,
+  hideCancel = false,
   onConfirm,
   onCancel,
 }: {
@@ -798,6 +799,15 @@ export function ConfirmDialog({
    * would run every time someone dismissed the dialog.
    */
   alt?: { label: string; onSelect: () => void; danger?: boolean };
+  /**
+   * Drops the cancel BUTTON (user directive, 2026-08-26: the recorder's
+   * stop dialog was three fat buttons wide and stopped looking like the
+   * theme's two-button box). Dismissal does not go away with it: Escape
+   * and the backdrop still call `onCancel`, and a corner ✕ appears so the
+   * way out stays visible — a destructive dialog with no visible exit is
+   * how a mis-press becomes a decision.
+   */
+  hideCancel?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
@@ -821,16 +831,31 @@ export function ConfirmDialog({
         className={`w-full ${wide ? "max-w-lg" : "max-w-sm"} rounded-2xl border border-border bg-surface p-5 shadow-2xl`}
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-base font-semibold text-fg">{title}</h2>
+        <div className="flex items-start gap-3">
+          <h2 className="flex-1 text-base font-semibold text-fg">{title}</h2>
+          {hideCancel ? (
+            <button
+              type="button"
+              aria-label={cancelLabel}
+              title={cancelLabel}
+              className="tap -me-1 -mt-1 grid h-7 w-7 shrink-0 place-items-center rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg"
+              onClick={onCancel}
+            >
+              ✕
+            </button>
+          ) : null}
+        </div>
         {body ? (
           typeof body === "string"
             ? <p className="mt-2 text-sm leading-6 text-fg-muted">{body}</p>
             : <div className="mt-3">{body}</div>
         ) : null}
         <div className="mt-5 flex items-center justify-end gap-2">
-          <button type="button" className="btn-secondary h-9 min-h-0 px-4 text-sm" onClick={onCancel}>
-            {cancelLabel}
-          </button>
+          {hideCancel ? null : (
+            <button type="button" className="btn-secondary h-9 min-h-0 px-4 text-sm" onClick={onCancel}>
+              {cancelLabel}
+            </button>
+          )}
           {alt ? (
             <button
               type="button"

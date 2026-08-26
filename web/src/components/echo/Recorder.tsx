@@ -383,25 +383,40 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
     const msPerSample = s.wave.length > 0 && span > 0 ? span / s.wave.length : 0;
     const visibleStartMs = s.recordedMs - shown.length * msPerSample;
     const windowSpan = s.recordedMs - visibleStartMs;
-    /* the glow follows the LIVE level, in three steps rather than
+    /* the glow follows the LIVE level in three steps rather than
        continuously: a filter that changes every frame re-rasterises the
-       band, and nobody can see more than three steps of a halo anyway */
+       whole scope, and nobody can see more than three steps of a halo */
     const glow = phase !== "recording" || s.level < 0.08 ? "0" : s.level < 0.35 ? "1" : "2";
+    const values = Array.from({ length: SLOTS }, (_, i) =>
+      Math.max(0.02, i < pad ? 0 : shown[i - pad]!));
+    const lane = (kind: "up" | "down") => (
+      <div className={`wave-lane wave-lane-${kind}`}>
+        {values.map((v, i) => (
+          <span
+            key={i}
+            className="wave-bar"
+            style={{ "--v": v, "--age": (i / SLOTS).toFixed(3) } as React.CSSProperties}
+          />
+        ))}
+      </div>
+    );
+    /*
+     * THE RAIL is the whole take, not the window: 0:00 at the left, now at
+     * the right, and the bright band marks the slice the wave above is
+     * showing. As the take grows that marker narrows and slides right —
+     * which is the "timer passing under it", and it is a real reading
+     * rather than a decorative sweep. Before anything is recorded there is
+     * nothing to mark, so the rail stays neutral.
+     */
+    const takeMs = Math.max(s.recordedMs, 1);
+    const windowLeftPct = takeMs > 0 ? Math.max(0, (visibleStartMs / takeMs) * 100) : 0;
     return (
       <div className="mt-3" dir="ltr" aria-hidden>
-        <div className="wave-band h-28" data-glow={glow}>
+        <div className="wave-scope h-28" data-glow={glow}>
           {s.wave.length === 0 ? <span className="wave-idle" /> : null}
-          {Array.from({ length: SLOTS }, (_, i) => (
-            <span
-              key={i}
-              className="wave-bar"
-              style={{
-                /* the 0.02 floor IS the hairline — see globals.css */
-                "--v": Math.max(0.02, i < pad ? 0 : shown[i - pad]!),
-                "--age": (i / SLOTS).toFixed(3),
-              } as React.CSSProperties}
-            />
-          ))}
+          {lane("up")}
+          {lane("down")}
+          <span className="wave-grain" />
           {msPerSample > 0
             ? s.chapterMarks.map((ms, i) => {
                 const denom = s.recordedMs - visibleStartMs;
@@ -411,24 +426,38 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
                 return (
                   <span
                     key={`c-${i}`}
-                    className="absolute bottom-1 top-1 w-0.5 rounded bg-warning"
+                    className="absolute bottom-3 top-3 z-[4] w-0.5 rounded bg-warning"
                     style={{ left: `${frac * 100}%` }}
                   />
                 );
               })
             : null}
-          {/* NOW — the newest bar's edge (the reference's playhead) */}
+          {/* NOW — the newest bar's edge, fading at both ends so it does
+              not punch through the letterbox */}
           {s.wave.length > 0 ? (
-            <span className="absolute bottom-0 right-0 top-0 w-0.5 rounded bg-accent">
-              <span className="absolute -top-1 right-1/2 h-2.5 w-2.5 translate-x-1/2 rounded-full bg-accent" />
+            <span
+              className="absolute bottom-1 right-0 top-1 z-[4] w-px"
+              style={{
+                background: "linear-gradient(180deg, transparent, rgb(var(--fg)) 14%, rgb(var(--fg)) 86%, transparent)",
+              }}
+            >
+              <span className="absolute -top-0.5 right-1/2 h-2 w-2 translate-x-1/2 rounded-full bg-fg shadow-[0_0_10px_2px_rgb(var(--accent)/0.8)]" />
             </span>
           ) : null}
         </div>
-        {/* the ruler: the rolling window's own clock, start → now — held
-            back until the window spans 5s (below that every label reads
-            the same second, a ruler that measures nothing) */}
+        <div className="wave-rail">
+          {s.recordedMs > 0 ? (
+            <>
+              <span
+                className="wave-rail-past"
+                style={{ clipPath: `inset(0 0 0 ${windowLeftPct}%)` }}
+              />
+              <span className="wave-rail-fill" style={{ width: "100%" }} />
+            </>
+          ) : null}
+        </div>
         {windowSpan >= 5_000 ? (
-          <div className="mt-1.5 flex select-none justify-between text-[10px] leading-none tabular-nums text-fg-subtle">
+          <div className="mt-1 flex select-none justify-between text-[10px] leading-none tabular-nums text-fg-subtle">
             {Array.from({ length: 5 }, (_, i) => {
               const ms = visibleStartMs + (windowSpan * i) / 4;
               return <span key={i}>{formatClock(Math.floor(ms / 1000), locale)}</span>;
@@ -463,6 +492,7 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
           cancelLabel={t("stopKeep")}
           confirmLabel={t("stopSave")}
           danger={false}
+          hideCancel
           alt={{
             label: t("stopDelete"),
             danger: true,

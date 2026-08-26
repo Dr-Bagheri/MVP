@@ -428,6 +428,15 @@ export interface Person {
   voice_samples?: number | null;
   /** db/0096: free-text team/department. ABSENT pre-migration; null = none. */
   team?: string | null;
+  /** the linked member's NAME, resolved server-side — the id alone is not
+   *  renderable, and an ordinary member cannot resolve it (the members
+   *  list is admin-only). null = linked to nobody, or the name is not
+   *  visible to this caller. */
+  linked_member_name?: string | null;
+  /** the member whose name FOLDS to this person's, when exactly one does
+   *  (2026-08-26). A suggestion an admin confirms — never applied. */
+  suggested_app_user_id?: string | null;
+  suggested_member_name?: string | null;
 }
 
 export interface Speaker {

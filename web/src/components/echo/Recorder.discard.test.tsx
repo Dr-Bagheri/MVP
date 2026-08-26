@@ -77,13 +77,26 @@ describe("the stop dialog", () => {
     expect(screen.getByText("stopDelete")).toBeInTheDocument();
   });
 
-  it("'keep recording' is a dismissal — neither answer runs", () => {
+  it("dismissing runs NEITHER answer — and the way out is visible", () => {
+    /* the cancel BUTTON left (2026-08-26: three fat buttons stopped
+       looking like the theme's box), so the corner ✕ is the visible exit
+       and it must still be a pure dismissal — a destructive dialog whose
+       only exit is a guess is how a mis-press becomes a decision */
     render(<Recorder />);
     fireEvent.click(stopButton());
-    fireEvent.click(screen.getByText("stopKeep"));
+    fireEvent.click(screen.getByRole("button", { name: "stopKeep" }));
     expect(discardRecording).not.toHaveBeenCalled();
     expect(finish).not.toHaveBeenCalled();
     expect(screen.queryByText("stopSave")).toBeNull();
+  });
+
+  it("the action row holds exactly the two answers", () => {
+    // the shape the directive asked for: no third button in the row
+    render(<Recorder />);
+    fireEvent.click(stopButton());
+    const dialog = screen.getByRole("alertdialog");
+    const actions = dialog.querySelectorAll("div:last-of-type > button");
+    expect([...actions].map((b) => b.textContent)).toEqual(["stopDelete", "stopSave"]);
   });
 
   it("DELETE discards exactly once, and does not finish", () => {

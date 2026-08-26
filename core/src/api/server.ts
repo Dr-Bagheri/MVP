@@ -1413,13 +1413,21 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     const identity = await auth.requireAdmin(request);
     const { id } = request.params as { id: string };
     const body = (request.body ?? {}) as {
-      display_name?: unknown; title?: unknown; team?: unknown;
+      display_name?: unknown; title?: unknown; team?: unknown; app_user_id?: unknown;
     };
+    /* 0005's column gains its first writer (2026-08-26). null CLEARS the
+       link and a uuid sets it; anything else is left alone — the same
+       supplied-flag contract the rest of this api uses, so "not a member
+       after all" is expressible and a typo is not silently a clear. */
+    const appUserId = body.app_user_id === null
+      ? null
+      : typeof body.app_user_id === "string" ? body.app_user_id : undefined;
     return reply.send(await directory.update(identity, id, {
       displayName: typeof body.display_name === "string" ? body.display_name : undefined,
       title: typeof body.title === "string" ? body.title : undefined,
       // 0096: "" clears the team; absent leaves it alone
       team: typeof body.team === "string" ? body.team : undefined,
+      appUserId,
     }));
   });
 

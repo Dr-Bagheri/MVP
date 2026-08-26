@@ -114,3 +114,78 @@ describe("remove — db/0076's named door, mapped honestly", () => {
       .rejects.toThrow(/no such person/);
   });
 });
+
+/**
+ * The ACCOUNT LINK (db/0005's column, written for the first time on
+ * 2026-08-26). The column, its FK and its RLS have existed since the first
+ * speaker migration; what never existed was a writer, so these assertions
+ * are about the three states a writer must keep apart — set, cleared, and
+ * left alone — and about the two refusals a person can act on.
+ */
+describe("identify a person as a platform member", () => {
+  const PERSON = "31111111-2222-4333-8444-555555555555";
+  const MEMBER = "41111111-2222-4333-8444-555555555555";
+  const ROW = { id: PERSON, display_name: "Ali", title: "", app_user_id: MEMBER };
+
+  it("an absent app_user_id does not touch the column", async () => {
+    /* the omit half of the contract: renaming somebody must not silently
+       unlink them, which a coalesce-shaped update would do the moment the
+       caller sent only a name */
+    const { db, log } = fakeDb(() => [{ ...ROW, app_user_id: null }]);
+    await createDirectoryRepo(db).update(WHO, PERSON, { displayName: "Ali" });
+    /* matched as an ASSIGNMENT, not as a name: `returning` lists the
+       column on every update, so a bare substring check would pass on a
+       statement that sets it and fail on one that does not — the name
+       matching itself, which this codebase has been bitten by before */
+    expect(log[0]!.sql).not.toContain("app_user_id = $");
+  });
+
+  it("a uuid SETS the link", async () => {
+    const { db, log } = fakeDb(() => [ROW]);
+    const person = await createDirectoryRepo(db).update(WHO, PERSON, { appUserId: MEMBER });
+    expect(log[0]!.sql).toContain("app_user_id = $");
+    expect(log[0]!.params).toContain(MEMBER);
+    expect(person.app_user_id).toBe(MEMBER);
+  });
+
+  it("null CLEARS it — 'not a member after all' is an answer", async () => {
+    // the discriminating third state: if null were treated as "absent",
+    // the one interaction that removes a wrong link would do nothing
+    const { db, log } = fakeDb(() => [{ ...ROW, app_user_id: null }]);
+    await createDirectoryRepo(db).update(WHO, PERSON, { appUserId: null });
+    expect(log[0]!.sql).toContain("app_user_id = $");
+    expect(log[0]!.params).toContain(null);
+  });
+
+  it("refuses a non-uuid before it reaches the database", async () => {
+    const { db } = fakeDb(() => [ROW]);
+    await expect(createDirectoryRepo(db).update(WHO, PERSON, { appUserId: "me" }))
+      .rejects.toThrow();
+  });
+
+  it("23505 (db/0100's index) becomes a nameable conflict, not a 500", async () => {
+    const { db } = fakeDb(() => { throw Object.assign(new Error("dup"), { code: "23505" }); });
+    await expect(createDirectoryRepo(db).update(WHO, PERSON, { appUserId: MEMBER }))
+      .rejects.toMatchObject({ message: "account_already_linked" });
+  });
+
+  it("23503 (the composite FK) says the account is not in this org", async () => {
+    // the two refusals mean different things to the admin standing there:
+    // "somebody else is that account" and "that account is not ours"
+    const { db } = fakeDb(() => { throw Object.assign(new Error("fk"), { code: "23503" }); });
+    await expect(createDirectoryRepo(db).update(WHO, PERSON, { appUserId: MEMBER }))
+      .rejects.toMatchObject({ code: "not_a_member" });
+  });
+
+  it("the list asks for the linked NAME and a single-match suggestion", async () => {
+    /* the id alone is not renderable and the members list is admin-only,
+       so the name is resolved server-side; the suggestion is guarded by
+       count(*) = 1 because two candidates is a question, not a hint */
+    const { db, log } = fakeDb(() => []);
+    await createDirectoryRepo(db).list(WHO);
+    const sql = log[log.length - 1]!.sql;
+    expect(sql).toContain("left join echo.app_user lu on lu.id = p.app_user_id");
+    expect(sql).toContain("case when count(*) = 1");
+    expect(sql).toContain("echo.fa_fold(u2.display_name) = echo.fa_fold(p.display_name)");
+  });
+});
