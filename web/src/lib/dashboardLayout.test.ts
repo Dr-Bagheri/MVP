@@ -1,59 +1,80 @@
 import { describe, expect, it } from "vitest";
 import {
-  DEFAULT_LAYOUT, DEFAULT_SIZE, SIZE_SPAN, TILE_SIZES, WIDGETS, WIDGET_SIZES,
-  moveWidget, sizeOf, type DashboardLayout, type WidgetKey,
+  COLUMNS, SIZE_SPAN, TILE_SIZES, WIDGET_SPECS,
+  clampSize, defaultLayout, defaultSizeFor, nextFreeSpot, sizeFromSpan, specFor,
+  type TilePlacement,
 } from "./dashboardLayout";
 import { rowsFor } from "@/components/platform/dashboard/widgets";
 
-const layout = (sizes: DashboardLayout["sizes"]): DashboardLayout => ({
-  ...DEFAULT_LAYOUT, sizes,
-});
+/**
+ * The registry is the dashboard's structure, so most of what matters is a
+ * claim about the CATALOGUE rather than about any one widget: that every
+ * entry is internally consistent, and that a stored board can never make
+ * the renderer render something impossible.
+ */
 
-describe("the four tile sizes", () => {
-  it("gives every widget at least one size it can be", () => {
-    for (const key of WIDGETS) {
-      expect(WIDGET_SIZES[key].length, key).toBeGreaterThan(0);
+describe("the widget catalogue", () => {
+  it("gives every widget at least one size it is designed at", () => {
+    for (const spec of WIDGET_SPECS) {
+      expect(spec.sizes.length, spec.key).toBeGreaterThan(0);
     }
   });
 
   it("never defaults a widget to a size it does not support", () => {
     // the default and the allow-list are two lists that must agree; a
-    // default outside its own allow-list is the shape that renders a tile
-    // at a tier it was never designed for
-    for (const key of WIDGETS) {
-      expect(WIDGET_SIZES[key], key).toContain(DEFAULT_SIZE[key]);
+    // default outside its own list renders a tile at a tier nobody designed
+    for (const spec of WIDGET_SPECS) {
+      expect(spec.sizes, spec.key).toContain(spec.defaultSize);
     }
   });
 
-  it("clamps a stored size the widget no longer supports", () => {
-    // `topics` supports small and large; a layout saved when it also
-    // supported hero must not resurrect as a hero-sized topics card
-    const key: WidgetKey = "topics";
-    expect(WIDGET_SIZES[key]).not.toContain("hero");
-    expect(sizeOf(layout({ [key]: "hero" }), key)).toBe(DEFAULT_SIZE[key]);
+  it("has no duplicate keys", () => {
+    const keys = WIDGET_SPECS.map((s) => s.key);
+    expect(new Set(keys).size).toBe(keys.length);
   });
 
-  it("honours a stored size the widget DOES support", () => {
-    expect(sizeOf(layout({ topics: "large" }), "topics")).toBe("large");
+  it("answers with undefined for a key it does not know", () => {
+    // a stored layout naming a retired widget must resolve to "nothing to
+    // render", never to a crash
+    expect(specFor("a-widget-that-was-deleted")).toBeUndefined();
+  });
+});
+
+describe("sizes", () => {
+  it("clamps a size the widget no longer supports", () => {
+    // `topics` is designed small and large; a board saved when it also had
+    // a hero tier must not resurrect as a hero-sized topics card
+    expect(specFor("topics")!.sizes).not.toContain("hero");
+    expect(clampSize("topics", "hero")).toBe(defaultSizeFor("topics"));
   });
 
-  it("answers with the default when nothing is stored", () => {
-    expect(sizeOf(layout({}), "pulse")).toBe(DEFAULT_SIZE.pulse);
+  it("honours a size the widget DOES support", () => {
+    expect(clampSize("topics", "large")).toBe("large");
   });
 
-  it("keeps every tier inside the six-column grid", () => {
+  it("keeps every tier inside the grid", () => {
     for (const size of TILE_SIZES) {
-      expect(SIZE_SPAN[size].cols).toBeGreaterThan(0);
-      expect(SIZE_SPAN[size].cols).toBeLessThanOrEqual(6);
+      expect(SIZE_SPAN[size].w).toBeGreaterThan(0);
+      expect(SIZE_SPAN[size].w).toBeLessThanOrEqual(COLUMNS);
     }
+  });
+
+  it("snaps a dragged span back to the nearest tier", () => {
+    // the resize handle is continuous; the sizes are not. Every exact span
+    // must round-trip, and an in-between drag must land on a real tier.
+    for (const size of TILE_SIZES) {
+      const span = SIZE_SPAN[size];
+      expect(sizeFromSpan(span.w, span.h), size).toBe(size);
+    }
+    expect(TILE_SIZES).toContain(sizeFromSpan(5, 3));
+    expect(TILE_SIZES).toContain(sizeFromSpan(11, 1));
   });
 
   it("is ADDITIVE: a bigger tier never shows FEWER rows", () => {
     /**
-     * The whole law of the four sizes in one assertion — Apple's rule and
-     * Android's Weather ladder both say a larger tile adds information. A
-     * ladder that dipped anywhere would mean growing a tile could hide a
-     * row, which is the one thing resizing must never do.
+     * The whole law of the four sizes in one assertion. A ladder that
+     * dipped anywhere would mean growing a tile could hide a row, which is
+     * the one thing resizing must never do.
      */
     const ladder = TILE_SIZES.map(rowsFor);
     for (let i = 1; i < ladder.length; i += 1) {
@@ -62,15 +83,48 @@ describe("the four tile sizes", () => {
   });
 });
 
-describe("moving a tile", () => {
-  it("moves one widget without disturbing the others' order", () => {
-    const order: WidgetKey[] = ["tiles", "pulse", "recent", "people"];
-    expect(moveWidget(order, "people", 1)).toEqual(["tiles", "people", "pulse", "recent"]);
+describe("the default board", () => {
+  it("places every default widget inside the grid, without overlaps", () => {
+    const { tiles } = defaultLayout();
+    expect(tiles.length).toBeGreaterThan(0);
+    const cells = new Set<string>();
+    for (const tile of tiles) {
+      const span = SIZE_SPAN[tile.size];
+      expect(tile.x + span.w, tile.key).toBeLessThanOrEqual(COLUMNS);
+      for (let x = tile.x; x < tile.x + span.w; x += 1) {
+        for (let y = tile.y; y < tile.y + span.h; y += 1) {
+          const cell = `${x}:${y}`;
+          expect(cells.has(cell), `${tile.key} overlaps at ${cell}`).toBe(false);
+          cells.add(cell);
+        }
+      }
+    }
+  });
+});
+
+describe("adding a card", () => {
+  it("puts it BELOW everything already placed", () => {
+    // never on top of an existing tile: the engine would then shove a card
+    // the person had positioned on purpose
+    const tiles: TilePlacement[] = [
+      { key: "tiles", x: 0, y: 0, size: "hero" },
+      { key: "pulse", x: 0, y: SIZE_SPAN.hero.h, size: "large" },
+    ];
+    /*
+     * DERIVED, not written down. The first version of this asserted a
+     * literal 8, which was a fact about the span table wearing the costume
+     * of a fact about the rule — it broke the moment a tier's height
+     * changed, while the rule it was meant to protect had not moved.
+     */
+    const bottom = Math.max(...tiles.map((t) => t.y + SIZE_SPAN[t.size].h));
+    expect(nextFreeSpot(tiles)).toEqual({ x: 0, y: bottom });
+    /* and the property itself: strictly below every placed tile */
+    for (const tile of tiles) {
+      expect(nextFreeSpot(tiles).y).toBeGreaterThanOrEqual(tile.y + SIZE_SPAN[tile.size].h);
+    }
   });
 
-  it("clamps past either end instead of dropping the widget", () => {
-    const order: WidgetKey[] = ["tiles", "pulse", "recent"];
-    expect(moveWidget(order, "tiles", -99)).toEqual(order);
-    expect(moveWidget(order, "tiles", 99)).toEqual(["pulse", "recent", "tiles"]);
+  it("starts at the origin on an empty board", () => {
+    expect(nextFreeSpot([])).toEqual({ x: 0, y: 0 });
   });
 });

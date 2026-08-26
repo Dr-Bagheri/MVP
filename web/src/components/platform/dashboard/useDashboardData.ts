@@ -66,6 +66,13 @@ export interface DashboardData {
   topics: { tag: string; now: number; before: number }[];
   /** ABSENT tags column (pre-0086 deployment) = the widget says so */
   tagsAvailable: boolean;
+  /**
+   * The read failed. Distinct from `calls === null` (not fetched yet) and
+   * from `calls.length === 0` (fetched, and the org genuinely has none) —
+   * three states a dashboard must not collapse into one, because two of
+   * them are "we don't know" and only the third is a fact about the org.
+   */
+  failed: boolean;
 }
 
 export function useDashboardData(): DashboardData {
@@ -76,12 +83,26 @@ export function useDashboardData(): DashboardData {
   const [decisions, setDecisions] = useState<LaneItem[]>([]);
   const [laneDepth, setLaneDepth] = useState(0);
   const [appearances, setAppearances] = useState<{ person: Person; records: number }[]>([]);
+  /** the read did not land — a different nothing from "nothing is there" */
+  const [failed, setFailed] = useState(false);
   const callsEpoch = useRefreshEpoch("calls");
 
   useEffect(() => {
     void api.listCalls({ includeArchived: false })
-      .then((rows) => setCalls(rows.filter((c) => c.deleted_at === null)))
-      .catch(() => setCalls([]));
+      .then((rows) => {
+        setCalls(rows.filter((c) => c.deleted_at === null));
+        setFailed(false);
+      })
+      /*
+       * A FAILED read is not an empty organisation.
+       *
+       * This used to `setCalls([])` on any error, which made every tile
+       * report a confident zero — "0 records this week", "no decisions" —
+       * for an org that might have hundreds, because one request 401'd.
+       * `calls` stays null (the not-fetched state the widgets already
+       * render as a dash) and `failed` says WHICH nothing it is.
+       */
+      .catch(() => setFailed(true));
     void api.directory().then(setDirectory).catch(() => setDirectory([]));
   }, [callsEpoch]);
 
@@ -166,6 +187,6 @@ export function useDashboardData(): DashboardData {
 
   return {
     calls, directory, records, actions, decisions, laneDepth, appearances,
-    topics, tagsAvailable,
+    topics, tagsAvailable, failed,
   };
 }

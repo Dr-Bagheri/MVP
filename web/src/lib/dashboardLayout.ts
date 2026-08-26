@@ -1,166 +1,163 @@
 "use client";
 
+import { DEFAULT_WIDGETS, WIDGETS, specFor, type WidgetKey } from "@/lib/widgetRegistry";
+
+export type { WidgetKey } from "@/lib/widgetRegistry";
+export {
+  WIDGETS, DEFAULT_WIDGETS, specFor, WIDGET_SPECS, WIDGET_GROUPS, TILE_LOOKS,
+} from "@/lib/widgetRegistry";
+
 /**
- * The dashboard's LAYOUT — which widgets, in what order, at what SIZE, and
- * how dense (user directives, 2026-08-25 and 2026-08-26: "a full grid and
- * changeable place … so you can move each section and add or remove them",
- * then "make it four sizes for each, it must be like a screen of an android,
- * easy to use and user friendly").
+ * The dashboard's LAYOUT — where each card sits, how big it is, and how
+ * dense the board is.
  *
- * FOUR SIZES, NOT FREE RESIZE. Every platform that ships home-screen widgets
- * lands on a small closed set — Windows 11 ships three (small/medium/large),
- * Apple's system family is four, and Android's Play quality bar names 2x2,
- * 4x1 and 4x2 as the target set. A closed set is what lets a widget be
- * DESIGNED at each size instead of stretched to fit, and it is what makes a
- * menu the right control: four named choices, not a handle that implies
- * continuous resize and then snaps.
+ * FOUR SIZES, NOT FREE RESIZE. Every platform that ships home-screen
+ * widgets lands on a small closed set — Windows 11 ships three, Apple's
+ * system family is four, Android's quality bar names 2x2/4x1/4x2 as the
+ * target set. A closed set is what lets a widget be DESIGNED at each size
+ * instead of stretched to fit. The law that comes with it: a bigger tile
+ * shows MORE INFORMATION, never the same content scaled up.
  *
- * The law that comes with it, in Apple's words and Android's Weather
- * example alike: a bigger tile shows MORE INFORMATION, never the same
- * content scaled up. Each step is additive — the subject stays put and the
- * range around it grows. Widgets receive their size as a PROP and branch on
- * it; none of them measures itself, which is the difference between fixed
- * tiers and free-form responsive.
+ * PLACEMENT IS FREE. Unlike the earlier ordered-list model, a card carries
+ * an x/y. A home screen does not gravity-compact — an icon left at the
+ * bottom stays at the bottom — and that is only expressible with real
+ * coordinates. The grid engine owns collision and reflow; this file owns
+ * the shape that gets stored and the rules about what a stored shape may
+ * say.
  *
  * INTERIM store: localStorage, per browser, marked as such. A layout is a
  * per-person convenience, not a record — losing it costs a drag, not data.
  * The named upgrade is `app_user.dashboard_layout` (the preferences slot
- * that already carries calendar/timezone), at which point this file's
- * read/write swaps for the wire and the shape below stays.
+ * that already carries calendar/timezone), at which point `readLayout` and
+ * `writeLayout` swap for the wire and everything below stays.
  */
 
-/** every widget the dashboard can render — the catalogue IS the vocabulary */
-export const WIDGETS = [
-  "tiles",
-  "briefing",
-  "ask",
-  "pulse",
-  "commitments",
-  "decisions",
-  "topics",
-  "people",
-  "pipeline",
-  "recent",
-  "watchlist",
-  "ledger",
-  "next",
-] as const;
-export type WidgetKey = (typeof WIDGETS)[number];
-
 /**
- * The four tiers, on a 6-column grid. Named for what they look like rather
- * than for their span, because the name is what the size menu shows.
+ * The four tiers, on a 12-column grid. Named for what they look like
+ * rather than for their span, because the name is what the size menu shows.
+ * Twelve columns rather than six so a `small` tile is a genuine quarter and
+ * the engine can pack without half-column rounding.
  */
 export const TILE_SIZES = ["small", "wide", "large", "hero"] as const;
 export type TileSize = (typeof TILE_SIZES)[number];
 
+export const COLUMNS = 12;
+
 /** columns × rows for each tier; one row is one grid track */
-export const SIZE_SPAN: Record<TileSize, { cols: number; rows: number }> = {
-  small: { cols: 2, rows: 1 },
-  wide: { cols: 4, rows: 1 },
-  large: { cols: 3, rows: 2 },
-  hero: { cols: 6, rows: 2 },
+export const SIZE_SPAN: Record<TileSize, { w: number; h: number }> = {
+  small: { w: 3, h: 2 },
+  wide: { w: 6, h: 2 },
+  large: { w: 6, h: 3 },
+  hero: { w: 12, h: 3 },
 };
 
-/**
- * Which sizes each widget actually SUPPORTS.
- *
- * Not every widget earns every tier: Apple's rule is that a sparse layout
- * makes a widget seem unnecessary, and Android's quality bar (WL-4.1) says
- * outright that a maximum size must be set when growing only adds blank
- * space. So a tile that has nothing more to say at `hero` does not offer
- * `hero`, and the menu greys it out rather than hiding it — a person
- * learns the widget's range by seeing where it stops.
- */
-export const WIDGET_SIZES: Record<WidgetKey, readonly TileSize[]> = {
-  tiles: ["wide", "hero"],
-  briefing: ["large", "hero"],
-  ask: ["wide", "hero"],
-  pulse: ["wide", "large", "hero"],
-  commitments: ["small", "large", "hero"],
-  decisions: ["small", "large", "hero"],
-  topics: ["small", "large"],
-  people: ["small", "large"],
-  pipeline: ["small", "wide"],
-  recent: ["small", "large", "hero"],
-  watchlist: ["small", "large", "hero"],
-  ledger: ["large", "hero"],
-  next: ["small", "large"],
-};
-
-/** the size a widget takes when it is first added, or when its stored size
-    is no longer one it supports */
-export const DEFAULT_SIZE: Record<WidgetKey, TileSize> = {
-  tiles: "hero",
-  briefing: "large",
-  ask: "wide",
-  pulse: "large",
-  commitments: "large",
-  decisions: "large",
-  topics: "small",
-  people: "small",
-  pipeline: "small",
-  recent: "large",
-  watchlist: "small",
-  ledger: "large",
-  next: "small",
-};
+/** the tier a given w/h is closest to — how a drag-resize snaps back */
+export function sizeFromSpan(w: number, h: number): TileSize {
+  let best: TileSize = "small";
+  let bestCost = Infinity;
+  for (const size of TILE_SIZES) {
+    const span = SIZE_SPAN[size];
+    /* height counts for more: two tiers can share a width, and picking the
+       wrong height is the change a person actually notices */
+    const cost = Math.abs(span.w - w) + Math.abs(span.h - h) * 1.5;
+    if (cost < bestCost) {
+      bestCost = cost;
+      best = size;
+    }
+  }
+  return best;
+}
 
 export type Density = "comfortable" | "compact";
 
+/** one card's placement — the unit the engine and the store both speak */
+export interface TilePlacement {
+  key: WidgetKey;
+  x: number;
+  y: number;
+  size: TileSize;
+}
+
 export interface DashboardLayout {
-  /** the ORDER is the array; membership is the on/off state */
-  widgets: WidgetKey[];
-  /** per-widget tier; a missing entry means DEFAULT_SIZE */
-  sizes: Partial<Record<WidgetKey, TileSize>>;
+  tiles: TilePlacement[];
   density: Density;
 }
 
-const KEY = "neurai-dashboard-layout";
+const KEY = "neurai-dashboard-layout-v2";
 
-export const DEFAULT_LAYOUT: DashboardLayout = {
-  widgets: [
-    "tiles", "briefing", "pulse", "commitments", "decisions",
-    "recent", "next", "pipeline", "ask",
-  ],
-  sizes: {},
-  density: "comfortable",
-};
+/** the tier a widget takes when added, clamped to what it supports */
+export function defaultSizeFor(key: WidgetKey): TileSize {
+  const spec = specFor(key);
+  if (!spec) return "small";
+  return spec.sizes.includes(spec.defaultSize) ? spec.defaultSize : spec.sizes[0]!;
+}
 
-/** the tier a widget is at right now, clamped to what it supports */
-export function sizeOf(layout: DashboardLayout, key: WidgetKey): TileSize {
-  const stored = layout.sizes[key];
-  const allowed = WIDGET_SIZES[key];
-  if (stored && allowed.includes(stored)) return stored;
-  const fallback = DEFAULT_SIZE[key];
-  return allowed.includes(fallback) ? fallback : allowed[0]!;
+/** clamp a size to what this widget is designed at */
+export function clampSize(key: WidgetKey, size: TileSize): TileSize {
+  const spec = specFor(key);
+  if (!spec) return size;
+  return spec.sizes.includes(size) ? size : defaultSizeFor(key);
+}
+
+/**
+ * The starting board: the registry's default widgets, packed left to right
+ * at their default sizes. Computed rather than hand-written, so changing a
+ * widget's default size cannot leave a stale coordinate behind.
+ */
+export function defaultLayout(): DashboardLayout {
+  const tiles: TilePlacement[] = [];
+  let x = 0;
+  let y = 0;
+  let rowHeight = 0;
+  for (const key of DEFAULT_WIDGETS) {
+    const size = defaultSizeFor(key);
+    const span = SIZE_SPAN[size];
+    if (x + span.w > COLUMNS) {
+      x = 0;
+      y += rowHeight;
+      rowHeight = 0;
+    }
+    tiles.push({ key, x, y, size });
+    x += span.w;
+    rowHeight = Math.max(rowHeight, span.h);
+  }
+  return { tiles, density: "comfortable" };
 }
 
 export function readLayout(): DashboardLayout {
   try {
     const raw = localStorage.getItem(KEY);
-    if (!raw) return DEFAULT_LAYOUT;
+    if (!raw) return defaultLayout();
     const parsed = JSON.parse(raw) as Partial<DashboardLayout>;
-    const widgets = Array.isArray(parsed.widgets)
-      // a widget removed from the catalogue must not resurrect as a crash
-      ? parsed.widgets.filter((w): w is WidgetKey => (WIDGETS as readonly string[]).includes(w))
-      : DEFAULT_LAYOUT.widgets;
-    /* a stored size for a retired widget, or a tier the widget no longer
-       supports, is dropped rather than trusted — `sizeOf` then answers
-       from the catalogue, which is the only thing that knows the truth */
-    const sizes: Partial<Record<WidgetKey, TileSize>> = {};
-    for (const [key, value] of Object.entries(parsed.sizes ?? {})) {
-      if (!(WIDGETS as readonly string[]).includes(key)) continue;
-      if (!(TILE_SIZES as readonly string[]).includes(value as string)) continue;
-      sizes[key as WidgetKey] = value as TileSize;
+    if (!Array.isArray(parsed.tiles)) return defaultLayout();
+    const density: Density = parsed.density === "compact" ? "compact" : "comfortable";
+    const seen = new Set<string>();
+    const tiles: TilePlacement[] = [];
+    for (const tile of parsed.tiles) {
+      /* a widget the catalogue has retired, a duplicate, or a tier this
+         widget no longer supports — all dropped rather than trusted. The
+         registry is the only thing that knows what is real. */
+      if (!tile || typeof tile.key !== "string") continue;
+      if (!(WIDGETS as string[]).includes(tile.key)) continue;
+      if (seen.has(tile.key)) continue;
+      seen.add(tile.key);
+      const key = tile.key as WidgetKey;
+      const size = (TILE_SIZES as readonly string[]).includes(tile.size as string)
+        ? clampSize(key, tile.size as TileSize)
+        : defaultSizeFor(key);
+      tiles.push({
+        key,
+        x: Math.max(0, Math.min(COLUMNS - 1, Number(tile.x) || 0)),
+        y: Math.max(0, Number(tile.y) || 0),
+        size,
+      });
     }
-    return {
-      widgets,
-      sizes,
-      density: parsed.density === "compact" ? "compact" : "comfortable",
-    };
+    /* an EMPTY board is a real state a person can reach by hiding every
+       card — it must survive a reload rather than being read as "no stored
+       layout" and refilled with the defaults */
+    return { tiles, density };
   } catch {
-    return DEFAULT_LAYOUT;
+    return defaultLayout();
   }
 }
 
@@ -168,9 +165,13 @@ export function writeLayout(next: DashboardLayout): void {
   try { localStorage.setItem(KEY, JSON.stringify(next)); } catch { /* fine */ }
 }
 
-/** move `key` to `index`, keeping every other widget's relative order */
-export function moveWidget(widgets: WidgetKey[], key: WidgetKey, index: number): WidgetKey[] {
-  const without = widgets.filter((w) => w !== key);
-  const at = Math.max(0, Math.min(index, without.length));
-  return [...without.slice(0, at), key, ...without.slice(at)];
+/**
+ * Where a newly added card goes: the first row below everything already
+ * placed, at the start of the line. Never on top of an existing tile — the
+ * engine would then push something the person had positioned deliberately.
+ */
+export function nextFreeSpot(tiles: TilePlacement[]): { x: number; y: number } {
+  if (tiles.length === 0) return { x: 0, y: 0 };
+  const bottom = Math.max(...tiles.map((tile) => tile.y + SIZE_SPAN[tile.size].h));
+  return { x: 0, y: bottom };
 }

@@ -137,7 +137,12 @@
     "collapse": "Collapse",
     "emptyBoard": "The board is empty — add a card to begin.",
     "sizeLabel": "Size",
-    "size": { "small": "Small", "wide": "Wide", "large": "Large", "hero": "Full width" },
+    "size": {
+      "small": "Small",
+      "wide": "Wide",
+      "large": "Large",
+      "hero": "Full width"
+    },
     "moveTile": "Move",
     "moveFirst": "Move to the start",
     "moveLast": "Move to the end",
@@ -164,7 +169,9 @@
       "recent": "Recent records",
       "watchlist": "Watchlist",
       "ledger": "Decision ledger",
-      "next": "Next meeting"
+      "next": "Next meeting",
+      "team": "Teams",
+      "agent": "Ask the assistant"
     },
     "tileRecordsWeek": "Records this week",
     "tileMinutes": "Minutes recorded",
@@ -192,7 +199,20 @@
     "pipelineNote": "{n} record(s) still moving or failed.",
     "recent": "Recent records",
     "seeAll": "See all",
-    "noRecords": "No records yet. Start a meeting from Echo and this fills in."
+    "noRecords": "No records yet. Start a meeting from Echo and this fills in.",
+    "teamEmpty": "No one has a team label yet — add them on the Speakers page.",
+    "agentAsk1": "What did I agree to this week?",
+    "agentAsk2": "Summarise my last three meetings",
+    "agentAsk3": "Who have I not met in a while?",
+    "moveStart": "Move to the start",
+    "moveEnd": "Move to the end",
+    "group": {
+      "overview": "Overview",
+      "work": "Your work",
+      "people": "People",
+      "ai": "Assistant"
+    },
+    "readFailed": "Could not read your records just now."
   },
   "conversations": {
     "title": "History",
@@ -335,7 +355,11 @@
     "deleteReasonHint": "Reason (recorded in the log)",
     "editFailed": "The change did not save.",
     "viewLabel": "Directory view",
-    "view": { "table": "Table", "cards": "Cards", "chart": "Chart" },
+    "view": {
+      "table": "Table",
+      "cards": "Cards",
+      "chart": "Chart"
+    },
     "allTeams": "All",
     "noTeam": "No team",
     "colTeam": "Team",

@@ -550,3 +550,239 @@
     background: #ffffff;
   }
 }
+
+/* ===========================================================================
+   THE DASHBOARD BOARD (2026-08-26 redesign)
+
+   The reference the user gave is a bright, tactile board: full-bleed
+   gradient cards, a big icon on each, soft depth, generous radii. Two
+   things had to be true at once — that look, and our own palette, which is
+   one violet on black with everything else neutral. The resolution is that
+   the GRADIENTS are all derived from the brand violet plus its two
+   neighbours on the wheel, so the board reads as colourful without
+   introducing a second brand colour.
+
+   Every value below composites over a token, never over a literal, so both
+   themes resolve as a set.
+   =========================================================================== */
+
+/* --- the tile shell -------------------------------------------------- */
+.tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  border-radius: 22px;
+  overflow: hidden;
+  isolation: isolate;
+  transition: transform .18s cubic-bezier(.2,.9,.3,1), box-shadow .18s ease;
+}
+.tile-plain,
+.tile-tinted {
+  background: rgb(var(--surface));
+  border: 1px solid rgb(var(--border));
+  color: rgb(var(--fg));
+}
+
+/* the three gradient families. Hue stays inside the brand's own
+   neighbourhood: violet, violet→magenta, violet→cyan. */
+.tile-feature {
+  background:
+    radial-gradient(120% 140% at 88% -10%, rgb(var(--accent) / .55) 0%, transparent 55%),
+    linear-gradient(135deg, #6C4BD6 0%, #8B5CF6 46%, #A78BFA 100%);
+  color: #ffffff;
+  border: 1px solid rgb(255 255 255 / .12);
+}
+.tile-warm {
+  background:
+    radial-gradient(120% 140% at 12% -10%, rgb(255 255 255 / .3) 0%, transparent 52%),
+    linear-gradient(135deg, #C0399F 0%, #E05A9B 48%, #F0728E 100%);
+  color: #ffffff;
+  border: 1px solid rgb(255 255 255 / .14);
+}
+.tile-cool {
+  background:
+    radial-gradient(120% 140% at 88% -10%, rgb(255 255 255 / .26) 0%, transparent 52%),
+    linear-gradient(135deg, #2E4BA8 0%, #4468D8 50%, #5B8DEF 100%);
+  color: #ffffff;
+  border: 1px solid rgb(255 255 255 / .14);
+}
+
+/* the light theme softens the gradients rather than inverting them — the
+   colour IS the identity, and a pastel version of it reads as the same
+   board in daylight instead of as a different product */
+:root[data-theme="light"] .tile-feature,
+:root[data-theme="light"] .tile-warm,
+:root[data-theme="light"] .tile-cool {
+  border-color: rgb(0 0 0 / .06);
+  box-shadow: 0 10px 24px -12px rgb(var(--accent) / .5);
+}
+
+/* a soft top highlight gives the gradients their curved, tactile feel —
+   the single thing that most separates the reference from a flat card */
+.tile-feature::before,
+.tile-warm::before,
+.tile-cool::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 45%;
+  background: linear-gradient(180deg, rgb(255 255 255 / .16), transparent);
+  pointer-events: none;
+  z-index: 0;
+}
+.tile > * { position: relative; z-index: 1; }
+
+/* --- an inner cell on a gradient tile --------------------------------
+   NOT `bg-white/12`: that utility computes to fully transparent in this
+   project (measured — the class was present, on the element, and the
+   computed background was rgba(0,0,0,0)). The artifact reads as satisfied
+   and only the computed value disagrees, which is why this is a real rule
+   rather than a utility class. */
+.tile-cell {
+  background: rgb(255 255 255 / .13);
+  border: 1px solid rgb(255 255 255 / .10);
+  border-radius: 16px;
+}
+:root[data-theme="light"] .tile-cell {
+  background: rgb(255 255 255 / .18);
+  border-color: rgb(255 255 255 / .22);
+}
+
+/* --- the icon chip --------------------------------------------------- */
+.tile-chip {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 13px;
+  flex-shrink: 0;
+}
+.tile-plain .tile-chip,
+.tile-tinted .tile-chip {
+  background: rgb(var(--accent) / .14);
+  color: rgb(var(--accent));
+}
+.tile-feature .tile-chip,
+.tile-warm .tile-chip,
+.tile-cool .tile-chip {
+  background: rgb(255 255 255 / .2);
+  color: #ffffff;
+  backdrop-filter: blur(6px);
+}
+
+/* --- ink on a gradient ----------------------------------------------- */
+.on-gradient { color: #ffffff; }
+.on-gradient .ink-muted { color: rgb(255 255 255 / .78); }
+.on-gradient .ink-subtle { color: rgb(255 255 255 / .6); }
+.ink-muted { color: rgb(var(--fg-muted)); }
+.ink-subtle { color: rgb(var(--fg-subtle)); }
+
+/* a pill on a gradient, for a value that needs to sit apart from the wash */
+.on-gradient .tile-pill {
+  background: rgb(255 255 255 / .18);
+  color: #ffffff;
+  border: 1px solid rgb(255 255 255 / .16);
+}
+.tile-pill {
+  background: rgb(var(--surface-2));
+  color: rgb(var(--fg-muted));
+  border: 1px solid rgb(var(--border));
+  border-radius: 999px;
+  padding: .15rem .55rem;
+  font-size: .7rem;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+/* --- the grip: where a tile is dragged from -------------------------- */
+.tile-grip { cursor: grab; }
+.tile-grip:active { cursor: grabbing; }
+
+/* --- gridstack -------------------------------------------------------
+   The engine ships a stylesheet for placement; everything cosmetic is
+   ours. Its item wrapper must not paint anything, or every tile gets a
+   second background behind its own. */
+.grid-stack { background: transparent; }
+.grid-stack-item-content {
+  inset: 0;
+  overflow: visible;
+  background: transparent;
+}
+/* the drop shadow of the tile being dragged, and the hole it leaves */
+.grid-stack > .grid-stack-item > .ui-resizable-handle { z-index: 3; }
+.grid-stack-item.ui-draggable-dragging .tile {
+  transform: scale(1.02);
+  box-shadow: 0 24px 48px -18px rgb(0 0 0 / .55);
+}
+.grid-stack > .grid-stack-placeholder > .placeholder-content {
+  border: 2px dashed rgb(var(--accent) / .5);
+  border-radius: 22px;
+  background: rgb(var(--accent) / .07);
+}
+/* the resize corner: visible on hover only, so a resting board is clean */
+.grid-stack-item > .ui-resizable-se,
+.grid-stack-item > .ui-resizable-sw {
+  opacity: 0;
+  transition: opacity .15s ease;
+  width: 18px;
+  height: 18px;
+}
+.grid-stack-item:hover > .ui-resizable-se,
+.grid-stack-item:hover > .ui-resizable-sw,
+.grid-stack-item:focus-within > .ui-resizable-se,
+.grid-stack-item:focus-within > .ui-resizable-sw {
+  opacity: .55;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tile,
+  .grid-stack-item.ui-draggable-dragging .tile { transition: none; transform: none; }
+}
+
+/* --- the app launcher row (the Echo button, at the top) --------------- */
+.launcher {
+  display: inline-flex;
+  align-items: center;
+  gap: .7rem;
+  padding: .55rem 1.15rem .55rem .6rem;
+  border-radius: 999px;
+  background:
+    radial-gradient(120% 200% at 0% 0%, rgb(var(--accent) / .5) 0%, transparent 60%),
+    linear-gradient(135deg, #6C4BD6 0%, #8B5CF6 100%);
+  color: #ffffff;
+  border: 1px solid rgb(255 255 255 / .14);
+  box-shadow: 0 8px 20px -10px rgb(var(--accent) / .8);
+  transition: transform .16s cubic-bezier(.2,.9,.3,1), box-shadow .16s ease;
+}
+.launcher:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 26px -10px rgb(var(--accent) / .95);
+}
+.launcher:focus-visible {
+  outline: 2px solid rgb(var(--accent));
+  outline-offset: 3px;
+}
+.launcher .launcher-mark {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / .22);
+}
+@media (prefers-reduced-motion: reduce) {
+  .launcher, .launcher:hover { transition: none; transform: none; }
+}
+
+/* --- a sparkline / bar row inside a gradient tile -------------------- */
+.spark-bar {
+  border-radius: 3px 3px 1px 1px;
+  background: rgb(255 255 255 / .45);
+}
+.on-gradient .spark-bar-hi { background: #ffffff; }
+.tile-plain .spark-bar,
+.tile-tinted .spark-bar { background: rgb(var(--accent) / .35); }
+.tile-plain .spark-bar-hi,
+.tile-tinted .spark-bar-hi { background: rgb(var(--accent)); }

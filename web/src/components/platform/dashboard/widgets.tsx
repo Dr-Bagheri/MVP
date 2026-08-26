@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { Call } from "@/api/types";
@@ -30,6 +30,21 @@ import type { DashboardData } from "./useDashboardData";
  * of them changes what it is about between tiers.
  */
 
+/**
+ * A read that did not land says SO. A dash means "we have not counted yet"
+ * and resolves on its own; a failure never will, so a tile that keeps
+ * showing the dash is a tile that lies by waiting.
+ */
+export function Unreadable({ children }: { children?: ReactNode }) {
+  const t = useTranslations("dashboard");
+  return (
+    <p className="ink-muted flex items-center gap-2 text-sm leading-7">
+      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-warning" aria-hidden />
+      {children ?? t("readFailed")}
+    </p>
+  );
+}
+
 /** how many list rows a tier has room for — the one place the ladder lives */
 export function rowsFor(size: TileSize): number {
   return { small: 3, wide: 3, large: 6, hero: 12 }[size];
@@ -48,6 +63,7 @@ export function TilesWidget({ data, size }: { data: DashboardData; size: TileSiz
   const minutes = Math.round(week.reduce((ms, c) => ms + (c.duration_ms ?? 0), 0) / 60_000);
   const processing = rows.filter((c) => c.status !== "ready" && c.status !== "failed").length;
   const value = (n: number) => (data.calls === null ? "—" : digits(n, locale));
+  if (data.failed) return <Unreadable />;
   const all: [string, number][] = [
     [t("tileRecordsWeek"), week.length],
     [t("tileMinutes"), minutes],
@@ -58,11 +74,16 @@ export function TilesWidget({ data, size }: { data: DashboardData; size: TileSiz
      numbers nobody reads. The tier drops tiles rather than shrinking them. */
   const tiles = size === "wide" ? all.slice(0, 2) : all;
   return (
-    <div className={`grid h-full gap-3 ${size === "wide" ? "grid-cols-2" : "grid-cols-2 xl:grid-cols-4"}`}>
+    <div className={`grid h-full gap-2.5 ${size === "wide" ? "grid-cols-2" : "grid-cols-2 xl:grid-cols-4"}`}>
       {tiles.map(([label, n]) => (
-        <div key={label} className="glass-tile flex flex-col justify-center rounded-xl p-3">
-          <p className="text-xs text-fg-muted">{label}</p>
-          <p className="mt-1 text-2xl font-bold text-fg">{value(n)}</p>
+        <div
+          key={label}
+          /* on a gradient tile the inner cells are frosted panes rather
+             than bordered boxes — a hairline over a wash reads as a seam */
+          className="tile-cell flex flex-col justify-center p-3"
+        >
+          <p className="ink-muted text-[11px] leading-snug">{label}</p>
+          <p className="mt-0.5 text-[1.7rem] font-bold leading-none tabular-nums">{value(n)}</p>
         </div>
       ))}
     </div>
@@ -125,8 +146,9 @@ export function BriefingWidget({ data, size }: { data: DashboardData; size: Tile
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once per mount
   }, [data.calls, text]);
 
+  if (data.failed) return <Unreadable />;
   if (data.calls !== null && data.calls.length === 0) {
-    return <p className="text-sm leading-7 text-fg-muted">{t("noRecords")}</p>;
+    return <p className="text-sm leading-7 ink-muted">{t("noRecords")}</p>;
   }
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -148,7 +170,7 @@ export function BriefingWidget({ data, size }: { data: DashboardData; size: Tile
       {failed ? <p className="mt-2 text-xs text-warning">{t("briefingFailed")}</p> : null}
       {/* WHY you are seeing this + how to reset it — the 2026 rule for any
           adaptive block, and the source line that makes it checkable */}
-      <p className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-fg-subtle">
+      <p className="mt-3 flex flex-wrap items-center gap-2 text-[11px] ink-subtle">
         <span>{t("briefingWhy", { n: digits(data.laneDepth, locale) })}</span>
         <button
           className="underline-offset-2 hover:text-fg hover:underline"
@@ -212,7 +234,7 @@ export function AskWidget({ size }: { size: TileSize }) {
           size === "hero" ? "max-h-56" : "max-h-24"
         }`}>
           <p dir="auto" className="whitespace-pre-wrap text-sm leading-7 text-fg">{answer}</p>
-          <p className="mt-2 flex items-center gap-2 text-[11px] text-fg-subtle">
+          <p className="mt-2 flex items-center gap-2 text-[11px] ink-subtle">
             <span>{t("askWhy")}</span>
             <button
               className="underline-offset-2 hover:text-fg hover:underline"
@@ -283,7 +305,7 @@ export function PulseWidget({ data, size }: { data: DashboardData; size: TileSiz
       {/* the legend is the tier's extra layer — at one row tall the bars
           have to speak for themselves */}
       {isShort(size) ? null : (
-        <p className="mt-2 flex items-center gap-3 text-[11px] text-fg-subtle">
+        <p className="mt-2 flex items-center gap-3 text-[11px] ink-subtle">
           <span className="flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-sm bg-accent/70" aria-hidden /> {t("pulseBars")}
           </span>
@@ -310,7 +332,7 @@ export function LaneWidget({
   const locale = useLocale();
   const shown = items.slice(0, rowsFor(size));
   if (items.length === 0) {
-    return <p className="text-sm leading-7 text-fg-muted">{empty}</p>;
+    return <p className="text-sm leading-7 ink-muted">{empty}</p>;
   }
   const List = numbered ? "ol" : "ul";
   return (
@@ -322,7 +344,7 @@ export function LaneWidget({
             <span dir="auto">{item.text}</span>
             <Link
               href={`/calls/${item.callId}`}
-              className="ms-2 text-[11px] text-fg-subtle underline-offset-2 hover:text-accent hover:underline"
+              className="ms-2 text-[11px] ink-subtle underline-offset-2 hover:text-accent hover:underline"
             >
               {item.callTitle || "—"}
             </Link>
@@ -330,7 +352,7 @@ export function LaneWidget({
         ))}
       </List>
       {isShort(size) ? null : (
-        <p className="mt-3 text-[11px] text-fg-subtle">
+        <p className="mt-3 text-[11px] ink-subtle">
           {t("laneDepth", { n: digits(depth, locale) })}
         </p>
       )}
@@ -342,10 +364,10 @@ export function TopicsWidget({ data, size }: { data: DashboardData; size: TileSi
   const t = useTranslations("dashboard");
   const locale = useLocale();
   if (!data.tagsAvailable) {
-    return <p className="text-sm leading-7 text-fg-muted">{t("topicsUnavailable")}</p>;
+    return <p className="text-sm leading-7 ink-muted">{t("topicsUnavailable")}</p>;
   }
   if (data.topics.length === 0) {
-    return <p className="text-sm leading-7 text-fg-muted">{t("topicsEmpty")}</p>;
+    return <p className="text-sm leading-7 ink-muted">{t("topicsEmpty")}</p>;
   }
   return (
     <ul className="h-full space-y-2 overflow-y-auto">
@@ -355,9 +377,9 @@ export function TopicsWidget({ data, size }: { data: DashboardData; size: TileSi
           <li key={topic.tag} className="flex items-center justify-between gap-2 text-sm">
             <span className="min-w-0 truncate text-fg">{topic.tag}</span>
             <span className="flex shrink-0 items-center gap-1.5 text-xs">
-              <span className="text-fg-muted">{digits(topic.now, locale)}</span>
+              <span className="ink-muted">{digits(topic.now, locale)}</span>
               {delta !== 0 ? (
-                <span className={delta > 0 ? "text-success" : "text-fg-subtle"}>
+                <span className={delta > 0 ? "text-success" : "ink-subtle"}>
                   {delta > 0 ? "▲" : "▼"}{digits(Math.abs(delta), locale)}
                 </span>
               ) : null}
@@ -373,7 +395,7 @@ export function PeopleWidget({ data, size }: { data: DashboardData; size: TileSi
   const t = useTranslations("dashboard");
   const locale = useLocale();
   if (data.appearances.length === 0) {
-    return <p className="text-sm leading-7 text-fg-muted">{t("peopleEmpty")}</p>;
+    return <p className="text-sm leading-7 ink-muted">{t("peopleEmpty")}</p>;
   }
   const top = data.appearances[0]!.records;
   return (
@@ -387,7 +409,7 @@ export function PeopleWidget({ data, size }: { data: DashboardData; size: TileSi
           <span className="h-1.5 w-16 shrink-0 overflow-hidden rounded-full bg-surface-2" aria-hidden>
             <span className="block h-full rounded-full bg-accent" style={{ width: `${(records / top) * 100}%` }} />
           </span>
-          <span className="w-6 shrink-0 text-end text-xs text-fg-muted">{digits(records, locale)}</span>
+          <span className="w-6 shrink-0 text-end text-xs ink-muted">{digits(records, locale)}</span>
         </li>
       ))}
     </ul>
@@ -401,10 +423,11 @@ export function PipelineWidget({ data, size }: { data: DashboardData; size: Tile
   const rows = data.calls ?? [];
   const failed = rows.filter((c) => c.status === "failed");
   const moving = rows.filter((c) => c.status !== "ready" && c.status !== "failed");
-  if (data.calls === null) return <p className="text-sm text-fg-muted">…</p>;
+  if (data.failed) return <Unreadable />;
+  if (data.calls === null) return <p className="text-sm ink-muted">…</p>;
   if (failed.length === 0 && moving.length === 0) {
     return (
-      <p className="flex items-center gap-2 text-sm text-fg-muted">
+      <p className="flex items-center gap-2 text-sm ink-muted">
         <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden />
         {t("pipelineClear")}
       </p>
@@ -423,7 +446,7 @@ export function PipelineWidget({ data, size }: { data: DashboardData; size: Tile
         </li>
       ))}
       {isShort(size) ? null : (
-        <li className="pt-1 text-[11px] text-fg-subtle">
+        <li className="pt-1 text-[11px] ink-subtle">
           {t("pipelineNote", { n: digits(moving.length + failed.length, locale) })}
         </li>
       )}
@@ -455,8 +478,9 @@ export function RecentWidget({ data, size }: { data: DashboardData; size: TileSi
     return () => clearTimeout(timer);
   }, [data.calls]);
 
-  if (data.calls === null) return <p className="text-sm text-fg-muted">…</p>;
-  if (shown.length === 0) return <p className="text-sm leading-7 text-fg-muted">{t("noRecords")}</p>;
+  if (data.failed) return <Unreadable />;
+  if (data.calls === null) return <p className="text-sm ink-muted">…</p>;
+  if (shown.length === 0) return <p className="text-sm leading-7 ink-muted">{t("noRecords")}</p>;
   return (
     <ul className="h-full divide-y divide-border overflow-y-auto">
       {shown.map((call: Call) => (
@@ -470,7 +494,7 @@ export function RecentWidget({ data, size }: { data: DashboardData; size: TileSi
             <span className="min-w-0 truncate text-sm text-fg group-hover:text-accent">
               {call.title.trim() === "" ? tCalls("untitled") : call.title}
             </span>
-            <span className="shrink-0 text-xs text-fg-subtle">
+            <span className="shrink-0 text-xs ink-subtle">
               {call.duration_ms !== null
                 ? formatDuration(call.duration_ms / 1000, locale)
                 : formatDate(call.started_at, locale)}
@@ -548,7 +572,7 @@ export function WatchlistWidget({ data, size }: { data: DashboardData; size: Til
   return (
     <div className="flex h-full min-h-0 flex-col">
       {terms.length === 0 ? (
-        <p className="flex-1 text-sm leading-7 text-fg-muted">{t("watchEmpty")}</p>
+        <p className="flex-1 text-sm leading-7 ink-muted">{t("watchEmpty")}</p>
       ) : (
         <ul className="min-h-0 flex-1 space-y-1.5 overflow-y-auto">
           {counted.slice(0, rowsFor(size)).map(({ term, hits, where }) => (
@@ -558,17 +582,17 @@ export function WatchlistWidget({ data, size }: { data: DashboardData; size: Til
                 {hits > 0 && where[0] ? (
                   <Link
                     href={`/calls/${where[0].callId}`}
-                    className="text-fg-subtle underline-offset-2 hover:text-accent hover:underline"
+                    className="ink-subtle underline-offset-2 hover:text-accent hover:underline"
                   >
                     {digits(hits, locale)}
                   </Link>
                 ) : (
-                  <span className="text-fg-subtle">{digits(0, locale)}</span>
+                  <span className="ink-subtle">{digits(0, locale)}</span>
                 )}
                 <button
                   type="button"
                   aria-label={t("watchRemove", { term })}
-                  className="tap grid h-6 w-6 place-items-center rounded text-fg-subtle opacity-0 hover:text-danger group-hover/w:opacity-100"
+                  className="tap grid h-6 w-6 place-items-center rounded ink-subtle opacity-0 hover:text-danger group-hover/w:opacity-100"
                   onClick={() => save(terms.filter((x) => x !== term))}
                 >
                   <span aria-hidden className="text-xs">✕</span>
@@ -596,7 +620,7 @@ export function WatchlistWidget({ data, size }: { data: DashboardData; size: Til
         />
       </form>
       {isShort(size) ? null : (
-        <p className="mt-2 text-[11px] text-fg-subtle">
+        <p className="mt-2 text-[11px] ink-subtle">
           {t("watchNote", { n: digits(data.laneDepth, locale) })}
         </p>
       )}
@@ -625,9 +649,10 @@ export function LedgerWidget({ data, size }: { data: DashboardData; size: TileSi
     .slice()
     .sort((a, b) => b.at.localeCompare(a.at));
 
-  if (data.calls === null) return <p className="text-sm text-fg-muted">…</p>;
+  if (data.failed) return <Unreadable />;
+  if (data.calls === null) return <p className="text-sm ink-muted">…</p>;
   if (withDecisions.length === 0) {
-    return <p className="text-sm leading-7 text-fg-muted">{t("decisionsEmpty")}</p>;
+    return <p className="text-sm leading-7 ink-muted">{t("decisionsEmpty")}</p>;
   }
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -644,17 +669,17 @@ export function LedgerWidget({ data, size }: { data: DashboardData; size: TileSi
               >
                 {record.callTitle || "—"}
               </Link>
-              <span className="text-[11px] text-fg-subtle">{formatDate(record.at, locale)}</span>
+              <span className="text-[11px] ink-subtle">{formatDate(record.at, locale)}</span>
             </p>
             <ul className="mt-1 space-y-1">
               {record.decisions.slice(0, size === "hero" ? 4 : 2).map((text, i) => (
-                <li key={i} dir="auto" className="text-sm leading-7 text-fg-muted">{text}</li>
+                <li key={i} dir="auto" className="text-sm leading-7 ink-muted">{text}</li>
               ))}
             </ul>
           </li>
         ))}
       </ol>
-      <p className="mt-2 text-[11px] text-fg-subtle">{t("ledgerNote")}</p>
+      <p className="mt-2 text-[11px] ink-subtle">{t("ledgerNote")}</p>
     </div>
   );
 }
@@ -698,33 +723,114 @@ export function NextWidget({ data, size }: { data: DashboardData; size: TileSize
         ]}
       />
       {personId === "" ? (
-        <p className="flex-1 text-xs leading-6 text-fg-muted">{t("nextHint")}</p>
+        /* the hint is the LARGE tier's extra layer — at two rows the
+           picker is the whole card, and a wrapped sentence under it
+           overflows into the tile below */
+        isShort(size)
+          ? null
+          : <p className="flex-1 text-xs leading-6 ink-muted">{t("nextHint")}</p>
       ) : last === undefined ? (
-        <p className="flex-1 text-xs leading-6 text-fg-muted">{t("nextNone")}</p>
+        <p className="flex-1 text-xs leading-6 ink-muted">{t("nextNone")}</p>
       ) : (
         <div className="min-h-0 flex-1 overflow-y-auto">
           <p className="flex flex-wrap items-baseline gap-2">
             <Link href={`/calls/${last.callId}`} className="text-xs font-semibold text-fg hover:text-accent">
               {last.callTitle || "—"}
             </Link>
-            <span className="text-[11px] text-fg-subtle">{formatDate(last.at, locale)}</span>
+            <span className="text-[11px] ink-subtle">{formatDate(last.at, locale)}</span>
           </p>
           {last.decisions.length + last.actions.length === 0 ? (
-            <p className="mt-1 text-xs leading-6 text-fg-muted">{t("nextNothingAgreed")}</p>
+            <p className="mt-1 text-xs leading-6 ink-muted">{t("nextNothingAgreed")}</p>
           ) : (
             <ul className="mt-1.5 space-y-1">
               {[...last.decisions, ...last.actions]
                 .slice(0, size === "large" ? 5 : 2)
                 .map((text, i) => (
-                  <li key={i} dir="auto" className="text-sm leading-7 text-fg-muted">{text}</li>
+                  <li key={i} dir="auto" className="text-sm leading-7 ink-muted">{text}</li>
                 ))}
             </ul>
           )}
         </div>
       )}
       {isShort(size) ? null : (
-        <p className="text-[11px] text-fg-subtle">{t("nextNoCalendar")}</p>
+        <p className="text-[11px] ink-subtle">{t("nextNoCalendar")}</p>
       )}
+    </div>
+  );
+}
+
+/**
+ * TEAM — the directory's teams, as a share of the people you actually
+ * meet. Uses `person.team` from db/0096, which only exists once that
+ * migration has run: an org that has not labelled anyone gets the honest
+ * line rather than a chart of one slice called "no team".
+ */
+export function TeamWidget({ data, size }: { data: DashboardData; size: TileSize }) {
+  const t = useTranslations("dashboard");
+  const locale = useLocale();
+  const counted = new Map<string, number>();
+  for (const { person, records } of data.appearances) {
+    const team = person.team ?? "";
+    counted.set(team, (counted.get(team) ?? 0) + records);
+  }
+  const rows = [...counted.entries()]
+    .filter(([team]) => team !== "")
+    .sort((a, b) => b[1] - a[1]);
+  const total = rows.reduce((sum, [, n]) => sum + n, 0);
+
+  if (data.appearances.length === 0) {
+    return <p className="ink-muted text-sm leading-7">{t("peopleEmpty")}</p>;
+  }
+  if (rows.length === 0) {
+    return <p className="ink-muted text-sm leading-7">{t("teamEmpty")}</p>;
+  }
+  return (
+    <ul className="h-full space-y-2.5 overflow-y-auto">
+      {rows.slice(0, rowsFor(size)).map(([team, n]) => (
+        <li key={team}>
+          <div className="mb-1 flex items-baseline justify-between gap-2 text-sm">
+            <span className="min-w-0 truncate">{team}</span>
+            <span className="ink-subtle shrink-0 text-xs tabular-nums">
+              {digits(Math.round((n / total) * 100), locale)}%
+            </span>
+          </div>
+          <span className="block h-1.5 overflow-hidden rounded-full bg-current/15" aria-hidden>
+            <span
+              className="block h-full rounded-full bg-current"
+              style={{ width: `${(n / total) * 100}%` }}
+            />
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * AGENT — the two doors into the assistant, as a card rather than a menu
+ * row. A dashboard whose only route to the agent is the rail is a
+ * dashboard that hides its most capable feature behind an icon.
+ */
+export function AgentWidget({ size }: { size: TileSize }) {
+  const t = useTranslations("dashboard");
+  const suggestions = [
+    t("agentAsk1"),
+    t("agentAsk2"),
+    t("agentAsk3"),
+  ].slice(0, size === "large" ? 3 : 2);
+  return (
+    <div className="flex h-full min-h-0 flex-col gap-1.5">
+      {suggestions.map((text) => (
+        <button
+          key={text}
+          type="button"
+          dir="auto"
+          className="tap rounded-xl border border-border bg-surface-2/60 px-3 py-2 text-start text-xs leading-6 ink-muted transition-colors hover:border-accent hover:text-fg"
+          onClick={() => openAssistant({ draft: text })}
+        >
+          {text}
+        </button>
+      ))}
     </div>
   );
 }
