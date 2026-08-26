@@ -446,6 +446,8 @@ export function SelectMenu({
   ariaLabel,
   className = "",
   disabled = false,
+  icon,
+  panelFooter,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -454,6 +456,16 @@ export function SelectMenu({
   /** sizing/spacing for the TRIGGER (defaults to the input look) */
   className?: string;
   disabled?: boolean;
+  /** a leading glyph on the trigger — what KIND of thing this picks (the
+      reference: Meet's device pills, a mic before the mic's name) */
+  icon?: ReactNode;
+  /**
+   * Rendered at the FOOT of the open panel, under a hairline — the live
+   * half of a picker (the mic's level meter, the speaker's test-sound
+   * row). It mounts only while the panel is open, so a meter here opens
+   * its device on open and releases it on close.
+   */
+  panelFooter?: ReactNode;
 }) {
   const [at, setAt] = useState<{ top: number; left: number; width: number } | null>(null);
   const rootRef = useRef<HTMLButtonElement | null>(null);
@@ -520,6 +532,7 @@ export function SelectMenu({
           at !== null ? "border-accent ring-1 ring-accent/30" : ""
         } ${className}`}
       >
+        {icon ? <span className="shrink-0 text-fg-muted">{icon}</span> : null}
         <span className="min-w-0 flex-1 truncate">{current?.label ?? ""}</span>
         <svg
           aria-hidden
@@ -559,7 +572,7 @@ export function SelectMenu({
                       setAt(null);
                       if (o.value !== value) onChange(o.value);
                     }}
-                    className={`flex min-w-0 flex-1 items-center gap-2.5 py-2 ps-3 text-start text-xs transition-colors ${
+                    className={`flex min-w-0 flex-1 items-center gap-2 py-2 ps-2.5 text-start text-xs transition-colors ${
                       o.onRemove ? "pe-1" : "pe-3"
                     } ${
                       o.value === value
@@ -567,8 +580,12 @@ export function SelectMenu({
                         : "text-fg-muted hover:bg-surface-2 hover:text-fg"
                     } disabled:pointer-events-none disabled:opacity-40`}
                   >
+                    {/* the check LEADS and its gutter is always spent —
+                        one scannable column of marks, labels aligned */}
+                    <span aria-hidden className="grid w-4 shrink-0 place-items-center text-[10px] text-accent">
+                      {o.value === value ? "✓" : ""}
+                    </span>
                     <span className="min-w-0 flex-1 truncate">{o.label}</span>
-                    {o.value === value ? <span aria-hidden className="text-[10px]">✓</span> : null}
                   </button>
                   {o.onRemove ? (
                     <button
@@ -586,6 +603,11 @@ export function SelectMenu({
                   ) : null}
                 </span>
               ))}
+              {panelFooter ? (
+                <div className="mt-1 border-t border-border px-2.5 pb-1.5 pt-2">
+                  {panelFooter}
+                </div>
+              ) : null}
             </div>,
             document.body,
           )

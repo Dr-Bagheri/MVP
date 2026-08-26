@@ -54,7 +54,6 @@ import {
  * server waits on the result, so blocking here is the honest shape.
  */
 
-const PRESENCE_KEY = "neurai-presence-session";
 
 interface DockMessage {
   id: string;
@@ -90,20 +89,41 @@ const SOCKET = 64;
 const SOCKET_CX = Math.round(SOCKET * 0.7 - SOCKET / 2); // 13px in
 
 /**
+ * The one side that holds a dock: the OPPOSITE of the menu rail (user
+ * directive, 2026-08-26 — "just one side bar, the one opposite side of the
+ * menu bar"). The rail sits at inline-start, so the holder is at
+ * inline-end: right in LTR, left in RTL.
+ */
+export function holderSideFor(dir: string): "side-left" | "side-right" {
+  return dir === "rtl" ? "side-left" : "side-right";
+}
+
+/**
  * Where a released orb docks. Exported for the tests — the drag itself
  * needs a signed-in member and a real pointer, but THIS is the decision.
- * The bottom dock was removed (user directive, 2026-08-26): the sides are
- * the only holders now, and a bottom release simply floats.
+ * Only the holder's own side docks; the menu's side and the bottom are
+ * plain floating space.
  */
 export function dockModeFor(
   x: number,
-  _y: number,
   width: number,
-  _height: number,
+  allowed: "side-left" | "side-right",
 ): OrbPin["mode"] {
-  if (x < EDGE) return "side-left";
-  if (x > width - EDGE) return "side-right";
+  if (allowed === "side-left" && x < EDGE) return "side-left";
+  if (allowed === "side-right" && x > width - EDGE) return "side-right";
   return "float";
+}
+
+/** the orb's home (user directive, 2026-08-26): seated in the holder, not
+    the top-bar cradle — the cradle is where it CAME from, not where it
+    lives */
+function defaultSidePin(): OrbPin {
+  const mode = holderSideFor(document.documentElement.dir);
+  return {
+    mode,
+    x: mode === "side-left" ? SOCKET_CX : window.innerWidth - SOCKET_CX,
+    y: Math.round(window.innerHeight * 0.42),
+  };
 }
 
 /** the orb's resting spot: a side dock SEATS it in the holder's socket —
@@ -174,10 +194,6 @@ export function DockHolder({ side, y, active }: {
   );
 }
 
-function todayKey(): string {
-  return `${PRESENCE_KEY}:${new Date().toISOString().slice(0, 10)}`;
-}
-
 /**
  * The mic glyph (user-supplied shape, 2026-08-22): a filled capsule, the
  * open cradle arc, a stem. Drawn as an SVG in currentColor rather than the
@@ -243,8 +259,21 @@ export function PresenceDock() {
     abortRef.current?.abort();
     setMessages([]);
     sessionId.current = undefined;
-    try { localStorage.removeItem(todayKey()); } catch { /* fine */ }
     notify(t("newConversationStarted"));
+  }
+
+  /**
+   * CLOSING ENDS THE CONVERSATION (user directive, 2026-08-26: "nothing
+   * should remain here as a history"). The ✕ resets the thread silently —
+   * the next open is clean, and what was said lives on as a conversation
+   * under Assistant → History, deletable there like any other.
+   */
+  function closeDock(): void {
+    abortRef.current?.abort();
+    setMessages([]);
+    sessionId.current = undefined;
+    setOpen(false);
+    setMinimized(false);
   }
   const [streaming, setStreaming] = useState(false);
   const [consent, setConsent] = useState<
@@ -344,20 +373,35 @@ export function PresenceDock() {
   useEffect(() => {
     try {
       const raw = localStorage.getItem("neurai-orb-pin");
-      if (raw) {
-        const parsed = JSON.parse(raw) as OrbPin;
-        // clamp a pin saved on a larger screen back into this viewport
-        setPin({
-          x: Math.min(Math.max(parsed.x, 32), window.innerWidth - 32),
-          y: Math.min(Math.max(parsed.y, 80), window.innerHeight - 32),
-          // "bottom" existed for a day and was removed — an old pin
-          // carrying it floats rather than resurrecting the mode
-          mode: parsed.mode === "side-left" || parsed.mode === "side-right"
-            ? parsed.mode
-            : "float",
-        });
+      if (!raw) {
+        // no saved spot = HOME: seated in the side holder (2026-08-26)
+        setPin(defaultSidePin());
+        return;
       }
-    } catch { /* storage unavailable — the cradle is home */ }
+      const parsed = JSON.parse(raw) as OrbPin;
+      const allowed = holderSideFor(document.documentElement.dir);
+      if (parsed.mode === "side-left" || parsed.mode === "side-right") {
+        // a docked pin always seats on the ALLOWED side — one saved under
+        // the other locale's direction (or the removed two-side build)
+        // comes home rather than docking over the menu
+        setPin({
+          ...defaultSidePin(),
+          y: Math.min(Math.max(parsed.y, 120), window.innerHeight - 72),
+          mode: allowed,
+        });
+        return;
+      }
+      // a float pin, clamped back into this viewport ("bottom" from the
+      // one-day build lands here too, as a float)
+      setPin({
+        x: Math.min(Math.max(parsed.x, 32), window.innerWidth - 32),
+        y: Math.min(Math.max(parsed.y, 80), window.innerHeight - 32),
+        mode: "float",
+      });
+    } catch {
+      /* storage unavailable — home still applies */
+      setPin(defaultSidePin());
+    }
   }, []);
 
   /**
@@ -388,10 +432,12 @@ export function PresenceDock() {
       if (!moved) return; // plain click — onClick handles it
       suppressClickRef.current = true;
       setDrag(null);
-      // released on the top bar = re-dock (the default home wins)
+      // released on the top bar = go HOME — and home is the side holder
+      // now, not the cradle it came from
       if (ev.clientY < 72) {
-        setPin(null);
-        try { localStorage.removeItem("neurai-orb-pin"); } catch { /* fine */ }
+        const home = defaultSidePin();
+        setPin(home);
+        try { localStorage.setItem("neurai-orb-pin", JSON.stringify(home)); } catch { /* fine */ }
         return;
       }
       /*
@@ -401,7 +447,8 @@ export function PresenceDock() {
        * the menu. Anywhere else stays the floating pin.
        */
       const mode = dockModeFor(
-        ev.clientX, ev.clientY, window.innerWidth, window.innerHeight);
+        ev.clientX, window.innerWidth,
+        holderSideFor(document.documentElement.dir));
       const seated = mode !== "float";
       const next: OrbPin = {
         x: Math.min(Math.max(ev.clientX, 32), window.innerWidth - 32),
@@ -510,12 +557,9 @@ export function PresenceDock() {
     return () => { live = false; };
   }, []);
 
-  /** today's thread, resumed — yesterday's key is simply never read again */
-  useEffect(() => {
-    try {
-      sessionId.current = localStorage.getItem(todayKey()) ?? undefined;
-    } catch { /* storage unavailable — a fresh thread each page is the floor */ }
-  }, []);
+  /** NOTHING resumes here (user directive, 2026-08-26): the panel opens
+      clean every time, and the conversations it creates live in
+      Assistant → History — the one place history is read and deleted */
 
   /** every bus notice becomes a toast at the orb's head, gone after 4s */
   useEffect(() => {
@@ -605,7 +649,6 @@ export function PresenceDock() {
    */
   async function loadSession(id: string) {
     sessionId.current = id;
-    try { localStorage.setItem(todayKey(), id); } catch { /* fine */ }
     try {
       const thread = await api.agentMessages(id);
       setMessages(thread.map((m) => ({
@@ -685,8 +728,27 @@ export function PresenceDock() {
   }
 
   /** the loop's stop-while-speaking rule needs to know the mouth's state */
+  /**
+   * HALF-DUPLEX (2026-08-26, after the dock interviewed itself): while the
+   * assistant's voice plays, the mic is fully muted — and it stays muted
+   * for a beat after playback ends, because the transcriber's tail arrives
+   * AFTER the audio stops and that tail is our own last words.
+   */
+  const unmuteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => subscribeSpeechPlayback((next) => {
-    loopRef.current?.setSpeaking(next);
+    const handle = loopRef.current;
+    if (!handle) return;
+    if (next) {
+      if (unmuteTimer.current) clearTimeout(unmuteTimer.current);
+      unmuteTimer.current = null;
+      handle.setSpeaking(true);
+      handle.setMuted(true);
+    } else {
+      unmuteTimer.current = setTimeout(() => {
+        loopRef.current?.setSpeaking(false);
+        loopRef.current?.setMuted(false);
+      }, 800);
+    }
   }), []);
 
   /** the ears open on landing (member only); leaving closes them */
@@ -797,7 +859,6 @@ export function PresenceDock() {
          */
         if (sessionId.current && (status === 404 || /not.?found/i.test(detail ?? ""))) {
           sessionId.current = undefined;
-          try { localStorage.removeItem(todayKey()); } catch { /* fine */ }
           setMessages((prev) => prev.filter((m) => m.id !== replyId && m.id !== userMsgId));
           pendingCommandRef.current = { text: trimmed, viaVoice };
         } else {
@@ -831,7 +892,6 @@ export function PresenceDock() {
     switch (event.type) {
       case "session":
         sessionId.current = event.id;
-        try { localStorage.setItem(todayKey(), event.id); } catch { /* fine */ }
         break;
       case "text_delta":
         replyTextRef.current += event.delta;
@@ -980,14 +1040,16 @@ export function PresenceDock() {
 
   return (
     <>
-      {/* the holders: while the orb is in hand, BOTH sides show their
-          socket at the pointer's height (the near one lit); once seated,
-          the docked side keeps its holder under the orb */}
+      {/* the holder: ONE side only — the opposite of the menu rail. While
+          the orb is in hand it shows its socket at the pointer's height,
+          lit when the pointer is in the zone; once seated it stays under
+          the orb */}
       {drag !== null ? (
-        <>
+        holderSideFor(document.documentElement.dir) === "side-left" ? (
           <DockHolder side="left" y={drag.y} active={drag.x < EDGE} />
+        ) : (
           <DockHolder side="right" y={drag.y} active={drag.x > window.innerWidth - EDGE} />
-        </>
+        )
       ) : pin && pin.mode !== "float" ? (
         <DockHolder
           side={pin.mode === "side-left" ? "left" : "right"}
@@ -1017,7 +1079,7 @@ export function PresenceDock() {
             type="button"
             className="tap h-6 w-6 rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg"
             aria-label={t("close")}
-            onClick={() => { setOpen(false); setMinimized(false); }}
+            onClick={closeDock}
           >
             ✕
           </button>
@@ -1089,7 +1151,7 @@ export function PresenceDock() {
               type="button"
               className="tap h-7 w-7 rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg"
               aria-label={t("close")}
-              onClick={() => setOpen(false)}
+              onClick={closeDock}
             >
               ✕
             </button>

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { BOOST_GAIN } from "@/lib/recordingEngine";
+import { playTestChime } from "@/lib/deviceTest";
 
 /**
  * MIC & SPEAKER CHECK (user directive, 2026-08-25): "a microphone and
@@ -47,7 +48,6 @@ export function DeviceCheck({
   const streamRef = useRef<MediaStream | null>(null);
   const ctxRef = useRef<AudioContext | null>(null);
   const rafRef = useRef<number | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   /** everything the check opened, closed — an idle page holds no device */
   function stopListening(): void {
@@ -114,42 +114,9 @@ export function DeviceCheck({
   const boostRef = useRef(boost);
   boostRef.current = boost;
 
-  /** a two-tone chime on the chosen output, at the chosen volume */
+  /** one chime, shared with the speaker dropdown (lib/deviceTest) */
   async function testSpeaker(): Promise<void> {
-    const ctx = new AudioContext();
-    const dest = ctx.createMediaStreamDestination();
-    const gainNode = ctx.createGain();
-    gainNode.gain.value = volume * 0.35; // a test tone is never a shock
-    gainNode.connect(dest);
-    const play = (freq: number, at: number) => {
-      const osc = ctx.createOscillator();
-      osc.type = "sine";
-      osc.frequency.value = freq;
-      const env = ctx.createGain();
-      env.gain.setValueAtTime(0.0001, ctx.currentTime + at);
-      env.gain.exponentialRampToValueAtTime(1, ctx.currentTime + at + 0.02);
-      env.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + at + 0.3);
-      osc.connect(env).connect(gainNode);
-      osc.start(ctx.currentTime + at);
-      osc.stop(ctx.currentTime + at + 0.32);
-    };
-    play(660, 0);
-    play(880, 0.22);
-    const el = audioRef.current ?? new Audio();
-    audioRef.current = el;
-    el.srcObject = dest.stream;
-    el.volume = 1;
-    /* the chosen OUTPUT — where the browser allows choosing one at all */
-    const withSink = el as HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> };
-    if (speakerId && typeof withSink.setSinkId === "function") {
-      await withSink.setSinkId(speakerId).catch(() => undefined);
-    }
-    await el.play().catch(() => undefined);
-    setTimeout(() => {
-      el.pause();
-      el.srcObject = null;
-      void ctx.close().catch(() => undefined);
-    }, 900);
+    await playTestChime(speakerId, volume);
   }
 
   return (

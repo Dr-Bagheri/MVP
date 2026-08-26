@@ -436,6 +436,8 @@
     "speakerField": "Speaker",
     "speakerDefault": "System default speaker",
     "speakerFallback": "Speaker",
+    "menuLevel": "Level",
+    "menuPlayTest": "Play a test sound",
     "micDenied": "Microphone access was not granted. Allow it in your browser settings and try again.",
     "createFailed": "Could not create the call — check your connection and try again.",
     "finishFailed": "Could not finish the call — the parts are uploaded; try again.",

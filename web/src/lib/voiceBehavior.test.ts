@@ -105,11 +105,28 @@ describe("createVoiceBehavior", () => {
     expect(onCommand).toHaveBeenCalledTimes(0);
   });
 
-  it("while speaking, the NAME + a command barges in", () => {
+  it("while speaking, even the NAME + a command does NOTHING", () => {
+    /*
+     * This test used to assert the OPPOSITE — that a wake+command barges
+     * in — and that assertion was the self-echo hole certified as a
+     * feature: the assistant says "I am Echo's assistant", the mic hears
+     * its own voice, and the barge-in ran the rest of its own sentence as
+     * a command. In production it interviewed itself in a loop. Real
+     * barge-in is handled by muting the mic during playback; while
+     * speaking, ONLY a short stop may act.
+     */
     feed("echo");
     b.setSpeaking(true);
     feed("echo open the records");
-    expect(onCommand).toHaveBeenCalledWith("open the records");
+    expect(onCommand).toHaveBeenCalledTimes(0);
+  });
+
+  it("the assistant's own greeting does not wake — the apostrophe guard", () => {
+    // "Echo's" passed the old letter-only lookahead; the apostrophe now
+    // blocks the match, so the name inside its own sentence stays inert
+    expect(matchWake("I am Echo's assistant").woke).toBe(false);
+    expect(matchWake("echo, open the records").woke).toBe(true);
+    expect(matchWake("echo").woke).toBe(true);
   });
 
   // ── the one dedupe rule ───────────────────────────────────────────────

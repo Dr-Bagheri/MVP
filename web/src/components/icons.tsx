@@ -212,3 +212,8 @@ export const IconRedact = (p: SVGProps<SVGSVGElement>) => (
 export const IconPrint = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><path d="M7 9V3.5h10V9" /><rect x="3.5" y="9" width="17" height="7" rx="2" /><path d="M7 14h10v6.5H7V14Z" /></svg>
 );
+/** a loudspeaker with waves — the OUTPUT device (the mic is the input) */
+export const IconSpeaker = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><path d="M4 9.5v5h3.5L13 19V5L7.5 9.5H4Z" /><path d="M16.5 9a4.2 4.2 0 0 1 0 6" /><path d="M19 6.8a8 8 0 0 1 0 10.4" /></svg>
+);
+

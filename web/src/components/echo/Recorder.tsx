@@ -24,6 +24,11 @@ import { digits, formatClock, modelLabel } from "@/lib/format";
 import { resumePoint } from "./uploadRules";
 import { RecorderNotes } from "./RecorderNotes";
 import { SelectMenu } from "@/components/rowActions";
+import {
+  IconChip, IconFileText, IconGlobe, IconMic, IconPulse, IconSpeaker,
+} from "@/components/icons";
+import { playTestChime } from "@/lib/deviceTest";
+import { useAudioLevel } from "@/lib/useAudioLevel";
 import { DeviceCheck } from "./DeviceCheck";
 import { customTemplates, type CustomTemplate } from "@/lib/summaryTemplates";
 import { SUMMARY_TEMPLATES, type SummaryTemplate } from "@echo/core/vocabulary";
@@ -289,8 +294,12 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
             </legend>
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label={t("micField")}>
+                {/* the Meet reading (user directive, 2026-08-26): the pick
+                    and the PROOF in one place — the open menu carries a
+                    live level meter of whichever mic is selected */}
                 <SelectMenu
                   ariaLabel={t("micField")}
+                  icon={<IconMic />}
                   value={micId}
                   onChange={setMicId}
                   options={
@@ -298,11 +307,15 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
                       ? [{ value: "", label: t("micDefault") }]
                       : mics.map((d) => ({ value: d.id, label: d.label }))
                   }
+                  panelFooter={<MicLevelFooter micId={micId} label={t("menuLevel")} />}
                 />
               </Field>
               <Field label={t("speakerField")}>
+                {/* …and the speaker menu proves ITSELF: a test chime
+                    through exactly the output being picked */}
                 <SelectMenu
                   ariaLabel={t("speakerField")}
+                  icon={<IconSpeaker />}
                   value={speakerId}
                   onChange={setSpeakerId}
                   options={
@@ -310,11 +323,21 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
                       ? [{ value: "", label: t("speakerDefault") }]
                       : speakers.map((d) => ({ value: d.id, label: d.label }))
                   }
+                  panelFooter={
+                    <button
+                      type="button"
+                      className="tap w-full rounded-md px-1 py-1 text-start text-xs text-accent hover:bg-surface-2"
+                      onClick={() => void playTestChime(speakerId)}
+                    >
+                      {t("menuPlayTest")}
+                    </button>
+                  }
                 />
               </Field>
               <Field label={t("sourceField")}>
                 <SelectMenu
                   ariaLabel={t("sourceField")}
+                  icon={<IconPulse />}
                   value={source}
                   onChange={(v) => setSource(v as "mic" | "system")}
                   options={[
@@ -346,6 +369,7 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
                 {/* the transcriber's hint — set at creation */}
                 <SelectMenu
                   ariaLabel={t("languageField")}
+                  icon={<IconGlobe />}
                   value={language}
                   onChange={(v) => setLanguage(v as "fa" | "en" | "mixed")}
                   disabled={resuming}
@@ -361,6 +385,7 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
                     ruled five plus this person's own templates */}
                 <SelectMenu
                   ariaLabel={t("templateField")}
+                  icon={<IconFileText />}
                   value={template}
                   onChange={setTemplate}
                   disabled={resuming}
@@ -378,6 +403,7 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
                     not chosen" state M5 protects. */}
                 <SelectMenu
                   ariaLabel={t("modelField")}
+                  icon={<IconChip />}
                   value={summaryModel}
                   onChange={setSummaryModel}
                   disabled={resuming}
@@ -644,5 +670,61 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
         </p>
       ) : null}
     </Card>
+  );
+}
+
+/**
+ * The mic menu's live meter (the Meet reference): mounts when the panel
+ * opens, opens its OWN short stream on the selected device, and releases
+ * it the moment the menu closes — the meter must never hold the mic after
+ * the panel is gone. A moving bar is the only honest answer to "is this
+ * the right microphone": a device name proves nothing.
+ */
+function MicLevelFooter({ micId, label }: { micId: string; label: string }) {
+  const [stream, setStream] = useState<MediaStream | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let live = true;
+    let opened: MediaStream | null = null;
+    navigator.mediaDevices
+      ?.getUserMedia({
+        audio: {
+          ...(micId ? { deviceId: { exact: micId } } : {}),
+          echoCancellation: true,
+          noiseSuppression: true,
+        },
+      })
+      .then((s2) => {
+        if (!live) {
+          s2.getTracks().forEach((track) => track.stop());
+          return;
+        }
+        opened = s2;
+        setStream(s2);
+      })
+      .catch(() => { if (live) setFailed(true); });
+    return () => {
+      live = false;
+      opened?.getTracks().forEach((track) => track.stop());
+      setStream(null);
+    };
+  }, [micId]);
+  const level = useAudioLevel(stream);
+  return (
+    <div className="flex items-center gap-2">
+      <span className="shrink-0 text-[10px] text-fg-subtle">{label}</span>
+      <span className="flex h-2 flex-1 items-center gap-[2px]" aria-hidden>
+        {Array.from({ length: 16 }, (_, i) => (
+          <span
+            key={i}
+            className={`h-full flex-1 rounded-[1px] transition-colors ${
+              !failed && level * 16 > i
+                ? i > 12 ? "bg-warning" : "bg-success"
+                : "bg-surface-2"
+            }`}
+          />
+        ))}
+      </span>
+    </div>
   );
 }

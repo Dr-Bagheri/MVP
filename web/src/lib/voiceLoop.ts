@@ -31,7 +31,15 @@ import { api } from "@/api/client";
 
 // ---- the behavior (pure, tested) -------------------------------------------
 
-const WAKE_RE = /(?:^|\s)(?:echo|ecco|eko|اکو|ایکو)(?!\p{L})[\s.,،!?]*/iu;
+/*
+ * `(?![\p{L}'’])`: the name must not run into a letter OR an apostrophe.
+ * The apostrophe matters because of a live incident (2026-08-26): the
+ * assistant's own spoken greeting — "I am Echo's assistant" — matched the
+ * wake word ("Echo" + apostrophe passed the old letter-only guard), and the
+ * while-speaking barge-in treated the rest of its own sentence as a
+ * command. It asked itself questions in a loop.
+ */
+const WAKE_RE = /(?:^|\s)(?:echo|ecco|eko|اکو|ایکو)(?![\p{L}'’])[\s.,،!?]*/iu;
 const STOP_RE = /(?:^|\s)(?:stop|بس|بسه|ساکت|کافیه)(?!\p{L})/iu;
 
 export function matchWake(text: string): { woke: boolean; command: string } {
@@ -115,11 +123,16 @@ export function createVoiceBehavior(
       const stops = STOP_RE.test(text);
 
       if (speaking) {
-        // rule 3, while the voice plays: a SHORT stop cuts it; the NAME
-        // with a command barges in; everything else is (mostly our own
-        // voice) ignored.
+        /*
+         * Rule 3, while the voice plays: a SHORT stop cuts it. Nothing
+         * else — the wake+command barge-in that used to live here was the
+         * self-echo hole: the assistant says its own name ("I am Echo's
+         * assistant"), the mic hears it, and the barge-in ran its own
+         * words as a command. Real barge-in is impossible anyway now that
+         * the mic is muted during playback; this branch only sees the
+         * decode tail, and a tail must never act.
+         */
         if (stops && words <= 4) { handlers.onStop(); endSession(); return; }
-        if (wake.woke && wake.command) { renew(); handlers.onCommand(wake.command); return; }
         return;
       }
 
@@ -152,6 +165,13 @@ const UTTERANCE_SILENCE_MS = 800;
 export interface VoiceLoopHandle {
   stop: () => void;
   setSpeaking: (speaking: boolean) => void;
+  /**
+   * Half-duplex (2026-08-26): while the assistant's own voice plays, the
+   * mic is DEAF — no frames buffered, none posted, and any text already in
+   * flight is dropped. Echo cancellation was the old defense and it lost
+   * on real speakers; not listening cannot lose.
+   */
+  setMuted: (muted: boolean) => void;
   endSession: () => void;
 }
 
@@ -182,6 +202,7 @@ export async function startVoiceLoop(handlers: VoiceHandlers): Promise<VoiceLoop
   proc.connect(ctx.destination); // required for onaudioprocess in some engines
 
   let stopped = false;
+  let muted = false;
   // the pre-roll ring: the last ~1.2s of PCM, so opening the relay on
   // speech onset still delivers the wake word's first syllable
   const ring: Int16Array[] = [];
@@ -258,6 +279,7 @@ export async function startVoiceLoop(handlers: VoiceHandlers): Promise<VoiceLoop
             return;
           }
           if (body.type === "tokens" && body.tokens) {
+            if (muted) return;
             const finals = body.tokens.filter((t) => t.is_final).map((t) => t.text).join("");
             const interim = body.tokens.filter((t) => !t.is_final).map((t) => t.text).join("");
             if (finals) finalsBuf += finals;
@@ -281,6 +303,14 @@ export async function startVoiceLoop(handlers: VoiceHandlers): Promise<VoiceLoop
 
   proc.onaudioprocess = (event) => {
     if (stopped) return;
+    if (muted) {
+      // deaf: nothing buffers while our own voice plays, and the pre-roll
+      // is emptied so unmuting cannot replay the tail of that voice
+      ring.length = 0;
+      ringMs = 0;
+      pending = [];
+      return;
+    }
     const input = event.inputBuffer.getChannelData(0);
     let sum = 0;
     for (let i = 0; i < input.length; i += 1) sum += input[i]! * input[i]!;
@@ -332,6 +362,14 @@ export async function startVoiceLoop(handlers: VoiceHandlers): Promise<VoiceLoop
       stream.getTracks().forEach((track) => track.stop());
     },
     setSpeaking: (speaking) => behavior.setSpeaking(speaking),
+    setMuted: (next) => {
+      muted = next;
+      if (next) {
+        // whatever was mid-decode is our own opening words — drop it
+        finalsBuf = "";
+        interimBuf = "";
+      }
+    },
     endSession: () => behavior.endSession(),
   };
 }
