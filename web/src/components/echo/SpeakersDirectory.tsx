@@ -9,7 +9,9 @@ import type { Me, Person } from "@/api/types";
 import { Card, EmptyState } from "@/components/ui";
 import { ConfirmDialog, IconAction, SelectMenu } from "@/components/rowActions";
 import { DataTable, StatusDot } from "@/components/DataTable";
-import { IconPencil, IconTrash } from "@/components/icons";
+import {
+  IconMerge, IconMicOff, IconMicPlus, IconPencil, IconTeam, IconTrash,
+} from "@/components/icons";
 import { digits } from "@/lib/format";
 
 /** 2026-08-24 cleanup: popup-confirmed deletes; the ledger's fixed line. */
@@ -688,6 +690,7 @@ export function SpeakersDirectory() {
                 ? [{
                     key: "team",
                     label: t("setTeam"),
+                    icon: <IconTeam />,
                     onSelect: () => {
                       setEditingTeamId(person.id);
                       setTeamDraft(person.team ?? "");
@@ -705,6 +708,7 @@ export function SpeakersDirectory() {
                       label: person.voice_enrolled_at
                         ? t("voiceImprove")
                         : t("voiceEnroll"),
+                      icon: <IconMicPlus />,
                       disabled: enroll !== null,
                       onSelect: () => openEnroll(person),
                     },
@@ -712,6 +716,7 @@ export function SpeakersDirectory() {
                       ? [{
                           key: "voiceClear",
                           label: t("voiceRemove"),
+                          icon: <IconMicOff />,
                           danger: true,
                           disabled: busy,
                           onSelect: () => void clearVoiceFor(person),
@@ -722,6 +727,7 @@ export function SpeakersDirectory() {
               {
                 key: "merge",
                 label: t("merge"),
+                icon: <IconMerge />,
                 /* a person can only fold into SOMEONE — with nobody else in
                    the directory the action has no other half */
                 disabled: (people?.length ?? 0) < 2,

@@ -20,7 +20,7 @@ import { MemberDetail } from "@/components/platform/MemberDetail";
 import { Card, Chip, EmptyState } from "@/components/ui";
 import { ConfirmDialog, SelectMenu } from "@/components/rowActions";
 import { DataTable, StatusDot } from "@/components/DataTable";
-import { IconPencil, IconTrash } from "@/components/icons";
+import { IconPencil, IconToggleOff, IconToggleOn, IconTrash } from "@/components/icons";
 import { digits, formatDate, personName } from "@/lib/format";
 
 /**
@@ -661,6 +661,7 @@ export default function UsersPage() {
                   ? [{
                       key: "status",
                       label: tAdmin(u.status === "disabled" ? "enable" : "disable"),
+                      icon: u.status === "disabled" ? <IconToggleOn /> : <IconToggleOff />,
                       disabled: busy,
                       onSelect: () => void toggleStatusFor(u),
                     }]

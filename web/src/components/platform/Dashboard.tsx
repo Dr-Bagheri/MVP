@@ -7,6 +7,10 @@ import type { Me } from "@/api/types";
 import { personName } from "@/lib/format";
 import { Link } from "@/i18n/routing";
 import { KebabMenu } from "@/components/rowActions";
+import {
+  IconArrowDown, IconArrowUp, IconHide, IconMove, IconPlus, IconResize,
+  IconToEnd, IconToStart,
+} from "@/components/icons";
 import { EchoMark } from "./icons";
 import {
   DEFAULT_LAYOUT, SIZE_SPAN, TILE_SIZES, WIDGETS, WIDGET_SIZES,
@@ -132,9 +136,13 @@ export function Dashboard() {
                      unsupported ones disabled rather than absent */
                   key: "size",
                   label: t("sizeLabel"),
+                  icon: <IconResize />,
                   sub: TILE_SIZES.map((s) => ({
                     key: s,
                     label: t(`size.${s}` as "size.small"),
+                    /* a size is a VALUE, not an action — the gutter stays,
+                       the glyph does not (the deliberate `icon: null`) */
+                    icon: null,
                     disabled: !allowed.includes(s) || size === s,
                     onSelect: () => resize(id, s),
                   })),
@@ -145,14 +153,21 @@ export function Dashboard() {
                      way to move a tile on a phone */
                   key: "move",
                   label: t("moveTile"),
+                  icon: <IconMove />,
                   sub: [
-                    { key: "up", label: t("moveUp"), onSelect: () => move(id, -1) },
-                    { key: "down", label: t("moveDown"), onSelect: () => move(id, 1) },
-                    { key: "first", label: t("moveFirst"), onSelect: () => move(id, -layout.widgets.length) },
-                    { key: "last", label: t("moveLast"), onSelect: () => move(id, layout.widgets.length) },
+                    { key: "up", label: t("moveUp"), icon: <IconArrowUp />, onSelect: () => move(id, -1) },
+                    { key: "down", label: t("moveDown"), icon: <IconArrowDown />, onSelect: () => move(id, 1) },
+                    { key: "first", label: t("moveFirst"), icon: <IconToStart />, onSelect: () => move(id, -layout.widgets.length) },
+                    { key: "last", label: t("moveLast"), icon: <IconToEnd />, onSelect: () => move(id, layout.widgets.length) },
                   ],
                 },
-                { key: "hide", label: t("hide"), danger: true, onSelect: () => toggleWidget(id) },
+                {
+                  key: "hide",
+                  label: t("hide"),
+                  icon: <IconHide />,
+                  danger: true,
+                  onSelect: () => toggleWidget(id),
+                },
               ]}
             />
           </span>
@@ -234,10 +249,11 @@ export function Dashboard() {
             trigger={<span className="text-xs">＋ {t("addWidget")}</span>}
             items={
               hidden.length === 0
-                ? [{ key: "none", label: t("allShown"), disabled: true }]
+                ? [{ key: "none", label: t("allShown"), icon: null, disabled: true }]
                 : hidden.map((key) => ({
                     key,
                     label: t(`widget.${key}` as "widget.tiles"),
+                    icon: <IconPlus />,
                     onSelect: () => toggleWidget(key),
                   }))
             }

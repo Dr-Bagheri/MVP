@@ -54,8 +54,30 @@ export function IconAction({
 export interface KebabItem {
   key: string;
   label: string;
-  icon?: ReactNode;
+  /**
+   * REQUIRED (user directive, 2026-08-26: "all items in kebab menus in the
+   * theme must have an icon").
+   *
+   * Not optional-with-a-convention: a menu is a column of icons before it
+   * is a column of words, and one item without one leaves a hole in that
+   * column that reads as a rendering fault. Making it required means a new
+   * menu item cannot ship iconless — the compiler asks for it at the only
+   * moment anyone is thinking about that item.
+   *
+   * `null` is the deliberate escape hatch for the rare row that is a
+   * VALUE, not an action (a size in the size flyout, a language in an
+   * export list) — spelled out loud so it reads as a decision rather than
+   * as a forgotten field.
+   */
+  icon: ReactNode | null;
   onSelect?: () => void;
+  /**
+   * A destructive item. The menu SORTS these to the bottom and rules a
+   * line above them (see `orderItems`) — the theme's other half of this
+   * directive: "the red one stays together too". Nobody has to remember to
+   * put delete last, and no menu can end up with a red row in the middle
+   * where a mis-click lands on it.
+   */
   danger?: boolean;
   disabled?: boolean;
   /** a toggle stays IN the menu when pressed (redact, view modes) */
@@ -70,6 +92,64 @@ export interface KebabItem {
 
 const MENU_W = 176; // matches min-w-44
 const ITEM_H = 34;  // one row's height — the no-scroll placement math
+const RULE_H = 9;   // the separator above the danger group
+
+/**
+ * THE DANGER GROUP (user directive, 2026-08-26: "the red one stays together
+ * too, in the theme").
+ *
+ * Destructive items sort to the END, in the order the caller listed them,
+ * with a rule drawn above the group. Doing it here rather than at each call
+ * site means it is true of every menu in the product, including the ones
+ * nobody has written yet — and a red row can never end up in the middle of
+ * a list where the pointer passes over it on the way somewhere else.
+ *
+ * Stable within each half: `filter` preserves order, so a caller's chosen
+ * sequence survives inside the safe group and inside the danger group.
+ */
+function orderItems(items: KebabItem[]): { safe: KebabItem[]; danger: KebabItem[] } {
+  return {
+    safe: items.filter((item) => !item.danger),
+    danger: items.filter((item) => item.danger),
+  };
+}
+
+/** the rendered height of a menu, for the no-scroll placement math */
+function menuHeight(items: KebabItem[]): number {
+  const { danger } = orderItems(items);
+  return items.length * ITEM_H + 10 + (danger.length > 0 && danger.length < items.length ? RULE_H : 0);
+}
+
+/** the two groups, with the theme's rule between them */
+function MenuBody({
+  items, expanded, setExpanded, close,
+}: {
+  items: KebabItem[];
+  expanded: string | null;
+  setExpanded: (key: string | null, anchor?: DOMRect) => void;
+  close: () => void;
+}) {
+  const { safe, danger } = orderItems(items);
+  return (
+    <>
+      {safe.map((item) => (
+        <MenuEntry
+          key={item.key} item={item} expanded={expanded}
+          setExpanded={setExpanded} close={close}
+        />
+      ))}
+      {danger.length > 0 && safe.length > 0 ? (
+        <hr className="my-1 border-border" />
+      ) : null}
+      {danger.map((item) => (
+        <MenuEntry
+          key={item.key} item={item} expanded={expanded}
+          setExpanded={setExpanded} close={close}
+        />
+      ))}
+    </>
+  );
+}
 
 function MenuEntry({
   item, expanded, setExpanded, close,
@@ -103,7 +183,12 @@ function MenuEntry({
           : "text-fg-muted hover:bg-surface-2 hover:text-fg"
       } ${isOpen ? "bg-surface-2 text-fg" : ""} disabled:pointer-events-none disabled:opacity-40`}
     >
-      {item.icon ? <span className="shrink-0 opacity-80">{item.icon}</span> : null}
+      {/* the icon GUTTER is always spent, even by an item that declined one
+          (a value row, `icon: null`) — otherwise its label sits four pixels
+          left of every other and the column looks broken */}
+      <span className="grid h-4 w-4 shrink-0 place-items-center opacity-80">
+        {item.icon}
+      </span>
       <span className="min-w-0 flex-1 truncate">{item.label}</span>
       {item.sub ? (
         <span aria-hidden className="inline-block text-[10px] rtl:-scale-x-100">▸</span>
@@ -150,7 +235,7 @@ export function KebabMenu({
     if (!rect) return;
     const rtl = document.documentElement.dir === "rtl";
     const left = rtl ? rect.left : rect.right - MENU_W;
-    const height = items.length * ITEM_H + 10;
+    const height = menuHeight(items);
     const below = rect.bottom + 4;
     const top = below + height <= window.innerHeight - 8
       ? below
@@ -231,15 +316,12 @@ export function KebabMenu({
               className="z-50 rounded-lg border border-border bg-surface py-1 shadow-xl"
               onClick={(e) => e.stopPropagation()}
             >
-              {items.map((item) => (
-                <MenuEntry
-                  key={item.key}
-                  item={item}
-                  expanded={expanded}
-                  setExpanded={setExpanded}
-                  close={closeAll}
-                />
-              ))}
+              <MenuBody
+                items={items}
+                expanded={expanded}
+                setExpanded={setExpanded}
+                close={closeAll}
+              />
             </div>,
             document.body,
           )
@@ -253,15 +335,12 @@ export function KebabMenu({
               className="z-[51] rounded-lg border border-border bg-surface py-1 shadow-xl"
               onClick={(e) => e.stopPropagation()}
             >
-              {openSub.map((child) => (
-                <MenuEntry
-                  key={child.key}
-                  item={child}
-                  expanded={null}
-                  setExpanded={() => undefined}
-                  close={closeAll}
-                />
-              ))}
+              <MenuBody
+                items={openSub}
+                expanded={null}
+                setExpanded={() => undefined}
+                close={closeAll}
+              />
             </div>,
             document.body,
           )
@@ -308,7 +387,7 @@ export function ContextMenu({
     };
   }, [onClose]);
 
-  const height = items.length * ITEM_H + 10;
+  const height = menuHeight(items);
   const rtl = typeof document !== "undefined" && document.documentElement.dir === "rtl";
   const left = rtl ? at.x - MENU_W : at.x;
   const top = at.y + height <= window.innerHeight - 8
@@ -328,15 +407,12 @@ export function ContextMenu({
       className="z-50 rounded-lg border border-border bg-surface py-1 shadow-xl"
       onClick={(e) => e.stopPropagation()}
     >
-      {items.map((item) => (
-        <MenuEntry
-          key={item.key}
-          item={item}
-          expanded={null}
-          setExpanded={() => undefined}
-          close={onClose}
-        />
-      ))}
+      <MenuBody
+        items={items}
+        expanded={null}
+        setExpanded={() => undefined}
+        close={onClose}
+      />
     </div>,
     document.body,
   );

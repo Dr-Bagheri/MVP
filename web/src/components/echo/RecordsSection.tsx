@@ -15,7 +15,10 @@ import { formatDate, formatDuration, formatRelativeDate, digits } from "@/lib/fo
 import { DeletedCallsCard } from "./DeletedCallsCard";
 import { ConfirmDialog } from "@/components/rowActions";
 import { DataTable } from "@/components/DataTable";
-import { IconArchive, IconGlobe, IconPencil, IconShare, IconTag, IconTrash } from "@/components/icons";
+import {
+  IconArchive, IconGlobe, IconOpen, IconPencil, IconPlay, IconRetry, IconShare,
+  IconTag, IconTrash,
+} from "@/components/icons";
 
 /**
  * 0085 + the 2026-08-24 cleanup: the delete popup's confirm IS the consent,
@@ -334,6 +337,7 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
               {
                 key: "open",
                 label: t("openRecord"),
+                icon: <IconOpen />,
                 onSelect: () => router.push(`/calls/${call.id}`),
               },
               /* An unfinished take continues where its audio ends (user
@@ -345,6 +349,7 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
                 ? [{
                     key: "resume",
                     label: t("resumeCall"),
+                    icon: <IconPlay />,
                     onSelect: () => router.push(`/echo/record?resume=${call.id}`),
                   }]
                 : []),
@@ -357,6 +362,7 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
                 ? [{
                     key: "retry",
                     label: t("retry"),
+                    icon: <IconRetry />,
                     disabled: busy,
                     onSelect: () =>
                       void act(async () => {

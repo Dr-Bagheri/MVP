@@ -1,0 +1,543 @@
+{
+  "schema": "openai.presentation.layout/v4",
+  "unit": "px",
+  "slide": {
+    "aid": "sl/q9rzzn",
+    "id": "q9rzzn",
+    "slide": 1,
+    "layoutId": "67831ed6-8400-4462-8313-a4778f7a4fcb",
+    "layoutName": "Title Slide",
+    "layoutType": "title",
+    "masterLayoutId": "6dd1c9a1-b37b-44c6-95b7-42d6390966cf",
+    "masterLayoutName": "Master",
+    "backgroundColor": "#0C0922",
+    "frame": {
+      "left": 0,
+      "top": 0,
+      "width": 1280,
+      "height": 720
+    }
+  },
+  "theme": {
+    "colorSchemeName": "ChatGPT",
+    "colors": {
+      "accent1": "#156082",
+      "accent2": "#E97132",
+      "accent3": "#196B24",
+      "accent4": "#0F9ED5",
+      "accent5": "#A02B93",
+      "accent6": "#4EA72E",
+      "bg1": "#FFFFFF",
+      "bg2": "#000000",
+      "tx1": "#1F1F1F",
+      "tx2": "#FFFFFF",
+      "dk1": "#000000",
+      "lt1": "#FFFFFF",
+      "dk2": "#0E2841",
+      "lt2": "#E8E8E8",
+      "hlink": "#467886",
+      "folHlink": "#96607D"
+    },
+    "typefaces": [
+      "+mn-lt"
+    ]
+  },
+  "inheritedLayers": [
+    {
+      "scope": "layout",
+      "id": "67831ed6-8400-4462-8313-a4778f7a4fcb",
+      "name": "Title Slide",
+      "type": "title",
+      "parentLayoutId": "6dd1c9a1-b37b-44c6-95b7-42d6390966cf",
+      "elements": []
+    },
+    {
+      "scope": "master",
+      "id": "6dd1c9a1-b37b-44c6-95b7-42d6390966cf",
+      "name": "Master",
+      "type": "master",
+      "elements": []
+    }
+  ],
+  "elements": [
+    {
+      "order": 1,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/dc3et0fi",
+      "id": "1",
+      "bbox": [
+        0,
+        0,
+        1280,
+        720
+      ],
+      "geometry": "rect",
+      "alt": "Conversation waveforms becoming governed organizational memory",
+      "contentType": "image/png",
+      "imageFit": "cover",
+      "imageMask": {
+        "geometry": "rect"
+      },
+      "asset": {
+        "assetId": "e4766633-28ad-4193-9133-8f18e3892855",
+        "contentType": "image/png",
+        "byteLength": 1885791
+      }
+    },
+    {
+      "order": 2,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/zaxwby90",
+      "id": "2",
+      "bbox": [
+        0,
+        0,
+        1280,
+        720
+      ],
+      "geometry": "rect",
+      "lineWidth": 0
+    },
+    {
+      "order": 3,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ypof2t8f",
+      "id": "3",
+      "bbox": [
+        0,
+        0,
+        620,
+        720
+      ],
+      "geometry": "rect",
+      "lineWidth": 0
+    },
+    {
+      "order": 4,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/0zux4fyt",
+      "id": "4",
+      "bbox": [
+        66,
+        56,
+        76,
+        76
+      ],
+      "geometry": "rect",
+      "alt": "NeurAI mark",
+      "contentType": "image/png",
+      "imageFit": "contain",
+      "imageMask": {
+        "geometry": "rect"
+      },
+      "asset": {
+        "assetId": "3863497b-b047-475d-9164-10bc15130ba2",
+        "contentType": "image/png",
+        "byteLength": 517581
+      }
+    },
+    {
+      "order": 5,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/cn6x03qp",
+      "id": "5",
+      "bbox": [
+        66,
+        152,
+        420,
+        34
+      ],
+      "geometry": "rect",
+      "text": "NEURAI PLATFORM",
+      "textPreview": "NEURAI PLATFORM",
+      "resolvedFontSize": 15,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 15,
+        "typeface": "+mn-lt",
+        "color": "#9B6DFF",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "NEURAI PLATFORM"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "NEURAI PLATFORM",
+          "resolvedTextStyle": {
+            "fontSize": 15,
+            "color": "#9B6DFF",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "NEURAI PLATFORM",
+              "fontSize": 15,
+              "color": "#9B6DFF",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 6,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/bmxw7y94",
+      "id": "6",
+      "bbox": [
+        66,
+        202,
+        590,
+        180
+      ],
+      "geometry": "rect",
+      "text": "AI that is present\nbefore it is prompted",
+      "textPreview": "AI that is present | before it is prompted",
+      "resolvedFontSize": 53,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 53,
+        "typeface": "+mn-lt",
+        "color": "#FFFFFF",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "AI that is present"
+          },
+          {
+            "index": 2,
+            "text": "before it is prompted"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "AI that is present",
+          "resolvedTextStyle": {
+            "fontSize": 53,
+            "color": "#FFFFFF",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "AI that is present",
+              "fontSize": 53,
+              "color": "#FFFFFF",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        },
+        {
+          "index": 2,
+          "text": "before it is prompted",
+          "resolvedTextStyle": {
+            "fontSize": 53,
+            "color": "#FFFFFF",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "before it is prompted",
+              "fontSize": 53,
+              "color": "#FFFFFF",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 7,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/qlofyt8j",
+      "id": "7",
+      "bbox": [
+        70,
+        410,
+        540,
+        86
+      ],
+      "geometry": "rect",
+      "text": "The Persian-first operating surface for\norganizational memory—beginning with Echo",
+      "textPreview": "The Persian-first operating surface for | organizational memory—beginning with Echo",
+      "resolvedFontSize": 23,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 23,
+        "typeface": "+mn-lt",
+        "color": "#DED7F2",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "The Persian-first operating surface for"
+          },
+          {
+            "index": 2,
+            "text": "organizational memory—beginning with Echo"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "The Persian-first operating surface for",
+          "resolvedTextStyle": {
+            "fontSize": 23,
+            "color": "#DED7F2",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "The Persian-first operating surface for",
+              "fontSize": 23,
+              "color": "#DED7F2",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        },
+        {
+          "index": 2,
+          "text": "organizational memory—beginning with Echo",
+          "resolvedTextStyle": {
+            "fontSize": 23,
+            "color": "#DED7F2",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "organizational memory—beginning with Echo",
+              "fontSize": 23,
+              "color": "#DED7F2",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 8,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/pkfe5ory",
+      "id": "8",
+      "bbox": [
+        70,
+        540,
+        466,
+        34
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#EEE7FF",
+      "lineWidth": 0
+    },
+    {
+      "order": 9,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ojmdwjqd",
+      "id": "9",
+      "bbox": [
+        80,
+        543,
+        446,
+        26
+      ],
+      "geometry": "rect",
+      "text": "PRESENT  ·  EVIDENCE-BACKED  ·  AUTHORITY-AWARE",
+      "textPreview": "PRESENT  ·  EVIDENCE-BACKED  ·  AUTHORITY-AWARE",
+      "resolvedFontSize": 14,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 14,
+        "typeface": "+mn-lt",
+        "color": "#6F43E7",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "middle",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "PRESENT  ·  EVIDENCE-BACKED  ·  AUTHORITY-AWARE"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "PRESENT  ·  EVIDENCE-BACKED  ·  AUTHORITY-AWARE",
+          "resolvedTextStyle": {
+            "fontSize": 14,
+            "color": "#6F43E7",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "PRESENT  ·  EVIDENCE-BACKED  ·  AUTHORITY-AWARE",
+              "fontSize": 14,
+              "color": "#6F43E7",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 10,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/yxgni90r",
+      "id": "10",
+      "bbox": [
+        70,
+        621,
+        520,
+        28
+      ],
+      "geometry": "rect",
+      "text": "Executive product & architecture demo  ·  August 2026",
+      "textPreview": "Executive product & architecture demo  ·  August 2026",
+      "resolvedFontSize": 13,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 13,
+        "typeface": "+mn-lt",
+        "color": "#AAA0C2",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Executive product & architecture demo  ·  August 2026"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Executive product & architecture demo  ·  August 2026",
+          "resolvedTextStyle": {
+            "fontSize": 13,
+            "color": "#AAA0C2",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Executive product & architecture demo  ·  August 2026",
+              "fontSize": 13,
+              "color": "#AAA0C2",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    }
+  ],
+  "composeRuns": []
+}

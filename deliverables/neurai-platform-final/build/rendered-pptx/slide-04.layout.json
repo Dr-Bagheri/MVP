@@ -1,0 +1,816 @@
+{
+  "schema": "openai.presentation.layout/v4",
+  "unit": "px",
+  "slide": {
+    "aid": "sl/2u28p5",
+    "id": "2u28p5",
+    "slide": 4,
+    "layoutId": "67831ed6-8400-4462-8313-a4778f7a4fcb",
+    "layoutName": "Title Slide",
+    "layoutType": "title",
+    "masterLayoutId": "6dd1c9a1-b37b-44c6-95b7-42d6390966cf",
+    "masterLayoutName": "Master",
+    "backgroundColor": "#FAF8FC",
+    "frame": {
+      "left": 0,
+      "top": 0,
+      "width": 1280,
+      "height": 720
+    }
+  },
+  "theme": {
+    "colorSchemeName": "ChatGPT",
+    "colors": {
+      "accent1": "#156082",
+      "accent2": "#E97132",
+      "accent3": "#196B24",
+      "accent4": "#0F9ED5",
+      "accent5": "#A02B93",
+      "accent6": "#4EA72E",
+      "bg1": "#FFFFFF",
+      "bg2": "#000000",
+      "tx1": "#1F1F1F",
+      "tx2": "#FFFFFF",
+      "dk1": "#000000",
+      "lt1": "#FFFFFF",
+      "dk2": "#0E2841",
+      "lt2": "#E8E8E8",
+      "hlink": "#467886",
+      "folHlink": "#96607D"
+    },
+    "typefaces": [
+      "+mn-lt"
+    ]
+  },
+  "inheritedLayers": [
+    {
+      "scope": "layout",
+      "id": "67831ed6-8400-4462-8313-a4778f7a4fcb",
+      "name": "Title Slide",
+      "type": "title",
+      "parentLayoutId": "6dd1c9a1-b37b-44c6-95b7-42d6390966cf",
+      "elements": []
+    },
+    {
+      "scope": "master",
+      "id": "6dd1c9a1-b37b-44c6-95b7-42d6390966cf",
+      "name": "Master",
+      "type": "master",
+      "elements": []
+    }
+  ],
+  "elements": [
+    {
+      "order": 1,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/2x476dc7",
+      "id": "1",
+      "bbox": [
+        64,
+        38,
+        500,
+        26
+      ],
+      "geometry": "rect",
+      "text": "THE EXPERIENCE",
+      "textPreview": "THE EXPERIENCE",
+      "resolvedFontSize": 13,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 13,
+        "typeface": "+mn-lt",
+        "color": "#6F43E7",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "THE EXPERIENCE"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "THE EXPERIENCE",
+          "resolvedTextStyle": {
+            "fontSize": 13,
+            "color": "#6F43E7",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "THE EXPERIENCE",
+              "fontSize": 13,
+              "color": "#6F43E7",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 2,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/pkfqhsby",
+      "id": "2",
+      "bbox": [
+        64,
+        76,
+        1152,
+        72
+      ],
+      "geometry": "rect",
+      "text": "One calm product surface—from question to captured truth",
+      "textPreview": "One calm product surface—from question to captured truth",
+      "resolvedFontSize": 38,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 38,
+        "typeface": "+mn-lt",
+        "color": "#181424",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "One calm product surface—from question to captured truth"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "One calm product surface—from question to captured truth",
+          "resolvedTextStyle": {
+            "fontSize": 38,
+            "color": "#181424",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "One calm product surface—from question to captured truth",
+              "fontSize": 38,
+              "color": "#181424",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 3,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/oj6p8nud",
+      "id": "3",
+      "bbox": [
+        64,
+        145,
+        1110,
+        44
+      ],
+      "geometry": "rect",
+      "text": "Actual current screens: Persian-first platform hub and Echo recording workspace.",
+      "textPreview": "Actual current screens: Persian-first platform hub and Echo recording workspace.",
+      "resolvedFontSize": 18,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 18,
+        "typeface": "+mn-lt",
+        "color": "#716A7C",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Actual current screens: Persian-first platform hub and Echo recording workspace."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Actual current screens: Persian-first platform hub and Echo recording workspace.",
+          "resolvedTextStyle": {
+            "fontSize": 18,
+            "color": "#716A7C",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Actual current screens: Persian-first platform hub and Echo recording workspace.",
+              "fontSize": 18,
+              "color": "#716A7C",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 4,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/fudobitw",
+      "id": "4",
+      "bbox": [
+        54,
+        214,
+        562,
+        422
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#FFFFFF",
+      "lineColor": "#DDD7E5",
+      "lineWidth": 1
+    },
+    {
+      "order": 5,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/et472dcb",
+      "id": "5",
+      "bbox": [
+        664,
+        214,
+        562,
+        422
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#FFFFFF",
+      "lineColor": "#DDD7E5",
+      "lineWidth": 1
+    },
+    {
+      "order": 6,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/07ahkrm1",
+      "id": "6",
+      "bbox": [
+        70,
+        230,
+        530,
+        300
+      ],
+      "geometry": "roundRect",
+      "alt": "Persian NeurAI Platform hub",
+      "contentType": "image/png",
+      "imageFit": "cover",
+      "imageMask": {
+        "geometry": "roundRect",
+        "adjustmentList": [
+          {
+            "name": "adj",
+            "formula": "val 5333"
+          }
+        ]
+      },
+      "asset": {
+        "assetId": "a0668eeb-f1e7-41e8-9903-16559137c0d7",
+        "contentType": "image/png",
+        "byteLength": 92657
+      }
+    },
+    {
+      "order": 7,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/18jydw3m",
+      "id": "7",
+      "bbox": [
+        680,
+        230,
+        530,
+        300
+      ],
+      "geometry": "roundRect",
+      "alt": "Echo recording workspace",
+      "contentType": "image/png",
+      "imageFit": "cover",
+      "imageMask": {
+        "geometry": "roundRect",
+        "adjustmentList": [
+          {
+            "name": "adj",
+            "formula": "val 5333"
+          }
+        ]
+      },
+      "asset": {
+        "assetId": "0e809797-3c37-41b6-ae4f-a47407f4f289",
+        "contentType": "image/png",
+        "byteLength": 85388
+      }
+    },
+    {
+      "order": 8,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/rqto7ytk",
+      "id": "8",
+      "bbox": [
+        82,
+        546,
+        150,
+        34
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#EEE7FF",
+      "lineWidth": 0
+    },
+    {
+      "order": 9,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/qpk7ytcz",
+      "id": "9",
+      "bbox": [
+        92,
+        549,
+        130,
+        26
+      ],
+      "geometry": "rect",
+      "text": "PLATFORM HUB",
+      "textPreview": "PLATFORM HUB",
+      "resolvedFontSize": 14,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 14,
+        "typeface": "+mn-lt",
+        "color": "#6F43E7",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "middle",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "PLATFORM HUB"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "PLATFORM HUB",
+          "resolvedTextStyle": {
+            "fontSize": 14,
+            "color": "#6F43E7",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "PLATFORM HUB",
+              "fontSize": 14,
+              "color": "#6F43E7",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 10,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/cnilgnud",
+      "id": "10",
+      "bbox": [
+        82,
+        582,
+        508,
+        42
+      ],
+      "geometry": "rect",
+      "text": "Ask across permitted memory. Attach sources. Choose agent, model, and web mode.",
+      "textPreview": "Ask across permitted memory. Attach sources. Choose agent, model, and web mode.",
+      "resolvedFontSize": 15.51,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 15.51,
+        "typeface": "+mn-lt",
+        "color": "#716A7C",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Ask across permitted memory. Attach sources. Choose agent, model, and web"
+          },
+          {
+            "index": 2,
+            "text": "mode."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Ask across permitted memory. Attach sources. Choose agent, model, and web mode.",
+          "resolvedTextStyle": {
+            "fontSize": 15.51,
+            "color": "#716A7C",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Ask across permitted memory. Attach sources. Choose agent, model, and web mode.",
+              "fontSize": 15.51,
+              "color": "#716A7C",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 11,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/dorm9svy",
+      "id": "11",
+      "bbox": [
+        692,
+        546,
+        150,
+        34
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#FFF0ED",
+      "lineWidth": 0
+    },
+    {
+      "order": 12,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ql03edcn",
+      "id": "12",
+      "bbox": [
+        702,
+        549,
+        130,
+        26
+      ],
+      "geometry": "rect",
+      "text": "ECHO CAPTURE",
+      "textPreview": "ECHO CAPTURE",
+      "resolvedFontSize": 14,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 14,
+        "typeface": "+mn-lt",
+        "color": "#B44235",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "middle",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "ECHO CAPTURE"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "ECHO CAPTURE",
+          "resolvedTextStyle": {
+            "fontSize": 14,
+            "color": "#B44235",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "ECHO CAPTURE",
+              "fontSize": 14,
+              "color": "#B44235",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 13,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/bm947ids",
+      "id": "13",
+      "bbox": [
+        692,
+        582,
+        508,
+        42
+      ],
+      "geometry": "rect",
+      "text": "Waveform, live transcript, agenda, notes, and explicit recording controls.",
+      "textPreview": "Waveform, live transcript, agenda, notes, and explicit recording controls.",
+      "resolvedFontSize": 15.51,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 15.51,
+        "typeface": "+mn-lt",
+        "color": "#716A7C",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Waveform, live transcript, agenda, notes, and explicit recording controls."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Waveform, live transcript, agenda, notes, and explicit recording controls.",
+          "resolvedTextStyle": {
+            "fontSize": 15.51,
+            "color": "#716A7C",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Waveform, live transcript, agenda, notes, and explicit recording controls.",
+              "fontSize": 15.51,
+              "color": "#716A7C",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 14,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ojilc3uh",
+      "id": "14",
+      "bbox": [
+        64,
+        681,
+        1152,
+        1.5
+      ],
+      "geometry": "rect",
+      "fillColor": "#DDD7E5",
+      "lineWidth": 0
+    },
+    {
+      "order": 15,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/pkr258v2",
+      "id": "15",
+      "bbox": [
+        64,
+        690,
+        220,
+        18
+      ],
+      "geometry": "rect",
+      "text": "NEURAI PLATFORM",
+      "textPreview": "NEURAI PLATFORM",
+      "resolvedFontSize": 10,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 10,
+        "typeface": "+mn-lt",
+        "color": "#6F43E7",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "NEURAI PLATFORM"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "NEURAI PLATFORM",
+          "resolvedTextStyle": {
+            "fontSize": 10,
+            "color": "#6F43E7",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "NEURAI PLATFORM",
+              "fontSize": 10,
+              "color": "#6F43E7",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 16,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/2hg3adcb",
+      "id": "16",
+      "bbox": [
+        1132,
+        688,
+        84,
+        18
+      ],
+      "geometry": "rect",
+      "text": "04",
+      "textPreview": "04",
+      "resolvedFontSize": 10,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 10,
+        "typeface": "+mn-lt",
+        "color": "#716A7C",
+        "bold": true,
+        "alignment": "right",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "04"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "04",
+          "resolvedTextStyle": {
+            "fontSize": 10,
+            "color": "#716A7C",
+            "bold": true,
+            "alignment": "right"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "04",
+              "fontSize": 10,
+              "color": "#716A7C",
+              "bold": true,
+              "alignment": "right"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    }
+  ],
+  "composeRuns": []
+}

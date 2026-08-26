@@ -13,8 +13,10 @@ import { isFillerWord, stripFillers } from "@/lib/cleanRead";
 import { ConfirmDialog, IconAction, KebabMenu, SelectMenu } from "@/components/rowActions";
 import { RichTextEditor } from "@/components/RichTextEditor";
 import {
-  IconArchive, IconChip, IconFileText, IconGavel, IconGlobe, IconMic, IconPencil,
-  IconPeople3, IconRows, IconShare, IconSparkle, IconTag, IconUsers, IconZap,
+  IconArchive, IconAsk, IconChip, IconCopy, IconDownload, IconEye, IconFileText,
+  IconFilter, IconGavel, IconGlobe, IconMic, IconOutline, IconParagraph,
+  IconPencil, IconPeople3, IconPrint, IconRedact, IconRetry, IconRows,
+  IconShare, IconSparkle, IconTag, IconUsers, IconZap,
 } from "@/components/icons";
 import { SectionMenu } from "@/components/scaffold";
 import { SummaryBody, parseSummary } from "@/components/echo/SummaryBody";
@@ -766,7 +768,7 @@ export default function CallDetailPage({
     {
       key: "ask",
       label: t("askAbout"),
-      icon: <IconSparkle />,
+      icon: <IconAsk />,
       onSelect: () =>
         openAssistant({
           draft: locale === "fa"
@@ -789,7 +791,7 @@ export default function CallDetailPage({
       ? [{
           key: "retry",
           label: tCalls("retry"),
-          icon: <IconSparkle />,
+          icon: <IconRetry />,
           onSelect: () =>
             void api.retryCall(id)
               .then(() => api.getCall(id)).then(setCall)
@@ -800,33 +802,34 @@ export default function CallDetailPage({
     {
       key: "export",
       label: t("exportMenu"),
-      icon: <IconFileText />,
+      icon: <IconDownload />,
       sub: [
         {
-          key: "export-srt", label: "SRT",
+          key: "export-srt", label: "SRT", icon: null,
           disabled: !canExportSubtitles(rows),
           onSelect: () => exportSubtitles("srt"),
         },
         {
-          key: "export-vtt", label: "VTT",
+          key: "export-vtt", label: "VTT", icon: null,
           disabled: !canExportSubtitles(rows),
           onSelect: () => exportSubtitles("vtt"),
         },
         {
-          key: "export-md", label: "Markdown",
+          key: "export-md", label: "Markdown", icon: null,
           disabled: rows.length === 0,
           onSelect: () => exportMarkdown(),
         },
         {
           /* minutes as a Word file: an HTML .doc — Word opens it natively,
              letterhead-light (title · date · summary · transcript), RTL */
-          key: "export-doc", label: "Word (.doc)",
+          key: "export-doc", label: "Word (.doc)", icon: null,
           disabled: rows.length === 0 && !summary,
           onSelect: () => exportDoc(),
         },
         {
           key: "export-redact",
           label: `${t("redactToggle")}${redactExports ? " ✓" : ""}`,
+          icon: <IconRedact />,
           keepOpen: true,
           onSelect: () => setRedactExports((v) => !v),
         },
@@ -835,14 +838,14 @@ export default function CallDetailPage({
     {
       key: "copy-summary",
       label: t("copySummary"),
-      icon: <IconFileText />,
+      icon: <IconCopy />,
       disabled: !summary,
       onSelect: () => {
         if (!summary) return;
         void navigator.clipboard.writeText(summary.body).then(() => notify(t("copied")));
       },
     },
-    { key: "print", label: t("printLabel"), icon: <IconFileText />, onSelect: () => window.print() },
+    { key: "print", label: t("printLabel"), icon: <IconPrint />, onSelect: () => window.print() },
     /* the VIEW toggles left this menu (user directive, 2026-08-25) — they
        are transcript facts, so they live on the transcript's own header */
     {
@@ -1170,6 +1173,8 @@ export default function CallDetailPage({
             items={[1, 1.5, 2].map((r) => ({
               key: String(r),
               label: `${r}×${rate === r ? " ✓" : ""}`,
+              /* a playback SPEED is a value, not an action */
+              icon: null,
               onSelect: () => setRateBoth(r),
             }))}
           />
@@ -1520,24 +1525,28 @@ export default function CallDetailPage({
                   {
                     key: "view-follow",
                     label: `${t("followPlayback")}${followPlayback ? " ✓" : ""}`,
+                    icon: <IconEye />,
                     keepOpen: true,
                     onSelect: () => setFollowPlayback((v) => !v),
                   },
                   {
                     key: "view-paragraphs",
                     label: `${t("paragraphMode")}${paragraphMode ? " ✓" : ""}`,
+                    icon: <IconParagraph />,
                     keepOpen: true,
                     onSelect: () => setParagraphMode((v) => !v),
                   },
                   {
                     key: "view-fillers",
                     label: `${t("cleanRead")}${cleanRead ? " ✓" : ""}`,
+                    icon: <IconFilter />,
                     keepOpen: true,
                     onSelect: () => setCleanRead((v) => !v),
                   },
                   {
                     key: "view-outline",
                     label: `${t("outlineMode")}${outlineMode ? " ✓" : ""}`,
+                    icon: <IconOutline />,
                     keepOpen: true,
                     disabled: headings.length < 2,
                     onSelect: () => setOutlineMode((v) => !v),

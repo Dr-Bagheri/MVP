@@ -107,3 +107,108 @@ export const IconPeople3 = (p: SVGProps<SVGSVGElement>) => (
 export const IconTag = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><path d="M3.5 11V4.5A1 1 0 0 1 4.5 3.5H11a2 2 0 0 1 1.4.6l7.5 7.5a2 2 0 0 1 0 2.8l-5.5 5.5a2 2 0 0 1-2.8 0L4.1 12.4a2 2 0 0 1-.6-1.4Z" /><circle cx="8" cy="8" r="1.3" fill="currentColor" stroke="none" /></svg>
 );
+
+/* ---------------------------------------------------------------------------
+ * 2026-08-26: every kebab item carries an icon (user directive), so the set
+ * grew to cover the actions that were rendering with a blank gutter. Same
+ * 24px grid, same 1.7px stroke — a menu is a column of icons before it is a
+ * column of words, and one item without one breaks the column.
+ * ------------------------------------------------------------------------ */
+
+/** open / go to — an arrow leaving its box */
+export const IconOpen = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><path d="M14 4h6v6" /><path d="m20 4-8.5 8.5" /><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" /></svg>
+);
+/** resume — a play head continuing */
+export const IconPlay = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><path d="M8 5.5v13l10-6.5-10-6.5Z" /></svg>
+);
+/** retry — a circular arrow */
+export const IconRetry = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><path d="M20 12a8 8 0 1 1-2.3-5.6" /><path d="M20.5 3.5V8H16" /></svg>
+);
+/** ask the assistant — a speech bubble with a spark */
+export const IconAsk = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><path d="M20.5 11.5a7.5 7.5 0 0 1-11 6.6L4 19.5l1.4-4.2A7.5 7.5 0 1 1 20.5 11.5Z" /><path d="m12 8 .8 2.2L15 11l-2.2.8L12 14l-.8-2.2L9 11l2.2-.8L12 8Z" /></svg>
+);
+/** export / download */
+export const IconDownload = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><path d="M12 4v10" /><path d="m8 10.5 4 4 4-4" /><path d="M4.5 17.5v1a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-1" /></svg>
+);
+/** copy — two stacked sheets */
+export const IconCopy = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15H4.5A1.5 1.5 0 0 1 3 13.5v-9A1.5 1.5 0 0 1 4.5 3h9A1.5 1.5 0 0 1 15 4.5V5" /></svg>
+);
+/** a team / department label */
+export const IconTeam = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><rect x="3" y="8" width="7" height="6" rx="1.5" /><rect x="14" y="8" width="7" height="6" rx="1.5" /><path d="M10 11h4" /><path d="M6.5 14v3.5h11V14" /></svg>
+);
+/** merge — two paths joining into one */
+export const IconMerge = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><path d="M6 3v4c0 3 2.5 4.5 6 5" /><path d="M18 3v4c0 3-2.5 4.5-6 5" /><path d="M12 12v9" /><path d="m9 18 3 3 3-3" /></svg>
+);
+/** add a voice sample — a mic with a plus */
+export const IconMicPlus = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><rect x="9" y="2.5" width="6" height="10" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 9 6" /><path d="M12 17.5V21" /><path d="M17.5 15h5M20 12.5v5" /></svg>
+);
+/** remove a voice — a mic with a slash */
+export const IconMicOff = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><path d="M9 5.5A3 3 0 0 1 15 5.5v4" /><path d="M15 12.4a3 3 0 0 1-4.6 1.4" /><path d="M5.5 11a6.5 6.5 0 0 0 10.2 5.3" /><path d="M18.5 11v0" /><path d="M12 17.5V21" /><path d="m3.5 3.5 17 17" /></svg>
+);
+/** enable / activate — a switch turned on */
+export const IconToggleOn = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><rect x="2.5" y="7" width="19" height="10" rx="5" /><circle cx="16.5" cy="12" r="2.6" fill="currentColor" stroke="none" /></svg>
+);
+/** disable — the same switch, off */
+export const IconToggleOff = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><rect x="2.5" y="7" width="19" height="10" rx="5" /><circle cx="7.5" cy="12" r="2.6" /></svg>
+);
+/** resize a tile — a frame with corner handles */
+export const IconResize = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><rect x="3.5" y="3.5" width="17" height="17" rx="2" /><path d="M8 3.5v3.5H3.5" /><path d="M16 20.5V17h4.5" /></svg>
+);
+/** move a tile — the four-way arrow */
+export const IconMove = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><path d="M12 3v18M3 12h18" /><path d="m9 6 3-3 3 3" /><path d="m9 18 3 3 3-3" /><path d="m6 9-3 3 3 3" /><path d="m18 9 3 3-3 3" /></svg>
+);
+export const IconArrowUp = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><path d="M12 20V4" /><path d="m6 10 6-6 6 6" /></svg>
+);
+export const IconArrowDown = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><path d="M12 4v16" /><path d="m6 14 6 6 6-6" /></svg>
+);
+/** to the very start — an arrow meeting a wall */
+export const IconToStart = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><path d="M4 4h16" /><path d="M12 20V8" /><path d="m7 13 5-5 5 5" /></svg>
+);
+export const IconToEnd = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><path d="M4 20h16" /><path d="M12 4v12" /><path d="m7 11 5 5 5-5" /></svg>
+);
+/** hide a tile — an eye with a slash */
+export const IconHide = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><path d="M3 12s3.5-6 9-6c1.7 0 3.2.6 4.4 1.4" /><path d="M20.2 9.3c.5.9.8 1.7.8 2.7 0 0-3.5 6-9 6-1.2 0-2.3-.3-3.2-.7" /><circle cx="12" cy="12" r="2.6" /><path d="m3.5 3.5 17 17" /></svg>
+);
+/** a reading/view mode toggle — an eye */
+export const IconEye = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><path d="M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6Z" /><circle cx="12" cy="12" r="2.6" /></svg>
+);
+/** paragraph mode — stacked text lines */
+export const IconParagraph = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><path d="M4 6h16" /><path d="M4 10h16" /><path d="M4 14h11" /><path d="M4 18h11" /></svg>
+);
+/** an outline / table of contents */
+export const IconOutline = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><path d="M4 6h4" /><path d="M11 6h9" /><path d="M4 12h4" /><path d="M11 12h9" /><path d="M4 18h4" /><path d="M11 18h9" /></svg>
+);
+/** a filter / clean-read broom */
+export const IconFilter = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><path d="M3.5 5h17l-6.5 7.5V19l-4 2v-8.5L3.5 5Z" /></svg>
+);
+/** redaction — a struck-through block */
+export const IconRedact = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><rect x="3.5" y="6" width="17" height="5" rx="1" fill="currentColor" stroke="none" /><path d="M4 15h10" /><path d="M4 19h7" /></svg>
+);
+/** a printed page */
+export const IconPrint = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><path d="M7 9V3.5h10V9" /><rect x="3.5" y="9" width="17" height="7" rx="2" /><path d="M7 14h10v6.5H7V14Z" /></svg>
+);
