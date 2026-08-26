@@ -49,8 +49,8 @@ const admin: User = {
 };
 const member: User = { ...admin, id: "u-9", role: "member", display_name: "عضو ساده" };
 
-vi.mock("@/components/platform/ManagementPane", () => ({
-  ManagementPane: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+vi.mock("@/components/platform/SettingsPane", () => ({
+  SettingsPane: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 
 const me = vi.fn();

@@ -11,6 +11,7 @@ import { LegalDocuments } from "@/components/platform/LegalDocuments";
 import { SecuritySettings } from "@/components/platform/SecuritySettings";
 import { SignInMethods } from "@/components/platform/SignInMethods";
 import { TwoPane } from "@/components/platform/TwoPane";
+import { SETTINGS_SECTIONS, useSettingsGroups } from "@/components/platform/SettingsPane";
 import { PageHeader, Section } from "@/components/scaffold";
 
 /**
@@ -28,28 +29,6 @@ import { PageHeader, Section } from "@/components/scaffold";
  * `elsewhere` remains for oauth-apps: the connectors surface is its real
  * home, and two homes for one feature is two states to disagree.
  */
-type SectionState = "ready" | "elsewhere";
-
-interface SectionDef {
-  slug: string;
-  group: "configuration" | "connections" | "compliance";
-  state: SectionState;
-  href?: string;
-}
-
-const SECTIONS: readonly SectionDef[] = [
-  { slug: "general", group: "configuration", state: "ready" },
-  { slug: "assistant", group: "configuration", state: "ready" },
-  { slug: "security", group: "configuration", state: "ready" },
-  { slug: "sso", group: "configuration", state: "ready" },
-  { slug: "oauth-apps", group: "connections", state: "elsewhere", href: "/connectors" },
-  { slug: "audit-logs", group: "compliance", state: "ready" },
-  { slug: "audit-log-drains", group: "compliance", state: "ready" },
-  { slug: "legal", group: "compliance", state: "ready" },
-];
-
-const GROUPS = ["configuration", "connections", "compliance"] as const;
-
 export default function SettingsPage({
   params,
 }: {
@@ -58,17 +37,9 @@ export default function SettingsPage({
   const t = useTranslations("settings");
   const { section } = use(params);
   const slug = section?.[0] ?? "general";
-  const active = SECTIONS.find((s) => s.slug === slug) ?? SECTIONS[0]!;
+  const active = SETTINGS_SECTIONS.find((s) => s.slug === slug) ?? SETTINGS_SECTIONS[0]!;
 
-  const groups = GROUPS.map((group) => ({
-    key: group,
-    title: t(`group.${group}`),
-    items: SECTIONS.filter((s) => s.group === group).map((s) => ({
-      slug: s.slug,
-      href: `/settings/${s.slug}`,
-      label: t(`section.${s.slug}`),
-    })),
-  }));
+  const groups = useSettingsGroups();
 
   return (
     <TwoPane
@@ -81,7 +52,7 @@ export default function SettingsPage({
     >
       <PageHeader title={t(`section.${active.slug}`)} subtitle={t(`desc.${active.slug}`)} />
 
-      {active.state === "elsewhere" && active.href ? (
+      {active.href ? (
         <Section>
           <Link href={active.href} className="btn-primary">
             {t("openSurface")}

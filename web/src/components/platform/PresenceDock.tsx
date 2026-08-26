@@ -13,7 +13,7 @@ import { useRouter } from "@/i18n/routing";
 import { executeClientTool, SURFACE_TOOLS } from "@/lib/agentSurface";
 import { subscribeAssistantOpen, subscribeRecordingLive } from "@/lib/assistantBus";
 import { notify, subscribeNotify, type PlatformNotice } from "@/lib/notify";
-import { IconClose, IconPlus } from "@/components/icons";
+import { Icon } from "@/components/icons";
 import { useAudioLevel, useSyntheticPulse } from "@/lib/useAudioLevel";
 import {
   currentSpeechAudio, speak, speakQueued, stopSpeaking, subscribeSpeechPlayback,
@@ -195,40 +195,6 @@ export function DockHolder({ side, y, active }: {
   );
 }
 
-/**
- * The mic glyph (user-supplied shape, 2026-08-22): a filled capsule, the
- * open cradle arc, a stem. Drawn as an SVG in currentColor rather than the
- * provided PNG so it follows the theme — a black bitmap would vanish on
- * the dark surface. `slashed` is the off state.
- */
-function MicIcon({ slashed }: { slashed?: boolean }) {
-  return (
-    <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden focusable="false">
-      <rect x="9" y="2.5" width="6" height="12" rx="3" fill="currentColor" />
-      <path
-        d="M5.5 11.5a6.5 6.5 0 0 0 13 0"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.4"
-        strokeLinecap="round"
-      />
-      <line
-        x1="12" y1="18" x2="12" y2="21.5"
-        stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"
-      />
-      {slashed ? (
-        /* the off state matches the speaker toggle's grammar: the same
-           glyph with a red slash — no badge, no filled circle (user
-           directive 2026-08-22: "a simple red slash on it is enough") */
-        <line
-          x1="4" y1="3" x2="20" y2="21"
-          className="text-danger"
-          stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"
-        />
-      ) : null}
-    </svg>
-  );
-}
 
 export function PresenceDock() {
   const t = useTranslations("presence");
@@ -1059,7 +1025,14 @@ export function PresenceDock() {
               title={t("silentLabel")}
               onClick={toggleSilent}
             >
-              {silent ? "🔇" : "🔊"}
+              {/* the theme's OFF state, not an emoji (user report,
+                  2026-08-26: "the icons on top of the orb are out of
+                  shape — use the theme icons"). An emoji is a font's
+                  drawing, not ours: it carries its own weight, its own
+                  colour and its own box, and renders differently on every
+                  platform. `<Icon off>` is the same speaker glyph under
+                  the theme's red slash. */}
+              <Icon name="speaker" size="md" off={silent} />
             </button>
             {/* the EARS twin: listening on/off, next to the mouth toggle —
                 off = same glyph, red slash, same quiet chrome as the speaker */}
@@ -1073,7 +1046,7 @@ export function PresenceDock() {
               title={t("earsLabel")}
               onClick={toggleEars}
             >
-              <MicIcon slashed={!ears} />
+              <Icon name="mic" size="md" off={!ears} />
             </button>
             {/* a FRESH conversation (user ask, 2026-08-26: "where can I
                 clean up this history"): the dock's thread resets here —
@@ -1086,7 +1059,7 @@ export function PresenceDock() {
               title={t("newConversation")}
               onClick={freshConversation}
             >
-              <IconPlus width={16} height={16} />
+              <Icon name="plus" size="md" />
             </button>
             <button
               type="button"
@@ -1094,7 +1067,7 @@ export function PresenceDock() {
               aria-label={t("close")}
               onClick={closeDock}
             >
-              <IconClose width={16} height={16} />
+              <Icon name="close" size="md" />
             </button>
           </div>
 

@@ -7,7 +7,7 @@ import { useSkillName } from "@/lib/skillName";
 import { api, BffError } from "@/api/client";
 import { useRefreshEpoch } from "@/lib/refreshBus";
 import type { AuthoredSkill, ModelInfo, Skill, User } from "@/api/types";
-import { ManagementPane } from "@/components/platform/ManagementPane";
+import { SettingsPane } from "@/components/platform/SettingsPane";
 import { FormPanel, FormRow, PageHeader, PanelFooter, Section } from "@/components/scaffold";
 import { Card, Chip } from "@/components/ui";
 
@@ -178,7 +178,7 @@ function SkillsPageContent() {
   const archived = authored.filter((s) => s.archived_at !== null);
 
   return (
-    <ManagementPane activeSlug="skills">
+    <SettingsPane activeSlug="skills">
       <div>
         <PageHeader
           title={t("title")}
@@ -424,6 +424,6 @@ function SkillsPageContent() {
           </div>
         </Section>
       </div>
-    </ManagementPane>
+    </SettingsPane>
   );
 }

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { GatewayKey, GatewayWebhook, User } from "@/api/types";
-import { ManagementPane } from "@/components/platform/ManagementPane";
+import { SettingsPane } from "@/components/platform/SettingsPane";
 import { Card, Chip, PageHeader } from "@/components/ui";
 import { DeliveriesCard } from "./_components/DeliveriesCard";
 import { KeysCard } from "./_components/KeysCard";
@@ -74,7 +74,7 @@ export default function ConnectorsPage() {
   }, [isAdmin, refreshGateway]);
 
   return (
-    <ManagementPane activeSlug="connectors">
+    <SettingsPane activeSlug="connectors">
       <div>
       <PageHeader title={t("title")} />
 
@@ -120,6 +120,6 @@ export default function ConnectorsPage() {
         it EXISTS, not the day it is imagined.
       */}
     </div>
-    </ManagementPane>
+    </SettingsPane>
   );
 }

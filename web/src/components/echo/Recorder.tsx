@@ -30,6 +30,7 @@ import {
   IconCheck, IconChip, IconClock, IconFileText, IconGlobe, IconMic,
   IconPause, IconPeople3, IconPlay, IconPulse, IconSettings, IconSpeaker,
 } from "@/components/icons";
+import { EchoMark } from "@/components/platform/icons";
 import { playTestChime } from "@/lib/deviceTest";
 import { useAudioLevel } from "@/lib/useAudioLevel";
 import { establishedSpeakers } from "@/lib/liveSpeakers";
@@ -798,7 +799,11 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
                 disabled={phase === "starting" || phase === "finishing"}
                 onClick={() => start()}
               >
-                <span aria-hidden className="block h-5 w-5 rounded-full border-2 border-white" />
+                {/* the ECHO MARK on the record button (user directive,
+                    2026-08-26): the app's own mark, in the button's ink —
+                    a ring and a dot, which is what a record button draws
+                    anyway, so the brand and the affordance are one shape */}
+                <EchoMark size={28} tone="current" />
               </button>
             )}
             <span data-tour="rec-devices" className="inline-flex items-center gap-3">

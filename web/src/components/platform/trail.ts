@@ -84,6 +84,16 @@ export const TRAIL: Readonly<Record<string, TrailEntry>> = {
   "/search": { label: "search.title", parent: "/echo" },
 
   "/management": { label: "platform.management", parent: "/" },
+  /* the four assistant/service sections wear the SETTINGS menu now (user
+     directive, 2026-08-26) and their pages did not move, so the TRAIL has
+     to follow the menu rather than the URL: a crumb that says Management
+     while the menu says Settings is the redirect lesson again — the route
+     resolves, every reachability check stays green, and the trail quietly
+     lies about where you are. */
+  "/management/skills": { label: "management.section.skills", parent: "/settings" },
+  "/management/models": { label: "management.section.models", parent: "/settings" },
+  "/management/connectors": { label: "management.section.connectors", parent: "/settings" },
+  "/management/server": { label: "management.section.server", parent: "/settings" },
   "/management/[section]": { labelPrefix: "management.section", parent: "/management" },
 
   "/settings": { label: "platform.settings", parent: "/" },

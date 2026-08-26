@@ -128,12 +128,27 @@ export const MoreIcon = (p: SVGProps<SVGSVGElement>) => (
  * perceptual distance of `--danger`, which would make Echo's launcher read as
  * an error state. This one is 77 away and 7.1:1 on the hub canvas.
  */
-export const EchoMark = ({ size = 22 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true">
-    <circle cx="16" cy="16" r="13" fill="none" stroke="#FF6F59" strokeWidth="2.5" />
-    <circle cx="16" cy="16" r="7" fill="#FF6F59" />
-  </svg>
-);
+export const EchoMark = ({
+  size = 22,
+  tone = "brand",
+}: {
+  size?: number;
+  /**
+   * "brand" is the ruled Echo red; "current" inherits the surrounding
+   * colour (2026-08-26, the record button — the mark sits ON a red fill
+   * there, and a brand-red mark on a red button is invisible). Same
+   * drawing either way: the mark is the mark, the ink is the context's.
+   */
+  tone?: "brand" | "current";
+}) => {
+  const ink = tone === "brand" ? "#FF6F59" : "currentColor";
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true">
+      <circle cx="16" cy="16" r="13" fill="none" stroke={ink} strokeWidth="2.5" />
+      <circle cx="16" cy="16" r="7" fill={ink} />
+    </svg>
+  );
+};
 
 /** Maps a nav key to its glyph. Echo is the mark, not an icon. */
 export const PlugIcon = (p: SVGProps<SVGSVGElement>) => (

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { AdminModelRow, User } from "@/api/types";
-import { ManagementPane } from "@/components/platform/ManagementPane";
+import { SettingsPane } from "@/components/platform/SettingsPane";
 import { PageHeader } from "@/components/scaffold";
 import { modelLabel } from "@/lib/format";
 import { Card, Chip } from "@/components/ui";
@@ -42,18 +42,18 @@ export default function ModelsPage() {
 
   if (me !== null && !isAdmin) {
     return (
-      <ManagementPane activeSlug="models">
+      <SettingsPane activeSlug="models">
         <PageHeader title={tAdmin("modelAllowList")} />
         <Card>
           <h2 className="h-section">{tAdmin("adminOnly")}</h2>
           <p className="mt-1 text-sm leading-7 text-fg-muted">{tAdmin("adminOnlyNote")}</p>
         </Card>
-      </ManagementPane>
+      </SettingsPane>
     );
   }
 
   return (
-    <ManagementPane activeSlug="models">
+    <SettingsPane activeSlug="models">
       <div>
         <PageHeader title={tAdmin("modelAllowList")} subtitle={tAdmin("modelAllowNote")} />
 
@@ -150,6 +150,6 @@ export default function ModelsPage() {
           </div>
         </Card>
       </div>
-    </ManagementPane>
+    </SettingsPane>
   );
 }

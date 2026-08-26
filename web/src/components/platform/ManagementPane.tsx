@@ -25,11 +25,23 @@ import { IconChip, IconPlug, IconPulse, IconSparkle, IconUser } from "@/componen
  * card as the first thing Management ever shows them.
  */
 
-/** Section slugs, in menu order within their group. */
+/**
+ * Section slugs, in menu order within their group.
+ *
+ * ASSISTANT and SERVICE moved under SETTINGS (user directive, 2026-08-26:
+ * "put assistant and services into the settings sub menu as well"). Their
+ * PAGES did not move: /management/skills and its three siblings keep their
+ * addresses, so every bookmark, redirect, rail entry and breadcrumb that
+ * points at them still lands. What changed is the menu they wear — those
+ * four pages render the Settings pane now, and this menu keeps the one
+ * question that is genuinely Management's: who is in the organisation.
+ *
+ * Moving the routes instead would have been the tidier diagram and the
+ * worse change: four redirects, a rail entry, two trail registrations and
+ * a reachability check, all to rename a URL nobody complained about.
+ */
 const GROUPS: readonly { key: string; slugs: readonly string[] }[] = [
   { key: "people", slugs: ["users"] },
-  { key: "ai", slugs: ["skills", "models"] },
-  { key: "service", slugs: ["connectors", "server"] },
 ];
 
 /**
