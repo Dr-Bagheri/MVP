@@ -10,6 +10,7 @@
  * precisely because versions are immutable. Pause = enabled false; new
  * runs stop, in-flight runs finish on their pinned version.
  */
+import { randomBytes } from "node:crypto";
 import { ConflictError, NotFoundError, ValidationError } from "./errors.ts";
 import { iso, WORKFLOW_EVENTS, AUTO_APPLY_ELIGIBLE } from "./vocabulary.ts";
 import {
@@ -21,6 +22,65 @@ import type { Db, SqlTx } from "../db/identity.ts";
 import type { Identity } from "../agent/types.ts";
 
 const HANDLE = /^[a-z0-9][a-z0-9-]{0,62}$/;
+
+/**
+ * THE SHIPPED STARTERS - installable per org with one press, so the engine
+ * is never an empty shelf. Each graph is validated by the SAME publish
+ * path an authored one takes (and pinned in the validator's corpus, so a
+ * grammar change that breaks a starter breaks the suite, not the press).
+ *
+ *  followups - manual: reads the member's recent meetings, extracts the
+ *    topics, writes one line per topic, cards the result. No writes, so
+ *    it runs for any org untouched.
+ *  autotag - the flagship (design doc s10): after every summarized
+ *    meeting, extract topics from the transcript and PROPOSE them as tags
+ *    - the human approves on the run page; the write lands on the agent
+ *    role. Ships with max_autonomy act so an org MAY later enable
+ *    standing auto-apply; until then every write waits for its human.
+ */
+export const STARTER_WORKFLOWS = {
+  followups: {
+    handle: "wf-starter-followups",
+    name: "\u067e\u06cc\u06af\u06cc\u0631\u06cc \u062c\u0644\u0633\u0647\u200c\u0647\u0627",
+    description: "\u0627\u0632 \u062c\u0644\u0633\u0647\u200c\u0647\u0627\u06cc \u0627\u062e\u06cc\u0631 \u0645\u0648\u0636\u0648\u0639\u200c\u0647\u0627 \u0631\u0627 \u062f\u0631\u0645\u06cc\u200c\u0622\u0648\u0631\u062f \u0648 \u0628\u0631\u0627\u06cc \u0647\u0631 \u06a9\u062f\u0627\u0645 \u06cc\u06a9 \u062e\u0637 \u067e\u06cc\u06af\u06cc\u0631\u06cc \u0645\u06cc\u200c\u0646\u0648\u06cc\u0633\u062f.",
+    trigger_event: null as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "search", scope: "calls", limit: 5 },
+        { id: "s2", kind: "extract", from: "{{s1}}", schema: "topics_v1",
+          instruction: "\u0627\u0632 \u0639\u0646\u0648\u0627\u0646 \u062c\u0644\u0633\u0647\u200c\u0647\u0627 \u0645\u0648\u0636\u0648\u0639\u200c\u0647\u0627\u06cc \u0627\u0635\u0644\u06cc \u0631\u0627 \u0627\u0633\u062a\u062e\u0631\u0627\u062c \u06a9\u0646." },
+        { id: "s3", kind: "decide", on: "s2.topics.length", gt: 0, then: "s4", else: "s6" },
+        { id: "s4", kind: "foreach", over: "{{s2.topics}}", max: 3, do: "s5" },
+        { id: "s5", kind: "ask",
+          instruction: "\u062f\u0631\u0628\u0627\u0631\u0647\u0654 \u00ab{{s4.item}}\u00bb \u06cc\u06a9 \u062c\u0645\u0644\u0647\u0654 \u067e\u06cc\u06af\u06cc\u0631\u06cc \u0628\u0646\u0648\u06cc\u0633." },
+        { id: "s6", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
+  autotag: {
+    handle: "wf-starter-autotag",
+    name: "\u0628\u0631\u0686\u0633\u0628\u200c\u06af\u0630\u0627\u0631\u06cc \u062e\u0648\u062f\u06a9\u0627\u0631 \u062c\u0644\u0633\u0647",
+    description: "\u067e\u0633 \u0627\u0632 \u0647\u0631 \u062c\u0644\u0633\u0647 \u0645\u0648\u0636\u0648\u0639\u200c\u0647\u0627 \u0627\u0632 \u0631\u0648\u0646\u0648\u0634\u062a \u062f\u0631\u0645\u06cc\u200c\u0622\u06cc\u062f \u0648 \u0628\u0647\u200c\u0639\u0646\u0648\u0627\u0646 \u0628\u0631\u0686\u0633\u0628 \u067e\u06cc\u0634\u0646\u0647\u0627\u062f \u0645\u06cc\u200c\u0634\u0648\u062f - \u0628\u0627 \u062a\u0623\u06cc\u06cc\u062f \u0634\u0645\u0627 \u062b\u0628\u062a \u0645\u06cc\u200c\u0634\u0648\u062f.",
+    trigger_event: "call.summarized" as string | null,
+    max_autonomy: "act" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "search", scope: "transcript", of: "{{trigger.call_id}}" },
+        { id: "s2", kind: "extract", from: "{{s1}}", schema: "topics_v1",
+          instruction: "\u0627\u0632 \u0627\u06cc\u0646 \u0631\u0648\u0646\u0648\u0634\u062a \u062d\u062f\u0627\u06a9\u062b\u0631 \u067e\u0646\u062c \u0645\u0648\u0636\u0648\u0639 \u06a9\u0648\u062a\u0627\u0647 \u062f\u0631\u0628\u06cc\u0627\u0648\u0631." },
+        { id: "s3", kind: "propose", proposal: "add_tags",
+          from: "{{s2.topics}}", call: "{{trigger.call_id}}" },
+        { id: "s4", kind: "wait", on: "decision" },
+        { id: "s5", kind: "apply", from: "s3" },
+        { id: "s6", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
+} as const;
+export type StarterKey = keyof typeof STARTER_WORKFLOWS;
 
 export interface AuthoredWorkflow {
   id: string;
@@ -86,7 +146,7 @@ export function createWorkflowAuthoringRepo(db: Db) {
       if (!name) throw new ValidationError("name is required");
       const handle = typeof input.handle === "string" && input.handle.trim() !== ""
         ? input.handle.trim()
-        : `wf-${Math.random().toString(16).slice(2, 10)}`;
+        : `wf-${randomBytes(4).toString("hex")}`;
       if (!HANDLE.test(handle)) {
         throw new ValidationError("handle must be lowercase letters, digits and dashes");
       }
@@ -230,6 +290,38 @@ export function createWorkflowAuthoringRepo(db: Db) {
                 where w.id = $1`,
           versionId ? [workflowId, versionId] : [workflowId]));
       return rows[0];
+    },
+
+    /**
+     * Install one shipped starter for THIS org: create with its fixed
+     * handle, publish through the same validated path as any authored
+     * graph, enable, set its trigger. A second install of the same
+     * starter is one 23505 -> 409, named.
+     */
+    async installStarter(identity: Identity, key: unknown): Promise<AuthoredWorkflow> {
+      if (typeof key !== "string" || !(key in STARTER_WORKFLOWS)) {
+        throw new ValidationError(
+          `starter must be one of: ${Object.keys(STARTER_WORKFLOWS).join(", ")}`);
+      }
+      const starter = STARTER_WORKFLOWS[key as StarterKey];
+      let workflow: AuthoredWorkflow;
+      try {
+        workflow = await this.create(identity, {
+          handle: starter.handle, name: starter.name, description: starter.description,
+        });
+      } catch (error) {
+        if (error instanceof ConflictError) {
+          throw new ConflictError("this starter is already installed",
+            { code: "starter_installed", params: { handle: starter.handle } });
+        }
+        throw error;
+      }
+      await this.publish(identity, workflow.id, {
+        graph: starter.graph, max_autonomy: starter.max_autonomy,
+      });
+      return this.update(identity, workflow.id, {
+        enabled: true, trigger_event: starter.trigger_event,
+      });
     },
 
     /**

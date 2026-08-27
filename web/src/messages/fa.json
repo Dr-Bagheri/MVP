@@ -1143,7 +1143,13 @@
     "proposal_set_title": "پیشنهاد عنوان:",
     "engineTitle": "گردش‌کارهای خودکار",
     "engineEmpty": "هنوز گردش‌کاری برای اجرا منتشر نشده است.",
-    "engineBuild": "در مدیریت · گردش‌کارها بسازید"
+    "starterHint": "دو گردش‌کار آماده — با یک کلیک نصب و روشن می‌شوند.",
+    "starter_followups": "نصب «پیگیری جلسه‌ها»",
+    "starter_autotag": "نصب «برچسب‌گذاری خودکار جلسه»",
+    "starterInstalling": "در حال نصب…",
+    "starterInstalled": "نصب شد و روشن است.",
+    "starterAlready": "قبلاً نصب شده است.",
+    "starterFailed": "نصب انجام نشد."
   },
   "agents": {
     "title": "مرور عامل‌ها",

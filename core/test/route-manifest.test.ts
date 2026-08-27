@@ -65,6 +65,7 @@ const REQUIRED_ROUTES: [method: string, path: string, why: string][] = [
   ["GET", "/v1/workflows/manage/:id/versions", "M41 P5/W32 — the immutable history, for rollback"],
   ["PUT", "/v1/workflows/manage/:id/publish", "M41 P5 — validate-then-insert version N+1"],
   ["PATCH", "/v1/workflows/manage/:id", "M41 P5/W32 — pause, rename, trigger, rollback"],
+  ["POST", "/v1/workflows/starters", "M41 P5 - the shipped starters: the engine is never an empty shelf"],
   ["GET", "/v1/workflows/auto-apply", "M41 W13 — members may KNOW what auto-applies"],
   ["PUT", "/v1/workflows/auto-apply", "M41 W13/W17 — the standing human decision, admin-only"],
   ["POST", "/v1/assistant/proposals/:id/confirm", "M4 — an inferred write is proposed, then approved"],

@@ -1682,6 +1682,14 @@ export const api = {
     const { rules } = await bff<{ rules: { kind: string; allowed: boolean }[] }>("/api/workflows/auto-apply");
     return rules;
   },
+  /** install a SHIPPED starter — create+publish+enable in one press */
+  async installStarter(key: string): Promise<void> {
+    await bff("/api/workflows/starters", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ key }),
+    });
+  },
   async setAutoApplyRule(kind: string, allowed: boolean): Promise<void> {
     await bff("/api/workflows/auto-apply", {
       method: "PUT",

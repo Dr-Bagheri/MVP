@@ -1976,6 +1976,14 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       await workflowAuthoring.update(identity, id, (request.body ?? {}) as Record<string, unknown>));
   });
 
+  app.post("/v1/workflows/starters", async (request, reply) => {
+    const identity = await auth.requireAdmin(request);
+    await capabilities.require(identity, "workflows.manage");
+    refuseApiKey(identity);
+    const body = (request.body ?? {}) as { key?: unknown };
+    return reply.code(201).send(await workflowAuthoring.installStarter(identity, body.key));
+  });
+
   app.get("/v1/workflows/auto-apply", async (request, reply) => {
     const identity = await auth.requireActive(request);
     refuseApiKey(identity);

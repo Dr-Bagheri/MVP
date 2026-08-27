@@ -1143,7 +1143,13 @@
     "proposal_set_title": "Proposed title:",
     "engineTitle": "Automation workflows",
     "engineEmpty": "No workflows are published to run yet.",
-    "engineBuild": "Build one in Management · Workflows"
+    "starterHint": "Two ready-made workflows — one click installs and enables them.",
+    "starter_followups": "Install “Meeting follow-ups”",
+    "starter_autotag": "Install “Auto-tag meetings”",
+    "starterInstalling": "Installing…",
+    "starterInstalled": "Installed and enabled.",
+    "starterAlready": "Already installed.",
+    "starterFailed": "The install did not go through."
   },
   "agents": {
     "title": "Browse agents",

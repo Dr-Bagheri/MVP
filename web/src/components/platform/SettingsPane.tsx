@@ -41,8 +41,6 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   /* the assistant's own configuration — the pages keep their addresses */
   { slug: "skills", group: "assistant", href: "/management/skills", labelFrom: "management" },
   { slug: "models", group: "assistant", href: "/management/models", labelFrom: "management" },
-  /* M41 P5: the workflow builder — author, publish, pause, roll back */
-  { slug: "workflows", group: "assistant", href: "/management/workflows", labelFrom: "management" },
   { slug: "connectors", group: "service", href: "/management/connectors", labelFrom: "management" },
   { slug: "audit-logs", group: "compliance" },
   { slug: "audit-log-drains", group: "compliance" },

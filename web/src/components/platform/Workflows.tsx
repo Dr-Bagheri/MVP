@@ -4,12 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import { useRefreshEpoch } from "@/lib/refreshBus";
-import type { ConnectorItem, ConnectorProvider, ConnectorStatus, WorkflowCard, WorkflowRunRecord } from "@/api/types";
+import type { ConnectorItem, ConnectorProvider, ConnectorStatus, User, WorkflowCard, WorkflowRunRecord } from "@/api/types";
 import { notify } from "@/lib/notify";
 import { Chip } from "@/components/ui";
-import { Link, useRouter } from "@/i18n/routing";
+import { useRouter } from "@/i18n/routing";
 import { AssistantMenu } from "./AssistantMenu";
 import { PlatformShell } from "./PlatformShell";
+import { WorkflowBuilder } from "./WorkflowBuilder";
 import { MenuLayout, PageHeader, Section } from "@/components/scaffold";
 import { Card } from "@/components/ui";
 
@@ -43,11 +44,54 @@ export function Workflows() {
       The template cards above are the OLD assistant flow; pressing Run on
       one of those was a 404 wearing a button (the first live report). */
   const [engine, setEngine] = useState<{ id: string; handle: string; name: string; description: string }[] | null>(null);
+  /** the builder + starter installs are admin surfaces on THIS page now
+      (user directive 2026-08-27: everything workflow lives here) */
+  const [me, setMe] = useState<User | null>(null);
+  const [installBusy, setInstallBusy] = useState<string | null>(null);
+  const [builderEpoch, setBuilderEpoch] = useState(0);
 
   useEffect(() => {
     void api.workflowRuns().then(setRuns).catch(() => setRuns([]));
     void api.engineWorkflows().then(setEngine).catch(() => setEngine([]));
+    void api.me().then(setMe).catch(() => setMe(null));
   }, []);
+
+  const isAdmin = me?.role === "admin" || me?.role === "owner";
+
+  /** core's STARTER_WORKFLOWS handles (workflow-authoring.ts) — spelled here
+      because that module is server-only (node:crypto). A drift is harmless
+      in the safe direction: the button re-offers an installed starter and
+      the press lands core's named 409, surfaced as "already installed". */
+  const STARTERS = [
+    { key: "followups", handle: "wf-starter-followups" },
+    { key: "autotag", handle: "wf-starter-autotag" },
+  ] as const;
+  const missingStarters = engine === null ? [] : STARTERS.filter(
+    (starter) => !engine.some((workflow) => workflow.handle === starter.handle));
+
+  function refreshEngine() {
+    void api.engineWorkflows().then(setEngine).catch(() => {});
+    void api.workflowRuns().then(setRuns).catch(() => {});
+  }
+
+  /** one press: create + publish + enable on the server, then the shelf
+      refreshes — the engine section stops being empty. */
+  async function installStarter(key: string) {
+    if (installBusy) return;
+    setInstallBusy(key);
+    try {
+      await api.installStarter(key);
+      notify(t("starterInstalled"));
+      refreshEngine();
+      setBuilderEpoch((epoch) => epoch + 1);
+    } catch (cause) {
+      const status = (cause as { status?: number }).status;
+      if (status === 409) { notify(t("starterAlready")); refreshEngine(); }
+      else notify(t("starterFailed"), "warn");
+    } finally {
+      setInstallBusy(null);
+    }
+  }
 
   /**
    * Press Run — the ENGINE's manual trigger (M41), not the source-picker
@@ -274,12 +318,7 @@ export function Workflows() {
               guided flow through the assistant. */}
           <Section title={t("engineTitle")}>
             {engine === null ? null : engine.length === 0 ? (
-              <p className="text-sm text-fg-muted">
-                {t("engineEmpty")}{" "}
-                <Link href="/management/workflows" className="text-accent underline-offset-2 hover:underline">
-                  {t("engineBuild")}
-                </Link>
-              </p>
+              <p className="text-sm text-fg-muted">{t("engineEmpty")}</p>
             ) : (
               <ul className="divide-y divide-border rounded-lg border border-border bg-surface">
                 {engine.map((workflow) => (
@@ -302,6 +341,26 @@ export function Workflows() {
                 ))}
               </ul>
             )}
+            {isAdmin && missingStarters.length > 0 ? (
+              <div className="mt-4">
+                <p className="text-xs text-fg-subtle">{t("starterHint")}</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {missingStarters.map((starter) => (
+                    <button
+                      key={starter.key}
+                      type="button"
+                      className="btn-secondary h-9 min-h-0 px-3 text-xs"
+                      disabled={installBusy !== null}
+                      onClick={() => void installStarter(starter.key)}
+                    >
+                      {installBusy === starter.key
+                        ? t("starterInstalling")
+                        : t(`starter_${starter.key}` as "starter_followups")}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </Section>
 
           {/* M41 P1 — the ledger strip: what ran, for whom, how it ended.
@@ -333,6 +392,12 @@ export function Workflows() {
               </ul>
             )}
           </Section>
+
+          {/* M41 P5 — THE BUILDER, on this page (2026-08-27): author,
+              publish, pause, auto-apply — members never see the section. */}
+          {isAdmin ? (
+            <WorkflowBuilder epoch={builderEpoch} onChanged={refreshEngine} />
+          ) : null}
         </div>
       </MenuLayout>
 

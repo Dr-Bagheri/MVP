@@ -17,6 +17,7 @@ import {
   type ValidateOptions,
 } from "../src/api/workflow-graph.ts";
 import { ValidationError } from "../src/api/errors.ts";
+import { STARTER_WORKFLOWS } from "../src/api/workflow-authoring.ts";
 
 const OPTS: ValidateOptions = { maxAutonomy: "assist" };
 
@@ -57,6 +58,15 @@ const MIGRATED_TEMPLATE_GRAPH = {
     { id: "s2", kind: "ask", from: "{{s1}}", instruction: "خلاصهٔ این جلسه را بنویس." },
   ],
 };
+
+describe("the SHIPPED starters validate under their own ceilings (rule 10 pin)", () => {
+  for (const [key, starter] of Object.entries(STARTER_WORKFLOWS)) {
+    it(`starter '${key}' is a valid program`, () => {
+      expect(() => validateWorkflowGraph(starter.graph, { maxAutonomy: starter.max_autonomy }))
+        .not.toThrow();
+    });
+  }
+});
 
 describe("the graphs that must validate", () => {
   it("accepts the canonical full path", () => {
