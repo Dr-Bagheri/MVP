@@ -70,6 +70,14 @@ async function seed(): Promise<void> {
       ($1, $3, 'p2-owner@harness.local', 'P2 Owner', 'owner', 'active', now()),
       ($2, $3, 'p2-member@harness.local', 'P2 Member', 'member', 'active', now())
       on conflict (id) do nothing`, [ALICE, BOB, ORG]);
+    /* the member has CHOSEN a model — the realistic top rung of the M5
+       ladder, and what keeps this acceptance independent of which worker
+       (local or production) claims a given message. The first run of this
+       harness failed exactly there: the production worker's env rung was
+       empty, and whichever s2 it claimed refused "ladder empty" while the
+       local runner's identical s2 succeeded. */
+    await tx.unsafe(`update echo.app_user set preferred_model = 'google/gemini-2.5-flash'
+      where id = $1`, [BOB]);
     /* the member's own calls — the material the extraction reads */
     await tx.unsafe(`insert into echo.call (id, org_id, owner_id, title, scope, status) values
       ($1, $3, $4, 'جلسهٔ بودجهٔ فصل پاییز', 'org', 'ready'),
