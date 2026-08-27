@@ -62,6 +62,79 @@ export const EXTRACT_SCHEMAS: Record<string, ExtractSchema> = {
   topics_v1: { topics: { list: "text" } },
 };
 
+/**
+ * RUNTIME validation of an extract's answer against its declared schema —
+ * the other half of the publish-time typing (W4): the publish validator
+ * promises downstream steps a shape; this is what makes the promise true
+ * at 3 a.m. Returns the list of NAMED field errors (empty = valid), which
+ * the executor hands back to the model for its one retry.
+ *
+ * Deliberately forgiving about EXTRA keys (models editorialize) and strict
+ * about declared ones: a missing field, a null, or a wrong type each earns
+ * a path-named error. `date` and `person_ref` validate as non-empty
+ * strings in this phase — a Jalali date is a legal date, and person
+ * RESOLUTION against the directory is the propose step's job (P3), where
+ * the assignment actually happens.
+ */
+export function validateExtractOutput(schema: ExtractSchema, value: unknown): string[] {
+  const errors: string[] = [];
+  const check = (field: SchemaField, at: string, v: unknown): void => {
+    if (typeof field === "string") {
+      if (field === "number") {
+        if (typeof v !== "number" || Number.isNaN(v)) errors.push(`${at}: expected a number`);
+      } else if (field === "boolean") {
+        if (typeof v !== "boolean") errors.push(`${at}: expected true/false`);
+      } else {
+        // text | date | person_ref — a non-empty string
+        if (typeof v !== "string" || v.trim() === "") errors.push(`${at}: expected non-empty text`);
+      }
+      return;
+    }
+    if ("list" in field) {
+      if (!Array.isArray(v)) { errors.push(`${at}: expected a list`); return; }
+      v.forEach((element, index) => check(field.list, `${at}[${index}]`, element));
+      return;
+    }
+    if (typeof v !== "object" || v === null || Array.isArray(v)) {
+      errors.push(`${at}: expected an object`);
+      return;
+    }
+    for (const [key, inner] of Object.entries(field.object)) {
+      const child = (v as Record<string, unknown>)[key];
+      if (child === undefined || child === null) errors.push(`${at}.${key}: missing`);
+      else check(inner, `${at}.${key}`, child);
+    }
+  };
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return ["the answer must be a JSON object"];
+  }
+  for (const [key, field] of Object.entries(schema)) {
+    const child = (value as Record<string, unknown>)[key];
+    if (child === undefined || child === null) errors.push(`${key}: missing`);
+    else check(field, key, child);
+  }
+  return errors;
+}
+
+/** the schema as a JSON skeleton the prompt shows the model — deterministic */
+export function renderSchemaContract(schema: ExtractSchema): string {
+  const render = (field: SchemaField): unknown => {
+    if (typeof field === "string") {
+      if (field === "number") return 0;
+      if (field === "boolean") return false;
+      if (field === "date") return "تاریخ";
+      if (field === "person_ref") return "نام شخص";
+      return "متن";
+    }
+    if ("list" in field) return [render(field.list)];
+    return Object.fromEntries(Object.entries(field.object).map(([k, f]) => [k, render(f)]));
+  };
+  return JSON.stringify(
+    Object.fromEntries(Object.entries(schema).map(([k, f]) => [k, render(f)])),
+    null, 1,
+  );
+}
+
 /* ── W25: the binding grammar — closed and tiny ──────────────────────── */
 
 const BINDING = /\{\{\s*([^{}]+?)\s*\}\}/g;
@@ -232,6 +305,11 @@ export function validateWorkflowGraph(raw: unknown, options: ValidateOptions): W
   const resolvePath = (path: BindingPath, atIndex: number, bodyOf?: string) => {
     if (path.source === "trigger") return "content" as const; // runtime facts; fenced if content
     if (!indexOf.has(path.source)) return null;
+    /* P2 tightening: a foreach BODY's output is unbindable from anywhere —
+       it exists once per iteration, and a later step binding it would
+       silently read iteration 0 and present it as the whole. The loop's
+       data flows through the foreach's own item view, nowhere else. */
+    if (foreachBody.has(path.source)) return null;
     const sourceIndex = indexOf.get(path.source)!;
     if (sourceIndex >= atIndex) {
       // one exception: a foreach BODY may read its own foreach's item view
@@ -376,6 +454,13 @@ export function validateWorkflowGraph(raw: unknown, options: ValidateOptions): W
         const body = step.do;
         if (typeof body !== "string" || indexOf.get(body) !== index + 1) {
           refuse("do must name the immediately following step — one-step bodies in P0", id);
+        }
+        const bodyKind = (top.steps[index + 1] as Record<string, unknown>).kind;
+        if (bodyKind === "decide" || bodyKind === "foreach"
+          || bodyKind === "apply" || bodyKind === "wait") {
+          /* a body that jumps, loops, writes or sleeps is not a one-step
+             body — it is control flow hiding inside an iteration */
+          refuse("a foreach body must be a linear step (search/fetch/ask/extract/propose/notify)", id);
         }
         foreachBody.set(body, id);
         outputs.set(id, { kind: "item", of: element });

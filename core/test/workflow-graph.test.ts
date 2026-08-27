@@ -192,6 +192,24 @@ describe("the corpus — every rule can fire, naming itself", () => {
       { id: "s1", kind: "extract", schema: "invented_v9" },
     ] }, "declared schema"));
 
+  it("refuses a binding to a foreach BODY from outside the loop (P2)", () =>
+    refusedWith({ entry: "s1", steps: [
+      { id: "s1", kind: "extract", schema: "topics_v1" },
+      { id: "s2", kind: "foreach", over: "{{s1.topics}}", max: 5, do: "s3" },
+      { id: "s3", kind: "ask", instruction: "x {{s2.item}}" },
+      /* s4 binding the BODY would silently read iteration 0 and present
+         it as the whole — the loop's data flows through the foreach only */
+      { id: "s4", kind: "ask", instruction: "y {{s3}}" },
+    ] }, "no earlier step declares"));
+
+  it("refuses a foreach body that is itself control flow (P2)", () =>
+    refusedWith({ entry: "s1", steps: [
+      { id: "s1", kind: "extract", schema: "topics_v1" },
+      { id: "s2", kind: "foreach", over: "{{s1.topics}}", max: 5, do: "s3" },
+      { id: "s3", kind: "foreach", over: "{{s1.topics}}", max: 5, do: "s4" },
+      { id: "s4", kind: "notify", card: "workflow_result" },
+    ] }, "linear step"));
+
   it("refuses an unresolvable agent when the caller knows the roster (W22)", () =>
     refusedWith({ entry: "s1", steps: [
       { id: "s1", kind: "ask", instruction: "x", agent: "nobody" },

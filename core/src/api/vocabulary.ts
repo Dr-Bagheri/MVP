@@ -284,4 +284,8 @@ export type WorkflowFailureCode = (typeof WORKFLOW_FAILURE_CODES)[number];
  * kinds it needs (rule 12: the refusal says WHICH nothing). Grows with the
  * phases: P2 adds extract/decide/foreach, P3 propose/wait/apply, P4 fetch.
  */
-export const EXECUTABLE_STEP_KINDS = ["search", "ask", "notify"] as const;
+export const EXECUTABLE_STEP_KINDS = [
+  "search", "ask", "notify",
+  /* P2 (2026-08-27): the graph becomes a program */
+  "extract", "decide", "foreach",
+] as const;
