@@ -73,6 +73,15 @@ export function SpeakersDirectory() {
   /** popup-confirmed delete (2026-08-24) — the dialog is the second click */
   const [confirmDelete, setConfirmDelete] = useState<Person | null>(null);
   /**
+   * Selection, the records table's shape (user directive, 2026-08-27: "the
+   * records table is the default version so all the other tables should
+   * look like it"). The checkbox column, the ⌘-less multi-select and the
+   * bulk bar all come from DataTable — this file supplies only what a
+   * SPEAKER row can be selected FOR.
+   */
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [confirmBulk, setConfirmBulk] = useState(false);
+  /**
    * The 2026-08-25 batch: three views of one directory, a team filter, and
    * presence. (The merge door left the UI on 2026-08-26 — see the kebab.)
    *
@@ -258,6 +267,26 @@ export function SpeakersDirectory() {
     }
   }
 
+
+  /**
+   * One action over every selected row. Failures are COUNTED, not hidden,
+   * and the list reloads from the server afterwards — so what the screen
+   * shows next is what actually survived, not what we hoped happened.
+   */
+  async function bulk(perRow: (person: Person) => Promise<unknown>): Promise<void> {
+    if (busy || selected.size === 0) return;
+    setBusy(true);
+    const targets = (people ?? []).filter((person) => selected.has(person.id));
+    const results = await Promise.allSettled(targets.map((person) => perRow(person)));
+    const failed = results.filter((r) => r.status === "rejected").length;
+    if (failed > 0) {
+      notify(t("bulkFailed", { n: String(failed), total: String(targets.length) }), "warn");
+    }
+    setSelected(new Set());
+    setConfirmBulk(false);
+    await api.directory().then(setPeople).catch(() => undefined);
+    setBusy(false);
+  }
 
   async function add(): Promise<void> {
     if (busy || !name.trim()) return;
@@ -478,6 +507,39 @@ export function SpeakersDirectory() {
 
   return (
     <div className="space-y-4">
+      {/* the bulk bar — present only while a selection exists, and only on
+          the table, which is the only view that can make one */}
+      {view === "table" && selected.size > 0 ? (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-surface px-4 py-2 text-sm">
+          <span className="text-fg">{t("selectedCount", { n: String(selected.size) })}</span>
+          {voiceReady ? (
+            <button
+              className="btn-secondary h-8 min-h-0 px-3 text-xs"
+              disabled={busy}
+              onClick={() => void bulk((person) => api.clearVoice(person.id))}
+            >
+              {t("voiceRemove")}
+            </button>
+          ) : null}
+          <button
+            className="btn-danger h-8 min-h-0 px-3 text-xs"
+            disabled={busy}
+            onClick={() => setConfirmBulk(true)}
+          >
+            {t("delete")}
+          </button>
+          <button
+            className="text-xs text-fg-muted underline-offset-2 hover:underline"
+            onClick={() => {
+              setSelected(new Set());
+              setConfirmBulk(false);
+            }}
+          >
+            {t("clearSelection")}
+          </button>
+        </div>
+      ) : null}
+
       {/* the directory's own controls (2026-08-25): three readings of one
           list, and the team filter the labels make possible */}
       {people !== null && (people.length > 0 || canManage) ? (
@@ -499,7 +561,13 @@ export function SpeakersDirectory() {
                     ? "bg-accent-soft font-semibold text-accent"
                     : "bg-surface text-fg-muted hover:text-fg"
                 }`}
-                onClick={() => setView(v)}
+                onClick={() => {
+                  setView(v);
+                  /* a selection made in the table cannot be acted on from
+                     cards or the chart — leaving it alive would keep a bar
+                     on screen governing rows nobody can see */
+                  if (v !== "table") setSelected(new Set());
+                }}
               >
                 {t(`view.${v}` as "view.table")}
               </button>
@@ -651,6 +719,13 @@ export function SpeakersDirectory() {
           <DataTable<Person>
             rows={shown}
             rowKey={(person) => person.id}
+            /* only somebody who may MANAGE the directory can select a row:
+               a checkbox that ticks and then offers nothing is a control
+               that lies about what the viewer is allowed to do */
+            selected={canManage ? selected : undefined}
+            onSelect={canManage ? setSelected : undefined}
+            selectableRow={() => canManage}
+            selectLabel={(person) => t("selectRow", { name: person.display_name })}
             rowDetail={(person) =>
               enroll?.personId === person.id ? enrollPanel(person) : null
             }
@@ -914,6 +989,18 @@ export function SpeakersDirectory() {
           />
         )}
       </Card>
+
+      {confirmBulk ? (
+        <ConfirmDialog
+          title={t("bulkDeleteConfirmTitle", { n: String(selected.size) })}
+          body={t("deleteConfirmBody")}
+          confirmLabel={t("delete")}
+          cancelLabel={t("voiceCancel")}
+          busy={busy}
+          onCancel={() => setConfirmBulk(false)}
+          onConfirm={() => void bulk((person) => api.deletePerson(person.id, UI_DELETE_REASON))}
+        />
+      ) : null}
 
       {confirmDelete !== null ? (
         <ConfirmDialog

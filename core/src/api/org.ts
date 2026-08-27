@@ -43,7 +43,7 @@ import { changedFields, record } from "./admin-actions.ts";
 import { ConflictError, NotFoundError, ValidationError } from "./errors.ts";
 import { iso } from "./vocabulary.ts";
 import { type Db, type SqlTx } from "../db/identity.ts";
-import { hasOrgGlossary, hasOrgProfile } from "../db/capabilities.ts";
+import { hasOrgGlossary, hasOrgLogoBytes, hasOrgProfile } from "../db/capabilities.ts";
 import type { Identity } from "../agent/types.ts";
 
 export interface OrgRecord {
@@ -74,6 +74,12 @@ export interface OrgRecord {
   location?: string | null;
   logo_url?: string | null;
   social_links?: string[];
+  /**
+   * db/0103 — whether an uploaded logo EXISTS. The bytes themselves never
+   * ride this record: a row read on every page that shows the org's name
+   * must not carry half a megabyte, and the image has its own route.
+   */
+  has_logo?: boolean;
 }
 
 const ORG_COLUMNS = `id, name, status, locale, allowed_models, created_at`;
@@ -87,6 +93,7 @@ const toOrg = (row: Record<string, unknown>): OrgRecord => ({
   created_at: iso(row.created_at),
   // absent stays absent on an un-migrated deployment
   ...(row.glossary !== undefined ? { glossary: (row.glossary as string[] | null) ?? [] } : {}),
+  ...(row.has_logo !== undefined ? { has_logo: row.has_logo === true } : {}),
   ...(row.logo_url !== undefined
     ? {
         public_email: (row.public_email as string | null) ?? null,
@@ -101,19 +108,54 @@ const toOrg = (row: Record<string, unknown>): OrgRecord => ({
 
 /** db/0102's columns, named once so the read and the write cannot drift */
 const PROFILE_COLUMNS = ", public_email, description, website_url, location, logo_url, social_links";
+/* the logo's PRESENCE, never its bytes — see OrgRecord.has_logo */
+const LOGO_COLUMN = ", (logo_bytes is not null) as has_logo";
 
 const MAX_NAME = 120;
 
 export function createOrgRepo(db: Db) {
   return {
+    /**
+     * THE LOGO ITSELF (db/0103). Its own read, deliberately: the org row is
+     * fetched on every page that shows the organisation's name, and half a
+     * megabyte riding that read would be paid for on every navigation.
+     */
+    async logo(identity: Identity): Promise<{ bytes: Buffer; mime: string } | null> {
+      if (!(await hasOrgLogoBytes(db))) return null;
+      const rows = await db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe<{ logo_bytes: Buffer | null; logo_mime: string | null }>(
+          `select logo_bytes, logo_mime from echo.org where id = $1`,
+          [identity.orgId],
+        ));
+      const row = rows[0];
+      if (!row?.logo_bytes || !row.logo_mime) return null;
+      return { bytes: row.logo_bytes, mime: row.logo_mime };
+    },
+
+    /** Store or clear it. `null` clears both columns together (0103's
+        whole-or-nothing constraint is the wall; this mirrors it). */
+    async setLogo(
+      identity: Identity,
+      image: { bytes: Buffer; mime: string } | null,
+    ): Promise<void> {
+      if (!(await hasOrgLogoBytes(db))) throw new ConflictError("not_migrated");
+      await db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe(
+          `update echo.org set logo_bytes = $2, logo_mime = $3 where id = $1`,
+          [identity.orgId, image?.bytes ?? null, image?.mime ?? null],
+        ));
+    },
+
     /** The caller's own org. Any active member — the shell shows its name. */
     async get(identity: Identity): Promise<OrgRecord> {
       const withGlossary = await hasOrgGlossary(db);
       const withProfile = await hasOrgProfile(db);
+      const withLogo = await hasOrgLogoBytes(db);
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<Record<string, unknown>>(
           `select ${ORG_COLUMNS}${withGlossary ? ", glossary" : ""}${
-            withProfile ? PROFILE_COLUMNS : ""} from echo.org where id = $1`,
+            withProfile ? PROFILE_COLUMNS : ""}${
+            withLogo ? LOGO_COLUMN : ""} from echo.org where id = $1`,
           [identity.orgId],
         ),
       );

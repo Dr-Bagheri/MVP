@@ -45,25 +45,46 @@ export async function GET() {
   }
 }
 
-export async function PATCH(request: Request) {
-  const body = (await request.json()) as {
-    name?: string | null;
-    locale?: string | null;
-    allowed_models?: string[];
-  };
+/**
+ * Every key core accepts, written out.
+ *
+ * This list IS the bug that made "Save changes" report Not saved (user
+ * report, 2026-08-26): the handler forwarded three keys and dropped
+ * everything else, so a Location edit — and the glossary, which had never
+ * saved through here — reached core as an empty patch, and core answered
+ * "nothing to update" with a 400. The form was right, the server was
+ * right, and the hop between them quietly threw the instruction away.
+ *
+ * Kept explicit rather than spreading the body: `{name: undefined}`
+ * serialises away while `{name: null}` does not, and that difference is
+ * how "leave it alone" is told apart from "clear it". A spread would
+ * collapse the two. The price of an explicit list is that it can go stale
+ * — which is exactly what happened — so org-route.guard.test.ts now fails
+ * when core learns a key this list has not.
+ */
+export const WRITABLE_ORG_KEYS = [
+  "name",
+  "locale",
+  "allowed_models",
+  "glossary",
+  "public_email",
+  "description",
+  "website_url",
+  "location",
+  "logo_url",
+  "social_links",
+] as const;
 
-  /*
-   * Forwarded key-by-key, and **absent stays absent**. `null` clears a field
-   * and omitting it leaves the field alone — two different instructions that
-   * a spread of the whole body would collapse, since `{name: undefined}`
-   * serialises away but `{name: null}` does not. Only what the caller actually
-   * supplied is passed on, so the server sees the same distinction the form
-   * made.
-   */
+export async function PATCH(request: Request) {
+  const body = (await request.json()) as Record<string, unknown>;
+
+  /* Forwarded key-by-key, and ABSENT STAYS ABSENT: only what the caller
+     actually supplied is passed on, so the server sees the same
+     distinction the form made. */
   const patch: Record<string, unknown> = {};
-  if ("name" in body) patch.name = body.name;
-  if ("locale" in body) patch.locale = body.locale;
-  if ("allowed_models" in body) patch.allowed_models = body.allowed_models;
+  for (const key of WRITABLE_ORG_KEYS) {
+    if (key in body) patch[key] = body[key];
+  }
 
   try {
     return Response.json(

@@ -1540,13 +1540,62 @@ export const api = {
    * `/v1/admin/org`, the one path core/ deliberately never registered, and the
    * truthful 404 got recorded as "the feature isn't built".
    */
-  async updateOrg(patch: { name?: string; locale?: string; allowed_models?: string[]; glossary?: string[] }): Promise<Org> {
+  async updateOrg(patch: {
+    name?: string;
+    locale?: string;
+    allowed_models?: string[];
+    glossary?: string[];
+    /* db/0102's public face. Declared here rather than cast at the call
+       site: a cast against a wire type is a drift report somebody decided
+       not to file, and this one had a real cost — the BFF was dropping
+       every key beyond the first three and the save returned a 400 that
+       read as "the feature is not built". */
+    public_email?: string | null;
+    description?: string | null;
+    website_url?: string | null;
+    location?: string | null;
+    logo_url?: string | null;
+    social_links?: string[] | null;
+  }): Promise<Org> {
     /* **LIVE** — `PATCH /api/admin/org` → `PATCH /v1/admin/org` (admin). */
     return bff<Org>("/api/admin/org", {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(patch),
     });
+  },
+
+  /**
+   * THE ORG LOGO — a real file (db/0103).
+   *
+   * Bytes up, bytes down, its own route: the org row is read on every page
+   * that shows the organisation's name, and half a megabyte riding that
+   * read would be paid for on every navigation. `has_logo` on the record
+   * says whether there is one; this URL serves it.
+   *
+   * The MIME the image comes back under is the one core SNIFFED from the
+   * file, never the one the uploader claimed.
+   */
+  async uploadOrgLogo(file: Blob): Promise<{ uploaded: boolean; mime: string }> {
+    return bff<{ uploaded: boolean; mime: string }>("/api/org/logo", {
+      method: "POST",
+      headers: { "content-type": file.type || "application/octet-stream" },
+      body: file,
+    });
+  },
+
+  async clearOrgLogo(): Promise<void> {
+    await bff("/api/org/logo", { method: "DELETE" });
+  },
+
+  /**
+   * Where the current logo lives. `version` is a cache-buster, not a
+   * parameter the server reads: the URL never changes when the image does,
+   * so without it a fresh upload keeps showing the old picture and the
+   * screen quietly disagrees with the record.
+   */
+  orgLogoUrl(version = 0): string {
+    return version > 0 ? `/api/org/logo?v=${version}` : "/api/org/logo";
   },
 
   // ---- gateway (M17) ----------------------------------------------------------

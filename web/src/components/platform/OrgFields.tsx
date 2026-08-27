@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import { notify } from "@/lib/notify";
@@ -8,7 +8,8 @@ import type { Org, User } from "@/api/types";
 import { FormPanel, FormRow, PanelFooter } from "@/components/scaffold";
 
 /**
- * The organization's own settings — name and interface locale (M25).
+ * The organization's own settings — name, public face, interface locale
+ * (M25, db/0102, db/0103).
  *
  * ── What it deliberately does not include ───────────────────────────────────
  *
@@ -102,7 +103,17 @@ export function OrgFields() {
   const [description, setDescription] = useState("");
   const [websiteUrl, setWebsiteUrl] = useState("");
   const [location, setLocation] = useState("");
-  const [logoUrl, setLogoUrl] = useState("");
+  /**
+   * db/0103 — the logo is a FILE now, not an address, so it is not part of
+   * the diff-based patch at all: bytes go up the moment one is chosen and
+   * come down from their own route. `logoVersion` only busts the browser
+   * cache — the URL cannot change when the image does, and without it a
+   * fresh upload keeps showing the old picture.
+   */
+  const [hasLogo, setHasLogo] = useState(false);
+  const [logoVersion, setLogoVersion] = useState(0);
+  const [logoBusy, setLogoBusy] = useState(false);
+  const logoInput = useRef<HTMLInputElement | null>(null);
   /** 0088 glossary, edited as one term per line. Rendered ONLY when the
       wire carries the column — a textarea for a column that does not
       exist would read as wired and save nothing. */
@@ -125,7 +136,7 @@ export function OrgFields() {
       setDescription(row.description ?? "");
       setWebsiteUrl(row.website_url ?? "");
       setLocation(row.location ?? "");
-      setLogoUrl(row.logo_url ?? "");
+      setHasLogo(row.has_logo === true);
       setGlossaryDraft((row.glossary ?? []).join("\n"));
     });
   }, []);
@@ -153,7 +164,6 @@ export function OrgFields() {
       ["description", description, org.description],
       ["website_url", websiteUrl, org.website_url],
       ["location", location, org.location],
-      ["logo_url", logoUrl, org.logo_url],
     ] as const;
     for (const [key, value, saved] of face) {
       const trimmed = value.trim();
@@ -177,6 +187,9 @@ export function OrgFields() {
      disabled button explains itself where a 400 does not. */
   const invalid = name.trim() === "";
 
+  /* the logo is NOT in `changes`: it saves on pick, not on Save. See
+     pickLogo — an image with no visible draft state cannot honestly share
+     a button with six text fields. */
   const save = async () => {
     setBusy(true);
     try {
@@ -188,13 +201,53 @@ export function OrgFields() {
       setDescription(updated.description ?? "");
       setWebsiteUrl(updated.website_url ?? "");
       setLocation(updated.location ?? "");
-      setLogoUrl(updated.logo_url ?? "");
+      setHasLogo(updated.has_logo === true);
       setGlossaryDraft((updated.glossary ?? []).join("\n"));
       notify(t("orgSaved"));
     } catch {
       notify(t("orgSaveFailed"), "warn");
     } finally {
       setBusy(false);
+    }
+  };
+
+  /**
+   * Choosing a file IS the save — there is no draft state for an image, and
+   * a picture sitting in a form waiting for a Save button that governs six
+   * text fields is a state nobody can read off the screen.
+   *
+   * The `accept` filter is a convenience, not the check: a browser's
+   * `file.type` comes from the extension and is a claim. Core decides from
+   * the BYTES, and its refusal is the one that counts.
+   */
+  const pickLogo = async (file: File) => {
+    setLogoBusy(true);
+    try {
+      await api.uploadOrgLogo(file);
+      setHasLogo(true);
+      setLogoVersion((v) => v + 1);
+      notify(t("orgLogoSaved"));
+    } catch {
+      notify(t("orgLogoFailed"), "warn");
+    } finally {
+      setLogoBusy(false);
+      /* clear the input so choosing the SAME file again still fires a
+         change event — otherwise a failed upload cannot be retried */
+      if (logoInput.current) logoInput.current.value = "";
+    }
+  };
+
+  const removeLogo = async () => {
+    setLogoBusy(true);
+    try {
+      await api.clearOrgLogo();
+      setHasLogo(false);
+      setLogoVersion((v) => v + 1);
+      notify(t("orgLogoRemoved"));
+    } catch {
+      notify(t("orgLogoFailed"), "warn");
+    } finally {
+      setLogoBusy(false);
     }
   };
 
@@ -238,17 +291,18 @@ export function OrgFields() {
         />
       </FormRow>
 
-      {/* db/0102's public face. The LOGO is a link, not an upload: this
-          deployment has no image-upload path at all, and a picker that
-          could not put a file anywhere would be a promise on screen. The
-          same column takes an uploaded address the day one exists. */}
+      {/* db/0103 — an uploaded FILE. It was a link until this deployment
+          grew an image path; the address input is gone rather than kept
+          beside the picker, because two ways to set one logo is two states
+          that will eventually disagree about which one is showing. */}
       <FormRow label={t("orgLogo")} description={t("orgLogoHint")} htmlFor="org-logo">
-        <span className="flex items-center gap-3">
-          {logoUrl.trim() ? (
-            /* eslint-disable-next-line @next/next/no-img-element -- an
-               arbitrary remote logo cannot go through the image optimiser */
+        <span className="flex flex-wrap items-center gap-3">
+          {hasLogo ? (
+            /* eslint-disable-next-line @next/next/no-img-element -- the
+               bytes come from our own BFF, not from a configured host the
+               image optimiser could be told about */
             <img
-              src={logoUrl}
+              src={api.orgLogoUrl(logoVersion)}
               alt=""
               className="h-12 w-12 shrink-0 rounded-lg border border-border object-cover"
             />
@@ -259,13 +313,34 @@ export function OrgFields() {
           )}
           <input
             id="org-logo"
-            className="input"
-            dir="ltr"
-            placeholder="https://…"
-            value={logoUrl}
-            disabled={busy}
-            onChange={(event) => setLogoUrl(event.target.value)}
+            ref={logoInput}
+            type="file"
+            className="sr-only"
+            accept="image/png,image/jpeg,image/webp"
+            disabled={busy || logoBusy}
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) void pickLogo(file);
+            }}
           />
+          <button
+            type="button"
+            className="btn-secondary h-9 min-h-0 px-3 text-sm"
+            disabled={busy || logoBusy}
+            onClick={() => logoInput.current?.click()}
+          >
+            {hasLogo ? t("orgLogoReplace") : t("orgLogoChoose")}
+          </button>
+          {hasLogo ? (
+            <button
+              type="button"
+              className="btn-ghost h-9 min-h-0 px-3 text-sm text-danger"
+              disabled={busy || logoBusy}
+              onClick={() => void removeLogo()}
+            >
+              {t("orgLogoRemove")}
+            </button>
+          ) : null}
         </span>
       </FormRow>
 
@@ -344,7 +419,6 @@ export function OrgFields() {
             value={glossaryDraft}
             disabled={busy}
             onChange={(event) => setGlossaryDraft(event.target.value)}
-            placeholder={t("orgGlossaryPlaceholder")}
           />
         </FormRow>
       ) : null}

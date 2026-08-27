@@ -135,6 +135,11 @@ export async function hasOrgProfile(db: Db): Promise<boolean> {
   return hasColumn(db, "org", "logo_url");
 }
 
+/** db/0103: the logo as BYTES (the upload path). */
+export async function hasOrgLogoBytes(db: Db): Promise<boolean> {
+  return hasColumn(db, "org", "logo_bytes");
+}
+
 /** db/0096: person.team + person.voiceprint_samples (they land together). */
 export async function hasPersonTeams(db: Db): Promise<boolean> {
   return hasColumn(db, "person", "team");

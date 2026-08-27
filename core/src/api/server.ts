@@ -53,6 +53,30 @@ import type { DomainTool } from "../agent/tools.ts";
 import { agentToolsDb, type Db, type SqlTx } from "../db/identity.ts";
 import { isAdmin, isOwner, type Identity, type Skill } from "../agent/types.ts";
 
+/**
+ * What KIND of image is this, by its own first bytes?
+ *
+ * Signatures, not extensions and not the caller's content-type: both of
+ * those are claims by the uploader, and the whole point of checking is
+ * that the uploader might be wrong or lying. `null` means "not one of the
+ * three we serve", which is a refusal rather than a guess.
+ */
+function sniffImage(bytes: Buffer): string | null {
+  if (bytes.length < 12) return null;
+  // PNG: 89 50 4E 47 0D 0A 1A 0A
+  if (bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
+    return "image/png";
+  }
+  // JPEG: FF D8 FF
+  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "image/jpeg";
+  // WebP: "RIFF" .... "WEBP"
+  if (bytes.subarray(0, 4).toString("ascii") === "RIFF"
+    && bytes.subarray(8, 12).toString("ascii") === "WEBP") {
+    return "image/webp";
+  }
+  return null;
+}
+
 export interface ServerOptions<TDeps> {
   db: Db;
   /** HS256 shared secret (legacy projects, and the test suite). */
@@ -196,6 +220,9 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
   for (const type of [
     "application/octet-stream", "audio/webm", "audio/ogg", "audio/mpeg",
     "audio/mp4", "audio/wav", "audio/x-wav", "audio/flac",
+    /* the org logo (db/0103) rides the same buffered path — the route
+       decides what it really is from the BYTES, not from this list */
+    "image/png", "image/jpeg", "image/webp",
   ]) {
     app.addContentTypeParser(type, { parseAs: "buffer" }, (_request, body, done) => {
       done(null, body);
@@ -1978,6 +2005,65 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
         ? (body.social_links as string[])
         : undefined,
     }));
+  });
+
+  /**
+   * THE ORG LOGO (db/0103) — a real file, uploaded.
+   *
+   * The image is served back to members of the org only, and the mime it
+   * is served under is NEVER the one the uploader claimed: the bytes are
+   * sniffed here, and a file whose content does not match a known image
+   * signature is refused. Serving arbitrary bytes under a caller-chosen
+   * content-type is how a stored image becomes a stored script.
+   *
+   * SVG is deliberately NOT accepted by the upload, though the column
+   * permits it for a future sanitising path: an SVG is a document that can
+   * carry script, and "it is an image" is exactly the assumption that
+   * makes it dangerous. PNG, JPEG and WebP have no such surface.
+   */
+  app.get("/v1/org/logo", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const image = await org.logo(identity);
+    if (!image) return reply.code(404).send({ error: "not found", kind: "not_found" });
+    return reply
+      .header("content-type", image.mime)
+      /* private: an org logo is org data, and a shared cache in front of
+         this api must not hand one organisation's image to another */
+      .header("cache-control", "private, max-age=300")
+      .send(image.bytes);
+  });
+
+  app.post("/v1/admin/org/logo", {
+    /* 512KB is the column's ceiling (0103); 1MB here so an oversized file
+       gets THIS route's named refusal instead of Fastify's generic 413 */
+    bodyLimit: 1024 * 1024,
+  }, async (request, reply) => {
+    const identity = await auth.requireAdmin(request);
+    await capabilities.require(identity, "org.settings");
+    const bytes = request.body as Buffer;
+    if (!Buffer.isBuffer(bytes) || bytes.length === 0) {
+      throw new ValidationError("send the image as a raw body");
+    }
+    if (bytes.length > 512 * 1024) {
+      throw new ValidationError("a logo tops out at 512KB",
+        { code: "logo_too_large", params: { max: "512KB" } });
+    }
+    /* the MIME comes from the BYTES, not from the header: a caller's
+       content-type is a claim, and this is the one place that decides */
+    const mime = sniffImage(bytes);
+    if (!mime) {
+      throw new ValidationError("that file is not a PNG, JPEG or WebP image",
+        { code: "logo_not_an_image" });
+    }
+    await org.setLogo(identity, { bytes, mime });
+    return reply.code(201).send({ uploaded: true, mime });
+  });
+
+  app.delete("/v1/admin/org/logo", async (request, reply) => {
+    const identity = await auth.requireAdmin(request);
+    await capabilities.require(identity, "org.settings");
+    await org.setLogo(identity, null);
+    return reply.code(204).send();
   });
 
   // ---- audit logs (M25, Settings · COMPLIANCE) ----------------------------

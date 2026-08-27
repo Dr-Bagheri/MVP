@@ -385,7 +385,12 @@
     "identifyDone": "Linked to the account.",
     "identifyCleared": "The account link was removed.",
     "identifyTaken": "Another person in the directory is already that account.",
-    "identifyNotMember": "That account is not a member of this organization."
+    "identifyNotMember": "That account is not a member of this organization.",
+    "selectedCount": "{n} selected",
+    "clearSelection": "Clear selection",
+    "bulkFailed": "{n} of {total} did not go through.",
+    "selectRow": "Select “{name}”",
+    "bulkDeleteConfirmTitle": "Delete {n} people?"
   },
   "table": {
     "selectAll": "Select all rows",
@@ -1300,8 +1305,6 @@
     "privilegeOn": "Allowed",
     "privilegeOff": "Not allowed",
     "privilegeFailed": "That change was not saved.",
-    "orgLogo": "Logo",
-    "orgLogoHint": "A link to an image. Uploading files is not available yet — paste an address.",
     "orgEmail": "Public email",
     "orgEmailHint": "Shown on your organization's page.",
     "orgDescription": "Description",
@@ -1381,7 +1384,6 @@
     "orgSaved": "Saved",
     "orgGlossary": "Recognition glossary",
     "orgGlossaryHint": "Names and terms the transcriber should recognize — one per line, up to 200. People's names spelled right here come out right in every transcript.",
-    "orgGlossaryPlaceholder": "محمد رضایی\nNeurAI\n…",
     "orgSaveFailed": "Not saved.",
     "orgAdminOnly": "Changing these values is an organization admin's to do.",
     "assistantAutonomy": "Assistant autonomy",
@@ -1395,12 +1397,18 @@
     "assistantSaveFailed": "Not saved.",
     "assistantNotReady": "This setting is not available on this deployment yet.",
     "orgLogo": "Logo",
-    "orgLogoHint": "A link to an image. Uploading files is not available yet — paste an address.",
+    "orgLogoHint": "A PNG, JPEG or WebP image, up to 512KB. Choosing a file saves it straight away.",
     "orgEmail": "Public email",
     "orgEmailHint": "Shown on your organization's page.",
     "orgDescription": "Description",
     "orgWebsite": "Website",
-    "orgLocation": "Location"
+    "orgLocation": "Location",
+    "orgLogoChoose": "Choose image",
+    "orgLogoReplace": "Replace image",
+    "orgLogoRemove": "Remove",
+    "orgLogoSaved": "Logo saved.",
+    "orgLogoRemoved": "Logo removed.",
+    "orgLogoFailed": "That image was not saved. Choose a PNG, JPEG or WebP file under 512KB."
   },
   "audit": {
     "codesOnly": "This page says what happened, not what was said. Question text, transcripts and conversation content never enter the audit trail.",
