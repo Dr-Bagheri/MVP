@@ -939,6 +939,34 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
         </div>
 
         <div className="mt-4 space-y-4 lg:mt-0">
+          {/*
+            THE RECORD'S NAME comes back (user directive, 2026-08-26: "on
+            top of action items add a title box, as before"). It sits above
+            the plan because that is the order the two get written: what
+            this meeting IS, then what it has to cover.
+
+            Empty is a real answer, not a missing one — the engine names an
+            untitled take itself («جلسه ۳»), so the placeholder says what
+            will happen rather than demanding a name. Editable only BEFORE
+            the take: once a call exists its title belongs to the record,
+            where one pencil renames it, and a second writable copy here
+            would be two spellings of one fact.
+          */}
+          <div className="rounded-xl border border-border bg-surface p-3">
+            <label className="block text-sm font-semibold text-fg" htmlFor="rec-title">
+              {t("titleField")}
+            </label>
+            <input
+              id="rec-title"
+              dir="auto"
+              className="input mt-2 h-9 min-h-0 py-0 text-sm"
+              placeholder={t("titlePlaceholder")}
+              value={title}
+              disabled={live || phase === "finishing"}
+              onChange={(event) => setTitle(event.target.value)}
+            />
+          </div>
+
           {/* items can be planned BEFORE the take (client state); ticking
               one persists a stamped chapter, so it waits for the call */}
           <AgendaPanel

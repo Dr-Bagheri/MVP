@@ -2056,14 +2056,28 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
    */
   app.get("/v1/admin/capabilities", async (request, reply) => {
     const identity = await auth.requireAdmin(request);
+    /*
+     * AN ADMIN SEES THE MEMBER HALF ONLY (user directive, 2026-08-26: "it
+     * does not feel right that an admin sees their own privileges").
+     *
+     * Filtered HERE and not on the screen: what binds an admin is the
+     * owner's decision about them, and handing it to the browser so a
+     * component can decline to render it means it still arrives, in a
+     * response anybody can open. The owner sees both halves because the
+     * owner is the one who writes them.
+     */
+    const owner = isOwner(identity);
+    const vocabulary = owner ? CAPABILITIES : CAPABILITIES.filter((c) => c.role === "member");
+    const decisions = (await capabilities.list(identity))
+      .filter((d) => owner || d.role === "member");
     return reply.send({
       /* the VOCABULARY travels with the decisions: a client that guessed
          the list would drift from the routes that enforce it */
-      capabilities: CAPABILITIES,
-      decisions: await capabilities.list(identity),
+      capabilities: vocabulary,
+      decisions,
       /* what THIS caller may change — the screen greys the rest rather
          than offering a switch that will be refused */
-      may_set_admin: isOwner(identity),
+      may_set_admin: owner,
     });
   });
 
@@ -2076,14 +2090,19 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       || typeof body.allowed !== "boolean") {
       throw new ValidationError("role, capability and allowed are required");
     }
+    const owner = isOwner(identity);
+    const decisions = await capabilities.set(identity, {
+      role: body.role,
+      capability: body.capability,
+      allowed: body.allowed,
+    });
+    /* the WRITE's response filters exactly as the read does — otherwise a
+       save would hand back the half the read withheld, and the narrower
+       view would be a property of one route rather than of the wall */
     return reply.send({
-      capabilities: CAPABILITIES,
-      decisions: await capabilities.set(identity, {
-        role: body.role,
-        capability: body.capability,
-        allowed: body.allowed,
-      }),
-      may_set_admin: isOwner(identity),
+      capabilities: owner ? CAPABILITIES : CAPABILITIES.filter((c) => c.role === "member"),
+      decisions: decisions.filter((d) => owner || d.role === "member"),
+      may_set_admin: owner,
     });
   });
 

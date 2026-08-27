@@ -42,12 +42,18 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   { slug: "skills", group: "assistant", href: "/management/skills", labelFrom: "management" },
   { slug: "models", group: "assistant", href: "/management/models", labelFrom: "management" },
   { slug: "connectors", group: "service", href: "/management/connectors", labelFrom: "management" },
-  { slug: "server", group: "service", href: "/management/server", labelFrom: "management" },
-  { slug: "oauth-apps", group: "connections", href: "/connectors" },
   { slug: "audit-logs", group: "compliance" },
   { slug: "audit-log-drains", group: "compliance" },
-  { slug: "legal", group: "compliance" },
 ];
+
+/*
+ * LEFT THE MENU (user directive, 2026-08-26): Connected apps, Legal
+ * documents and Service health. Their PAGES still resolve — /connectors
+ * redirects, /settings/legal and /management/server render — so nothing
+ * bookmarked breaks and nothing had to be deleted to take a row out of a
+ * menu. What the menu offers and what the router serves are different
+ * questions, and only the first one was asked.
+ */
 
 const GROUP_ORDER: readonly SettingsGroup[] = [
   "configuration", "assistant", "service", "connections", "compliance",

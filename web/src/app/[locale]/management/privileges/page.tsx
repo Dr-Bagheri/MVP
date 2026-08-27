@@ -85,10 +85,18 @@ export default function PrivilegesPage() {
         <p className="text-sm leading-6 text-fg-muted">{t("privilegeScope")}</p>
       </Card>
 
-      {(["member", "admin"] as const).map((role) => {
-        /* the owner alone may bind admins (0101). The admin block still
-           RENDERS for an admin — knowing what binds you is not a
-           privilege — it simply cannot be changed by them. */
+      {/*
+        * The ADMIN half is the owner's alone to see (user directive,
+        * 2026-08-26: "it does not feel right that an admin sees their own
+        * privileges"). The filtering happens on the SERVER — an admin's
+        * response simply has no admin rows in it — so this map renders
+        * whichever halves arrived rather than deciding the question here.
+        * A component that hid data it had been sent would be a curtain,
+        * not a wall.
+        */}
+      {(["member", "admin"] as const)
+        .filter((role) => (state?.capabilities ?? []).some((cap) => cap.role === role))
+        .map((role) => {
         const editable = role === "member" || (state?.may_set_admin ?? false);
         return (
           <Card key={role} className="mb-4">

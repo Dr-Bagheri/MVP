@@ -1,26 +1,38 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { AdminModelRow, User } from "@/api/types";
 import { SettingsPane } from "@/components/platform/SettingsPane";
 import { PageHeader } from "@/components/scaffold";
 import { modelLabel } from "@/lib/format";
-import { Card, Chip } from "@/components/ui";
+import { Card, Chip, EmptyState } from "@/components/ui";
+import { DataTable, type Column } from "@/components/DataTable";
+import { ConfirmDialog, IconAction } from "@/components/rowActions";
+import { IconChip, IconPlus, IconTrash } from "@/components/icons";
+import { notify } from "@/lib/notify";
 
 /**
- * The org's model allow-list (M5's cost lever) — LIVE (Part 3).
+ * The org's model allow-list (M5's cost lever).
  *
- * The read is `GET /v1/admin/models` (the curation menu that used to have no
- * endpoint — the recorded gap behind this screen's old "choices are not
- * saved" banner, now retired WITH the gap rather than papered over). The
- * write composes the whole `allowed_models` array through the org PATCH,
- * with the lost-update decision taken in the client: re-read before write.
+ * THE TABLE HOLDS THE ACTIVE LIST ONLY (user directive, 2026-08-26). The
+ * catalogue runs to hundreds, and a table of hundreds with five ticks in
+ * it made the five hard to find and the other three hundred look like a
+ * decision somebody made. Adding is a deliberate act through a picker now;
+ * removing is the table row menu, which is the theme rule for every table.
+ *
+ * THE EMPTY LIST IS NOT AN EMPTY PRODUCT, and this screen has to say so:
+ * `allowed_models = []` means NO CURATION, which core reads as "every model
+ * the platform offers" — not "no models". An empty table with no sentence
+ * beside it would tell an admin the opposite of what their members can do.
  *
  * `tools` is a MARKER, not a filter: absent means the capability catalogue
- * wasn't readable when this was served — "not checked" is not "no".
+ * was not readable when this was served — "not checked" is not "no".
  */
+/** `google/gemini-3.1-pro` -> `google`; an id with no slash is its own */
+const providerOf = (id: string): string => (id.includes("/") ? id.split("/")[0]! : id);
+
 export default function ModelsPage() {
   const t = useTranslations("management");
   const tAdmin = useTranslations("admin");
@@ -28,6 +40,8 @@ export default function ModelsPage() {
   const [models, setModels] = useState<AdminModelRow[]>([]);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [search, setSearch] = useState("");
 
   const isAdmin = me?.role === "admin" || me?.role === "owner";
 
@@ -39,6 +53,39 @@ export default function ModelsPage() {
     if (!isAdmin) return;
     void api.adminModels().then(setModels).catch(() => setFailed(true));
   }, [isAdmin]);
+
+  const active = useMemo(() => models.filter((m) => m.allowed), [models]);
+  const inactive = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return models
+      .filter((m) => !m.allowed)
+      .filter((m) => term === ""
+        || modelLabel(m.id).toLowerCase().includes(term)
+        || m.id.toLowerCase().includes(term))
+      .slice(0, 40);
+  }, [models, search]);
+
+  /**
+   * Write the WHOLE array, re-reading after. The lost-update hazard stays
+   * recorded rather than silently solved: two admins editing at once is
+   * last-write-wins, and the symptom arrives as "this toggle did not
+   * stick".
+   */
+  async function commit(next: string[]) {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await api.updateOrg({ allowed_models: next });
+      setModels(await api.adminModels());
+    } catch {
+      notify(t("modelsSaveFailed"), "warn");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const allow = (id: string) => commit([...active.map((m) => m.id), id]);
+  const revoke = (id: string) => commit(active.filter((m) => m.id !== id).map((m) => m.id));
 
   if (me !== null && !isAdmin) {
     return (
@@ -52,6 +99,41 @@ export default function ModelsPage() {
     );
   }
 
+  const columns: Column<AdminModelRow>[] = [
+    {
+      key: "name",
+      header: t("modelColName"),
+      className: "font-medium text-fg",
+      headClassName: "text-start",
+      cell: (model) => modelLabel(model.id),
+    },
+    {
+      key: "provider",
+      header: t("modelColProvider"),
+      headClassName: "text-start",
+      className: "text-fg-muted",
+      /* the provider is the id's own prefix (`google/gemini-3.1-pro`), not
+         a served field — deriving it here keeps one spelling of a fact the
+         catalogue already carries */
+      cell: (model) => providerOf(model.id),
+    },
+    {
+      key: "suggested",
+      header: t("modelColSuggested"),
+      headClassName: "text-start",
+      cell: (model) => (model.suggested ? <Chip tone="accent">{t("modelSuggested")}</Chip> : null),
+    },
+    {
+      key: "notes",
+      header: t("modelColNotes"),
+      headClassName: "text-start",
+      /* allowed-but-tool-incapable: members will not be OFFERED it for the
+         assistant, and the row says so rather than letting it look chosen */
+      cell: (model) =>
+        model.tools === false ? <Chip tone="warning">{t("modelNoTools")}</Chip> : null,
+    },
+  ];
+
   return (
     <SettingsPane activeSlug="models">
       <div>
@@ -63,93 +145,93 @@ export default function ModelsPage() {
           </Card>
         ) : null}
 
-        <Card className="!p-0">
-          <div className="overflow-x-auto">
-            {/* a TABLE with a master checkbox (user directive): one glance
-                says what is on, one click flips the whole catalogue */}
-            <table className="w-full min-w-[36rem] border-collapse text-sm">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="w-10 px-4 py-3">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 accent-[rgb(var(--accent))]"
-                      aria-label={t("modelSelectAll")}
-                      checked={models.length > 0 && models.every((m) => m.allowed)}
-                      ref={(el) => {
-                        // the third state the checkbox can express and props
-                        // cannot: some-but-not-all
-                        if (el) el.indeterminate = models.some((m) => m.allowed) && !models.every((m) => m.allowed);
-                      }}
-                      disabled={busy || models.length === 0}
-                      onChange={async (e) => {
-                        // ONE write for the whole flip — per-row round trips
-                        // here would be N re-reads racing each other
-                        setBusy(true);
-                        try {
-                          await api.updateOrg({
-                            allowed_models: e.target.checked ? models.map((m) => m.id) : [],
-                          });
-                          setModels(await api.adminModels());
-                        } catch {
-                          setFailed(true);
-                        } finally {
-                          setBusy(false);
-                        }
-                      }}
-                    />
-                  </th>
-                  <th className="table-head px-2 py-3 text-start">{t("modelColName")}</th>
-                  <th className="table-head px-2 py-3 text-start">{t("modelColProvider")}</th>
-                  <th className="table-head px-2 py-3 text-start">{t("modelColSuggested")}</th>
-                  <th className="table-head px-2 py-3 text-start">{t("modelColNotes")}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {models.map((model) => (
-                  <tr key={model.id} className="transition-colors hover:bg-surface-2">
-                    <td className="w-10 px-4 py-2.5">
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 accent-[rgb(var(--accent))]"
-                        aria-label={modelLabel(model.name)}
-                        checked={model.allowed}
-                        disabled={busy}
-                        onChange={async (e) => {
-                          setBusy(true);
-                          try {
-                            setModels(await api.setModelAllowed(model.id, e.target.checked));
-                          } catch {
-                            setFailed(true);
-                          } finally {
-                            setBusy(false);
-                          }
-                        }}
-                      />
-                    </td>
-                    <td className="px-2 py-2.5 text-fg">{modelLabel(model.name)}</td>
-                    <td className="px-2 py-2.5">
-                      {/* provider derived from the id — not a field the server owes */}
-                      <span className="ltr text-xs text-fg-muted">{model.id.split("/")[0]}</span>
-                    </td>
-                    <td className="px-2 py-2.5">
-                      {model.suggested ? <Chip tone="accent">{t("modelSuggested")}</Chip> : null}
-                    </td>
-                    <td className="px-2 py-2.5">
-                      {model.tools === false ? (
-                        /* allowed-but-tool-incapable: members won't be OFFERED
-                           it (SPEC's filter) — the marker says why a checked
-                           box can still produce nothing in the picker */
-                        <Chip tone="warning">{t("modelNoTools")}</Chip>
-                      ) : null}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <p className="text-sm text-fg-muted">
+            {active.length > 0 ? t("modelsActiveCount", { n: String(active.length) }) : ""}
+          </p>
+          <button
+            type="button"
+            className="btn-secondary h-9 min-h-0 gap-1.5 px-3 text-sm"
+            disabled={busy}
+            onClick={() => { setSearch(""); setAdding(true); }}
+          >
+            <IconPlus width={14} height={14} />
+            {t("modelsAdd")}
+          </button>
+        </div>
+
+        <div className="rounded-lg border border-border bg-surface">
+          {active.length === 0 ? (
+            /* the honest empty state: an empty allow-list is NO CURATION,
+               which core reads as every model the platform offers. Saying
+               "no models" here would be the opposite of the truth. */
+            <EmptyState text={t("modelsNoCuration")} />
+          ) : (
+            <DataTable
+              rows={active}
+              rowKey={(model) => model.id}
+              columns={columns}
+              menuItems={(model) => [
+                {
+                  key: "revoke",
+                  label: t("modelsRemove"),
+                  icon: <IconTrash width={14} height={14} />,
+                  danger: true,
+                  disabled: busy,
+                  onSelect: () => void revoke(model.id),
+                },
+              ]}
+            />
+          )}
+        </div>
       </div>
+
+      {adding ? (
+        <ConfirmDialog
+          title={t("modelsAddTitle")}
+          wide
+          body={
+            <div className="space-y-3">
+              <input
+                className="input h-9 min-h-0 py-0 text-sm"
+                placeholder={t("modelsSearch")}
+                value={search}
+                autoFocus
+                onChange={(event) => setSearch(event.target.value)}
+              />
+              <ul className="max-h-72 divide-y divide-border overflow-y-auto">
+                {inactive.map((model) => (
+                  <li key={model.id} className="flex items-center gap-3 py-2">
+                    <IconChip width={14} height={14} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm text-fg">{modelLabel(model.id)}</span>
+                      <span className="block truncate text-xs text-fg-subtle">{providerOf(model.id)}</span>
+                    </span>
+                    {model.tools === false ? (
+                      <Chip tone="warning">{t("modelNoTools")}</Chip>
+                    ) : null}
+                    <IconAction
+                      label={t("modelsAddOne")}
+                      onClick={() => { setAdding(false); void allow(model.id); }}
+                    >
+                      <IconPlus width={14} height={14} />
+                    </IconAction>
+                  </li>
+                ))}
+                {inactive.length === 0 ? (
+                  <li className="py-3 text-sm text-fg-muted">{t("modelsNoMatch")}</li>
+                ) : null}
+              </ul>
+            </div>
+          }
+          confirmLabel={t("modelsDone")}
+          cancelLabel={t("modelsDone")}
+          danger={false}
+          hideCancel
+          onConfirm={() => setAdding(false)}
+          onCancel={() => setAdding(false)}
+        />
+      ) : null}
     </SettingsPane>
   );
 }
