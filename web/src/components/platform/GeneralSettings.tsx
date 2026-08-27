@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Link } from "@/i18n/routing";
 import { api } from "@/api/client";
 import type { Org, User } from "@/api/types";
 import { notify } from "@/lib/notify";
@@ -35,8 +34,10 @@ import { FormPanel, FormRow, Section } from "@/components/scaffold";
  * ── What is NOT here ────────────────────────────────────────────────────────
  *
  * The organisation's identity — name, logo, glossary, public face — is
- * Management · General's. This screen links there rather than rendering a
- * second copy of the same row.
+ * Management · General's, and this screen no longer even links there (user
+ * directive, 2026-08-27): admins reach it from the Management menu, and a
+ * door here was one more thing to read on a screen that answers a
+ * different question.
  */
 
 /** The dial's rungs, lowest first. Mirrors core's AUTONOMY_LEVELS. */
@@ -111,14 +112,6 @@ export function GeneralSettings() {
               )}
             </FormRow>
           ) : null}
-
-          <FormRow label={t("workspaceIdentity")} description={t("workspaceIdentityHint")}>
-            {/* ONE home for the org's identity. This is a door to it, not a
-                second copy of the row that edits it. */}
-            <Link href="/management/general" className="btn-secondary h-9 min-h-0 px-3 text-sm">
-              {t("workspaceIdentityOpen")}
-            </Link>
-          </FormRow>
         </FormPanel>
         {!isAdmin ? (
           <p className="mt-2 text-detail leading-6 text-fg-muted">{t("orgAdminOnly")}</p>
