@@ -48,6 +48,10 @@ const REQUIRED_ROUTES: [method: string, path: string, why: string][] = [
   ["GET", "/v1/search", "SPEC §Search"],
 
   ["POST", "/v1/assistant/ask", "SPEC §The assistant"],
+
+  ["POST", "/v1/workflows/:ref/run", "M41 P1 — the manual trigger; without it the engine has no door"],
+  ["GET", "/v1/workflows/runs", "M41 P1 — the run ledger's list"],
+  ["GET", "/v1/workflows/runs/:id", "M41 P1 — one run + its steps; where proposals get decided in P3 (W14)"],
   ["POST", "/v1/assistant/proposals/:id/confirm", "M4 — an inferred write is proposed, then approved"],
   ["POST", "/v1/assistant/proposals/:id/reject", "M4 — a refusal is recorded, not discarded"],
   ["GET", "/v1/assistant/sessions", "M4/db-0018 — conversations persist; the hub needs a list to resume from"],

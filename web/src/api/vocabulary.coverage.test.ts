@@ -30,6 +30,8 @@ const GUARDED = [
   "TRANSCRIPT_TIMINGS",
   "USER_STATUSES",
   "WEBHOOK_EVENTS",
+  "WORKFLOW_RUN_STATUSES",
+  "WORKFLOW_STEP_STATUSES",
 ];
 
 /**
@@ -64,6 +66,21 @@ const EXCLUDED: Record<string, string> = {
     "is no local union or local member list to drift. Same reasoning as " +
     "AUDIT_SOURCES — the missing guard is the consequence of importing rather " +
     "than copying, not an oversight.",
+  WORKFLOW_STEP_KINDS:
+    "no local union exists: the run detail renders step IDS, not kinds, and " +
+    "the builder (P5) will import this array rather than copy it — the " +
+    "AUDIT_SOURCES posture, chosen in advance of the surface.",
+  WORKFLOW_TRIGGER_KINDS:
+    "no local union: `trigger_kind` travels as a string and renders inside a " +
+    "translated sentence; nothing branches on its members here.",
+  WORKFLOW_FAILURE_CODES:
+    "no local union: failure codes render VERBATIM as mono codes (the " +
+    "codes-not-content posture) — a per-code label map would be a translation " +
+    "of an operator vocabulary members are not meant to interpret.",
+  EXECUTABLE_STEP_KINDS:
+    "core-internal: the manual-trigger route's phase gate. Web learns of it " +
+    "only as core's named refusal sentence, surfaced verbatim — mirroring the " +
+    "list would let the screen contradict the gate.",
   SUMMARY_TEMPLATES:
     "not mirrored: the call page imports SUMMARY_TEMPLATES and the " +
     "SummaryTemplate type straight from this module, and its label map is " +

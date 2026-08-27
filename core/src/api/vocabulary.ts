@@ -270,5 +270,18 @@ export type WorkflowStepStatus = (typeof WORKFLOW_STEP_STATUSES)[number];
 export const WORKFLOW_FAILURE_CODES = [
   "owner_not_found", "owner_inactive", "step_dead_letter", "budget_exceeded",
   "model_refused", "schema_invalid", "source_purged", "stalled",
+  /* runtime-only pair (P1): a trigger binding the run does not carry, and a
+     step kind outside the phase's executable set reaching the executor
+     anyway (gated at trigger time; here = forged payload or bug) */
+  "binding_unresolved", "kind_unavailable",
 ] as const;
 export type WorkflowFailureCode = (typeof WORKFLOW_FAILURE_CODES)[number];
+
+/**
+ * The kinds the EXECUTOR can run TODAY (M41 build phases). The manual
+ * trigger route refuses to start a run whose graph steps outside this set —
+ * a workflow that would fail on step 3 is refused at step 0, naming the
+ * kinds it needs (rule 12: the refusal says WHICH nothing). Grows with the
+ * phases: P2 adds extract/decide/foreach, P3 propose/wait/apply, P4 fetch.
+ */
+export const EXECUTABLE_STEP_KINDS = ["search", "ask", "notify"] as const;

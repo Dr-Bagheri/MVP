@@ -31,6 +31,8 @@ import type {
   Role,
   UserStatus,
   TranscriptTiming,
+  WorkflowRunRecord,
+  WorkflowStepRunRecord,
 } from "./types";
 import type { CallSummary } from "@echo/core/wire";
 import {
@@ -41,6 +43,8 @@ import {
   TRANSCRIPT_TIMINGS,
   USER_STATUSES,
   WEBHOOK_EVENTS,
+  WORKFLOW_RUN_STATUSES,
+  WORKFLOW_STEP_STATUSES,
 } from "@echo/core/vocabulary";
 
 /**
@@ -75,6 +79,20 @@ export const ROLE_MATCHES: Exact<Role, (typeof MEMBER_ROLES)[number]> = true;
  * hand-written.
  */
 export const USER_STATUS_MATCHES: Exact<UserStatus, (typeof USER_STATUSES)[number]> = true;
+
+/**
+ * M41 P1: the run ledger's two status unions are hand-written mirrors in
+ * `types.ts` (the tone maps and the `status_*` copy keys are typed off
+ * them), which is exactly the drift-prone shape this file exists for — a
+ * new run status on core's side must break the BUILD here, not render as
+ * an unknown chip.
+ */
+export const WORKFLOW_RUN_STATUS_MATCHES: Exact<
+  WorkflowRunRecord["status"], (typeof WORKFLOW_RUN_STATUSES)[number]
+> = true;
+export const WORKFLOW_STEP_STATUS_MATCHES: Exact<
+  WorkflowStepRunRecord["status"], (typeof WORKFLOW_STEP_STATUSES)[number]
+> = true;
 
 /**
  * The last closed vocabulary this codebase held a hand-written copy of. It

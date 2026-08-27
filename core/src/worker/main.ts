@@ -22,6 +22,7 @@ import { storageSignerFromEnv } from "../storage/signer.ts";
 import { createLinkSpeakersStep, createSummarizeStep } from "./call-steps.ts";
 import { createSummarizer } from "./summarizer.ts";
 import { createSignalStep } from "./signal-step.ts";
+import { createWorkflowStep } from "./workflow-step.ts";
 import { hasSignalTables } from "../db/capabilities.ts";
 import { createDomainTools } from "../agent/domain-tools.ts";
 import { createSummarizerResolver } from "../agent/skill-store.ts";
@@ -123,6 +124,12 @@ export async function main(): Promise<void> {
       createSummarizeStep({ db, lifecycle, summarizer, queue }),
       // M35: signals — briefs and digests, each run AS the owner
       createSignalStep({ db }),
+      // M41 P1: the workflow executor — one message, one step, as-owner
+      createWorkflowStep({
+        db, queue,
+        apiKey: process.env.OPENROUTER_API_KEY,
+        fallbackModel: process.env.WORKER_SUMMARY_MODEL,
+      }),
     ],
     config,
     sink: (() => {

@@ -12,12 +12,13 @@
  * available, and it is the one that happens by default if nobody writes this
  * file.
  */
-import { identityForJob } from "../db/actor.ts";
+import { identityForJob, resolveIdentity } from "../db/actor.ts";
 import type { Db } from "../db/identity.ts";
 import { allPartsMissing, partsSettled, type Lifecycle } from "./lifecycle.ts";
 import {
   isDeliveryPayload,
   isSignalPayload,
+  isWorkflowStepPayload,
   PART_QUEUES,
   Q_LINK_SPEAKERS,
   type JobPayload,
@@ -64,6 +65,39 @@ export function createDeadLetterSink({ db, lifecycle, queue, log }: DeadLetterOp
         );
         return;
       }
+      /*
+       * M41: a dead-lettered workflow step is the loud half of §5.5 — the
+       * run must not stay 'running' forever while its message rots in the
+       * archive. Marked AS THE OWNER; an unresolvable owner gets the log
+       * line only (invariant 2: no owner, no product write — the archived
+       * message stays the replay handle).
+       */
+      if (isWorkflowStepPayload(body)) {
+        log.error(
+          { queue: queueName, run_id: body.runId, step_id: body.stepId,
+            org_id: body.orgId, error_type: info.errorType, exhausted: info.exhausted },
+          "workflow step dead-lettered",
+        );
+        try {
+          const identity = await resolveIdentity(db, body.ownerId);
+          await db.withIdentity(identity, async (tx) => {
+            await tx.unsafe(
+              `update echo.workflow_step_run
+                  set status = 'failed', failure_code = 'step_dead_letter', ended_at = now()
+                where run_id = $1 and step_id = $2 and iteration = $3 and status = 'running'`,
+              [body.runId, body.stepId, body.iteration]);
+            await tx.unsafe(
+              `update echo.workflow_run
+                  set status = 'failed', failure_code = 'step_dead_letter', ended_at = now()
+                where id = $1 and status in ('running', 'waiting')`,
+              [body.runId]);
+          });
+        } catch {
+          // the owner is gone or inactive: the log line above is the trace
+        }
+        return;
+      }
+
       const payload: JobPayload = body;
       let identity;
       try {

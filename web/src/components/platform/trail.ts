@@ -102,6 +102,8 @@ export const TRAIL: Readonly<Record<string, TrailEntry>> = {
   "/conversations": { label: "conversations.title", parent: "/" },
   "/agents": { label: "platform.agents", parent: "/" },
   "/workflows": { label: "platform.workflows", parent: "/" },
+  /** M41 P1 — one run's ledger; the leaf is the workflow's name (entity). */
+  "/workflows/runs/[id]": { entity: true, parent: "/workflows" },
   /** M32's separate metadata-only operator console. */
   "/platform": { label: "platformRoot.title", parent: "/" },
   "/profile": { label: "profile.title", parent: "/" },

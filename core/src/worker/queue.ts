@@ -29,9 +29,14 @@ export const Q_DELIVER_WEBHOOK = "echo_deliver_webhook";
 /** M35 signals: rule firings, each run AS the owner (db/0074). */
 export const Q_AGENT_RULES = "echo_agent_rules";
 
+/** M41: one message advances exactly ONE workflow step (W11, db/0104). */
+export const Q_WORKFLOW_STEP = "echo_workflow_step";
+
 export const PART_QUEUES = [Q_PROCESS_PART] as const;
 export const CALL_QUEUES = [Q_LINK_SPEAKERS, Q_SUMMARIZE] as const;
-export const ALL_QUEUES = [...PART_QUEUES, ...CALL_QUEUES, Q_DELIVER_WEBHOOK, Q_AGENT_RULES] as const;
+export const ALL_QUEUES = [
+  ...PART_QUEUES, ...CALL_QUEUES, Q_DELIVER_WEBHOOK, Q_AGENT_RULES, Q_WORKFLOW_STEP,
+] as const;
 
 export type QueueName = (typeof ALL_QUEUES)[number];
 
@@ -92,7 +97,21 @@ export interface SignalPayload {
   ruleId?: string;
 }
 
-export type QueuePayload = JobPayload | DeliveryPayload | SignalPayload;
+/**
+ * M41: the executor's program counter. The message is TRANSPORT (M7): the
+ * handler re-reads the run row as the owner and refuses on any mismatch —
+ * a forged payload buys an attacker a dead letter, never a read.
+ */
+export interface WorkflowStepPayload {
+  runId: string;
+  stepId: string;
+  iteration: number;
+  /** written at enqueue time, while a genuine caller was present (M7). */
+  ownerId: string;
+  orgId: string;
+}
+
+export type QueuePayload = JobPayload | DeliveryPayload | SignalPayload | WorkflowStepPayload;
 
 export function isDeliveryPayload(body: QueuePayload): body is DeliveryPayload {
   return typeof (body as DeliveryPayload).deliveryId === "string";
@@ -100,6 +119,11 @@ export function isDeliveryPayload(body: QueuePayload): body is DeliveryPayload {
 
 export function isSignalPayload(body: QueuePayload): body is SignalPayload {
   return typeof (body as SignalPayload).event === "string";
+}
+
+export function isWorkflowStepPayload(body: QueuePayload): body is WorkflowStepPayload {
+  return typeof (body as WorkflowStepPayload).runId === "string"
+    && typeof (body as WorkflowStepPayload).stepId === "string";
 }
 
 export interface QueueMessage<T = QueuePayload> {

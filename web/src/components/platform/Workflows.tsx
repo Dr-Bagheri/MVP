@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import { useRefreshEpoch } from "@/lib/refreshBus";
-import type { ConnectorItem, ConnectorProvider, ConnectorStatus, WorkflowCard } from "@/api/types";
+import type { ConnectorItem, ConnectorProvider, ConnectorStatus, WorkflowCard, WorkflowRunRecord } from "@/api/types";
+import { notify } from "@/lib/notify";
+import { Chip } from "@/components/ui";
 import { useRouter } from "@/i18n/routing";
 import { AssistantMenu } from "./AssistantMenu";
 import { PlatformShell } from "./PlatformShell";
@@ -34,6 +36,33 @@ export function Workflows() {
   });
   const [createBusy, setCreateBusy] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  /** M41 P1 — the run ledger strip (own runs; admins also the org's). */
+  const [runs, setRuns] = useState<WorkflowRunRecord[] | null>(null);
+  const [runBusy, setRunBusy] = useState<string | null>(null);
+
+  useEffect(() => {
+    void api.workflowRuns().then(setRuns).catch(() => setRuns([]));
+  }, []);
+
+  /**
+   * Press Run — the ENGINE's manual trigger (M41), not the source-picker
+   * flow above it. A refusal is a NAMED sentence from core (a workflow
+   * needing un-runnable kinds says which), surfaced verbatim: the refusal
+   * copy is core's alone.
+   */
+  async function runNow(workflow: WorkflowCard): Promise<void> {
+    if (runBusy) return;
+    setRunBusy(workflow.slug);
+    try {
+      const { run_id } = await api.runWorkflow(workflow.slug);
+      router.push({ pathname: "/workflows/runs/[id]", params: { id: run_id } } as never);
+    } catch (cause) {
+      const detail = (cause as { detail?: string }).detail;
+      notify(detail || t("runFailed"), "warn");
+    } finally {
+      setRunBusy(null);
+    }
+  }
 
   const workflowsEpoch = useRefreshEpoch("workflows");
   useEffect(() => {
@@ -227,12 +256,52 @@ export function Workflows() {
                           )}
                         </div>
                       ) : null}
+                      <div className="mt-3 flex items-center justify-end border-t border-border pt-3">
+                        <button
+                          type="button"
+                          className="btn-secondary h-8 min-h-0 px-3 text-xs"
+                          disabled={runBusy !== null}
+                          onClick={(event) => { event.stopPropagation(); void runNow(workflow); }}
+                        >
+                          {runBusy === workflow.slug ? t("runStarting") : t("runNow")}
+                        </button>
+                      </div>
                     </Card>
                   );
                 })}
               </div>
             )}
             {error ? <p role="status" className="mt-4 text-sm text-danger">{error}</p> : null}
+          </Section>
+
+          {/* M41 P1 — the ledger strip: what ran, for whom, how it ended.
+              RLS decides whose rows arrive; the screen adds nothing. */}
+          <Section title={t("runsTitle")}>
+            {runs === null ? null : runs.length === 0 ? (
+              <p className="text-sm text-fg-muted">{t("runsEmpty")}</p>
+            ) : (
+              <ul className="divide-y divide-border rounded-lg border border-border bg-surface">
+                {runs.slice(0, 12).map((run) => (
+                  <li key={run.id}>
+                    <button
+                      type="button"
+                      className="tap flex w-full items-center gap-3 px-4 py-2.5 text-start hover:bg-surface-2"
+                      onClick={() => router.push({ pathname: "/workflows/runs/[id]", params: { id: run.id } } as never)}
+                    >
+                      <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg">{run.workflow}</span>
+                      <Chip tone={run.status === "done" ? "success"
+                        : run.status === "running" || run.status === "waiting" ? "info"
+                        : run.status === "cancelled" ? "neutral" : "danger"}>
+                        {t(`status_${run.status}` as "status_done")}
+                      </Chip>
+                      {run.failure_code ? (
+                        <span dir="ltr" className="font-mono text-[11px] text-fg-subtle">{run.failure_code}</span>
+                      ) : null}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </Section>
         </div>
       </MenuLayout>

@@ -49,6 +49,7 @@ import { createMlClient } from "../worker/ml-client.ts";
 import { decideMatch } from "../worker/voice-match.ts";
 import { createStorage as createPurgeStorage } from "../purge/main.ts";
 import { createWorkflow, listWorkflows, resolveWorkflow } from "./workflows.ts";
+import { createWorkflowRunsRepo } from "./workflow-runs.ts";
 import type { DomainTool } from "../agent/tools.ts";
 import { agentToolsDb, type Db, type SqlTx } from "../db/identity.ts";
 import { isAdmin, isOwner, type Identity, type Skill } from "../agent/types.ts";
@@ -1782,6 +1783,8 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     return reply.code(201).send(agent);
   });
 
+  const workflowRuns = createWorkflowRunsRepo(options.db);
+
   app.get("/v1/workflows", async (request, reply) => {
     const identity = await auth.requireActive(request);
     return reply.send({ workflows: await listWorkflows(options.db, identity) });
@@ -1809,6 +1812,47 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       instructions: body.instructions,
     });
     return reply.code(201).send(workflow);
+  });
+
+  /**
+   * M41 P1 — the manual trigger and the run ledger.
+   *
+   * Every route here refuses API-key principals (W23): a stolen gateway
+   * credential can never start, list or read workflow runs. The capability
+   * wall (`workflows.run`, narrowable in Member privileges) gates the
+   * TRIGGER; reading one's own ledger is not a privilege anyone narrows.
+   */
+  app.post("/v1/workflows/:ref/run", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    await capabilities.require(identity, "workflows.run");
+    if ((identity as { viaApiKey?: boolean }).viaApiKey === true) {
+      throw new NotActivatedError("api keys may not run workflows");
+    }
+    const { ref } = request.params as { ref: string };
+    return reply.code(201).send(await workflowRuns.start(identity, ref));
+  });
+
+  app.get("/v1/workflows/runs", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    if ((identity as { viaApiKey?: boolean }).viaApiKey === true) {
+      throw new NotActivatedError("api keys may not read workflow runs");
+    }
+    const query = request.query as { before?: string; limit?: string };
+    return reply.send({
+      runs: await workflowRuns.list(identity, {
+        before: query.before,
+        limit: query.limit ? Number(query.limit) : undefined,
+      }),
+    });
+  });
+
+  app.get("/v1/workflows/runs/:id", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    if ((identity as { viaApiKey?: boolean }).viaApiKey === true) {
+      throw new NotActivatedError("api keys may not read workflow runs");
+    }
+    const { id } = request.params as { id: string };
+    return reply.send(await workflowRuns.detail(identity, id));
   });
 
   app.get("/v1/connectors", async (request, reply) => {

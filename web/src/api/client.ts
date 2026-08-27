@@ -8,6 +8,8 @@
 // swapped to the wire or deleted by the 2026-08-20 tenancy audit — see the
 // notes at their former sites.)
 import type {
+  WorkflowRunDetail,
+  WorkflowRunRecord,
   CapabilityState,
   AgentCardItem,
   AgentEvent,
@@ -1598,6 +1600,26 @@ export const api = {
    */
   orgLogoUrl(version = 0): string {
     return version > 0 ? `/api/org/logo?v=${version}` : "/api/org/logo";
+  },
+
+  /**
+   * M41 P1 — the workflow engine's manual trigger and run ledger.
+   * **LIVE** — `/api/workflows/…` → core `/v1/workflows/…`.
+   */
+  async runWorkflow(ref: string): Promise<{ run_id: string; status: string }> {
+    return bff<{ run_id: string; status: string }>(
+      `/api/workflows/${encodeURIComponent(ref)}/run`,
+      { method: "POST", headers: { "content-type": "application/json" }, body: "{}" },
+    );
+  },
+
+  async workflowRuns(): Promise<WorkflowRunRecord[]> {
+    const { runs } = await bff<{ runs: WorkflowRunRecord[] }>("/api/workflows/runs");
+    return runs;
+  },
+
+  async workflowRun(id: string): Promise<WorkflowRunDetail> {
+    return bff<WorkflowRunDetail>(`/api/workflows/runs/${encodeURIComponent(id)}`);
   },
 
   // ---- gateway (M17) ----------------------------------------------------------

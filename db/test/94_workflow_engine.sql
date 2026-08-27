@@ -263,6 +263,29 @@ select t.denied(
      where owner_id = '02000000-0000-4000-8000-000000000002'$$,
   '0106: schedules are disabled, never deleted — no DELETE exists to reach for');
 
+-- ─── the executor's door (0107): the caller's own run, nothing else ───
+-- bob owns run …21: through the door he reads the program his run is
+-- executing — the one moment the program stops being a secret FROM him
+select set_config('echo.actor_id', '02000000-0000-4000-8000-000000000002', true); -- bob
+select t.ok(
+  (select graph->>'entry' from echo.workflow_graph_for_run(
+     '94000000-0000-4000-8000-000000000021')) = 's1',
+  '0107: the run''s owner reads their own run''s program through the door');
+-- carol owns nothing here: the door answers empty, indistinguishable from
+-- no-such-run (deliberate — the door must not be an existence oracle)
+select set_config('echo.actor_id', '03000000-0000-4000-8000-000000000003', true); -- carol
+select t.ok(
+  not exists (select 1 from echo.workflow_graph_for_run(
+     '94000000-0000-4000-8000-000000000021')),
+  '0107: the door answers empty for a run the caller does not own');
+-- and an ADMIN gets nothing through the door either — their read is the
+-- version policy, not a side entrance widened past its one safe shape
+select set_config('echo.actor_id', '06000000-0000-4000-8000-000000000006', true); -- dave, admin
+select t.ok(
+  not exists (select 1 from echo.workflow_graph_for_run(
+     '94000000-0000-4000-8000-000000000021')),
+  '0107: the door is owner-only — an admin''s program read is the policy');
+
 -- ─── the agent role touches none of this ────────────────────────────────
 reset role;
 set local role echo_agent;

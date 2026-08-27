@@ -1025,3 +1025,40 @@ export interface CapabilityState {
   /** the owner alone may bind admins — the screen greys the rest */
   may_set_admin: boolean;
 }
+
+/**
+ * M41 P1 — the run ledger, as core serves it.
+ *
+ * `output` on a step is ABSENT (not null) when the produce wall filtered
+ * it: the wire distinguishes "this step made nothing" (a notify) from
+ * "not yours to read" (an admin looking at a member's run) by key
+ * presence, and the screen must render those as different sentences.
+ */
+export interface WorkflowRunRecord {
+  id: string;
+  workflow_id: string;
+  workflow: string;
+  owner_id: string;
+  status: "running" | "waiting" | "done" | "failed" | "refused" | "cancelled" | "expired";
+  trigger_kind: string;
+  failure_code: string | null;
+  started_at: string;
+  ended_at: string | null;
+}
+
+export interface WorkflowStepRunRecord {
+  step_id: string;
+  iteration: number;
+  status: "running" | "done" | "failed" | "skipped" | "refused";
+  failure_code: string | null;
+  agent_run_id: string | null;
+  model_cost: { model?: string; tokens_in?: number | null; tokens_out?: number | null } | null;
+  started_at: string;
+  ended_at: string | null;
+  output?: unknown;
+}
+
+export interface WorkflowRunDetail {
+  run: WorkflowRunRecord;
+  steps: WorkflowStepRunRecord[];
+}
