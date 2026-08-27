@@ -7,7 +7,7 @@ import { useRefreshEpoch } from "@/lib/refreshBus";
 import type { ConnectorItem, ConnectorProvider, ConnectorStatus, WorkflowCard, WorkflowRunRecord } from "@/api/types";
 import { notify } from "@/lib/notify";
 import { Chip } from "@/components/ui";
-import { useRouter } from "@/i18n/routing";
+import { Link, useRouter } from "@/i18n/routing";
 import { AssistantMenu } from "./AssistantMenu";
 import { PlatformShell } from "./PlatformShell";
 import { MenuLayout, PageHeader, Section } from "@/components/scaffold";
@@ -39,9 +39,14 @@ export function Workflows() {
   /** M41 P1 — the run ledger strip (own runs; admins also the org's). */
   const [runs, setRuns] = useState<WorkflowRunRecord[] | null>(null);
   const [runBusy, setRunBusy] = useState<string | null>(null);
+  /** M41: the ENGINE catalogue - the only rows Run can honestly offer.
+      The template cards above are the OLD assistant flow; pressing Run on
+      one of those was a 404 wearing a button (the first live report). */
+  const [engine, setEngine] = useState<{ id: string; handle: string; name: string; description: string }[] | null>(null);
 
   useEffect(() => {
     void api.workflowRuns().then(setRuns).catch(() => setRuns([]));
+    void api.engineWorkflows().then(setEngine).catch(() => setEngine([]));
   }, []);
 
   /**
@@ -50,11 +55,11 @@ export function Workflows() {
    * needing un-runnable kinds says which), surfaced verbatim: the refusal
    * copy is core's alone.
    */
-  async function runNow(workflow: WorkflowCard): Promise<void> {
+  async function runNow(handle: string): Promise<void> {
     if (runBusy) return;
-    setRunBusy(workflow.slug);
+    setRunBusy(handle);
     try {
-      const { run_id } = await api.runWorkflow(workflow.slug);
+      const { run_id } = await api.runWorkflow(handle);
       router.push({ pathname: "/workflows/runs/[id]", params: { id: run_id } } as never);
     } catch (cause) {
       const detail = (cause as { detail?: string }).detail;
@@ -256,22 +261,47 @@ export function Workflows() {
                           )}
                         </div>
                       ) : null}
-                      <div className="mt-3 flex items-center justify-end border-t border-border pt-3">
-                        <button
-                          type="button"
-                          className="btn-secondary h-8 min-h-0 px-3 text-xs"
-                          disabled={runBusy !== null}
-                          onClick={(event) => { event.stopPropagation(); void runNow(workflow); }}
-                        >
-                          {runBusy === workflow.slug ? t("runStarting") : t("runNow")}
-                        </button>
-                      </div>
                     </Card>
                   );
                 })}
               </div>
             )}
             {error ? <p role="status" className="mt-4 text-sm text-danger">{error}</p> : null}
+          </Section>
+
+          {/* M41 - the ENGINE: workflows the org published for running.
+              Run lives HERE and only here; the cards above are the older
+              guided flow through the assistant. */}
+          <Section title={t("engineTitle")}>
+            {engine === null ? null : engine.length === 0 ? (
+              <p className="text-sm text-fg-muted">
+                {t("engineEmpty")}{" "}
+                <Link href="/management/workflows" className="text-accent underline-offset-2 hover:underline">
+                  {t("engineBuild")}
+                </Link>
+              </p>
+            ) : (
+              <ul className="divide-y divide-border rounded-lg border border-border bg-surface">
+                {engine.map((workflow) => (
+                  <li key={workflow.id} className="flex flex-wrap items-center gap-3 px-4 py-2.5">
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium text-fg">{workflow.name}</span>
+                      {workflow.description ? (
+                        <span className="block truncate text-xs text-fg-muted">{workflow.description}</span>
+                      ) : null}
+                    </span>
+                    <button
+                      type="button"
+                      className="btn-secondary h-8 min-h-0 px-3 text-xs"
+                      disabled={runBusy !== null}
+                      onClick={() => void runNow(workflow.handle)}
+                    >
+                      {runBusy === workflow.handle ? t("runStarting") : t("runNow")}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </Section>
 
           {/* M41 P1 — the ledger strip: what ran, for whom, how it ended.

@@ -30,6 +30,9 @@ const REQUIRED_ROUTES: [method: string, path: string, why: string][] = [
 
   ["GET", "/v1/me", "M1 — the browser never sees the token, so the shell cannot self-identify"],
   ["PATCH", "/v1/me", "M24 round 1 — the caller edits their own names (display_name, display_name_en, username)"],
+  ["PATCH", "/v1/me/assistant", "db/0112 — the person's standing assistant voice (Settings·Assistant)"],
+  ["GET", "/v1/me/sessions", "db/0112 — the caller's own devices (Security 43)"],
+  ["DELETE", "/v1/me/voiceprint", "db/0112 — consent withdrawal is self-service (Security 59)"],
   ["POST", "/v1/signup", "M15 — the only caller of echo.register_account(); without it a signed-up person 401s forever and never reaches the pending queue"],
 
   ["GET", "/v1/calls", "SPEC §Calls — the list"],
@@ -50,6 +53,7 @@ const REQUIRED_ROUTES: [method: string, path: string, why: string][] = [
   ["POST", "/v1/assistant/ask", "SPEC §The assistant"],
 
   ["POST", "/v1/workflows/:ref/run", "M41 P1 — the manual trigger; without it the engine has no door"],
+  ["GET", "/v1/workflows/engine", "M41 — the runnable catalogue; the Run button's honest source"],
   ["GET", "/v1/workflows/runs", "M41 P1 — the run ledger's list"],
   ["GET", "/v1/workflows/runs/:id", "M41 P1 — one run + its steps; where proposals get decided in P3 (W14)"],
   ["POST", "/v1/workflows/runs/:id/decide", "M41 P3/W14 — the decision, on the run, by its owner"],

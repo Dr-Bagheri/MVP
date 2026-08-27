@@ -43,7 +43,7 @@ import { changedFields, record } from "./admin-actions.ts";
 import { ConflictError, NotFoundError, ValidationError } from "./errors.ts";
 import { iso } from "./vocabulary.ts";
 import { type Db, type SqlTx } from "../db/identity.ts";
-import { hasAutonomyCeiling, hasOrgGlossary, hasOrgLogoBytes, hasOrgProfile } from "../db/capabilities.ts";
+import { hasAutonomyCeiling, hasOrgGlossary, hasOrgLogoBytes, hasOrgProfile, hasSignupPolicy } from "../db/capabilities.ts";
 import type { Identity } from "../agent/types.ts";
 
 export interface OrgRecord {
@@ -89,6 +89,8 @@ export interface OrgRecord {
    * nobody could set. ABSENT on an un-migrated deployment.
    */
   autonomy_ceiling?: string;
+  /** db/0112 - the invitation domain wall. ABSENT until migrated. */
+  allowed_email_domains?: string[];
 }
 
 const ORG_COLUMNS = `id, name, status, locale, allowed_models, created_at`;
@@ -105,6 +107,8 @@ const toOrg = (row: Record<string, unknown>): OrgRecord => ({
   ...(row.has_logo !== undefined ? { has_logo: row.has_logo === true } : {}),
   ...(row.autonomy_ceiling !== undefined
     ? { autonomy_ceiling: String(row.autonomy_ceiling) } : {}),
+  ...(row.allowed_email_domains !== undefined
+    ? { allowed_email_domains: (row.allowed_email_domains as string[] | null) ?? [] } : {}),
   ...(row.logo_url !== undefined
     ? {
         public_email: (row.public_email as string | null) ?? null,
@@ -123,6 +127,8 @@ const PROFILE_COLUMNS = ", public_email, description, website_url, location, log
 const LOGO_COLUMN = ", (logo_bytes is not null) as has_logo";
 /** db/0075's cap. Its own probe: it landed in a different migration. */
 const CEILING_COLUMN = ", autonomy_ceiling";
+/** db/0112's wall. Its own probe likewise. */
+const DOMAINS_COLUMN = ", allowed_email_domains";
 /** The dial's rungs, lowest first — core owns this vocabulary. */
 export const AUTONOMY_LEVELS = ["watch", "assist", "act"] as const;
 
@@ -167,12 +173,14 @@ export function createOrgRepo(db: Db) {
       const withProfile = await hasOrgProfile(db);
       const withLogo = await hasOrgLogoBytes(db);
       const withCeiling = await hasAutonomyCeiling(db);
+      const withDomains = await hasSignupPolicy(db);
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<Record<string, unknown>>(
           `select ${ORG_COLUMNS}${withGlossary ? ", glossary" : ""}${
             withProfile ? PROFILE_COLUMNS : ""}${
             withLogo ? LOGO_COLUMN : ""}${
-            withCeiling ? CEILING_COLUMN : ""} from echo.org where id = $1`,
+            withCeiling ? CEILING_COLUMN : ""}${
+            withDomains ? DOMAINS_COLUMN : ""} from echo.org where id = $1`,
           [identity.orgId],
         ),
       );
@@ -206,6 +214,8 @@ export function createOrgRepo(db: Db) {
         socialLinks?: string[] | undefined;
         /** db/0075: watch | assist | act. Absent leaves it alone. */
         autonomyCeiling?: string | undefined;
+        /** db/0112: whole-set replacement; [] clears the wall. */
+        allowedEmailDomains?: string[] | undefined;
       },
     ): Promise<OrgRecord> {
       const name = patch.name?.trim();
@@ -254,6 +264,26 @@ export function createOrgRepo(db: Db) {
        */
       const withCeiling = patch.autonomyCeiling !== undefined;
       if (withCeiling && !(await hasAutonomyCeiling(db))) throw new ConflictError("not_migrated");
+      let domainsList: string[] | null = null;
+      if (patch.allowedEmailDomains !== undefined) {
+        if (!(await hasSignupPolicy(db))) throw new ConflictError("not_migrated");
+        if (!Array.isArray(patch.allowedEmailDomains)
+          || patch.allowedEmailDomains.some((d) => typeof d !== "string")) {
+          throw new ValidationError("allowed_email_domains must be an array of domains");
+        }
+        domainsList = [...new Set(patch.allowedEmailDomains
+          .map((d) => d.trim().toLowerCase()).filter((d) => d !== ""))];
+        if (domainsList.length > 20) {
+          throw new ValidationError("at most 20 allowed domains",
+            { code: "too_many_domains", params: { max: 20 } });
+        }
+        const DOMAIN_SHAPE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/;
+        const bad = domainsList.find((d) => !DOMAIN_SHAPE.test(d));
+        if (bad !== undefined) {
+          throw new ValidationError(`"${bad}" is not a valid domain`,
+            { code: "domain_shape", params: { domain: bad } });
+        }
+      }
       const withProfile = await hasOrgProfile(db);
       const PROFILE_FIELDS = [
         ["public_email", patch.publicEmail],
@@ -269,7 +299,8 @@ export function createOrgRepo(db: Db) {
       }
       if (name === undefined && patch.locale === undefined
         && patch.allowedModels === undefined && patch.glossary === undefined
-        && profileSupplied.length === 0 && !withSocials && !withCeiling) {
+        && profileSupplied.length === 0 && !withSocials && !withCeiling
+        && domainsList === null) {
         throw new ValidationError("nothing to update");
       }
 
@@ -299,6 +330,10 @@ export function createOrgRepo(db: Db) {
           params.push(patch.autonomyCeiling);
           sets.push(`autonomy_ceiling = $${params.length}::text`);
         }
+        if (domainsList !== null) {
+          params.push(domainsList);
+          sets.push(`allowed_email_domains = $${params.length}::text[]`);
+        }
         if (withSocials) {
           const links = (patch.socialLinks ?? [])
             .map((l: string) => l.trim()).filter((l: string) => l !== "").slice(0, 6);
@@ -310,7 +345,8 @@ export function createOrgRepo(db: Db) {
             where id = $1
             returning ${ORG_COLUMNS}${withGlossary ? ", glossary" : ""}${
               withProfile ? PROFILE_COLUMNS : ""}${
-              withCeiling ? CEILING_COLUMN : ""}`,
+              withCeiling ? CEILING_COLUMN : ""}${
+              domainsList !== null ? DOMAINS_COLUMN : ""}`,
           params,
         );
         /**
@@ -328,6 +364,7 @@ export function createOrgRepo(db: Db) {
               name, locale: patch.locale, allowed_models: patch.allowedModels,
               glossary: patch.glossary,
               autonomy_ceiling: patch.autonomyCeiling,
+              allowed_email_domains: patch.allowedEmailDomains,
             }),
           });
         }

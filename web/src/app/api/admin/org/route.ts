@@ -74,6 +74,7 @@ export const WRITABLE_ORG_KEYS = [
   "logo_url",
   "social_links",
   "autonomy_ceiling",
+  "allowed_email_domains",
 ] as const;
 
 export async function PATCH(request: Request) {

@@ -9,6 +9,7 @@
 // notes at their former sites.)
 import type {
   AuthoredWorkflow,
+  AuthSessionRow,
   WorkflowRunDetail,
   WorkflowRunRecord,
   CapabilityState,
@@ -1561,6 +1562,8 @@ export const api = {
     social_links?: string[] | null;
     /** db/0075 — the workspace's autonomy cap (Settings · Workspace). */
     autonomy_ceiling?: string;
+    /** db/0112 — the invitation domain wall; [] clears it. */
+    allowed_email_domains?: string[];
   }): Promise<Org> {
     /* **LIVE** — `PATCH /api/admin/org` → `PATCH /v1/admin/org` (admin). */
     return bff<Org>("/api/admin/org", {
@@ -1612,6 +1615,13 @@ export const api = {
       `/api/workflows/${encodeURIComponent(ref)}/run`,
       { method: "POST", headers: { "content-type": "application/json" }, body: "{}" },
     );
+  },
+
+  /** M41 - the runnable engine catalogue (the Run button's honest source). */
+  async engineWorkflows(): Promise<{ id: string; handle: string; name: string; description: string }[]> {
+    const { workflows } = await bff<{ workflows: { id: string; handle: string; name: string; description: string }[] }>(
+      "/api/workflows/engine");
+    return workflows;
   },
 
   async workflowRuns(): Promise<WorkflowRunRecord[]> {
@@ -1678,6 +1688,31 @@ export const api = {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ kind, allowed }),
     });
+  },
+
+  /** db/0112 - the standing assistant voice. null clears; absent leaves. */
+  async updateAssistant(patch: {
+    assistant_reply_language?: string | null;
+    assistant_reply_length?: string | null;
+    assistant_instructions?: string | null;
+    post_call_brief?: boolean;
+  }): Promise<Me> {
+    return bff<Me>("/api/me/assistant", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+  },
+
+  /** db/0112 - the caller's own devices (Security 43). */
+  async mySessions(): Promise<AuthSessionRow[]> {
+    const { sessions } = await bff<{ sessions: AuthSessionRow[] }>("/api/me/sessions");
+    return sessions;
+  },
+
+  /** db/0112 - consent withdrawal is self-service (Security 59). */
+  async deleteMyVoiceprint(): Promise<void> {
+    await bff("/api/me/voiceprint", { method: "DELETE" });
   },
 
   // ---- gateway (M17) ----------------------------------------------------------

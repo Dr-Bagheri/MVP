@@ -12,7 +12,7 @@
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 
 import { assistantAllowed, createApiKeysRepo, type ApiKeysRepo } from "./apikeys.ts";
-import { createAssistant, languageInstruction } from "./assistant.ts";
+import { createAssistant, languageInstruction, personalAssistantInstructions } from "./assistant.ts";
 import { CLIENT_TOOL_NAMES, deliverClientToolResult } from "../agent/client-tools.ts";
 import { actorAutonomy, hasAutonomyColumn, hasSignalTables } from "../db/capabilities.ts";
 import { iso } from "./vocabulary.ts";
@@ -684,6 +684,56 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
    * M1 keeps the token server-side, so the browser cannot read its own
    * claims. Role comes from the database, not the token.
    */
+  /**
+   * Settings-Assistant (db/0112): the person's standing voice. Its own
+   * route - "how your assistant behaves" is not "what you are called".
+   */
+  app.patch("/v1/me/assistant", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    const text = (v: unknown): string | null | undefined =>
+      v === null ? null : typeof v === "string" ? v : undefined;
+    return reply.send(await members.updateAssistantPrefs(identity, {
+      assistant_reply_language: text(body.assistant_reply_language),
+      assistant_reply_length: text(body.assistant_reply_length),
+      assistant_instructions: text(body.assistant_instructions),
+      post_call_brief: typeof body.post_call_brief === "boolean" ? body.post_call_brief : undefined,
+    }));
+  });
+
+  /**
+   * Security (db/0112): the caller's OWN auth sessions - device, ip,
+   * times. The door's select list is the wall; no token column can leave
+   * it. Sign-in HISTORY is deliberately not served: auth.audit_log_entries
+   * is empty on this deployment, and an empty list rendered as "no
+   * history" would be absent-because-unrecorded wearing
+   * absent-because-quiet.
+   */
+  app.get("/v1/me/sessions", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const rows = await options.db.withIdentity(identity, (tx: SqlTx) =>
+      tx.unsafe<Record<string, unknown>>("select * from echo.my_auth_sessions()"));
+    return reply.send({ sessions: rows });
+  });
+
+  /**
+   * Security (db/0112): withdrawing one's OWN voice print. Withdrawal is
+   * the other half of consent and must not need an admin; the door acts
+   * only on the person row linked to the caller (app_user_id).
+   */
+  app.delete("/v1/me/voiceprint", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const rows = await options.db.withIdentity(identity, (tx: SqlTx) =>
+      tx.unsafe<{ clear_my_voiceprint: boolean | null }>(
+        "select echo.clear_my_voiceprint()"));
+    if (rows[0]?.clear_my_voiceprint !== true) {
+      // two different nothings, one honest answer: no linked person, or no
+      // print - either way there is nothing to withdraw, and 404 says so
+      throw new NotFoundError("no voice print of yours is stored");
+    }
+    return reply.code(204).send();
+  });
+
   app.get("/v1/me", async (request, reply) => {
     const identity = await auth.requireActive(request);
     return reply.send(await members.me(identity));
@@ -1945,6 +1995,15 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     return reply.send({ kind: body.kind, allowed: body.allowed });
   });
 
+  /** M41: the ENGINE catalogue - published+enabled workflows a member may
+      RUN (the old /v1/workflows stays the template-card list until P5's
+      replacement fully retires it). */
+  app.get("/v1/workflows/engine", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    return reply.send({ workflows: await workflowRuns.catalogue(identity) });
+  });
+
   app.get("/v1/workflows/runs", async (request, reply) => {
     const identity = await auth.requireActive(request);
     if ((identity as { viaApiKey?: boolean }).viaApiKey === true) {
@@ -2136,7 +2195,7 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       name?: unknown; locale?: unknown; allowed_models?: unknown; glossary?: unknown;
       public_email?: unknown; description?: unknown; website_url?: unknown;
       location?: unknown; logo_url?: unknown; social_links?: unknown;
-      autonomy_ceiling?: unknown;
+      autonomy_ceiling?: unknown; allowed_email_domains?: unknown;
     };
     if (body.name !== undefined && typeof body.name !== "string") {
       throw new ValidationError("name must be a string");
@@ -2172,6 +2231,9 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
          a non-string, so a number does not reach a `text` column as one */
       autonomyCeiling: typeof body.autonomy_ceiling === "string"
         ? body.autonomy_ceiling
+        : undefined,
+      allowedEmailDomains: Array.isArray(body.allowed_email_domains)
+        ? (body.allowed_email_domains as string[])
         : undefined,
     }));
   });
@@ -2762,8 +2824,13 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       question,
       model: chosenModel,
       // A replay's recorded prompt already carries the original ask's
-      // language line; this covers the no-replay fallback path.
-      systemInstructions: languageInstruction(body.locale),
+      // language line; this covers the no-replay fallback path. The
+      // person's standing voice (db/0112) rides beside it - an explicit
+      // reply-language choice overrides the mirror rule.
+      systemInstructions: [
+        languageInstruction(body.locale),
+        personalAssistantInstructions(await members.me(identity)),
+      ].filter((part) => part !== "").join("\n"),
       systemPromptOverride: replay?.systemPrompt,
       // A recorded [] remains an explicit no-tool replay ceiling. This is
       // why `undefined` and [] have distinct semantics in policy.ts.

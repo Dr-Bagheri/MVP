@@ -194,6 +194,11 @@ export interface Me extends User {
    * the Settings control renders the default but must not claim it is stored.
    */
   autonomy?: "watch" | "assist" | "act";
+  /** db/0112 - Settings-Assistant; absent as a group until migrated. */
+  assistant_reply_language?: string | null;
+  assistant_reply_length?: string | null;
+  assistant_instructions?: string | null;
+  post_call_brief?: boolean;
   /**
    * Profile context (db/0080): what the person does + their own words, and
    * the CONSENT flag that lets the assistant see the two texts at ask time.
@@ -1085,4 +1090,13 @@ export interface WorkflowVersionRow {
   max_autonomy: string;
   published_at: string;
   published_by: string;
+}
+
+/** db/0112 - one of the caller's own auth sessions (Security 43). */
+export interface AuthSessionRow {
+  handle: string;
+  created_at: string;
+  refreshed_at: string | null;
+  user_agent: string | null;
+  ip: string | null;
 }

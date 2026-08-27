@@ -141,6 +141,21 @@ export function createWorkflowRunsRepo(db: Db) {
   }
 
   return {
+    /** The runnable catalogue: enabled, published, member-visible. */
+    async catalogue(identity: Identity): Promise<
+      { id: string; handle: string; name: string; description: string }[]
+    > {
+      const rows = await db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe<Record<string, unknown>>(
+          `select id, handle, name, description from echo.workflow
+            where enabled and current_version_id is not null and archived_at is null
+            order by created_at`));
+      return rows.map((row) => ({
+        id: String(row.id), handle: String(row.handle),
+        name: String(row.name), description: String(row.description ?? ""),
+      }));
+    },
+
     /** Press Run — the manual trigger. */
     async start(identity: Identity, ref: string): Promise<{ run_id: string; status: string }> {
       return startWith(identity, ref, "manual", null);

@@ -32,6 +32,7 @@ import { record } from "./admin-actions.ts";
 import { ConflictError, NotFoundError, ValidationError } from "./errors.ts";
 import { iso, isoOrNull, MEMBER_ROLES, type MemberRole } from "./vocabulary.ts";
 import { assertUuid, type Db, type SqlTx } from "../db/identity.ts";
+import { hasSignupPolicy } from "../db/capabilities.ts";
 import { isOwner, type Identity } from "../agent/types.ts";
 
 /** Distinct from the api-key prefix so the two can never be confused. */
@@ -202,6 +203,26 @@ export function createInvitationsRepo(db: Db, config: InvitationsConfig = {}) {
 
       const token = `${INVITE_PREFIX}${randomBytes(TOKEN_BYTES).toString("base64url")}`;
       try {
+        /*
+         * db/0112 - the org's domain wall: when the list is non-empty, an
+         * invitation outside it is refused AT CREATION, naming the domain.
+         * Joining is invitation-only by construction, so this wall sits on
+         * the only door. Empty list = no wall (absence changes nothing).
+         */
+        if (await hasSignupPolicy(db)) {
+          const policy = await db.withIdentity(identity, (tx: SqlTx) =>
+            tx.unsafe<{ allowed_email_domains: string[] }>(
+              `select allowed_email_domains from echo.org where id = $1`,
+              [identity.orgId]));
+          const allowed = policy[0]?.allowed_email_domains ?? [];
+          const domain = email.split("@")[1] ?? "";
+          if (allowed.length > 0 && !allowed.includes(domain)) {
+            throw new ValidationError(
+              `invitations are limited to: ${allowed.join(", ")}`,
+              { code: "invite_domain_not_allowed", params: { domain } });
+          }
+        }
+
         const rows = await db.withIdentity(identity, async (tx: SqlTx) => {
           const issued = await tx.unsafe<Record<string, unknown>>(
             `insert into echo.invitation

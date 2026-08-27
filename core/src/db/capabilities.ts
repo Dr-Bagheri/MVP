@@ -135,6 +135,17 @@ export async function hasOrgProfile(db: Db): Promise<boolean> {
   return hasColumn(db, "org", "logo_url");
 }
 
+/** db/0112: the assistant's per-person voice (reply prefs + standing
+    instructions + the brief switch). */
+export async function hasAssistantPrefs(db: Db): Promise<boolean> {
+  return hasColumn(db, "app_user", "assistant_instructions");
+}
+
+/** db/0112: the org's invitation domain wall. */
+export async function hasSignupPolicy(db: Db): Promise<boolean> {
+  return hasColumn(db, "org", "allowed_email_domains");
+}
+
 /** db/0103: the logo as BYTES (the upload path). */
 export async function hasOrgLogoBytes(db: Db): Promise<boolean> {
   return hasColumn(db, "org", "logo_bytes");

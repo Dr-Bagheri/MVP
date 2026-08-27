@@ -96,6 +96,36 @@ export interface AssistantDeps<TDeps> {
  * sends none still gets the right behavior; only the tiebreaker sentence
  * needs the locale.
  */
+/**
+ * db/0112 - the person's standing voice for their own assistant, composed
+ * at ask time. The reply-language choice OVERRIDES the mirror rule (an
+ * explicit choice beats an inference - M21's told-beats-inferred);
+ * instructions are the user's own words to their own assistant, appended
+ * as user-authored configuration under a label, bounded at the column.
+ */
+export function personalAssistantInstructions(prefs: {
+  assistant_reply_language?: string | null;
+  assistant_reply_length?: string | null;
+  assistant_instructions?: string | null;
+}): string {
+  const parts: string[] = [];
+  if (prefs.assistant_reply_language === "fa") {
+    parts.push("\u0647\u0645\u06cc\u0634\u0647 \u0628\u0647 \u0641\u0627\u0631\u0633\u06cc \u067e\u0627\u0633\u062e \u0628\u062f\u0647\u060c \u0641\u0627\u0631\u063a \u0627\u0632 \u0632\u0628\u0627\u0646 \u067e\u06cc\u0627\u0645 \u06a9\u0627\u0631\u0628\u0631.");
+  } else if (prefs.assistant_reply_language === "en") {
+    parts.push("Always reply in English, regardless of the user's message language.");
+  }
+  if (prefs.assistant_reply_length === "short") {
+    parts.push("\u067e\u0627\u0633\u062e\u200c\u0647\u0627 \u0631\u0627 \u06a9\u0648\u062a\u0627\u0647 \u0648 \u0641\u0634\u0631\u062f\u0647 \u0628\u062f\u0647 - \u0686\u0646\u062f \u062c\u0645\u0644\u0647\u060c \u0628\u062f\u0648\u0646 \u0645\u0642\u062f\u0645\u0647.");
+  } else if (prefs.assistant_reply_length === "detailed") {
+    parts.push("\u067e\u0627\u0633\u062e\u200c\u0647\u0627 \u0631\u0627 \u06a9\u0627\u0645\u0644 \u0648 \u0628\u0627 \u062c\u0632\u0626\u06cc\u0627\u062a \u0628\u062f\u0647.");
+  }
+  const custom = prefs.assistant_instructions?.trim();
+  if (custom) {
+    parts.push("\u062f\u0633\u062a\u0648\u0631\u0647\u0627\u06cc \u0647\u0645\u06cc\u0634\u06af\u06cc \u06a9\u0627\u0631\u0628\u0631:\n" + custom);
+  }
+  return parts.join("\n");
+}
+
 export function languageInstruction(locale: unknown): string {
   const mirror =
     "Always reply in the language of the user's most recent message: an English"

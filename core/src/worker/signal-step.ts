@@ -21,7 +21,7 @@
  */
 import { createSessionsRepo } from "../api/sessions.ts";
 import { resolveIdentity } from "../db/actor.ts";
-import { hasSignalTables } from "../db/capabilities.ts";
+import { hasAssistantPrefs, hasSignalTables } from "../db/capabilities.ts";
 import { resolveJobIdentity } from "./job-identity.ts";
 import { Q_AGENT_RULES, isSignalPayload, type QueuePayload } from "./queue.ts";
 import type { StepHandler } from "./runner.ts";
@@ -90,6 +90,19 @@ export function createSignalStep({ db }: SignalStepOptions): StepHandler {
       }
 
       if (payload.event === "call.processed" && payload.callId) {
+        /* db/0112 - the brief's per-person switch. Skipping is a NAMED
+           choice in the log, never a mystery absence. */
+        if (await hasAssistantPrefs(db)) {
+          const pref = await db.withIdentity(identity, (tx: SqlTx) =>
+            tx.unsafe<{ post_call_brief: boolean }>(
+              `select post_call_brief from echo.app_user where id = $1`,
+              [identity.userId]));
+          if (pref[0]?.post_call_brief === false) {
+            log.info({ event: "post_call_brief_off", owner_id: identity.userId },
+              "brief skipped - the owner turned it off");
+            return;
+          }
+        }
         // The brief: the call's own facts, read under the owner's RLS.
         const rows = await db.withIdentity(identity, (tx: SqlTx) =>
           tx.unsafe<{ title: string | null; body: string | null }>(

@@ -20,17 +20,47 @@ import { Card } from "@/components/ui";
 export function AssistantSettings() {
   const t = useTranslations("settings");
   const [autonomy, setAutonomy] = useState<"watch" | "assist" | "act">("assist");
+  /** db/0112 - the standing voice. null = auto; save-on-change, adopt the
+      server's answer, never optimistic-and-forget. */
+  const [replyLanguage, setReplyLanguage] = useState<string>("");
+  const [replyLength, setReplyLength] = useState<string>("");
+  const [instructions, setInstructions] = useState<string>("");
+  const [savedInstructions, setSavedInstructions] = useState<string>("");
+  const [brief, setBrief] = useState<boolean | null>(null);
+  const [prefsReady, setPrefsReady] = useState(false);
   const [digest, setDigest] = useState<{ enabled: boolean; available: boolean } | null>(null);
   const [notReady, setNotReady] = useState(false);
 
   useEffect(() => {
     void api.me().then((me) => {
       if (me?.autonomy) setAutonomy(me.autonomy);
+      if (me && "assistant_instructions" in me) {
+        setPrefsReady(true);
+        setReplyLanguage(me.assistant_reply_language ?? "");
+        setReplyLength(me.assistant_reply_length ?? "");
+        setInstructions(me.assistant_instructions ?? "");
+        setSavedInstructions(me.assistant_instructions ?? "");
+        setBrief(me.post_call_brief !== false);
+      }
     }).catch(() => undefined);
     void api.weeklyDigest()
       .then((d) => setDigest(d.available ? d : null))
       .catch(() => setDigest(null));
   }, []);
+
+  async function savePrefs(patch: Parameters<typeof api.updateAssistant>[0]) {
+    try {
+      const me = await api.updateAssistant(patch);
+      setReplyLanguage(me.assistant_reply_language ?? "");
+      setReplyLength(me.assistant_reply_length ?? "");
+      setInstructions(me.assistant_instructions ?? "");
+      setSavedInstructions(me.assistant_instructions ?? "");
+      setBrief(me.post_call_brief !== false);
+      notify(t("assistantSaved"));
+    } catch {
+      notify(t("assistantSaveFailed"), "warn");
+    }
+  }
 
   async function saveAutonomy(next: "watch" | "assist" | "act") {
     const prev = autonomy;
@@ -99,6 +129,82 @@ export function AssistantSettings() {
           </label>
         )}
       </Card>
+
+      {/* db/0112 - the standing voice. Rendered ONLY when the wire carries
+          the group: controls over columns that do not exist would save
+          nothing and look saved. */}
+      {prefsReady ? (
+        <Card>
+          <h2 className="text-sm font-semibold text-fg">{t("voiceTitle")}</h2>
+          <p className="mt-1 text-xs leading-5 text-fg-muted">{t("voiceHint")}</p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <label className="block text-xs text-fg-muted">
+              {t("replyLanguage")}
+              <select
+                className="input mt-1 h-9 min-h-0 w-full text-sm"
+                value={replyLanguage}
+                onChange={(e) => {
+                  setReplyLanguage(e.target.value);
+                  void savePrefs({ assistant_reply_language: e.target.value === "" ? null : e.target.value });
+                }}
+              >
+                <option value="">{t("replyAuto")}</option>
+                <option value="fa">فارسی</option>
+                <option value="en">English</option>
+              </select>
+            </label>
+            <label className="block text-xs text-fg-muted">
+              {t("replyLength")}
+              <select
+                className="input mt-1 h-9 min-h-0 w-full text-sm"
+                value={replyLength}
+                onChange={(e) => {
+                  setReplyLength(e.target.value);
+                  void savePrefs({ assistant_reply_length: e.target.value === "" ? null : e.target.value });
+                }}
+              >
+                <option value="">{t("replyAuto")}</option>
+                <option value="short">{t("replyShort")}</option>
+                <option value="detailed">{t("replyDetailed")}</option>
+              </select>
+            </label>
+          </div>
+          <label className="mt-3 block text-xs text-fg-muted">
+            {t("customInstructions")}
+            <textarea
+              className="input mt-1 min-h-24 py-2 text-sm leading-6"
+              maxLength={2000}
+              value={instructions}
+              onChange={(e) => setInstructions(e.target.value)}
+            />
+          </label>
+          {instructions.trim() !== savedInstructions ? (
+            <button
+              type="button"
+              className="btn-primary mt-2 h-8 min-h-0 px-3 text-xs"
+              onClick={() => void savePrefs({
+                assistant_instructions: instructions.trim() === "" ? null : instructions.trim(),
+              })}
+            >
+              {t("saveInstructions")}
+            </button>
+          ) : null}
+          {brief !== null ? (
+            <label className="mt-4 flex items-center gap-2 text-sm text-fg">
+              <input
+                type="checkbox"
+                checked={brief}
+                onChange={(e) => {
+                  setBrief(e.target.checked);
+                  void savePrefs({ post_call_brief: e.target.checked });
+                }}
+              />
+              {t("postCallBrief")}
+            </label>
+          ) : null}
+          <p className="mt-1 text-xs leading-5 text-fg-subtle">{t("postCallBriefHint")}</p>
+        </Card>
+      ) : null}
     </div>
   );
 }

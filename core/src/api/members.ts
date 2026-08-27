@@ -19,7 +19,7 @@ import {
   CALENDAR_PREFERENCES, iso, isoOrNull, MEMBER_ROLES, TIMEZONE_AUTO, USER_STATUSES,
   type CalendarPreference, type MemberRole, type UserStatus,
 } from "./vocabulary.ts";
-import { hasAutonomyColumn, hasProfileContext } from "../db/capabilities.ts";
+import { hasAssistantPrefs, hasAutonomyColumn, hasProfileContext } from "../db/capabilities.ts";
 import { assertUuid, type Db, type SqlTx } from "../db/identity.ts";
 import type { Identity } from "../agent/types.ts";
 
@@ -135,6 +135,15 @@ export interface MeRecord extends MemberRecord {
    * omitted field, never a fabricated "assist".
    */
   autonomy?: "watch" | "assist" | "act";
+  /**
+   * db/0112 — Settings·Assistant. ABSENT as a group until the migration
+   * lands. null = auto/default for the two selects; instructions null =
+   * none; post_call_brief carries its schema default.
+   */
+  assistant_reply_language?: string | null;
+  assistant_reply_length?: string | null;
+  assistant_instructions?: string | null;
+  post_call_brief?: boolean;
   /**
    * Profile context (db/0080, user directive 2026-08-22): what the person
    * does and what they told us about themselves, plus the CONSENT flag —
@@ -368,10 +377,68 @@ export function createMembersRepo(db: Db) {
      * the token — a token minted a minute ago can be stale about someone
      * whose role just changed.
      */
+    /**
+     * Settings·Assistant (db/0112) — its own method, deliberately: the
+     * combined profile/preferences update is a 20-parameter supplied-flag
+     * statement, and a fifth hand in it is how the coalesce bug returns.
+     * Same contract as everywhere: null CLEARS (back to auto/none),
+     * absent leaves alone; the brief switch is a plain boolean.
+     */
+    async updateAssistantPrefs(
+      identity: Identity,
+      patch: {
+        assistant_reply_language?: string | null | undefined;
+        assistant_reply_length?: string | null | undefined;
+        assistant_instructions?: string | null | undefined;
+        post_call_brief?: boolean | undefined;
+      },
+    ): Promise<MeRecord> {
+      if (!(await hasAssistantPrefs(db))) {
+        throw new ValidationError(
+          "assistant preferences are not available on this deployment yet (db/0112 pending)",
+          { code: "not_migrated" });
+      }
+      const language = patch.assistant_reply_language;
+      if (language !== undefined && language !== null && language !== "fa" && language !== "en") {
+        throw new ValidationError("assistant_reply_language must be fa, en or null (auto)");
+      }
+      const length = patch.assistant_reply_length;
+      if (length !== undefined && length !== null && length !== "short" && length !== "detailed") {
+        throw new ValidationError("assistant_reply_length must be short, detailed or null (auto)");
+      }
+      const instructions = patch.assistant_instructions === undefined
+        ? undefined
+        : (patch.assistant_instructions?.trim() || null);
+      if (instructions && instructions.length > 2000) {
+        throw new ValidationError("assistant_instructions tops out at 2000 characters",
+          { code: "instructions_too_long", params: { max: "2000" } });
+      }
+      if (language === undefined && length === undefined
+        && instructions === undefined && patch.post_call_brief === undefined) {
+        throw new ValidationError("nothing to update", { code: "nothing_to_update" });
+      }
+      await db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe(
+          `update echo.app_user
+              set assistant_reply_language = case when $2 then $3::text else assistant_reply_language end,
+                  assistant_reply_length   = case when $4 then $5::text else assistant_reply_length end,
+                  assistant_instructions   = case when $6 then $7::text else assistant_instructions end,
+                  post_call_brief          = case when $8 then $9::boolean else post_call_brief end
+            where id = $1`,
+          [identity.userId,
+            language !== undefined, language ?? null,
+            length !== undefined, length ?? null,
+            instructions !== undefined, instructions ?? null,
+            patch.post_call_brief !== undefined, patch.post_call_brief ?? null,
+          ]));
+      return this.me(identity);
+    },
+
     async me(identity: Identity): Promise<MeRecord> {
       // Capability-gated column (db/0073): the select must not name a column
       // an un-migrated deployment does not have.
       const withAutonomy = await hasAutonomyColumn(db);
+      const withAssistant = await hasAssistantPrefs(db);
       const withProfileCtx = await hasProfileContext(db);
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<Record<string, unknown>>(
@@ -391,6 +458,9 @@ export function createMembersRepo(db: Db) {
                   u.accepted_at, u.last_seen_at, u.created_at,
                   u.preferred_model, u.locale, u.calendar, u.timezone,
                   ${withAutonomy ? "u.autonomy," : ""}
+                  ${withAssistant
+                    ? "u.assistant_reply_language, u.assistant_reply_length, u.assistant_instructions, u.post_call_brief,"
+                    : ""}
                   ${withProfileCtx ? "u.job_title, u.about, u.assistant_context," : ""}
                   o.name as org_name
              from echo.app_user u
@@ -421,6 +491,14 @@ export function createMembersRepo(db: Db) {
         // not exist here yet" and "the dial is at assist" are different facts.
         ...(withAutonomy
           ? { autonomy: (row.autonomy as MeRecord["autonomy"]) ?? "assist" }
+          : {}),
+        ...(withAssistant
+          ? {
+              assistant_reply_language: (row.assistant_reply_language as string | null) ?? null,
+              assistant_reply_length: (row.assistant_reply_length as string | null) ?? null,
+              assistant_instructions: (row.assistant_instructions as string | null) ?? null,
+              post_call_brief: row.post_call_brief !== false,
+            }
           : {}),
         ...(withProfileCtx
           ? {

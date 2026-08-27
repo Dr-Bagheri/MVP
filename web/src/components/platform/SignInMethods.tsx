@@ -22,15 +22,43 @@ import { Chip } from "@/components/ui";
 export function SignInMethods() {
   const t = useTranslations("signin");
   const [methods, setMethods] = useState<{ provider: string; enabled: boolean }[]>([]);
+  /** db/0112 - the domain wall; absent until the org wire carries it */
+  const [domains, setDomains] = useState<string[]>([]);
+  const [domainsReady, setDomainsReady] = useState(false);
+  const [domainDraft, setDomainDraft] = useState("");
   const [me, setMe] = useState<Me | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
   useEffect(() => {
     void api.authMethods().then(setMethods).catch(() => setMethods([]));
+    void api.org().then((org) => {
+      if ("allowed_email_domains" in org) {
+        setDomainsReady(true);
+        setDomains((org.allowed_email_domains as string[]) ?? []);
+      }
+    }).catch(() => undefined);
     void api.me().then(setMe).catch(() => setMe(null));
   }, []);
 
   const mayToggle = me?.role === "admin" || me?.role === "owner";
+
+  async function saveDomains(next: string[]) {
+    try {
+      const org = await api.updateOrg({ allowed_email_domains: next });
+      setDomains((org.allowed_email_domains as string[]) ?? next);
+      notify(t("domainsSaved"));
+    } catch (cause) {
+      // the server's named refusal (a bad domain names itself) verbatim
+      const { detail } = cause as { detail?: string };
+      notify(detail || t("domainsFailed"), "warn");
+    }
+  }
+  async function addDomain() {
+    const value = domainDraft.trim().toLowerCase();
+    if (value === "") return;
+    setDomainDraft("");
+    await saveDomains([...domains, value]);
+  }
 
   async function toggle(provider: "google" | "github", enabled: boolean): Promise<void> {
     setBusy(provider);
@@ -86,6 +114,50 @@ export function SignInMethods() {
           );
         })}
       </div>
+
+      {/* db/0112 - the invitation domain wall (Sign-in methods 73).
+          Members SEE the policy (they are governed by it); admins edit.
+          Whole-set write through updateOrg; [] clears the wall. */}
+      {domainsReady ? (
+        <div className="mt-5">
+          <h2 className="h-section">{t("domainsTitle")}</h2>
+          <p className="mt-1 text-sm leading-6 text-fg-muted">{t("domainsHint")}</p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {domains.map((domain) => (
+              <span key={domain} dir="ltr"
+                className="flex items-center gap-1.5 rounded-full bg-surface-2 px-2.5 py-1 font-mono text-xs text-fg">
+                {domain}
+                {mayToggle ? (
+                  <button type="button" aria-label={t("domainRemove", { domain })}
+                    className="text-fg-subtle hover:text-danger"
+                    onClick={() => void saveDomains(domains.filter((d) => d !== domain))}>
+                    ×
+                  </button>
+                ) : null}
+              </span>
+            ))}
+            {domains.length === 0 ? (
+              <span className="text-sm text-fg-muted">{t("domainsNone")}</span>
+            ) : null}
+          </div>
+          {mayToggle ? (
+            <div className="mt-3 flex items-center gap-2">
+              <input
+                dir="ltr"
+                className="input h-9 min-h-0 w-56 py-0 font-mono text-sm"
+                placeholder="example.com"
+                value={domainDraft}
+                onChange={(e) => setDomainDraft(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") void addDomain(); }}
+              />
+              <button type="button" className="btn-secondary h-9 min-h-0 px-3 text-sm"
+                onClick={() => void addDomain()}>
+                {t("domainAdd")}
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

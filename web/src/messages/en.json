@@ -1140,7 +1140,10 @@
     "decidedApprove": "Approved",
     "decidedReject": "Rejected",
     "proposal_add_tags": "Proposed tags:",
-    "proposal_set_title": "Proposed title:"
+    "proposal_set_title": "Proposed title:",
+    "engineTitle": "Automation workflows",
+    "engineEmpty": "No workflows are published to run yet.",
+    "engineBuild": "Build one in Management · Workflows"
   },
   "agents": {
     "title": "Browse agents",
@@ -1447,7 +1450,18 @@
     "autonomyCeilingHint": "The cap for everyone here. A member's effective autonomy is the lower of their own choice and this.",
     "autonomy_watch": "Watch only",
     "autonomy_assist": "Assist (propose, you approve)",
-    "autonomy_act": "Act"
+    "autonomy_act": "Act",
+    "voiceTitle": "Assistant voice & behavior",
+    "voiceHint": "These travel with every question you ask.",
+    "replyLanguage": "Reply language",
+    "replyLength": "Reply length",
+    "replyAuto": "Auto",
+    "replyShort": "Short",
+    "replyDetailed": "Detailed",
+    "customInstructions": "Standing instructions (up to 2000 characters)",
+    "saveInstructions": "Save instructions",
+    "postCallBrief": "Post-call brief",
+    "postCallBriefHint": "After each meeting the assistant leaves a brief card on your dashboard. Turning it off is yours alone."
   },
   "audit": {
     "codesOnly": "This page says what happened, not what was said. Question text, transcripts and conversation content never enter the audit trail.",
@@ -1722,7 +1736,26 @@
     "passwordAction": "Open profile",
     "methodsLabel": "Sign-in methods",
     "methodsHint": "Google and GitHub sign-in methods are available.",
-    "methodsAction": "View methods"
+    "methodsAction": "View methods",
+    "exportLabel": "Export account data",
+    "exportHint": "A copy of your account data — available on Profile.",
+    "exportAction": "Open Profile",
+    "sessionsTitle": "Active sessions",
+    "sessionsHint": "Devices currently signed in to your account. Each sign-in creates a new session.",
+    "sessionsEmpty": "No sessions recorded.",
+    "deviceUnknown": "Unknown device",
+    "deviceMobile": "Mobile device",
+    "deviceBrowser": "Browser",
+    "voiceTitle": "My voice print",
+    "voiceConsent": "Enrollment happened with your consent; withdrawing it is your right too — right here, no admin needed.",
+    "voiceDelete": "Delete voice print",
+    "voiceDeleted": "Your voice print was deleted.",
+    "voiceNone": "No voice print of yours was stored.",
+    "voiceGone": "No voice print of yours is stored.",
+    "voiceDeleteFailed": "The deletion did not go through.",
+    "voiceConfirmTitle": "Delete your voice print?",
+    "voiceConfirmBody": "After deletion, automatic recognition of your voice in meetings stops until you enroll again.",
+    "cancel": "Cancel"
   },
   "signin": {
     "intro": "External sign-in methods for this platform — an admin or the owner can turn each on or off.",
@@ -1735,7 +1768,14 @@
     "toggleLabel": "Toggle {method} sign-in",
     "turnedOn": "{method} sign-in turned on.",
     "turnedOff": "{method} sign-in turned off.",
-    "toggleFailed": "The sign-in method change did not go through — try again."
+    "toggleFailed": "The sign-in method change did not go through — try again.",
+    "domainsTitle": "Allowed invitation domains",
+    "domainsHint": "When the list is not empty, invitations can only go to addresses on these domains.",
+    "domainsNone": "No restriction set — any address can be invited.",
+    "domainAdd": "Add",
+    "domainRemove": "Remove {domain}",
+    "domainsSaved": "Domains saved.",
+    "domainsFailed": "Not saved."
   },
   "legal": {
     "version": "Version 2026-08-16",
