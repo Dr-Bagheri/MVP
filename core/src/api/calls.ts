@@ -519,7 +519,9 @@ export function createCallsRepo(db: Db) {
     /**
      * Soft delete (M11) — a named database operation, not an UPDATE.
      *
-     * echo_app holds no DELETE grant anywhere: deletion in this product means
+     * echo_app holds no DELETE grant on the record (one ruled exception in
+     * the whole schema: 0079's call_note, where a note's author removes
+     * their own annotation — deleteNote below): deletion of a call means
      * marking the row, and only echo_purge removes it after the window.
      *
      * The history is worth keeping, because I got the diagnosis half right

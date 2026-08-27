@@ -60,10 +60,18 @@ select t.ok(
   (select title from echo.call where id = '64000000-0000-4000-8000-000000000004')
     = 'رکورد عضو — ویرایش',
   'a member edits their own record — the ordinary path is the product');
-select t.denied(
+-- Below admin rank the UPDATE policy (0013: owner-or-admin) filters the row
+-- before the 0077 guard can speak, so the denial is zero rows, not a raise.
+-- The row IS readable — pinned, so this is the policy filtering an
+-- addressable-looking row, not invisibility proven twice. The guard's own
+-- raise is proven below, where an ADMIN addresses a peer's row.
+select t.ok(
+  exists (select 1 from echo.call where id = '64000000-0000-4000-8000-000000000002'),
+  'a member can SEE an admin''s org-scoped record...');
+select t.writes_nothing(
   $$update echo.call set title = 'دستکاری'
      where id = '64000000-0000-4000-8000-000000000002'$$,
-  'a member cannot edit an admin''s record');
+  '...and still cannot edit it — the update policy filters below admin rank, and a silent filter is still a denial');
 select t.denied(
   $$select echo.soft_delete_call('64000000-0000-4000-8000-000000000001')$$,
   'nor delete the owner''s');

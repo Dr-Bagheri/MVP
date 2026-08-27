@@ -1,24 +1,34 @@
 -- 0082: organizations are born in the platform console, nowhere else.
--- Runs AFTER 85: alice (01…01) became the platform root there.
+--
+-- Self-contained: every test file rolls back, so nothing carries over from
+-- 85 (its old "runs after 85" premise was never true under this runner).
+-- Alice is seated as the fixture platform root here, at owner altitude; the
+-- registry row is fixture data and rolls back with the file.
 
 reset role;
+insert into echo.platform_operator (user_id)
+values ('01000000-0000-4000-8000-000000000001')
+on conflict (user_id) do nothing;
 set local role echo_app;
 
 -- ── the root creates an org, audited ──────────────────────────────────────
 select set_config('echo.actor_id', '01000000-0000-4000-8000-000000000001', true);
 select t.ok(
   (select echo.platform_create_org(
-     '01000000-0000-4000-8000-000000000001', 'شرکت نو', 'fa',
+     '01000000-0000-4000-8000-000000000001', 'شرکت نوی فیکسچر', 'fa',
      'onboarding the new customer')) is not null,
   'the platform root creates an organization');
+-- read back through the console door: the new org is not the root's own, so
+-- the ambient product read cannot see it (0091 — console-only sight)
 select t.ok(
-  exists (select 1 from echo.org where name = 'شرکت نو' and status = 'active'),
+  exists (select 1 from echo.platform_list_orgs() o
+           where o.name = 'شرکت نوی فیکسچر' and o.status = 'active'),
   'and it is born ACTIVE, ready to be joined by name');
 
 -- ── the name is a JOIN KEY: duplicates are refused at birth ───────────────
 select t.denied(
   $$select echo.platform_create_org(
-      '01000000-0000-4000-8000-000000000001', 'شرکت نو', 'fa', 'again')$$,
+      '01000000-0000-4000-8000-000000000001', 'شرکت نوی فیکسچر', 'fa', 'again')$$,
   'a duplicate active name is refused — signup matches on names, and a twin would make the first unjoinable');
 select t.denied(
   $$select echo.platform_create_org(
@@ -40,9 +50,8 @@ set local role echo_app;
 select t.ok(
   (select status from echo.register_account(
      '86000000-0000-4000-8000-000000000086', 'newhire@example.com', 'تازه‌وارد',
-     'شرکت نو')) = 'pending',
+     'شرکت نوی فیکسچر')) = 'pending',
   'the console-born org is joinable by its name — pending member, the full loop closed');
 
--- deliberately NOT swept: an app_user delete at owner altitude would race
--- the status-history/tombstone machinery for nothing — only 90_queues runs
--- after this file and it counts no users. (B3's count trap, weighed.)
+-- no sweep needed: the file's transaction rolls back — the org, the root
+-- seat and the new hire all vanish with it.

@@ -1,0 +1,28 @@
+-- 0109 — role_capability rejoins the no-DELETE invariant (D3).
+--
+-- Caught by the suite's negative-space check (50_identity_search_gateway),
+-- the same instrument that caught 0104's workflow grants within minutes —
+-- this one had sat since 0101 because the suite ran red on other files and
+-- nobody read past the first failure. 0101 granted echo_app
+-- select/insert/update/DELETE on echo.role_capability while its own design
+-- text says the opposite: "`allowed = true` rows are kept rather than
+-- deleted so that turning something back on is visible in the audit trail."
+--
+-- The grant was also unconsumed: core's only writer (api/capabilities.ts)
+-- upserts — insert ... on conflict do update — and nothing anywhere issues
+-- a DELETE against the table. A grant that contradicts its migration's own
+-- design and has no caller is not an exception, it is a leftover (13½: a
+-- producer with no consumer is a defect).
+--
+-- The one DELIBERATE exception to D3 stays as ruled: 0079's call_note,
+-- where a note's author removes their own annotation (append-only
+-- delete-and-retype, RLS-scoped to created_by, consumed by calls.ts
+-- deleteNote). Check 50 now asserts the exception list EXACTLY, so a third
+-- member of this class cannot arrive silently.
+--
+-- The role_capability_write policy stays `for all`: its USING/WITH CHECK
+-- predicate is the written form of the escalation hierarchy for every
+-- command, and with the grant gone the DELETE half is unreachable at the
+-- outer wall (grants refuse before policies are consulted).
+
+revoke delete on echo.role_capability from echo_app;

@@ -12,21 +12,51 @@ select t.ok(
 -- Scoped to the echo schema: echo_app does hold DELETE on pgmq's own tables,
 -- because working a queue means consuming from it. No product row is reachable
 -- that way.
+--
+-- Altitude note (rule 11): role_table_grants is permission-filtered, but the
+-- suite connects as the role that GRANTED everything here, so the view is
+-- complete at this altitude — and the staged-grant control below proves this
+-- instrument sees a grant appear.
+--
+-- ONE ruled exception, named (D3 amendment, 2026-08-27): 0079 grants
+-- echo_app DELETE on call_note — a note is its author's own annotation,
+-- append-only delete-and-retype by design, RLS-scoped to created_by =
+-- actor, and consumed by core (calls.ts deleteNote). Every other product
+-- row still deletes only through echo_purge. The list is EXACT, so a stray
+-- DELETE grant anywhere else in echo turns this red — it caught 0101's
+-- unconsumed role_capability grant, revoked in 0109.
 select t.ok(
-  not exists (
-    select 1 from information_schema.role_table_grants
-    where grantee = 'echo_app' and privilege_type = 'DELETE' and table_schema = 'echo'
-  ),
-  'core/''s own role holds no DELETE on any product table — only echo_purge does');
+  (select coalesce(array_agg(distinct table_name::text order by table_name::text), '{}')
+     from information_schema.role_table_grants
+    where grantee = 'echo_app' and privilege_type = 'DELETE' and table_schema = 'echo')
+   = array['call_note'],
+  'core/''s own role deletes nothing but a note author''s own note (0079) — every other product row is echo_purge''s alone');
 -- Scoped to the application roles: the schema owner also appears as a grantee
 -- of everything on a managed platform, and a superuser was never inside this
 -- wall to begin with — core/ simply never connects as one.
 select t.ok(
-  (select coalesce(array_agg(distinct grantee::text order by grantee::text), '{}')
-     from information_schema.role_table_grants
+  not exists (
+    select 1 from information_schema.role_table_grants
     where table_schema = 'echo' and privilege_type = 'DELETE'
-      and grantee::text like 'echo\_%') = array['echo_purge'],
-  'echo_purge is the only application role that can delete a product row');
+      and grantee::text like 'echo\_%'
+      and grantee::text <> 'echo_purge'
+      and not (grantee::text = 'echo_app' and table_name = 'call_note')
+  ),
+  'echo_purge is the only application role that deletes product rows — the 0079 note exception is the closed list''s single entry');
+
+-- Negative control (the en-sweep lesson): a closed-list check that has never
+-- seen a stray grant is indistinguishable from one that cannot see grants at
+-- all. Stage the defect, watch the check-form fire, then take the grant back
+-- out (the file's rollback would anyway).
+grant delete on echo.skill to echo_app;
+select t.denied(
+  $$select t.ok(
+      (select coalesce(array_agg(distinct table_name::text order by table_name::text), '{}')
+         from information_schema.role_table_grants
+        where grantee = 'echo_app' and privilege_type = 'DELETE' and table_schema = 'echo')
+       = array['call_note'], 'control')$$,
+  'a staged stray DELETE grant turns the closed list red — the instrument can fail for its own reason');
+revoke delete on echo.skill from echo_app;
 
 -- Every product table has RLS on and forced. A table added later without it
 -- would be a silent hole, so the suite counts them rather than trusting review.

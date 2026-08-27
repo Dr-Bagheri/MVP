@@ -44,6 +44,21 @@ grant for any role**, core/ included. Running the suite is what surfaced this
 UPDATE was fine, so the invariant held only as long as the trigger did. Both
 layers now say the same thing, and the suite tests them separately.
 
+> **[AMENDED 2026-08-27]** D3 now carries exactly ONE named exception:
+> `0079` grants `echo_app` DELETE on `echo.call_note` — a note is its
+> author's own annotation, designed append-only delete-and-retype ("an
+> edited note is a new note"), the RLS policy scopes the delete to
+> `created_by = actor`, and core consumes it (`calls.ts` `deleteNote`). The
+> record itself (calls, transcripts, summaries, runs) remains untouchable:
+> the exception covers a person's own marginalia, never the org's data.
+> A second grant of this class — `0101`'s `role_capability` DELETE — was
+> the accident that proves the rule: it contradicted its own migration's
+> keep-rows design, had no consumer, and is revoked in `0109`. The suite
+> (`50_identity_search_gateway`) asserts the exception list EXACTLY, with a
+> staged-grant negative control, so this class cannot grow silently. If the
+> steward/user ever rules notes must keep rows instead (the 0106 flag
+> pattern), the exception list shrinks to empty and 0079's delete converts.
+
 **D4 — The current-summary pointer is a column on `echo.call`, moved only by
 the database.**
 As dispatched, `call.current_summary_id` exists. The complication worth naming:

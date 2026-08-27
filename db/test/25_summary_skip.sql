@@ -7,12 +7,20 @@
 reset role;
 set local role echo_app;
 
--- --- the reason is part of the record, so a non-owner may not write it -----
+-- --- who may write the excuse follows the 0077 hierarchy -------------------
+-- The old reading here ("a non-owner may not write it") predates 0077: an
+-- outranking role may now write every column the record's owner could, the
+-- skip reason included. The worker stays the ordinary author (M5); the
+-- wall's question is rank, not job title.
 select set_config('echo.actor_id', '01000000-0000-4000-8000-000000000001', true);
-select t.denied(
-  $$update echo.call set summary_skipped_reason = 'مدلی در دسترس نبود'
-     where id = 'c1000000-0000-4000-8000-000000000001'$$,
-  'an admin cannot write a skip reason onto a call they do not own');
+update echo.call set summary_skipped_reason = 'ثبت مدیر: مدلی در دسترس نبود'
+ where id = 'c1000000-0000-4000-8000-000000000001';
+select t.ok(
+  (select summary_skipped_reason from echo.call
+    where id = 'c1000000-0000-4000-8000-000000000001') = 'ثبت مدیر: مدلی در دسترس نبود',
+  'the org owner may record a skip reason on a member''s call — 0077 superseded the owner-only reading');
+update echo.call set summary_skipped_reason = null
+ where id = 'c1000000-0000-4000-8000-000000000001';
 
 -- --- the owner records it, and the call stays ready ------------------------
 select set_config('echo.actor_id', '02000000-0000-4000-8000-000000000002', true);

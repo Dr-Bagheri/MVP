@@ -169,15 +169,32 @@ select t.writes_nothing(
      where id = 'c4000000-0000-4000-8000-000000000004'$$,
   'and a soft-deleted call is not editable by its owner either — it is gone for them');
 
--- Which version is presented is part of the record, so re-pointing it is a
--- rewrite — and Q4 as ratified binds a human admin exactly as it binds the
--- agent: reads everything, rewrites nothing.
+-- Which version is presented used to be refused to every non-owner ("Q4
+-- binds a human admin as it binds the agent"). 0077 SUPERSEDED the human
+-- half: an outranking role may change every column the record's owner
+-- could, the presented-version pointer included. The AGENT half of Q4
+-- stands untouched — echo_agent holds no grant on echo.call at all (0014),
+-- so the agent still rewrites nothing.
 select set_config('echo.actor_id', '01000000-0000-4000-8000-000000000001', true);
-select t.denied(
-  $$update echo.call set current_summary_id = 'b2000000-0000-4000-8000-000000000002'
-     where id = 'c2000000-0000-4000-8000-000000000002'$$,
-  'an admin cannot re-point another member''s summary back to an older version');
+update echo.call set current_summary_id = 'b2000000-0000-4000-8000-000000000002'
+ where id = 'c2000000-0000-4000-8000-000000000002';
+select t.ok(
+  (select current_summary_id from echo.call
+    where id = 'c2000000-0000-4000-8000-000000000002')
+    = 'b2000000-0000-4000-8000-000000000002',
+  'the org owner may re-point a member''s summary to an older version — 0077: rank decides, authorship does not');
+-- and the record's owner may choose the presented version too — the same
+-- rule read from below (the ordinary path is the product)
 select set_config('echo.actor_id', '02000000-0000-4000-8000-000000000002', true);
+update echo.call set current_summary_id =
+  (select id from echo.summary
+    where call_id = 'c2000000-0000-4000-8000-000000000002'
+    order by version desc limit 1)
+ where id = 'c2000000-0000-4000-8000-000000000002';
+select t.ok(
+  (select s.version from echo.call c join echo.summary s on s.id = c.current_summary_id
+    where c.id = 'c2000000-0000-4000-8000-000000000002') = 2,
+  'and the owner puts their own pointer back on the newest version');
 
 -- --- a corrected line keeps its identity and its place ---------------------
 -- On c2, not c1: the admin soft-deleted c1 earlier in this file, and a

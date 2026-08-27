@@ -5,28 +5,48 @@
 -- organisation's customer content. A green access test alone cannot prove
 -- that a new broad role did not become a content bypass.
 
--- The fixture starts with zero platform roots. Alice is an active owner in
--- org A and represents the server-configured bootstrap account.
+-- Production-aware: this suite also runs against the LIVE database, whose
+-- platform registry is real (live roots predate the fixture). The
+-- first-claim story is only provable where no root exists yet; where roots
+-- hold office, the same door must present as already CONSUMED — asserted,
+-- not skipped, because "consumed" is exactly the property from that side.
+-- The registry is invisible below root altitude, so the count is probed at
+-- owner altitude and carried in as a GUC.
 reset role;
+select set_config('t.pre_roots',
+  (select count(*)::text from echo.platform_operator), true);
+
 set local role echo_app;
 select set_config('echo.actor_id', '01000000-0000-4000-8000-000000000001', true);
 
-select t.ok(
-  echo.bootstrap_platform_root(
-    '01000000-0000-4000-8000-000000000001', 'alice@example.com'
-  ),
-  'the configured active account claims the first platform root exactly once'
-);
-select t.ok(
-  echo.actor_is_platform_root(),
-  'the root predicate is a fresh database fact under the caller identity'
-);
-select t.ok(
-  not echo.bootstrap_platform_root(
-    '01000000-0000-4000-8000-000000000001', 'alice@example.com'
-  ),
-  'the root bootstrap is consumed and cannot create a second root record'
-);
+do $$
+begin
+  if current_setting('t.pre_roots')::int = 0 then
+    -- a rootless database (the local container, --fresh): the full claim story
+    perform t.ok(
+      echo.bootstrap_platform_root(
+        '01000000-0000-4000-8000-000000000001', 'alice@example.com'
+      ),
+      'the configured active account claims the first platform root exactly once');
+    perform t.ok(
+      echo.actor_is_platform_root(),
+      'the root predicate is a fresh database fact under the caller identity');
+    perform t.ok(
+      not echo.bootstrap_platform_root(
+        '01000000-0000-4000-8000-000000000001', 'alice@example.com'
+      ),
+      'the root bootstrap is consumed and cannot create a second root record');
+  else
+    perform t.ok(
+      not echo.bootstrap_platform_root(
+        '01000000-0000-4000-8000-000000000001', 'alice@example.com'
+      ),
+      'live roots predate the fixture, so the bootstrap door is consumed — it cannot mint another first root');
+    raise notice 'ok  first-claim story not provable here — % live platform root(s) already in office (asserted as consumed instead)',
+      current_setting('t.pre_roots');
+  end if;
+end $$;
+
 select t.denied(
   $$select echo.bootstrap_platform_root(
       '02000000-0000-4000-8000-000000000002', 'alice@example.com'
@@ -34,14 +54,33 @@ select t.denied(
   'a caller cannot smuggle another user id into root bootstrap'
 );
 
--- Cross-org METADATA is the designed capability.
+-- The rest of the file needs alice IN OFFICE whichever branch ran. Mint the
+-- fixture root directly at owner altitude — the registry row is fixture
+-- data like any other and rolls back with the file. (The 86/87 files used
+-- to say "runs after 85"; every file rolls back, so nothing ever carried
+-- over — each file now seats its own root.)
+reset role;
+insert into echo.platform_operator (user_id)
+values ('01000000-0000-4000-8000-000000000001')
+on conflict (user_id) do nothing;
+set local role echo_app;
+select set_config('echo.actor_id', '01000000-0000-4000-8000-000000000001', true);
 select t.ok(
-  exists (select 1 from echo.org where id = '0b000000-0000-4000-8000-00000000000b'),
-  'platform root can list an organization outside its own membership'
+  echo.actor_is_platform_root(),
+  'the fixture root is in office for the rest of this file — the predicate answers under the caller identity');
+
+-- Cross-org METADATA is the designed capability — through the CONSOLE DOORS
+-- since 0091 (the ambient product read stays org-scoped for a root too;
+-- 92_platform_sight pins that side of the pair).
+select t.ok(
+  exists (select 1 from echo.platform_list_orgs() o
+           where o.id = '0b000000-0000-4000-8000-00000000000b'),
+  'platform root lists an organization outside its own membership — the console door (0091)'
 );
 select t.ok(
-  exists (select 1 from echo.app_user where id = '05000000-0000-4000-8000-000000000005'),
-  'platform root can list an external user metadata row'
+  exists (select 1 from echo.platform_list_users() u
+           where u.id = '05000000-0000-4000-8000-000000000005'),
+  'platform root lists an external user metadata row — same door'
 );
 
 -- Cross-org CONTENT remains denied. The root happens to own org A, so the
@@ -55,9 +94,30 @@ select t.ok(
   not exists (select 1 from echo.agent_session where id = '52000000-0000-4000-8000-000000000002'),
   'platform root does not gain assistant-conversation visibility through the new role'
 );
-select t.denied(
-  $$select * from echo.connector_secret$$,
-  'platform root has no connector-secret grant'
+-- Connector credentials: echo_app legitimately holds grants here (0065 —
+-- core stores and reads tokens FOR THE CALLER), so "no grant" stopped being
+-- the wall's shape the day connections landed. The wall is D29's owner-only
+-- policy, and the root-specific claim is that root-ness does not widen it.
+-- Seed another person's secret first, so the read has something it must
+-- fail to surface (rule 12: the fixture is the input where the states
+-- differ) — 72_agents… proves the owner-only wall itself.
+select set_config('echo.actor_id', '05000000-0000-4000-8000-000000000005', true);
+insert into echo.connector_connection
+  (id, org_id, owner_id, provider, status, account_label)
+values
+  ('85000000-0000-4000-8000-000000000001',
+   '0b000000-0000-4000-8000-00000000000b',
+   '05000000-0000-4000-8000-000000000005', 'google', 'connected', 'erin@example.com');
+insert into echo.connector_secret
+  (connection_id, org_id, owner_id, encrypted_payload)
+values
+  ('85000000-0000-4000-8000-000000000001',
+   '0b000000-0000-4000-8000-00000000000b',
+   '05000000-0000-4000-8000-000000000005', decode('00112233445566778899aabbccddeeff', 'hex'));
+select set_config('echo.actor_id', '01000000-0000-4000-8000-000000000001', true);
+select t.ok(
+  not exists (select 1 from echo.connector_secret),
+  'platform root surfaces nobody''s connector secrets — the owner-only wall (D29) ignores root-ness'
 );
 
 -- A root cannot turn the metadata policy into a direct write permission.
@@ -81,8 +141,11 @@ select t.ok(
   ),
   'root can disable a non-root user through the named operation'
 );
+-- read back through the console door — erin's row is outside the root's own
+-- org, so the product read cannot see her at all (0091, deliberately)
 select t.ok(
-  (select status = 'disabled' from echo.app_user where id = '05000000-0000-4000-8000-000000000005'),
+  (select u.status from echo.platform_list_users() u
+    where u.id = '05000000-0000-4000-8000-000000000005') = 'disabled',
   'the named user-status operation changed the target'
 );
 select t.ok(
@@ -132,7 +195,7 @@ select t.ok(
     '06000000-0000-4000-8000-000000000006',
     'on-call coverage'
   ),
-  'root can appoint an active second platform root'
+  'root can appoint another active platform root'
 );
 select t.denied(
   $$select echo.platform_set_user_status(
@@ -150,13 +213,16 @@ select t.ok(
   ),
   'root can remove a different root through the separate audited action'
 );
+-- 0066 refuses self-removal BEFORE it even counts the remaining roots, so
+-- this holds on the live database too, where the fixture root is never the
+-- last one standing.
 select t.denied(
   $$select echo.platform_revoke_root(
       '01000000-0000-4000-8000-000000000001',
       '01000000-0000-4000-8000-000000000001',
       'attempt self removal'
     )$$,
-  'the final root cannot remove itself'
+  'a platform root can never remove itself — revocation is always another root''s act'
 );
 
 select t.ok(
