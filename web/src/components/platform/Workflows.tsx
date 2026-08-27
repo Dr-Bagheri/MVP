@@ -208,6 +208,53 @@ export function Workflows() {
               {t("create")}
             </button>
           </div>
+          {/* CONNECTED ACCOUNTS — always visible (user question 2026-08-27:
+              "how to connect the email and calendar, where to do it"). The
+              connect door used to appear only inside an opened card; a
+              door someone has to already know about is not an answer.
+              `not_configured` is a claim about the PRODUCT (operator OAuth
+              credentials absent), rendered as such — never as a broken
+              button. */}
+          <Section title={t("connectionsTitle")}>
+            <p className="-mt-2 mb-3 text-sm leading-6 text-fg-muted">{t("connectionsHint")}</p>
+            {connections === null ? null : (
+              <div className="flex flex-wrap gap-2">
+                {(["google", "microsoft"] as const).map((entry) => {
+                  const state = connections.find((connection) => connection.provider === entry);
+                  if (!state || !state.configured) {
+                    return (
+                      <span key={entry} className="inline-flex h-9 items-center rounded-full border border-border px-3 text-xs text-fg-subtle">
+                        {t("notConfigured", { provider: t(entry) })}
+                      </span>
+                    );
+                  }
+                  if (state.status === "connected") {
+                    return (
+                      <span key={entry} className="inline-flex h-9 items-center gap-2 rounded-full border border-accent bg-accent-soft px-3 text-xs text-accent">
+                        {t("connectedAs", { provider: t(entry) })}
+                        {state.account_label ? (
+                          <span dir="ltr" className="font-medium">{state.account_label}</span>
+                        ) : null}
+                      </span>
+                    );
+                  }
+                  return (
+                    <button
+                      key={entry}
+                      type="button"
+                      className="btn-secondary h-9 min-h-0 px-3 text-xs"
+                      onClick={() => void connect(entry)}
+                    >
+                      {state.status === "expired" || state.status === "revoked"
+                        ? t("reconnect", { provider: t(entry) })
+                        : t("connect", { provider: t(entry) })}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </Section>
+
           <Section title={t("featured")}>
             {workflows === null || connections === null ? null : workflows.length === 0 ? (
               <Card><p className="text-sm text-fg-muted">{t("empty")}</p></Card>

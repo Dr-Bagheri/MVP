@@ -1149,7 +1149,11 @@
     "starterInstalling": "Installing…",
     "starterInstalled": "Installed and enabled.",
     "starterAlready": "Already installed.",
-    "starterFailed": "The install did not go through."
+    "starterFailed": "The install did not go through.",
+    "connectionsTitle": "Connected accounts",
+    "connectionsHint": "These accounts are the calendar and mail sources for workflows — the connection is personal and read-only.",
+    "connectedAs": "{provider} connected:",
+    "reconnect": "Reconnect {provider}"
   },
   "agents": {
     "title": "Browse agents",

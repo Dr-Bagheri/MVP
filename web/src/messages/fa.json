@@ -1149,7 +1149,11 @@
     "starterInstalling": "در حال نصب…",
     "starterInstalled": "نصب شد و روشن است.",
     "starterAlready": "قبلاً نصب شده است.",
-    "starterFailed": "نصب انجام نشد."
+    "starterFailed": "نصب انجام نشد.",
+    "connectionsTitle": "حساب‌های متصل",
+    "connectionsHint": "این حساب‌ها منبع تقویم و ایمیل گردش‌کارها هستند — اتصال شخصی است و فقط خواندنی.",
+    "connectedAs": "{provider} متصل است:",
+    "reconnect": "اتصال دوبارهٔ {provider}"
   },
   "agents": {
     "title": "مرور عامل‌ها",
