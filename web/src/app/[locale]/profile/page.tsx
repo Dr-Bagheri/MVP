@@ -11,6 +11,8 @@ import { ExportAccountData } from "@/components/platform/ExportAccountData";
 import { PlatformShell } from "@/components/platform/PlatformShell";
 import { FormPanel, FormRow, PageContainer, PageHeader, PanelFooter, Section } from "@/components/scaffold";
 import { modelLabel } from "@/lib/format";
+import { storeTheme, type Theme } from "@/lib/theme";
+import { useTheme } from "@/lib/useTheme";
 import { Chip } from "@/components/ui";
 
 /**
@@ -52,6 +54,14 @@ export default function ProfilePage() {
   const t = useTranslations("profile");
   const router = useRouter();
   const pathname = usePathname();
+  /*
+   * The theme lives HERE now (user directive, 2026-08-27: the general
+   * settings belong in profile settings; Settings · General is the
+   * WORKSPACE). Read through the shared hook, never a local useState — the
+   * avatar menu writes the same store, and a private copy would go stale
+   * the moment the menu changed it and then write the stale value back.
+   */
+  const theme = useTheme();
 
   /**
    * `me` is the SAVED state and the drafts are what is typed. Both are needed:
@@ -295,6 +305,18 @@ export default function ProfilePage() {
               >
                 <option value="fa">فارسی</option>
                 <option value="en">English</option>
+              </select>
+            </FormRow>
+
+            <FormRow label={t("theme")} description={t("themeHint")} htmlFor="profile-theme">
+              <select
+                id="profile-theme"
+                className="input min-h-0 h-11 md:h-control"
+                value={theme}
+                onChange={(e) => storeTheme(e.target.value as Theme)}
+              >
+                <option value="dark">{t("themeDark")}</option>
+                <option value="light">{t("themeLight")}</option>
               </select>
             </FormRow>
 

@@ -1973,6 +1973,7 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       name?: unknown; locale?: unknown; allowed_models?: unknown; glossary?: unknown;
       public_email?: unknown; description?: unknown; website_url?: unknown;
       location?: unknown; logo_url?: unknown; social_links?: unknown;
+      autonomy_ceiling?: unknown;
     };
     if (body.name !== undefined && typeof body.name !== "string") {
       throw new ValidationError("name must be a string");
@@ -2003,6 +2004,11 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       logoUrl: text(body.logo_url),
       socialLinks: Array.isArray(body.social_links)
         ? (body.social_links as string[])
+        : undefined,
+      /* db/0075's cap. The repo validates the value; this hop only refuses
+         a non-string, so a number does not reach a `text` column as one */
+      autonomyCeiling: typeof body.autonomy_ceiling === "string"
+        ? body.autonomy_ceiling
         : undefined,
     }));
   });

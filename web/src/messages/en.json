@@ -1357,7 +1357,7 @@
       "legal": "Legal documents"
     },
     "desc": {
-      "general": "Organization name, default call scope, language and theme.",
+      "general": "Settings that apply to everyone in this workspace.",
       "assistant": "The assistant's autonomy level and the weekly digest.",
       "security": "The wall this deployment keeps around your account and your data.",
       "sso": "How people enter this platform, and turning each method on or off.",
@@ -1408,7 +1408,18 @@
     "orgLogoRemove": "Remove",
     "orgLogoSaved": "Logo saved.",
     "orgLogoRemoved": "Logo removed.",
-    "orgLogoFailed": "That image was not saved. Choose a PNG, JPEG or WebP file under 512KB."
+    "orgLogoFailed": "That image was not saved. Choose a PNG, JPEG or WebP file under 512KB.",
+    "workspaceTitle": "Workspace",
+    "workspaceSaved": "Workspace setting saved.",
+    "workspaceSaveFailed": "That workspace setting was not saved.",
+    "workspaceIdentity": "Organization identity",
+    "workspaceIdentityHint": "The name, logo, glossary and public face are set in Management · General.",
+    "workspaceIdentityOpen": "Open Management · General",
+    "autonomyCeiling": "Assistant autonomy ceiling",
+    "autonomyCeilingHint": "The cap for everyone here. A member's effective autonomy is the lower of their own choice and this.",
+    "autonomy_watch": "Watch only",
+    "autonomy_assist": "Assist (propose, you approve)",
+    "autonomy_act": "Act"
   },
   "audit": {
     "codesOnly": "This page says what happened, not what was said. Question text, transcripts and conversation content never enter the audit trail.",
@@ -1658,7 +1669,11 @@
     "exportHint": "One JSON file of your profile, records, transcripts, summaries and notes — exactly what you can already see.",
     "exportAction": "Request data export",
     "exportWorking": "Gathering… {done}/{total}",
-    "exportFailed": "The export did not complete — try again."
+    "exportFailed": "The export did not complete — try again.",
+    "theme": "Theme",
+    "themeHint": "Light or dark, on this device.",
+    "themeDark": "Dark",
+    "themeLight": "Light"
   },
   "common": {
     "cancel": "Cancel",

@@ -43,7 +43,7 @@ import { changedFields, record } from "./admin-actions.ts";
 import { ConflictError, NotFoundError, ValidationError } from "./errors.ts";
 import { iso } from "./vocabulary.ts";
 import { type Db, type SqlTx } from "../db/identity.ts";
-import { hasOrgGlossary, hasOrgLogoBytes, hasOrgProfile } from "../db/capabilities.ts";
+import { hasAutonomyCeiling, hasOrgGlossary, hasOrgLogoBytes, hasOrgProfile } from "../db/capabilities.ts";
 import type { Identity } from "../agent/types.ts";
 
 export interface OrgRecord {
@@ -80,6 +80,15 @@ export interface OrgRecord {
    * must not carry half a megabyte, and the image has its own route.
    */
   has_logo?: boolean;
+  /**
+   * db/0075 — the highest autonomy any member's assistant may reach here.
+   * A member's effective setting is `least(their choice, this)`, and that
+   * clamp has been live in `actorAutonomy` since 0075 landed. What did NOT
+   * exist was any way to MOVE it: the column was written by the default
+   * and by nothing else, so the cap an admin could rely on was a cap
+   * nobody could set. ABSENT on an un-migrated deployment.
+   */
+  autonomy_ceiling?: string;
 }
 
 const ORG_COLUMNS = `id, name, status, locale, allowed_models, created_at`;
@@ -94,6 +103,8 @@ const toOrg = (row: Record<string, unknown>): OrgRecord => ({
   // absent stays absent on an un-migrated deployment
   ...(row.glossary !== undefined ? { glossary: (row.glossary as string[] | null) ?? [] } : {}),
   ...(row.has_logo !== undefined ? { has_logo: row.has_logo === true } : {}),
+  ...(row.autonomy_ceiling !== undefined
+    ? { autonomy_ceiling: String(row.autonomy_ceiling) } : {}),
   ...(row.logo_url !== undefined
     ? {
         public_email: (row.public_email as string | null) ?? null,
@@ -110,6 +121,10 @@ const toOrg = (row: Record<string, unknown>): OrgRecord => ({
 const PROFILE_COLUMNS = ", public_email, description, website_url, location, logo_url, social_links";
 /* the logo's PRESENCE, never its bytes — see OrgRecord.has_logo */
 const LOGO_COLUMN = ", (logo_bytes is not null) as has_logo";
+/** db/0075's cap. Its own probe: it landed in a different migration. */
+const CEILING_COLUMN = ", autonomy_ceiling";
+/** The dial's rungs, lowest first — core owns this vocabulary. */
+export const AUTONOMY_LEVELS = ["watch", "assist", "act"] as const;
 
 const MAX_NAME = 120;
 
@@ -151,11 +166,13 @@ export function createOrgRepo(db: Db) {
       const withGlossary = await hasOrgGlossary(db);
       const withProfile = await hasOrgProfile(db);
       const withLogo = await hasOrgLogoBytes(db);
+      const withCeiling = await hasAutonomyCeiling(db);
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<Record<string, unknown>>(
           `select ${ORG_COLUMNS}${withGlossary ? ", glossary" : ""}${
             withProfile ? PROFILE_COLUMNS : ""}${
-            withLogo ? LOGO_COLUMN : ""} from echo.org where id = $1`,
+            withLogo ? LOGO_COLUMN : ""}${
+            withCeiling ? CEILING_COLUMN : ""} from echo.org where id = $1`,
           [identity.orgId],
         ),
       );
@@ -187,6 +204,8 @@ export function createOrgRepo(db: Db) {
         location?: string | null | undefined;
         logoUrl?: string | null | undefined;
         socialLinks?: string[] | undefined;
+        /** db/0075: watch | assist | act. Absent leaves it alone. */
+        autonomyCeiling?: string | undefined;
       },
     ): Promise<OrgRecord> {
       const name = patch.name?.trim();
@@ -205,6 +224,10 @@ export function createOrgRepo(db: Db) {
             || patch.allowedModels.some((m) => typeof m !== "string" || !m.trim())) {
           throw new ValidationError("allowed_models must be an array of model ids");
         }
+      }
+      if (patch.autonomyCeiling !== undefined
+        && !(AUTONOMY_LEVELS as readonly string[]).includes(patch.autonomyCeiling)) {
+        throw new ValidationError("autonomy_ceiling must be watch, assist or act");
       }
       let glossary: string[] | null = null;
       if (patch.glossary !== undefined) {
@@ -229,6 +252,8 @@ export function createOrgRepo(db: Db) {
        * leaves alone. Coalesce here would make clearing impossible, which
        * is the save-button-does-nothing trap for exactly one interaction.
        */
+      const withCeiling = patch.autonomyCeiling !== undefined;
+      if (withCeiling && !(await hasAutonomyCeiling(db))) throw new ConflictError("not_migrated");
       const withProfile = await hasOrgProfile(db);
       const PROFILE_FIELDS = [
         ["public_email", patch.publicEmail],
@@ -244,7 +269,7 @@ export function createOrgRepo(db: Db) {
       }
       if (name === undefined && patch.locale === undefined
         && patch.allowedModels === undefined && patch.glossary === undefined
-        && profileSupplied.length === 0 && !withSocials) {
+        && profileSupplied.length === 0 && !withSocials && !withCeiling) {
         throw new ValidationError("nothing to update");
       }
 
@@ -270,6 +295,10 @@ export function createOrgRepo(db: Db) {
           params.push(trimmed === "" ? null : trimmed);
           sets.push(`${column} = $${params.length}::text`);
         }
+        if (withCeiling) {
+          params.push(patch.autonomyCeiling);
+          sets.push(`autonomy_ceiling = $${params.length}::text`);
+        }
         if (withSocials) {
           const links = (patch.socialLinks ?? [])
             .map((l: string) => l.trim()).filter((l: string) => l !== "").slice(0, 6);
@@ -280,7 +309,8 @@ export function createOrgRepo(db: Db) {
           `update echo.org set ${sets.join(", ")}
             where id = $1
             returning ${ORG_COLUMNS}${withGlossary ? ", glossary" : ""}${
-              withProfile ? PROFILE_COLUMNS : ""}`,
+              withProfile ? PROFILE_COLUMNS : ""}${
+              withCeiling ? CEILING_COLUMN : ""}`,
           params,
         );
         /**
@@ -297,6 +327,7 @@ export function createOrgRepo(db: Db) {
             detail: changedFields({
               name, locale: patch.locale, allowed_models: patch.allowedModels,
               glossary: patch.glossary,
+              autonomy_ceiling: patch.autonomyCeiling,
             }),
           });
         }

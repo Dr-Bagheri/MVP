@@ -1556,6 +1556,8 @@ export const api = {
     location?: string | null;
     logo_url?: string | null;
     social_links?: string[] | null;
+    /** db/0075 — the workspace's autonomy cap (Settings · Workspace). */
+    autonomy_ceiling?: string;
   }): Promise<Org> {
     /* **LIVE** — `PATCH /api/admin/org` → `PATCH /v1/admin/org` (admin). */
     return bff<Org>("/api/admin/org", {
