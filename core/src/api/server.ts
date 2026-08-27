@@ -50,6 +50,7 @@ import { decideMatch } from "../worker/voice-match.ts";
 import { createStorage as createPurgeStorage } from "../purge/main.ts";
 import { createWorkflow, listWorkflows, resolveWorkflow } from "./workflows.ts";
 import { createWorkflowRunsRepo } from "./workflow-runs.ts";
+import { createWorkflowAuthoringRepo } from "./workflow-authoring.ts";
 import type { DomainTool } from "../agent/tools.ts";
 import { agentToolsDb, type Db, type SqlTx } from "../db/identity.ts";
 import { isAdmin, isOwner, type Identity, type Skill } from "../agent/types.ts";
@@ -1784,6 +1785,16 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
   });
 
   const workflowRuns = createWorkflowRunsRepo(options.db);
+  const workflowAuthoring = createWorkflowAuthoringRepo(options.db);
+
+  /** W23, once for the whole workflow surface: a gateway key holds none
+      of these doors — author, publish, run, signal, schedule, decide. */
+  const refuseApiKey = (identity: unknown): void => {
+    if ((identity as { viaApiKey?: boolean }).viaApiKey === true) {
+      throw new NotActivatedError("api keys may not use the workflow surface");
+    }
+  };
+
 
   app.get("/v1/workflows", async (request, reply) => {
     const identity = await auth.requireActive(request);
@@ -1830,6 +1841,108 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     }
     const { ref } = request.params as { ref: string };
     return reply.code(201).send(await workflowRuns.start(identity, ref));
+  });
+
+  app.post("/v1/workflows/:ref/signal", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    await capabilities.require(identity, "workflows.run");
+    refuseApiKey(identity);
+    const { ref } = request.params as { ref: string };
+    const body = (request.body ?? {}) as { source_ref?: unknown };
+    return reply.code(201).send(await workflowRuns.signal(identity, ref, body.source_ref));
+  });
+
+  app.post("/v1/workflows/:ref/schedule", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    await capabilities.require(identity, "workflows.run");
+    refuseApiKey(identity);
+    const { ref } = request.params as { ref: string };
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    /* scheduling ANOTHER person's runs is management (the wall re-asserts) */
+    if (typeof body.owner_id === "string" && body.owner_id !== identity.userId) {
+      await capabilities.require(identity, "workflows.manage");
+    }
+    return reply.code(201).send(await workflowRuns.schedule(identity, ref, body));
+  });
+
+  app.post("/v1/workflows/runs/:id/decide", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    return reply.send(await workflowRuns.decide(identity, id, body));
+  });
+
+  // ---- P5: authoring (admin + workflows.manage, never a key) -------------
+  app.get("/v1/workflows/manage", async (request, reply) => {
+    const identity = await auth.requireAdmin(request);
+    await capabilities.require(identity, "workflows.manage");
+    refuseApiKey(identity);
+    return reply.send({ workflows: await workflowAuthoring.list(identity) });
+  });
+
+  app.post("/v1/workflows/manage", async (request, reply) => {
+    const identity = await auth.requireAdmin(request);
+    await capabilities.require(identity, "workflows.manage");
+    refuseApiKey(identity);
+    return reply.code(201).send(
+      await workflowAuthoring.create(identity, (request.body ?? {}) as Record<string, unknown>));
+  });
+
+  app.get("/v1/workflows/manage/:id/graph", async (request, reply) => {
+    const identity = await auth.requireAdmin(request);
+    await capabilities.require(identity, "workflows.manage");
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    const query = request.query as { version?: string };
+    const graph = await workflowAuthoring.graph(identity, id, query.version);
+    if (!graph) throw new NotFoundError("no published version to read");
+    return reply.send(graph);
+  });
+
+  app.get("/v1/workflows/manage/:id/versions", async (request, reply) => {
+    const identity = await auth.requireAdmin(request);
+    await capabilities.require(identity, "workflows.manage");
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    return reply.send({ versions: await workflowAuthoring.versions(identity, id) });
+  });
+
+  app.put("/v1/workflows/manage/:id/publish", async (request, reply) => {
+    const identity = await auth.requireAdmin(request);
+    await capabilities.require(identity, "workflows.manage");
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    return reply.code(201).send(
+      await workflowAuthoring.publish(identity, id, (request.body ?? {}) as Record<string, unknown>));
+  });
+
+  app.patch("/v1/workflows/manage/:id", async (request, reply) => {
+    const identity = await auth.requireAdmin(request);
+    await capabilities.require(identity, "workflows.manage");
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    return reply.send(
+      await workflowAuthoring.update(identity, id, (request.body ?? {}) as Record<string, unknown>));
+  });
+
+  app.get("/v1/workflows/auto-apply", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    /* any member may KNOW what auto-applies (the read policy agrees) */
+    return reply.send({ rules: await workflowAuthoring.autoApply(identity) });
+  });
+
+  app.put("/v1/workflows/auto-apply", async (request, reply) => {
+    const identity = await auth.requireAdmin(request);
+    await capabilities.require(identity, "workflows.manage");
+    refuseApiKey(identity);
+    const body = (request.body ?? {}) as { kind?: unknown; allowed?: unknown };
+    if (typeof body.kind !== "string" || typeof body.allowed !== "boolean") {
+      throw new ValidationError("kind and allowed are required");
+    }
+    await workflowAuthoring.setAutoApply(identity, body.kind, body.allowed);
+    return reply.send({ kind: body.kind, allowed: body.allowed });
   });
 
   app.get("/v1/workflows/runs", async (request, reply) => {

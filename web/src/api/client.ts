@@ -8,6 +8,7 @@
 // swapped to the wire or deleted by the 2026-08-20 tenancy audit — see the
 // notes at their former sites.)
 import type {
+  AuthoredWorkflow,
   WorkflowRunDetail,
   WorkflowRunRecord,
   CapabilityState,
@@ -1620,6 +1621,63 @@ export const api = {
 
   async workflowRun(id: string): Promise<WorkflowRunDetail> {
     return bff<WorkflowRunDetail>(`/api/workflows/runs/${encodeURIComponent(id)}`);
+  },
+
+  /** M41 P3/W14 — the decision, on the run, by its owner. */
+  async decideWorkflowRun(
+    id: string, stepId: string, decision: "approve" | "reject",
+  ): Promise<{ decision: string; resumed: boolean }> {
+    return bff(`/api/workflows/runs/${encodeURIComponent(id)}/decide`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ step_id: stepId, decision }),
+    });
+  },
+
+  /** M41 P5 — the builder (admin; core holds the walls). */
+  async authoredWorkflows(): Promise<AuthoredWorkflow[]> {
+    const { workflows } = await bff<{ workflows: AuthoredWorkflow[] }>("/api/workflows/manage");
+    return workflows;
+  },
+  async createAuthoredWorkflow(input: { name: string; description?: string }): Promise<AuthoredWorkflow> {
+    return bff<AuthoredWorkflow>("/api/workflows/manage", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    });
+  },
+  async patchWorkflow(
+    id: string,
+    patch: { enabled?: boolean; name?: string; trigger_event?: string | null; current_version_id?: string },
+  ): Promise<AuthoredWorkflow> {
+    return bff<AuthoredWorkflow>(`/api/workflows/manage/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+  },
+  async publishWorkflow(
+    id: string, body: { graph: unknown; max_autonomy: string },
+  ): Promise<{ version: number; version_id: string }> {
+    return bff(`/api/workflows/manage/${encodeURIComponent(id)}/publish`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  },
+  async workflowGraph(id: string): Promise<{ graph: unknown; max_autonomy: string }> {
+    return bff(`/api/workflows/manage/${encodeURIComponent(id)}/graph`);
+  },
+  async autoApplyRules(): Promise<{ kind: string; allowed: boolean }[]> {
+    const { rules } = await bff<{ rules: { kind: string; allowed: boolean }[] }>("/api/workflows/auto-apply");
+    return rules;
+  },
+  async setAutoApplyRule(kind: string, allowed: boolean): Promise<void> {
+    await bff("/api/workflows/auto-apply", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ kind, allowed }),
+    });
   },
 
   // ---- gateway (M17) ----------------------------------------------------------

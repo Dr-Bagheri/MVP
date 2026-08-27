@@ -44,9 +44,12 @@ import { resolveIdentity, UnknownActorError } from "../db/actor.ts";
 import { agentToolsDb, type Db, type SqlTx } from "../db/identity.ts";
 import { JSONB_PARAM, toJsonb } from "../db/jsonb.ts";
 import {
+  AUTO_APPLY_ELIGIBLE,
   EXECUTABLE_STEP_KINDS,
+  WORKFLOW_PROPOSAL_KINDS,
   type WorkflowFailureCode,
 } from "../api/vocabulary.ts";
+import { actorAutonomy } from "../db/capabilities.ts";
 import {
   EXTRACT_SCHEMAS,
   parseBindingPath,
@@ -123,7 +126,11 @@ type Directive =
   | { kind: "output"; output: Record<string, unknown> }
   | { kind: "effect" }
   | { kind: "jump"; targetIndex: number | "__end" }
-  | { kind: "loop"; output: Record<string, unknown>; count: number };
+  | { kind: "loop"; output: Record<string, unknown>; count: number }
+  /* the run sleeps in the database - no message in flight (P3) */
+  | { kind: "park"; on: "decision" }
+  /* a human said no, or the branch made the step moot - visibly */
+  | { kind: "skip" };
 
 interface ExecutionContext {
   db: Db;
@@ -134,6 +141,7 @@ interface ExecutionContext {
   iteration: number;
   stepRunId: string;
   graph: WorkflowGraph;
+  maxAutonomy: string;
   indexOf: Map<string, number>;
   /** body step id → its foreach step id */
   bodyToForeach: Map<string, string>;
@@ -496,6 +504,153 @@ const EXECUTORS: Record<(typeof EXECUTABLE_STEP_KINDS)[number], ExecuteFn> = {
     return { kind: "loop", output, count: items.length };
   },
 
+  /**
+   * P3 - the MECHANICAL propose: typed extract output mapped onto a
+   * proposal payload, no model anywhere in the loop. The recorded output
+   * IS the proposal a human reads before anything happens.
+   */
+  async propose(context) {
+    const kind = String(context.step.proposal);
+    if (!(WORKFLOW_PROPOSAL_KINDS as readonly string[]).includes(kind)) {
+      throw new RunFailure("kind_unavailable", `proposal kind ${kind} is not shipped`);
+    }
+    const callRaw = String(context.step.call ?? "").trim().replace(/^\{\{|\}\}$/g, "");
+    const callPath = parseBindingPath(callRaw);
+    if (!callPath) throw new RunFailure("binding_unresolved", "propose.call is malformed");
+    const callResolved = await resolveBinding(context, callPath);
+    const callId = String(callResolved.value ?? "");
+    if (!/^[0-9a-f-]{36}$/i.test(callId)) {
+      throw new RunFailure("binding_unresolved", "propose.call did not resolve to a call id");
+    }
+    const fromRaw = String(context.step.from ?? "").trim().replace(/^\{\{|\}\}$/g, "");
+    const fromPath = parseBindingPath(fromRaw);
+    if (!fromPath) throw new RunFailure("binding_unresolved", "propose.from is malformed");
+    const { value, typed } = await resolveBinding(context, fromPath);
+    if (!typed) throw new RunFailure("schema_invalid", "a proposal payload must be typed data");
+
+    let payload: Record<string, unknown>;
+    if (kind === "add_tags") {
+      const source = Array.isArray(value) ? value : [value];
+      const tags = [...new Set(source
+        .map((entry) => typeof entry === "string" ? entry.trim()
+          : typeof entry === "object" && entry !== null && "title" in entry
+            ? String((entry as { title: unknown }).title).trim() : "")
+        .filter((tag) => tag !== "" && tag.length <= 40))].slice(0, 10);
+      if (tags.length === 0) throw new RunFailure("schema_invalid", "add_tags resolved to no usable tags");
+      payload = { tags };
+    } else {
+      const title = (typeof value === "string" ? value : String(value ?? "")).trim().slice(0, 200);
+      if (title === "") throw new RunFailure("schema_invalid", "set_title resolved to an empty title");
+      payload = { title };
+    }
+    return { kind: "output", output: { proposal: kind, call_id: callId, payload } };
+  },
+
+  /**
+   * P3 - wait on:decision. Complete when every proposal this run has made
+   * is either DECIDED or covered by the standing auto-apply switches
+   * (minting stays the apply step's job); otherwise park. Other wait
+   * variants are honest refusals until their phase.
+   */
+  async wait(context) {
+    const on = String(context.step.on);
+    if (on !== "decision") {
+      throw new RunFailure("kind_unavailable", `wait on ${on} is not runnable in this phase`);
+    }
+    const pending = await undecidedProposals(context);
+    if (pending.length === 0) return { kind: "effect" };
+    const autoVerdicts = await Promise.all(pending.map((p) => autoApplyAllowed(context, p.kind)));
+    if (autoVerdicts.every(Boolean)) return { kind: "effect" };
+    return { kind: "park", on: "decision" };
+  },
+
+  /**
+   * P3 - the write. Only ever downstream of its propose (the validator's
+   * span protection), and only with a decision: a live human's, or one
+   * minted here under the three standing switches - all of which must
+   * hold (owner+org autonomy at act, version ceiling at act, the
+   * per-kind standing row). The write itself runs ON THE AGENT ROLE
+   * against an owner-only policy: approval widens content, never the
+   * grant.
+   */
+  async apply(context) {
+    const proposeId = String(context.step.from);
+    const rows = await context.db.withIdentity(context.identity, (tx: SqlTx) =>
+      tx.unsafe<{ id: string; output: unknown }>(
+        `select s.id, o.output
+           from echo.workflow_step_run s
+           left join echo.workflow_step_output o on o.step_run_id = s.id
+          where s.run_id = $1 and s.step_id = $2 and s.iteration = 0`,
+        [context.run.id, proposeId]));
+    const proposeRun = rows[0];
+    const proposal = proposeRun?.output as
+      | { proposal: string; call_id: string; payload: Record<string, unknown> } | undefined;
+    if (!proposeRun || !proposal) {
+      throw new RunFailure("binding_unresolved", `apply found no recorded proposal at ${proposeId}`);
+    }
+
+    const decided = await context.db.withIdentity(context.identity, (tx: SqlTx) =>
+      tx.unsafe<{ decision: string }>(
+        `select decision::text from echo.proposal_decision where proposal_id = $1`,
+        [proposeRun.id]));
+    let decision = decided[0]?.decision;
+
+    if (!decision && (await autoApplyAllowed(context, proposal.proposal))) {
+      /* W17 at the wall: decided_by is STAMPED as the run's owner (whose
+         authority the run borrows); via_standing points one hop at the
+         admin who enabled the rule. Racing the human's own click is safe:
+         the PK makes the second writer a no-op. */
+      await context.db.withIdentity(context.identity, (tx: SqlTx) =>
+        tx.unsafe(
+          `insert into echo.proposal_decision
+             (proposal_id, org_id, call_id, kind, decision, decided_by, via_standing)
+           values ($1, $2, $3, $4, 'approve', $5, true)
+           on conflict (proposal_id) do nothing`,
+          [proposeRun.id, context.run.org_id, proposal.call_id,
+            proposal.proposal, context.run.owner_id]));
+      const reread = await context.db.withIdentity(context.identity, (tx: SqlTx) =>
+        tx.unsafe<{ decision: string }>(
+          `select decision::text from echo.proposal_decision where proposal_id = $1`,
+          [proposeRun.id]));
+      decision = reread[0]?.decision;
+    }
+    if (!decision) return { kind: "park", on: "decision" }; // a wait, wherever apply stands
+    if (decision === "reject") return { kind: "skip" };     // a human's no, visible
+
+    /* THE WRITE - agent role, owner-only policy, exactly two columns */
+    if (proposal.proposal === "add_tags") {
+      const current = await context.db.withIdentity(context.identity, (tx: SqlTx) =>
+        tx.unsafe<{ tags: string[] | null }>(
+          `select tags from echo.call where id = $1`, [proposal.call_id]));
+      if (current.length === 0) {
+        throw new RunFailure("source_purged", "the approved call is gone or not the owner's");
+      }
+      const merged = [...new Set([...(current[0]?.tags ?? []),
+        ...((proposal.payload.tags as string[]) ?? [])])];
+      const applied = merged.slice(0, 10);
+      const updated = await context.db.withIdentity(context.identity, (tx: SqlTx) =>
+        tx.unsafe<{ id: string }>(
+          `update echo.call set tags = $2 where id = $1 returning id`,
+          [proposal.call_id, applied]),
+        { role: "agent" });
+      if (updated.length === 0) {
+        throw new RunFailure("source_purged", "the approved call refused the write - gone or not the owner's");
+      }
+      const output: Record<string, unknown> = { applied: true, tags: applied };
+      if (merged.length > applied.length) output.dropped = merged.length - applied.length;
+      return { kind: "output", output };
+    }
+    const updated = await context.db.withIdentity(context.identity, (tx: SqlTx) =>
+      tx.unsafe<{ id: string }>(
+        `update echo.call set title = $2 where id = $1 returning id`,
+        [proposal.call_id, String(proposal.payload.title ?? "")]),
+      { role: "agent" });
+    if (updated.length === 0) {
+      throw new RunFailure("source_purged", "the approved call refused the write - gone or not the owner's");
+    }
+    return { kind: "output", output: { applied: true, title: proposal.payload.title } };
+  },
+
   /** a dock card into the OWNER's own channel — titles only */
   async notify(context) {
     const kind = String(context.step.card);
@@ -548,6 +703,48 @@ async function evaluateDecide(context: ExecutionContext): Promise<Directive> {
     throw new RunFailure("schema_invalid", `decide targets unknown step ${target}`);
   }
   return { kind: "jump", targetIndex };
+}
+
+/** every propose in this run whose ledger row has no decision yet */
+async function undecidedProposals(
+  context: ExecutionContext,
+): Promise<{ stepRunId: string; kind: string }[]> {
+  const proposeIds = context.graph.steps
+    .filter((step) => step.kind === "propose")
+    .map((step) => step.id);
+  if (proposeIds.length === 0) return [];
+  const rows = await context.db.withIdentity(context.identity, (tx: SqlTx) =>
+    tx.unsafe<{ id: string; step_id: string; output: unknown; decided: string | null }>(
+      `select s.id, s.step_id, o.output, pd.decision::text as decided
+         from echo.workflow_step_run s
+         left join echo.workflow_step_output o on o.step_run_id = s.id
+         left join echo.proposal_decision pd on pd.proposal_id = s.id
+        where s.run_id = $1 and s.step_id = any($2::text[]) and s.status = 'done'`,
+      [context.run.id, proposeIds]));
+  return rows
+    .filter((row) => row.decided === null && row.output !== null)
+    .map((row) => ({
+      stepRunId: row.id,
+      kind: String((row.output as { proposal?: unknown })?.proposal ?? ""),
+    }));
+}
+
+/**
+ * W13's three switches, all required: owner+org autonomy resolves to act
+ * (actorAutonomy is already least(owner dial, org ceiling)), the VERSION
+ * declared act, and the org holds a standing allowed row for this kind -
+ * which the platform only offers for reversible kinds at all.
+ */
+async function autoApplyAllowed(context: ExecutionContext, kind: string): Promise<boolean> {
+  if (!(AUTO_APPLY_ELIGIBLE as readonly string[]).includes(kind)) return false;
+  if (context.maxAutonomy !== "act") return false;
+  if ((await actorAutonomy(context.db, context.identity)) !== "act") return false;
+  const rows = await context.db.withIdentity(context.identity, (tx: SqlTx) =>
+    tx.unsafe<{ allowed: boolean }>(
+      `select allowed from echo.workflow_auto_apply
+        where org_id = $1 and proposal_kind = $2`,
+      [context.run.org_id, kind]));
+  return rows[0]?.allowed === true;
 }
 
 /* ── the handler ───────────────────────────────────────────────────────── */
@@ -703,6 +900,9 @@ export function createWorkflowStep(options: WorkflowStepOptions): StepHandler {
           "the run is invisible to its claimed owner — stale or forged payload", true);
       }
       if (run.status !== "running") {
+        /* includes waiting: the resume contract flips the run back to
+           running BEFORE enqueueing (route and sweep both), so a message
+           meeting a waiting run is a stray from a prior park - consumed */
         log.info({ event: "workflow_run_not_running", run_id: run.id, status: run.status },
           "message for a settled run; adopted");
         return;
@@ -710,8 +910,8 @@ export function createWorkflowStep(options: WorkflowStepOptions): StepHandler {
 
       // the program, through the run-scoped door (0107)
       const doorRows = await db.withIdentity(identity, (tx: SqlTx) =>
-        tx.unsafe<{ graph: WorkflowGraph; budget: Record<string, unknown> }>(
-          `select graph, budget from echo.workflow_graph_for_run($1)`, [run.id]));
+        tx.unsafe<{ graph: WorkflowGraph; budget: Record<string, unknown>; max_autonomy: string }>(
+          `select graph, budget, max_autonomy from echo.workflow_graph_for_run($1)`, [run.id]));
       const door = doorRows[0];
       if (!door) {
         throw new StepError("graph_unreadable", "the run's program did not come back through the door", false);
@@ -749,8 +949,8 @@ export function createWorkflowStep(options: WorkflowStepOptions): StepHandler {
 
       const context: ExecutionContext = {
         db, identity, run, step, stepIndex, iteration: payload.iteration,
-        stepRunId: stepRun.id, graph: door.graph, indexOf, bodyToForeach,
-        options, log,
+        stepRunId: stepRun.id, graph: door.graph, maxAutonomy: door.max_autonomy,
+        indexOf, bodyToForeach, options, log,
       };
 
       if (stepRun.status === "done") {
@@ -759,7 +959,13 @@ export function createWorkflowStep(options: WorkflowStepOptions): StepHandler {
         await advance(context, await reconstruct(context));
         return;
       }
-      if (stepRun.status !== "running") return; // failed/refused/skipped: settled
+      if (stepRun.status === "skipped") {
+        // a skipped CURRENT step (apply after a reject) advances on
+        // redelivery exactly like a done one - the no is already recorded
+        await advance(context, { kind: "effect" });
+        return;
+      }
+      if (stepRun.status !== "running") return; // failed/refused: the run is settled
 
       // the budget's step ceiling (W12)
       const maxSteps = typeof door.budget?.max_steps === "number" ? door.budget.max_steps : 200;
@@ -782,6 +988,28 @@ export function createWorkflowStep(options: WorkflowStepOptions): StepHandler {
           throw new RunFailure("kind_unavailable", `step kind ${step.kind} is not executable in this phase`);
         }
         const directive = await execute(context);
+
+        if (directive.kind === "park") {
+          /* the run sleeps IN THE DATABASE: no message in flight, the
+             parked step's ledger row stays running, and the deadline
+             makes silence an answer (7 days, then expired - loudly) */
+          await db.withIdentity(identity, (tx: SqlTx) =>
+            tx.unsafe(
+              `update echo.workflow_run
+                  set status = 'waiting', waiting_on = $2,
+                      wait_deadline = coalesce(wait_deadline, now() + interval '7 days')
+                where id = $1 and status = 'running'`,
+              [run.id, directive.on]));
+          return;
+        }
+        if (directive.kind === "skip") {
+          await db.withIdentity(identity, (tx: SqlTx) =>
+            tx.unsafe(
+              `update echo.workflow_step_run set status = 'skipped', ended_at = now()
+                where id = $1`, [stepRun.id]));
+          await advance(context, { kind: "effect" });
+          return;
+        }
 
         // effect + ledger in ONE transaction as the owner
         await db.withIdentity(identity, async (tx: SqlTx) => {

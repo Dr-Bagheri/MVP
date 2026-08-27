@@ -1134,7 +1134,13 @@
     "status_refused": "Refused",
     "status_cancelled": "Cancelled",
     "status_expired": "Expired",
-    "status_skipped": "Skipped"
+    "status_skipped": "Skipped",
+    "approve": "Approve",
+    "reject": "Reject",
+    "decidedApprove": "Approved",
+    "decidedReject": "Rejected",
+    "proposal_add_tags": "Proposed tags:",
+    "proposal_set_title": "Proposed title:"
   },
   "agents": {
     "title": "Browse agents",
@@ -1176,7 +1182,8 @@
       "models": "Allowed models",
       "server": "Service health",
       "general": "General",
-      "privileges": "Member privileges"
+      "privileges": "Member privileges",
+      "workflows": "Workflows"
     },
     "desc": {
       "server": "Processing queues, work that keeps failing, gateway keys and storage use.",
@@ -1805,5 +1812,40 @@
     "ask1": "Records is where every meeting lives — open any row to read its summary and transcript.",
     "ask2": "Search looks across every transcript you are allowed to see, and shows the exact sentence.",
     "ask3": "And this is the assistant — ask it anything about your meetings, in your own words."
+  },
+  "builder": {
+    "title": "Workflows",
+    "subtitle": "Author, publish and operate the organization's workflows — versions are immutable; every publish is a new one.",
+    "newName": "New workflow name…",
+    "create": "Create",
+    "createFailed": "The workflow was not created.",
+    "empty": "No workflows authored yet.",
+    "unpublished": "Unpublished",
+    "versionN": "Version {n}",
+    "trigger": "Trigger",
+    "triggerNone": "No automatic trigger",
+    "triggerSummarized": "After a meeting is summarized",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "editing": "Editing “{name}”",
+    "ceiling": "Version autonomy ceiling",
+    "ceiling_watch": "Watch only",
+    "ceiling_assist": "Assist",
+    "ceiling_act": "Act",
+    "publish": "Publish new version",
+    "published": "Version {version} published.",
+    "publishFailed": "Publish failed.",
+    "stepId": "Step id",
+    "stepKind": "Step kind",
+    "removeStep": "Remove step",
+    "addStep": "Add step",
+    "starter": "Start from the follow-ups preset",
+    "instructionHint": "This step's instruction…",
+    "waitNote": "Pauses until a human decides the proposals.",
+    "autoTitle": "Standing decisions",
+    "autoNote": "Only reversible kinds may apply without asking; everything else always waits for a human. Turning one on is a recorded decision under your name.",
+    "autoOn": "Auto — on",
+    "autoOff": "Off",
+    "autoFailed": "Not saved."
   }
 }

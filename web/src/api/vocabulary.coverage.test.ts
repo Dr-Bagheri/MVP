@@ -66,6 +66,15 @@ const EXCLUDED: Record<string, string> = {
     "is no local union or local member list to drift. Same reasoning as " +
     "AUDIT_SOURCES — the missing guard is the consequence of importing rather " +
     "than copying, not an oversight.",
+  WORKFLOW_PROPOSAL_KINDS:
+    "not mirrored: the builder maps over the imported array itself " +
+    "(one spelling, no local union to drift) — the AUDIT_SOURCES posture.",
+  AUTO_APPLY_ELIGIBLE:
+    "not mirrored: the standing-decisions card renders the imported array " +
+    "directly, so W13's reversible-only floor has exactly one spelling.",
+  WORKFLOW_EVENTS:
+    "not mirrored: the trigger picker maps over the imported array — a new " +
+    "fact appears in the menu the moment core ships it.",
   WORKFLOW_STEP_KINDS:
     "no local union exists: the run detail renders step IDS, not kinds, and " +
     "the builder (P5) will import this array rather than copy it — the " +

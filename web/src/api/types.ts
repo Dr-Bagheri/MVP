@@ -1056,9 +1056,33 @@ export interface WorkflowStepRunRecord {
   started_at: string;
   ended_at: string | null;
   output?: unknown;
+  /** P3: the human's answer on a proposal step, when one exists */
+  decision?: string;
 }
 
 export interface WorkflowRunDetail {
   run: WorkflowRunRecord;
   steps: WorkflowStepRunRecord[];
+}
+
+/** M41 P5 — the builder's row, as core serves it. */
+export interface AuthoredWorkflow {
+  id: string;
+  handle: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+  trigger_event: string | null;
+  current_version: number | null;
+  current_version_id: string | null;
+  versions: number;
+  created_at: string;
+}
+
+export interface WorkflowVersionRow {
+  id: string;
+  version: number;
+  max_autonomy: string;
+  published_at: string;
+  published_by: string;
 }

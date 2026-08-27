@@ -30,6 +30,7 @@
  */
 import { ValidationError } from "./errors.ts";
 import {
+  WORKFLOW_PROPOSAL_KINDS,
   WORKFLOW_STEP_KINDS,
   type WorkflowStepKind,
 } from "./vocabulary.ts";
@@ -222,7 +223,7 @@ const STEP_KEYS: Record<WorkflowStepKind, readonly string[]> = {
   extract: ["id", "kind", "instruction", "agent", "from", "schema"],
   decide: ["id", "kind", "on", "gt", "gte", "lt", "lte", "eq", "ne", "contains", "then", "else"],
   foreach: ["id", "kind", "over", "max", "do"],
-  propose: ["id", "kind", "proposal", "from"],
+  propose: ["id", "kind", "proposal", "from", "call"],
   apply: ["id", "kind", "from"],
   notify: ["id", "kind", "card"],
   wait: ["id", "kind", "on"],
@@ -468,10 +469,19 @@ export function validateWorkflowGraph(raw: unknown, options: ValidateOptions): W
       }
       case "propose": {
         if (typeof step.proposal !== "string"
-          || step.proposal.length < 3 || step.proposal.length > 60) {
-          refuse("propose needs a proposal kind", id);
+          || !(WORKFLOW_PROPOSAL_KINDS as readonly string[]).includes(step.proposal)) {
+          refuse("propose needs a known proposal kind", id);
         }
-        requireBinding(step.from, "from", id, index, bodyOf);
+        const fromPath = requireBinding(step.from, "from", id, index, bodyOf);
+        /* P3: a proposal's payload is TYPED data only — a propose fed raw
+           content would put unvalidated text one human click from a write */
+        const fromShape = resolvePath(fromPath, index, bodyOf);
+        if (fromShape === "content") {
+          refuse("propose.from must bind typed extract output, never raw content", id);
+        }
+        /* both v1 kinds are call-scoped, and the CALL is load-bearing:
+           the decision row carries it so its own decider can read it back */
+        requireBinding(step.call, "call", id, index, bodyOf);
         sawProposeAt.set(id, index);
         outputs.set(id, { kind: "none" });
         break;

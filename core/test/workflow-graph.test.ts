@@ -43,7 +43,7 @@ const FULL_GRAPH = {
     { id: "s2", kind: "extract", agent: "analyst", from: "{{s1}}", schema: "decisions_v1" },
     { id: "s3", kind: "decide", on: "s2.action_items.length", gt: 0, then: "s4", else: "s7" },
     { id: "s4", kind: "foreach", over: "{{s2.action_items}}", max: 20, do: "s5" },
-    { id: "s5", kind: "propose", proposal: "assign_action_item", from: "{{s4.item}}" },
+    { id: "s5", kind: "propose", proposal: "add_tags", from: "{{s4.item}}", call: "{{trigger.call_id}}" },
     { id: "s6", kind: "apply", from: "s5" },
     { id: "s7", kind: "notify", card: "workflow_result" },
   ],
@@ -176,16 +176,34 @@ describe("the corpus — every rule can fire, naming itself", () => {
     refusedWith({ entry: "s1", steps: [
       { id: "s1", kind: "extract", schema: "topics_v1" },
       { id: "s2", kind: "decide", on: "s1.topics.length", gt: 0, then: "s4", else: "__end" },
-      { id: "s3", kind: "propose", proposal: "add_tags", from: "{{s1.topics}}" },
+      { id: "s3", kind: "propose", proposal: "add_tags", from: "{{s1.topics}}", call: "{{trigger.call_id}}" },
       { id: "s4", kind: "apply", from: "s3" },
     ] }, "between a propose and its apply"));
 
   it("refuses apply under a watch ceiling — self-contradictory (§4.3 check 10)", () =>
     refusedWith({ entry: "s1", steps: [
       { id: "s1", kind: "extract", schema: "topics_v1" },
-      { id: "s2", kind: "propose", proposal: "add_tags", from: "{{s1.topics}}" },
+      { id: "s2", kind: "propose", proposal: "add_tags", from: "{{s1.topics}}", call: "{{trigger.call_id}}" },
       { id: "s3", kind: "apply", from: "s2" },
     ] }, "self-contradictory", { maxAutonomy: "watch" }));
+
+  it("refuses an UNKNOWN proposal kind — the set is closed (P3)", () =>
+    refusedWith({ entry: "s1", steps: [
+      { id: "s1", kind: "extract", schema: "topics_v1" },
+      { id: "s2", kind: "propose", proposal: "grant_admin", from: "{{s1.topics}}", call: "{{trigger.call_id}}" },
+    ] }, "known proposal kind"));
+
+  it("refuses a propose fed raw CONTENT — payloads are typed data only (P3)", () =>
+    refusedWith({ entry: "s1", steps: [
+      { id: "s1", kind: "search", scope: "calls" },
+      { id: "s2", kind: "propose", proposal: "add_tags", from: "{{s1}}", call: "{{trigger.call_id}}" },
+    ] }, "never raw content"));
+
+  it("refuses a propose without its call — the decision must be readable by its decider", () =>
+    refusedWith({ entry: "s1", steps: [
+      { id: "s1", kind: "extract", schema: "topics_v1" },
+      { id: "s2", kind: "propose", proposal: "add_tags", from: "{{s1.topics}}" },
+    ] }, "call must be a binding"));
 
   it("refuses an unknown extract schema", () =>
     refusedWith({ entry: "s1", steps: [
@@ -255,7 +273,7 @@ describe("every step kind has a validator arm", () => {
         { id: "s4", kind: "extract", from: "{{s1}}", schema: "decisions_v1" },
         { id: "s5", kind: "decide", on: "s4.action_items.length", gt: 0, then: "s6", else: "s10" },
         { id: "s6", kind: "foreach", over: "{{s4.action_items}}", max: 10, do: "s7" },
-        { id: "s7", kind: "propose", proposal: "assign_action_item", from: "{{s6.item}}" },
+        { id: "s7", kind: "propose", proposal: "add_tags", from: "{{s6.item}}", call: "{{trigger.call_id}}" },
         { id: "s8", kind: "wait", on: "decision" },
         { id: "s9", kind: "apply", from: "s7" },
         { id: "s10", kind: "notify", card: "workflow_result" },

@@ -45,12 +45,16 @@ select t.ok(
 set local role echo_agent;
 select set_config('echo.actor_id', '02000000-0000-4000-8000-000000000002', true);
 
--- --- it cannot touch a call row at all -------------------------------------
--- This is what makes "replace a summary" unable to become "change the scope
--- of this call" or "delete it softly".
+-- --- its reach into a call row is EXACTLY two columns ----------------------
+-- 0108 (M41 P3) widened this deliberately: a human-approved workflow apply
+-- writes tags and title ON the agent role, owner-only. What this check
+-- guarded — "replace a summary" must never become "change the scope of
+-- this call" or "delete it softly" — still holds, one column-grant tighter:
+-- everything BEYOND the two approved columns stays refused. (95_workflow_
+-- writes.sql walks the positive half and the owner-only policy.)
 select t.denied(
-  $$update echo.call set title = 'x' where id = 'c1000000-0000-4000-8000-000000000001'$$,
-  'the agent cannot modify a call, not even its owner''s');
+  $$update echo.call set scope = 'private' where id = 'c1000000-0000-4000-8000-000000000001'$$,
+  'the agent cannot re-scope a call — its reach is tags and title, nothing more');
 select t.denied(
   $$update echo.call set deleted_at = now() where id = 'c1000000-0000-4000-8000-000000000001'$$,
   'so it cannot soft-delete either — the no-delete rule has no back door');

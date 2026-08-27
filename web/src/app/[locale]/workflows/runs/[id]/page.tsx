@@ -47,6 +47,7 @@ export default function WorkflowRunPage({
   const t = useTranslations("workflows");
   const [detail, setDetail] = useState<WorkflowRunDetail | null>(null);
   const [missing, setMissing] = useState(false);
+  const [deciding, setDeciding] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -68,6 +69,29 @@ export default function WorkflowRunPage({
   }, [id]);
 
   useCrumbTitle(detail?.run.workflow);
+
+  /**
+   * P3/W14 — the decision, ON THE RUN. Rendered only where all three hold:
+   * the step recorded a PROPOSAL (its output carries one — and outputs are
+   * owner-only, so a viewer who can see it IS the person entitled to
+   * decide), no decision exists yet, and the run is still alive. The
+   * refusal path (someone else pressing anyway) is core's 403; this is
+   * affordance, never the wall.
+   */
+  const decide = async (stepId: string, decision: "approve" | "reject") => {
+    if (deciding) return;
+    setDeciding(true);
+    try {
+      await api.decideWorkflowRun(id, stepId, decision);
+      setDetail(await api.workflowRun(id));
+    } catch {
+      /* already decided elsewhere, or not ours to decide — reload shows
+         the truth either way */
+      setDetail(await api.workflowRun(id).catch(() => null));
+    } finally {
+      setDeciding(false);
+    }
+  };
 
   const columns: Column<WorkflowStepRunRecord>[] = [
     {
@@ -109,6 +133,52 @@ export default function WorkflowRunPage({
       headClassName: "text-start",
       className: "max-w-96",
       cell: (step) => {
+        const proposal = step.output as { proposal?: string; payload?: Record<string, unknown> } | undefined;
+        const pending = proposal?.proposal !== undefined
+          && step.decision === undefined
+          && detail !== null
+          && (detail.run.status === "waiting" || detail.run.status === "running");
+        if (pending) {
+          return (
+            <div className="space-y-2">
+              <p className="text-xs text-fg">
+                {t(`proposal_${proposal!.proposal}` as "proposal_add_tags")}
+                <span dir="auto" className="ms-2 font-medium">
+                  {Array.isArray(proposal!.payload?.tags)
+                    ? (proposal!.payload!.tags as string[]).join("، ")
+                    : String(proposal!.payload?.title ?? "")}
+                </span>
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className="btn-primary h-7 min-h-0 px-3 text-xs"
+                  disabled={deciding}
+                  onClick={() => void decide(step.step_id, "approve")}
+                >
+                  {t("approve")}
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary h-7 min-h-0 px-3 text-xs"
+                  disabled={deciding}
+                  onClick={() => void decide(step.step_id, "reject")}
+                >
+                  {t("reject")}
+                </button>
+              </div>
+            </div>
+          );
+        }
+        if (step.decision !== undefined && proposal?.proposal !== undefined) {
+          return (
+            <div className="space-y-1">
+              <Chip tone={step.decision === "approve" ? "success" : "neutral"}>
+                {step.decision === "approve" ? t("decidedApprove") : t("decidedReject")}
+              </Chip>
+            </div>
+          );
+        }
         if (step.output !== undefined) {
           const text = typeof step.output === "string"
             ? step.output

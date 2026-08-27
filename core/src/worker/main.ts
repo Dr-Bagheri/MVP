@@ -23,6 +23,7 @@ import { createLinkSpeakersStep, createSummarizeStep } from "./call-steps.ts";
 import { createSummarizer } from "./summarizer.ts";
 import { createSignalStep } from "./signal-step.ts";
 import { createWorkflowStep } from "./workflow-step.ts";
+import { sweepWorkflowTimers } from "./workflow-triggers.ts";
 import { hasSignalTables } from "../db/capabilities.ts";
 import { createDomainTools } from "../agent/domain-tools.ts";
 import { createSummarizerResolver } from "../agent/skill-store.ts";
@@ -185,6 +186,17 @@ export async function main(): Promise<void> {
   };
   const cronTimer = setInterval(() => { void cronTick(); }, 5 * 60_000);
   cronTimer.unref();
+
+  /*
+   * M41 P3/P4: the workflow belt — resume/expire waits, fire due
+   * schedules. One minute, not five: a human just clicked Approve and the
+   * push path usually already won; this is the crash-gap belt, and a
+   * minute is the difference between "it resumed" and "it feels stuck".
+   */
+  const workflowTimer = setInterval(() => {
+    void sweepWorkflowTimers(db, queue, log as never);
+  }, 60_000);
+  workflowTimer.unref();
 
   let running = true;
   for (const signal of ["SIGINT", "SIGTERM"] as const) {

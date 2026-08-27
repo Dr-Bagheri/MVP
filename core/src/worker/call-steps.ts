@@ -9,6 +9,7 @@ import { resolveJobIdentity } from "./job-identity.ts";
 import type { Db, SqlTx } from "../db/identity.ts";
 import type { Lifecycle } from "./lifecycle.ts";
 import { Q_AGENT_RULES, Q_LINK_SPEAKERS, Q_SUMMARIZE, type JobPayload, type Queue } from "./queue.ts";
+import { enqueueWorkflowEvents } from "./workflow-triggers.ts";
 import { StepError, type StepHandler } from "./runner.ts";
 import { enqueueWebhooks } from "./webhook-enqueue.ts";
 import type { MlClient } from "./ml-client.ts";
@@ -361,6 +362,13 @@ export function createSummarizeStep({
       } catch (error) {
         log.warn({ event: "signal_enqueue_failed", detail: (error as Error).name }, "call.processed signal not enqueued (db/0074 pending?)");
       }
+      /*
+       * M41 P4: the EVENT trigger — subscribed workflows fire for this
+       * fact, each run owned by the CALL'S owner (W1), enqueued right
+       * here where the identity already is them. Best-effort like the
+       * signal above: a workflow must never fail the call it rides.
+       */
+      await enqueueWorkflowEvents(db, identity, "call.summarized", payload.callId, queue, log);
     },
   };
 }

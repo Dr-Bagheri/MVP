@@ -288,4 +288,29 @@ export const EXECUTABLE_STEP_KINDS = [
   "search", "ask", "notify",
   /* P2 (2026-08-27): the graph becomes a program */
   "extract", "decide", "foreach",
+  /* P3 (2026-08-27): the writes — propose/wait/apply through the M4
+     machinery. `fetch` alone stays gated: the connector poller it needs
+     is deferred, on the record. */
+  "propose", "wait", "apply",
 ] as const;
+
+/**
+ * M41 P3 — what a workflow may PROPOSE (the mechanical propose step's
+ * closed set). Both v1 kinds target the run owner's own call, which is
+ * load-bearing twice: the decision row carries the call so its own
+ * decider can read it back (the read policy follows the call), and the
+ * agent role's apply grant is owner-only on exactly these two columns.
+ */
+export const WORKFLOW_PROPOSAL_KINDS = ["add_tags", "set_title"] as const;
+export type WorkflowProposalKind = (typeof WORKFLOW_PROPOSAL_KINDS)[number];
+
+/**
+ * W13's platform floor: only REVERSIBLE kinds may ever auto-apply. Tags
+ * can be removed; a title overwrite loses the previous title — so
+ * set_title always keeps a live human, whatever the org enables.
+ */
+export const AUTO_APPLY_ELIGIBLE = ["add_tags"] as const;
+
+/** M41 L1 — the facts that may trigger a workflow (P4; closed). */
+export const WORKFLOW_EVENTS = ["call.summarized"] as const;
+export type WorkflowEvent = (typeof WORKFLOW_EVENTS)[number];
