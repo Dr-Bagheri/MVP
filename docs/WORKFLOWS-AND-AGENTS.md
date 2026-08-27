@@ -17,6 +17,15 @@
 > CAS that died on microseconds) and the kind-aware binding rule (a
 > schedule id wearing a call's costume). This document remains the design
 > of record; the code is the state of record.
+>
+> **Addendum (2026-08-27, later):** the builder moved onto `/workflows`
+> itself (user directive — engine catalogue, starter installs, run
+> ledger, builder, auto-apply on one page; `/management/workflows` is a
+> redirect and the Settings entry is gone), and §10's flagship shipped as
+> an installable STARTER: `STARTER_WORKFLOWS` (followups, autotag) +
+> `POST /v1/workflows/starters` install create→publish→enable in one
+> press, live-proven end to end by `core/scripts/workflow-starters-live.ts`
+> (6/6 — including the installed starter running to `done`).
 
 ---
 
