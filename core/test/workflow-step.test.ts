@@ -354,6 +354,28 @@ describe("extract: parse → validate → one retry → loud forfeit", () => {
     expect(sent[0]!.body.stepId).toBe("s3");
   });
 
+  it("a RUNTIME model failure retries — transport is not a refusal (rule 12)", async () => {
+    // minted by the P2 live acceptance: one of two identical extracts
+    // failed seconds before the other succeeded — a transient wearing a
+    // named-forfeit costume. Transient-shaped errors go back to the
+    // runner's retry; only semantic outcomes are named ends.
+    const { db, calls } = scriptedDb(scenario({
+      graph: EXTRACTY, outputs: { s1: { results: ["x"] } },
+    }));
+    const { queue, sent } = fakeQueue();
+    const handler = createWorkflowStep({
+      db, queue,
+      runModel: () => Promise.resolve({ failed: true, error: "provider hiccup", text: "" }),
+    });
+    await expect(handler.handle(payload("s2"), { attempt: 1, log: silentLog }))
+      .rejects.toSatisfy((error: unknown) =>
+        error instanceof StepError
+        && error.errorType === "model_call_failed" && error.retryable === true);
+    // and the run was NOT marked failed — the retry still owns it
+    expect(writes(calls).filter((c) => /update echo\.workflow_run/i.test(c.sql))).toEqual([]);
+    expect(sent).toEqual([]);
+  });
+
   it("a model that never complies is a loud schema_invalid that fails the RUN", async () => {
     const { db, calls } = scriptedDb(scenario({
       graph: EXTRACTY, outputs: { s1: { results: ["x"] } },

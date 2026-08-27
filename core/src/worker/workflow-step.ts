@@ -407,8 +407,19 @@ const EXECUTORS: Record<(typeof EXECUTABLE_STEP_KINDS)[number], ExecuteFn> = {
     const instruction = await buildInstruction(context, String(context.step.instruction ?? ""));
     const result = await callModel(context, instruction);
     await recordModelSpend(context, result);
-    if (result.failed || result.text.trim() === "") {
-      throw new RunFailure("model_refused", result.error ?? "the model produced nothing");
+    /*
+     * Two different nothings (rule 12, caught by the P2 live acceptance:
+     * one of two IDENTICAL extracts failed seconds before the other
+     * succeeded). A runtime-level failure — transport, provider, model
+     * error — is TRANSIENT-SHAPED and retries through the runner; only a
+     * clean completion that says nothing is the named forfeit.
+     */
+    if (result.failed) {
+      throw new StepError("model_call_failed",
+        result.error ?? "the model call failed", true);
+    }
+    if (result.text.trim() === "") {
+      throw new RunFailure("model_refused", "the model produced nothing");
     }
     return { kind: "output", output: { text: result.text } };
   },
@@ -433,7 +444,10 @@ const EXECUTORS: Record<(typeof EXECUTABLE_STEP_KINDS)[number], ExecuteFn> = {
 
     let result = await callModel(context, ask);
     await recordModelSpend(context, result);
-    if (result.failed) throw new RunFailure("model_refused", result.error ?? "the model produced nothing");
+    // transient-shaped: retry through the runner (see ask's rule-12 note)
+    if (result.failed) {
+      throw new StepError("model_call_failed", result.error ?? "the model call failed", true);
+    }
 
     let value = parseModelJson(result.text);
     let errors = value === undefined ? ["the answer was not JSON"] : validateExtractOutput(schema, value);
@@ -443,7 +457,9 @@ const EXECUTORS: Record<(typeof EXECUTABLE_STEP_KINDS)[number], ExecuteFn> = {
       result = await callModel(context,
         `${ask}\n\nپاسخ قبلی نامعتبر بود (${errors.join("; ")}). فقط JSON معتبر مطابق ساختار بده.`);
       await recordModelSpend(context, result);
-      if (result.failed) throw new RunFailure("model_refused", result.error ?? "the model produced nothing");
+      if (result.failed) {
+        throw new StepError("model_call_failed", result.error ?? "the model call failed", true);
+      }
       value = parseModelJson(result.text);
       errors = value === undefined ? ["the answer was not JSON"] : validateExtractOutput(schema, value);
       if (errors.length > 0) {
