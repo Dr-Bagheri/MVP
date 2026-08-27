@@ -1,12 +1,22 @@
 # Workflows & Agents — the complete architecture
 
-> **Status: RATIFIED — user approval, 2026-08-27 ("approved").** W1–W33 are
-> decided; the fold into ARCHITECTURE.md is **M41**. The four formerly-open
-> rulings landed as recommended: W1 (run owner = subject), W13 (auto-apply
-> switches built, shipped OFF, reversible kinds only in v1), W14 (decisions
-> on the run detail page — amends M4's no-inbox letter while preserving its
-> reason), W15 (templates migrate as one-step workflows). Build proceeds
-> P0→P5 per §13; this document is the design of record.
+> **Status: BUILT AND LIVE-PROVEN (P0–P5), 2026-08-27.** Ratified as M41;
+> all four open rulings landed as recommended (W1, W13, W14, W15). Every
+> phase shipped same-day with its instruments and a live acceptance on
+> production: P0 schema+walls (db/0104–0107), P1 executor + manual trigger
+> + run surfaces, P2 typed steps, P3 writes with the human in the middle
+> (the full matrix walked live — admin refused, owner approved, the write
+> landed on the agent role, replay 409, reject skipped, auto via_standing),
+> P4 event/schedule/signal triggers + expiry, P5 the builder at
+> /management/workflows. Deviations from this text, each recorded at its
+> site: W17 amended at the wall (decided_by stays stamped as the run owner;
+> via_standing points at the standing rule), `fetch` stays trigger-gated
+> until a connector poller exists, foreach bodies are single-step, wait
+> supports `decision` only, and trigger bindings are kind-aware (a schedule
+> carries no call). Two live-acceptance catches worth reading: db/0111 (the
+> CAS that died on microseconds) and the kind-aware binding rule (a
+> schedule id wearing a call's costume). This document remains the design
+> of record; the code is the state of record.
 
 ---
 
