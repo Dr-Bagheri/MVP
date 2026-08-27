@@ -131,10 +131,13 @@ export async function sweepWorkflowTimers(
       tx.unsafe<{ id: string; workflow_id: string; owner_id: string; org_id: string; next_due: string }>(
         "select id, workflow_id, owner_id, org_id, next_due from echo.due_workflow_schedules()"));
     for (const schedule of due) {
+      /* 0111: no echoed timestamp — the due-predicate is the CAS. The
+         0108 version compared microseconds to a millisecond round-trip and
+         never matched; the live acceptance caught it, the suite could not
+         (its value never crossed the wire). */
       const claimed = await db.withoutIdentity((tx) =>
         tx.unsafe<{ claim_workflow_fire: boolean | null }>(
-          "select echo.claim_workflow_fire($1, $2::timestamptz)",
-          [schedule.id, schedule.next_due]));
+          "select echo.claim_workflow_fire($1)", [schedule.id]));
       if (claimed[0]?.claim_workflow_fire !== true) continue;   // another pass won
       let identity: Identity;
       try {

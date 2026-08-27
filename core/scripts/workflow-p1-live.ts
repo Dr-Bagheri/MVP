@@ -13,6 +13,7 @@ import postgres from "postgres";
 import { createDb, type SqlClient } from "../src/db/identity.ts";
 import { createQueue, Q_WORKFLOW_STEP } from "../src/worker/queue.ts";
 import { createRunner } from "../src/worker/runner.ts";
+import { loadWorkerConfig } from "../src/worker/config.ts";
 import { createWorkflowStep } from "../src/worker/workflow-step.ts";
 import { createWorkflowRunsRepo } from "../src/api/workflow-runs.ts";
 import { resolveIdentity } from "../src/db/actor.ts";
@@ -111,11 +112,8 @@ async function main() {
     queue,
     handlers: [createWorkflowStep({ db, queue, apiKey,
       fallbackModel: process.env.WORKER_SUMMARY_MODEL ?? "google/gemini-2.5-flash" })],
-    config: {
-      mlBaseUrl: "http://127.0.0.1:0", mlTimeoutMs: 1000,
-      batchSize: 5, concurrency: 1, visibilityTimeoutSec: 120, idlePollMs: 200,
-      maxAttempts: 3,
-    } as never,
+    config: { ...loadWorkerConfig(), batchSize: 5, concurrency: 1,
+      visibilityTimeoutSec: 180, idlePollMs: 200, maxAttempts: 3 },
     sink: { onDeadLetter: async (q, _b, info) => log.error({ q, info }, "dead letter") },
     log: log as never,
   });

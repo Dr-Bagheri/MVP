@@ -100,18 +100,17 @@ select t.ok(
   '0108: a due schedule surfaces through the door');
 do $$
 declare
-  expected timestamptz;
   first boolean;
   second boolean;
 begin
-  select next_due into expected from echo.workflow_schedule
-   where id = '95000000-0000-4000-8000-000000000041';
-  select echo.claim_workflow_fire('95000000-0000-4000-8000-000000000041', expected)
-    into first;
-  select echo.claim_workflow_fire('95000000-0000-4000-8000-000000000041', expected)
-    into second;
+  -- 0111: the claim takes NO echoed token — the 0108 two-arg version was
+  -- green here (plpgsql kept full precision) and dead on the wire (the
+  -- worker's millisecond round-trip never equalled the stored microseconds).
+  -- This exercises the shape the CALLER actually uses.
+  select echo.claim_workflow_fire('95000000-0000-4000-8000-000000000041') into first;
+  select echo.claim_workflow_fire('95000000-0000-4000-8000-000000000041') into second;
   perform t.ok(first is true and second is null,
-    '0108: the CAS fires once — a second pass with the same expectation claims nothing');
+    '0111: the due-predicate IS the CAS — the second claim matches nothing');
   perform t.ok(
     (select next_due from echo.workflow_schedule
       where id = '95000000-0000-4000-8000-000000000041') > now(),

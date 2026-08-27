@@ -154,7 +154,7 @@ describe("propose: mechanical, typed, recorded", () => {
 
 describe("wait: parks on an open question, passes on an answered one", () => {
   it("an undecided proposal PARKS the run — no message in flight", async () => {
-    const { db, calls } = scriptedDb(scenario({ decision: undefined }));
+    const { db, calls } = scriptedDb(scenario({}));
     const { queue, sent } = fakeQueue();
     await createWorkflowStep({ db, queue }).handle(payload("s3"), { attempt: 1, log: silentLog });
 
@@ -204,6 +204,31 @@ describe("apply: the matrix, walked", () => {
     expect(sent).toEqual([]);
     expect(writes(calls).some((c) => /'waiting'/.test(c.sql))).toBe(true);
     expect(calls.some((c) => /update echo\.call set/i.test(c.sql))).toBe(false);
+  });
+});
+
+describe("trigger bindings are KIND-aware (the D poisoning)", () => {
+  it("a schedule-triggered run refuses {{trigger.call_id}} BY NAME", async () => {
+    // the schedule id is a uuid too — without the kind check it wore a
+    // call's costume into a decision row the wall then refused
+    const base = scenario({ outputs: { s1: { topics: ["x"] } } });
+    const { db, calls } = scriptedDb((sql, params) => {
+      if (/from echo\.workflow_run r/i.test(sql)) {
+        return [{ id: RUN, org_id: ORG, owner_id: OWNER,
+          workflow_id: "94000000-0000-4000-8000-000000000001",
+          status: "running", trigger_kind: "schedule",
+          trigger_ref: "6bae03c0-95c7-43a7-b197-64df623c4cf9",
+          workflow_name: "زمان‌بندی" }];
+      }
+      return base(sql, params);
+    });
+    const { queue, sent } = fakeQueue();
+    await createWorkflowStep({ db, queue }).handle(payload("s2"), { attempt: 1, log: silentLog });
+    expect(sent).toEqual([]);
+    const runFail = writes(calls).find((c) =>
+      /update echo\.workflow_run/i.test(c.sql) && c.params.includes("binding_unresolved"));
+    expect(runFail).toBeDefined();
+    expect(calls.some((c) => /insert into echo\.proposal_decision/i.test(c.sql))).toBe(false);
   });
 });
 

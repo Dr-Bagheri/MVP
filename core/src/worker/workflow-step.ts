@@ -191,6 +191,23 @@ async function resolveBinding(
 ): Promise<{ value: unknown; typed: boolean }> {
   if (path.source === "trigger") {
     if (path.parts.length === 1 && (path.parts[0] === "source_ref" || path.parts[0] === "call_id")) {
+      /*
+       * KIND-AWARE, after the P3 acceptance's movement D poisoned itself:
+       * a SCHEDULE run's trigger_ref is the schedule id, and it resolved
+       * as {{trigger.call_id}} because a uuid looks like a uuid — the
+       * schedule id wore a call's costume all the way into a decision row
+       * the wall then refused. A trigger fact resolves ONLY on the kinds
+       * that actually carry it: event and signal carry an item; manual
+       * and schedule carry nothing. The refusal is named, so a
+       * call-scoped workflow scheduled anyway fails as
+       * binding_unresolved — legible — instead of dead-lettering.
+       */
+      const carriesItem = context.run.trigger_kind === "event"
+        || context.run.trigger_kind === "signal";
+      if (!carriesItem) {
+        throw new RunFailure("binding_unresolved",
+          `a ${context.run.trigger_kind}-triggered run carries no ${String(path.parts[0])}`);
+      }
       const value = context.run.trigger_ref;
       if (!value) throw new RunFailure("binding_unresolved", `trigger.${String(path.parts[0])} is empty on this run`);
       return { value, typed: true };   // an id, not content
