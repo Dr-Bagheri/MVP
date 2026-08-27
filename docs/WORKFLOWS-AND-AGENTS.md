@@ -679,6 +679,53 @@ while the ordinary path ships broken.
 
 ---
 
+### 7.4 Admin operability — working with it without reading through it
+
+The walls above could read as "admins are locked out of the thing they
+operate". They are not — the design gives an admin five first-class paths,
+each of which preserves the walls rather than piercing them:
+
+**W29 (proposed): test runs on your own data.** A draft (unpublished)
+version is runnable by `workflows.manage` holders, manually, with the ADMIN
+as owner, over data the admin can already see. Being the owner, they see
+everything — outputs included — because it is their run over their data.
+This is how an author debugs: run it on yourself. Publishing stays the
+deliberate act, and a draft can never be reached by event, schedule or
+signal triggers — only by its author's hand.
+
+**W30 (proposed): run sharing, by the owner.** A member asking "why did
+this give me nonsense?" shares THAT run with admins — deliberate, per-run,
+revocable, audit-logged (the call-sharing shape). Consent stays with the
+subject; the admin gets the one run they were asked to look at, never a
+standing window.
+
+**W31 (proposed): fleet health, from metadata.** The workflow detail page
+shows admins per-step aggregates across all runs — failure rate by step,
+median duration, model cost, budget refusals, schema-validation failures.
+All of it derives from `workflow_step_run`, which admins may already read;
+none of it touches `workflow_step_output`. "s2 fails 40% of the time on
+mail-triggered runs" is a debugging fact that needs nobody's content.
+
+**W32 (proposed): pause and rollback.** `enabled = false` stops new runs
+while in-flight runs finish on their pinned version; rollback is repointing
+`current_version_id` at any prior version — one pointer move, cheap
+precisely because versions are immutable (W18 paying rent).
+
+**W33 (proposed): the workflow tells its author it is broken.** A run
+failing for a SYSTEM reason (`step_dead_letter`, `schema_invalid`,
+`stalled`) raises a dock card to the workflow's managing admins — workflow,
+step, failure code, count; codes only, never content. Members must not have
+to be the monitoring system for the org's own processes.
+
+And one boundary stated explicitly, because it is the one an admin will ask
+about: **an admin can cancel a member's run but can never approve its
+writes.** Approval is consent, and the consent is the subject's. The
+on-vacation case is answered by the wait deadline — the proposal expires
+loudly and the workflow can be re-run — not by a colleague consenting on
+someone else's behalf.
+
+---
+
 ## 8. DATA LIFECYCLE
 
 - **Runs reference, never copy** (W9). `input_ref` holds ids; when a source
@@ -806,7 +853,9 @@ who approved, the row that changed — and the admin can see all of that
    trigger's shape.
 2. **W13** — auto-apply in v1? Recommendation: build the three switches
    (org ceiling `act` + version `act` + per-kind standing row), ship all
-   **off**.
+   **off** — and in v1 the platform itself offers only REVERSIBLE kinds
+   for auto-apply (tags, titles: things with an undo). Assigning work to a
+   person always keeps a live human, whatever the org enables.
 3. **W14** — decisions live on the run detail page; dock cards are pointers,
    never controls. Amends M4's "no pending-proposals inbox" — the reason is
    preserved (the run page IS the conversation), the letter is amended.
@@ -817,4 +866,7 @@ enqueue), W16 (owner-only outputs), W17 (auto-apply as a standing *human*
 decision), W18 (immutability by missing grant), W19 (agent snapshot at
 publish), W20 (auto-fencing), W21 (closed egress), W22 (deterministic agent
 ladder in workflows), W23 (API keys refused; new capabilities), W24 (subject
-mute), W25 (closed binding grammar), W26 (trigger dedup), W28 (no cascades).
+mute), W25 (closed binding grammar), W26 (trigger dedup), W28 (no
+cascades), and the admin-operability set W29–W33 (§7.4: test runs on own
+data, owner-shared runs, metadata fleet health, pause/rollback,
+author-alert cards).
