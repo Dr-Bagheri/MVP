@@ -43,7 +43,7 @@ import { changedFields, record } from "./admin-actions.ts";
 import { ConflictError, NotFoundError, ValidationError } from "./errors.ts";
 import { iso } from "./vocabulary.ts";
 import { type Db, type SqlTx } from "../db/identity.ts";
-import { hasOrgGlossary } from "../db/capabilities.ts";
+import { hasOrgGlossary, hasOrgProfile } from "../db/capabilities.ts";
 import type { Identity } from "../agent/types.ts";
 
 export interface OrgRecord {
@@ -62,6 +62,18 @@ export interface OrgRecord {
   created_at: string;
   /** 0088 STT glossary. ABSENT until the migration runs on the deployment. */
   glossary?: string[];
+  /**
+   * db/0102 — the organisation's public face. ABSENT as a group until the
+   * migration runs; null within the group means "not published", which is
+   * a real answer and not an empty string. The check constraints refuse a
+   * blank, so the two states cannot both exist for one field.
+   */
+  public_email?: string | null;
+  description?: string | null;
+  website_url?: string | null;
+  location?: string | null;
+  logo_url?: string | null;
+  social_links?: string[];
 }
 
 const ORG_COLUMNS = `id, name, status, locale, allowed_models, created_at`;
@@ -75,7 +87,20 @@ const toOrg = (row: Record<string, unknown>): OrgRecord => ({
   created_at: iso(row.created_at),
   // absent stays absent on an un-migrated deployment
   ...(row.glossary !== undefined ? { glossary: (row.glossary as string[] | null) ?? [] } : {}),
+  ...(row.logo_url !== undefined
+    ? {
+        public_email: (row.public_email as string | null) ?? null,
+        description: (row.description as string | null) ?? null,
+        website_url: (row.website_url as string | null) ?? null,
+        location: (row.location as string | null) ?? null,
+        logo_url: (row.logo_url as string | null) ?? null,
+        social_links: (row.social_links as string[] | null) ?? [],
+      }
+    : {}),
 });
+
+/** db/0102's columns, named once so the read and the write cannot drift */
+const PROFILE_COLUMNS = ", public_email, description, website_url, location, logo_url, social_links";
 
 const MAX_NAME = 120;
 
@@ -84,9 +109,11 @@ export function createOrgRepo(db: Db) {
     /** The caller's own org. Any active member — the shell shows its name. */
     async get(identity: Identity): Promise<OrgRecord> {
       const withGlossary = await hasOrgGlossary(db);
+      const withProfile = await hasOrgProfile(db);
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<Record<string, unknown>>(
-          `select ${ORG_COLUMNS}${withGlossary ? ", glossary" : ""} from echo.org where id = $1`,
+          `select ${ORG_COLUMNS}${withGlossary ? ", glossary" : ""}${
+            withProfile ? PROFILE_COLUMNS : ""} from echo.org where id = $1`,
           [identity.orgId],
         ),
       );
@@ -111,6 +138,13 @@ export function createOrgRepo(db: Db) {
         allowedModels?: string[] | undefined;
         /** 0088: the STT recognition glossary — whole-set replacement. */
         glossary?: string[] | undefined;
+        /* db/0102 — the public face. null CLEARS, absent leaves alone. */
+        publicEmail?: string | null | undefined;
+        description?: string | null | undefined;
+        websiteUrl?: string | null | undefined;
+        location?: string | null | undefined;
+        logoUrl?: string | null | undefined;
+        socialLinks?: string[] | undefined;
       },
     ): Promise<OrgRecord> {
       const name = patch.name?.trim();
@@ -147,24 +181,65 @@ export function createOrgRepo(db: Db) {
             { code: "term_too_long", params: { max: 60 } });
         }
       }
+      /*
+       * db/0102's public face. Each field is SUPPLIED-FLAG, not coalesce:
+       * `null` clears — "we publish no email" is an answer — and absent
+       * leaves alone. Coalesce here would make clearing impossible, which
+       * is the save-button-does-nothing trap for exactly one interaction.
+       */
+      const withProfile = await hasOrgProfile(db);
+      const PROFILE_FIELDS = [
+        ["public_email", patch.publicEmail],
+        ["description", patch.description],
+        ["website_url", patch.websiteUrl],
+        ["location", patch.location],
+        ["logo_url", patch.logoUrl],
+      ] as const;
+      const profileSupplied = PROFILE_FIELDS.filter(([, v]) => v !== undefined);
+      const withSocials = patch.socialLinks !== undefined;
+      if ((profileSupplied.length > 0 || withSocials) && !withProfile) {
+        throw new ConflictError("not_migrated");
+      }
       if (name === undefined && patch.locale === undefined
-        && patch.allowedModels === undefined && patch.glossary === undefined) {
+        && patch.allowedModels === undefined && patch.glossary === undefined
+        && profileSupplied.length === 0 && !withSocials) {
         throw new ValidationError("nothing to update");
       }
 
       const withGlossary = patch.glossary !== undefined;
       const rows = await db.withIdentity(identity, async (tx: SqlTx) => {
+        /* columns and values built TOGETHER — the placeholder-drift guard */
+        const params: unknown[] = [
+          identity.orgId, name ?? null, patch.locale ?? null, patch.allowedModels ?? null,
+        ];
+        const sets = [
+          "name           = coalesce($2::text, name)",
+          "locale         = coalesce($3::text, locale)",
+          "allowed_models = coalesce($4::text[], allowed_models)",
+        ];
+        if (withGlossary) {
+          params.push(glossary);
+          sets.push(`glossary = $${params.length}::text[]`);
+        }
+        for (const [column, value] of profileSupplied) {
+          // a blank string IS a clear: the column's check refuses blanks, so
+          // one spelling of "not published" reaches the database
+          const trimmed = typeof value === "string" ? value.trim() : null;
+          params.push(trimmed === "" ? null : trimmed);
+          sets.push(`${column} = $${params.length}::text`);
+        }
+        if (withSocials) {
+          const links = (patch.socialLinks ?? [])
+            .map((l: string) => l.trim()).filter((l: string) => l !== "").slice(0, 6);
+          params.push(links);
+          sets.push(`social_links = $${params.length}::text[]`);
+        }
         const updated = await tx.unsafe<Record<string, unknown>>(
-          `update echo.org
-              set name           = coalesce($2::text, name),
-                  locale         = coalesce($3::text, locale),
-                  allowed_models = coalesce($4::text[], allowed_models)
-                  ${withGlossary ? ", glossary = $5::text[]" : ""}
+          `update echo.org set ${sets.join(", ")}
             where id = $1
-            returning ${ORG_COLUMNS}${withGlossary ? ", glossary" : ""}`,
-          withGlossary
-            ? [identity.orgId, name ?? null, patch.locale ?? null, patch.allowedModels ?? null, glossary]
-            : [identity.orgId, name ?? null, patch.locale ?? null, patch.allowedModels ?? null],
+            returning ${ORG_COLUMNS}${withGlossary ? ", glossary" : ""}${
+              withProfile ? PROFILE_COLUMNS : ""}`,
+          params,
         );
         /**
          * Audited in the SAME transaction, and only after the update actually

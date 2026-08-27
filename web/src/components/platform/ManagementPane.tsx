@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import { TwoPane, type PaneGroup } from "./TwoPane";
-import { IconMailPlus, IconUser } from "@/components/icons";
+import { IconGauge, IconGavel, IconMailPlus, IconUser } from "@/components/icons";
 
 /**
  * Management's two-pane surface (user directive, review round 2: "Management
@@ -41,7 +41,8 @@ import { IconMailPlus, IconUser } from "@/components/icons";
  * a reachability check, all to rename a URL nobody complained about.
  */
 const GROUPS: readonly { key: string; slugs: readonly string[] }[] = [
-  { key: "people", slugs: ["users", "invitations"] },
+  { key: "org", slugs: ["general"] },
+  { key: "people", slugs: ["users", "invitations", "privileges"] },
 ];
 
 /**
@@ -63,7 +64,11 @@ export function ManagementPane({
 
   /* menu icons (2026-08-24, sana reference) */
   const ICONS: Record<string, ReactNode> = {
+    general: <IconGauge />,
     users: <IconUser />,
+    /* privileges: a shield-shaped door. It is admin-only, and the icon
+       says "protection", not "settings" — the difference is the point */
+    privileges: <IconGavel />,
     /* its own icon (user directive): an envelope-shaped door, not a
        second person glyph — inviting is not the same act as listing */
     invitations: <IconMailPlus />,

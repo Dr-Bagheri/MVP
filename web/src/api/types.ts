@@ -997,3 +997,31 @@ export type { ServerHealth, QueueHealth } from "@echo/core/wire";
  * admin could otherwise brick their own organization irreversibly.
  */
 export type { OrgRecord } from "@echo/core/wire";
+
+/**
+ * MEMBER PRIVILEGES (db/0101) — the org's capability decisions, plus the
+ * vocabulary they are decisions ABOUT, served together so the two cannot
+ * disagree.
+ *
+ * A capability NARROWS what a role may do. It never widens: RLS decides
+ * which rows exist for a caller, and no switch here can change that.
+ */
+export interface CapabilityDef {
+  key: string;
+  /** whose privilege it is — and, by db/0101, who may change it */
+  role: "member" | "admin";
+}
+
+export interface CapabilityDecision {
+  role: "member" | "admin";
+  capability: string;
+  allowed: boolean;
+}
+
+export interface CapabilityState {
+  capabilities: CapabilityDef[];
+  /** only the WRITTEN decisions; an absent one means allowed */
+  decisions: CapabilityDecision[];
+  /** the owner alone may bind admins — the screen greys the rest */
+  may_set_admin: boolean;
+}

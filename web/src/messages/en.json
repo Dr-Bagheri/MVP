@@ -1139,7 +1139,8 @@
     "group": {
       "people": "People",
       "ai": "Assistant",
-      "service": "Service"
+      "service": "Service",
+      "org": "Organization"
     },
     "section": {
       "users": "Users",
@@ -1147,12 +1148,16 @@
       "skills": "Skills",
       "connectors": "Connectors",
       "models": "Allowed models",
-      "server": "Service health"
+      "server": "Service health",
+      "general": "General",
+      "privileges": "Member privileges"
     },
     "desc": {
       "server": "Processing queues, work that keeps failing, gateway keys and storage use.",
       "invitations": "Invite people to your organization and manage the invitations you have sent.",
-      "users": "Add, approve, assign roles and disable members of your organization."
+      "users": "Add, approve, assign roles and disable members of your organization.",
+      "general": "Your organization's name and public face.",
+      "privileges": "Choose what members and admins may do. Every switch narrows an ability — it never grants access the database does not already allow."
     },
     "notWired": "Not wired yet",
     "server": {
@@ -1289,7 +1294,37 @@
     "inviteState_expired": "Expired",
     "memberDeleted": "Member “{name}” was deleted.",
     "memberDeleteFailed": "Deleting the member did not go through.",
-    "deleteReasonHint": "Reason (recorded in the log)"
+    "deleteReasonHint": "Reason (recorded in the log)",
+    "privilegeScope": "These switches narrow what a role may do in the product. They cannot widen access: what each person can see is decided by the database, and no switch here changes that.",
+    "privilegeOwnerOnly": "Only the owner can change these",
+    "privilegeOn": "Allowed",
+    "privilegeOff": "Not allowed",
+    "privilegeFailed": "That change was not saved.",
+    "orgLogo": "Logo",
+    "orgLogoHint": "A link to an image. Uploading files is not available yet — paste an address.",
+    "orgEmail": "Public email",
+    "orgEmailHint": "Shown on your organization's page.",
+    "orgDescription": "Description",
+    "orgWebsite": "Website",
+    "orgLocation": "Location",
+    "privilegeGroup_member": "Members",
+    "privilegeGroup_admin": "Admins",
+    "privilege_records_delete": "Delete their own records",
+    "privilegeHint_records_delete": "Deleted records stay restorable by an admin until the purge window ends.",
+    "privilege_records_share": "Change who a record is shared with",
+    "privilegeHint_records_share": "Switching a record between private and the whole organization.",
+    "privilege_records_upload": "Start recordings and upload files",
+    "privilegeHint_records_upload": "Turning this off leaves existing records readable.",
+    "privilege_assistant_ask": "Use the AI assistant",
+    "privilegeHint_assistant_ask": "Asking questions about their own records.",
+    "privilege_directory_edit": "Add people to the directory",
+    "privilegeHint_directory_edit": "Admins can always edit the directory.",
+    "privilege_members_manage": "Change roles and disable members",
+    "privilegeHint_members_manage": "The owner can always do this.",
+    "privilege_invitations_send": "Invite new people",
+    "privilegeHint_invitations_send": "The owner can always invite.",
+    "privilege_org_settings": "Edit organization settings",
+    "privilegeHint_org_settings": "Name, public face, models and glossary."
   },
   "settings": {
     "title": "Settings",
@@ -1348,7 +1383,14 @@
     "assistantDigestHint": "Leaves a weekly summary card of the week's calls in the assistant.",
     "assistantSaved": "Saved.",
     "assistantSaveFailed": "Not saved.",
-    "assistantNotReady": "This setting is not available on this deployment yet."
+    "assistantNotReady": "This setting is not available on this deployment yet.",
+    "orgLogo": "Logo",
+    "orgLogoHint": "A link to an image. Uploading files is not available yet — paste an address.",
+    "orgEmail": "Public email",
+    "orgEmailHint": "Shown on your organization's page.",
+    "orgDescription": "Description",
+    "orgWebsite": "Website",
+    "orgLocation": "Location"
   },
   "audit": {
     "codesOnly": "This page says what happened, not what was said. Question text, transcripts and conversation content never enter the audit trail.",

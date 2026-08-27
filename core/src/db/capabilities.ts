@@ -130,6 +130,11 @@ export async function hasOrgGlossary(db: Db): Promise<boolean> {
   return hasColumn(db, "org", "glossary");
 }
 
+/** db/0102: the organisation's public face — the columns land together. */
+export async function hasOrgProfile(db: Db): Promise<boolean> {
+  return hasColumn(db, "org", "logo_url");
+}
+
 /** db/0096: person.team + person.voiceprint_samples (they land together). */
 export async function hasPersonTeams(db: Db): Promise<boolean> {
   return hasColumn(db, "person", "team");

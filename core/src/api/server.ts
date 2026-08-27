@@ -44,13 +44,14 @@ import { createAssistantAgent, listAssistantAgents, resolveAssistantAgent } from
 import { createConnectorsRepo, type ConnectorOAuthOptions, type ConnectorProvider } from "./connectors.ts";
 import { createTts } from "./tts.ts";
 import { createLiveStt } from "./live-stt.ts";
+import { createCapabilitiesRepo, CAPABILITIES, type CapabilitiesRepo } from "./capabilities.ts";
 import { createMlClient } from "../worker/ml-client.ts";
 import { decideMatch } from "../worker/voice-match.ts";
 import { createStorage as createPurgeStorage } from "../purge/main.ts";
 import { createWorkflow, listWorkflows, resolveWorkflow } from "./workflows.ts";
 import type { DomainTool } from "../agent/tools.ts";
 import { agentToolsDb, type Db, type SqlTx } from "../db/identity.ts";
-import { isAdmin, type Identity, type Skill } from "../agent/types.ts";
+import { isAdmin, isOwner, type Identity, type Skill } from "../agent/types.ts";
 
 export interface ServerOptions<TDeps> {
   db: Db;
@@ -93,6 +94,9 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
   const members: MembersRepo = createMembersRepo(options.db);
   const keys: ApiKeysRepo = createApiKeysRepo(options.db);
   const audit: AuditRepo = createAuditRepo(options.db);
+  /* db/0101 — member privileges. A NARROWING layer: it refuses actions the
+     database would have allowed, and can never widen anything. */
+  const capabilities: CapabilitiesRepo = createCapabilitiesRepo(options.db);
   const org: OrgRepo = createOrgRepo(options.db);
   const sessions: SessionsRepo = createSessionsRepo(options.db);
   const tts = createTts();
@@ -308,6 +312,7 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
 
   app.post("/v1/calls", async (request, reply) => {
     const identity = await auth.requireActive(request);
+    await capabilities.require(identity, "records.upload");
     const body = (request.body ?? {}) as {
       title?: unknown; scope?: unknown; source?: unknown; language?: unknown;
       summary_template?: unknown; summary_instruction?: unknown;
@@ -587,6 +592,7 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
 
   app.patch("/v1/calls/:id", async (request, reply) => {
     const identity = await auth.requireActive(request);
+    await capabilities.require(identity, "records.share");
     const { id } = request.params as { id: string };
     const body = (request.body ?? {}) as { title?: unknown; scope?: unknown; tags?: unknown };
     if (body.title !== undefined && typeof body.title !== "string") {
@@ -633,6 +639,7 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
 
   app.delete("/v1/calls/:id", async (request, reply) => {
     const identity = await auth.requireActive(request);
+    await capabilities.require(identity, "records.delete");
     const { id } = request.params as { id: string };
     // 0085: every product deletion carries its reason into the ledger
     const body = (request.body ?? {}) as { reason?: unknown };
@@ -1396,6 +1403,7 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
 
   app.post("/v1/directory", async (request, reply) => {
     const identity = await auth.requireActive(request);
+    await capabilities.require(identity, "directory.edit");
     const body = (request.body ?? {}) as { display_name?: unknown; title?: unknown };
     return reply.code(201).send(await directory.create(identity, {
       displayName: typeof body.display_name === "string" ? body.display_name : "",
@@ -1933,8 +1941,11 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
    */
   app.patch("/v1/admin/org", async (request, reply) => {
     const identity = await auth.requireAdmin(request);
+    await capabilities.require(identity, "org.settings");
     const body = (request.body ?? {}) as {
       name?: unknown; locale?: unknown; allowed_models?: unknown; glossary?: unknown;
+      public_email?: unknown; description?: unknown; website_url?: unknown;
+      location?: unknown; logo_url?: unknown; social_links?: unknown;
     };
     if (body.name !== undefined && typeof body.name !== "string") {
       throw new ValidationError("name must be a string");
@@ -1948,11 +1959,24 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     if (body.glossary !== undefined && !Array.isArray(body.glossary)) {
       throw new ValidationError("glossary must be an array");
     }
+    /* db/0102's public face: null CLEARS, absent leaves alone — the same
+       supplied-flag contract the rest of this api uses, so "we publish no
+       email" is expressible and a missing key is not a silent clear */
+    const text = (v: unknown): string | null | undefined =>
+      v === null ? null : typeof v === "string" ? v : undefined;
     return reply.send(await org.update(identity, {
       name: body.name as string | undefined,
       locale: body.locale as string | undefined,
       allowedModels: body.allowed_models as string[] | undefined,
       glossary: body.glossary as string[] | undefined,
+      publicEmail: text(body.public_email),
+      description: text(body.description),
+      websiteUrl: text(body.website_url),
+      location: text(body.location),
+      logoUrl: text(body.logo_url),
+      socialLinks: Array.isArray(body.social_links)
+        ? (body.social_links as string[])
+        : undefined,
     }));
   });
 
@@ -2015,6 +2039,54 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
 
   // ---- invitations and true delete (M24, D25) -----------------------------
 
+  /**
+   * MEMBER PRIVILEGES (db/0101) — read and write the org's capability
+   * decisions.
+   *
+   * READ is admin-walled because the SCREEN is (user directive: "the
+   * member privileges section can only be accessed by the admin"). The
+   * table itself is readable by any active member at the database, on
+   * purpose — a person is entitled to know what binds them — but the api
+   * offers no member-facing route for it, so nothing renders it to them.
+   *
+   * WRITE carries the hierarchy: an admin may bind MEMBERS, only the owner
+   * may bind ADMINS, and nobody may bind the owner. All three are enforced
+   * by 0101's policy first; the repo restates the admin/owner split so a
+   * refusal arrives as a sentence instead of a 42501.
+   */
+  app.get("/v1/admin/capabilities", async (request, reply) => {
+    const identity = await auth.requireAdmin(request);
+    return reply.send({
+      /* the VOCABULARY travels with the decisions: a client that guessed
+         the list would drift from the routes that enforce it */
+      capabilities: CAPABILITIES,
+      decisions: await capabilities.list(identity),
+      /* what THIS caller may change — the screen greys the rest rather
+         than offering a switch that will be refused */
+      may_set_admin: isOwner(identity),
+    });
+  });
+
+  app.patch("/v1/admin/capabilities", async (request, reply) => {
+    const identity = await auth.requireAdmin(request);
+    const body = (request.body ?? {}) as {
+      role?: unknown; capability?: unknown; allowed?: unknown;
+    };
+    if (typeof body.role !== "string" || typeof body.capability !== "string"
+      || typeof body.allowed !== "boolean") {
+      throw new ValidationError("role, capability and allowed are required");
+    }
+    return reply.send({
+      capabilities: CAPABILITIES,
+      decisions: await capabilities.set(identity, {
+        role: body.role,
+        capability: body.capability,
+        allowed: body.allowed,
+      }),
+      may_set_admin: isOwner(identity),
+    });
+  });
+
   app.get("/v1/admin/invitations", async (request, reply) => {
     const identity = await auth.requireAdmin(request);
     return reply.send({ invitations: await invitations.list(identity) });
@@ -2028,6 +2100,7 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
    */
   app.post("/v1/admin/invitations", async (request, reply) => {
     const identity = await auth.requireAdmin(request);
+    await capabilities.require(identity, "invitations.send");
     const body = (request.body ?? {}) as { email?: unknown; role?: unknown; ttl_days?: unknown };
     if (typeof body.email !== "string") throw new ValidationError("email is required");
     if (body.role !== undefined && typeof body.role !== "string") {
@@ -2115,6 +2188,7 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
 
   app.patch("/v1/admin/members/:id", async (request, reply) => {
     const identity = await auth.requireAdmin(request);
+    await capabilities.require(identity, "members.manage");
     const { id } = request.params as { id: string };
     const body = (request.body ?? {}) as {
       role?: unknown; status?: unknown; display_name?: unknown; username?: unknown;
@@ -2453,6 +2527,7 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
 
   app.post("/v1/assistant/ask", async (request, reply) => {
     const identity = await auth.requireActive(request);
+    await capabilities.require(identity, "assistant.ask");
     const body = (request.body ?? {}) as {
       question?: unknown; model?: unknown; call_id?: unknown; skill?: unknown;
       session_id?: unknown; call_ids?: unknown; web?: unknown;

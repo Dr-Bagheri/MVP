@@ -8,6 +8,7 @@
 // swapped to the wire or deleted by the 2026-08-20 tenancy audit — see the
 // notes at their former sites.)
 import type {
+  CapabilityState,
   AgentCardItem,
   AgentEvent,
   AgentMessage,
@@ -1410,6 +1411,28 @@ export const api = {
    * history log was not recording, and the UI renders "—" rather than a
    * fabricated zero.
    */
+  /**
+   * MEMBER PRIVILEGES (db/0101). The vocabulary travels WITH the decisions
+   * — a client holding its own copy of the capability list would drift
+   * from the routes that enforce it, and the drift would show as a switch
+   * for something nothing checks.
+   */
+  async capabilities(): Promise<CapabilityState> {
+    return bff<CapabilityState>("/api/admin/capabilities");
+  },
+
+  async setCapability(
+    role: string,
+    capability: string,
+    allowed: boolean,
+  ): Promise<CapabilityState> {
+    return bff<CapabilityState>("/api/admin/capabilities", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ role, capability, allowed }),
+    });
+  },
+
   /* memberStats LEFT the client (user directive, 2026-08-26: the three
      counter tiles at the top of Management · Users were removed). The
      SERVER route survives — a count of an org's members is a real

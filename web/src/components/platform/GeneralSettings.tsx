@@ -2,7 +2,6 @@
 
 import { useLocale, useTranslations } from "next-intl";
 import { usePathname, useRouter } from "@/i18n/routing";
-import { OrgFields } from "@/components/platform/OrgFields";
 import { FormPanel, FormRow, Section } from "@/components/scaffold";
 import { storeTheme, type Theme } from "@/lib/theme";
 import { useTheme } from "@/lib/useTheme";
@@ -17,7 +16,10 @@ import { useTheme } from "@/lib/useTheme";
  *   wire-backed on `PATCH /v1/me` and follow the person to their next device;
  *   the theme is a `data-theme` attribute plus one local store, deliberately,
  *   because it is a property of the screen you are looking at.
- * - **Organisation fields are EDITABLE** — `OrgFields` writes through
+ * - **Organisation fields LEFT this screen** (user directive, 2026-08-26):
+ *   who the organisation IS belongs to Management · General. Settings is
+ *   where a person configures the product for themselves; one home each.
+ *   The old note said `OrgFields` writes through
  *   `PATCH /v1/admin/org`. This line said "read-only for now, and the notice
  *   says so" after the notice had been deleted and the fields made live, i.e.
  *   the file's header contradicted its own body seventy lines down. Corrected
@@ -57,7 +59,8 @@ export function GeneralSettings() {
   const theme = useTheme();
 
   /*
-   * No `api.org()` here any more: `OrgFields` fetches the row it edits. Keeping
+   * No `api.org()` here: the org row moved to Management · General with the
+   * form that edits it. (The older note read: `OrgFields` fetches its own row; keeping
    * a copy in this component would be two reads of one row on one screen, which
    * disagree for as long as either is in flight — and this panel had nothing
    * left to show from it.
@@ -92,28 +95,6 @@ export function GeneralSettings() {
             </select>
           </FormRow>
         </FormPanel>
-      </Section>
-
-      {/*
-        The org block is FE3's `OrgFields`, self-contained and dropped in whole
-        rather than reimplemented here. Its Section title lives HERE so the
-        member read-only branch and the admin form sit under one heading.
-
-        It replaced an amber "not wired" notice that stood on a **wrong reading
-        of a truthful 404** (see the header): the read lives at `GET /v1/org`
-        and only the write is under `/admin`, so the feature was reachable the
-        whole time. The notice and its two copy keys are gone rather than
-        softened — a caveat nobody deletes is how a fixed thing keeps
-        apologising for itself.
-
-        "Default call scope" is gone with it and was never real: core/'s
-        `OrgRecord` has no such field. It existed only in web's hand-written
-        type, so this panel rendered a confident value for a setting the server
-        does not have. A local type is a claim about someone else's data, and
-        nothing checks it until someone reads the producer.
-      */}
-      <Section title={t("orgTitle")} divided>
-        <OrgFields />
       </Section>
     </>
   );

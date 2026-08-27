@@ -95,6 +95,14 @@ export function OrgFields() {
   const [org, setOrg] = useState<Org | null>(null);
   const [name, setName] = useState("");
   const [locale, setLocale] = useState("");
+  /* db/0102 — the organisation's public face. Held as strings because a
+     form's empty box is a string; the patch turns "" into an explicit
+     null, which is what CLEARS the column (absent would leave it). */
+  const [publicEmail, setPublicEmail] = useState("");
+  const [description, setDescription] = useState("");
+  const [websiteUrl, setWebsiteUrl] = useState("");
+  const [location, setLocation] = useState("");
+  const [logoUrl, setLogoUrl] = useState("");
   /** 0088 glossary, edited as one term per line. Rendered ONLY when the
       wire carries the column — a textarea for a column that does not
       exist would read as wired and save nothing. */
@@ -113,6 +121,11 @@ export function OrgFields() {
       setOrg(row);
       setName(row.name);
       setLocale(row.locale);
+      setPublicEmail(row.public_email ?? "");
+      setDescription(row.description ?? "");
+      setWebsiteUrl(row.website_url ?? "");
+      setLocation(row.location ?? "");
+      setLogoUrl(row.logo_url ?? "");
       setGlossaryDraft((row.glossary ?? []).join("\n"));
     });
   }, []);
@@ -126,12 +139,28 @@ export function OrgFields() {
    * Compare in the server's terms, or the comparison is about a different
    * value than the one being stored.
    */
-  const patch = (): { name?: string; locale?: string; glossary?: string[] } => {
+  const patch = (): Record<string, unknown> => {
     if (!org) return {};
-    const next: { name?: string; locale?: string; glossary?: string[] } = {};
+    const next: Record<string, unknown> = {};
     const trimmed = name.trim();
     if (trimmed !== org.name) next.name = trimmed;
     if (locale !== org.locale) next.locale = locale;
+    /* each field sends only when it CHANGED, and sends null when emptied:
+       "" and null are one state on the wire (not published), and the
+       column's check refuses a blank so they cannot both exist */
+    const face = [
+      ["public_email", publicEmail, org.public_email],
+      ["description", description, org.description],
+      ["website_url", websiteUrl, org.website_url],
+      ["location", location, org.location],
+      ["logo_url", logoUrl, org.logo_url],
+    ] as const;
+    for (const [key, value, saved] of face) {
+      const trimmed = value.trim();
+      if (trimmed !== (saved ?? "")) {
+        (next as Record<string, unknown>)[key] = trimmed === "" ? null : trimmed;
+      }
+    }
     if (glossaryReady) {
       const terms = parseGlossary(glossaryDraft);
       const saved = org.glossary ?? [];
@@ -151,10 +180,15 @@ export function OrgFields() {
   const save = async () => {
     setBusy(true);
     try {
-      const updated = await api.updateOrg(changes);
+      const updated = await api.updateOrg(changes as Parameters<typeof api.updateOrg>[0]);
       setOrg(updated);
       setName(updated.name);
       setLocale(updated.locale);
+      setPublicEmail(updated.public_email ?? "");
+      setDescription(updated.description ?? "");
+      setWebsiteUrl(updated.website_url ?? "");
+      setLocation(updated.location ?? "");
+      setLogoUrl(updated.logo_url ?? "");
       setGlossaryDraft((updated.glossary ?? []).join("\n"));
       notify(t("orgSaved"));
     } catch {
@@ -201,6 +235,81 @@ export function OrgFields() {
           value={name}
           disabled={busy}
           onChange={(event) => setName(event.target.value)}
+        />
+      </FormRow>
+
+      {/* db/0102's public face. The LOGO is a link, not an upload: this
+          deployment has no image-upload path at all, and a picker that
+          could not put a file anywhere would be a promise on screen. The
+          same column takes an uploaded address the day one exists. */}
+      <FormRow label={t("orgLogo")} description={t("orgLogoHint")} htmlFor="org-logo">
+        <span className="flex items-center gap-3">
+          {logoUrl.trim() ? (
+            /* eslint-disable-next-line @next/next/no-img-element -- an
+               arbitrary remote logo cannot go through the image optimiser */
+            <img
+              src={logoUrl}
+              alt=""
+              className="h-12 w-12 shrink-0 rounded-lg border border-border object-cover"
+            />
+          ) : (
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-lg border border-border text-xs text-fg-subtle">
+              —
+            </span>
+          )}
+          <input
+            id="org-logo"
+            className="input"
+            dir="ltr"
+            placeholder="https://…"
+            value={logoUrl}
+            disabled={busy}
+            onChange={(event) => setLogoUrl(event.target.value)}
+          />
+        </span>
+      </FormRow>
+
+      <FormRow label={t("orgEmail")} description={t("orgEmailHint")} htmlFor="org-email">
+        <input
+          id="org-email"
+          className="input"
+          dir="ltr"
+          type="email"
+          value={publicEmail}
+          disabled={busy}
+          onChange={(event) => setPublicEmail(event.target.value)}
+        />
+      </FormRow>
+
+      <FormRow label={t("orgDescription")} htmlFor="org-description">
+        <input
+          id="org-description"
+          className="input"
+          value={description}
+          disabled={busy}
+          onChange={(event) => setDescription(event.target.value)}
+        />
+      </FormRow>
+
+      <FormRow label={t("orgWebsite")} htmlFor="org-website">
+        <input
+          id="org-website"
+          className="input"
+          dir="ltr"
+          placeholder="https://…"
+          value={websiteUrl}
+          disabled={busy}
+          onChange={(event) => setWebsiteUrl(event.target.value)}
+        />
+      </FormRow>
+
+      <FormRow label={t("orgLocation")} htmlFor="org-location">
+        <input
+          id="org-location"
+          className="input"
+          value={location}
+          disabled={busy}
+          onChange={(event) => setLocation(event.target.value)}
         />
       </FormRow>
 
