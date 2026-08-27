@@ -1521,6 +1521,52 @@ finish (M21: a rough copy must not cost the real one). This does not
 amend M20 — the timing ladder governs the REAL transcript's rungs; the
 provisional is a different artifact with its own one-way lifecycle.
 
+## M41 — The workflow engine & agents [user-approved 2026-08-27 ("approved");
+## full design + rationale: docs/WORKFLOWS-AND-AGENTS.md v2, W1–W33 ratified]
+
+A workflow is a durable, resumable, versioned program executed over org data
+under a named person's authority; an agent is a bounded persona playing the
+steps the graph assigns it. Supersedes nothing — M30's template/persona
+tables become the v1 substrate (templates migrate as one-step workflows,
+W15). The binding constraints, each a W-decision in the design doc:
+
+- **The run's owner is the SUBJECT of the work, never the workflow's
+  author** (W1) — job-identity one level up. Every step executes as the
+  owner via withIdentity; owner-unresolvable ⇒ no product write.
+- **Inside a workflow a model can only produce data**: `ask`/`extract`
+  steps hold READ tools only; `propose` is mechanical (typed extract output
+  → proposal payload, no model); every effect is authored in the graph
+  before the run exists. `decide` is code, never a model (W6).
+- **Published versions are immutable by a MISSING UPDATE GRANT** (W18) —
+  publish = insert, edit = new version; the version snapshots referenced
+  agent instructions (W19). Inside workflows the agent ladder is org→system
+  only (W22): determinism over personalisation.
+- **Step outputs are owner-only in their own table** (W16); run metadata is
+  owner+admin. Nobody — owner-role included — reads another person's
+  outputs; the subject may share a single run (W30).
+- **Ten step kinds, four trigger kinds, closed** in @echo/core/vocabulary;
+  binding grammar closed and tiny (W25); content-bearing bindings are
+  auto-fenced untrusted by the executor, no author opt-out (W20); no graph
+  can name a role/grant/org/user (W5 — the grammar has no way to say it).
+- **The propose→approve→apply machinery is M4's, unchanged** (W7).
+  Auto-apply = three independent switches shipped OFF (org ceiling `act` +
+  version `act` + per-kind standing row naming the human who enabled it,
+  W13/W17); v1 offers only reversible kinds. An admin may cancel a
+  member's run and may never approve its writes.
+- **One pgmq message per step** (`echo_workflow_step`, W11); redelivery
+  adopts, never repeats (W26); wait = no message in flight, woken by
+  push+sweep, expiring loudly at a deadline; budget/policy exhaustion is a
+  loud forfeit with partials MARKED (W12/M21). **A workflow-produced fact
+  never triggers a workflow** (W28 — depth 1, structurally).
+- Capabilities `workflows.run` (member) / `workflows.manage` (admin) join
+  the 0101 catalogue; API-key principals are refused on every workflow and
+  agent route (W23). Admin operability is W29–W33: draft test-runs on the
+  admin's own data, owner-shared runs, metadata fleet health,
+  pause/rollback, author-alert cards — codes only.
+
+Build phases P0–P5 and the per-phase instruments are in the design doc;
+each phase lands with its checks verified red first (rule 13).
+
 ## Speed/quality pass ledger [2026-08-23, user-approved 1-8 + 10-12]
 
 Shipped same day: worker concurrency actually gating (the config knob had

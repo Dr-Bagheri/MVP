@@ -1,14 +1,12 @@
 # Workflows & Agents — the complete architecture
 
-> **Status: DESIGN v2, awaiting the user's ruling.** v1 (earlier today) laid
-> the seven layers; this revision goes to full depth on the user's directive:
-> *"go even deeper and complete the design and architecture for these two —
-> these are important parts of the platform, need to be secure, need access
-> control. Make them super strong."*
->
-> Numbered decisions **W1–W30** are proposed. Four (W1, W13, W14, W15) are
-> flagged as the user's to rule; the rest carry recommendations and fold into
-> ARCHITECTURE.md as M-decisions on approval. Nothing beyond §1 is built.
+> **Status: RATIFIED — user approval, 2026-08-27 ("approved").** W1–W33 are
+> decided; the fold into ARCHITECTURE.md is **M41**. The four formerly-open
+> rulings landed as recommended: W1 (run owner = subject), W13 (auto-apply
+> switches built, shipped OFF, reversible kinds only in v1), W14 (decisions
+> on the run detail page — amends M4's no-inbox letter while preserving its
+> reason), W15 (templates migrate as one-step workflows). Build proceeds
+> P0→P5 per §13; this document is the design of record.
 
 ---
 
