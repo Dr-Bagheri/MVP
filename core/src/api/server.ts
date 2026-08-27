@@ -1795,6 +1795,12 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
    */
   app.post("/v1/workflows", async (request, reply) => {
     const identity = await auth.requireAdmin(request);
+    await capabilities.require(identity, "workflows.manage");
+    /* W23: a gateway key can never author a workflow — an org-wide prompt
+       surface is not something a stolen integration credential may write */
+    if ((identity as { viaApiKey?: boolean }).viaApiKey === true) {
+      throw new NotActivatedError("api keys may not manage workflows");
+    }
     const body = (request.body ?? {}) as Record<string, unknown>;
     const workflow = await createWorkflow(options.db, identity, {
       name: body.name,
@@ -2692,6 +2698,14 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       throw new ValidationError("unknown agent", { code: "agent_not_found" });
     }
 
+    /* M41: running a workflow is its own privilege (Member privileges can
+       narrow it) and never a gateway key's (W23) */
+    if (typeof body.workflow === "string" && body.workflow !== "") {
+      await capabilities.require(identity, "workflows.run");
+      if ((identity as { viaApiKey?: boolean }).viaApiKey === true) {
+        throw new NotActivatedError("api keys may not run workflows");
+      }
+    }
     const selectedWorkflow = typeof body.workflow === "string" && body.workflow !== ""
       ? await resolveWorkflow(options.db, identity, body.workflow)
       : undefined;

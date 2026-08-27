@@ -234,3 +234,41 @@ export type SummaryTemplate = (typeof SUMMARY_TEMPLATES)[number];
 
 /** The regenerate door's instruction field is bounded like every reason. */
 export const SUMMARY_INSTRUCTION_MAX = 500;
+
+/**
+ * M41 — THE WORKFLOW ENGINE's closed vocabularies. Mirrored by db/0104's
+ * check constraints; the db test suite and these constants are two
+ * spellings deliberately kept in sight of each other (a drift shows as a
+ * red on whichever side moved).
+ *
+ * Ten step kinds — and the catalogue is load-bearing: the executor's
+ * dispatch test asserts every kind here is actually handled, so adding a
+ * kind without an executor arm fails the suite, not the 3 a.m. run.
+ */
+export const WORKFLOW_STEP_KINDS = [
+  "search", "fetch", "ask", "extract", "decide",
+  "foreach", "propose", "apply", "notify", "wait",
+] as const;
+export type WorkflowStepKind = (typeof WORKFLOW_STEP_KINDS)[number];
+
+export const WORKFLOW_TRIGGER_KINDS = ["manual", "event", "schedule", "signal"] as const;
+export type WorkflowTriggerKind = (typeof WORKFLOW_TRIGGER_KINDS)[number];
+
+/** seven, not four: "waiting on a human" and "still working" are different
+    nothings, and so are refused / cancelled / expired (rule 12) */
+export const WORKFLOW_RUN_STATUSES = [
+  "running", "waiting", "done", "failed", "refused", "cancelled", "expired",
+] as const;
+export type WorkflowRunStatus = (typeof WORKFLOW_RUN_STATUSES)[number];
+
+export const WORKFLOW_STEP_STATUSES = [
+  "running", "done", "failed", "skipped", "refused",
+] as const;
+export type WorkflowStepStatus = (typeof WORKFLOW_STEP_STATUSES)[number];
+
+/** codes only, never content — each names WHICH nothing (M41 s5.6) */
+export const WORKFLOW_FAILURE_CODES = [
+  "owner_not_found", "owner_inactive", "step_dead_letter", "budget_exceeded",
+  "model_refused", "schema_invalid", "source_purged", "stalled",
+] as const;
+export type WorkflowFailureCode = (typeof WORKFLOW_FAILURE_CODES)[number];

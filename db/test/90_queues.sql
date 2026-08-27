@@ -20,7 +20,10 @@ declare
     'echo_link_speakers',
     -- per-part: ONE message walks the whole ml/ ladder
     'echo_process_part',
-    'echo_summarize'
+    'echo_summarize',
+    -- M41/W11: one message advances exactly one workflow step (0104);
+    -- consumer lands in P1 — the queue is the program counter it will walk
+    'echo_workflow_step'
   ];
 begin
   if not exists (select 1 from pg_extension where extname = 'pgmq') then

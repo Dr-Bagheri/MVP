@@ -40,10 +40,12 @@ export const CAPABILITIES: readonly CapabilityDef[] = [
   { key: "records.upload", role: "member" },   // POST   /v1/calls
   { key: "assistant.ask", role: "member" },    // POST   /v1/ask
   { key: "directory.edit", role: "member" },   // POST   /v1/directory
+  { key: "workflows.run", role: "member" },    // POST   /v1/ask (workflow selected)
   /* --- what an ADMIN may do; only the OWNER may take these away --------- */
   { key: "members.manage", role: "admin" },    // PATCH  /v1/admin/members/:id
   { key: "invitations.send", role: "admin" },  // POST   /v1/invitations
   { key: "org.settings", role: "admin" },      // PATCH  /v1/admin/org
+  { key: "workflows.manage", role: "admin" },  // POST   /v1/workflows
 ];
 
 const KEYS = new Set(CAPABILITIES.map((c) => c.key));
