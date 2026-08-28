@@ -24,6 +24,7 @@ import { Card, Chip } from "@/components/ui";
 import { Link } from "@/i18n/routing";
 import { digits, formatClock, modelLabel } from "@/lib/format";
 import { resumePoint } from "./uploadRules";
+import { shouldStick } from "@/lib/threadFollow";
 import { AgendaPanel, RecorderNotes } from "./RecorderNotes";
 import { ConfirmDialog, KebabMenu, SelectMenu, type KebabItem } from "@/components/rowActions";
 import {
@@ -451,6 +452,22 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
    * take is not a second participant, and saying "2" when one person is
    * in the room is the screen lying about the room.
    */
+  /*
+   * THE TRANSCRIPT FOLLOWS THE SPEECH (user report, 2026-08-28: "the
+   * transcription should show the latest, not need to scroll down"). Same
+   * decision the assistant's thread uses, same helper: pinned at the bottom
+   * → every new row keeps the newest words in view; scrolled UP to re-read
+   * → no yank, because following and fighting are different behaviours.
+   * The pin recomputes on the person's own scroll, so returning to the
+   * bottom re-arms it.
+   */
+  const captionsRef = useRef<HTMLDivElement | null>(null);
+  const captionsPinned = useRef(true);
+  useEffect(() => {
+    const box = captionsRef.current;
+    if (box && captionsPinned.current) box.scrollTop = box.scrollHeight;
+  }, [s.captionRows, s.captions?.interim]);
+
   const voices = establishedSpeakers(s.liveSpeakers, s.captionRows);
   const personFor = (label: string): Person | undefined => {
     const id = voiceNames[label];
@@ -859,7 +876,13 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
               s.captionRows.length === 0 && s.captions.interim === "" ? (
                 <p className="text-sm text-fg-muted">{t("liveWaiting")}</p>
               ) : (
-                <div className="max-h-80 space-y-3 overflow-y-auto pe-1">
+                <div
+                  ref={captionsRef}
+                  onScroll={(scrollEvent) => {
+                    captionsPinned.current = shouldStick(scrollEvent.currentTarget);
+                  }}
+                  className="scroll-quiet max-h-80 space-y-3 overflow-y-auto pe-1"
+                >
                   {s.captionRows.map((row, i) => {
                     /* a label with too little behind it carries NO badge:
                        the words were said and stay, but we do not claim
