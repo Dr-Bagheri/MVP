@@ -133,6 +133,17 @@ const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/calendar.events.readonly",
   "https://www.googleapis.com/auth/gmail.readonly",
   "https://www.googleapis.com/auth/gmail.compose",
+  /*
+   * `gmail.send` on top of `compose` (user directive, 2026-08-28: "give the
+   * full access for gmail and google so it can send emails as well").
+   *
+   * `compose` already covers sending a draft, and this is deliberately NOT
+   * `https://mail.google.com/` — the truly full scope also grants DELETE
+   * over the person's entire mailbox, which nothing in this product does or
+   * should be able to do. Asking for a permission we have no code path for
+   * is how a connection becomes something a person is right to refuse.
+   */
+  "https://www.googleapis.com/auth/gmail.send",
 ] as const;
 const MICROSOFT_SCOPES = [
   "openid", "profile", "email", "offline_access", "User.Read",
@@ -593,7 +604,19 @@ export function createConnectorsRepo(db: Db, options: ConnectorOAuthOptions = {}
            providers, Microsoft mail): one number for "the recent ones",
            not a different one per provider. The per-message metadata
            reads below are parallel, so the count costs latency once. */
-        const list = await providerFetch("https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=20", {
+        /*
+         * INBOX ONLY, and this is not a refinement — it is a correctness
+         * bug fixed. `users/me/messages` with no label filter returns EVERY
+         * label: sent mail, spam, and DRAFTS — including the drafts this
+         * product creates. The poller was therefore reading its own reply
+         * back as new mail and drafting a reply to it, which is why one
+         * incoming email produced two conversations (user report,
+         * 2026-08-28: "it got double time, but i got one email"). Each new
+         * draft was itself new mail for the next round; only the per-sweep
+         * ceiling and the one-draft-per-message constraint kept it from
+         * running away.
+         */
+        const list = await providerFetch("https://gmail.googleapis.com/gmail/v1/users/me/messages?labelIds=INBOX&maxResults=20", {
           headers: { authorization: `Bearer ${bearer}` },
         });
         const ids = (Array.isArray(list.messages) ? list.messages : [])
@@ -612,7 +635,9 @@ export function createConnectorsRepo(db: Db, options: ConnectorOAuthOptions = {}
         });
       }
       const data = await providerFetch(
-        "https://graph.microsoft.com/v1.0/me/messages?$top=20&$select=id,subject,from,receivedDateTime,bodyPreview&$orderby=receivedDateTime%20DESC",
+        /* the same rule as Gmail's INBOX filter above: Graph's /me/messages
+           spans every folder, drafts included */
+        "https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages?$top=20&$select=id,subject,from,receivedDateTime,bodyPreview&$orderby=receivedDateTime%20DESC",
         { headers: { authorization: `Bearer ${bearer}` } },
       );
       return (Array.isArray(data.value) ? data.value : []).flatMap((item): ConnectorItem[] => {

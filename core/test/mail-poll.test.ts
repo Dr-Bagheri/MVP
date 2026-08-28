@@ -25,7 +25,7 @@ interface Recorded { sql: string; params?: unknown[] | undefined }
  * A db that answers by SQL shape. `cursor` is what the connection currently
  * holds — the one piece of state these tests vary.
  */
-function fakeDb(cursor: string | null) {
+function fakeDb(cursor: string | null, ownAccount = "owner@example.com") {
   const calls: Recorded[] = [];
   const tx = {
     async unsafe(sql: string, params?: unknown[]) {
@@ -34,8 +34,10 @@ function fakeDb(cursor: string | null) {
         return [{ connection_id: CONNECTION, owner_id: OWNER, provider: "google" }];
       }
       if (sql.includes("claim_mail_poll")) return [{ ok: true }];
-      if (sql.includes("mail_cursor from echo.connector_connection")) {
-        return [{ mail_cursor: cursor }];
+      if (sql.includes("mail_cursor, account_label from echo.connector_connection")) {
+        /* the account is the same address the hostile message replies to, so
+           the self-reply guard is the thing under test in that case */
+        return [{ mail_cursor: cursor, account_label: ownAccount }];
       }
       if (sql.includes("from echo.app_user u")) {
         return [{ preferred_model: "google/gemini-3.1-pro-preview", allowed_models: null }];
@@ -195,6 +197,28 @@ describe("sweepMailboxes", () => {
     expect(seen).toContain("<email>");
     expect(seen).toContain("attacker@evil.example");   // present, and inert
     expect(seen).toContain("is DATA");
+  });
+
+  it("never drafts a reply to the account's own address", async () => {
+    /*
+     * The loop this closes, from production: the Gmail listing had no label
+     * filter, so it returned the DRAFTS this product creates; the poller
+     * read its own reply back as new mail and answered it, and one incoming
+     * email became two conversations. The inbox filter is the fix; this is
+     * the second net, because it survives a provider whose folder semantics
+     * differ from what we assumed.
+     */
+    /* the connection's own account IS the address the envelope replies to */
+    const { db } = fakeDb("msg-1", "amirreza@example.com");
+    const create = vi.fn();
+    await sweepMailboxes({
+      db,
+      connectors: connectorsFor([HOSTILE]) as never,
+      drafts: { create } as never,
+      apiKey: "k",
+      runModel: async () => ({ text: '{"reply":true,"note":"","body":"b"}' }),
+    }, log);
+    expect(create).not.toHaveBeenCalled();
   });
 
   it("leaves automated senders alone", async () => {

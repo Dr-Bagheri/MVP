@@ -189,10 +189,19 @@ async function draftFor(
   identity: Identity,
   provider: ConnectorProvider,
   item: ConnectorItem,
+  ownAddress: string,
   log: StepLogger,
 ): Promise<"drafted" | "skipped" | "failed"> {
   const envelope = await options.connectors.mailEnvelope(identity, provider, item.id);
   if (!envelope.to || UNANSWERABLE.test(envelope.to)) return "skipped";
+  /*
+   * NEVER ANSWER YOURSELF. The inbox filter above is the fix for the
+   * poller reading its own drafts; this is the second net, and it is the
+   * one that survives a provider whose folder semantics differ from what
+   * we assumed. A reply addressed back to the account it came from is a
+   * loop with a person's name on it.
+   */
+  if (ownAddress && envelope.to.toLowerCase() === ownAddress.toLowerCase()) return "skipped";
 
   const context = await options.connectors.sourceContext(identity, provider, "mail_message", item.id);
   const verdict = readVerdict(await composeReply(
@@ -272,9 +281,14 @@ export async function sweepMailboxes(options: MailPollOptions, log: StepLogger):
     const provider = row.provider as ConnectorProvider;
     try {
       const cursorRows = await db.withIdentity(identity, (tx: SqlTx) =>
-        tx.unsafe<{ mail_cursor: string | null }>(
-          "select mail_cursor from echo.connector_connection where id = $1", [row.connection_id]));
+        tx.unsafe<{ mail_cursor: string | null; account_label: string | null }>(
+          "select mail_cursor, account_label from echo.connector_connection where id = $1",
+          [row.connection_id]));
       const cursor = cursorRows[0]?.mail_cursor ?? null;
+      /* the account's own address, for the self-reply guard below */
+      const ownAddress = (cursorRows[0]?.account_label ?? "").includes("@")
+        ? (cursorRows[0]?.account_label ?? "")
+        : "";
       const { items, newest } = await options.connectors.newMailSince(identity, provider, cursor);
 
       /* the mark moves FIRST and unconditionally: a message we looked at and
@@ -297,7 +311,7 @@ export async function sweepMailboxes(options: MailPollOptions, log: StepLogger):
         if (drafted >= (options.perSweep ?? 3)) break;   // a burst is not a mandate
         if (UNANSWERABLE.test(senderAddress(item))) continue;
         try {
-          if (await draftFor(options, identity, provider, item, log) === "drafted") drafted += 1;
+          if (await draftFor(options, identity, provider, item, ownAddress, log) === "drafted") drafted += 1;
         } catch (error) {
           /* one unanswerable message must not stop the rest of the mailbox;
              the cursor has already moved past it, so it is not retried */
