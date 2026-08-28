@@ -1,75 +1,64 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type KeyboardEvent } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { ConnectorProvider, ConnectorStatus, Me } from "@/api/types";
+import { useRouter } from "@/i18n/routing";
 import { AssistantMenu } from "./AssistantMenu";
 import { PlatformShell } from "./PlatformShell";
 import { MenuLayout, PageContainer, PageHeader, Section } from "@/components/scaffold";
 import { DataTable, StatusDot, type Column } from "@/components/DataTable";
 import { EmptyState } from "@/components/ui";
+import { ConfirmDialog } from "@/components/rowActions";
 import { Icon, type IconName } from "@/components/icons";
 import { digits, formatRelativeDate, formatTime, personName } from "@/lib/format";
-import { OFFERED_CONNECTOR_PROVIDERS } from "@echo/core/vocabulary";
+import {
+  INTEGRATIONS,
+  foldSearch,
+  useIntegrationCopy,
+  type IntegrationEntry,
+} from "./integrationsCatalogue";
 
 /**
  * The data sources this product reads — what is connected, and what could be
  * (user directive, 2026-08-28: integrations get a page of their own, under
- * Workflows, the way Sana arranges them).
+ * Workflows, the way Sana arranges them; second round the same day: "the
+ * items in table must be selectable … make the steps easier and more user
+ * friendly").
  *
- * It also becomes the ONE door to connecting an account. The strip that used
- * to sit on `/workflows` moved here whole: the question it answered ("how do I
- * connect the email and calendar, where do I do it") deserves an address a
- * person can be sent to, rather than a row above a list of templates.
+ * It also remains the ONE door to connecting an account, but the door grew a
+ * hallway: pressing Connect now opens a small dialog that says what the
+ * integration enables, that the connection is private to this person (D29),
+ * and that one Google sign-in covers all four Google sources — and only THEN
+ * hands off to the provider. The OAuth redirect is disorienting enough
+ * without arriving there unbriefed.
  *
- * **The available list is four things and there is no fifth.** Not Slack, not
- * Notion, not Drive — the product speaks to Google and Microsoft, for mail and
- * for calendars, and that is the whole surface. A tile for something we do not
- * integrate with is a claim we would then have to keep, and the person who
- * clicks it learns that the page lies before they learn anything else.
+ * **The catalogue lives in `integrationsCatalogue.ts` now**, shared with the
+ * detail page — two screens each holding their own list is how one learns
+ * about Drive while the other keeps rendering three tiles.
  *
  * **The connected table lists SOURCES, not accounts** (user report,
- * 2026-08-28: "i got the email but it did not update itself, sana.ai already
- * showed that i received them, it must show in that table"). One Google grant
- * is two things the product does — it reads a mailbox and it reads a calendar
- * — and they do not have the same state: the mailbox is polled, so it has a
- * last-looked time and a count of messages passed through, and the calendar is
- * read on demand and has neither. A single per-provider row could only report
- * the intersection, which is exactly the fact the person came here to check.
+ * 2026-08-28: "i got the email but it did not update itself … it must show
+ * in that table"). One Google grant is four things the product does — mail,
+ * calendar, Meet, Drive — and they do not share state: the mailbox is
+ * polled, so it has a last-looked time and a count; the others are read on
+ * demand and have neither. Each source row is SELECTABLE and opens that
+ * integration's own page.
  */
 
 /**
- * The catalogue: every integration the platform ACTUALLY has, once each —
- * filtered below by what the platform currently OFFERS, so "we just go with
- * the google for now" is one edit in the producer rather than four here.
- */
-const ALL_SOURCES = [
-  { key: "gmail", provider: "google", icon: "mail", kind: "mail" },
-  { key: "googleCalendar", provider: "google", icon: "calendar", kind: "calendar" },
-  { key: "outlookMail", provider: "microsoft", icon: "mail", kind: "mail" },
-  { key: "outlookCalendar", provider: "microsoft", icon: "calendar", kind: "calendar" },
-] as const satisfies readonly {
-  key: string;
-  provider: ConnectorProvider;
-  icon: IconName;
-  kind: "mail" | "calendar";
-}[];
-
-const CATALOGUE = ALL_SOURCES.filter((entry) =>
-  (OFFERED_CONNECTOR_PROVIDERS as readonly string[]).includes(entry.provider));
-
-/**
- * One line of the connected table: what the product reads, not what the person
- * signed into. A provider's grant fans out into one of these per source.
+ * One line of the connected table: what the product reads, not what the
+ * person signed into. A provider's grant fans out into one of these per
+ * source.
  */
 interface SourceRow {
-  key: string;
+  /** the detail page's address — the row click is a navigation */
+  slug: string;
   provider: ConnectorProvider;
-  kind: "mail" | "calendar";
   icon: IconName;
   name: string;
-  /** the account the grant was made on — the same label under both sources */
+  /** the account the grant was made on — the same label under every source */
   accountLabel: string | null;
   status: ConnectorStatus["status"];
   /** when the poller last looked; null on a mailbox it has never reached */
@@ -78,12 +67,29 @@ interface SourceRow {
   messagesSeen: number | null;
 }
 
-/**
- * ZWNJ joins words for a reader, not for a typist: «جی‌میل» is one word on
- * screen and «جیمیل» is what somebody types, and a search that answers "no
- * results" for text plainly on the page is worse than no search.
- */
-const fold = (value: string) => value.toLocaleLowerCase().replace(/‌/g, "");
+/** What a tile offers, decided in ONE place so the card and its button agree. */
+type TileAction =
+  | { kind: "sentence" }
+  | { kind: "connect" }
+  | { kind: "reconnect" }
+  | { kind: "enableDrafts" }
+  | { kind: "reconnectDrive" }
+  | { kind: "connected" };
+
+function tileAction(entry: IntegrationEntry, state: ConnectorStatus | undefined): TileAction {
+  if (state === undefined || !state.configured) return { kind: "sentence" };
+  if (state.status === "connected") {
+    /* connected is not the same fact as can-drive: a grant made before Drive
+       joined the sign-in reads mail perfectly and cannot list a single file,
+       so the upgrade is OFFERED rather than discovered as an error */
+    if (entry.source === "drive" && state.can_drive === false) return { kind: "reconnectDrive" };
+    /* same shape for drafting: a pre-drafting grant reads mail and fails at
+       the provider on a draft */
+    if (entry.source === "mail" && state.can_draft === false) return { kind: "enableDrafts" };
+    return { kind: "connected" };
+  }
+  return state.status === "not_connected" ? { kind: "connect" } : { kind: "reconnect" };
+}
 
 export function Integrations() {
   const t = useTranslations("integrations");
@@ -94,6 +100,8 @@ export function Integrations() {
   const tw = useTranslations("workflows");
   const tp = useTranslations("platform");
   const locale = useLocale() as "fa" | "en";
+  const router = useRouter();
+  const copy = useIntegrationCopy();
 
   const [connectors, setConnectors] = useState<ConnectorStatus[] | null>(null);
   const [me, setMe] = useState<Me | null>(null);
@@ -101,6 +109,8 @@ export function Integrations() {
   const [query, setQuery] = useState("");
   /** "" = every app; otherwise the one provider whose rows are shown */
   const [app, setApp] = useState<ConnectorProvider | "">("");
+  /** the connect briefing dialog, per tile; null = closed */
+  const [briefing, setBriefing] = useState<{ entry: IntegrationEntry; reconnect: boolean } | null>(null);
 
   useEffect(() => {
     void api.connectors().then(setConnectors).catch(() => setConnectors([]));
@@ -116,20 +126,6 @@ export function Integrations() {
     }
   }
 
-  /*
-   * Names resolved as LITERAL keys, here, rather than built from the entry's
-   * own `key` field. The catalogue parity check only sees literal `t("…")`
-   * calls by design, so a computed key is a key nothing guards — and a missing
-   * one renders its own dotted path on screen, in the locale nobody is
-   * reading. Same reason the detail page resolves its integration labels this
-   * way rather than looping.
-   */
-  const COPY: Record<string, { name: string; description: string }> = {
-    gmail: { name: t("gmail"), description: t("gmailDesc") },
-    googleCalendar: { name: t("googleCalendar"), description: t("googleCalendarDesc") },
-    outlookMail: { name: t("outlookMail"), description: t("outlookMailDesc") },
-    outlookCalendar: { name: t("outlookCalendar"), description: t("outlookCalendarDesc") },
-  };
   const providerName = (provider: ConnectorProvider) =>
     provider === "google" ? tw("google") : tw("microsoft");
 
@@ -143,24 +139,31 @@ export function Integrations() {
    * first is true. It is also what makes the status column a column — a
    * column that can only ever say one word is not reporting anything.
    *
-   * The order is the catalogue's, so a provider's two sources sit together.
+   * The one deliberate exception is Drive on a grant that never included it
+   * (`can_drive: false`): there is no Drive connection to report on — not a
+   * broken one, an unasked one — so Drive stays on its Available card with
+   * the reconnect offer instead of sitting here wearing a status it never
+   * had.
+   *
+   * The order is the catalogue's, so a provider's sources sit together.
    */
-  const allRows: SourceRow[] = CATALOGUE.flatMap((entry) => {
+  const allRows: SourceRow[] = INTEGRATIONS.flatMap((entry) => {
     const state = (connectors ?? []).find((row) => row.provider === entry.provider);
     if (!state || state.status === "not_configured" || state.status === "not_connected") {
       return [];
     }
-    const mail = entry.kind === "mail";
+    if (entry.source === "drive" && state.can_drive === false) return [];
+    const mail = entry.source === "mail";
     return [{
-      key: `${entry.provider}:${entry.kind}`,
+      slug: entry.slug,
       provider: entry.provider,
-      kind: entry.kind,
       icon: entry.icon,
-      name: COPY[entry.key]!.name,
+      name: copy[entry.key].name,
       accountLabel: state.account_label,
       status: state.status,
-      /* the calendar is read on demand, so it has no poll to report and no
-         count to give — null here is "nothing counts this", not "zero" */
+      /* only the mailbox is polled — the other sources are read on demand,
+         so they have no poll to report and no count to give; null here is
+         "nothing counts this", not "zero" */
       polledAt: mail ? state.polled_at : null,
       messagesSeen: mail ? state.messages_seen : null,
     }];
@@ -168,15 +171,15 @@ export function Integrations() {
 
   /** the apps with a row — a filter offering one option filters nothing */
   const apps = [...new Set(allRows.map((row) => row.provider))];
-  const needle = fold(query.trim());
+  const needle = foldSearch(query.trim());
   const rows = allRows.filter((row) =>
     (app === "" || row.provider === app)
     /* the account label is matched too: it is the other text on the row, and
        a search that ignores what a person can plainly read is a search that
        lies about its own result */
     && (needle === ""
-      || fold(row.name).includes(needle)
-      || fold(row.accountLabel ?? "").includes(needle)));
+      || foldSearch(row.name).includes(needle)
+      || foldSearch(row.accountLabel ?? "").includes(needle)));
 
   const columns: Column<SourceRow>[] = [
     {
@@ -238,8 +241,8 @@ export function Integrations() {
       /*
        * A real zero is a zero. `messagesSeen === 0` means the poller looked
        * and found nothing yet, and rendering that as a dash would report a
-       * working connection as unmeasured — the dash belongs to the calendar
-       * rows, where nothing is counted at all.
+       * working connection as unmeasured — the dash belongs to the rows
+       * where nothing is counted at all.
        */
       cell: (row) => (
         <span className="text-sm text-fg-muted">
@@ -323,7 +326,11 @@ export function Integrations() {
                 <DataTable
                   rows={rows}
                   columns={columns}
-                  rowKey={(row) => row.key}
+                  rowKey={(row) => row.slug}
+                  /* the row IS the way in (user directive: "the items in
+                     table must be selectable") — it opens that integration's
+                     own page, assets and settings included */
+                  onRowClick={(row) => router.push(`/integrations/${row.slug}`)}
                   empty={<EmptyState text={t("noneMatch")} />}
                 />
               </>
@@ -332,11 +339,39 @@ export function Integrations() {
 
           <Section title={t("availableTitle")} description={t("availableHint")} divided>
             <div className="grid gap-4 sm:grid-cols-2">
-              {CATALOGUE.map((entry) => {
+              {INTEGRATIONS.map((entry) => {
                 const state = connectors?.find((row) => row.provider === entry.provider);
-                const copy = COPY[entry.key]!;
+                const action = connectors === null ? null : tileAction(entry, state);
+                /* what a CLICK on the card does — decided from the same
+                   action the button renders, so the two can never disagree:
+                   a connected tile opens its detail page, an unconnected one
+                   opens the connect briefing, an unconfigured one is not a
+                   control at all */
+                const open =
+                  action === null || action.kind === "sentence"
+                    ? null
+                    : action.kind === "connect" || action.kind === "reconnect"
+                      ? () => setBriefing({ entry, reconnect: action.kind === "reconnect" })
+                      : () => router.push(`/integrations/${entry.slug}`);
                 return (
-                  <div key={entry.key} className="card flex flex-col">
+                  <div
+                    key={entry.slug}
+                    className={`card flex flex-col ${open ? "cursor-pointer transition-colors hover:border-border-strong" : ""}`}
+                    {...(open
+                      ? {
+                          role: "button",
+                          tabIndex: 0,
+                          "aria-label": t("openDetails", { name: copy[entry.key].name }),
+                          onClick: open,
+                          onKeyDown: (event: KeyboardEvent) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              open();
+                            }
+                          },
+                        }
+                      : {})}
+                  >
                     <div className="flex items-center gap-3">
                       <span
                         className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-surface-2 text-fg-muted"
@@ -346,7 +381,7 @@ export function Integrations() {
                       </span>
                       <span className="min-w-0">
                         <span className="block truncate text-sm font-semibold text-fg">
-                          {copy.name}
+                          {copy[entry.key].name}
                         </span>
                         <span className="block truncate text-xs text-fg-muted">
                           {providerName(entry.provider)}
@@ -354,16 +389,14 @@ export function Integrations() {
                       </span>
                     </div>
                     <p className="mt-3 flex-1 text-sm leading-6 text-fg-muted">
-                      {copy.description}
+                      {copy[entry.key].description}
                     </p>
-                    <div className="mt-4">
-                      {connectors === null ? null : (
-                        <IntegrationAction
-                          state={state}
-                          /* drafting scope only matters where drafts happen;
-                             offering it on a calendar tile would explain
-                             nothing about what the button is for */
-                          mail={entry.kind === "mail"}
+                    {/* the action row stops the click: a button here answers
+                        its own question, never also the card's */}
+                    <div className="mt-4" onClick={(event) => event.stopPropagation()}>
+                      {action === null ? null : (
+                        <TileControl
+                          action={action}
                           labels={{
                             connect: tw("connect", { provider: providerName(entry.provider) }),
                             reconnect: tw("reconnect", { provider: providerName(entry.provider) }),
@@ -371,8 +404,14 @@ export function Integrations() {
                               provider: providerName(entry.provider),
                             }),
                             enableDrafts: tw("enableDrafts"),
+                            reconnectDrive: t("reconnectDrive"),
                             connected: t("connected"),
                           }}
+                          onBrief={() =>
+                            setBriefing({ entry, reconnect: action.kind === "reconnect" })}
+                          /* scope upgrades skip the briefing: the account is
+                             already connected and briefed — the press is a
+                             re-consent, not a first meeting */
                           onConnect={() => void connect(entry.provider)}
                         />
                       )}
@@ -385,58 +424,107 @@ export function Integrations() {
           </Section>
         </PageContainer>
       </MenuLayout>
+
+      {/*
+        THE CONNECT BRIEFING (user directive: "when you click the one without
+        connections it must show like the image that connect me … make the
+        steps easier and more user friendly"). The theme's one dialog in its
+        non-danger face — not a second modal to style. It says, before the
+        OAuth redirect: what this integration enables, that one Google
+        sign-in covers all four Google sources (so four tiles do not read as
+        four accounts), and the privacy facts that are actually true here —
+        per-person connection (D29), content read on demand, never in logs.
+      */}
+      {briefing ? (
+        <ConfirmDialog
+          title={copy[briefing.entry.key].name}
+          danger={false}
+          confirmLabel={
+            briefing.reconnect
+              ? tw("reconnect", { provider: providerName(briefing.entry.provider) })
+              : t("connectJustForMe")
+          }
+          cancelLabel={t("cancel")}
+          body={
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <span
+                  className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-surface-2 text-fg-muted"
+                  aria-hidden
+                >
+                  <Icon name={briefing.entry.icon} size="lg" />
+                </span>
+                <p className="text-sm leading-6 text-fg-muted">
+                  {copy[briefing.entry.key].description}
+                </p>
+              </div>
+              {briefing.entry.provider === "google" ? (
+                <p className="text-sm leading-6 text-fg-muted">{t("oneGoogleGrant")}</p>
+              ) : null}
+              <div className="rounded-xl border border-border bg-surface-2/40 p-4">
+                <p className="text-sm font-medium text-fg">{t("privacyTitle")}</p>
+                <p className="mt-1 text-sm leading-6 text-fg-muted">{t("privacyNote")}</p>
+              </div>
+            </div>
+          }
+          onConfirm={() => {
+            const provider = briefing.entry.provider;
+            setBriefing(null);
+            void connect(provider);
+          }}
+          onCancel={() => setBriefing(null)}
+        />
+      ) : null}
     </PlatformShell>
   );
 }
 
 /**
- * What a tile OFFERS, given what the server says about its provider.
+ * What a tile OFFERS, given the action decided above.
  *
- * `not_configured` is a claim about the PRODUCT — the operator holds no OAuth
+ * `sentence` is a claim about the PRODUCT — the operator holds no OAuth
  * credentials for this provider — so it renders as a sentence and never as a
- * button, because a button here could not work for any person on any account.
- * The other four states are claims about this person's connection, and each
- * has an action that genuinely does something.
+ * button, because a button here could not work for any person on any
+ * account. Everything else genuinely does something: opens the briefing,
+ * starts a re-consent, or (connected) states the fact while the card itself
+ * carries the navigation.
  */
-function IntegrationAction({
-  state,
-  mail,
+function TileControl({
+  action,
   labels,
+  onBrief,
   onConnect,
 }: {
-  state: ConnectorStatus | undefined;
-  mail: boolean;
+  action: TileAction;
   labels: {
     connect: string;
     reconnect: string;
     notConfigured: string;
     enableDrafts: string;
+    reconnectDrive: string;
     connected: string;
   };
+  onBrief: () => void;
   onConnect: () => void;
 }) {
-  if (state === undefined || !state.configured) {
+  if (action.kind === "sentence") {
     return (
       <span className="inline-flex h-9 items-center rounded-full border border-border px-3 text-xs text-fg-subtle">
         {labels.notConfigured}
       </span>
     );
   }
-  if (state.status === "connected") {
-    /* connected is not the same fact as can-draft: a connection made before
-       drafting existed reads mail perfectly and fails at the provider on a
-       draft, so the upgrade is OFFERED rather than discovered */
-    return mail && state.can_draft === false ? (
+  if (action.kind === "connected") return <StatusDot label={labels.connected} />;
+  if (action.kind === "enableDrafts" || action.kind === "reconnectDrive") {
+    return (
       <button type="button" className="btn-secondary h-9 min-h-0 px-3 text-xs" onClick={onConnect}>
-        {labels.enableDrafts}
+        {action.kind === "enableDrafts" ? labels.enableDrafts : labels.reconnectDrive}
       </button>
-    ) : (
-      <StatusDot label={labels.connected} />
     );
   }
   return (
-    <button type="button" className="btn-secondary h-9 min-h-0 px-3 text-xs" onClick={onConnect}>
-      {state.status === "not_connected" ? labels.connect : labels.reconnect}
+    <button type="button" className="btn-secondary h-9 min-h-0 px-3 text-xs" onClick={onBrief}>
+      {action.kind === "connect" ? labels.connect : labels.reconnect}
     </button>
   );
 }

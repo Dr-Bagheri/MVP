@@ -57,6 +57,10 @@ export const TRAIL: Readonly<Record<string, TrailEntry>> = {
 
   /* the connected accounts a workflow runs on, beside the workflows */
   "/integrations": { label: "platform.integrations", parent: "/workflows" },
+  /** one integration's detail (M47) — the leaf is the integration's own
+   *  localized name, supplied by the page (entity), and the parent crumb IS
+   *  Sana's "< All integrations" back link in the platform's one mechanism */
+  "/integrations/[slug]": { entity: true, parent: "/integrations" },
 
   /*
    * Echo is an app inside the platform (the pivot), so everything of Echo's

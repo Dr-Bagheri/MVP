@@ -287,6 +287,16 @@ export const IconSend = (p: SVGProps<SVGSVGElement>) => (
 export const IconCalendar = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><rect x="3.5" y="5" width="17" height="15" rx="2" /><path d="M3.5 10h17" /><path d="M8 3.5v3M16 3.5v3" /></svg>
 );
+/** a folder — Drive as a SOURCE (your files), not the provider's brand
+    triangle: source marks stay in the house line style, and brand assets
+    are remote (CSP) anyway */
+export const IconFolder = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><path d="M3.5 7A1.5 1.5 0 0 1 5 5.5h4.2L11.2 8H19a1.5 1.5 0 0 1 1.5 1.5V17A1.5 1.5 0 0 1 19 18.5H5A1.5 1.5 0 0 1 3.5 17Z" /></svg>
+);
+/** a camera — Meet as a SOURCE: the meetings you join on video */
+export const IconVideo = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><rect x="3" y="7" width="12" height="10" rx="2" /><path d="m15 12 6-3.5v7z" /></svg>
+);
 
 /* =========================================================================
    THE LIST — one registry, one vocabulary
@@ -315,6 +325,7 @@ export const ICONS = {
   "eye": IconEye,
   "fileText": IconFileText,
   "filter": IconFilter,
+  "folder": IconFolder,
   "gauge": IconGauge,
   "gavel": IconGavel,
   "globe": IconGlobe,
@@ -358,6 +369,7 @@ export const ICONS = {
   "upload": IconUpload,
   "user": IconUser,
   "users": IconUsers,
+  "video": IconVideo,
   "voice": IconVoice,
   "zap": IconZap,
 } as const;

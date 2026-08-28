@@ -31,7 +31,7 @@ const POLLED = (() => {
   return at.toISOString();
 })();
 
-/** google, connected, with drafting granted — the healthy row */
+/** google, connected, with drafting AND drive granted — the healthy row */
 const GOOGLE: ConnectorStatus = {
   provider: "google",
   configured: true,
@@ -39,6 +39,7 @@ const GOOGLE: ConnectorStatus = {
   account_label: "amir@example.test",
   expires_at: "2026-12-01T00:00:00.000Z",
   can_draft: true,
+  can_drive: true,
   polled_at: POLLED,
   messages_seen: 65,
 };
@@ -51,13 +52,19 @@ vi.mock("@/components/platform/AssistantMenu", () => ({
   AssistantMenu: () => null,
 }));
 
+/** captured so a row click can be asserted as the NAVIGATION it promises */
+const push = vi.fn();
+
 vi.mock("@/i18n/routing", () => ({
   Link: ({ href, children, ...props }: { href: string; children: React.ReactNode }) => (
     <a href={href} {...props}>{children}</a>
   ),
-  useRouter: () => ({ push: () => {}, replace: () => {} }),
+  useRouter: () => ({ push, replace: () => {} }),
   usePathname: () => "/integrations",
 }));
+
+/** a vi.fn so the briefing test can assert WHEN the OAuth flow starts */
+const connectorAuthorization = vi.fn(async () => "https://accounts.example.test/authorize");
 
 vi.mock("@/api/client", () => ({
   api: {
@@ -68,7 +75,7 @@ vi.mock("@/api/client", () => ({
       role: "owner", status: "active", locale: "fa", model_id: null,
       created_at: "2026-01-01T00:00:00.000Z", calendar: "auto", timezone: "auto",
     }),
-    connectorAuthorization: async () => "https://accounts.example.test/authorize",
+    connectorAuthorization: (...args: unknown[]) => connectorAuthorization(...args as []),
   },
 }));
 
@@ -76,6 +83,8 @@ const { Integrations } = await import("./Integrations");
 
 beforeEach(() => {
   cleanup();
+  push.mockClear();
+  connectorAuthorization.mockClear();
   /*
    * Google alone. Microsoft came off the OFFER (user directive, 2026-08-28:
    * "we just go with the google") — the server still speaks Graph and an
@@ -87,20 +96,21 @@ beforeEach(() => {
 
 describe("the integrations page", () => {
   /**
-   * ONE grant, TWO rows, and the pair is the assertion.
+   * ONE grant, FOUR rows, and the differences between them are the assertion.
    *
    * The mailbox is polled, so it has a last-looked time and a count of
-   * messages passed through; the calendar is read on demand and has neither.
-   * A per-provider row could only ever report one of those two states, which
-   * is precisely the fact the user came to this table for ("i got the email
-   * but it did not update itself... it must show in that table").
+   * messages passed through; calendar, Meet and Drive are read on demand and
+   * have neither. A per-provider row could only ever report one of those
+   * states, which is precisely the fact the user came to this table for
+   * ("i got the email but it did not update itself... it must show in that
+   * table").
    *
    * Both halves are asserted together because either alone passes against
    * code that says the same thing on every row: "the calendar shows a dash"
    * is satisfied by a table with no counts at all, and "Gmail shows 65" is
    * satisfied by a table that prints the count on every row it draws.
    */
-  it("splits one connection into its sources, and reports the mailbox's sync where the calendar has none", async () => {
+  it("splits one connection into its sources, and reports the mailbox's sync where the others have none", async () => {
     await act(async () => { render(<Integrations />); });
 
     /* scoped to the TABLE: «جی‌میل» and «تقویم گوگل» also name the tiles in
@@ -109,6 +119,11 @@ describe("the integrations page", () => {
     const table = await screen.findByRole("table");
     const gmail = within(table).getByText("جی‌میل").closest("tr")!;
     const calendar = within(table).getByText("تقویم گوگل").closest("tr")!;
+
+    // the grant fans out into Drive and Meet rows too (user directive:
+    // "add google meet, google drive, gmail there as well")
+    expect(within(table).getByText("گوگل درایو")).toBeTruthy();
+    expect(within(table).getByText("گوگل میت")).toBeTruthy();
 
     // the account the grant was made on, under BOTH of its sources
     expect(within(gmail).getByText("amir@example.test")).toBeTruthy();
@@ -134,6 +149,23 @@ describe("the integrations page", () => {
     /* the provider with no credentials on this server has no ROW at all —
        there is no connection to report on */
     expect(within(table).queryByText("ایمیل اوت‌لوک")).toBeNull();
+  });
+
+  /**
+   * The row is the way in (user directive: "the items in table must be
+   * selectable"). Asserted as the NAVIGATION it performs — the pushed
+   * address carries the source's own slug, which is what makes the detail
+   * page fetch THAT source's items and not whichever one is first.
+   */
+  it("opens a source's own detail page when its row is clicked", async () => {
+    await act(async () => { render(<Integrations />); });
+    const table = await screen.findByRole("table");
+
+    fireEvent.click(within(table).getByText("تقویم گوگل").closest("tr")!);
+    expect(push).toHaveBeenCalledWith("/integrations/google-calendar");
+
+    fireEvent.click(within(table).getByText("جی‌میل").closest("tr")!);
+    expect(push).toHaveBeenCalledWith("/integrations/gmail");
   });
 
   /**
@@ -163,7 +195,7 @@ describe("the integrations page", () => {
     expect(within(table).getByText("جی‌میل")).toBeTruthy();
   });
 
-  it("renders an unconfigured provider as a sentence, and a configured one as a button", async () => {
+  it("renders an unconfigured provider as a sentence, and a configured one as a briefing door", async () => {
     /*
      * The vehicle is GOOGLE now, not Microsoft: the distinction under test is
      * "the operator gave this deployment no OAuth credentials" versus "they
@@ -176,15 +208,16 @@ describe("the integrations page", () => {
       account_label: null,
       expires_at: null,
       can_draft: false,
+      can_drive: false,
       polled_at: null,
       messages_seen: 0,
     }];
     await act(async () => { render(<Integrations />); });
 
     const notConfigured = "گوگل روی سرور پیکربندی نشده است";
-    // both Google tiles say it, and neither offers anything to press
-    expect(screen.getAllByText(notConfigured).length).toBe(2);
-    expect(screen.queryByRole("button", { name: /گوگل/ })).toBeNull();
+    // all four Google tiles say it, and none offers anything to press
+    expect(screen.getAllByText(notConfigured).length).toBe(4);
+    expect(screen.queryByRole("button", { name: "اتصال گوگل" })).toBeNull();
 
     /*
      * The control. Same provider, same page, one field different: with OAuth
@@ -199,13 +232,78 @@ describe("the integrations page", () => {
       account_label: null,
       expires_at: null,
       can_draft: false,
+      can_drive: false,
       polled_at: null,
       messages_seen: 0,
     }];
     await act(async () => { render(<Integrations />); });
 
     expect(screen.queryByText(notConfigured)).toBeNull();
-    expect(screen.getAllByRole("button", { name: "اتصال گوگل" }).length).toBe(2);
+    expect(screen.getAllByRole("button", { name: "اتصال گوگل" }).length).toBe(4);
+  });
+
+  /**
+   * The connect BRIEFING (user directive: "when you click the one without
+   * connections it must show like the image that connect me").
+   *
+   * The load-bearing half is the ORDER: pressing Connect must open the
+   * dialog and must NOT start the OAuth redirect — the redirect is spent
+   * only by the dialog's own button. Without the not-yet assertion, a tile
+   * wired straight to the provider passes every "the dialog renders"
+   * check by rendering it beside the navigation it failed to hold back.
+   */
+  it("briefs before the OAuth redirect: dialog first, provider only on its button", async () => {
+    CONNECTORS = [{
+      provider: "google",
+      configured: true,
+      status: "not_connected",
+      account_label: null,
+      expires_at: null,
+      can_draft: false,
+      can_drive: false,
+      polled_at: null,
+      messages_seen: 0,
+    }];
+    await act(async () => { render(<Integrations />); });
+
+    fireEvent.click(screen.getAllByRole("button", { name: "اتصال گوگل" })[0]!);
+
+    const dialog = await screen.findByRole("alertdialog");
+    // what the person is agreeing to, before the provider asks them again
+    expect(within(dialog).getByText("اتصال خصوصی")).toBeTruthy();
+    expect(within(dialog).getByText(/یک بار ورود با گوگل/)).toBeTruthy();
+    // the flow has NOT started — the dialog is a door, not a decoration
+    expect(connectorAuthorization).not.toHaveBeenCalled();
+
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole("button", { name: "اتصال فقط برای من" }));
+    });
+    expect(connectorAuthorization).toHaveBeenCalledWith("google", "fa");
+  });
+
+  /**
+   * Drive on a grant that predates the scope: connected-and-cannot-list is
+   * an OFFER to reconnect, never an error — and never a silent hole. The
+   * control (can_drive: true) is what distinguishes "the prompt appears
+   * when it should" from "the prompt appears always".
+   */
+  it("offers reconnect-for-Drive on a pre-Drive grant, and not on a full one", async () => {
+    CONNECTORS = [{ ...GOOGLE, can_drive: false }];
+    await act(async () => { render(<Integrations />); });
+
+    // the offer, on the Drive tile
+    expect(screen.getByRole("button", { name: "برای دسترسی به درایو دوباره وصل شوید" })).toBeTruthy();
+    /* and no Drive ROW: a grant that never covered Drive has no Drive
+       connection to report on — not a broken one, an unasked one */
+    const table = screen.getByRole("table");
+    expect(within(table).queryByText("گوگل درایو")).toBeNull();
+
+    // the control: with the scope granted, no such prompt anywhere
+    cleanup();
+    CONNECTORS = [GOOGLE];
+    await act(async () => { render(<Integrations />); });
+    expect(screen.queryByText("برای دسترسی به درایو دوباره وصل شوید")).toBeNull();
+    expect(within(screen.getByRole("table")).getByText("گوگل درایو")).toBeTruthy();
   });
 
   it("offers nothing Microsoft, anywhere on the page", async () => {
