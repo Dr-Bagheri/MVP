@@ -17,3 +17,25 @@ export async function PATCH(
     return errorResponse(error);
   }
 }
+
+/**
+ * Remove a workflow (M41 P5, 2026-08-28).
+ *
+ * Core ARCHIVES rather than deletes — the runs and step outputs that point
+ * at this row are the record of things that happened to somebody's data.
+ * The route is DELETE because that is what the caller is asking for; what
+ * the server does about the history is the server's business.
+ */
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const { id } = await params;
+    await coreFetch<void>(
+      `/v1/workflows/manage/${encodeURIComponent(id)}`, { method: "DELETE" });
+    return new Response(null, { status: 204 });
+  } catch (error) {
+    return errorResponse(error);
+  }
+}

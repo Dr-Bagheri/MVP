@@ -242,6 +242,36 @@ export function createWorkflowAuthoringRepo(db: Db) {
     },
 
     /** pause / rename / trigger / ROLLBACK (repoint at a prior version) */
+    /**
+     * **Remove a workflow** (user directive, 2026-08-28: "add remove this
+     * workflow to the kebab menu").
+     *
+     * ARCHIVE, not DELETE, and the reason is not squeamishness: a workflow's
+     * runs, its step outputs and its published versions all point at this
+     * row, and they are the record of things that actually happened to
+     * somebody's data. Destroying the row would either orphan that history
+     * or cascade it away — one of which is a lie and the other is a bigger
+     * one. `archived_at` takes it out of every list, out of the trigger
+     * query, and out of the product; the history it produced stays readable.
+     *
+     * Reversible on purpose, at the database. The product offers no un-remove
+     * because nobody has asked for one — and "we cannot get it back" would be
+     * false if it did.
+     */
+    async archive(identity: Identity, workflowId: string): Promise<void> {
+      const workflow = await this.get(identity, workflowId);
+      if (!workflow) throw new NotFoundError("no such workflow");
+      await db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe(
+          /* enabled goes false in the same statement: an archived row is
+             invisible, and an invisible row that is still `enabled` would
+             keep firing on every matching event forever */
+          `update echo.workflow
+              set archived_at = now(), enabled = false
+            where id = $1 and archived_at is null`,
+          [workflowId]));
+    },
+
     async update(
       identity: Identity,
       workflowId: string,

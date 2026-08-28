@@ -1668,6 +1668,10 @@ export const api = {
       body: JSON.stringify(patch),
     });
   },
+  /** remove a workflow — core archives it, so its runs stay readable */
+  async removeWorkflow(id: string): Promise<void> {
+    await bff<void>(`/api/workflows/manage/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
   async publishWorkflow(
     id: string, body: { graph: unknown; max_autonomy: string },
   ): Promise<{ version: number; version_id: string }> {

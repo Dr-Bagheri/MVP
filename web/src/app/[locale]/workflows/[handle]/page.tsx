@@ -6,7 +6,7 @@ import { api } from "@/api/client";
 import type {
   AuthoredWorkflow, MailDraft, Me, WorkflowCard, WorkflowRunRecord,
 } from "@/api/types";
-import { Link } from "@/i18n/routing";
+import { Link, useRouter } from "@/i18n/routing";
 import { PlatformShell } from "@/components/platform/PlatformShell";
 import { AssistantMenu } from "@/components/platform/AssistantMenu";
 import { useCrumbTitle } from "@/components/platform/CrumbTitle";
@@ -14,12 +14,13 @@ import { WorkflowTile } from "@/components/platform/WorkflowTile";
 import { MenuLayout, PageContainer } from "@/components/scaffold";
 import { Card } from "@/components/ui";
 import { Pagination, usePaged } from "@/components/Pagination";
-import { KebabMenu, type KebabItem } from "@/components/rowActions";
+import { ConfirmDialog, KebabMenu, type KebabItem } from "@/components/rowActions";
 import {
-  Icon, IconRetry, IconToggleOff, IconToggleOn, type IconName,
+  Icon, IconPlay, IconRetry, IconToggleOff, IconToggleOn, IconTrash, type IconName,
 } from "@/components/icons";
 import { digits, formatDate, formatTime } from "@/lib/format";
 import { notify } from "@/lib/notify";
+import { useWorkflowCopy } from "@/lib/workflowName";
 import { WorkflowBuilder } from "@/components/platform/WorkflowBuilder";
 import { OFFERED_CONNECTOR_PROVIDERS } from "@echo/core/vocabulary";
 
@@ -213,6 +214,8 @@ export default function WorkflowDetailPage({
   const { handle } = use(params);
   const t = useTranslations("workflows");
   const tb = useTranslations("builder");
+  const router = useRouter();
+  const workflowCopy = useWorkflowCopy();
   const locale = useLocale();
 
   const [cards, setCards] = useState<WorkflowCard[] | null>(null);
@@ -259,6 +262,11 @@ export default function WorkflowDetailPage({
   const [graph, setGraph] = useState<{ steps: { id: string; kind: string }[] } | null>(null);
   const [editing, setEditing] = useState(false);
   const [installing, setInstalling] = useState(false);
+  /** Run now, for a manual workflow: the request in flight */
+  const [running, setRunning] = useState(false);
+  /** the are-you-sure popup, open */
+  const [removing, setRemoving] = useState(false);
+  const [removeBusy, setRemoveBusy] = useState(false);
 
   const card = cards?.find((entry) => entry.slug === handle);
   const engineRow = engine?.find((entry) => entry.handle === handle);
@@ -275,12 +283,15 @@ export default function WorkflowDetailPage({
   const subject = useMemo(() => {
     const base = engineRow ?? authoredRow;
     if (base) {
+      const copy = workflowCopy({
+        handle, name: base.name, description: base.description,
+      });
       return {
         kind: "engine" as const,
         /* the id `workflow_run.workflow_id` refers to */
         id: base.id,
-        name: base.name,
-        description: base.description,
+        name: copy.name,
+        description: copy.description,
         icon: card?.icon ?? "sparkles",
         color: card?.color ?? "violet",
         sourceKind: card?.source_kind,
@@ -305,7 +316,7 @@ export default function WorkflowDetailPage({
       };
     }
     return null;
-  }, [card, engineRow, authoredRow]);
+  }, [card, engineRow, authoredRow, handle, workflowCopy]);
 
   useCrumbTitle(subject?.name);
 
@@ -365,7 +376,20 @@ export default function WorkflowDetailPage({
    * steps are the org's own words and can only come off the wire.
    * (`lib/skillName.ts` settled the same question the same way.)
    */
-  const trigger = catalogueProcess?.trigger ?? served.trigger;
+  /*
+   * An AUTHORED workflow's trigger is a fact on its row, not prose in a
+   * catalogue — so its card is derived from `trigger_event`, in the same
+   * words the builder used when it was chosen. Without this the page said
+   * "no process" above a workflow that runs every time an email arrives,
+   * which is as wrong as a description gets.
+   */
+  const authoredTrigger: ProcessStep | undefined = authoredRow
+    ? {
+        title: tb(authoredRow.trigger_event === null ? "trigger_manual" : "trigger_event"),
+        description: tb(authoredRow.trigger_event === null ? "triggerHint_manual" : "triggerHint_event"),
+      }
+    : undefined;
+  const trigger = catalogueProcess?.trigger ?? served.trigger ?? authoredTrigger;
   /*
    * THE GRAPH WINS over both, when there is one (user directive,
    * 2026-08-28: "all these is not just a text that we show, it must be
@@ -537,7 +561,46 @@ export default function WorkflowDetailPage({
    * a missing one. Written down so the next person does not read the gap as an
    * oversight and add one.
    */
+  /*
+   * **Run now, for MANUAL workflows only** (user directive, 2026-08-28: "for
+   * the one that set run manually add the run now in their kebab menu, for
+   * the rest does not need").
+   *
+   * A manual workflow has no other way to start — the item is the whole
+   * feature. A triggered one starts when its fact happens, and a Run-now
+   * beside it mostly produces a run against whatever happens to be lying
+   * around, which is how "why did it answer all my old mail" began.
+   * `trigger_event === null` IS manual: the column is the trigger.
+   */
+  const isManual = authoredRow ? authoredRow.trigger_event === null : false;
+
+  async function runManually() {
+    if (running) return;
+    setRunning(true);
+    try {
+      const { run_id } = await api.runWorkflow(handle);
+      router.push({ pathname: "/workflows/runs/[id]", params: { id: run_id } } as never);
+    } catch (cause) {
+      /* core's refusal NAMES the rule it broke (a graph needing un-runnable
+         kinds says which), and only core knows that — so it is surfaced
+         verbatim rather than translated into a shrug */
+      const detail = (cause as { detail?: string }).detail;
+      notify(detail || t("runFailed"), "warn");
+    } finally {
+      setRunning(false);
+    }
+  }
+
   const menuItems: KebabItem[] = subject === null ? [] : [
+    ...(isManual
+      ? [{
+          key: "run",
+          label: running ? t("runStarting") : t("runNow"),
+          icon: <IconPlay width={14} height={14} />,
+          disabled: running,
+          onSelect: () => void runManually(),
+        }]
+      : []),
     ...(switchProps?.onToggle
       ? [{
           key: "enabled",
@@ -547,6 +610,20 @@ export default function WorkflowDetailPage({
             : <IconToggleOff width={14} height={14} />,
           disabled: saving,
           onSelect: () => void switchProps.onToggle!(),
+        }]
+      : []),
+    /*
+     * REMOVE. Only for a workflow this org authored — a shipped template is
+     * not ours to take away, and an item that could only ever fail is worse
+     * than a missing one.
+     */
+    ...(isAdmin && authoredRow
+      ? [{
+          key: "remove",
+          label: t("removeWorkflow"),
+          icon: <IconTrash width={14} height={14} />,
+          danger: true,
+          onSelect: () => setRemoving(true),
         }]
       : []),
   ];
@@ -786,6 +863,35 @@ export default function WorkflowDetailPage({
           )}
         </PageContainer>
       </MenuLayout>
+
+      {/*
+        Destructive actions confirm — the platform's rule, one dialog
+        (`ConfirmDialog`), enforced by `confirm.guard.test.ts`. The body
+        names the workflow and says what survives: removing it stops the
+        automation and leaves its run history readable, which is a thing a
+        person deciding this actually wants to know.
+      */}
+      {removing && authoredRow ? (
+        <ConfirmDialog
+          title={t("removeTitle", { name: authoredRow.name })}
+          body={t("removeBody")}
+          confirmLabel={t("removeConfirm")}
+          cancelLabel={t("cancel")}
+          busy={removeBusy}
+          onCancel={() => setRemoving(false)}
+          onConfirm={() => {
+            if (removeBusy) return;
+            setRemoveBusy(true);
+            void api.removeWorkflow(authoredRow.id)
+              .then(() => {
+                setRemoving(false);
+                router.push({ pathname: "/workflows" } as never);
+              })
+              .catch(() => notify(t("removeFailed"), "warn"))
+              .finally(() => setRemoveBusy(false));
+          }}
+        />
+      ) : null}
 
       {editing && (authoredRow ?? backingRow) ? (
         <WorkflowBuilder

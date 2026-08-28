@@ -141,13 +141,21 @@ describe("the workflows list", () => {
   it("shows the builder's door to admins and to nobody else", async () => {
     await act(async () => { render(<Workflows />); });
     expect(screen.queryByRole("button", { name: "ساخت گردش‌کار" })).toBeNull();
-    expect(screen.queryByText("گردش‌کارهای خودکار")).toBeNull();
+    /* the authored card too: a member's catalogue is the two templates */
+    expect(screen.queryByText("پیگیری")).toBeNull();
 
     cleanup();
     role = "owner";
     await act(async () => { render(<Workflows />); });
     expect(screen.getByRole("button", { name: "ساخت گردش‌کار" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "ویرایش «پیگیری»" })).toBeTruthy();
+    /*
+     * An authored workflow is a CARD in the same grid now, not a list row
+     * with an edit button (user directive, 2026-08-28: "half the size of
+     * the email and meeting calendar button with same style") — and a card
+     * is a LINK to the workflow's own page, where the editing lives.
+     */
+    const authoredCard = screen.getByText("پیگیری").closest("a");
+    expect(authoredCard?.getAttribute("href")).toContain("/workflows/wf-a1");
   });
 
   /**

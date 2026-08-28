@@ -377,6 +377,41 @@ describe("the workflow detail page", () => {
     expect(screen.getByRole("switch")).toBeTruthy();
   });
 
+  /**
+   * The kebab, per trigger kind (user directive, 2026-08-28: "for the one
+   * that set run manually add the run now in their kebab menu, for the rest
+   * does not need").
+   *
+   * The WHOLE item list again, both ways: a manual workflow's menu must hold
+   * Run now and Remove; a triggered one must hold Remove and NOT Run now —
+   * an absence check alone cannot tell "removed for triggered" from
+   * "removed everywhere", which would take the only start a manual workflow
+   * has.
+   */
+  it("offers Run now to a manual workflow and not to a triggered one", async () => {
+    ME = { ...BASE_ME, role: "owner" };
+    AUTHORED = [{
+      id: "w-2", handle: "my-manual", name: "دستی",
+      description: "", enabled: true, trigger_event: null,
+      current_version: 1, current_version_id: "v-1", versions: 1,
+      created_at: "2026-08-28T00:00:00.000Z",
+    }];
+    GRAPH = { steps: [{ id: "s1", kind: "search" }] };
+    await open("my-manual");
+    fireEvent.click(screen.getByRole("button", { name: "کارهای این گردش‌کار" }));
+    let items = within(screen.getByRole("menu")).getAllByRole("menuitem");
+    expect(items.map((item) => item.textContent))
+      .toEqual(["اجرای اکنون", "خاموش کردن", "حذف این گردش‌کار"]);
+
+    cleanup();
+    AUTHORED = [{ ...AUTHORED[0]!, trigger_event: "mail.received" }];
+    await open("my-manual");
+    fireEvent.click(screen.getByRole("button", { name: "کارهای این گردش‌کار" }));
+    items = within(screen.getByRole("menu")).getAllByRole("menuitem");
+    expect(items.map((item) => item.textContent))
+      .toEqual(["خاموش کردن", "حذف این گردش‌کار"]);
+  });
+
   it("carries the switch's other entrance in the kebab, and nothing else", async () => {
     ME = { ...BASE_ME, auto_draft_replies: true };
     await open("draft-email-replies");

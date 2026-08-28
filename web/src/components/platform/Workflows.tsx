@@ -5,15 +5,15 @@ import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import { useRefreshEpoch } from "@/lib/refreshBus";
-import { notify } from "@/lib/notify";
+import { useWorkflowCopy } from "@/lib/workflowName";
 import type { AuthoredWorkflow, User, WorkflowCard } from "@/api/types";
 import { Link } from "@/i18n/routing";
 import { AssistantMenu } from "./AssistantMenu";
 import { PlatformShell } from "./PlatformShell";
 import { WorkflowBuilder } from "./WorkflowBuilder";
 import { WorkflowTile } from "./WorkflowTile";
-import { MenuLayout, PageContainer, PageHeader, Section } from "@/components/scaffold";
-import { Chip, EmptyState } from "@/components/ui";
+import { MenuLayout, PageContainer, PageHeader } from "@/components/scaffold";
+import { EmptyState } from "@/components/ui";
 
 /**
  * The workflow catalogue: two doors, and nothing else (user directive,
@@ -67,7 +67,6 @@ export function Workflows() {
   const [authored, setAuthored] = useState<AuthoredWorkflow[] | null>(null);
   /** `undefined` = closed; `null` = a new workflow; a row = editing it */
   const [editing, setEditing] = useState<AuthoredWorkflow | null | undefined>(undefined);
-  const [busy, setBusy] = useState(false);
 
   const isAdmin = me?.role === "admin" || me?.role === "owner";
 
@@ -92,6 +91,7 @@ export function Workflows() {
     setEditing(null);
   }, [params, isAdmin]);
 
+  const workflowCopy = useWorkflowCopy();
   const workflowsEpoch = useRefreshEpoch("workflows");
   useEffect(() => {
     void api.workflows().then(setWorkflows).catch(() => setWorkflows([]));
@@ -107,19 +107,6 @@ export function Workflows() {
   }, [isAdmin]);
 
   useEffect(loadAuthored, [loadAuthored]);
-
-  async function toggleEnabled(row: AuthoredWorkflow) {
-    if (busy) return;
-    setBusy(true);
-    try {
-      await api.patchWorkflow(row.id, { enabled: !row.enabled });
-      setAuthored(await api.authoredWorkflows());
-    } catch {
-      notify(tb("toggleFailed"), "warn");
-    } finally {
-      setBusy(false);
-    }
-  }
 
   return (
     <PlatformShell>
@@ -142,6 +129,15 @@ export function Workflows() {
             <EmptyState text={t("empty")} />
           ) : (
             <div className="grid gap-5 lg:grid-cols-2">
+              {/*
+                The two shipped templates first, then whatever this
+                organization has authored — one grid, one visual language
+                (user directive, 2026-08-28: "any new workflow must have half
+                the size of the email and meeting calendar button with same
+                style"). A separate list underneath was the previous shape and
+                it read as a different KIND of thing, which these are not: a
+                workflow somebody wrote is a workflow.
+              */}
               {workflows.map((workflow) => (
                 <Link
                   key={workflow.id}
@@ -159,49 +155,36 @@ export function Workflows() {
                   </p>
                 </Link>
               ))}
+
+              {(authored ?? []).map((row) => (
+                <Link
+                  key={row.id}
+                  href={`/workflows/${row.handle}`}
+                  /* HALF the height of a template card and the same
+                     everything else: same corner, same border, same hover,
+                     same tile — the size says "smaller", not "lesser" */
+                  className="group flex min-h-28 flex-col justify-center rounded-2xl border border-border bg-surface p-7 transition-colors hover:border-border-strong hover:bg-surface-2"
+                >
+                  <span className="flex items-center gap-4">
+                    <WorkflowTile icon="sparkles" color="violet" size="sm" />
+                    <span className="min-w-0">
+                      <span className="block truncate text-base font-semibold text-fg group-hover:text-accent">
+                        {/* shipped starters localize; an org's own name renders as written */}
+                        {workflowCopy(row).name}
+                      </span>
+                      <span className="mt-0.5 block text-xs text-fg-subtle">
+                        {row.enabled ? tb("enabled") : tb("disabled")}
+                        {row.current_version === null
+                          ? ` · ${tb("unpublished")}`
+                          : ` · ${tb("versionN", { n: String(row.current_version) })}`}
+                      </span>
+                    </span>
+                  </span>
+                </Link>
+              ))}
             </div>
           )}
 
-          {/* ── the authored catalogue, admins only ─────────────────────── */}
-          {isAdmin ? (
-            <Section title={tb("automationTitle")} description={tb("automationHint")}>
-              {authored === null ? null : authored.length === 0 ? (
-                <p className="text-sm text-fg-muted">{tb("automationEmpty")}</p>
-              ) : (
-                <ul className="divide-y divide-border rounded-lg border border-border bg-surface">
-                  {authored.map((row) => (
-                    <li key={row.id} className="flex flex-wrap items-center gap-3 px-4 py-2.5">
-                      <button
-                        type="button"
-                        aria-label={tb("edit", { name: row.name })}
-                        className="min-w-0 flex-1 truncate text-start text-sm font-medium text-fg hover:text-accent"
-                        onClick={() => setEditing(row)}
-                      >
-                        {row.name}
-                      </button>
-                      <Chip tone={row.current_version === null ? "warning" : "success"}>
-                        {row.current_version === null
-                          ? tb("unpublished")
-                          : tb("versionN", { n: String(row.current_version) })}
-                      </Chip>
-                      <button
-                        type="button"
-                        aria-pressed={row.enabled}
-                        className={`tap h-8 rounded-full border px-3 text-xs ${row.enabled
-                          ? "border-accent bg-accent-soft text-accent"
-                          : "border-border text-fg-muted"}`}
-                        disabled={busy}
-                        onClick={() => void toggleEnabled(row)}
-                      >
-                        {row.enabled ? tb("enabled") : tb("disabled")}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-
-            </Section>
-          ) : null}
         </PageContainer>
       </MenuLayout>
 

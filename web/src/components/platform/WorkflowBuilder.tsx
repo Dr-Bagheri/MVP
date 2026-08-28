@@ -750,6 +750,20 @@ export function WorkflowBuilder({
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+          {/*
+            The ceiling, in a sentence (user question, 2026-08-28: "what is
+            the difference between these three, act, watch and assist?").
+            Three one-word options that decide whether a workflow may WRITE
+            are not self-explanatory, and a person choosing one of them
+            deserves to know which without leaving the modal. It changes with
+            the picker, so it answers the question they are actually asking:
+            what does THIS one mean.
+          */}
+          <p className="mb-3 rounded-lg border border-border bg-surface-2/40 px-3 py-2 text-[11px] leading-5 text-fg-muted">
+            <span className="font-medium text-fg">{t(`ceiling_${maxAutonomy}`)}</span>
+            {" — "}
+            {t(`ceilingHint_${maxAutonomy}`)}
+          </p>
           {label(t("nameLabel"), (
             <input
               className="input text-sm"

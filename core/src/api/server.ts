@@ -1971,6 +1971,15 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       await workflowAuthoring.publish(identity, id, (request.body ?? {}) as Record<string, unknown>));
   });
 
+  app.delete("/v1/workflows/manage/:id", async (request, reply) => {
+    const identity = await auth.requireAdmin(request);
+    await capabilities.require(identity, "workflows.manage");
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    await workflowAuthoring.archive(identity, id);
+    return reply.code(204).send();
+  });
+
   app.patch("/v1/workflows/manage/:id", async (request, reply) => {
     const identity = await auth.requireAdmin(request);
     await capabilities.require(identity, "workflows.manage");

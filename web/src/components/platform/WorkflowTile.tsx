@@ -38,20 +38,26 @@ export function WorkflowTile({
   icon: string;
   /** the card's own `color` field; `coral` is the danger family */
   color: string;
-  /** `hero` is the detail page's 96px header mark; `card` the list's 64px */
-  size?: "card" | "hero";
+  /**
+   * `hero` is the detail page's 96px header mark, `card` the list's 64px,
+   * and `sm` the 40px one an authored workflow's half-height card carries —
+   * same mark, same colours, one size down, because those cards say
+   * "smaller", not "lesser".
+   */
+  size?: "card" | "hero" | "sm";
 }) {
   const hero = size === "hero";
+  const small = size === "sm";
   return (
     <span
-      className={`grid ${hero ? "h-24 w-24" : "h-16 w-16"} shrink-0 place-items-center rounded-full ${
+      className={`grid ${hero ? "h-24 w-24" : small ? "h-10 w-10" : "h-16 w-16"} shrink-0 place-items-center rounded-full ${
         color === "coral"
           ? "bg-danger text-on-danger shadow-[0_18px_44px_-14px_rgb(var(--danger)/0.75)]"
           : "bg-accent text-on-accent shadow-[0_18px_44px_-14px_rgb(var(--accent)/0.75)]"
       }`}
       aria-hidden
     >
-      <Icon name={TILE_ICON[icon] ?? "zap"} size={hero ? "hero" : "xl"} />
+      <Icon name={TILE_ICON[icon] ?? "zap"} size={hero ? "hero" : small ? "md" : "xl"} />
     </span>
   );
 }
