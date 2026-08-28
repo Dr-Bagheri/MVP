@@ -32,6 +32,7 @@ export function AssistantMenu({
   const router = useRouter();
   const t = useTranslations("platform");
   const tConversations = useTranslations("conversations");
+  const tWorkflows = useTranslations("workflows");
   const locale = useLocale();
   const { started, startNewConversation } = useAssistantConversation();
   const isHub = activeSlug === "new" || activeSlug === "hub";
@@ -57,6 +58,17 @@ export function AssistantMenu({
   useEffect(() => {
     void api.skills().then(setSkills).catch(() => setSkills([]));
   }, []);
+
+  /* the CREATE row below is admin-only, so the menu has to know who is
+     reading it — a member seeing a door they cannot open is worse than not
+     seeing it, because the refusal arrives after the click */
+  const [role, setRole] = useState<string | null>(null);
+  useEffect(() => {
+    /* me() answers null when nobody is signed in — that is a state, not a
+       failure, and it must not read as an admin */
+    void api.me().then((who) => setRole(who?.role ?? null)).catch(() => setRole(null));
+  }, []);
+  const canAuthor = role === "admin" || role === "owner";
   const suggestions = skills
     .filter((skill) => skill.starter_questions.length > 0)
     .slice(0, 6);
@@ -135,6 +147,24 @@ export function AssistantMenu({
           title: t("assistantMenuSetup"),
           items: [
             { slug: "workflows", href: "/workflows", label: t("workflows"), icon: <IconZap /> },
+            /* CREATE, directly under Workflows (user directive, 2026-08-28:
+               "add create workflow in workflow section as well"). It is a
+               real href, not a bus message: pressed from Integrations or a
+               conversation it has to ARRIVE at the catalogue, and the page
+               opens the builder from the query it lands with. */
+            ...(canAuthor
+              ? [{
+                  slug: "workflow-new",
+                  href: "/workflows",
+                  label: tWorkflows("createWorkflow"),
+                  icon: <IconPlus />,
+                  sub: true,
+                  preventNavigation: true,
+                  onSelect: () => router.push({
+                    pathname: "/workflows", query: { new: "1" },
+                  }),
+                }]
+              : []),
             /* directly under Workflows (user directive, 2026-08-28) — the
                accounts a workflow runs on, so the two sit together */
             { slug: "integrations", href: "/integrations", label: t("integrations"), icon: <IconPlug /> },

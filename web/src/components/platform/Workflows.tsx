@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import { useRefreshEpoch } from "@/lib/refreshBus";
@@ -69,6 +70,27 @@ export function Workflows() {
   const [busy, setBusy] = useState(false);
 
   const isAdmin = me?.role === "admin" || me?.role === "owner";
+
+  /*
+   * `?new=1` opens the builder on arrival — how the section menu's "Create
+   * workflow" reaches this page from anywhere else in the assistant (user
+   * directive, 2026-08-28: "add create workflow in workflow section as
+   * well").
+   *
+   * Spent ONCE, on a ref rather than in state: a param that survives a
+   * re-render would re-open the modal every time this page re-rendered,
+   * including after the person closed it. The gate also waits for the
+   * identity, because opening a builder for a member who may not save is a
+   * dead end with a nice animation.
+   */
+  const params = useSearchParams();
+  const opened = useRef(false);
+  useEffect(() => {
+    if (opened.current || !isAdmin) return;
+    if (params.get("new") !== "1") return;
+    opened.current = true;
+    setEditing(null);
+  }, [params, isAdmin]);
 
   const workflowsEpoch = useRefreshEpoch("workflows");
   useEffect(() => {

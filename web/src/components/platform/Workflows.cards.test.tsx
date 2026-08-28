@@ -47,6 +47,17 @@ vi.mock("@/components/platform/AssistantMenu", () => ({
   AssistantMenu: () => null,
 }));
 
+/*
+ * The page reads `?new=1` so the section menu's "Create workflow" can arrive
+ * with the builder opening. Outside the app router there is no provider and
+ * `useSearchParams()` answers null, which is a fact about the harness rather
+ * than about the page — so the harness supplies the params, empty.
+ */
+let SEARCH = "";
+vi.mock("next/navigation", () => ({
+  useSearchParams: () => new URLSearchParams(SEARCH),
+}));
+
 vi.mock("@/i18n/routing", () => ({
   Link: ({ href, children, ...props }: { href: string; children: React.ReactNode }) => (
     <a href={href} {...props}>{children}</a>
@@ -137,5 +148,26 @@ describe("the workflows list", () => {
     await act(async () => { render(<Workflows />); });
     expect(screen.getByRole("button", { name: "ساخت گردش‌کار" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "ویرایش «پیگیری»" })).toBeTruthy();
+  });
+
+  /**
+   * Arriving with the builder already opening — how the section menu's
+   * "Create workflow" reaches this page from anywhere else in the assistant.
+   *
+   * Both directions again, and the second one is not politeness: the param
+   * is a REQUEST from a link anybody can type, so a member arriving with it
+   * must get the page, not an editor whose Save the server would refuse.
+   */
+  it("opens the builder when it arrives with ?new=1, for an admin only", async () => {
+    SEARCH = "new=1";
+    role = "owner";
+    await act(async () => { render(<Workflows />); });
+    expect(screen.getByText("گردش‌کار تازه")).toBeTruthy();
+
+    cleanup();
+    role = "member";
+    await act(async () => { render(<Workflows />); });
+    expect(screen.queryByText("گردش‌کار تازه")).toBeNull();
+    SEARCH = "";
   });
 });
