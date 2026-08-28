@@ -21,6 +21,7 @@
 import { createAgentRunStore } from "../agent/run-store.ts";
 import { createAgentRuntime } from "../agent/runtime.ts";
 import { createDomainTools } from "../agent/domain-tools.ts";
+import { firstServable } from "../api/models.ts";
 import { createSessionsRepo } from "../api/sessions.ts";
 import { resolveIdentity } from "../db/actor.ts";
 import { hasMeetingPrep } from "../db/capabilities.ts";
@@ -101,7 +102,7 @@ async function composeBrief(
       `select u.preferred_model, o.allowed_models
          from echo.app_user u join echo.org o on o.id = u.org_id
         where u.id = $1 limit 1`, [identity.userId]));
-  const model = rows[0]?.preferred_model ?? rows[0]?.allowed_models?.[0] ?? options.fallbackModel;
+  const model = firstServable(rows[0]?.preferred_model, rows[0]?.allowed_models?.[0], options.fallbackModel);
   if (!model) throw new Error("no model resolvable for this owner (M5 ladder empty)");
 
   const runs = createAgentRunStore({ db: options.db, identity });

@@ -748,6 +748,14 @@ export interface MailDraft {
   decided_at: string | null;
 }
 
+/** The message a draft answers, shown above the reply. */
+export interface MailSourceMessage {
+  from: string;
+  subject: string;
+  body: string;
+  occurred_at: string | null;
+}
+
 export interface AgentCardItem {
   id: string;
   /* derived from core's AGENT_CARD_KINDS — this union sat one kind behind

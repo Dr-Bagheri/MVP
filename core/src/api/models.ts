@@ -157,6 +157,30 @@ const isExcluded = (id: string): boolean => {
   return EXCLUDED_PROVIDERS.includes(vendor) || normalized.includes("claude");
 };
 
+/**
+ * THE LADDER, with the product rule applied at every rung.
+ *
+ * M5's ladder (the person's choice → the org's first allowed → the env
+ * fallback) was written out FOUR separate times in the worker — summarizer,
+ * workflow executor, mail poller, meeting prep — and not one of them asked
+ * whether the model was allowed. `assertAskable` guards the API path only,
+ * so a background run would happily route to a barred model on nothing more
+ * than a stale row: the no-Claude rule was never true for anything that ran
+ * without a person watching.
+ *
+ * A rung naming a barred model is a rung that is not there. That includes
+ * the env fallback — a misconfigured WORKER_SUMMARY_MODEL is exactly the
+ * kind of thing that would otherwise serve one silently forever.
+ */
+export function firstServable(...candidates: (string | null | undefined)[]): string | null {
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate !== "" && !isExcluded(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
 /** Suggested first (in the order above), then everything else unchanged. */
 function bySuggestion<T extends { id: string }>(models: T[]): T[] {
   const rank = (id: string): number => {
@@ -300,7 +324,28 @@ export function createModelsRepo(db: Db, options: ModelsOptions = {}) {
           [identity.userId],
         ),
       );
-      return rows[0]?.preferred_model ?? null;
+      const stored = rows[0]?.preferred_model ?? null;
+      /**
+       * A stored preference for a BARRED model is a dangling pointer, and
+       * reading it as a preference breaks every run the person makes.
+       *
+       * This was decided the other way once, on the argument that "a legacy
+       * preference stored before the exclusion existed is as refused as a
+       * typed one" — a refusal that names the model beats a vague one. That
+       * argument is right about the CALLER NAMING a model and wrong here:
+       * `assertAskable` still refuses `body.model` by name, but nobody typed
+       * this one. The first real member had `~anthropic/claude-opus-latest`
+       * saved from when the catalogue offered it, and the consequence was
+       * not a clear message — it was the workflow run in their thread ending
+       * on "model is not available on this product" with no answer, every
+       * time, until someone thought to open a settings page.
+       *
+       * So the ladder does what a ladder is for: this rung is missing, take
+       * the next one. What the person chose is untouched in the row, and the
+       * moment the product serves that model again it takes effect.
+       */
+      if (stored !== null && isExcluded(stored)) return null;
+      return stored;
     },
 
     /**

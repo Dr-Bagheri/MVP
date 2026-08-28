@@ -8,6 +8,7 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 
 import { JSONB_PARAM, toJsonb } from "../db/jsonb.ts";
+import { iso } from "./vocabulary.ts";
 import type { Db, SqlTx } from "../db/identity.ts";
 import type { Identity } from "../agent/types.ts";
 import { NotFoundError, ValidationError } from "./errors.ts";
@@ -36,6 +37,14 @@ export interface ConnectorStatus {
   expires_at: string | null;
   /** the granted scopes include drafting — see DRAFT_SCOPE */
   can_draft: boolean;
+  /**
+   * When the poller last looked at this mailbox, and how many messages it
+   * has passed through. "Connected" answers a question nobody asks; these
+   * two answer the one they do — is it working right now (user report,
+   * 2026-08-27: "i got the email but it did not update itself").
+   */
+  polled_at: string | null;
+  messages_seen: number;
 }
 
 export interface ConnectorItem {
@@ -74,6 +83,8 @@ export interface ConnectorContext {
 }
 
 interface ConnectionRow {
+  polled_at?: string | Date | null;
+  messages_seen?: number | null;
   id: string;
   provider: ConnectorProvider;
   status: "connected" | "expired" | "revoked";
@@ -375,7 +386,8 @@ function limited(content: string): string {
 export function createConnectorsRepo(db: Db, options: ConnectorOAuthOptions = {}) {
   async function rows(identity: Identity): Promise<ConnectionRow[]> {
     return db.withIdentity(identity, (tx: SqlTx) => tx.unsafe<ConnectionRow>(
-      `select id, provider, status, account_label, expires_at, scopes
+      `select id, provider, status, account_label, expires_at, scopes,
+              polled_at, messages_seen
          from echo.connector_connection
         order by provider`,
     ));
@@ -461,6 +473,8 @@ export function createConnectorsRepo(db: Db, options: ConnectorOAuthOptions = {}
            * standing in for two different states again.
            */
           can_draft: strings(row?.scopes).includes(DRAFT_SCOPE[provider]),
+          polled_at: row?.polled_at ? iso(row.polled_at) : null,
+          messages_seen: Number(row?.messages_seen ?? 0),
         };
       });
     },
@@ -526,6 +540,10 @@ export function createConnectorsRepo(db: Db, options: ConnectorOAuthOptions = {}
            person narrowed is a connection that cannot draft, and it says so
            from the first render rather than at the first attempt */
         can_draft: payload.scopes.includes(DRAFT_SCOPE[provider]),
+        /* a fresh connection has been looked at zero times, which is a fact
+           and not a gap — the table says "Active" until the first poll */
+        polled_at: null,
+        messages_seen: 0,
       };
     },
 

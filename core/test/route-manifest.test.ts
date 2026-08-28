@@ -66,6 +66,7 @@ const REQUIRED_ROUTES: [method: string, path: string, why: string][] = [
   ["PUT", "/v1/workflows/manage/:id/publish", "M41 P5 — validate-then-insert version N+1"],
   ["PATCH", "/v1/workflows/manage/:id", "M41 P5/W32 — pause, rename, trigger, rollback"],
   ["GET", "/v1/mail/drafts", "M43 - the replies the assistant wrote and nobody has sent"],
+  ["GET", "/v1/mail/drafts/:id/source", "M43 - the message a draft answers, read from the provider on demand"],
   ["POST", "/v1/mail/drafts/:id/send", "M43 - the only outward action: a person presses send"],
   ["POST", "/v1/mail/drafts/:id/discard", "M43 - a draft the person does not want"],
   ["POST", "/v1/workflows/starters", "M41 P5 - the shipped starters: the engine is never an empty shelf"],

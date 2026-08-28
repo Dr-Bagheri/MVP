@@ -10,6 +10,7 @@
 import type {
   AuthoredWorkflow,
   MailDraft,
+  MailSourceMessage,
   AuthSessionRow,
   WorkflowRunDetail,
   WorkflowRunRecord,
@@ -1695,6 +1696,10 @@ export const api = {
     const { drafts } = await bff<{ drafts: MailDraft[] }>(
       `/api/mail/drafts${suffix ? `?${suffix}` : ""}`);
     return drafts;
+  },
+  /** the message a draft answers — read from the provider, never stored */
+  async mailDraftSource(id: string): Promise<MailSourceMessage> {
+    return bff<MailSourceMessage>(`/api/mail/drafts/${encodeURIComponent(id)}/source`);
   },
   async sendMailDraft(id: string): Promise<MailDraft> {
     return bff<MailDraft>(`/api/mail/drafts/${encodeURIComponent(id)}/send`, { method: "POST" });

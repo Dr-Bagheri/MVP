@@ -1999,6 +1999,12 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     });
   });
 
+  app.get("/v1/mail/drafts/:id/source", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id } = request.params as { id: string };
+    return reply.send(await mailDrafts.source(identity, id));
+  });
+
   app.post("/v1/mail/drafts/:id/send", async (request, reply) => {
     const identity = await auth.requireActive(request);
     refuseApiKey(identity);

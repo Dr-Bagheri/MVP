@@ -56,11 +56,22 @@ function toRecord(row: Record<string, unknown>): MailDraftRecord {
   };
 }
 
+/** The message a draft answers, for showing above the reply. */
+export interface MailSourceMessage {
+  from: string;
+  subject: string;
+  body: string;
+  occurred_at: string | null;
+}
+
 export interface MailSender {
   createDraft(identity: Identity, provider: ConnectorProvider, mail: OutgoingMail): Promise<string | null>;
   sendMail(
     identity: Identity, provider: ConnectorProvider, mail: OutgoingMail, providerDraftId: string | null,
   ): Promise<void>;
+  sourceContext(
+    identity: Identity, provider: ConnectorProvider, sourceKind: "mail_message", sourceId: string,
+  ): Promise<{ content: string; label: string }>;
 }
 
 export function createMailDraftsRepo(db: Db, connectors: MailSender) {
@@ -186,6 +197,37 @@ export function createMailDraftsRepo(db: Db, connectors: MailSender) {
       }, claimed[0].provider_draft_id);
 
       return { ...draft, status: "sent" };
+    },
+
+    /**
+     * The message this draft answers, read from the provider ON DEMAND.
+     *
+     * Not stored beside the draft, deliberately: the mail is the person's
+     * and belongs in their mailbox (W9 — we keep references, not content).
+     * The cost is a provider call when someone opens the thread; the
+     * alternative is a second copy of their correspondence in our database,
+     * which is a much larger thing to own.
+     */
+    async source(identity: Identity, id: string): Promise<MailSourceMessage> {
+      const draft = await this.get(identity, id);
+      if (!draft) throw new NotFoundError();
+      const context = await connectors.sourceContext(
+        identity, draft.provider, "mail_message", draft.source_ref);
+      /* sourceContext hands back the provider's JSON as a string, already
+         bounded; parse defensively — a shape we cannot read is still a
+         message the person can see in their mailbox, so it degrades to the
+         label rather than failing the screen */
+      try {
+        const parsed = JSON.parse(context.content) as Record<string, unknown>;
+        return {
+          from: typeof parsed.from === "string" ? parsed.from : "",
+          subject: typeof parsed.subject === "string" ? parsed.subject : context.label,
+          body: typeof parsed.body === "string" ? parsed.body : "",
+          occurred_at: typeof parsed.date === "string" ? parsed.date : null,
+        };
+      } catch {
+        return { from: "", subject: context.label, body: "", occurred_at: null };
+      }
     },
 
     async discard(identity: Identity, id: string): Promise<MailDraftRecord> {

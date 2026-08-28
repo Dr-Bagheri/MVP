@@ -229,6 +229,16 @@ export function Hub() {
   const ranRef = useRef<string | null>(null);
   useEffect(() => {
     if (!autoRun || resumeId || streaming) return;
+    /*
+     * WAIT FOR THE MODEL. The catalogue arrives on its own request, and the
+     * auto-run used to fire the moment the workflow cards landed — whichever
+     * came first. When the models lost that race the ask carried no model,
+     * the server fell back to the stored preference, and the person watched
+     * their workflow end on a refusal about a model they never chose
+     * (2026-08-27, live). A run that starts itself has to be at least as
+     * complete as one a person starts.
+     */
+    if (model === "") return;
     if (!workflowSlug || !connectorProvider || !sourceId) return;
     if (messages.length > 0) return;
     const card = workflowCards.find((candidate) => candidate.slug === workflowSlug);
@@ -247,7 +257,7 @@ export function Hub() {
       pathname: "/assistant",
       query: { workflow: workflowSlug, connectorProvider, sourceId },
     } as never);
-  }, [autoRun, resumeId, streaming, workflowSlug, connectorProvider, sourceId,
+  }, [autoRun, resumeId, streaming, model, workflowSlug, connectorProvider, sourceId,
       messages.length, workflowCards, router]);
 
   /**

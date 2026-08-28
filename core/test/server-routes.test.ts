@@ -818,21 +818,42 @@ describe("assistant SSE route", () => {
     expect(call.model.id).toBe("google/gemini-3.6-flash");
   });
 
-  it("refuses a BARRED model by name, before the stream — from the body OR a stored preference", async () => {
-    // M5: never selectable by name, never re-admittable. The wall must not
-    // care where the name came from: a legacy preference stored before the
-    // exclusion existed is as refused as a typed one.
-    for (const payload of [
-      { question: "چه شد؟", model: "anthropic/claude-opus-5" },
-      { question: "چه شد؟" }, // falls back to the stored preference below
-    ]) {
-      const db = fakeDb({ preferredModel: "anthropic/claude-opus-5" });
-      const res = await server(db).inject({
-        method: "POST", url: "/v1/assistant/ask", headers: authed, payload,
-      });
-      expect(res.statusCode).toBe(400);
-      expect(res.json().error).toMatch(/not available/);
-    }
+  it("refuses a BARRED model NAMED in the request, by name, before the stream", async () => {
+    // M5: never selectable by name, never re-admittable. A caller who types
+    // one gets told which model and why.
+    const db = fakeDb({ preferredModel: "google/gemini-3.6-flash" });
+    const res = await server(db).inject({
+      method: "POST", url: "/v1/assistant/ask", headers: authed,
+      payload: { question: "چه شد؟", model: "anthropic/claude-opus-5" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/not available/);
+  });
+
+  it("treats a barred STORED preference as no preference, not as a refusal", async () => {
+    /*
+     * RULED THE OTHER WAY ONCE, and reversed on 2026-08-27 by what it did in
+     * production. The old rule — "a legacy preference stored before the
+     * exclusion existed is as refused as a typed one" — is right about a
+     * caller NAMING a model and wrong about a stale row: the first real
+     * member had `~anthropic/claude-opus-latest` saved from when the
+     * catalogue served it, and every run in their thread ended on "model is
+     * not available on this product" with no answer.
+     *
+     * Nobody typed that. A rung of the ladder naming a barred model is a
+     * rung that is not there, so the ask falls through — here to the honest
+     * end of the ladder ("no model selected"), and in the worker to the
+     * org's next allowed model. The refusal that names a model is kept for
+     * the case where someone actually named it, above.
+     */
+    const db = fakeDb({ preferredModel: "~anthropic/claude-opus-latest" });
+    const res = await server(db).inject({
+      method: "POST", url: "/v1/assistant/ask", headers: authed,
+      payload: { question: "چه شد؟" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).not.toMatch(/not available/);
+    expect(res.json().error).toMatch(/no model selected/);
   });
 
   it("carries every attached call and the web flag onto the run", async () => {

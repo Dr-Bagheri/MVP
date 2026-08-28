@@ -49,6 +49,7 @@ import {
   WORKFLOW_PROPOSAL_KINDS,
   type WorkflowFailureCode,
 } from "../api/vocabulary.ts";
+import { firstServable } from "../api/models.ts";
 import { actorAutonomy } from "../db/capabilities.ts";
 import {
   EXTRACT_SCHEMAS,
@@ -314,7 +315,7 @@ async function callModel(context: ExecutionContext, input: string): Promise<Mode
       `select u.preferred_model, o.allowed_models
          from echo.app_user u join echo.org o on o.id = u.org_id
         where u.id = $1 limit 1`, [identity.userId]));
-  const model = rows[0]?.preferred_model ?? rows[0]?.allowed_models?.[0] ?? options.fallbackModel;
+  const model = firstServable(rows[0]?.preferred_model, rows[0]?.allowed_models?.[0], options.fallbackModel);
   if (!model) throw new RunFailure("model_refused", "no model resolvable for this owner (M5 ladder empty)");
 
   const runs = createAgentRunStore({ db, identity });

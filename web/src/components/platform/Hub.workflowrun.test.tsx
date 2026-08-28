@@ -37,6 +37,8 @@ vi.mock("@/i18n/routing", () => ({
 
 /** Read at render time, so each test sets the URL it is about. */
 let search = new URLSearchParams("");
+/** when true the catalogue answers empty — the race the guard exists for */
+let noModels = false;
 vi.mock("next/navigation", () => ({
   useSearchParams: () => search,
 }));
@@ -82,7 +84,18 @@ vi.mock("@/api/client", () => ({
     }),
     ask: (...args: Parameters<typeof scriptedAsk>) => scriptedAsk(...args),
     agentMessages: async () => persisted.map((m) => ({ ...m, tool_calls: [], proposal: null })),
-    models: async () => ({ models: [], preferred_model: null, curated: false, tool_capability_filtered: false }),
+    /*
+       A REAL model, because a hub with none cannot run anything: the
+       auto-run waits for the catalogue (a run that starts itself has to be
+       at least as complete as one a person starts), so an empty list here
+       would assert a run in the one state where no run is possible.
+    */
+    models: async () => ({
+      models: noModels
+        ? []
+        : [{ id: "google/gemini-3.1-pro-preview", name: "Gemini 3.1 Pro", reasoning: true }],
+      preferred_model: null, curated: false, tool_capability_filtered: false,
+    }),
     skills: async () => [],
     agents: async () => [],
     workflows: async () => [CARD],
@@ -104,6 +117,7 @@ describe("Hub — a picked source runs its workflow", () => {
     asked.length = 0;
     persisted.length = 0;
     replaced.length = 0;
+    noModels = false;
     search = new URLSearchParams("");
   });
 
@@ -134,6 +148,21 @@ describe("Hub — a picked source runs its workflow", () => {
       connectorProvider: "google",
       sourceId: "msg-1",
     });
+  });
+
+  it("waits for the catalogue rather than asking with no model", async () => {
+    /*
+     * The live failure this prevents (2026-08-27): the workflow cards won
+     * the race against the model list, the ask went out with no model, the
+     * server fell back to a stored preference for a model the product had
+     * since barred, and the run ended on a refusal about a model the person
+     * never chose. Nothing on screen explained it.
+     */
+    noModels = true;
+    search = new URLSearchParams(RUN_URL);
+    render(<Hub />);
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    expect(asked.length).toBe(0);
   });
 
   it("stays silent when the launcher did not ask for a run", async () => {

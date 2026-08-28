@@ -28,7 +28,7 @@ vi.mock("../src/agent/pi.ts", () => ({
   Type: {},
 }));
 
-const { createModelsRepo, SUGGESTED_MODELS } = await import("../src/api/models.ts");
+const { createModelsRepo, SUGGESTED_MODELS, firstServable } = await import("../src/api/models.ts");
 const { toolCapability, resetCapabilityCache } = await import("../src/api/model-capability.ts");
 const { createMembersRepo } = await import("../src/api/members.ts");
 import { ConflictError, NotFoundError, ValidationError } from "../src/api/errors.ts";
@@ -211,6 +211,29 @@ describe("model catalogue (M5)", () => {
         capability: capable(withClaude().map((m) => m.id)),
       }).list(ADMIN_ID);
       expect(result.models.filter((m) => claudeish(m.id))).toEqual([]);
+    });
+
+    it("the LADDER refuses a barred rung at every level, including the env fallback", async () => {
+      /*
+       * The ladder was written out four times in the worker — summarizer,
+       * workflow executor, mail poller, meeting prep — and not one of them
+       * asked whether the model was allowed, because `assertAskable` guards
+       * the API path only. Every background run therefore honoured a barred
+       * model on nothing more than a stale row: the no-Claude rule was never
+       * true for anything that ran without a person watching.
+       *
+       * The env fallback is in here deliberately. A misconfigured
+       * WORKER_SUMMARY_MODEL is exactly the kind of thing that serves one
+       * silently forever, because nobody reads it after the day it is set.
+       */
+      expect(firstServable("~anthropic/claude-opus-latest", "openai/gpt-5")).toBe("openai/gpt-5");
+      expect(firstServable("anthropic/claude-opus-5", null, "google/gemini-3.6-flash"))
+        .toBe("google/gemini-3.6-flash");
+      expect(firstServable(null, undefined, "anthropic/claude-3-haiku")).toBeNull();
+      /* the control: a ladder that returns null always would satisfy the
+         three above and serve nobody */
+      expect(firstServable("openai/gpt-5", "anthropic/claude-opus-5")).toBe("openai/gpt-5");
+      expect(firstServable(null, "google/gemini-3.6-flash")).toBe("google/gemini-3.6-flash");
     });
 
     it("cannot be re-admitted by an admin's allow-list", async () => {

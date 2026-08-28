@@ -17,6 +17,7 @@ import type { Identity, Skill } from "../agent/types.ts";
 import type { Db, SqlTx } from "../db/identity.ts";
 import type { DomainTool } from "../agent/tools.ts";
 import type { Summarizer } from "./call-steps.ts";
+import { firstServable } from "../api/models.ts";
 
 export interface SummarizerOptions<TDeps> {
   db: Db;
@@ -229,7 +230,9 @@ async function resolveModel(
       [identity.userId],
     ),
   );
-  return rows[0]?.preferred_model ?? rows[0]?.allowed_models?.[0] ?? fallback;
+  /* `?? undefined`: this resolver's callers read absence as undefined, and
+     the M5 skip path below distinguishes it from a chosen model */
+  return firstServable(rows[0]?.preferred_model, rows[0]?.allowed_models?.[0], fallback) ?? undefined;
 }
 
 export function createSummarizer<TDeps>({
