@@ -34,10 +34,10 @@ function fakeDb(cursor: string | null, ownAccount = "owner@example.com") {
         return [{ connection_id: CONNECTION, owner_id: OWNER, provider: "google" }];
       }
       if (sql.includes("claim_mail_poll")) return [{ ok: true }];
-      if (sql.includes("mail_cursor, account_label from echo.connector_connection")) {
+      if (sql.includes("from echo.connector_connection where id")) {
         /* the account is the same address the hostile message replies to, so
            the self-reply guard is the thing under test in that case */
-        return [{ mail_cursor: cursor, account_label: ownAccount }];
+        return [{ mail_cursor: cursor, mail_cursor_at: null, account_label: ownAccount }];
       }
       if (sql.includes("from echo.app_user u")) {
         return [{ preferred_model: "google/gemini-3.1-pro-preview", allowed_models: null }];

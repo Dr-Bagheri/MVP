@@ -42,7 +42,8 @@ export interface MailPollConnectors {
   ): Promise<{ content: string; label: string }>;
   newMailSince(
     identity: Identity, provider: ConnectorProvider, cursor: string | null,
-  ): Promise<{ items: ConnectorItem[]; newest: string | null }>;
+    cursorAt: Date | null,
+  ): Promise<{ items: ConnectorItem[]; newest: string | null; newestAt: Date | null }>;
 }
 
 export interface MailPollDrafts {
@@ -281,24 +282,30 @@ export async function sweepMailboxes(options: MailPollOptions, log: StepLogger):
     const provider = row.provider as ConnectorProvider;
     try {
       const cursorRows = await db.withIdentity(identity, (tx: SqlTx) =>
-        tx.unsafe<{ mail_cursor: string | null; account_label: string | null }>(
-          "select mail_cursor, account_label from echo.connector_connection where id = $1",
+        tx.unsafe<{ mail_cursor: string | null; mail_cursor_at: Date | null; account_label: string | null }>(
+          "select mail_cursor, mail_cursor_at, account_label from echo.connector_connection where id = $1",
           [row.connection_id]));
       const cursor = cursorRows[0]?.mail_cursor ?? null;
+      const cursorAt = cursorRows[0]?.mail_cursor_at ?? null;
       /* the account's own address, for the self-reply guard below */
       const ownAddress = (cursorRows[0]?.account_label ?? "").includes("@")
         ? (cursorRows[0]?.account_label ?? "")
         : "";
-      const { items, newest } = await options.connectors.newMailSince(identity, provider, cursor);
+      const { items, newest, newestAt } = await options.connectors.newMailSince(
+        identity, provider, cursor, cursorAt,
+      );
 
       /* the mark moves FIRST and unconditionally: a message we looked at and
          declined is still a message we have seen */
       if (newest && newest !== cursor) {
-        /* the count travels with the mark: both describe the same look, and
-           writing them apart is two truths about one round */
+        /* the count and the TIME travel with the mark: all three describe the
+           same look, and writing them apart is three truths about one round.
+           The time is what lets the next poll answer "what is new" after this
+           message leaves the inbox, which is what happens the moment the
+           person archives it (0119). */
         await db.withoutIdentity((tx) =>
-          tx.unsafe("select echo.set_mail_cursor($1, $2, $3)",
-            [row.connection_id, newest, items.length]));
+          tx.unsafe("select echo.set_mail_cursor($1, $2, $3, $4)",
+            [row.connection_id, newest, items.length, newestAt]));
       }
       if (cursor === null) {
         log.info({ event: "mail_poll_marked", connection: row.connection_id },

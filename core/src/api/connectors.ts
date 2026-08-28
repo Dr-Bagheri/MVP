@@ -165,6 +165,22 @@ function text(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
+/**
+ * A provider's date string as a Date, or null.
+ *
+ * Gmail hands back an RFC-2822 `Date:` header written by whatever client
+ * sent the mail, and Graph hands back ISO-8601. Both parse; neither is
+ * guaranteed, because the header is attacker-controlled text in the general
+ * case. An unreadable date must therefore mean "I do not know when this
+ * arrived" — never a silent 1970, which sorts as the oldest mail there has
+ * ever been and would read as "not new" forever.
+ */
+function when(value: string | null): Date | null {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
 function providerScopes(provider: ConnectorProvider): readonly string[] {
   return provider === "google" ? GOOGLE_SCOPES : MICROSOFT_SCOPES;
 }
@@ -780,14 +796,47 @@ export function createConnectorsRepo(db: Db, options: ConnectorOAuthOptions = {}
     /** New messages since `cursor` (a provider message id), newest first. */
     async newMailSince(
       identity: Identity, provider: ConnectorProvider, cursor: string | null,
-    ): Promise<{ items: ConnectorItem[]; newest: string | null }> {
+      /**
+       * When the cursor message arrived. Only consulted when the cursor
+       * itself is gone from the window — see below — but that is the
+       * COMMON case, not the exotic one: the mark leaves the inbox every
+       * time the person archives the mail we drafted for.
+       */
+      cursorAt: Date | null = null,
+    ): Promise<{ items: ConnectorItem[]; newest: string | null; newestAt: Date | null }> {
       const items = await this.mailMessages(identity, provider);
       const newest = items[0]?.id ?? null;
-      if (cursor === null) return { items: [], newest };
+      const newestAt = when(items[0]?.occurred_at ?? null);
+      if (cursor === null) return { items: [], newest, newestAt };
+
       const seen = items.findIndex((item) => item.id === cursor);
-      /* cursor not in the window: the mailbox moved further than one page, so
-         take the page — never the whole history, and never nothing */
-      return { items: seen === -1 ? items : items.slice(0, seen), newest };
+      if (seen !== -1) return { items: items.slice(0, seen), newest, newestAt };
+
+      /*
+       * The cursor is not in the window — archived, deleted, filtered out, or
+       * pushed off the page. This branch used to take the WHOLE page, and on
+       * 2026-08-28 that drafted replies to three hours-old messages the
+       * moment the window narrowed to the inbox. The id cannot answer "what
+       * is new" once it is gone; the time it arrived can, so ask that
+       * instead (0119).
+       */
+      if (cursorAt) {
+        return {
+          items: items.filter((item) => {
+            const at = when(item.occurred_at);
+            /* a message we cannot date is not evidence that it is new */
+            return at !== null && at.getTime() > cursorAt.getTime();
+          }),
+          newest, newestAt,
+        };
+      }
+      /*
+       * No time either: a connection marked before 0119, or a provider that
+       * gave no date. Move the mark and draft nothing this round — the next
+       * round has a time and answers properly, which costs one cycle, where
+       * the page costs a burst of replies nobody asked for.
+       */
+      return { items: [], newest, newestAt };
     },
 
     async sourceContext(
