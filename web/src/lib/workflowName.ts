@@ -59,6 +59,82 @@ export const SEEDED_STARTERS: Readonly<
     name: "پیش‌نویس پاسخ ایمیل",
     description: "هر ایمیل تازه‌ای که می‌رسد خوانده می‌شود و اگر پاسخ می‌خواهد، پیش‌نویسی نوشته می‌شود که خودتان بازبینی و ارسال کنید.",
   },
+  /* the 2026-08-28 wave: seven options per platform agent (AGENT_STARTERS
+     in core) — the parity test compares every literal below against the
+     producer's, so a rename in core goes red here instead of silently
+     falling back to Persian on the English UI */
+  "wf-starter-meeting-title": {
+    name: "پیشنهاد عنوان جلسه",
+    description: "پس از هر جلسه یک عنوان کوتاه از رونوشت پیشنهاد می‌شود — با تأیید شما ثبت می‌شود.",
+  },
+  "wf-starter-decisions-digest": {
+    name: "جمع‌بندی تصمیم‌ها",
+    description: "از خلاصه‌های جلسه‌های اخیر تصمیم‌ها را جمع می‌کند و یک جمع‌بندی کوتاه می‌نویسد.",
+  },
+  "wf-starter-action-items": {
+    name: "مرور کارهای جلسه",
+    description: "پس از هر جلسه کارهای گفته‌شده با مسئول و موعدشان بیرون کشیده می‌شود و برای هر کدام یک خط پیگیری نوشته می‌شود.",
+  },
+  "wf-starter-open-questions": {
+    name: "پرسش‌های بی‌پاسخ جلسه",
+    description: "پس از هر جلسه پرسش‌هایی که بی‌پاسخ ماند جمع می‌شود تا هیچ‌کدام گم نشود.",
+  },
+  "wf-starter-topic-history": {
+    name: "سیر موضوع‌ها",
+    description: "در خلاصه‌های جلسه‌ها موضوع‌های تکرارشونده را پیدا می‌کند و مسیر هر کدام را روایت می‌کند.",
+  },
+  "wf-starter-mail-triage": {
+    name: "تشخیص ایمیل‌های پاسخ‌خواه",
+    description: "هر ایمیل تازه خوانده می‌شود و اگر پاسخ انسانی بخواهد، با یک یادداشت کوتاه خبرتان می‌کند.",
+  },
+  "wf-starter-mail-summary": {
+    name: "خلاصهٔ ایمیل تازه",
+    description: "هر ایمیل تازه در دو-سه خط خلاصه می‌شود: چه می‌خواهد، از چه کسی، تا کی.",
+  },
+  "wf-starter-mail-reply-formal": {
+    name: "پیش‌نویس رسمی پاسخ",
+    description: "برای ایمیل‌هایی که پاسخ می‌خواهند پیش‌نویسی با لحن رسمی و اداری نوشته می‌شود — ارسال همیشه با خود شماست.",
+  },
+  "wf-starter-mail-reply-brief": {
+    name: "پاسخ کوتاه دریافت",
+    description: "برای ایمیل‌های پاسخ‌خواه یک پیش‌نویس کوتاه دو-سه جمله‌ای نوشته می‌شود: رسید، در دست بررسی است.",
+  },
+  "wf-starter-mail-meeting-request": {
+    name: "تشخیص درخواست جلسه",
+    description: "اگر ایمیلی درخواست جلسه یا قرار داشته باشد، همان لحظه با یادداشتی کوتاه خبرتان می‌کند.",
+  },
+  "wf-starter-mail-context": {
+    name: "پیشینهٔ فرستنده و موضوع",
+    description: "برای هر ایمیل تازه، در خلاصه‌های جلسه‌ها هرچه به فرستنده یا موضوعش مربوط است جمع می‌شود.",
+  },
+  "wf-starter-prep-brief": {
+    name: "جمع‌بندی پیش از جلسه",
+    description: "کمی پیش از هر جلسه، از سابقهٔ گفت‌وگوها یک جمع‌بندی کوتاه ساخته می‌شود: چه گذشت، چه ماند، چه بپرسید.",
+  },
+  "wf-starter-prep-people": {
+    name: "شناخت شرکت‌کنندگان",
+    description: "پیش از هر جلسه سابقهٔ گفت‌وگو با شرکت‌کنندگان مرور می‌شود: آخرین بار چه گفتید و چه چیزی از هر نفر مانده.",
+  },
+  "wf-starter-prep-questions": {
+    name: "پرسش‌های پیشنهادی جلسه",
+    description: "پیش از هر جلسه چند پرسش از دل خلاصه‌های پیشین پیشنهاد می‌شود که بحث را جلو ببرد.",
+  },
+  "wf-starter-prep-open-decisions": {
+    name: "موارد باز پیش از جلسه",
+    description: "پیش از هر جلسه تصمیم‌های معلق و کارهای ناتمام فهرست می‌شود تا در جلسه بسته شوند.",
+  },
+  "wf-starter-prep-related": {
+    name: "رکوردهای مرتبط با جلسه",
+    description: "پیش از هر جلسه تماس‌ها و جلسه‌های مرتبط با آن پیدا و فهرست می‌شود.",
+  },
+  "wf-starter-prep-today": {
+    name: "نمای امروز",
+    description: "هر وقت بخواهید، از تازه‌ترین تماس‌ها یک نمای کلی می‌سازد: چه گذشته، چه در جریان است، چه چیزی به توجه نیاز دارد.",
+  },
+  "wf-starter-prep-agenda": {
+    name: "پیش‌نویس دستور جلسهٔ بعد",
+    description: "پس از هر جلسه از تصمیم‌ها و کارهای آن، دستور جلسهٔ بعدی پیش‌نویس می‌شود.",
+  },
 };
 
 /** what a caller has to hand us — every workflow list row carries these */

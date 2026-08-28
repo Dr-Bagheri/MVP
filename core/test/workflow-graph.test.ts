@@ -19,7 +19,7 @@ import {
   type ValidateOptions,
 } from "../src/api/workflow-graph.ts";
 import { ValidationError } from "../src/api/errors.ts";
-import { STARTER_WORKFLOWS } from "../src/api/workflow-authoring.ts";
+import { AGENT_STARTERS, STARTER_WORKFLOWS } from "../src/api/workflow-authoring.ts";
 
 const OPTS: ValidateOptions = { maxAutonomy: "assist" };
 
@@ -80,6 +80,31 @@ describe("the SHIPPED starters validate under their own ceilings (rule 10 pin)",
         .not.toThrow();
     });
   }
+
+  it("no two starters share a handle — install() 409s the second wearer", () => {
+    const handles = Object.values(STARTER_WORKFLOWS).map((starter) => starter.handle);
+    expect(new Set(handles).size).toBe(handles.length);
+  });
+});
+
+describe("AGENT_STARTERS — the seven options each platform agent offers", () => {
+  it("every agent offers exactly seven", () => {
+    for (const [agent, keys] of Object.entries(AGENT_STARTERS)) {
+      expect(keys, agent).toHaveLength(7);
+    }
+  });
+
+  it("the assignments PARTITION the registry — nothing unassigned, nothing offered twice", () => {
+    /*
+     * Sorted-list equality carries three facts at once: every offered key
+     * exists in STARTER_WORKFLOWS, no key is offered by two agents, and no
+     * starter is left off every menu. The last one is the one that rots
+     * quietly: a starter added to the registry but to no agent's seven is
+     * a shelf item no door leads to — built, validated, unreachable.
+     */
+    const offered = Object.values(AGENT_STARTERS).flat().sort();
+    expect(offered).toEqual(Object.keys(STARTER_WORKFLOWS).sort());
+  });
 });
 
 describe("an ask step may search the web", () => {

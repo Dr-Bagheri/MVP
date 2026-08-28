@@ -42,6 +42,25 @@ const HANDLE = /^[a-z0-9][a-z0-9-]{0,62}$/;
  * db/capabilities.ts). Existing published versions may still CARRY act or
  * watch on their rows — the wire field stays — but nothing resolves above
  * assist any more, so every write waits for its human everywhere.
+ *
+ * [EXTENDED 2026-08-28, user directive: "for each of these agents make 7
+ * different workflow to choose from"] each platform agent (db/0124:
+ * meetings / mail / prep) offers SEVEN starters — `AGENT_STARTERS` below
+ * is that menu. Every addition obeys the same law as the first three:
+ * published through the validated path, pinned in the validator's corpus
+ * (test/workflow-graph.test.ts iterates this whole object), and mirrored
+ * for display in web/src/lib/workflowName.ts. Two runtime facts shaped
+ * these graphs, and they are worth restating because the validator cannot
+ * see them: `search scope:"transcript"` executes only against
+ * {{trigger.call_id}} (worker/workflow-step.ts), so transcript-reading
+ * starters are call-triggered; and binding a SINGLE envelope field
+ * ({{s1.title}}) fails the run when the provider left it empty, so event
+ * context is bound as the WHOLE envelope ({{s1}}), which tolerates absent
+ * fields and fences as content. `notify.card` values come from the
+ * agent_card CHECK (db/0117): workflow_result, or mail_draft where a
+ * draft was actually written — an invented card kind would publish and
+ * then 23514 at 3 a.m., which is the exact failure this registry must
+ * never ship.
  */
 export const STARTER_WORKFLOWS = {
   followups: {
@@ -116,8 +135,415 @@ export const STARTER_WORKFLOWS = {
       ],
     },
   },
+
+  /* ── the MEETINGS agent's remaining five (autotag + followups above) ── */
+
+  meeting_title: {
+    handle: "wf-starter-meeting-title",
+    name: "پیشنهاد عنوان جلسه",
+    description: "پس از هر جلسه یک عنوان کوتاه از رونوشت پیشنهاد می‌شود — با تأیید شما ثبت می‌شود.",
+    trigger_event: "call.summarized" as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "search", scope: "transcript", of: "{{trigger.call_id}}" },
+        /* propose.from must be TYPED data, and ask's prose is not — so the
+           title travels as topics_v1's first (and only) list item */
+        { id: "s2", kind: "extract", from: "{{s1}}", schema: "topics_v1",
+          instruction: "از این رونوشت فقط یک مورد در topics بگذار: عنوانی کوتاه و گویا برای این جلسه، حداکثر ده کلمه." },
+        { id: "s3", kind: "propose", proposal: "set_title",
+          from: "{{s2.topics[0]}}", call: "{{trigger.call_id}}" },
+        { id: "s4", kind: "wait", on: "decision" },
+        { id: "s5", kind: "apply", from: "s3" },
+        { id: "s6", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
+  decisions_digest: {
+    handle: "wf-starter-decisions-digest",
+    name: "جمع‌بندی تصمیم‌ها",
+    description: "از خلاصه‌های جلسه‌های اخیر تصمیم‌ها را جمع می‌کند و یک جمع‌بندی کوتاه می‌نویسد.",
+    trigger_event: null as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "search", scope: "summaries", limit: 10 },
+        { id: "s2", kind: "extract", from: "{{s1}}", schema: "decisions_v1",
+          instruction: "از این خلاصه‌ها تصمیم‌های ثبت‌شده، کارهای سپرده‌شده و پرسش‌های باز را دربیاور." },
+        { id: "s3", kind: "ask",
+          instruction: "این تصمیم‌ها از جلسه‌های اخیر است: {{s2.decisions}} و این کارها: {{s2.action_items}} — یک جمع‌بندی کوتاه بنویس: هر تصمیم یک خط، و در پایان بگو چه چیزهایی هنوز باز مانده است." },
+        { id: "s4", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
+  action_items: {
+    handle: "wf-starter-action-items",
+    name: "مرور کارهای جلسه",
+    description: "پس از هر جلسه کارهای گفته‌شده با مسئول و موعدشان بیرون کشیده می‌شود و برای هر کدام یک خط پیگیری نوشته می‌شود.",
+    trigger_event: "call.summarized" as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "search", scope: "transcript", of: "{{trigger.call_id}}" },
+        /* the schema demands non-empty assignee/due, and a meeting often
+           names neither — the instruction supplies the honest filler so a
+           silent field never fails the whole extraction */
+        { id: "s2", kind: "extract", from: "{{s1}}", schema: "action_items_v1",
+          instruction: "کارهای گفته‌شده در این جلسه را دربیاور؛ اگر مسئول یا موعد گفته نشده بود، همان «نامشخص» را بنویس." },
+        { id: "s3", kind: "decide", on: "s2.action_items.length", gt: 0, then: "s4", else: "s6" },
+        { id: "s4", kind: "foreach", over: "{{s2.action_items}}", max: 10, do: "s5" },
+        { id: "s5", kind: "ask",
+          instruction: "برای این کار یک خط پیگیری بنویس که مسئول و موعد را نام ببرد: {{s4.item}}" },
+        { id: "s6", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
+  open_questions: {
+    handle: "wf-starter-open-questions",
+    name: "پرسش‌های بی‌پاسخ جلسه",
+    description: "پس از هر جلسه پرسش‌هایی که بی‌پاسخ ماند جمع می‌شود تا هیچ‌کدام گم نشود.",
+    trigger_event: "call.summarized" as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "search", scope: "transcript", of: "{{trigger.call_id}}" },
+        { id: "s2", kind: "extract", from: "{{s1}}", schema: "decisions_v1",
+          instruction: "تمرکز روی پرسش‌های باز: هر پرسشی که در جلسه مطرح شد و پاسخ روشنی نگرفت را در open_questions بیاور؛ تصمیم‌ها و کارها را هم اگر بود ثبت کن." },
+        /* no open questions -> straight to the card; the run still says it
+           looked (a silent end is the wrong kind of nothing) */
+        { id: "s3", kind: "decide", on: "s2.open_questions.length", gt: 0, then: "s4", else: "s5" },
+        { id: "s4", kind: "ask",
+          instruction: "این پرسش‌ها در جلسه بی‌پاسخ ماند: {{s2.open_questions}} — برای هر کدام بنویس پاسخش را باید از کجا یا از چه کسی گرفت." },
+        { id: "s5", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
+  topic_history: {
+    handle: "wf-starter-topic-history",
+    name: "سیر موضوع‌ها",
+    description: "در خلاصه‌های جلسه‌ها موضوع‌های تکرارشونده را پیدا می‌کند و مسیر هر کدام را روایت می‌کند.",
+    trigger_event: null as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "search", scope: "summaries", limit: 20 },
+        { id: "s2", kind: "ask", from: "{{s1}}",
+          instruction: "در این خلاصه‌ها موضوع‌های تکرارشونده را پیدا کن و برای هر کدام بنویس در طول جلسه‌ها چه مسیری داشته است: کجا مطرح شد، چه تغییری کرد، اکنون کجاست." },
+        { id: "s3", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
+
+  /* ── the MAIL agent's remaining six (mail_reply above) ────────────────
+     None of these are manual: the grammar can reach a specific message
+     only through {{trigger.source_ref}}, so every mail starter rides
+     mail.received. The model steps that read a stranger's prose carry
+     tools:"none" even where no draft_mail forces it — retrieval already
+     happened in a deterministic step, and a mail body must never steer
+     tools (the M43 asymmetry, applied one notch earlier than the
+     validator demands). */
+
+  mail_triage: {
+    handle: "wf-starter-mail-triage",
+    name: "تشخیص ایمیل‌های پاسخ‌خواه",
+    description: "هر ایمیل تازه خوانده می‌شود و اگر پاسخ انسانی بخواهد، با یک یادداشت کوتاه خبرتان می‌کند.",
+    trigger_event: "mail.received" as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "fetch", source_kind: "mail_message", of: "{{trigger.source_ref}}" },
+        { id: "s2", kind: "extract", schema: "mail_reply_v1", tools: "none",
+          from: "{{s1.body}}",
+          instruction: "این پیام را بخوان و تشخیص بده آیا پاسخِ یک انسان را می‌خواهد یا نه — اعلان‌ها، رسیدها و خبرنامه‌ها نمی‌خواهند. در reply همین را بگو؛ در note یک جمله دلیلت را بنویس؛ در body در یک خط بنویس چه اقدامی لازم است." },
+        /* the quiet mail ends quietly — a card for every newsletter would
+           teach the person to ignore the channel */
+        { id: "s3", kind: "decide", on: "s2.reply", eq: true, then: "s4", else: "__end" },
+        { id: "s4", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
+  mail_summary: {
+    handle: "wf-starter-mail-summary",
+    name: "خلاصهٔ ایمیل تازه",
+    description: "هر ایمیل تازه در دو-سه خط خلاصه می‌شود: چه می‌خواهد، از چه کسی، تا کی.",
+    trigger_event: "mail.received" as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "fetch", source_kind: "mail_message", of: "{{trigger.source_ref}}" },
+        /* the WHOLE envelope, not s1.subject — a subjectless mail is legal,
+           and a single-field binding fails the run when the field is empty */
+        { id: "s2", kind: "ask", tools: "none", from: "{{s1}}",
+          instruction: "این ایمیل را در دو-سه خط خلاصه کن: چه می‌خواهد، از چه کسی، تا چه زمانی؛ اگر مهلتی یا پیوستی نام برده شده آن را هم بیاور." },
+        { id: "s3", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
+  mail_reply_formal: {
+    handle: "wf-starter-mail-reply-formal",
+    name: "پیش‌نویس رسمی پاسخ",
+    description: "برای ایمیل‌هایی که پاسخ می‌خواهند پیش‌نویسی با لحن رسمی و اداری نوشته می‌شود — ارسال همیشه با خود شماست.",
+    trigger_event: "mail.received" as string | null,
+    /* same shape as mail_reply, same reasoning for the assist ceiling:
+       the draft_mail apply is the ruled inert kind, and db/0114's grant
+       wall is what keeps the draft unsent — never this field */
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "fetch", source_kind: "mail_message", of: "{{trigger.source_ref}}" },
+        { id: "s2", kind: "extract", schema: "mail_reply_v1", tools: "none",
+          from: "{{s1.body}}",
+          instruction: "این پیام را بخوان و تصمیم بگیر که آیا از یک انسان پاسخ می‌خواهد یا نه — اعلان‌ها، رسیدها و خبرنامه‌ها نمی‌خواهند. اگر می‌خواهد، پاسخی رسمی و اداری به همان زبان پیام بنویس: با «با سلام و احترام» یا معادل آن در زبان پیام آغاز کن، در بندهای کوتاه و سنجیده بنویس، و با «با احترام» یا معادل آن پایان بده؛ هرگز نامی برای صاحب حساب از خودت نساز. در note یک جمله برای صاحب حساب بنویس که چه کردی." },
+        { id: "s3", kind: "decide", on: "s2.reply", eq: true, then: "s4", else: "__end" },
+        { id: "s4", kind: "propose", proposal: "draft_mail",
+          message: "{{s1.id}}", to: "{{s1.reply_to}}", subject: "{{s1.subject}}",
+          from: "{{s2.body}}" },
+        { id: "s5", kind: "apply", from: "s4" },
+        { id: "s6", kind: "notify", card: "mail_draft" },
+      ],
+    },
+  },
+  mail_reply_brief: {
+    handle: "wf-starter-mail-reply-brief",
+    name: "پاسخ کوتاه دریافت",
+    description: "برای ایمیل‌های پاسخ‌خواه یک پیش‌نویس کوتاه دو-سه جمله‌ای نوشته می‌شود: رسید، در دست بررسی است.",
+    trigger_event: "mail.received" as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "fetch", source_kind: "mail_message", of: "{{trigger.source_ref}}" },
+        { id: "s2", kind: "extract", schema: "mail_reply_v1", tools: "none",
+          from: "{{s1.body}}",
+          instruction: "این پیام را بخوان و تصمیم بگیر که آیا فرستنده منتظر پاسخ است یا نه — اعلان‌ها، رسیدها و خبرنامه‌ها منتظر نیستند. اگر هست، فقط یک پاسخ کوتاهِ دو-سه جمله‌ای به همان زبان پیام بنویس: دریافت را تأیید کن و بگو در دست بررسی است و پاسخ کامل به‌زودی می‌رسد؛ قولی جز این نده و هرگز نامی برای صاحب حساب از خودت نساز. در note یک جمله برای صاحب حساب بنویس که چه کردی." },
+        { id: "s3", kind: "decide", on: "s2.reply", eq: true, then: "s4", else: "__end" },
+        { id: "s4", kind: "propose", proposal: "draft_mail",
+          message: "{{s1.id}}", to: "{{s1.reply_to}}", subject: "{{s1.subject}}",
+          from: "{{s2.body}}" },
+        { id: "s5", kind: "apply", from: "s4" },
+        { id: "s6", kind: "notify", card: "mail_draft" },
+      ],
+    },
+  },
+  mail_meeting_request: {
+    handle: "wf-starter-mail-meeting-request",
+    name: "تشخیص درخواست جلسه",
+    description: "اگر ایمیلی درخواست جلسه یا قرار داشته باشد، همان لحظه با یادداشتی کوتاه خبرتان می‌کند.",
+    trigger_event: "mail.received" as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "fetch", source_kind: "mail_message", of: "{{trigger.source_ref}}" },
+        /* mail_reply_v1 reused as a detector: `reply` is the typed boolean
+           decide needs, and the instruction redefines what the boolean is
+           ABOUT — the schema is a shape contract, not a semantics one */
+        { id: "s2", kind: "extract", schema: "mail_reply_v1", tools: "none",
+          from: "{{s1.body}}",
+          instruction: "فقط تشخیص بده آیا این پیام درخواست جلسه، تماس یا قرار دارد. اگر دارد reply را true کن؛ در note بنویس چه کسی و برای چه؛ در body زمان‌های پیشنهادشده را بیاور و اگر زمانی پیشنهاد نشده بنویس «زمانی پیشنهاد نشده»." },
+        { id: "s3", kind: "decide", on: "s2.reply", eq: true, then: "s4", else: "__end" },
+        { id: "s4", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
+  mail_context: {
+    handle: "wf-starter-mail-context",
+    name: "پیشینهٔ فرستنده و موضوع",
+    description: "برای هر ایمیل تازه، در خلاصه‌های جلسه‌ها هرچه به فرستنده یا موضوعش مربوط است جمع می‌شود.",
+    trigger_event: "mail.received" as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    /* the replacement for an end-of-day recap, which the grammar cannot
+       say: no schedule trigger exists and no step enumerates a mailbox
+       (fetch reads ONE message; search has no mail scope). This one is
+       expressible AND more useful per message: the org's own records,
+       brought to the mail the moment it lands. */
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "fetch", source_kind: "mail_message", of: "{{trigger.source_ref}}" },
+        /* retrieval is THIS deterministic step, so the model step below can
+           stay tools:"none" while still having records to work with */
+        { id: "s2", kind: "search", scope: "summaries", limit: 10 },
+        { id: "s3", kind: "ask", tools: "none", from: "{{s2}}",
+          instruction: "ایمیل تازه‌ای رسیده است: {{s1}} — در خلاصه‌های جلسه‌ها که در ادامه می‌آید هرچه به فرستنده یا موضوع این ایمیل مربوط است را جمع کن؛ اگر چیزی پیدا نشد، همین را صریح بگو." },
+        { id: "s4", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
+
+  /* ── the PREP agent's seven ───────────────────────────────────────────
+     The meeting.soon graphs bind the calendar event as the WHOLE envelope
+     ({{s1}}): titles, attendees and descriptions are all optional on real
+     providers, and a single-field binding fails the run whenever its field
+     is absent. The brief-shaped asks keep the default READ tools — M44's
+     ruling: what they produce never leaves the building, so retrieval is
+     the value, not a hazard. */
+
+  prep_brief: {
+    handle: "wf-starter-prep-brief",
+    name: "جمع‌بندی پیش از جلسه",
+    description: "کمی پیش از هر جلسه، از سابقهٔ گفت‌وگوها یک جمع‌بندی کوتاه ساخته می‌شود: چه گذشت، چه ماند، چه بپرسید.",
+    trigger_event: "meeting.soon" as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "fetch", source_kind: "calendar_event", of: "{{trigger.source_ref}}" },
+        { id: "s2", kind: "search", scope: "summaries", limit: 10 },
+        { id: "s3", kind: "ask", from: "{{s2}}",
+          instruction: "این رویداد تقویم پیشِ روست: {{s1}} — از خلاصه‌هایی که در ادامه می‌آید یک جمع‌بندی کوتاه برای این جلسه بساز: چه گذشت، چه تصمیم‌هایی باز ماند، چه باید بپرسید. آن‌قدر کوتاه که در یک دقیقه خوانده شود." },
+        { id: "s4", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
+  prep_people: {
+    handle: "wf-starter-prep-people",
+    name: "شناخت شرکت‌کنندگان",
+    description: "پیش از هر جلسه سابقهٔ گفت‌وگو با شرکت‌کنندگان مرور می‌شود: آخرین بار چه گفتید و چه چیزی از هر نفر مانده.",
+    trigger_event: "meeting.soon" as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "fetch", source_kind: "calendar_event", of: "{{trigger.source_ref}}" },
+        { id: "s2", kind: "search", scope: "directory", limit: 20 },
+        { id: "s3", kind: "ask", from: "{{s2}}",
+          instruction: "این رویداد تقویم پیشِ روست: {{s1}} — با کمک ابزارها سابقهٔ گفت‌وگو با شرکت‌کنندگان این جلسه را بررسی کن و دربارهٔ هر نفر دو خط بنویس: آخرین بار چه گفتید و چه چیزی از او مانده است." },
+        { id: "s4", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
+  prep_questions: {
+    handle: "wf-starter-prep-questions",
+    name: "پرسش‌های پیشنهادی جلسه",
+    description: "پیش از هر جلسه چند پرسش از دل خلاصه‌های پیشین پیشنهاد می‌شود که بحث را جلو ببرد.",
+    trigger_event: "meeting.soon" as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "fetch", source_kind: "calendar_event", of: "{{trigger.source_ref}}" },
+        { id: "s2", kind: "search", scope: "summaries", limit: 10 },
+        { id: "s3", kind: "ask", from: "{{s2}}",
+          instruction: "برای جلسهٔ پیشِ رو ({{s1}}) پنج پرسش پیشنهاد بده که بحث را جلو ببرد — پرسش‌هایی که از خلاصه‌های پیشین برمی‌آید، نه کلیات." },
+        { id: "s4", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
+  prep_open_decisions: {
+    handle: "wf-starter-prep-open-decisions",
+    name: "موارد باز پیش از جلسه",
+    description: "پیش از هر جلسه تصمیم‌های معلق و کارهای ناتمام فهرست می‌شود تا در جلسه بسته شوند.",
+    trigger_event: "meeting.soon" as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "fetch", source_kind: "calendar_event", of: "{{trigger.source_ref}}" },
+        { id: "s2", kind: "search", scope: "summaries", limit: 10 },
+        { id: "s3", kind: "extract", from: "{{s2}}", schema: "decisions_v1",
+          instruction: "از این خلاصه‌ها تصمیم‌های گرفته‌شده، کارهای سپرده‌شده و پرسش‌های باز را دربیاور." },
+        { id: "s4", kind: "decide", on: "s3.open_questions.length", gt: 0, then: "s5", else: "s6" },
+        { id: "s5", kind: "ask",
+          instruction: "جلسه‌ای در راه است: {{s1}} — این پرسش‌ها هنوز بازند: {{s3.open_questions}} و این کارها هنوز در جریان‌اند: {{s3.action_items}}. فهرست کن کدام‌ها را باید همین جلسه بست." },
+        { id: "s6", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
+  prep_related: {
+    handle: "wf-starter-prep-related",
+    name: "رکوردهای مرتبط با جلسه",
+    description: "پیش از هر جلسه تماس‌ها و جلسه‌های مرتبط با آن پیدا و فهرست می‌شود.",
+    trigger_event: "meeting.soon" as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "fetch", source_kind: "calendar_event", of: "{{trigger.source_ref}}" },
+        { id: "s2", kind: "search", scope: "calls", limit: 10 },
+        { id: "s3", kind: "ask", from: "{{s2}}",
+          instruction: "این رویداد تقویم پیشِ روست: {{s1}} — از میان تماس‌هایی که در ادامه می‌آید هر کدام را که به این جلسه مربوط است نام ببر و بگو چرا؛ اگر هیچ‌کدام مربوط نبود، همین را بگو." },
+        { id: "s4", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
+  prep_today: {
+    handle: "wf-starter-prep-today",
+    name: "نمای امروز",
+    description: "هر وقت بخواهید، از تازه‌ترین تماس‌ها یک نمای کلی می‌سازد: چه گذشته، چه در جریان است، چه چیزی به توجه نیاز دارد.",
+    trigger_event: null as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "search", scope: "calls", limit: 10 },
+        { id: "s2", kind: "ask", from: "{{s1}}",
+          instruction: "از این تازه‌ترین تماس‌ها یک نمای کلی بساز: چه جلسه‌هایی برگزار شده، چه موضوع‌هایی در جریان است و چه چیزی اکنون به توجه نیاز دارد. با کمک ابزارها جزئیات موارد مهم را بررسی کن." },
+        { id: "s3", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
+  prep_agenda: {
+    handle: "wf-starter-prep-agenda",
+    name: "پیش‌نویس دستور جلسهٔ بعد",
+    description: "پس از هر جلسه از تصمیم‌ها و کارهای آن، دستور جلسهٔ بعدی پیش‌نویس می‌شود.",
+    trigger_event: "call.summarized" as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "search", scope: "transcript", of: "{{trigger.call_id}}" },
+        { id: "s2", kind: "extract", from: "{{s1}}", schema: "decisions_v1",
+          instruction: "تصمیم‌ها، کارهای سپرده‌شده و پرسش‌های باز این جلسه را دربیاور." },
+        { id: "s3", kind: "ask",
+          instruction: "بر پایهٔ این جلسه، دستور جلسهٔ بعدی را پیش‌نویس کن — تصمیم‌هایی که باید پیگیری شود: {{s2.decisions}}؛ کارها: {{s2.action_items}}؛ پرسش‌های باز: {{s2.open_questions}}. هر بند یک خط." },
+        { id: "s4", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
 } as const;
 export type StarterKey = keyof typeof STARTER_WORKFLOWS;
+
+/**
+ * WHICH SEVEN COME UP WITH EACH AGENT (user directive, 2026-08-28: "for
+ * each of these agents make 7 different workflow to choose from when it
+ * comes up — i want to have options").
+ *
+ * Keys are the three platform agents' HANDLES (db/0124) — the same string
+ * the wire's AgentCard carries, which is what the panel has in hand when
+ * an agent is picked. Values are STARTER_WORKFLOWS keys, so a typo here is
+ * a compile error rather than an empty menu.
+ *
+ * The web panel cannot import this module (node:crypto — see
+ * workflowName.ts's header for the precedent), so
+ * web/src/lib/agentStarters.ts mirrors it by HANDLE with a parity test
+ * that imports THIS object in Node and compares whole-object. The core
+ * suite pins the other invariants: exactly seven per agent, every key
+ * real, and the 21 assignments partitioning the registry — an unassigned
+ * starter is a shelf item no door leads to.
+ */
+export const AGENT_STARTERS: Readonly<Record<"meetings" | "mail" | "prep", readonly StarterKey[]>> = {
+  meetings: [
+    "autotag", "followups", "meeting_title", "decisions_digest",
+    "action_items", "open_questions", "topic_history",
+  ],
+  mail: [
+    "mail_reply", "mail_triage", "mail_summary", "mail_reply_formal",
+    "mail_reply_brief", "mail_meeting_request", "mail_context",
+  ],
+  prep: [
+    "prep_brief", "prep_people", "prep_questions", "prep_open_decisions",
+    "prep_related", "prep_today", "prep_agenda",
+  ],
+};
 
 export interface AuthoredWorkflow {
   id: string;

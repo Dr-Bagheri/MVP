@@ -7,6 +7,8 @@ import type { AgentCard, AgentWorkflowLink } from "@/api/types";
 import { Link } from "@/i18n/routing";
 import { Icon } from "@/components/icons";
 import { Chip } from "@/components/ui";
+import { AGENT_STARTER_HANDLES } from "@/lib/agentStarters";
+import { SEEDED_STARTERS, useWorkflowCopy } from "@/lib/workflowName";
 import { agentColorClasses, agentIconName, agentLevelTone, toolDescription, useAgentCopy } from "./agentAppearance";
 
 /**
@@ -71,6 +73,32 @@ export function AgentOverviewPanel({
     }
   }, [t]);
 
+  /* shipped-starter names localize exactly as they do on /workflows */
+  const workflowCopy = useWorkflowCopy();
+
+  /**
+   * The agent's SEVEN STARTER OPTIONS (user directive, 2026-08-28) — a
+   * static catalogue lookup by the agent's handle, no wire involved.
+   *
+   * DEDUPED BY HANDLE against the attached list: a starter the org has
+   * installed AND attached to this agent already renders above as an
+   * attached workflow, and the same handle twice would read as two
+   * different workflows. While the attached list is still loading the
+   * whole options block stays hidden (see the render condition) — deduping
+   * against an unknown list would flash a row and then remove it.
+   *
+   * The SEEDED_STARTERS filter cannot drop a real option (the parity
+   * tests pin catalogue completeness); it only keeps a drifted mirror
+   * from rendering a nameless link.
+   */
+  const starterOptions = useMemo(() => {
+    const offered = AGENT_STARTER_HANDLES[agent.handle] ?? [];
+    const attached = new Set((workflows ?? []).map((workflow) => workflow.handle));
+    return offered.filter(
+      (handle) => !attached.has(handle) && SEEDED_STARTERS[handle] !== undefined,
+    );
+  }, [agent.handle, workflows]);
+
   return (
     <section
       aria-label={t("overviewLabel")}
@@ -125,6 +153,39 @@ export function AgentOverviewPanel({
                 <p className="mt-2 text-xs leading-5 text-fg-subtle">{t("overviewHint")}</p>
               </>
             )}
+            {/* the starter menu renders once the attached list has ANSWERED —
+                loaded or failed — never during loading (the panel claims
+                nothing it cannot yet dedupe). On a failed fetch nothing can
+                render twice, because the attached rows are not rendered at
+                all; the options are static catalogue links and stay useful. */}
+            {starterOptions.length > 0 && (workflows !== null || failed) ? (
+              <>
+                <h3 className="mt-4 text-xs font-medium uppercase tracking-wide text-fg-subtle">{t("overviewStarters")}</h3>
+                <ul className="mt-2 max-h-44 space-y-1.5 overflow-y-auto">
+                  {starterOptions.map((handle) => {
+                    const seeded = SEEDED_STARTERS[handle]!;
+                    /* the catalogue strings are by definition untouched, so
+                       workflowCopy localizes them exactly as /workflows does */
+                    const copyFor = workflowCopy({
+                      handle, name: seeded.name, description: seeded.description,
+                    });
+                    return (
+                      <li key={handle}>
+                        <Link
+                          href={`/workflows/${handle}`}
+                          title={copyFor.description}
+                          className="flex items-center justify-between gap-2 rounded-lg border border-dashed border-border px-3 py-2 text-sm text-fg-muted transition-colors hover:border-accent hover:text-accent"
+                        >
+                          <span className="truncate">{copyFor.name}</span>
+                          <span className="shrink-0 text-xs text-fg-subtle" dir="ltr">{handle}</span>
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+                <p className="mt-2 text-xs leading-5 text-fg-subtle">{t("overviewStartersHint")}</p>
+              </>
+            ) : null}
           </div>
           <div>
             <h3 className="text-xs font-medium uppercase tracking-wide text-fg-subtle">{t("overviewKnowledge")}</h3>
