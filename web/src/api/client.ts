@@ -20,6 +20,7 @@ import type {
   AgentMessage,
   AgentCard,
   AgentStats,
+  AgentWorkflowLink,
   CallNote,
   RunTrace,
   AssistantSession,
@@ -1264,10 +1265,52 @@ export const api = {
     instructions: string;
     model?: string | null;
     tools?: string[];
+    icon?: string;
+    color?: string;
+    web?: boolean;
   }): Promise<AgentCard> {
     return bff<AgentCard>("/api/agents", {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input),
     });
+  },
+  /**
+   * M47 — the editor's save. `patch` carries ONLY the fields the person
+   * changed (the org-form precedent: diff-based send, so a stale screen
+   * cannot clobber a colleague's edit with old values it never touched).
+   * `instructions` never reads back over the wire — absent here means KEEP,
+   * which is the platform's patch contract and the only honest option for a
+   * write-only field.
+   */
+  async updateAgent(id: string, patch: Partial<{
+    name: string;
+    description: string;
+    instructions: string;
+    model: string | null;
+    tools: string[];
+    icon: string;
+    color: string;
+    web: boolean;
+  }>): Promise<AgentCard> {
+    return bff<AgentCard>(`/api/agents/${encodeURIComponent(id)}`, {
+      method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(patch),
+    });
+  },
+  /** M47 — what an agent carries, for the overview that opens with it. */
+  async agentWorkflows(id: string): Promise<AgentWorkflowLink[]> {
+    const { workflows } = await bff<{ workflows: AgentWorkflowLink[] }>(
+      `/api/agents/${encodeURIComponent(id)}/workflows`);
+    return workflows;
+  },
+  /** M47 — whole-set write (the producer's contract); answers the set as it
+      now stands, so the caller adopts the server's truth rather than its own. */
+  async setAgentWorkflows(id: string, workflowIds: string[]): Promise<AgentWorkflowLink[]> {
+    const { workflows } = await bff<{ workflows: AgentWorkflowLink[] }>(
+      `/api/agents/${encodeURIComponent(id)}/workflows`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ workflow_ids: workflowIds }),
+      });
+    return workflows;
   },
   async workflows(): Promise<WorkflowCard[]> {
     const { workflows } = await bff<{ workflows: WorkflowCard[] }>("/api/workflows");
@@ -1286,11 +1329,27 @@ export const api = {
     const { connectors } = await bff<{ connectors: ConnectorStatus[] }>("/api/connectors");
     return connectors;
   },
-  async connectorItems(provider: ConnectorProvider, source: "calendar" | "mail"): Promise<ConnectorItem[]> {
+  async connectorItems(
+    provider: ConnectorProvider,
+    /* the wire's own vocabulary for `GET /v1/connectors/:provider/:source` —
+       drive and meet joined it with M47 (google-only lenses; the server 400s
+       them for microsoft, so the detail page never offers them there) */
+    source: "calendar" | "mail" | "drive" | "meet",
+  ): Promise<ConnectorItem[]> {
     const { items } = await bff<{ items: ConnectorItem[] }>(
       `/api/connectors/${encodeURIComponent(provider)}/${source}`,
     );
     return items;
+  },
+  /**
+   * Disconnect one provider (M47): revokes the grant at the provider, empties
+   * the stored credential, marks the row revoked. Reconnecting afterwards is
+   * the ordinary connect flow. Destructive by name on purpose — the confirm
+   * guard derives its list from this file, so every caller must ask first in
+   * the theme's one dialog.
+   */
+  async disconnectConnector(provider: ConnectorProvider): Promise<void> {
+    await bff<undefined>(`/api/connectors/${encodeURIComponent(provider)}`, { method: "DELETE" });
   },
   async connectorAuthorization(provider: ConnectorProvider, locale: "fa" | "en"): Promise<string> {
     const { authorization_url } = await bff<{ authorization_url: string }>(

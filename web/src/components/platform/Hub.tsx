@@ -13,6 +13,7 @@ import { subscribeComposer, takePendingDraft } from "@/lib/assistantBus";
 import { shouldStick } from "@/lib/threadFollow";
 import { useSkillName, useSkillStarters } from "@/lib/skillName";
 import { ConversationThread } from "./ConversationThread";
+import { AgentOverviewPanel } from "./AgentOverviewPanel";
 import { MailDraftCard } from "./MailDraftCard";
 import { useAssistantConversation } from "./AssistantConversationState";
 import { DocumentIcon, MicIcon, PlusIcon, SendIcon } from "./icons";
@@ -887,21 +888,32 @@ export function Hub() {
         </div>
       ) : null}
 
+      {/*
+       * M47 — the overview that comes up WITH the agent (Sana's shape): its
+       * workflows and its reach, above the thread and never over it. Keyed
+       * by hub state so the first message REMOUNTS it folded — the panel's
+       * job is done once the conversation is the screen's subject, and a
+       * same-children re-render would keep it open (the children-bailout
+       * lesson: a re-render is not a remount). The idle centrepiece below
+       * stays exactly the user-approved anatomy; this renders only when an
+       * agent is picked.
+       */}
+      {selectedAgent ? (
+        <AgentOverviewPanel
+          key={idle ? "agent-panel-idle" : "agent-panel-active"}
+          agent={selectedAgent}
+          defaultCollapsed={!idle}
+        />
+      ) : null}
+
       {idle ? (
         <>
           <div
             aria-hidden="true"
             className="neurai-watermark pointer-events-none absolute inset-0 -z-10 bg-center bg-no-repeat opacity-[0.035] [background-size:min(68vw,680px)]"
           />
-          {selectedAgent ? (
-            <section className="mx-auto mb-1 flex w-full max-w-content items-center gap-4 rounded-3xl border border-border bg-surface/80 p-4 text-start shadow-sm" aria-label={t("activeAgent")}>
-              <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-accent-soft text-xl text-accent" aria-hidden>✦</span>
-              <span className="min-w-0">
-                <span className="block text-base font-semibold text-fg">{selectedAgent.name}</span>
-                <span className="mt-1 block text-sm leading-5 text-fg-muted">{selectedAgent.description}</span>
-              </span>
-            </section>
-          ) : null}
+          {/* the picked-agent chip that lived here grew into the
+              AgentOverviewPanel above — one panel, both hub states */}
           {workflowSlug ? (
             <p className="mx-auto mt-3 w-fit rounded-full bg-accent-soft px-3 py-1 text-xs font-medium text-accent">
               {t("activeWorkflow")}

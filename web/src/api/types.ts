@@ -1147,3 +1147,16 @@ export interface AuthSessionRow {
   user_agent: string | null;
   ip: string | null;
 }
+
+/**
+ * M47 — one workflow an agent carries (`GET /v1/agents/:id/workflows`).
+ * Core returns this shape inline from `agentWorkflows()` in
+ * agent-store.ts rather than exporting a name for it, so this is a
+ * description of the producer's wire, not a browser-side invention —
+ * the shape is asserted against a producer-shaped fixture in the tests.
+ */
+export interface AgentWorkflowLink {
+  id: string;
+  handle: string;
+  name: string;
+}

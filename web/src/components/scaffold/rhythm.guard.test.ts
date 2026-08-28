@@ -127,8 +127,6 @@ const VIEWPORT_ROOT = /(^|["'\s])(?:min-)?h-(?:dvh|screen|\[100[dsl]?vh\])(["'\s
 const SHELL_ALLOWED: Readonly<Record<string, string>> = {
   "components/platform/PlatformShell.tsx":
     "the shell itself — its h-dvh root is what keeps the document from ever scrolling",
-  "components/AppShell.tsx":
-    "the pre-platform Echo shell; zero importers remain (checked 2026-08-28) — harmless while nothing renders it, and its removal is its own decision",
   "app/[locale]/platform/page.tsx":
     "the vendor operations console renders outside PlatformShell entirely and owns its own document",
   "app/[locale]/(auth)/layout.tsx":
