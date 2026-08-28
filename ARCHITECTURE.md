@@ -1707,6 +1707,45 @@ useful.
 calendar is not less personal than an inbox, and an admin does not switch it
 on for somebody else.
 
+## M45 — The page rhythm lives in the theme
+[user directive, 2026-08-27: "see the margin that the title heading in page
+has from the top, add it to the theme so it apply to all pages … the margins
+and spaces everywhere is unset … when you change pages, the theme must show
+that everything is in order"]
+
+M26 put the blueprint's numbers in `scaffold/constants.ts` and derived the
+Tailwind theme from them — but SPACING was the one family left out, recorded
+as a comment ("page top padding 48 = pt-12 · content inline padding 40 =
+px-10") while each screen wrote its own. The comment was two revisions stale,
+and the page column had been copied into five surfaces that froze at the
+value the original held before a one-line bump. Five screens sat 12px higher
+than the rest of the platform and nothing went red, because nothing had ever
+asserted `PageContainer`'s classes.
+
+So the rhythm is config: `SCAFFOLD.page` (top 48, topSm 32, inline 20,
+inlineMd 40, bottom 64, menuTop 36), Tailwind derives NAMED steps from it,
+and a screen writes `pt-page` rather than a number it picked.
+
+**`menuTop` is a relationship, not a number.** The section menu's 17px pane
+title sits 12px below a 24px page title to share its line (2026-08-18), so
+the two move together and the test asserts the offset — raising the page's
+top margin and leaving the menu behind is exactly what a later "just add some
+space" edit does.
+
+**The guard is the part that lasts** (`rhythm.guard.test.ts`): the named steps
+may only be written inside the scaffold, the literals the copies were made of
+may not come back, and nobody may re-implement the column. Exceptions are
+entries with reasons — a false positive would get it muted inside a week —
+and one assertion checks the exceptions still name real files, because an
+allow-list entry for a deleted file reads as coverage and is a hole. Its
+first fire caught a sixth copy written minutes earlier by its own author.
+
+Two exceptions stand, each because it is not a page in the scaffold's sense:
+the assistant (a full-height column with a sticky composer, which owns its
+bottom because 64px under a sticky composer is dead space) and the operations
+console (rendered outside the shell entirely). Auth surfaces are the door,
+not a room, and keep their centred card.
+
 ## Invariants (locked)
 
 1. The transcript is the source of truth; everything else derived + rebuildable.
