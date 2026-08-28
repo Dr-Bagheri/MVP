@@ -157,6 +157,11 @@ const isExcluded = (id: string): boolean => {
   return EXCLUDED_PROVIDERS.includes(vendor) || normalized.includes("claude");
 };
 
+/** A stored preference the product will not serve is not a preference. */
+function servablePreference(id: string | null): string | null {
+  return id !== null && isExcluded(id) ? null : id;
+}
+
 /**
  * THE LADDER, with the product rule applied at every rung.
  *
@@ -252,13 +257,18 @@ export function createModelsRepo(db: Db, options: ModelsOptions = {}) {
         : permitted,
       ).map((m) => ({
         ...m,
-        selected: m.id === row.preferred_model,
+        selected: m.id === servablePreference(row.preferred_model),
         ...(capability.known ? { tools: capability.toolCapable.has(m.id) } : {}),
       }));
 
       return {
         models,
-        preferred_model: row.preferred_model,
+        /* the SAME rule the ask applies (see `preferred` below): a stored
+           model the product will not serve is not a preference. Reporting it
+           here while the ask ignores it would be two readers disagreeing
+           about one fact — the picker would show a choice that silently is
+           not in force. */
+        preferred_model: servablePreference(row.preferred_model),
         curated,
         tool_capability_filtered: capability.known,
         ...(capability.stale === true ? { tool_capability_stale: true } : {}),
@@ -344,8 +354,7 @@ export function createModelsRepo(db: Db, options: ModelsOptions = {}) {
        * the next one. What the person chose is untouched in the row, and the
        * moment the product serves that model again it takes effect.
        */
-      if (stored !== null && isExcluded(stored)) return null;
-      return stored;
+      return servablePreference(stored);
     },
 
     /**

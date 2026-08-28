@@ -213,6 +213,38 @@ describe("model catalogue (M5)", () => {
       expect(result.models.filter((m) => claudeish(m.id))).toEqual([]);
     });
 
+    it("reports a barred STORED preference as no preference, in BOTH readers", async () => {
+      /*
+       * `list` (what the picker shows) and `preferred` (what the ask runs)
+       * are separate queries, and fixing one would leave the picker showing
+       * a choice that is silently not in force. The live state that made
+       * this concrete: the first member's row still says
+       * `~anthropic/claude-opus-latest`, and the product will not serve it.
+       * The row is untouched — the moment the model is offered again, their
+       * choice takes effect.
+       */
+      const stored = () => [{ allowed_models: [], preferred_model: "~anthropic/claude-opus-latest" }];
+      const listed = await createModelsRepo(fakeDb(stored).db, {
+        capability: capable(withClaude().map((m) => m.id)),
+      }).list(ADMIN_ID);
+      expect(listed.preferred_model).toBeNull();
+      expect(listed.models.some((m) => m.selected)).toBe(false);
+
+      const forRun = await createModelsRepo(fakeDb(stored).db, {
+        capability: capable(withClaude().map((m) => m.id)),
+      }).preferred(ADMIN_ID);
+      expect(forRun).toBeNull();
+
+      /* the control: a servable preference survives both readers untouched */
+      const good = () => [{ allowed_models: [], preferred_model: "openai/gpt-5" }];
+      expect(await createModelsRepo(fakeDb(good).db, {
+        capability: capable(withClaude().map((m) => m.id)),
+      }).preferred(ADMIN_ID)).toBe("openai/gpt-5");
+      expect((await createModelsRepo(fakeDb(good).db, {
+        capability: capable(withClaude().map((m) => m.id)),
+      }).list(ADMIN_ID)).preferred_model).toBe("openai/gpt-5");
+    });
+
     it("the LADDER refuses a barred rung at every level, including the env fallback", async () => {
       /*
        * The ladder was written out four times in the worker — summarizer,
