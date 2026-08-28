@@ -226,6 +226,8 @@
     "colMessages": "Messages",
     "colActions": "Actions",
     "delete": "Delete",
+    "deleteConfirmTitle": "Delete “{title}”?",
+    "deleteConfirmBody": "The conversation is taken out of History and does not come back to any list.",
     "deleteFailed": "Could not delete — try again."
   },
   "errorPage": {
@@ -350,6 +352,9 @@
     "voiceSending": "Saving…",
     "voiceOn": "Enrolled",
     "voiceRemove": "Remove voice",
+    "voiceRemoveTitle": "Remove the enrolled voice for “{name}”?",
+    "voiceRemoveBody": "The voice sample is deleted and they stop being recognized automatically in meetings. Getting it back means recording the sample again.",
+    "voiceRemoveBulkTitle": "Remove the enrolled voice for {n} people?",
     "voiceEnrolled": "{name}'s voice is enrolled — they will be recognized automatically in meetings.",
     "voiceFailed": "Voice enrollment did not go through — try again.",
     "voiceMicDenied": "Microphone access was not granted.",
@@ -683,7 +688,11 @@
     "noSummaryYet": "The summary is written when processing finishes.",
     "notesHeading": "Notes & chapters",
     "chapterChip": "Chapter",
-    "noteDelete": "Delete"
+    "noteDelete": "Delete",
+    "noteDeleteTitle": "Delete this note?",
+    "noteDeleteBody": "The note is removed for good; the transcript and the summary are untouched.",
+    "templateDeleteTitle": "Delete the “{name}” template?",
+    "templateDeleteBody": "This template is saved in this browser only — deleting it loses its prompt text, and there is no way back."
   },
   "search": {
     "title": "Search",
@@ -1100,6 +1109,12 @@
     "runNow": "Run now",
     "runStarting": "Starting…",
     "runFailed": "The run did not start.",
+    "removeWorkflow": "Remove this workflow",
+    "removeTitle": "Remove «{name}»?",
+    "removeBody": "It stops running and leaves the catalogue. Everything it has already done stays in your history.",
+    "removeConfirm": "Remove",
+    "cancel": "Cancel",
+    "removeFailed": "The workflow was not removed.",
     "runClose": "Close",
     "runSubtitle": "Trigger: {trigger}",
     "runMissing": "No such run is available.",
@@ -1157,6 +1172,20 @@
     "detailOutlook": "Outlook",
     "detailGoogleCalendar": "Google Calendar",
     "detailOutlookCalendar": "Outlook Calendar",
+    "starter": {
+      "wf-starter-followups": {
+        "name": "Meeting follow-ups",
+        "description": "Pulls the topics out of recent meetings and writes one follow-up line for each."
+      },
+      "wf-starter-autotag": {
+        "name": "Automatic meeting tagging",
+        "description": "After every meeting the topics are drawn from the transcript and proposed as tags — they are saved once you approve them."
+      },
+      "wf-starter-mail-reply": {
+        "name": "Email reply drafts",
+        "description": "Every new email that arrives is read, and if it wants a reply a draft is written for you to review and send."
+      }
+    },
     "process": {
       "draft-email-replies": {
         "trigger": {
@@ -1431,6 +1460,8 @@
     "inviteStored": "I passed it on",
     "noInvitations": "No invitations yet.",
     "inviteRevoke": "Revoke",
+    "inviteRevokeTitle": "Revoke the invitation for {email}?",
+    "inviteRevokeBody": "The link you sent stops working and can no longer be redeemed. Inviting them again means issuing a new invitation.",
     "inviteState_open": "Open",
     "inviteState_redeemed": "Redeemed",
     "inviteState_revoked": "Revoked",
@@ -1472,6 +1503,8 @@
     "modelsSearch": "Search the catalogue",
     "modelsNoMatch": "No model matches that.",
     "modelsRemove": "Remove from the list",
+    "modelsRemoveTitle": "Remove “{name}” from the allow-list?",
+    "modelsRemoveBody": "The model leaves reach for everyone in the organization, and automations that picked it stop running. You can add it back later.",
     "modelsDone": "Done",
     "modelsActiveCount": "{n} models allowed",
     "modelsNoCuration": "No models chosen — members may use any model the platform offers. Add one to start curating.",
@@ -1544,6 +1577,8 @@
     "orgLogoChoose": "Choose image",
     "orgLogoReplace": "Replace image",
     "orgLogoRemove": "Remove",
+    "orgLogoRemoveTitle": "Remove the organization logo?",
+    "orgLogoRemoveBody": "The image is deleted and every place the platform shows the organization falls back to its initial. Getting it back means uploading the file again.",
     "orgLogoSaved": "Logo saved.",
     "orgLogoRemoved": "Logo removed.",
     "orgLogoFailed": "That image was not saved. Choose a PNG, JPEG or WebP file under 512KB.",
@@ -1973,6 +2008,9 @@
     "ceiling_watch": "Watch only",
     "ceiling_assist": "Assist",
     "ceiling_act": "Act",
+    "ceilingHint_watch": "Reads and reports only. A step that writes anything cannot be published at this setting.",
+    "ceilingHint_assist": "Reads and proposes; every change waits for your approval before it is applied.",
+    "ceilingHint_act": "May apply a change it proposed — writing a reply draft, for instance. Sending it is still yours.",
     "triggerTitle": "Trigger",
     "triggerSelect": "Select a trigger",
     "triggerSelectHint": "A trigger is what starts the workflow.",
@@ -2109,6 +2147,8 @@
     "sendNow": "Send now",
     "sending": "Sending…",
     "discard": "Discard",
+    "discardTitle": "Discard the reply to “{subject}”?",
+    "discardBody": "The reply can no longer be sent and stays here recorded as discarded. The copy in your own Drafts folder is untouched — deleting that one is yours to do.",
     "editNote": "Edit it in your mailbox before sending.",
     "decidedNote": "This reply has been decided.",
     "sent": "The reply was sent.",

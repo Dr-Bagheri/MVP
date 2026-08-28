@@ -11,6 +11,7 @@ import { useRouter } from "@/i18n/routing";
 import { useRefreshEpoch } from "@/lib/refreshBus";
 import { digits } from "@/lib/format";
 import { untitledNumbers } from "@/lib/sessionTitles";
+import { useSkillStarters } from "@/lib/skillName";
 import { useAssistantConversation } from "./AssistantConversationState";
 
 /**
@@ -58,6 +59,13 @@ export function AssistantMenu({
   useEffect(() => {
     void api.skills().then(setSkills).catch(() => setSkills([]));
   }, []);
+  /* through the SAME resolver the hub's chips use (user report: the English
+     menu suggested «کارهای این تماس را فهرست کن»). A system skill's starters
+     are shipped product copy and localize; an org-authored skill's are its
+     author's words and come off the wire untouched — `lib/skillName.ts`
+     owns that line, and reading the wire directly here was this menu
+     quietly opting out of it. */
+  const skillStarters = useSkillStarters();
 
   /* the CREATE row below is admin-only, so the menu has to know who is
      reading it — a member seeing a door they cannot open is worse than not
@@ -69,8 +77,14 @@ export function AssistantMenu({
     void api.me().then((who) => setRole(who?.role ?? null)).catch(() => setRole(null));
   }, []);
   const canAuthor = role === "admin" || role === "owner";
+  /* resolved BEFORE the filter, not after: the row exists because there is a
+     question to show, so "is there one" has to be asked of the string that
+     will actually be rendered — asking the wire and rendering the catalogue
+     is how a row appears with an empty label, or vanishes while its
+     translation sits in the file */
   const suggestions = skills
-    .filter((skill) => skill.starter_questions.length > 0)
+    .map((skill) => ({ skill, starters: skillStarters(skill) }))
+    .filter((entry) => entry.starters.length > 0)
     .slice(0, 6);
   /* numbered over the FULL list so the menu and the history table agree
      about which conversation is «گفت‌وگوی جدید ۲» */
@@ -122,16 +136,19 @@ export function AssistantMenu({
           ? [{
               key: "suggestions",
               title: t("suggestions"),
-              items: suggestions.map((skill) => ({
+              items: suggestions.map(({ skill, starters }) => ({
                 slug: `suggest-${skill.slug}`,
                 /* the href is real: pressed from another page this has to
                    ARRIVE at the assistant, and the draft waits for it in
                    the composer mailbox */
                 href: "/assistant",
-                label: skill.starter_questions[0] ?? "",
+                label: starters[0] ?? "",
                 icon: <IconAsk />,
+                /* the composer is filled with the SAME words the row shows —
+                   a row that reads English and drafts Persian is the mixing
+                   complaint one step later, where it is harder to see */
                 onSelect: () => fillComposer({
-                  text: skill.starter_questions[0] ?? "",
+                  text: starters[0] ?? "",
                   skillSlug: skill.slug,
                 }),
               })),
