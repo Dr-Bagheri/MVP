@@ -8,10 +8,19 @@ import { PageHeader, Section } from "@/components/scaffold";
 import { Card } from "@/components/ui";
 import { digits } from "@/lib/format";
 import { useLocale } from "next-intl";
+import { HELP_GROUPS, HELP_SECTIONS, type HelpSlug } from "../sections";
 
 /**
- * Help — a real guide now (user directive, 2026-08-16): "how to work with
- * the platform, with simple images", one side-menu section per part.
+ * Help — a real guide (user directive, 2026-08-16): "how to work with the
+ * platform, with simple images", one side-menu section per part.
+ *
+ * Rewritten from the beginning (user directive, 2026-08-28) to match the
+ * platform as it stands: the Assistant is the landing page; Workflows,
+ * Integrations and Agents live under its menu; Echo carries the live-
+ * transcript record page; Management holds the organisation; Settings and
+ * Profile carry the person. The old copy taught a hub-with-app-cards home
+ * and an organisation under Settings — both gone, and a guide that teaches
+ * a layout the product no longer has is worse than none.
  *
  * The illustrations are inline SVG sketches drawn from the theme's own
  * tokens (currentColor + the accent), not screenshots: a screenshot of the
@@ -20,25 +29,15 @@ import { useLocale } from "next-intl";
  * is decorative (aria-hidden) beside numbered steps that carry the meaning
  * — the image guides the eye, the words carry the truth.
  *
- * Steps live in the message catalogue per section (`help.s.<slug>.stepN`),
- * so both locales carry the full guide and the keys.test referenced-must-
- * exist rule covers them.
+ * Steps live in the message catalogue per section (`help.s.<slug>.stepN`).
+ * Those keys are COMPUTED here, so `keys.test.ts` cannot see them — the
+ * colocated `help.test.tsx` walks `HELP_SECTIONS` against both catalogues
+ * instead, and renders every section with a positive ID and a negative
+ * control.
  */
 
-const SECTIONS = [
-  { slug: "overview", group: "start", steps: 4 },
-  { slug: "assistant", group: "parts", steps: 5 },
-  { slug: "echo", group: "parts", steps: 5 },
-  { slug: "management", group: "parts", steps: 5 },
-  { slug: "settings", group: "parts", steps: 4 },
-] as const;
-
-type Slug = (typeof SECTIONS)[number]["slug"];
-
-const GROUPS = ["start", "parts"] as const;
-
 /** Simple, theme-drawn sketches — one per section. Decorative only. */
-function HelpArt({ slug }: { slug: Slug }) {
+function HelpArt({ slug }: { slug: HelpSlug }) {
   const cls = "w-full max-w-[420px] text-fg-muted";
   const common = {
     fill: "none",
@@ -50,7 +49,7 @@ function HelpArt({ slug }: { slug: Slug }) {
   if (slug === "overview") {
     return (
       <svg viewBox="0 0 320 150" className={cls} aria-hidden>
-        {/* rail | content | assistant — the three-column shell */}
+        {/* rail | content | assistant panel — the shell's three columns */}
         <rect x="8" y="10" width="34" height="130" rx="6" {...common} />
         <circle cx="25" cy="30" r="6" {...common} className="text-accent" />
         <circle cx="25" cy="52" r="6" {...common} />
@@ -68,7 +67,7 @@ function HelpArt({ slug }: { slug: Slug }) {
   if (slug === "assistant") {
     return (
       <svg viewBox="0 0 320 120" className={cls} aria-hidden>
-        {/* the composer: input, mic, send, pills */}
+        {/* the composer: input, mic, send, picker pills */}
         <rect x="10" y="20" width="300" height="52" rx="14" {...common} />
         <line x1="28" y1="46" x2="150" y2="46" {...common} />
         <circle cx="248" cy="46" r="10" {...common} />
@@ -77,6 +76,59 @@ function HelpArt({ slug }: { slug: Slug }) {
         <rect x="18" y="86" width="70" height="20" rx="10" {...common} />
         <rect x="96" y="86" width="56" height="20" rx="10" {...common} />
         <rect x="180" y="86" width="120" height="20" rx="10" {...common} className="text-accent" />
+      </svg>
+    );
+  }
+  if (slug === "workflows") {
+    return (
+      <svg viewBox="0 0 320 120" className={cls} aria-hidden>
+        {/* trigger → ordered steps, and the personal on/off switch */}
+        <circle cx="30" cy="72" r="13" {...common} className="text-accent" />
+        <line x1="44" y1="72" x2="64" y2="72" {...common} />
+        <path d="m58 66 6 6-6 6" {...common} />
+        <rect x="70" y="54" width="62" height="36" rx="8" {...common} />
+        <line x1="134" y1="72" x2="150" y2="72" {...common} />
+        <path d="m144 66 6 6-6 6" {...common} />
+        <rect x="156" y="54" width="62" height="36" rx="8" {...common} />
+        <line x1="220" y1="72" x2="236" y2="72" {...common} />
+        <path d="m230 66 6 6-6 6" {...common} />
+        <rect x="242" y="54" width="62" height="36" rx="8" {...common} className="text-accent" />
+        <rect x="242" y="14" width="46" height="20" rx="10" {...common} className="text-accent" />
+        <circle cx="278" cy="24" r="6" fill="currentColor" stroke="none" className="text-accent" />
+      </svg>
+    );
+  }
+  if (slug === "integrations") {
+    return (
+      <svg viewBox="0 0 320 120" className={cls} aria-hidden>
+        {/* one sign-in in the middle, four sources around it */}
+        <circle cx="160" cy="60" r="17" {...common} className="text-accent" />
+        <line x1="145" y1="50" x2="76" y2="32" {...common} />
+        <line x1="145" y1="70" x2="76" y2="88" {...common} />
+        <line x1="175" y1="50" x2="244" y2="32" {...common} />
+        <line x1="175" y1="70" x2="244" y2="88" {...common} />
+        <rect x="36" y="14" width="38" height="28" rx="7" {...common} />
+        <rect x="36" y="78" width="38" height="28" rx="7" {...common} />
+        <rect x="246" y="14" width="38" height="28" rx="7" {...common} />
+        <rect x="246" y="78" width="38" height="28" rx="7" {...common} />
+      </svg>
+    );
+  }
+  if (slug === "agents") {
+    return (
+      <svg viewBox="0 0 320 120" className={cls} aria-hidden>
+        {/* three focused assistants; the chosen one opens a conversation */}
+        {[24, 122, 220].map((x, i) => (
+          <g key={x}>
+            <rect x={x} y="34" width="76" height="60" rx="8" {...common}
+              className={i === 1 ? "text-accent" : undefined} />
+            <circle cx={x + 38} cy="54" r="9" {...common} />
+            <line x1={x + 16} y1="74" x2={x + 60} y2="74" {...common} />
+            <line x1={x + 22} y1="84" x2={x + 54} y2="84" {...common} />
+          </g>
+        ))}
+        <rect x="136" y="6" width="48" height="20" rx="9" {...common} className="text-accent" />
+        <path d="m152 26 6 8 4-8" {...common} className="text-accent" />
       </svg>
     );
   }
@@ -141,12 +193,12 @@ export default function HelpPage({
   const locale = useLocale();
   const { section } = use(params);
   const active =
-    SECTIONS.find((s) => s.slug === section?.[0]) ?? SECTIONS[0]!;
+    HELP_SECTIONS.find((s) => s.slug === section?.[0]) ?? HELP_SECTIONS[0]!;
 
-  const groups = GROUPS.map((group) => ({
+  const groups = HELP_GROUPS.map((group) => ({
     key: group,
     title: t(`group.${group}`),
-    items: SECTIONS.filter((s) => s.group === group).map((s) => ({
+    items: HELP_SECTIONS.filter((s) => s.group === group).map((s) => ({
       slug: s.slug,
       href: s.slug === "overview" ? "/help" : `/help/${s.slug}`,
       label: t(`section.${s.slug}`),

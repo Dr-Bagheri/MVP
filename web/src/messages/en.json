@@ -245,16 +245,22 @@
     "section": {
       "overview": "The platform at a glance",
       "assistant": "AI assistant",
+      "workflows": "Workflows",
+      "integrations": "Integrations",
+      "agents": "Agents",
       "echo": "Echo — recording & transcripts",
       "management": "Management",
       "settings": "Settings & profile"
     },
     "desc": {
       "overview": "How the platform is laid out and how to reach each part.",
-      "assistant": "Asking, choosing a model and skill, adding files and tools.",
-      "echo": "Recording a session in the browser, uploading files, reading transcripts.",
-      "management": "Members, invitations, roles, models and skills.",
-      "settings": "Theme, language, calendar, names and your profile photo."
+      "assistant": "Asking, picking an agent and a model, sources, files and voice.",
+      "workflows": "Automated work — from email drafts to meeting prep; admins can build new ones.",
+      "integrations": "Connect a Google account — Gmail, Calendar, Meet and Drive — for the assistant and workflows to read.",
+      "agents": "Focused assistants for specific jobs; pick one, talk to it, or build your own.",
+      "echo": "Recording with a live transcript, the records list, speakers and search.",
+      "management": "Members, invitations, member privileges and the organization's identity — for admins.",
+      "settings": "Workspace, assistant behavior, security and audit logs; names and photo in Profile."
     },
     "stepsTitle": "Step by step",
     "githubCard": "Project GitHub repository",
@@ -262,37 +268,64 @@
     "openGithub": "Open GitHub",
     "s": {
       "overview": {
-        "step1": "Sign in with your email and password; the home page IS the AI assistant.",
-        "step2": "Open “Echo” from the side rail to record calls and read transcripts.",
-        "step3": "“Management” holds members, models and skills; “Settings” holds the organization.",
-        "step4": "The avatar menu (top of the page) carries theme, calendar and sign-out."
+        "step1": "Sign in with your email and password; the home page is the Assistant — ask there and the answer arrives in the conversation.",
+        "step2": "The side rail has three domains: the Assistant, “Echo” for recording and transcribing meetings, and “Management” for the organization's admins.",
+        "step3": "Under the assistant's menu you will find Workflows, Integrations and Agents; “History” brings back previous conversations.",
+        "step4": "“Settings” and “Help” sit at the bottom of the rail; “Profile” opens from the avatar menu.",
+        "step5": "The avatar menu holds theme, calendar and sign-out; the language toggle is in the top bar, and the breadcrumb above each page is the way back."
       },
       "assistant": {
-        "step1": "Type your question in the center box and press Enter.",
-        "step2": "Pick the model and the skill from the two lists beside the box.",
-        "step3": "Attach up to three text files with “Add file”.",
-        "step4": "The microphone button turns your speech into text.",
-        "step5": "“History” brings back previous conversations; answers can be rated or regenerated."
+        "step1": "Type your question in the center box and press Enter; the answer arrives right in the conversation.",
+        "step2": "Pick an agent from the picker beside the box to talk with that focused assistant; the model and the skill are chosen from the same bar.",
+        "step3": "“Sources” attaches your own meetings and calls to a question; “Web search” lets the assistant read the live web.",
+        "step4": "Attach up to three text files with “Add file”; the microphone button turns your speech into text.",
+        "step5": "Under each answer you can copy it, rate it good or bad, or regenerate it; “How this answer was made” shows the tools it used.",
+        "step6": "“History” brings back previous conversations; each one can be renamed, archived, or shared with the organization."
+      },
+      "workflows": {
+        "step1": "“Workflows” opens from the assistant's menu; each card is one automated job with its own page and its own switch.",
+        "step2": "“Draft email replies”: while it is on, your connected inbox is checked and a reply draft is written for new mail — sending always stays with you.",
+        "step3": "“Prepare me for meetings”: about half an hour before each calendar meeting, a preparation brief is written into your conversation.",
+        "step4": "Each workflow's switch is personal — turning it on or off affects only your own account.",
+        "step5": "A workflow's page shows its Process (the trigger and the steps) and its Runs — upcoming and recent.",
+        "step6": "Admins can build a new workflow: a trigger — manual, or an event such as a recording starting, a transcript ready, a meeting summarized, mail arriving or a meeting coming up — plus ordered steps such as search, ask the assistant, extract, decide, propose, apply and notify."
+      },
+      "integrations": {
+        "step1": "“Integrations” opens from the assistant's menu: Gmail, Google Calendar, Google Meet and Google Drive.",
+        "step2": "One Google sign-in covers all four sources; a connection is yours alone, and only you see its content.",
+        "step3": "Each connection's page lists the items read from that source — mail, events or files — beside the connection's details.",
+        "step4": "The assistant and workflows only read from these sources; drafts the assistant writes wait until you press Send yourself.",
+        "step5": "“Disconnect” on a connection's page revokes access — all of that account's sources disconnect together, and you can reconnect whenever you like."
+      },
+      "agents": {
+        "step1": "“Agents” opens from the assistant's menu; three ready-made agents ship with the platform: Meetings, Email and Meeting preparation.",
+        "step2": "Click an agent to start talking with it in the assistant; its workflows and knowledge appear beside the greeting.",
+        "step3": "An agent's knowledge is the records you can already access — nothing separate is uploaded.",
+        "step4": "Use “Create” to build a personal agent: persona and instructions, knowledge, workflows and visibility — step by step.",
+        "step5": "Organization-wide agents are created and edited by admins only; system agents are part of the platform and are not edited here."
       },
       "echo": {
-        "step1": "In “Record in browser”, pick your microphone and speaker and start recording.",
-        "step2": "The level bar should move as you speak; if it stays flat, check the microphone.",
-        "step3": "Long sessions split automatically into 30-minute parts, uploaded as you go.",
-        "step4": "“Pause” holds the recording; “Finish & process” hands the call to transcription.",
-        "step5": "Send already-recorded files from “Upload a file”; results appear under “Calls”."
+        "step1": "In “New record”, pick your microphone and start recording; the live transcript appears on the same page as you speak.",
+        "step2": "Take notes right there and tick action items as they come up; send an existing file from the upload icon on the same menu row.",
+        "step3": "Long sessions split automatically into 30-minute parts, uploaded as you go; “Finish & process” hands the record to transcription.",
+        "step4": "“Records” lists your recordings; each record's page has four sections: the summary, the transcript, actions & decisions, and notes & attachments.",
+        "step5": "In “Speakers”, keep people and their titles; enroll a voice and that person is recognized automatically in later meetings.",
+        "step6": "“Search” scans every transcript and summary you can access and takes you to the record it found."
       },
       "management": {
-        "step1": "In “Users”, add a member with an invitation — the link is shown exactly once.",
-        "step2": "Accept or reject pending requests; change each member's role right there.",
-        "step3": "Select several rows to enable or disable members in one action.",
-        "step4": "“Models” manages the organization's allowed model list.",
-        "step5": "“Skills” creates and edits the assistant's ready-made instructions."
+        "step1": "“Management” opens from the side rail and belongs to the organization's admins and owner.",
+        "step2": "In “Users”, see the organization's members, assign roles, approve or disable; search and filters work across all names.",
+        "step3": "In “Invitations”, add people with an invitation link — shown exactly once; an invitation can be revoked and reissued.",
+        "step4": "“Member privileges” sets what members and admins may do — each switch limits exactly one ability.",
+        "step5": "In “General”, edit the organization's name and logo, its default language and the speech-recognition glossary."
       },
       "settings": {
-        "step1": "Theme (dark/light), language and calendar change from the avatar menu or “Settings”.",
-        "step2": "In “Profile”, edit your display name, Latin-script name and username — names are never translated.",
-        "step3": "Set your profile photo with the camera button on the circle and accept the crop.",
-        "step4": "“Audit logs” in Settings shows the organization's administrative actions."
+        "step1": "“Settings” sits at the bottom of the side rail; “Profile” opens from the avatar menu.",
+        "step2": "“General” shows your workspace's facts; the calendar (Jalali or Gregorian) and the timezone are set right there.",
+        "step3": "“Assistant” holds the reply language and length and your standing instructions — they travel with every question you ask.",
+        "step4": "“Security” lists your live sessions — “this device” is marked; a session idle for too long closes automatically.",
+        "step5": "“Sign-in methods” shows the ways into the platform; “Audit logs” says who did what, and when.",
+        "step6": "In “Profile”, edit your names, username and photo, change your password, and export your account data."
       }
     }
   },
@@ -499,6 +532,8 @@
     "micGain": "Meter sensitivity",
     "boostOption": "Loudness enhance for the microphone",
     "boostHint": "For a quiet room or a far microphone. It lifts the noise floor too — leave it off when the meter already reaches the middle.",
+    "noiseOption": "Noise suppression",
+    "noiseHint": "The browser's own filter — good for keyboard clatter and device hum; turn it off for music or a room that is already clean. It applies when recording starts and cannot change mid-take.",
     "templateField": "Summary template",
     "templateNone": "Default summary",
     "tplBoard": "Board meeting",
@@ -657,6 +692,18 @@
     "laneEmpty": "None found in this summary.",
     "notesEmpty": "No notes yet — select a passage in the transcript, or mint a chapter from the player.",
     "attachmentsSoon": "File & photo attachments arrive with the storage lane",
+    "actionsMenu": "Actions & decisions options",
+    "notesMenu": "Notes options",
+    "copyActions": "Copy actions & decisions",
+    "copyNotes": "Copy notes",
+    "goToSummary": "Go to summary",
+    "noteAdd": "Add note",
+    "notePlaceholder": "Write a note about this record…",
+    "noteAtPlayhead": "Anchor at {clock}",
+    "actionAdd": "Add action item",
+    "decisionAdd": "Add decision",
+    "actionPlaceholder": "New action item…",
+    "decisionPlaceholder": "New decision…",
     "templatePromptLabel": "Template prompt",
     "templateNameHint": "Template name",
     "templatePromptHint": "What should this summary focus on and how should it be structured?",
@@ -1184,6 +1231,78 @@
       "wf-starter-mail-reply": {
         "name": "Email reply drafts",
         "description": "Every new email that arrives is read, and if it wants a reply a draft is written for you to review and send."
+      },
+      "wf-starter-meeting-title": {
+        "name": "Meeting title suggestion",
+        "description": "After every meeting a short title is proposed from the transcript — it is saved once you approve it."
+      },
+      "wf-starter-decisions-digest": {
+        "name": "Decisions digest",
+        "description": "Collects the decisions from recent meeting summaries and writes a short digest."
+      },
+      "wf-starter-action-items": {
+        "name": "Action-item sweep",
+        "description": "After every meeting the promised tasks are pulled out with their owner and due date, and a follow-up line is written for each."
+      },
+      "wf-starter-open-questions": {
+        "name": "Unanswered questions",
+        "description": "After every meeting the questions that stayed unanswered are collected so none of them gets lost."
+      },
+      "wf-starter-topic-history": {
+        "name": "Topic history",
+        "description": "Finds the recurring topics across your meeting summaries and tells how each one has moved."
+      },
+      "wf-starter-mail-triage": {
+        "name": "Reply-needed detection",
+        "description": "Every new email is read, and when it wants a human reply you get a short note."
+      },
+      "wf-starter-mail-summary": {
+        "name": "New-mail summary",
+        "description": "Every new email is summarized in two or three lines: what it wants, from whom, by when."
+      },
+      "wf-starter-mail-reply-formal": {
+        "name": "Formal reply drafts",
+        "description": "For emails that want an answer, a draft in a formal register is written — sending always stays yours."
+      },
+      "wf-starter-mail-reply-brief": {
+        "name": "Brief acknowledgements",
+        "description": "For emails that want an answer, a short two-line acknowledgement draft is written: received, being looked at."
+      },
+      "wf-starter-mail-meeting-request": {
+        "name": "Meeting-request detection",
+        "description": "When an email asks for a meeting or an appointment, you get a short note right away."
+      },
+      "wf-starter-mail-context": {
+        "name": "Sender & topic history",
+        "description": "For every new email, whatever the meeting summaries hold about its sender or subject is collected."
+      },
+      "wf-starter-prep-brief": {
+        "name": "Pre-meeting brief",
+        "description": "Shortly before every meeting a short brief is built from your records: what happened, what stayed open, what to ask."
+      },
+      "wf-starter-prep-people": {
+        "name": "Who you are meeting",
+        "description": "Before every meeting the conversation history with its participants is reviewed: what was said last, and what each person still owes."
+      },
+      "wf-starter-prep-questions": {
+        "name": "Suggested questions",
+        "description": "Before every meeting a few questions are proposed out of the earlier summaries to move the discussion forward."
+      },
+      "wf-starter-prep-open-decisions": {
+        "name": "Open items before the meeting",
+        "description": "Before every meeting the pending decisions and unfinished tasks are listed so the meeting can close them."
+      },
+      "wf-starter-prep-related": {
+        "name": "Related records",
+        "description": "Before every meeting the calls and meetings related to it are found and listed."
+      },
+      "wf-starter-prep-today": {
+        "name": "Today at a glance",
+        "description": "Whenever you ask, an overview is built from your latest calls: what happened, what is moving, what needs attention."
+      },
+      "wf-starter-prep-agenda": {
+        "name": "Next meeting's agenda",
+        "description": "After every meeting, the next meeting's agenda is drafted from its decisions and tasks."
       }
     },
     "process": {
@@ -1376,6 +1495,8 @@
     "overviewNoWorkflows": "This agent carries no workflows.",
     "overviewWorkflowsFailed": "The workflow list could not be loaded.",
     "overviewHint": "Picking a workflow opens that workflow's own page.",
+    "overviewStarters": "Workflows to choose from",
+    "overviewStartersHint": "Ready-made workflows this agent can take on. Each opens on its own page.",
     "collapse": "Hide agent details",
     "expand": "Show agent details",
     "colorName": {
@@ -1618,6 +1739,7 @@
     "section": {
       "general": "General",
       "assistant": "Assistant",
+      "notifications": "Notifications",
       "security": "Security",
       "sso": "Sign-in methods",
       "oauth-apps": "Connected apps",
@@ -1627,7 +1749,8 @@
     },
     "desc": {
       "general": "Settings that apply to everyone in this workspace.",
-      "assistant": "The assistant's voice and behavior, and the weekly digest.",
+      "assistant": "The assistant's voice and behavior.",
+      "notifications": "What gets made for you automatically — briefs, drafts and the weekly digest. These choices are yours alone.",
       "security": "The wall this deployment keeps around your account and your data.",
       "sso": "How people enter this platform, and turning each method on or off.",
       "oauth-apps": "API keys and webhooks — the same gateway outside systems use.",
@@ -1654,11 +1777,18 @@
     "orgGlossaryHint": "Names and terms the transcriber should recognize — one per line, up to 200. People's names spelled right here come out right in every transcript.",
     "orgSaveFailed": "Not saved.",
     "orgAdminOnly": "Changing these values is an organization admin's to do.",
-    "assistantDigest": "Weekly digest",
-    "assistantDigestHint": "Leaves a weekly summary card of the week's calls in the assistant.",
     "assistantSaved": "Saved.",
     "assistantSaveFailed": "Not saved.",
-    "assistantNotReady": "This setting is not available on this deployment yet.",
+    "notifPostCallBrief": "Post-call brief",
+    "notifPostCallBriefDesc": "After each processed meeting the assistant leaves a brief card for you. Turning it off is yours alone.",
+    "notifDigest": "Weekly digest",
+    "notifDigestDesc": "Every Saturday a summary card of the week's calls is left in the assistant.",
+    "notifAutoDraft": "Auto-draft email replies",
+    "notifAutoDraftDesc": "Your connected mailbox is read every few minutes and new messages get a drafted reply. Nothing is ever sent without you pressing send.",
+    "notifMeetingPrep": "Meeting preparation",
+    "notifMeetingPrepDesc": "About half an hour before each meeting, the assistant writes a pre-read from your own records.",
+    "notifUnavailable": "This setting is not available on this deployment yet.",
+    "notifUnreadable": "The current state of this setting could not be read.",
     "orgLogo": "Logo",
     "orgLogoHint": "A PNG, JPEG or WebP image, up to 512KB. Choosing a file saves it straight away.",
     "orgEmail": "Public email",
@@ -1683,12 +1813,6 @@
     "replyDetailed": "Detailed",
     "customInstructions": "Standing instructions (up to 2000 characters)",
     "saveInstructions": "Save instructions",
-    "postCallBrief": "Post-call brief",
-    "postCallBriefHint": "After each meeting the assistant leaves a brief card on your dashboard. Turning it off is yours alone.",
-    "autoDraft": "Draft replies to new email",
-    "autoDraftHint": "Your connected mailbox is read every few minutes and new messages get a drafted reply. Nothing is ever sent without you pressing send.",
-    "meetingPrep": "Prepare me before meetings",
-    "meetingPrepHint": "About half an hour before each meeting, the assistant writes a pre-read from your own records.",
     "generalWorkspaceTitle": "Workspace",
     "generalWorkspaceName": "Workspace name",
     "generalYourRole": "Your role",
@@ -2000,7 +2124,13 @@
     "colLocation": "Location",
     "colSignedIn": "Signed in",
     "colLastAction": "Last action",
-    "thisDevice": "This device"
+    "thisDevice": "This device",
+    "endSession": "End this session",
+    "endConfirmTitle": "End the {device} session?",
+    "endConfirmBody": "That device is signed out the next time it talks to the server. Its work is untouched — only the sign-in ends.",
+    "endConfirm": "End session",
+    "endDone": "The session was ended.",
+    "endFailed": "The session was not ended."
   },
   "signin": {
     "intro": "External sign-in methods for this platform — an admin or the owner can turn each on or off.",
