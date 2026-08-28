@@ -147,7 +147,17 @@ export async function matchEnrolledVoices(input: {
   options?: VoiceMatchOptions;
 }): Promise<void> {
   const { db, ml, storage, identity, callId, log } = input;
-  const threshold = input.options?.threshold ?? 0.6;
+  /*
+   * 0.55, CALIBRATED ON REAL CALLS (2026-08-28). The 0.6 default came from
+   * the clean-clip acceptance run (same voice 0.845, other voices 0.227/
+   * 0.244) and over-fit that context: call audio is far-field and
+   * compressed, and the worker's own log shows the same person scoring
+   * 0.55-0.80 on real records while different people sit at or under
+   * ~0.45. The user's genuine voice scored 0.551 and 0.585 against 0.6 —
+   * recognised by the arithmetic, refused by the bar. The margin rule
+   * below still guards the crowded case.
+   */
+  const threshold = input.options?.threshold ?? 0.55;
   const margin = input.options?.margin ?? 0.1;
   const minSpeechMs = input.options?.minSpeechMs ?? 3_000;
   const maxSpeechMs = input.options?.maxSpeechMs ?? 60_000;

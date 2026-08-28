@@ -509,6 +509,380 @@ export const STARTER_WORKFLOWS = {
       ],
     },
   },
+
+  /* ── the SALES agent's seven (2026-08-28 wave: three more platform
+     agents; every graph obeys the two runtime facts in this file's header
+     — transcript scope only under a call trigger, envelopes bound whole) ── */
+
+  sales_debrief: {
+    handle: "wf-starter-sales-debrief",
+    name: "گزارش تماس فروش",
+    description: "پس از هر تماس، یک گزارش فروش کوتاه نوشته می‌شود: نیاز مشتری، دغدغه‌ها و قدم بعدی.",
+    trigger_event: "call.summarized" as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "search", scope: "transcript", of: "{{trigger.call_id}}" },
+        { id: "s2", kind: "ask", from: "{{s1}}",
+          instruction: "از این رونوشت یک گزارش تماس فروش بنویس: مشتری چه می‌خواهد، چه دغدغه‌ها یا مخالفت‌هایی گفت، چه قول‌هایی داده شد، و قدم بعدی چیست. کوتاه و قابل اقدام." },
+        { id: "s3", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
+  sales_objections: {
+    handle: "wf-starter-sales-objections",
+    name: "مخالفت‌های پرتکرار",
+    description: "از خلاصه‌های تماس‌های اخیر، دغدغه‌ها و مخالفت‌های تکرارشونده جمع می‌شود — با پاسخ‌هایی که جواب داده‌اند.",
+    trigger_event: null as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "search", scope: "summaries", limit: 10 },
+        { id: "s2", kind: "ask", from: "{{s1}}",
+          instruction: "در این خلاصه‌ها دغدغه‌ها و مخالفت‌های مشتری‌ها را پیدا کن؛ تکرارشونده‌ها را اول بیاور، و اگر جایی پاسخی داده شده که جواب داده، همان را کنارش بنویس." },
+        { id: "s3", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
+  sales_next_steps: {
+    handle: "wf-starter-sales-next-steps",
+    name: "قدم‌های بعدی مشتری",
+    description: "پس از هر تماس، قول‌ها و قدم‌های بعدی با مسئول و موعدشان بیرون کشیده می‌شود.",
+    trigger_event: "call.summarized" as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "search", scope: "transcript", of: "{{trigger.call_id}}" },
+        { id: "s2", kind: "extract", from: "{{s1}}", schema: "action_items_v1",
+          instruction: "قول‌ها و قدم‌های بعدی این تماس را دربیاور؛ اگر مسئول یا موعد گفته نشده بود، «نامشخص» بنویس." },
+        { id: "s3", kind: "decide", on: "s2.action_items.length", gt: 0, then: "s4", else: "s6" },
+        { id: "s4", kind: "foreach", over: "{{s2.action_items}}", max: 8, do: "s5" },
+        { id: "s5", kind: "ask",
+          instruction: "برای این قدم یک خط پیگیری بنویس که مسئول و موعد را نام ببرد: {{s4.item}}" },
+        { id: "s6", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
+  sales_commitments: {
+    handle: "wf-starter-sales-commitments",
+    name: "قول‌هایی که ما داده‌ایم",
+    description: "هر وقت بخواهید، از تماس‌های اخیر هر قولی که به مشتری‌ها داده شده جمع می‌شود — پیش از آن‌که فراموش شود.",
+    trigger_event: null as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "search", scope: "summaries", limit: 10 },
+        { id: "s2", kind: "ask", from: "{{s1}}",
+          instruction: "در این خلاصه‌ها هر قولی که طرف ما به مشتری داده — قیمت، زمان تحویل، پیگیری، سند — را جمع کن؛ برای هر کدام بنویس به چه کسی و در کدام جلسه." },
+        { id: "s3", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
+  sales_lead_mail: {
+    handle: "wf-starter-sales-lead-mail",
+    name: "تشخیص ایمیل مشتری",
+    description: "اگر ایمیل تازه از یک مشتری یا سرنخ فروش باشد — پرسش قیمت، درخواست دمو، پیگیری خرید — همان لحظه خبرتان می‌کند.",
+    trigger_event: "mail.received" as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "fetch", source_kind: "mail_message", of: "{{trigger.source_ref}}" },
+        { id: "s2", kind: "extract", schema: "mail_reply_v1", tools: "none",
+          from: "{{s1.body}}",
+          instruction: "فقط تشخیص بده آیا این پیام از یک مشتری یا سرنخ فروش است — پرسش قیمت، درخواست دمو، علاقه به خرید یا پیگیری سفارش. اگر هست reply را true کن؛ در note یک جمله بنویس چه می‌خواهد؛ body را یک خط تیره بگذار." },
+        { id: "s3", kind: "decide", on: "s2.reply", eq: true, then: "s4", else: "__end" },
+        { id: "s4", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
+  sales_meeting_prep: {
+    handle: "wf-starter-sales-meeting-prep",
+    name: "آماده‌سازی جلسهٔ فروش",
+    description: "پیش از هر جلسه، سابقهٔ همان مشتری مرور می‌شود: چه گفته، چه خواسته، و چه چیزی هنوز روی میز است.",
+    trigger_event: "meeting.soon" as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "fetch", source_kind: "calendar_event", of: "{{trigger.source_ref}}" },
+        { id: "s2", kind: "search", scope: "summaries", limit: 10 },
+        { id: "s3", kind: "ask", from: "{{s2}}",
+          instruction: "این جلسهٔ فروش پیشِ روست: {{s1}} — از خلاصه‌های در ادامه، سابقهٔ همین مشتری را جمع کن: چه خواسته، چه قول‌هایی رد و بدل شده، چه دغدغه‌ای مانده، و در این جلسه چه چیزی را باید ببندید." },
+        { id: "s4", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
+  sales_pipeline: {
+    handle: "wf-starter-sales-pipeline",
+    name: "نمای مشتری‌ها",
+    description: "هر وقت بخواهید، از تماس‌های اخیر یک نمای فروش ساخته می‌شود: هر مشتری کجاست و کدام به توجه فوری نیاز دارد.",
+    trigger_event: null as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "search", scope: "summaries", limit: 10 },
+        { id: "s2", kind: "ask", from: "{{s1}}",
+          instruction: "از این خلاصه‌ها یک نمای فروش بساز: برای هر مشتری یک خط — کجای گفت‌وگوست، آخرین تماس کی بود، و قدم بعدی چیست. مشتری‌هایی که مدتی است خبری از آن‌ها نیست را جدا نام ببر." },
+        { id: "s3", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
+
+  /* ── the INTERVIEW agent's seven ── */
+
+  int_scorecard: {
+    handle: "wf-starter-int-scorecard",
+    name: "کارنامهٔ مصاحبه",
+    description: "پس از هر مصاحبه، یک کارنامهٔ ساختاریافته نوشته می‌شود: نقاط قوت، نگرانی‌ها، و شواهد هر کدام از خود گفت‌وگو.",
+    trigger_event: "call.summarized" as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "search", scope: "transcript", of: "{{trigger.call_id}}" },
+        { id: "s2", kind: "ask", from: "{{s1}}",
+          instruction: "اگر این گفت‌وگو یک مصاحبهٔ کاری است، از آن یک کارنامه بنویس: نقاط قوت با نقل‌قول شاهد، نگرانی‌ها با شاهد، تجربه‌های مرتبط، و یک جمع‌بندی بی‌طرف. اگر مصاحبه نیست، فقط همین را بگو و تمام." },
+        { id: "s3", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
+  int_questions: {
+    handle: "wf-starter-int-questions",
+    name: "پرسش‌های مصاحبهٔ بعد",
+    description: "پیش از هر مصاحبه، از دورهای قبلی همان فرایند پرسش‌هایی ساخته می‌شود که هنوز جواب نگرفته‌اند.",
+    trigger_event: "meeting.soon" as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "fetch", source_kind: "calendar_event", of: "{{trigger.source_ref}}" },
+        { id: "s2", kind: "search", scope: "summaries", limit: 10 },
+        { id: "s3", kind: "ask", from: "{{s2}}",
+          instruction: "این جلسه پیشِ روست: {{s1}} — اگر مصاحبه است، از خلاصه‌های در ادامه دورهای قبلیِ همین فرایند را پیدا کن و پرسش‌هایی بنویس که هنوز بی‌جواب مانده‌اند: چیزهایی که مبهم ماند، ادعاهایی که سنجیده نشد. اگر سابقه‌ای نبود، پرسش‌های پایه‌ای برای شروع پیشنهاد کن." },
+        { id: "s4", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
+  int_compare: {
+    handle: "wf-starter-int-compare",
+    name: "مقایسهٔ نامزدها",
+    description: "هر وقت بخواهید، مصاحبه‌های اخیر کنار هم گذاشته می‌شوند: هر نامزد در چه چیزی قوی‌تر بود، با شاهد.",
+    trigger_event: null as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "search", scope: "summaries", limit: 10 },
+        { id: "s2", kind: "ask", from: "{{s1}}",
+          instruction: "در این خلاصه‌ها مصاحبه‌های کاری را پیدا کن و نامزدها را کنار هم بگذار: برای هر معیار — تجربه، مهارت فنی، ارتباط — بگو کدام نامزد قوی‌تر بود و شاهدش چیست. اگر فقط یک مصاحبه هست، همان یک نفر را جمع‌بندی کن؛ اگر هیچ، صریح بگو." },
+        { id: "s3", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
+  int_redflags: {
+    handle: "wf-starter-int-redflags",
+    name: "نکته‌های نیازمند وارسی",
+    description: "پس از هر مصاحبه، ادعاهای وارسی‌نشده و ناسازگاری‌ها فهرست می‌شود — چیزهایی که پیش از تصمیم باید روشن شوند.",
+    trigger_event: "call.summarized" as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "search", scope: "transcript", of: "{{trigger.call_id}}" },
+        { id: "s2", kind: "ask", from: "{{s1}}",
+          instruction: "اگر این گفت‌وگو مصاحبه است، فهرست کن چه ادعاهایی وارسی نشد، کجا پاسخ‌ها با هم نمی‌خواند، و چه چیزی پیش از تصمیم باید روشن شود — هر مورد با نقل‌قول. اتهام نزن؛ فقط آنچه باید پرسیده شود را بنویس. اگر مصاحبه نیست، همین را بگو." },
+        { id: "s3", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
+  int_candidate_mail: {
+    handle: "wf-starter-int-candidate-mail",
+    name: "پیش‌نویس پاسخ به نامزد",
+    description: "اگر ایمیل تازه از یک نامزد استخدام باشد، پاسخی مودبانه و بی‌وعده پیش‌نویس می‌شود — ارسال همیشه با خود شماست.",
+    trigger_event: "mail.received" as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "fetch", source_kind: "mail_message", of: "{{trigger.source_ref}}" },
+        { id: "s2", kind: "extract", schema: "mail_reply_v1", tools: "none",
+          from: "{{s1.body}}",
+          instruction: "فقط اگر این پیام از یک نامزد استخدام دربارهٔ فرایند مصاحبه است — پیگیری نتیجه، هماهنگی زمان، پرسش دربارهٔ نقش — reply را true کن و پاسخی به همان زبان بنویس: مودبانه، کوتاه، و بدون هیچ وعده‌ای دربارهٔ نتیجه یا زمان قطعی؛ هرگز نامی برای صاحب حساب از خودت نساز. در note بنویس چه کردی." },
+        { id: "s3", kind: "decide", on: "s2.reply", eq: true, then: "s4", else: "__end" },
+        { id: "s4", kind: "propose", proposal: "draft_mail",
+          message: "{{s1.id}}", to: "{{s1.reply_to}}", subject: "{{s1.subject}}",
+          from: "{{s2.body}}" },
+        { id: "s5", kind: "apply", from: "s4" },
+        { id: "s6", kind: "notify", card: "mail_draft" },
+      ],
+    },
+  },
+  int_tag: {
+    handle: "wf-starter-int-tag",
+    name: "برچسب مصاحبه",
+    description: "پس از هر مصاحبه، برچسب‌هایی مثل نقش و حوزهٔ آن پیشنهاد می‌شود — با تأیید شما ثبت می‌شود.",
+    trigger_event: "call.summarized" as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "search", scope: "transcript", of: "{{trigger.call_id}}" },
+        { id: "s2", kind: "extract", from: "{{s1}}", schema: "topics_v1",
+          instruction: "اگر این گفت‌وگو مصاحبه است، حداکثر چهار برچسب کوتاه بده: «مصاحبه»، نام نقش، و حوزه‌های اصلی. اگر مصاحبه نیست، topics را خالی بگذار." },
+        { id: "s3", kind: "decide", on: "s2.topics.length", gt: 0, then: "s4", else: "__end" },
+        { id: "s4", kind: "propose", proposal: "add_tags",
+          from: "{{s2.topics}}", call: "{{trigger.call_id}}" },
+        { id: "s5", kind: "wait", on: "decision" },
+        { id: "s6", kind: "apply", from: "s4" },
+        { id: "s7", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
+  int_debrief: {
+    handle: "wf-starter-int-debrief",
+    name: "دستور جلسهٔ جمع‌بندی",
+    description: "پس از هر مصاحبه، دستور جلسهٔ جمع‌بندی تیم پیش‌نویس می‌شود: چه دیدیم، چه بسنجیم، چه تصمیمی مانده.",
+    trigger_event: "call.summarized" as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "search", scope: "transcript", of: "{{trigger.call_id}}" },
+        { id: "s2", kind: "ask", from: "{{s1}}",
+          instruction: "اگر این گفت‌وگو مصاحبه است، دستور جلسهٔ کوتاهی برای جمع‌بندی تیم بنویس: مشاهده‌های کلیدی، نکته‌هایی که باید سنجیده شود، و تصمیمی که باید گرفته شود. اگر مصاحبه نیست، همین را بگو." },
+        { id: "s3", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
+
+  /* ── the MANAGER agent's seven ── */
+
+  mgr_meeting_brief: {
+    handle: "wf-starter-mgr-meeting-brief",
+    name: "جلسه از چشم مدیر",
+    description: "پیش از هر جلسه، یک برگهٔ مدیر ساخته می‌شود: چه تصمیمی روی میز است، چه کسی چه می‌خواهد، کجا نباید کوتاه آمد.",
+    trigger_event: "meeting.soon" as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "fetch", source_kind: "calendar_event", of: "{{trigger.source_ref}}" },
+        { id: "s2", kind: "search", scope: "summaries", limit: 10 },
+        { id: "s3", kind: "ask", from: "{{s2}}",
+          instruction: "این جلسه پیشِ روست: {{s1}} — از خلاصه‌های در ادامه یک برگهٔ مدیر بساز: چه تصمیمی باید در این جلسه گرفته شود، هر طرف چه می‌خواهد، و چه چیزی را نباید بی‌جواب گذاشت. کوتاه و صریح." },
+        { id: "s4", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
+  mgr_week_review: {
+    handle: "wf-starter-mgr-week-review",
+    name: "مرور هفته",
+    description: "هر وقت بخواهید، از جلسه‌های اخیر یک مرور مدیریتی ساخته می‌شود: محورها، تصمیم‌ها، و آنچه عقب مانده.",
+    trigger_event: null as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "search", scope: "summaries", limit: 10 },
+        { id: "s2", kind: "ask", from: "{{s1}}",
+          instruction: "از این خلاصه‌ها یک مرور مدیریتی بنویس: محورهای اصلی این مدت، تصمیم‌های گرفته‌شده، کارهایی که عقب مانده، و یکی دو چیزی که اگر امروز به آن نرسید هفتهٔ بعد گران تمام می‌شود." },
+        { id: "s3", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
+  mgr_delegations: {
+    handle: "wf-starter-mgr-delegations",
+    name: "بار هر نفر",
+    description: "از جلسه‌های اخیر، کارهای سپرده‌شده به تفکیک افراد جمع می‌شود — چه کسی چه بر عهده دارد و بار چه کسی سنگین است.",
+    trigger_event: null as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "search", scope: "summaries", limit: 10 },
+        { id: "s2", kind: "extract", from: "{{s1}}", schema: "action_items_v1",
+          instruction: "همهٔ کارهای سپرده‌شده در این خلاصه‌ها را دربیاور؛ اگر مسئول یا موعد نامشخص بود، «نامشخص» بنویس." },
+        { id: "s3", kind: "ask",
+          instruction: "این کارها را به تفکیک مسئول مرتب کن: {{s2.action_items}} — زیر نام هر نفر کارهایش، و در پایان بگو بار چه کسی سنگین‌تر از بقیه است و چه کارهایی مسئول ندارند." },
+        { id: "s4", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
+  mgr_risks: {
+    handle: "wf-starter-mgr-risks",
+    name: "ریسک‌ها و گره‌ها",
+    description: "هر وقت بخواهید، از جلسه‌های اخیر هر ریسک، گره و نگرانی گفته‌شده جمع می‌شود — پیش از آن‌که به مشکل برسد.",
+    trigger_event: null as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "search", scope: "summaries", limit: 10 },
+        { id: "s2", kind: "ask", from: "{{s1}}",
+          instruction: "در این خلاصه‌ها هر ریسک، گره، تاخیر یا نگرانی که کسی گفته را جمع کن؛ برای هر کدام بنویس در کدام جلسه گفته شد و آیا برایش کاری تعیین شد یا بی‌صاحب ماند." },
+        { id: "s3", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
+  mgr_decisions_log: {
+    handle: "wf-starter-mgr-decisions-log",
+    name: "ثبت تصمیم‌های جلسه",
+    description: "پس از هر جلسه، تصمیم‌های آن با صاحبشان در یک فهرست تمیز ثبت می‌شود.",
+    trigger_event: "call.summarized" as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "search", scope: "transcript", of: "{{trigger.call_id}}" },
+        { id: "s2", kind: "extract", from: "{{s1}}", schema: "decisions_v1",
+          instruction: "تصمیم‌های این جلسه را با نام تصمیم‌گیرنده دربیاور؛ پرسش‌هایی که باز ماند را هم بیاور." },
+        { id: "s3", kind: "ask",
+          instruction: "از این‌ها یک فهرست تمیز بساز — هر تصمیم یک خط با نام صاحبش: {{s2.decisions}} — و در پایان پرسش‌های باز را جدا بیاور." },
+        { id: "s4", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
+  mgr_escalations: {
+    handle: "wf-starter-mgr-escalations",
+    name: "تشخیص ایمیل فوری",
+    description: "اگر ایمیل تازه چیزی باشد که تصمیم یا دخالت مدیر می‌خواهد — شکایت، ریسک، مهلت — همان لحظه خبرتان می‌کند.",
+    trigger_event: "mail.received" as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "fetch", source_kind: "mail_message", of: "{{trigger.source_ref}}" },
+        { id: "s2", kind: "extract", schema: "mail_reply_v1", tools: "none",
+          from: "{{s1.body}}",
+          instruction: "فقط تشخیص بده آیا این پیام به تصمیم یا دخالت یک مدیر نیاز دارد — شکایت جدی، ریسک، مهلت نزدیک، یا تعهدی مالی. اگر دارد reply را true کن؛ در note یک جمله بنویس چرا فوری است؛ body را یک خط تیره بگذار." },
+        { id: "s3", kind: "decide", on: "s2.reply", eq: true, then: "s4", else: "__end" },
+        { id: "s4", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
+  mgr_one_on_one: {
+    handle: "wf-starter-mgr-one-on-one",
+    name: "آماده‌سازی جلسهٔ فردی",
+    description: "پیش از هر جلسهٔ فردی، سابقهٔ همان نفر مرور می‌شود: چه بر عهده گرفته، چه گفته، و چه چیزی باید پرسیده شود.",
+    trigger_event: "meeting.soon" as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "fetch", source_kind: "calendar_event", of: "{{trigger.source_ref}}" },
+        { id: "s2", kind: "search", scope: "summaries", limit: 10 },
+        { id: "s3", kind: "ask", from: "{{s2}}",
+          instruction: "این جلسه پیشِ روست: {{s1}} — اگر جلسهٔ فردی است، از خلاصه‌های در ادامه سابقهٔ همان نفر را جمع کن: چه کارهایی بر عهده گرفته و کدام هنوز باز است، چه دغدغه‌ای گفته، و چه چیزی ارزش پرسیدن دارد. اگر معلوم نیست با چه کسی است، از عنوان رویداد کمک بگیر." },
+        { id: "s4", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
 } as const;
 export type StarterKey = keyof typeof STARTER_WORKFLOWS;
 
@@ -530,7 +904,7 @@ export type StarterKey = keyof typeof STARTER_WORKFLOWS;
  * real, and the 21 assignments partitioning the registry — an unassigned
  * starter is a shelf item no door leads to.
  */
-export const AGENT_STARTERS: Readonly<Record<"meetings" | "mail" | "prep", readonly StarterKey[]>> = {
+export const AGENT_STARTERS: Readonly<Record<"meetings" | "mail" | "prep" | "sales" | "interview" | "manager", readonly StarterKey[]>> = {
   meetings: [
     "autotag", "followups", "meeting_title", "decisions_digest",
     "action_items", "open_questions", "topic_history",
@@ -542,6 +916,22 @@ export const AGENT_STARTERS: Readonly<Record<"meetings" | "mail" | "prep", reado
   prep: [
     "prep_brief", "prep_people", "prep_questions", "prep_open_decisions",
     "prep_related", "prep_today", "prep_agenda",
+  ],
+  /* the 2026-08-28 second wave (user directive: "3 more related agents
+     ... with their workflow"). Seeded as system agents in db/0129. */
+  sales: [
+    "sales_debrief", "sales_objections", "sales_next_steps",
+    "sales_commitments", "sales_lead_mail", "sales_meeting_prep",
+    "sales_pipeline",
+  ],
+  interview: [
+    "int_scorecard", "int_questions", "int_compare", "int_redflags",
+    "int_candidate_mail", "int_tag", "int_debrief",
+  ],
+  manager: [
+    "mgr_meeting_brief", "mgr_week_review", "mgr_delegations",
+    "mgr_risks", "mgr_decisions_log", "mgr_escalations",
+    "mgr_one_on_one",
   ],
 };
 

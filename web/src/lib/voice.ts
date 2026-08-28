@@ -57,6 +57,56 @@ const PERSIAN_RE = /[؀-ۿ]/;
  * Voices load ASYNC in Chrome: getVoices() is [] until `voiceschanged`.
  * Waiting bounded — a browser that never fires it still answers.
  */
+/**
+ * The person's spoken-voice choice (0128), cached for five minutes — this
+ * module has no identity context of its own, and asking /me once per
+ * utterance would make every sentence a network round trip. Signed-out or
+ * unreadable = the female defaults, re-asked next window.
+ */
+let voiceGenderCache: { fa: "female" | "male"; en: "female" | "male" } | null = null;
+let voiceGenderAt = 0;
+async function voiceGenders(): Promise<{ fa: "female" | "male"; en: "female" | "male" }> {
+  if (voiceGenderCache && Date.now() - voiceGenderAt < 300_000) return voiceGenderCache;
+  try {
+    const { api } = await import("@/api/client");
+    const me = await api.me();
+    voiceGenderCache = {
+      fa: me?.assistant_voice_fa === "male" ? "male" : "female",
+      en: me?.assistant_voice_en === "male" ? "male" : "female",
+    };
+  } catch {
+    voiceGenderCache = voiceGenderCache ?? { fa: "female", en: "female" };
+  }
+  voiceGenderAt = Date.now();
+  return voiceGenderCache;
+}
+
+/** the settings screen saved a new choice — the next sentence uses it */
+export function forgetVoiceGenders(): void {
+  voiceGenderCache = null;
+  voiceGenderAt = 0;
+}
+
+/*
+ * Browser-voice gender heuristics: engines name voices after people, not
+ * genders, so the pick is by KNOWN NAMES first (Edge's own catalogue) and
+ * the literal words female/male second. A miss falls back to any voice of
+ * the language — a voice of the wrong gender beats silence, and the server
+ * rung underneath honors the choice exactly.
+ */
+const FEMALE_NAMES = /female|dilara|aria|jenny|zira|sonia|libby|michelle|emma|clara|ana|amy|natasha|hazel|susan/i;
+const MALE_NAMES = /(?<!fe)male|farid|guy|ryan|davis|tony|william|liam|christopher|eric|andrew|brian|david|mark|george|james/i;
+
+function pickBrowserVoice(
+  voices: readonly SpeechSynthesisVoice[],
+  lang: "fa" | "en",
+  gender: "female" | "male",
+): SpeechSynthesisVoice | undefined {
+  const pool = voices.filter((v) => v.lang.toLowerCase().startsWith(lang));
+  const wanted = gender === "female" ? FEMALE_NAMES : MALE_NAMES;
+  return pool.find((v) => wanted.test(v.name)) ?? pool[0];
+}
+
 function loadVoices(): Promise<SpeechSynthesisVoice[]> {
   const synth = window.speechSynthesis;
   const now = synth.getVoices();
@@ -167,16 +217,18 @@ function speakUtterance(utterance: SpeechSynthesisUtterance, text: string): Prom
 async function speakOne(cleaned: string): Promise<void> {
   const persian = PERSIAN_RE.test(cleaned);
   const synthAvailable = "speechSynthesis" in window;
+  const genders = await voiceGenders();
   if (!persian) {
     if (!synthAvailable) return;
     const utterance = new SpeechSynthesisUtterance(cleaned);
-    utterance.lang = "en-US";
+    const enVoice = pickBrowserVoice(await loadVoices(), "en", genders.en);
+    if (enVoice) utterance.voice = enVoice;
+    utterance.lang = enVoice?.lang ?? "en-US";
     await speakUtterance(utterance, cleaned);
     return;
   }
   const voices = synthAvailable ? await loadVoices() : [];
-  const faVoices = voices.filter((v) => v.lang.toLowerCase().startsWith("fa"));
-  const faVoice = faVoices.find((v) => /dilara|female/i.test(v.name)) ?? faVoices[0];
+  const faVoice = pickBrowserVoice(voices, "fa", genders.fa);
   if (faVoice) {
     const utterance = new SpeechSynthesisUtterance(cleaned);
     utterance.voice = faVoice;
@@ -186,7 +238,7 @@ async function speakOne(cleaned: string): Promise<void> {
   }
   try {
     const { api } = await import("@/api/client");
-    const blob = await api.tts(cleaned.slice(0, 1200));
+    const blob = await api.tts(cleaned.slice(0, 1200), "fa");
     const audio = new Audio(URL.createObjectURL(blob));
     serverAudio = audio; // the orb's level meter taps the CURRENT element
     await new Promise<void>((resolve) => {
@@ -264,19 +316,21 @@ async function speakAsync(text: string): Promise<void> {
   };
 
   const persian = PERSIAN_RE.test(cleaned);
+  /* 0128: the person's own gender choice steers BOTH rungs — the browser
+     pick here, the piper model on the server underneath */
+  const genders = await voiceGenders();
   if (!persian) {
     if (!("speechSynthesis" in window)) return;
     const utterance = new SpeechSynthesisUtterance(cleaned);
-    utterance.lang = "en-US";
+    const enVoice = pickBrowserVoice(await loadVoices(), "en", genders.en);
+    if (enVoice) utterance.voice = enVoice;
+    utterance.lang = enVoice?.lang ?? "en-US";
     fireUtterance(utterance);
     return;
   }
 
   const voices = "speechSynthesis" in window ? await loadVoices() : [];
-  // a WOMAN's voice for Persian (user directive, 2026-08-21): Edge ships
-  // fa-IR Dilara (female) beside Farid (male) — prefer her when present
-  const faVoices = voices.filter((v) => v.lang.toLowerCase().startsWith("fa"));
-  const faVoice = faVoices.find((v) => /dilara|female/i.test(v.name)) ?? faVoices[0];
+  const faVoice = pickBrowserVoice(voices, "fa", genders.fa);
   if (faVoice) {
     const utterance = new SpeechSynthesisUtterance(cleaned);
     utterance.voice = faVoice;
@@ -288,7 +342,7 @@ async function speakAsync(text: string): Promise<void> {
   // no browser voice speaks Persian — the server does (M37)
   try {
     const { api } = await import("@/api/client");
-    const blob = await api.tts(cleaned.slice(0, 1200));
+    const blob = await api.tts(cleaned.slice(0, 1200), "fa");
     serverAudio = new Audio(URL.createObjectURL(blob));
     publishPlayback(true);
     serverAudio.onended = () => {

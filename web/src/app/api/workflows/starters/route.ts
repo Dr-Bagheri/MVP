@@ -1,5 +1,19 @@
 import { coreFetch, errorResponse } from "@/server/core";
-import type { AuthoredWorkflow } from "@/api/types";
+import type { AuthoredWorkflow, StarterWorkflow } from "@/api/types";
+
+/**
+ * The LIBRARY — every shipped starter, served by core straight from
+ * STARTER_WORKFLOWS. Member-safe: reading the shelf is not the admin act,
+ * installing (the POST below) is.
+ */
+export async function GET() {
+  try {
+    return Response.json(
+      await coreFetch<{ starters: StarterWorkflow[] }>("/v1/workflows/starters"));
+  } catch (error) {
+    return errorResponse(error);
+  }
+}
 
 /**
  * M41 — install a SHIPPED starter (admin, core-walled): create + publish +

@@ -13,23 +13,49 @@
  * no-content-in-logs, outbound-audio flavor).
  */
 
+/**
+ * The voice registry (0128, user directive 2026-08-28: gender choice for
+ * Persian AND English). One piper process per model, each on its own
+ * loopback port; the env var IS the availability fact — no URL, no voice,
+ * said out loud. `fa_male` reuses TTS_URL so the original deployment's
+ * meaning is unchanged.
+ */
+export const TTS_VOICES = ["fa_female", "fa_male", "en_female", "en_male"] as const;
+export type TtsVoice = (typeof TTS_VOICES)[number];
+
 export interface TtsService {
-  available: () => boolean;
+  available: (voice?: TtsVoice) => boolean;
+  /** which voices this deployment can actually speak */
+  voices: () => Record<TtsVoice, boolean>;
   /** WAV bytes for the given text. Throws on any rung failing — the caller
       maps that to a legible refusal, never to silence. */
-  synthesize: (text: string) => Promise<Uint8Array>;
+  synthesize: (text: string, voice?: TtsVoice) => Promise<Uint8Array>;
 }
 
 export function createTts(options: {
   url?: string | undefined;
+  urls?: Partial<Record<TtsVoice, string | undefined>>;
   fetchImpl?: typeof fetch;
 } = {}): TtsService {
-  const url = options.url ?? process.env.TTS_URL;
+  const urls: Record<TtsVoice, string | undefined> = {
+    fa_male: options.urls?.fa_male ?? options.url ?? process.env.TTS_URL,
+    fa_female: options.urls?.fa_female ?? process.env.TTS_URL_FA_FEMALE,
+    en_female: options.urls?.en_female ?? process.env.TTS_URL_EN_FEMALE,
+    en_male: options.urls?.en_male ?? process.env.TTS_URL_EN_MALE,
+  };
   const doFetch = options.fetchImpl ?? fetch;
   return {
-    available: () => Boolean(url),
-    async synthesize(text: string): Promise<Uint8Array> {
-      if (!url) throw new Error("tts unavailable — TTS_URL not configured");
+    available: (voice: TtsVoice = "fa_male") => Boolean(urls[voice]),
+    voices: () => ({
+      fa_female: Boolean(urls.fa_female), fa_male: Boolean(urls.fa_male),
+      en_female: Boolean(urls.en_female), en_male: Boolean(urls.en_male),
+    }),
+    async synthesize(text: string, voice: TtsVoice = "fa_male"): Promise<Uint8Array> {
+      const url = urls[voice];
+      /* an EXPLICIT voice that cannot be honored is refused by name, never
+         silently swapped for another gender (M21: degrade what was
+         inferred, fail on what was told) */
+      if (!url) throw new Error(`tts unavailable — no URL configured for voice ${voice}`);
       /*
        * The provider's spelling, proven live on the box (2026-08-21):
        * piper 1.7's http_server takes POST /synthesize with JSON

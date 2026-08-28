@@ -299,7 +299,23 @@ function tokenPayload(response: ProviderTokenResponse, previous?: TokenPayload):
 
 async function providerFetch(url: string, init: RequestInit): Promise<Record<string, unknown>> {
   const response = await fetch(url, init);
-  if (!response.ok) throw new Error(`connector provider request failed (${response.status})`);
+  if (!response.ok) {
+    /*
+     * Name WHICH refusal (rule 12). The Drive outage of 2026-08-28 logged
+     * as `"err":"Error"` — a 403 (the Drive API was never enabled on the
+     * Google project) indistinguishable in our own logs from a bad token,
+     * a rate limit, or a provider outage. The status class is the
+     * provider's own word for which nothing this is; it carries no
+     * content, so it may travel to logs and to the caller's error code.
+     */
+    const failed = new Error(`connector provider request failed (${response.status})`) as Error & {
+      errorType: string;
+      providerStatus: number;
+    };
+    failed.errorType = "provider_refused";
+    failed.providerStatus = response.status;
+    throw failed;
+  }
   /* a 202/204 carries no body: Graph answers a send that way, and asking
      `.json()` for one turns a success into a thrown parse error */
   if (response.status === 202 || response.status === 204) return {};

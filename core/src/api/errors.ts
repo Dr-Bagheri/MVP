@@ -158,7 +158,7 @@ export class ConflictError extends Error {
 export interface ErrorBody {
   /** English prose. The fallback when a client has not catalogued `code`. */
   error: string;
-  kind?: RefusalKind | UnauthenticatedKind | "not_found" | "invalid" | "conflict" | "internal";
+  kind?: RefusalKind | UnauthenticatedKind | "not_found" | "invalid" | "conflict" | "internal" | "provider";
   /** Stable, snake_case, and what a localized client actually keys on. */
   code?: string;
   /** The numbers and names inside the sentence — see RefusalCode. */
@@ -266,6 +266,25 @@ export function mapError(error: unknown): MappedError {
         ...(error.params === undefined ? {} : { params: error.params }),
       },
       ours: false,
+    };
+  }
+  /*
+   * A connector PROVIDER said no (2026-08-28, the Drive finding): 502 with
+   * the provider's status class as a param, because "Google refused with
+   * 403" and "our handler crashed" are different facts and only one of
+   * them is ours. Carried as fields, never sniffed from the message.
+   */
+  const provider = error as { errorType?: unknown; providerStatus?: unknown };
+  if (provider?.errorType === "provider_refused" && typeof provider.providerStatus === "number") {
+    return {
+      status: 502,
+      body: {
+        error: "the connected provider refused the request",
+        kind: "provider",
+        code: "provider_refused",
+        params: { status: provider.providerStatus },
+      },
+      ours: true,
     };
   }
   if (error instanceof InvalidTimingError) {

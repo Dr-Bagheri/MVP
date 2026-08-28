@@ -51,10 +51,11 @@ import { decideMatch } from "../worker/voice-match.ts";
 import { createStorage as createPurgeStorage } from "../purge/main.ts";
 import { createWorkflow, listWorkflows, resolveWorkflow } from "./workflows.ts";
 import { createWorkflowRunsRepo } from "./workflow-runs.ts";
-import { createWorkflowAuthoringRepo } from "./workflow-authoring.ts";
+import { createWorkflowAuthoringRepo, STARTER_WORKFLOWS } from "./workflow-authoring.ts";
 import type { DomainTool } from "../agent/tools.ts";
 import { agentToolsDb, type Db, type SqlTx } from "../db/identity.ts";
 import { isAdmin, isOwner, type Identity, type Skill } from "../agent/types.ts";
+import { createQueue, Q_LINK_SPEAKERS } from "../worker/queue.ts";
 
 /**
  * What KIND of image is this, by its own first bytes?
@@ -702,6 +703,8 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       post_call_brief: typeof body.post_call_brief === "boolean" ? body.post_call_brief : undefined,
       auto_draft_replies: typeof body.auto_draft_replies === "boolean" ? body.auto_draft_replies : undefined,
       auto_meeting_prep: typeof body.auto_meeting_prep === "boolean" ? body.auto_meeting_prep : undefined,
+      assistant_voice_fa: typeof body.assistant_voice_fa === "string" ? body.assistant_voice_fa : undefined,
+      assistant_voice_en: typeof body.assistant_voice_en === "string" ? body.assistant_voice_en : undefined,
     }));
   });
 
@@ -964,17 +967,42 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
    * never an empty 200 the client would play as silence.
    */
   app.post("/v1/tts", async (request, reply) => {
-    await auth.requireActive(request);
-    const body = (request.body ?? {}) as { text?: unknown };
+    const identity = await auth.requireActive(request);
+    const body = (request.body ?? {}) as { text?: unknown; lang?: unknown };
     if (typeof body.text !== "string" || body.text.trim() === "") {
       throw new ValidationError("text is required");
     }
     if (body.text.length > 2000) throw new ValidationError("text too long (max 2000)");
-    if (!tts.available()) {
+    /*
+     * 0128: the voice = the CALLER's stored gender choice for the text's
+     * language. The client says which language it is speaking (it knows —
+     * it detected the script to pick the rung); the preference stays
+     * server-side so there is exactly one copy of the fact. Absent lang =
+     * fa, the deployment's first language and the wire's old meaning.
+     */
+    const lang = body.lang === "en" ? "en" : "fa";
+    let gender = "female";
+    try {
+      const prefs = await members.me(identity);
+      gender = (lang === "en" ? prefs.assistant_voice_en : prefs.assistant_voice_fa) ?? "female";
+    } catch {
+      /* an unreadable preference must not silence the voice — the default
+         speaks, and the choice re-applies on the next request */
+    }
+    const voice = `${lang}_${gender === "male" ? "male" : "female"}` as
+      "fa_female" | "fa_male" | "en_female" | "en_male";
+    /* a deployment without that specific voice falls back to the ONE voice
+       every deployment has had (fa_male = TTS_URL) only for fa — for en it
+       refuses, because a Persian voice reading English is not a fallback,
+       it is a malfunction with a confident face */
+    const chosen = tts.available(voice) ? voice
+      : lang === "fa" && tts.available("fa_male") ? "fa_male" as const
+      : null;
+    if (chosen === null) {
       return reply.code(503).send({ error: "tts_unavailable" });
     }
     try {
-      const audio = await tts.synthesize(body.text);
+      const audio = await tts.synthesize(body.text, chosen);
       return reply.type("audio/wav").send(Buffer.from(audio));
     } catch (cause) {
       // codes only — the failure names itself, the text stays out of logs
@@ -1619,7 +1647,41 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       vector: embedded.embedding,
       model: embedded.model,
     });
-    return reply.code(201).send({ enrolled: true, speech_ms: embedded.speech_ms });
+
+    /*
+     * M39 backfill (2026-08-28, "i put two voices of myself but it still
+     * does not recognize me in the records"): matching used to run only
+     * when a record was PROCESSED, so an enrollment changed nothing the
+     * enroller could see — every record they opened predated their print.
+     * A fresh print now re-tries the recent records this caller can see.
+     * The message carries each call's own owner (M7: the job runs as the
+     * record's owner, whose wall decides what the matcher may read), and
+     * `rematch` makes the step do nothing but match. Best-effort: a queue
+     * hiccup must not fail an enrollment that already stored.
+     */
+    let rematchQueued = 0;
+    try {
+      const queue = createQueue(options.db);
+      const recent = await options.db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe<{ id: string; owner_id: string }>(
+          `select id, owner_id from echo.call
+            where status = 'ready' and deleted_at is null
+            order by created_at desc limit 25`));
+      for (const call of recent) {
+        await queue.send(Q_LINK_SPEAKERS, {
+          callId: call.id, ownerId: call.owner_id, rematch: true,
+        });
+        rematchQueued += 1;
+      }
+    } catch (cause) {
+      request.log.warn(
+        { error_type: (cause as { errorType?: string }).errorType ?? "rematch_enqueue_failed" },
+        "enrollment stored; rematch backfill could not be queued",
+      );
+    }
+    return reply.code(201).send({
+      enrolled: true, speech_ms: embedded.speech_ms, rematch_queued: rematchQueued,
+    });
   });
 
   /**
@@ -2107,6 +2169,30 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     refuseApiKey(identity);
     const { id } = request.params as { id: string };
     return reply.send(await mailDrafts.discard(identity, id));
+  });
+
+  /**
+   * The LIBRARY: every shipped starter, graphs included, derived directly
+   * from the registry — rule 13½'s shape: STARTER_WORKFLOWS' owner is the
+   * only source this list may have, so a starter added in core is on the
+   * shelf without anybody hand-copying an array. READING the shelf is
+   * member-safe (it is product copy, not org data); INSTALLING one stays
+   * the admin POST below.
+   */
+  app.get("/v1/workflows/starters", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    return reply.send({
+      starters: Object.entries(STARTER_WORKFLOWS).map(([key, starter]) => ({
+        key,
+        handle: starter.handle,
+        name: starter.name,
+        description: starter.description,
+        trigger_event: starter.trigger_event,
+        max_autonomy: starter.max_autonomy,
+        graph: starter.graph,
+      })),
+    });
   });
 
   app.post("/v1/workflows/starters", async (request, reply) => {

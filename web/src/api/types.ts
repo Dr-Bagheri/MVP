@@ -205,6 +205,9 @@ export interface Me extends User {
   autonomy?: "watch" | "assist" | "act";
   /** db/0112 - Settings-Assistant; absent as a group until migrated. */
   assistant_reply_language?: string | null;
+  /* 0128: the spoken voice per language — "female" | "male" */
+  assistant_voice_fa?: string;
+  assistant_voice_en?: string;
   assistant_reply_length?: string | null;
   assistant_instructions?: string | null;
   post_call_brief?: boolean;
@@ -1119,6 +1122,23 @@ export interface WorkflowStepRunRecord {
 export interface WorkflowRunDetail {
   run: WorkflowRunRecord;
   steps: WorkflowStepRunRecord[];
+}
+
+/**
+ * GET /v1/workflows/starters — one shipped library entry, exactly as core
+ * derives it from STARTER_WORKFLOWS (the registry is the producer; this type
+ * mirrors its wire shape and invents nothing). `name`/`description` are the
+ * SEEDED Persian strings, which is what lets `useWorkflowCopy` localize them
+ * on the English UI — the same discriminator the installed rows use.
+ */
+export interface StarterWorkflow {
+  key: string;
+  handle: string;
+  name: string;
+  description: string;
+  trigger_event: string | null;
+  max_autonomy: string;
+  graph: { entry: string; steps: { id: string; kind: string }[] };
 }
 
 /** M41 P5 — the builder's row, as core serves it. */

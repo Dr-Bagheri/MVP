@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import { notify } from "@/lib/notify";
+import { forgetVoiceGenders } from "@/lib/voice";
 import { Card } from "@/components/ui";
 
 /**
@@ -33,6 +34,9 @@ export function AssistantSettings() {
   const [replyLength, setReplyLength] = useState<string>("");
   const [instructions, setInstructions] = useState<string>("");
   const [savedInstructions, setSavedInstructions] = useState<string>("");
+  /* 0128: the SPOKEN voice, per language — 'female' | 'male' */
+  const [voiceFa, setVoiceFa] = useState<string>("female");
+  const [voiceEn, setVoiceEn] = useState<string>("female");
   const [prefsReady, setPrefsReady] = useState(false);
 
   useEffect(() => {
@@ -43,6 +47,8 @@ export function AssistantSettings() {
         setReplyLength(me.assistant_reply_length ?? "");
         setInstructions(me.assistant_instructions ?? "");
         setSavedInstructions(me.assistant_instructions ?? "");
+        setVoiceFa(me.assistant_voice_fa ?? "female");
+        setVoiceEn(me.assistant_voice_en ?? "female");
       }
     }).catch(() => undefined);
   }, []);
@@ -54,6 +60,11 @@ export function AssistantSettings() {
       setReplyLength(me.assistant_reply_length ?? "");
       setInstructions(me.assistant_instructions ?? "");
       setSavedInstructions(me.assistant_instructions ?? "");
+      setVoiceFa(me.assistant_voice_fa ?? "female");
+      setVoiceEn(me.assistant_voice_en ?? "female");
+      /* the speech module caches the choice — a saved change must reach
+         the very next spoken sentence, not the next five-minute window */
+      forgetVoiceGenders();
       notify(t("assistantSaved"));
     } catch {
       notify(t("assistantSaveFailed"), "warn");
@@ -98,6 +109,40 @@ export function AssistantSettings() {
                 <option value="">{t("replyAuto")}</option>
                 <option value="short">{t("replyShort")}</option>
                 <option value="detailed">{t("replyDetailed")}</option>
+              </select>
+            </label>
+          </div>
+          {/* 0128 (user directive, 2026-08-28): the gender of the SPOKEN
+              voice, chosen per language — the Persian and English voices
+              are different models, and one switch for both would decide
+              something the person did not say */}
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <label className="block text-xs text-fg-muted">
+              {t("voiceFa")}
+              <select
+                className="input mt-1 h-9 min-h-0 w-full text-sm"
+                value={voiceFa}
+                onChange={(e) => {
+                  setVoiceFa(e.target.value);
+                  void savePrefs({ assistant_voice_fa: e.target.value });
+                }}
+              >
+                <option value="female">{t("voiceFemale")}</option>
+                <option value="male">{t("voiceMale")}</option>
+              </select>
+            </label>
+            <label className="block text-xs text-fg-muted">
+              {t("voiceEn")}
+              <select
+                className="input mt-1 h-9 min-h-0 w-full text-sm"
+                value={voiceEn}
+                onChange={(e) => {
+                  setVoiceEn(e.target.value);
+                  void savePrefs({ assistant_voice_en: e.target.value });
+                }}
+              >
+                <option value="female">{t("voiceFemale")}</option>
+                <option value="male">{t("voiceMale")}</option>
               </select>
             </label>
           </div>

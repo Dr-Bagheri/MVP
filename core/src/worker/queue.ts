@@ -58,6 +58,12 @@ export interface JobPayload {
   instruction?: string;
   /** Append the «ارقام و تاریخ‌ها» ledger section to the summary. */
   figures?: boolean;
+  /** M39 backfill (2026-08-28): a fresh enrollment re-tries matching on
+      recent records. Only link_speakers reads it, and with it set the step
+      does NOTHING but match — no status move, no summarize, no events:
+      re-firing those on an old call would re-summarize it and wake every
+      call.transcribed subscriber for something that did not happen. */
+  rematch?: boolean;
   /** 0094: the display name the produced version stores (a ruled key or a
       custom template's own name) — provenance, never a prompt. */
   label?: string;

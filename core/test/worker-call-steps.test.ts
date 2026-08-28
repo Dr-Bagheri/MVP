@@ -66,6 +66,26 @@ describe("link_speakers", () => {
     expect(sent).toHaveLength(1);
   });
 
+  it("a REMATCH message matches and then stops — no status move, no summarize, no events", async () => {
+    /*
+     * M39 backfill (2026-08-28): enrollment re-tries recent records. The
+     * load-bearing half is what the branch must NOT do — re-firing the
+     * tail would re-summarize a finished call and wake every
+     * call.transcribed subscriber. Verified red by deleting the branch:
+     * setCallStatus fires and `sent` gains the summarize message.
+     */
+    const { db } = fakeDb([]);
+    const lifecycle = fakeLifecycle();
+    const sent: unknown[] = [];
+    const queue = { send: async (_q: unknown, b: unknown) => { sent.push(b); return 1; } } as unknown as Queue;
+
+    await createLinkSpeakersStep({ db, queue, lifecycle }).handle(
+      { ...payload, rematch: true }, { attempt: 1, log: silent });
+
+    expect(lifecycle.setCallStatus).not.toHaveBeenCalled();
+    expect(sent).toHaveLength(0);
+  });
+
   it("only fills a sample that is not already set, so a re-run is harmless", async () => {
     const { db, executed } = fakeDb([]);
     const queue = { send: async () => 1 } as unknown as Queue;

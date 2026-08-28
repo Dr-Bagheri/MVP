@@ -47,4 +47,32 @@ export const AGENT_STARTER_HANDLES: Readonly<Record<string, readonly string[]>> 
     "wf-starter-prep-today",
     "wf-starter-prep-agenda",
   ],
+  /* the 2026-08-28 second wave (db/0129): sales, interview, manager */
+  sales: [
+    "wf-starter-sales-debrief",
+    "wf-starter-sales-objections",
+    "wf-starter-sales-next-steps",
+    "wf-starter-sales-commitments",
+    "wf-starter-sales-lead-mail",
+    "wf-starter-sales-meeting-prep",
+    "wf-starter-sales-pipeline",
+  ],
+  interview: [
+    "wf-starter-int-scorecard",
+    "wf-starter-int-questions",
+    "wf-starter-int-compare",
+    "wf-starter-int-redflags",
+    "wf-starter-int-candidate-mail",
+    "wf-starter-int-tag",
+    "wf-starter-int-debrief",
+  ],
+  manager: [
+    "wf-starter-mgr-meeting-brief",
+    "wf-starter-mgr-week-review",
+    "wf-starter-mgr-delegations",
+    "wf-starter-mgr-risks",
+    "wf-starter-mgr-decisions-log",
+    "wf-starter-mgr-escalations",
+    "wf-starter-mgr-one-on-one",
+  ],
 };

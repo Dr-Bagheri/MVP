@@ -1964,3 +1964,38 @@ post-lock without affecting any decision: Soniox Persian quality numbers on
 the user's consented clip (lane validation inside the M6 design, not an
 architecture variable). From here: amendments only via the steward, marked
 and logged.
+
+## Amendments of 2026-08-28 (the voice-and-agents wave)
+
+**M37 amended — the voice is a choice.** The platform's TTS becomes a
+four-voice registry (`fa_female` mana / `fa_male` gyro / `en_female` amy /
+`en_male` ryan), one piper process per model on its own loopback port; the
+env var per voice IS the availability fact. Each person stores a gender
+choice per language (db/0128, default female — the 2026-08-21 "a woman's
+voice for Persian" directive generalized). The /v1/tts route resolves
+voice = caller's choice for the text's language; an explicit voice the
+deployment cannot speak is refused by name for English and falls back only
+fa→fa_male (the one voice every deployment has had) — a Persian voice
+reading English is not a fallback, it is a malfunction with a confident
+face. The browser rung picks its voice by the same stored choice.
+
+**M39 amended — matching is calibrated on production, and enrollment
+reaches backward.** The 0.6 threshold came from clean-clip acceptance and
+over-fit that context: on real call audio the same person scores 0.55–0.80
+(the user's own voice was refused at 0.551/0.585) while different people
+sit at or under ~0.45. Default is now 0.55, pinned in tests on BOTH sides
+of the bar. And enrolling re-tries the recent records the enroller can
+see: a `rematch` message through echo_link_speakers runs ONLY the matcher
+— no status move, no summarize, no re-fired events — because matching used
+to run only at processing time, so an enrollment changed nothing the
+enroller could see and read as broken.
+
+**M47 extended — the second agent wave.** Three more system agents ship
+(db/0129): sales, interview, manager — same walls, same per-org
+arrangement policy (it keys off level='system' and needed no change), each
+with seven starters in STARTER_WORKFLOWS (42 total), validated by the same
+corpus test and partitioned by the same menu invariant. The starters are
+now also a LIBRARY in the workflows section: every uninstalled starter
+lists there and renders its own page, where an admin installs it — "make
+all the workflows real in the workflow section, so anyone else can use
+them for real later."

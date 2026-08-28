@@ -189,10 +189,15 @@ function NotificationRow({
   onToggle: (next: boolean) => void;
 }) {
   const t = useTranslations("settings");
+  /* `ms-auto` on the control itself, never a wrapper: FormRow clones
+     aria-describedby onto its single child, and a positioning <div> would
+     take the describedby while the switch loses its description. The class
+     puts switch AND stand-in reason at the control cell's inline-end, both
+     directions (row's end in fa RTL and en LTR alike). */
   return (
     <FormRow label={label} description={description} htmlFor={id}>
       {state === null ? null : typeof state !== "boolean" ? (
-        <span className="text-detail text-fg-muted">
+        <span className="ms-auto text-detail text-fg-muted">
           {t(state === "absent" ? "notifUnavailable" : "notifUnreadable")}
         </span>
       ) : (
@@ -202,7 +207,7 @@ function NotificationRow({
           role="switch"
           aria-checked={state}
           disabled={busy}
-          className={`tap relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-60 ${
+          className={`tap relative ms-auto h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-60 ${
             state ? "bg-accent" : "border border-border bg-surface-2"
           }`}
           onClick={() => onToggle(!state)}

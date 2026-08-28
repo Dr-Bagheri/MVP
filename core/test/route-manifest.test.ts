@@ -70,6 +70,7 @@ const REQUIRED_ROUTES: [method: string, path: string, why: string][] = [
   ["POST", "/v1/mail/drafts/:id/send", "M43 - the only outward action: a person presses send"],
   ["POST", "/v1/mail/drafts/:id/discard", "M43 - a draft the person does not want"],
   ["POST", "/v1/workflows/starters", "M41 P5 - the shipped starters: the engine is never an empty shelf"],
+  ["GET", "/v1/workflows/starters", "2026-08-28 user directive - the library: every shipped starter readable by any member, so /workflows can list what an admin may install"],
   ["GET", "/v1/workflows/auto-apply", "M41 W13 — members may KNOW what auto-applies"],
   ["PUT", "/v1/workflows/auto-apply", "M41 W13/W17 — the standing human decision, admin-only"],
   ["POST", "/v1/assistant/proposals/:id/confirm", "M4 — an inferred write is proposed, then approved"],

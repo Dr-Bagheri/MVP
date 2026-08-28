@@ -11,11 +11,11 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
-  const body = (await request.json()) as { text?: string };
+  const body = (await request.json()) as { text?: string; lang?: string };
   try {
     const upstream = await coreFetch<Response>("/v1/tts", {
       method: "POST",
-      body: { text: body.text },
+      body: { text: body.text, lang: body.lang },
       raw: true,
     });
     return new Response(upstream.body, {

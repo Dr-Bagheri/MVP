@@ -68,6 +68,12 @@ export function createLinkSpeakersStep({ db, queue, lifecycle, ml, storage, voic
         ),
       );
 
+      // M39 backfill: a rematch message wants EXACTLY the matching below
+      // and none of the pipeline around it — the call already finished
+      // once, and moving its status or re-firing call.transcribed would
+      // narrate an event that is not happening.
+      const rematchOnly = payload.rematch === true;
+
       // M39: match unlinked voices against ENROLLED prints — best-effort,
       // never the pipeline's problem when it can't (M21: forfeit out loud)
       if (ml && storage) {
@@ -83,6 +89,11 @@ export function createLinkSpeakersStep({ db, queue, lifecycle, ml, storage, voic
             "voice matching forfeited — the call proceeds unnamed",
           );
         }
+      }
+
+      if (rematchOnly) {
+        log.info({ call_id: payload.callId }, "voice rematch pass complete");
+        return;
       }
 
       await lifecycle.setCallStatus(identity, payload.callId, "summarizing");

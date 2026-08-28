@@ -1,7 +1,11 @@
 import { Suspense } from "react";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { MailDraft, WorkflowCard } from "@/api/types";
+import type { MailDraft, StarterWorkflow, WorkflowCard } from "@/api/types";
+import fa from "@/messages/fa.json";
+/* the PRODUCER's registry, imported in Node exactly as workflowName.test.ts
+   does — the library fixture is derived from it, never transcribed */
+import { STARTER_WORKFLOWS } from "../../../../../../core/src/api/workflow-authoring.ts";
 
 /**
  * The workflow detail page states two things a person acts on, and both have
@@ -62,6 +66,19 @@ let DRAFTS: MailDraft[] = [];
  */
 let AUTHORED: Record<string, unknown>[] | null = null;
 let GRAPH: { steps: { id: string; kind: string; instruction?: string }[] } | null = null;
+
+/** the shipped LIBRARY, in the GET's wire shape, straight from the registry */
+const STARTERS: StarterWorkflow[] = Object.entries(STARTER_WORKFLOWS).map(
+  ([key, starter]) => ({
+    key,
+    handle: starter.handle,
+    name: starter.name,
+    description: starter.description,
+    trigger_event: starter.trigger_event,
+    max_autonomy: starter.max_autonomy,
+    graph: starter.graph as unknown as StarterWorkflow["graph"],
+  }),
+);
 
 let ME: Record<string, unknown> = {};
 const BASE_ME = {
@@ -125,6 +142,7 @@ vi.mock("@/api/client", () => ({
       return { graph: GRAPH, max_autonomy: "act" };
     },
     installStarter: async () => {},
+    workflowStarters: async () => STARTERS,
     mailDrafts: async () => DRAFTS,
     me: async () => ME,
     updateAssistant: async (patch: { auto_draft_replies?: boolean }) => ({
@@ -419,5 +437,86 @@ describe("the workflow detail page", () => {
     fireEvent.click(screen.getByRole("button", { name: "کارهای این گردش‌کار" }));
     const items = within(screen.getByRole("menu")).getAllByRole("menuitem");
     expect(items.map((item) => item.textContent)).toEqual(["خاموش کردن"]);
+  });
+
+  /**
+   * An UNINSTALLED starter's page (user directive, 2026-08-28: "make all the
+   * workflows that you put in skill real in workflow section"). This handle
+   * used to resolve to NOTHING — the page rendered its «missing» card for
+   * every one of the 21 shipped graphs.
+   *
+   * The fixture is the registry itself, so the assertions read the graph the
+   * page must render FROM THE PRODUCER: the step titles are derived from the
+   * starter's own step kinds through the same catalogue the page uses, and
+   * the instruction asserted is the registry's own sentence — in order,
+   * because a shuffled program is a different promise (this file's rule).
+   */
+  it("renders an uninstalled starter — name, trigger, its whole program, and the admin's install door", async () => {
+    ME = { ...BASE_ME, role: "owner" };
+    AUTHORED = []; // an admin, with nothing installed yet
+    await open("wf-starter-followups");
+
+    expect(screen.getByRole("heading", { level: 1 }).textContent)
+      .toBe(STARTER_WORKFLOWS.followups.name);
+
+    const process = screen.getByText("فرایند").closest("section")!;
+    /* followups is MANUAL (trigger_event null) — the builder's own word */
+    expect(within(process).getByText("دستی")).toBeTruthy();
+
+    const kinds = fa.builder as Record<string, string>;
+    const expected = STARTER_WORKFLOWS.followups.graph.steps.map(
+      (step, index) => `${index + 1}. ${kinds[`kind_${step.kind}`]}`,
+    );
+    const list = within(process).getByText(expected[0]!).closest("ol")!;
+    const titles = [...list.querySelectorAll("li")].map(
+      (item) => item.querySelector("p")?.textContent,
+    );
+    expect(titles).toEqual(expected);
+    /* the author's own words are shown, not summarised — the registry's */
+    expect(within(process).getByText(
+      STARTER_WORKFLOWS.followups.graph.steps[1]!.instruction!,
+    )).toBeTruthy();
+
+    /* the install door, for an admin — and NO switch: nothing is stored
+       anywhere yet, so a pill would be a claim about a row that does not
+       exist */
+    expect(screen.getByRole("button", { name: "نصب گردش‌کار" })).toBeTruthy();
+    expect(screen.queryByRole("switch")).toBeNull();
+  });
+
+  it("shows a member the same page read-only, with the admin line instead of the door", async () => {
+    /* member defaults: AUTHORED = null (the authoring list is refused) */
+    await open("wf-starter-followups");
+
+    expect(screen.getByRole("heading", { level: 1 }).textContent)
+      .toBe(STARTER_WORKFLOWS.followups.name);
+    expect(screen.getByText("نصب با مدیر سازمان است.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "نصب گردش‌کار" })).toBeNull();
+    expect(screen.queryByRole("switch")).toBeNull();
+  });
+
+  /**
+   * The other direction, and the load-bearing one: once the org HOLDS the
+   * row, the same handle must resolve to the installed view — switch, no
+   * install door. Without this control, "render the library entry" could
+   * simply always win and every installed starter would offer a second
+   * install button over a workflow that already runs.
+   */
+  it("stops offering the install door once the starter is installed", async () => {
+    ME = { ...BASE_ME, role: "owner" };
+    AUTHORED = [{
+      id: "w-9", handle: "wf-starter-followups",
+      name: STARTER_WORKFLOWS.followups.name,
+      description: "", enabled: true, trigger_event: null,
+      current_version: 1, current_version_id: "v-9", versions: 1,
+      created_at: "2026-08-28T00:00:00.000Z",
+    }];
+    GRAPH = { steps: [{ id: "s1", kind: "search" }] };
+    await open("wf-starter-followups");
+
+    expect(screen.queryByRole("button", { name: "نصب گردش‌کار" })).toBeNull();
+    expect(screen.queryByText("نصب با مدیر سازمان است.")).toBeNull();
+    /* the org's enabled switch is what stands in its place */
+    expect(screen.getByRole("switch").tagName).toBe("BUTTON");
   });
 });

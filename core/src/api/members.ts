@@ -143,6 +143,10 @@ export interface MeRecord extends MemberRecord {
    * none; post_call_brief carries its schema default.
    */
   assistant_reply_language?: string | null;
+  /* 0128: the spoken voice per language; served with a female default so a
+     pre-migration deployment still renders a coherent choice */
+  assistant_voice_fa?: string;
+  assistant_voice_en?: string;
   assistant_reply_length?: string | null;
   assistant_instructions?: string | null;
   post_call_brief?: boolean;
@@ -403,6 +407,9 @@ export function createMembersRepo(db: Db) {
         post_call_brief?: boolean | undefined;
         auto_draft_replies?: boolean | undefined;
         auto_meeting_prep?: boolean | undefined;
+        /* 0128: the spoken voice, per language — 'female' | 'male' */
+        assistant_voice_fa?: string | undefined;
+        assistant_voice_en?: string | undefined;
       },
     ): Promise<MeRecord> {
       if (!(await hasAssistantPrefs(db))) {
@@ -425,10 +432,17 @@ export function createMembersRepo(db: Db) {
         throw new ValidationError("assistant_instructions tops out at 2000 characters",
           { code: "instructions_too_long", params: { max: "2000" } });
       }
+      for (const voice of [patch.assistant_voice_fa, patch.assistant_voice_en]) {
+        if (voice !== undefined && voice !== "female" && voice !== "male") {
+          throw new ValidationError("assistant voice must be female or male");
+        }
+      }
       if (language === undefined && length === undefined
         && instructions === undefined && patch.post_call_brief === undefined
         && patch.auto_draft_replies === undefined
-        && patch.auto_meeting_prep === undefined) {
+        && patch.auto_meeting_prep === undefined
+        && patch.assistant_voice_fa === undefined
+        && patch.assistant_voice_en === undefined) {
         throw new ValidationError("nothing to update", { code: "nothing_to_update" });
       }
       await db.withIdentity(identity, (tx: SqlTx) =>
@@ -439,7 +453,9 @@ export function createMembersRepo(db: Db) {
                   assistant_instructions   = case when $6 then $7::text else assistant_instructions end,
                   post_call_brief          = case when $8 then $9::boolean else post_call_brief end,
                   auto_draft_replies       = case when $10 then $11::boolean else auto_draft_replies end,
-                  auto_meeting_prep        = case when $12 then $13::boolean else auto_meeting_prep end
+                  auto_meeting_prep        = case when $12 then $13::boolean else auto_meeting_prep end,
+                  assistant_voice_fa       = case when $14 then $15::text else assistant_voice_fa end,
+                  assistant_voice_en       = case when $16 then $17::text else assistant_voice_en end
             where id = $1`,
           [identity.userId,
             language !== undefined, language ?? null,
@@ -448,6 +464,8 @@ export function createMembersRepo(db: Db) {
             patch.post_call_brief !== undefined, patch.post_call_brief ?? null,
             patch.auto_draft_replies !== undefined, patch.auto_draft_replies ?? null,
             patch.auto_meeting_prep !== undefined, patch.auto_meeting_prep ?? null,
+            patch.assistant_voice_fa !== undefined, patch.assistant_voice_fa ?? null,
+            patch.assistant_voice_en !== undefined, patch.assistant_voice_en ?? null,
           ]));
       /*
        * TURNING DRAFTING ON RE-BASELINES THE MAILBOX.
@@ -504,7 +522,7 @@ export function createMembersRepo(db: Db) {
                   u.preferred_model, u.locale, u.calendar, u.timezone,
                   ${withAutonomy ? "u.autonomy," : ""}
                   ${withAssistant
-                    ? "u.assistant_reply_language, u.assistant_reply_length, u.assistant_instructions, u.post_call_brief, u.auto_draft_replies, u.auto_meeting_prep,"
+                    ? "u.assistant_reply_language, u.assistant_reply_length, u.assistant_instructions, u.post_call_brief, u.auto_draft_replies, u.auto_meeting_prep, u.assistant_voice_fa, u.assistant_voice_en,"
                     : ""}
                   ${withProfileCtx ? "u.job_title, u.about, u.assistant_context," : ""}
                   o.name as org_name
@@ -542,6 +560,8 @@ export function createMembersRepo(db: Db) {
         ...(withAssistant
           ? {
               assistant_reply_language: (row.assistant_reply_language as string | null) ?? null,
+              assistant_voice_fa: (row.assistant_voice_fa as string | null) ?? "female",
+              assistant_voice_en: (row.assistant_voice_en as string | null) ?? "female",
               assistant_reply_length: (row.assistant_reply_length as string | null) ?? null,
               assistant_instructions: (row.assistant_instructions as string | null) ?? null,
               post_call_brief: row.post_call_brief !== false,

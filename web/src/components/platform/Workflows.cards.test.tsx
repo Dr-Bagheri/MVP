@@ -1,6 +1,11 @@
 import { act, cleanup, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { WorkflowCard } from "@/api/types";
+import type { StarterWorkflow, WorkflowCard } from "@/api/types";
+/* the PRODUCER's registry, imported in Node exactly as workflowName.test.ts
+   does — the library fixture below is derived from it rather than
+   hand-written, so a starter added in core is in this suite's world the
+   moment it exists (rule 10: the fixture comes from the producer) */
+import { STARTER_WORKFLOWS } from "../../../../core/src/api/workflow-authoring.ts";
 
 /**
  * The workflows list is two big buttons now, and "big button" is a claim about
@@ -74,17 +79,33 @@ vi.mock("@/i18n/routing", () => ({
  */
 let role = "member";
 
-const AUTHORED = [{
+const BASE_AUTHORED = [{
   id: "a1", handle: "wf-a1", name: "پیگیری", description: "", enabled: false,
   trigger_event: null, current_version: null, current_version_id: null,
   versions: 0, created_at: "2026-08-28T10:00:00.000Z",
 }];
+/** reassigned per test — the dedupe test installs a starter here */
+let AUTHORED = BASE_AUTHORED;
+
+/** the GET's rows, derived from the registry — the wire mapping core serves */
+const STARTERS: StarterWorkflow[] = Object.entries(STARTER_WORKFLOWS).map(
+  ([key, starter]) => ({
+    key,
+    handle: starter.handle,
+    name: starter.name,
+    description: starter.description,
+    trigger_event: starter.trigger_event,
+    max_autonomy: starter.max_autonomy,
+    graph: starter.graph as unknown as StarterWorkflow["graph"],
+  }),
+);
 
 vi.mock("@/api/client", () => ({
   api: {
     workflows: async () => CARDS,
     me: async () => ({ role }),
     authoredWorkflows: async () => AUTHORED,
+    workflowStarters: async () => STARTERS,
     autoApplyRules: async () => [],
   },
 }));
@@ -94,24 +115,28 @@ const { Workflows } = await import("./Workflows");
 beforeEach(() => {
   cleanup();
   role = "member";
+  AUTHORED = BASE_AUTHORED;
 });
 
 describe("the workflows list", () => {
   it("renders one card per template, with the WHOLE card as the link", async () => {
     await act(async () => { render(<Workflows />); });
 
+    /* the two templates first, then the whole LIBRARY in registry order —
+       the expected list is derived from the producer, never transcribed */
     const links = screen.getAllByRole("link");
     expect(links.map((link) => link.getAttribute("href"))).toEqual([
       "/workflows/draft-email-replies",
       "/workflows/prepare-meetings",
+      ...Object.values(STARTER_WORKFLOWS).map((starter) => `/workflows/${starter.handle}`),
     ]);
 
     /* the description lives INSIDE the link — the assertion the previous
        title-only-link shape fails, and the only one that distinguishes a card
        that is a button from a card with a button in it */
-    for (const [index, link] of links.entries()) {
-      expect(link.textContent).toContain(CARDS[index]!.name);
-      expect(link.textContent).toContain(CARDS[index]!.description);
+    for (const [index, card] of CARDS.entries()) {
+      expect(links[index]!.textContent).toContain(card.name);
+      expect(links[index]!.textContent).toContain(card.description);
     }
   });
 
@@ -177,5 +202,48 @@ describe("the workflows list", () => {
     await act(async () => { render(<Workflows />); });
     expect(screen.queryByText("گردش‌کار تازه")).toBeNull();
     SEARCH = "";
+  });
+
+  /**
+   * The LIBRARY's dedupe — the load-bearing half (user directive,
+   * 2026-08-28: every shipped starter reachable from this page, but an
+   * installed one already has a real card above, and the same handle twice
+   * reads as two different workflows).
+   *
+   * Both directions in one test, scoped to the library's own section: the
+   * installed starter's NAME legitimately renders twice on this page (its
+   * authored card above localizes through the same path), so an unscoped
+   * absence check would fail against correct code, and an unscoped presence
+   * check would pass against a library that lists everything.
+   */
+  it("lists an uninstalled starter in the library and hides an installed one", async () => {
+    role = "owner";
+    AUTHORED = [{
+      ...BASE_AUTHORED[0]!,
+      id: "a2", handle: "wf-starter-autotag",
+      name: STARTER_WORKFLOWS.autotag.name, enabled: true,
+    }];
+    await act(async () => { render(<Workflows />); });
+
+    const section = screen.getByText("کتابخانهٔ گردش‌کارها").closest("section")!;
+    const hrefs = within(section).getAllByRole("link")
+      .map((link) => link.getAttribute("href"));
+    /* NOT installed → on the shelf, linking to its own page */
+    expect(hrefs).toContain("/workflows/wf-starter-followups");
+    /* installed → OFF the shelf (its card above is the real thing)… */
+    expect(hrefs).not.toContain("/workflows/wf-starter-autotag");
+    /* …while the page as a whole still links it exactly once, as the
+       authored card — hidden from the shelf, not from the page */
+    expect(
+      screen.getAllByRole("link")
+        .map((link) => link.getAttribute("href"))
+        .filter((href) => href === "/workflows/wf-starter-autotag"),
+    ).toHaveLength(1);
+    /* the shelf shrank by exactly the installed one */
+    expect(within(section).getAllByRole("link"))
+      .toHaveLength(Object.keys(STARTER_WORKFLOWS).length - 1);
+    /* and a shelf card carries the LOCALIZED name — the same
+       `useWorkflowCopy` path the agent panel and the installed cards use */
+    expect(within(section).getByText("پیگیری جلسه‌ها")).toBeTruthy();
   });
 });

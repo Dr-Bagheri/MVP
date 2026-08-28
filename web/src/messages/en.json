@@ -1140,6 +1140,12 @@
     "subtitle": "Choose a prompt to start a guided task. Workflows run only when you start them.",
     "empty": "No prompts are available yet.",
     "createWorkflow": "Create workflow",
+    "libraryTitle": "Workflow library",
+    "libraryHint": "Ready-made workflows — each opens on its own page, where it can be installed.",
+    "starterInstall": "Install workflow",
+    "starterInstalling": "Installing…",
+    "starterInstallFailed": "The workflow was not installed.",
+    "starterAdminInstall": "Installing is an admin's act.",
     "calendarSource": "calendar event",
     "mailSource": "email",
     "connectRequired": "Connect a calendar or email account before choosing a {source}.",
@@ -1303,6 +1309,90 @@
       "wf-starter-prep-agenda": {
         "name": "Next meeting's agenda",
         "description": "After every meeting, the next meeting's agenda is drafted from its decisions and tasks."
+      },
+      "wf-starter-sales-debrief": {
+        "name": "Sales call debrief",
+        "description": "After each call, a short sales debrief is written: what the customer wants, their concerns, and the next step."
+      },
+      "wf-starter-sales-objections": {
+        "name": "Recurring objections",
+        "description": "Collects recurring customer concerns and objections from recent call summaries — with the answers that worked."
+      },
+      "wf-starter-sales-next-steps": {
+        "name": "Customer next steps",
+        "description": "After each call, the promises and next steps are pulled out with their owner and due date."
+      },
+      "wf-starter-sales-commitments": {
+        "name": "Promises we made",
+        "description": "Whenever you ask, every promise made to customers in recent calls is collected — before it slips."
+      },
+      "wf-starter-sales-lead-mail": {
+        "name": "Sales lead detection",
+        "description": "If a new email is from a customer or sales lead — pricing question, demo request, purchase follow-up — you are told the moment it lands."
+      },
+      "wf-starter-sales-meeting-prep": {
+        "name": "Sales meeting prep",
+        "description": "Before each meeting, that customer's history is reviewed: what they said, what they asked for, and what is still on the table."
+      },
+      "wf-starter-sales-pipeline": {
+        "name": "Customer overview",
+        "description": "Whenever you ask, a sales overview is built from recent calls: where each customer stands and who needs attention now."
+      },
+      "wf-starter-int-scorecard": {
+        "name": "Interview scorecard",
+        "description": "After each interview, a structured scorecard is written: strengths, concerns, and the evidence for each from the conversation itself."
+      },
+      "wf-starter-int-questions": {
+        "name": "Next-round questions",
+        "description": "Before each interview, questions are built from the earlier rounds of the same process — the things still unanswered."
+      },
+      "wf-starter-int-compare": {
+        "name": "Compare candidates",
+        "description": "Whenever you ask, recent interviews are set side by side: who was stronger on each criterion, with evidence."
+      },
+      "wf-starter-int-redflags": {
+        "name": "Points to verify",
+        "description": "After each interview, unverified claims and inconsistencies are listed — what should be cleared up before a decision."
+      },
+      "wf-starter-int-candidate-mail": {
+        "name": "Candidate reply draft",
+        "description": "If a new email is from a job candidate, a polite, commitment-free reply is drafted — sending always stays with you."
+      },
+      "wf-starter-int-tag": {
+        "name": "Interview tags",
+        "description": "After each interview, tags like the role and its areas are suggested — recorded with your approval."
+      },
+      "wf-starter-int-debrief": {
+        "name": "Debrief agenda",
+        "description": "After each interview, the team debrief agenda is drafted: what we saw, what to weigh, what remains to decide."
+      },
+      "wf-starter-mgr-meeting-brief": {
+        "name": "The manager's brief",
+        "description": "Before each meeting, a manager's one-pager is built: what decision is on the table, who wants what, where not to yield."
+      },
+      "wf-starter-mgr-week-review": {
+        "name": "Week in review",
+        "description": "Whenever you ask, a management review is built from recent meetings: themes, decisions, and what fell behind."
+      },
+      "wf-starter-mgr-delegations": {
+        "name": "Everyone's load",
+        "description": "From recent meetings, delegated work is collected per person — who carries what, and whose load is heavy."
+      },
+      "wf-starter-mgr-risks": {
+        "name": "Risks and blockers",
+        "description": "Whenever you ask, every risk, blocker and concern voiced in recent meetings is collected — before it becomes a problem."
+      },
+      "wf-starter-mgr-decisions-log": {
+        "name": "Meeting decisions log",
+        "description": "After each meeting, its decisions are recorded in one clean list with their owners."
+      },
+      "wf-starter-mgr-escalations": {
+        "name": "Urgent-mail detection",
+        "description": "If a new email needs a manager's decision or attention — a complaint, a risk, a deadline — you are told the moment it lands."
+      },
+      "wf-starter-mgr-one-on-one": {
+        "name": "One-on-one prep",
+        "description": "Before each one-on-one, that person's history is reviewed: what they took on, what they said, and what is worth asking."
       }
     },
     "process": {
@@ -1522,7 +1612,13 @@
     "sys_mail_name": "Email agent",
     "sys_mail_desc": "Helps write and polish email replies; works with the auto-draft workflow, and sending always stays with you.",
     "sys_prep_name": "Meeting prep agent",
-    "sys_prep_desc": "Before a meeting, builds a working brief from your records: what happened, what is open, what to ask."
+    "sys_prep_desc": "Before a meeting, builds a working brief from your records: what happened, what is open, what to ask.",
+    "sys_sales_name": "Sales agent",
+    "sys_sales_desc": "Turns sales calls into debriefs, next steps and a customer overview; never forgets a promise or an objection.",
+    "sys_interview_name": "Interview agent",
+    "sys_interview_desc": "Turns recorded interviews into scorecards, candidate comparisons and next-round questions — all with evidence from the conversation itself.",
+    "sys_manager_name": "Manager agent",
+    "sys_manager_desc": "Builds the management view: decisions, everyone's load, risks and whatever is left unowned — from your own meetings."
   },
   "management": {
     "title": "Management",
@@ -1824,7 +1920,11 @@
     "generalLocaleHint": "How dates and times render for you, everywhere in the platform. Language switches from the toggle in the top bar.",
     "role_owner": "Owner",
     "role_admin": "Admin",
-    "role_member": "Member"
+    "role_member": "Member",
+    "voiceFa": "Persian voice",
+    "voiceEn": "English voice",
+    "voiceFemale": "Female",
+    "voiceMale": "Male"
   },
   "audit": {
     "codesOnly": "This page says what happened, not what was said. Question text, transcripts and conversation content never enter the audit trail.",

@@ -22,6 +22,7 @@ vi.mock("../src/agent/pi.ts", () => ({
 
 const { buildServer } = await import("../src/api/server.ts");
 import { createDb, type SqlClient, type SqlTx } from "../src/db/identity.ts";
+import { STARTER_WORKFLOWS } from "../src/api/workflow-authoring.ts";
 import { isAdmin, isOwner } from "../src/agent/types.ts";
 import { MEMBER_ROLES } from "../src/api/vocabulary.ts";
 
@@ -905,5 +906,58 @@ describe("assistant SSE route", () => {
     });
     expect(res.statusCode).toBe(400);
     expect(res.headers["content-type"]).toContain("application/json");
+  });
+});
+
+/**
+ * GET /v1/workflows/starters — the shipped LIBRARY (2026-08-28 directive:
+ * every starter reachable from the workflow section, not just the agent
+ * panel).
+ *
+ * The expectation is STARTER_WORKFLOWS itself, never a transcribed list: the
+ * route's whole contract is "the registry, verbatim", and a hand-copied
+ * expectation here would be the exact drift the route exists to prevent
+ * (rule 13½ — the producer owns the list). The harness's default identity is
+ * a plain MEMBER, so the first test passing at all proves reading the shelf
+ * never needed the admin gate the install POST keeps.
+ */
+describe("GET /v1/workflows/starters — the shipped library", () => {
+  it("serves every registry key to a plain member, graph steps as an array", async () => {
+    const res = await server().inject({
+      method: "GET", url: "/v1/workflows/starters", headers: authed,
+    });
+    expect(res.statusCode).toBe(200);
+    const { starters } = res.json() as {
+      starters: {
+        key: string; handle: string; name: string; description: string;
+        trigger_event: string | null; max_autonomy: string;
+        graph: { steps: unknown };
+      }[];
+    };
+    expect(starters.map((row) => row.key).sort())
+      .toEqual(Object.keys(STARTER_WORKFLOWS).sort());
+    for (const starter of starters) {
+      /* serialized through Fastify the graph must still be a WALKABLE
+         program — steps an array, every step naming id + kind — because the
+         web detail page renders exactly that as its process panel */
+      expect(Array.isArray(starter.graph.steps),
+        `${starter.key} serves graph.steps as an array`).toBe(true);
+      const steps = starter.graph.steps as { id?: unknown; kind?: unknown }[];
+      expect(steps.length, `${starter.key} has at least one step`).toBeGreaterThan(0);
+      for (const step of steps) {
+        expect(typeof step.id, `${starter.key}: a step's id`).toBe("string");
+        expect(typeof step.kind, `${starter.key}: a step's kind`).toBe("string");
+      }
+      expect(starter.handle, `${starter.key} handle`).toMatch(/^wf-starter-/);
+      expect(starter.name.length, `${starter.key} name`).toBeGreaterThan(0);
+    }
+  });
+
+  it("refuses a gateway key, mirroring the install POST beside it", async () => {
+    const res = await server().inject({
+      method: "GET", url: "/v1/workflows/starters",
+      headers: { authorization: "Bearer echo_sk_test-token" },
+    });
+    expect(res.statusCode).toBe(403);
   });
 });

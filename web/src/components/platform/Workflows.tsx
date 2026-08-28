@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import { useRefreshEpoch } from "@/lib/refreshBus";
 import { useWorkflowCopy } from "@/lib/workflowName";
-import type { AuthoredWorkflow, User, WorkflowCard } from "@/api/types";
+import type { AuthoredWorkflow, StarterWorkflow, User, WorkflowCard } from "@/api/types";
 import { Link } from "@/i18n/routing";
 import { AssistantMenu } from "./AssistantMenu";
 import { PlatformShell } from "./PlatformShell";
@@ -65,6 +65,8 @@ export function Workflows() {
   const [workflows, setWorkflows] = useState<WorkflowCard[] | null>(null);
   const [me, setMe] = useState<User | null>(null);
   const [authored, setAuthored] = useState<AuthoredWorkflow[] | null>(null);
+  /** the shipped LIBRARY — `null` while loading, `[]` when the read failed */
+  const [starters, setStarters] = useState<StarterWorkflow[] | null>(null);
   /** `undefined` = closed; `null` = a new workflow; a row = editing it */
   const [editing, setEditing] = useState<AuthoredWorkflow | null | undefined>(undefined);
 
@@ -95,6 +97,14 @@ export function Workflows() {
   const workflowsEpoch = useRefreshEpoch("workflows");
   useEffect(() => {
     void api.workflows().then(setWorkflows).catch(() => setWorkflows([]));
+    /* try/catch AND .catch — a client without the method throws
+       synchronously, and that must degrade the same way a rejection does
+       (the AgentOverviewPanel's own precedent) */
+    try {
+      void api.workflowStarters().then(setStarters).catch(() => setStarters([]));
+    } catch {
+      setStarters([]);
+    }
   }, [workflowsEpoch]);
 
   useEffect(() => {
@@ -107,6 +117,22 @@ export function Workflows() {
   }, [isAdmin]);
 
   useEffect(loadAuthored, [loadAuthored]);
+
+  /**
+   * The LIBRARY: every shipped starter the org has NOT installed, deduped by
+   * HANDLE against the authored list — the same discriminator the agent
+   * panel uses, because an installed starter already has a card above and
+   * the same handle twice would read as two different workflows.
+   *
+   * The dedupe source has to have ANSWERED before the section renders (the
+   * panel's own rule): for an admin that is the authored list; a member's
+   * authored list is never requested (the server would refuse it), so their
+   * gate is the identity read alone and the dedupe set is honestly empty —
+   * an installed starter's card simply opens as the installed view.
+   */
+  const installedHandles = new Set((authored ?? []).map((row) => row.handle));
+  const library = (starters ?? []).filter((starter) => !installedHandles.has(starter.handle));
+  const libraryReady = me !== null && (!isAdmin || authored !== null);
 
   return (
     <PlatformShell>
@@ -184,6 +210,53 @@ export function Workflows() {
               ))}
             </div>
           )}
+
+          {/*
+            The LIBRARY (user directive, 2026-08-28: "make all the workflows
+            that you put in skill real in workflow section, so anyone else can
+            use them for real later") — every shipped starter, each a link to
+            its own page, where the install lives. The list comes off the
+            wire (`GET /v1/workflows/starters`, derived from the registry
+            itself) so a starter added in core is on this shelf without
+            anybody editing this file; the NAMES localize through the same
+            `useWorkflowCopy` path every installed starter uses.
+          */}
+          {libraryReady && library.length > 0 ? (
+            <section className="mt-10">
+              <h2 className="text-lg font-semibold text-fg">{t("libraryTitle")}</h2>
+              <p className="mt-1 text-sm text-fg-muted">{t("libraryHint")}</p>
+              <div className="mt-5 grid gap-5 lg:grid-cols-2">
+                {library.map((starter) => {
+                  const copy = workflowCopy({
+                    handle: starter.handle,
+                    name: starter.name,
+                    description: starter.description,
+                  });
+                  return (
+                    <Link
+                      key={starter.handle}
+                      href={`/workflows/${starter.handle}`}
+                      /* the authored card's own skin — half a template's
+                         height, same corner, same border, same hover */
+                      className="group flex min-h-28 flex-col justify-center rounded-2xl border border-border bg-surface p-7 transition-colors hover:border-border-strong hover:bg-surface-2"
+                    >
+                      <span className="flex items-center gap-4">
+                        <WorkflowTile icon="sparkles" color="violet" size="sm" />
+                        <span className="min-w-0">
+                          <span className="block truncate text-base font-semibold text-fg group-hover:text-accent">
+                            {copy.name}
+                          </span>
+                          <span className="mt-0.5 block truncate text-xs text-fg-subtle">
+                            {copy.description}
+                          </span>
+                        </span>
+                      </span>
+                    </Link>
+                  );
+                })}
+              </div>
+            </section>
+          ) : null}
 
         </PageContainer>
       </MenuLayout>

@@ -90,6 +90,21 @@ describe("decideMatch", () => {
     });
   });
 
+  it("the calibrated bar: a real-call 0.56 LINKS, a different-person 0.45 does not", () => {
+    /*
+     * 2026-08-28 calibration, from production's own log: the same person
+     * scores 0.55-0.80 on real records (their genuine voice was refused at
+     * 0.551/0.585 by the old 0.6 bar) while different people sit at or
+     * under ~0.45. Both sides pinned so the next "tidy round number"
+     * cannot silently undo the calibration in either direction.
+     */
+    const enrolled = [{ person_id: "alice", vector: [1, 0, 0] }];
+    const same = decideMatch([0.56, 0, -0.83], enrolled, 0.55, 0.1);
+    expect(same).toMatchObject({ person_id: "alice" });
+    const other = decideMatch([0.45, 0, -0.89], enrolled, 0.55, 0.1);
+    expect(other).toMatchObject({ person_id: null, why: "below_threshold" });
+  });
+
   it("ONE enrolled print still links (margin compares against -1, not a missing runner-up)", () => {
     const v = decideMatch([1, 0, 0], [ENROLLED[0]!], 0.6, 0.1);
     expect(v).toMatchObject({ person_id: "alice" });

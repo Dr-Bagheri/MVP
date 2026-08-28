@@ -58,6 +58,7 @@ import type {
   ServerHealth,
   Skill,
   Speaker,
+  StarterWorkflow,
   SummaryVersion,
   TranscriptSegment,
   User,
@@ -1772,6 +1773,11 @@ export const api = {
     return bff<MailDraft>(`/api/mail/drafts/${encodeURIComponent(id)}/discard`, { method: "POST" });
   },
 
+  /** the shipped LIBRARY — every installable starter, from the registry itself */
+  async workflowStarters(): Promise<StarterWorkflow[]> {
+    const { starters } = await bff<{ starters: StarterWorkflow[] }>("/api/workflows/starters");
+    return starters;
+  },
   /** install a SHIPPED starter — create+publish+enable in one press */
   async installStarter(key: string): Promise<void> {
     await bff("/api/workflows/starters", {
@@ -1797,6 +1803,9 @@ export const api = {
     /** db/0115 — the person's own "draft replies to my new mail" switch. */
     auto_draft_replies?: boolean;
     auto_meeting_prep?: boolean;
+    /* 0128: the spoken voice per language */
+    assistant_voice_fa?: string;
+    assistant_voice_en?: string;
   }): Promise<Me> {
     return bff<Me>("/api/me/assistant", {
       method: "PATCH",
@@ -2202,11 +2211,11 @@ export const api = {
    * browsers that ship no fa voice (Windows Chrome). Binary, so it skips
    * the JSON-shaped bff() helper deliberately.
    */
-  async tts(text: string): Promise<Blob> {
+  async tts(text: string, lang: "fa" | "en" = "fa"): Promise<Blob> {
     const response = await fetch("/api/tts", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text, lang }),
     });
     if (!response.ok) throw new BffError(response.status, undefined, "tts_failed");
     return response.blob();

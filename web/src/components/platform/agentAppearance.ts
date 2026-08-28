@@ -99,6 +99,10 @@ const SYSTEM_AGENT_KEYS: Readonly<Record<string, string>> = {
   meetings: "sys_meetings",
   mail: "sys_mail",
   prep: "sys_prep",
+  /* the 2026-08-28 second wave (db/0129) */
+  sales: "sys_sales",
+  interview: "sys_interview",
+  manager: "sys_manager",
 };
 
 export function useAgentCopy(): (agent: {

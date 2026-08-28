@@ -338,7 +338,9 @@ export function Integrations() {
           </Section>
 
           <Section title={t("availableTitle")} description={t("availableHint")} divided>
-            <div className="grid gap-4 sm:grid-cols-2">
+            {/* one row of four from xl up (the offer IS four Google sources) —
+                compact, Sana-shaped (user directive, 2026-08-28) */}
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               {INTEGRATIONS.map((entry) => {
                 const state = connectors?.find((row) => row.provider === entry.provider);
                 const action = connectors === null ? null : tileAction(entry, state);
@@ -356,13 +358,14 @@ export function Integrations() {
                 return (
                   <div
                     key={entry.slug}
-                    /* the WORKFLOW template card's anatomy, verbatim (user
-                       directive, 2026-08-28: "make integration big buttons
-                       look like the workflow big buttons") — same corner,
-                       same padding, same round glowing tile, same title
-                       scale. Two big-card styles on adjacent pages read as
-                       two products. */
-                    className={`group flex min-h-56 flex-col rounded-2xl border border-border bg-surface p-7 ${open ? "cursor-pointer transition-colors hover:border-border-strong hover:bg-surface-2" : ""}`}
+                    /* the WORKFLOW card's FAMILY — same corner, same border,
+                       same glowing round tile recipe — at COMPACT scale
+                       (user directive, 2026-08-28, second round: all four in
+                       one row, closer together, per the Sana reference). The
+                       first round's "look like the workflow big buttons"
+                       verbatim copy is deliberately superseded: kinship now
+                       lives in the recipe, not the measurements. */
+                    className={`group flex min-h-44 flex-col rounded-2xl border border-border bg-surface p-5 ${open ? "cursor-pointer transition-colors hover:border-border-strong hover:bg-surface-2" : ""}`}
                     {...(open
                       ? {
                           role: "button",
@@ -378,28 +381,28 @@ export function Integrations() {
                         }
                       : {})}
                   >
-                    {/* the tile keeps the workflow tile's exact recipe —
-                        Gmail wears the coral family (its own mark is red;
-                        beside the mail workflow's coral plane it reads as
-                        kin), everything else the accent, the platform's
-                        only two on-color pairs */}
+                    {/* the tile keeps the workflow tile's colour recipe at
+                        card scale — Gmail wears the coral family (its own
+                        mark is red; beside the mail workflow's coral plane
+                        it reads as kin), everything else the accent, the
+                        platform's only two on-color pairs */}
                     <span
-                      className={`grid h-16 w-16 shrink-0 place-items-center rounded-full ${
+                      className={`grid h-10 w-10 shrink-0 place-items-center rounded-full ${
                         entry.slug === "gmail" || entry.slug === "outlook-mail"
                           ? "bg-danger text-on-danger shadow-[0_18px_44px_-14px_rgb(var(--danger)/0.75)]"
                           : "bg-accent text-on-accent shadow-[0_18px_44px_-14px_rgb(var(--accent)/0.75)]"
                       }`}
                       aria-hidden
                     >
-                      <Icon name={entry.icon} size="xl" />
+                      <Icon name={entry.icon} size="lg" />
                     </span>
-                    <h2 className="mt-7 text-xl font-semibold text-fg group-hover:text-accent">
+                    <h2 className="mt-4 text-base font-semibold text-fg group-hover:text-accent">
                       {copy[entry.key].name}
                     </h2>
-                    <p className="mt-0.5 text-xs text-fg-muted">
+                    <p className="text-xs text-fg-muted">
                       {providerName(entry.provider)}
                     </p>
-                    <p className="mt-2 flex-1 max-w-md text-sm leading-6 text-fg-muted">
+                    <p className="mt-1.5 flex-1 text-sm leading-6 text-fg-muted">
                       {copy[entry.key].description}
                     </p>
                     {/* the action row stops the click: a button here answers

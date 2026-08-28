@@ -4,7 +4,7 @@ import { use, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type {
-  AuthoredWorkflow, MailDraft, Me, WorkflowCard, WorkflowRunRecord,
+  AuthoredWorkflow, MailDraft, Me, StarterWorkflow, WorkflowCard, WorkflowRunRecord,
 } from "@/api/types";
 import { Link, useRouter } from "@/i18n/routing";
 import { PlatformShell } from "@/components/platform/PlatformShell";
@@ -228,6 +228,8 @@ export default function WorkflowDetailPage({
    * indistinguishable from "this org has authored none".
    */
   const [authored, setAuthored] = useState<AuthoredWorkflow[] | null | undefined>(undefined);
+  /** the shipped LIBRARY — `null` while loading, `[]` when the read failed */
+  const [starters, setStarters] = useState<StarterWorkflow[] | null>(null);
   const [runs, setRuns] = useState<WorkflowRunRecord[]>([]);
   /** the person's reply drafts — a mail workflow's actual output */
   const [drafts, setDrafts] = useState<MailDraft[]>([]);
@@ -247,6 +249,13 @@ export default function WorkflowDetailPage({
     void api.org().then((org) => setOrgName(org.name)).catch(() => setOrgName(null));
     void api.authoredWorkflows().then(setAuthored).catch(() => setAuthored(null));
     void api.me().then(setMe).catch(() => setMe(null));
+    /* try/catch AND .catch — a client without the method throws
+       synchronously, and that must degrade the same way a rejection does */
+    try {
+      void api.workflowStarters().then(setStarters).catch(() => setStarters([]));
+    } catch {
+      setStarters([]);
+    }
   }, []);
 
   /**
@@ -266,10 +275,14 @@ export default function WorkflowDetailPage({
   /** the are-you-sure popup, open */
   const [removing, setRemoving] = useState(false);
   const [removeBusy, setRemoveBusy] = useState(false);
+  /** installing this starter for the org — the request in flight */
+  const [installing, setInstalling] = useState(false);
 
   const card = cards?.find((entry) => entry.slug === handle);
   const engineRow = engine?.find((entry) => entry.handle === handle);
   const authoredRow = authored?.find((entry) => entry.handle === handle);
+  /** the shipped library's entry for this handle — the UNINSTALLED case */
+  const starterDef = starters?.find((entry) => entry.handle === handle);
 
   /**
    * The subject, resolved from whichever catalogue holds it.
@@ -314,8 +327,41 @@ export default function WorkflowDetailPage({
         manageId: undefined,
       };
     }
+    /*
+     * An UNINSTALLED shipped starter (user directive, 2026-08-28: "make all
+     * the workflows that you put in skill real in workflow section"). LAST
+     * on purpose: the moment the org installs it, the engine/authored row
+     * wins this resolution and the page becomes the installed view — the
+     * library entry is only the subject while nothing real exists yet.
+     */
+    if (starterDef) {
+      const copy = workflowCopy({
+        handle, name: starterDef.name, description: starterDef.description,
+      });
+      return {
+        kind: "starter" as const,
+        /* no engine row exists yet, so no run can reference it — a null id
+           matches nothing in the runs filter, which is the truth */
+        id: null,
+        name: copy.name,
+        description: copy.description,
+        icon: "sparkles",
+        color: "violet",
+        /* which integration the graph reads through, derived from its
+           trigger: the mail starters fetch the triggering message, the prep
+           starters the calendar event. Manual starters read only the org's
+           own records and name no integration. */
+        sourceKind: starterDef.trigger_event === "mail.received"
+          ? ("mail_message" as const)
+          : starterDef.trigger_event === "meeting.soon"
+            ? ("calendar_event" as const)
+            : undefined,
+        enabled: false,
+        manageId: undefined,
+      };
+    }
     return null;
-  }, [card, engineRow, authoredRow, handle, workflowCopy]);
+  }, [card, engineRow, authoredRow, starterDef, handle, workflowCopy]);
 
   useCrumbTitle(subject?.name);
 
@@ -382,13 +428,17 @@ export default function WorkflowDetailPage({
    * "no process" above a workflow that runs every time an email arrives,
    * which is as wrong as a description gets.
    */
-  const authoredTrigger: ProcessStep | undefined = authoredRow
-    ? authoredRow.trigger_event === null
+  /* an uninstalled starter's trigger is the same FACT an authored row
+     carries — `trigger_event` — read from the library instead of the org's
+     table, and rendered in the same words the builder uses */
+  const triggerRow = authoredRow ?? (subject?.kind === "starter" ? starterDef : undefined);
+  const authoredTrigger: ProcessStep | undefined = triggerRow
+    ? triggerRow.trigger_event === null
       ? { title: tb("trigger_manual"), description: tb("triggerHint_manual") }
       : {
           /* the EVENT'S OWN sentence as the title — "with an event" answers
              a different question than the one a reader of this card asks */
-          title: tb(`event_${authoredRow.trigger_event.replace(".", "_")}`),
+          title: tb(`event_${triggerRow.trigger_event.replace(".", "_")}`),
           description: tb("triggerHint_event"),
         }
     : undefined;
@@ -409,7 +459,22 @@ export default function WorkflowDetailPage({
         description: describeStep(step, tb),
       }))
     : undefined;
-  const steps = graphSteps ?? catalogueProcess?.steps ?? served.steps ?? [];
+  /*
+   * An uninstalled starter's program, straight off the library wire — the
+   * SAME rendering an installed graph gets, because it is the same program:
+   * install copies it verbatim. All-or-nothing on the shape check (the
+   * page's own convention): a numbered list silently missing a malformed
+   * step is a different promise, not a degraded one.
+   */
+  const starterSteps: ProcessStep[] | undefined =
+    subject?.kind === "starter" && starterDef
+      && Array.isArray(starterDef.graph?.steps) && starterDef.graph.steps.every(isGraphStep)
+      ? starterDef.graph.steps.map((step, index) => ({
+          title: `${index + 1}. ${tb(`kind_${step.kind}`)}`,
+          description: describeStep(step, tb),
+        }))
+      : undefined;
+  const steps = graphSteps ?? starterSteps ?? catalogueProcess?.steps ?? served.steps ?? [];
 
   const recents = useMemo((): RecentRow[] => {
     const fromRuns: RecentRow[] = runs
@@ -432,7 +497,10 @@ export default function WorkflowDetailPage({
      * with no conversation would land the person on a NEW empty thread and
      * read as the draft having vanished.
      */
-    const fromDrafts: RecentRow[] = subject?.sourceKind !== "mail_message" ? [] : drafts
+    /* an UNINSTALLED mail starter gets no drafts: they were written by the
+       running pipeline, and hanging them under a workflow that has never
+       run would be a list of things it never did */
+    const fromDrafts: RecentRow[] = subject?.kind === "starter" || subject?.sourceKind !== "mail_message" ? [] : drafts
       .map((draft) => ({
         key: `draft:${draft.id}`,
         title: t("detailDraftTo", { subject: draft.subject }),
@@ -440,7 +508,7 @@ export default function WorkflowDetailPage({
         href: draft.session_id === null ? null : `/assistant?c=${draft.session_id}`,
       }));
     return [...fromRuns, ...fromDrafts].sort((a, b) => b.at.localeCompare(a.at));
-  }, [runs, drafts, subject?.id, subject?.sourceKind, t]);
+  }, [runs, drafts, subject?.id, subject?.sourceKind, subject?.kind, t]);
   const { page, setPage, pageCount, visible } = usePaged(recents);
 
   /** the org's switch: an admin publishing or pausing an engine workflow */
@@ -492,10 +560,13 @@ export default function WorkflowDetailPage({
     }
   }
 
-  if (cards === null || engine === null || authored === undefined) return null;
+  if (cards === null || engine === null || authored === undefined || starters === null) {
+    return null;
+  }
 
-  /* a shipped template is the vendor's; anything else is this org's */
-  const creator = subject?.kind === "template" ? t("detailVendor") : orgName ?? t("detailVendor");
+  /* a shipped template OR an uninstalled starter is the vendor's; only an
+     engine row — something this org actually holds — is the org's */
+  const creator = subject?.kind === "engine" ? orgName ?? t("detailVendor") : t("detailVendor");
 
   /**
    * WHICH switch this workflow has — decided once, here, because the three
@@ -512,7 +583,10 @@ export default function WorkflowDetailPage({
    */
   const autoDraft = subject?.kind === "template" && handle === AUTO_DRAFT_SLUG;
   const meetingPrep = subject?.kind === "template" && MEETING_PREP_SLUGS.includes(handle);
-  const switchProps = subject === null
+  /* an uninstalled starter has NO switch anywhere — nothing is stored, so a
+     pill would be a claim about a row that does not exist; its slot renders
+     the install door instead (below) */
+  const switchProps = subject === null || subject.kind === "starter"
     ? null
     : autoDraft
       ? {
@@ -576,6 +650,33 @@ export default function WorkflowDetailPage({
    * `trigger_event === null` IS manual: the column is the trigger.
    */
   const isManual = authoredRow ? authoredRow.trigger_event === null : false;
+
+  /**
+   * INSTALL this starter for the org (admin; the server holds the wall).
+   * On success the page is not navigated away from — the authored and
+   * engine lists are re-read, the new row wins the subject resolution, and
+   * this same page BECOMES the installed view with its graph and switch.
+   * A 409 means another admin got there first; the re-read is the truth
+   * either way, so only other failures are worth a sentence.
+   */
+  async function installThisStarter() {
+    if (!starterDef || installing) return;
+    setInstalling(true);
+    try {
+      await api.installStarter(starterDef.key);
+    } catch (cause) {
+      if ((cause as { status?: number }).status !== 409) {
+        notify(t("starterInstallFailed"), "warn");
+        setInstalling(false);
+        return;
+      }
+    }
+    await Promise.all([
+      api.authoredWorkflows().then(setAuthored).catch(() => {}),
+      api.engineWorkflows().then(setEngine).catch(() => {}),
+    ]);
+    setInstalling(false);
+  }
 
   async function runManually() {
     if (running) return;
@@ -649,10 +750,33 @@ export default function WorkflowDetailPage({
                     </p>
                   ) : null}
                   <div className="mt-5">
-                    <EnableSwitch {...switchProps!} busy={saving} failed={saveFailed} />
+                    {subject.kind === "starter" ? (
+                      /* the INSTALL door where the switch would sit. The
+                         member line waits for the identity to answer — a
+                         claim about who may install is not one to make
+                         about an unknown caller. */
+                      me === null ? null : isAdmin ? (
+                        <button
+                          type="button"
+                          className="btn-primary h-9 min-h-0 px-4 text-sm disabled:opacity-60"
+                          disabled={installing}
+                          onClick={() => void installThisStarter()}
+                        >
+                          {installing ? t("starterInstalling") : t("starterInstall")}
+                        </button>
+                      ) : (
+                        <p className="text-sm text-fg-muted">{t("starterAdminInstall")}</p>
+                      )
+                    ) : (
+                      <EnableSwitch {...switchProps!} busy={saving} failed={saveFailed} />
+                    )}
                   </div>
                 </div>
-                <KebabMenu label={t("detailMenu")} items={menuItems} />
+                {/* a ⋯ with nothing in it is a dead control, not a menu —
+                    an uninstalled starter has no acts of its own yet */}
+                {menuItems.length > 0 ? (
+                  <KebabMenu label={t("detailMenu")} items={menuItems} />
+                ) : null}
               </header>
 
               {/* WHO / WHAT / WITH WHAT — the three facts a person checks
