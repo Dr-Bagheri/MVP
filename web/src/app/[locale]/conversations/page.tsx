@@ -7,6 +7,7 @@ import type { AssistantSession } from "@/api/types";
 import { Pagination, usePaged } from "@/components/Pagination";
 import { AssistantMenu } from "@/components/platform/AssistantMenu";
 import { PlatformShell } from "@/components/platform/PlatformShell";
+import { ConfirmDialog } from "@/components/rowActions";
 import { MenuLayout, PageContainer, PageHeader } from "@/components/scaffold";
 import { useRouter } from "@/i18n/routing";
 import { notify } from "@/lib/notify";
@@ -27,10 +28,13 @@ import { untitledNumbers } from "@/lib/sessionTitles";
 export default function ConversationsPage() {
   const router = useRouter();
   const t = useTranslations("conversations");
+  const tCommon = useTranslations("common");
   const locale = useLocale();
   /** `null` = not fetched; `[]` = genuinely none. */
   const [sessions, setSessions] = useState<AssistantSession[] | null>(null);
   const [search, setSearch] = useState("");
+  /** the row awaiting the platform's are-you-sure (see the dialog below) */
+  const [confirmDelete, setConfirmDelete] = useState<AssistantSession | null>(null);
   /* a removal's failure is still never swallowed — it goes to the
      notification system (orb toast + bell), not an inline span */
 
@@ -113,23 +117,15 @@ export default function ConversationsPage() {
                           <button
                             type="button"
                             className="text-xs text-danger/80 underline-offset-2 hover:text-danger hover:underline"
-                            onClick={() => {
-                              /* removal = archive under the hood: nothing
-                                 in the product may DELETE a conversation
-                                 row (the audit survives), but an archived
-                                 one never returns to any list.
-
-                                 The failure is SHOWN, never swallowed: the
-                                 first version .catch(() => undefined)'d a
-                                 404 from a BFF route that did not exist,
-                                 and the button "worked" by doing nothing
-                                 (user report, 2026-08-20). */
-                              void api
-                                .archiveSession(s.id, true)
-                                .then(() => api.agentSessions())
-                                .then(setSessions)
-                                .catch(() => notify(t("deleteFailed"), "warn"));
-                            }}
+                            /* the press ASKS; the write lives in the dialog
+                               below (the platform's destructive-action rule —
+                               see confirm.guard.test.ts). Removal is archive
+                               under the hood: nothing in the product may
+                               DELETE a conversation row (the audit survives),
+                               but an archived one never returns to any list,
+                               which is why this is a delete to the person
+                               pressing it and gets asked about like one. */
+                            onClick={() => setConfirmDelete(s)}
                           >
                             {t("delete")}
                           </button>
@@ -144,6 +140,36 @@ export default function ConversationsPage() {
           </div>
         </PageContainer>
       </MenuLayout>
+
+      {/* The platform's one destructive-action dialog. The title names the
+          conversation being removed — an untitled one is named the way the
+          table names it, so the dialog and the row it came from agree.
+
+          The failure is still SHOWN, never swallowed: the first version
+          .catch(() => undefined)'d a 404 from a BFF route that did not
+          exist, and the button "worked" by doing nothing (user report,
+          2026-08-20). */}
+      {confirmDelete !== null ? (
+        <ConfirmDialog
+          title={t("deleteConfirmTitle", {
+            title: confirmDelete.title
+              ?? t("newChat", { n: digits(numbers.get(confirmDelete.id) ?? 1, locale) }),
+          })}
+          body={t("deleteConfirmBody")}
+          confirmLabel={t("delete")}
+          cancelLabel={tCommon("cancel")}
+          onCancel={() => setConfirmDelete(null)}
+          onConfirm={() => {
+            const target = confirmDelete;
+            setConfirmDelete(null);
+            void api
+              .archiveSession(target.id, true)
+              .then(() => api.agentSessions())
+              .then(setSessions)
+              .catch(() => notify(t("deleteFailed"), "warn"));
+          }}
+        />
+      ) : null}
     </PlatformShell>
   );
 }

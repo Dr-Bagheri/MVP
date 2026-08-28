@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { MailDraft } from "@/api/types";
 
@@ -42,6 +42,20 @@ const ENABLE = "فعال‌کردن ارسال";
 const SHOW_SOURCE = "نمایش متن";
 const IN_MAILBOX = "در پیش‌نویس‌های صندوق پستی شما هم هست";
 const STILL_IN_MAILBOX = "هنوز در پوشهٔ پیش‌نویس‌های شماست؛ از همان‌جا پاکش کنید";
+const DISCARD_TITLE = "پاسخ به «Re: meeting» کنار گذاشته شود؟";
+
+/**
+ * Press Discard, then answer the dialog that the platform's rule puts in
+ * front of it. The card's own button and the dialog's confirm carry the SAME
+ * word, so the confirm is reached through the dialog element rather than by
+ * text — `getByText` would be ambiguous, and picking the first match would
+ * silently re-press the button that opened it.
+ */
+function discardThroughTheDialog(): void {
+  fireEvent.click(screen.getByText(DISCARD));
+  const dialog = screen.getByRole("alertdialog");
+  fireEvent.click(within(dialog).getByRole("button", { name: DISCARD }));
+}
 
 const DRAFT: MailDraft = {
   id: "d-1",
@@ -122,9 +136,32 @@ describe("MailDraftCard", () => {
     render(<MailDraftCard draft={DRAFT} />);
     expect(screen.getByText(IN_MAILBOX)).toBeTruthy();
 
-    fireEvent.click(screen.getByText(DISCARD));
+    discardThroughTheDialog();
     await waitFor(() => expect(screen.getByText(STILL_IN_MAILBOX)).toBeTruthy());
     expect(screen.queryByText(IN_MAILBOX)).toBeNull();
+  });
+
+  /**
+   * Discard ASKS first (the platform's destructive-action rule). Asserted on
+   * its own rather than folded into the test above, because "the press wrote
+   * the row" and "the press only opened a dialog" are different claims, and
+   * a helper that walks the dialog would hide the second one.
+   */
+  it("asks before discarding, and writes nothing until the dialog is answered", async () => {
+    discarded.mockResolvedValue({ ...DRAFT, status: "discarded" });
+    render(<MailDraftCard draft={DRAFT} />);
+
+    fireEvent.click(screen.getByText(DISCARD));
+    expect(discarded).not.toHaveBeenCalled();
+    /* the dialog names the reply being thrown away, not just "are you sure" */
+    expect(screen.getByRole("alertdialog", { name: DISCARD_TITLE })).toBeTruthy();
+
+    fireEvent.click(screen.getByText("انصراف"));
+    expect(discarded).not.toHaveBeenCalled();
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+
+    discardThroughTheDialog();
+    await waitFor(() => expect(discarded).toHaveBeenCalledWith("d-1"));
   });
 
   it("renders a decided draft as a record, with no send", () => {

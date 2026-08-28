@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import { notify } from "@/lib/notify";
 import type { Org, User } from "@/api/types";
+import { ConfirmDialog } from "@/components/rowActions";
 import { FormPanel, FormRow, PanelFooter } from "@/components/scaffold";
 
 /**
@@ -91,8 +92,11 @@ const localeOptions = (stored: string): readonly string[] =>
 export function OrgFields() {
   const t = useTranslations("settings");
   const tAdmin = useTranslations("admin");
+  const tCommon = useTranslations("common");
 
   const [me, setMe] = useState<User | null>(null);
+  /** the logo removal awaiting the platform's are-you-sure (dialog at the foot) */
+  const [confirmLogoRemove, setConfirmLogoRemove] = useState(false);
   const [org, setOrg] = useState<Org | null>(null);
   const [name, setName] = useState("");
   const [locale, setLocale] = useState("");
@@ -280,6 +284,7 @@ export function OrgFields() {
   }
 
   return (
+    <>
     <FormPanel>
       <FormRow label={tAdmin("orgName")} htmlFor="org-name">
         <input
@@ -336,7 +341,7 @@ export function OrgFields() {
               type="button"
               className="btn-ghost h-9 min-h-0 px-3 text-sm text-danger"
               disabled={busy || logoBusy}
-              onClick={() => void removeLogo()}
+              onClick={() => setConfirmLogoRemove(true)}
             >
               {t("orgLogoRemove")}
             </button>
@@ -438,5 +443,27 @@ export function OrgFields() {
         </button>
       </PanelFooter>
     </FormPanel>
+
+    {/* The platform's one destructive-action dialog (confirm.guard.test.ts).
+        Choosing a file IS the save here, so removing one is a save too —
+        there is no draft state to back out of, and the previous image is
+        gone the moment this lands. The body says the consequence a person
+        cannot see from this form: every surface showing the organization
+        falls back to its initial. */}
+    {confirmLogoRemove ? (
+      <ConfirmDialog
+        title={t("orgLogoRemoveTitle")}
+        body={t("orgLogoRemoveBody")}
+        confirmLabel={t("orgLogoRemove")}
+        cancelLabel={tCommon("cancel")}
+        busy={logoBusy}
+        onCancel={() => setConfirmLogoRemove(false)}
+        onConfirm={() => {
+          setConfirmLogoRemove(false);
+          void removeLogo();
+        }}
+      />
+    ) : null}
+    </>
   );
 }

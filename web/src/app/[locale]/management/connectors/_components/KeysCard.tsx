@@ -5,9 +5,9 @@ import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { GatewayKey, User } from "@/api/types";
 import { Pagination, usePaged } from "@/components/Pagination";
+import { ConfirmDialog } from "@/components/rowActions";
 import { Card, Chip, EmptyState } from "@/components/ui";
 import { formatDate } from "@/lib/format";
-import { Dialog } from "./Dialog";
 import { MintKeyDialog } from "./MintKeyDialog";
 
 /**
@@ -193,40 +193,38 @@ export function KeysCard({
         meId={meId}
       />
 
-      <Dialog
-        open={revoking !== null}
-        onClose={() => setRevoking(null)}
-        title={revoking ? t("revokeTitle", { name: revoking.name }) : ""}
-      >
-        <p className="text-sm leading-7 text-fg-muted">{t("revokeBody")}</p>
-        <div className="mt-4 flex justify-end gap-2">
-          <button
-            type="button"
-            className="btn-secondary h-10 min-h-0 px-4 text-sm"
-            onClick={() => setRevoking(null)}
-          >
-            {t("cancel")}
-          </button>
-          <button
-            type="button"
-            className="btn-danger h-10 min-h-0 px-4 text-sm"
-            disabled={busy}
-            onClick={async () => {
-              if (!revoking) return;
-              setBusy(true);
-              try {
-                await api.revokeGatewayKey(revoking.id);
+      {/*
+        The platform's ONE destructive-action dialog (`ConfirmDialog`, the
+        rule enforced by `confirm.guard.test.ts`).
+
+        This screen used to hand-roll the same box out of the local `Dialog`
+        primitive. Two dialogs asking one question is how they drift: one
+        gains a busy state, the other keeps its own spacing, and eventually
+        a delete somewhere looks like a different product. `Dialog` stays
+        for what it was built for — the FORMS beside this (minting a key,
+        adding a webhook), including the show-once secret that must not close
+        on a reflex.
+      */}
+      {revoking !== null ? (
+        <ConfirmDialog
+          title={t("revokeTitle", { name: revoking.name })}
+          body={t("revokeBody")}
+          confirmLabel={t("revokeConfirm")}
+          cancelLabel={t("cancel")}
+          busy={busy}
+          onCancel={() => setRevoking(null)}
+          onConfirm={() => {
+            const key = revoking;
+            setBusy(true);
+            void api.revokeGatewayKey(key.id)
+              .then(() => {
                 setRevoking(null);
                 onChanged();
-              } finally {
-                setBusy(false);
-              }
-            }}
-          >
-            {t("revokeConfirm")}
-          </button>
-        </div>
-      </Dialog>
+              })
+              .finally(() => setBusy(false));
+          }}
+        />
+      ) : null}
     </Card>
   );
 }

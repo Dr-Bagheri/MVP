@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import type { Role, User } from "@/api/types";
 import { BffError } from "@/api/client";
+import { ConfirmDialog } from "@/components/rowActions";
 import { Chip } from "@/components/ui";
 import { formatDate, personName } from "@/lib/format";
 
@@ -49,7 +50,17 @@ export function MemberDetail({
   const t = useTranslations("management");
   const tAdmin = useTranslations("admin");
   const locale = useLocale();
-  /** Two-step delete: the first press arms it, the second is the real one. */
+  /**
+   * The delete asks in the platform's ONE dialog (`ConfirmDialog`, enforced
+   * by `confirm.guard.test.ts`) instead of the inline two-press expander it
+   * used to grow in place.
+   *
+   * The reason field goes INSIDE that dialog rather than beside the button:
+   * 0085 requires a reason in the ledger, and a confirmation that needs an
+   * answer is exactly what `ConfirmDialog`'s `body` slot is for. Asking in
+   * a row of controls meant the sentence explaining what a tombstone does
+   * sat under a form the person had already started filling in.
+   */
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   /** 0085: every deletion carries its reason into the ledger */
   const [deleteReason, setDeleteReason] = useState("");
@@ -252,54 +263,53 @@ export function MemberDetail({
               {tAdmin(user.status === "disabled" ? "enable" : "disable")}
             </button>
             {onDelete ? (
-              confirmingDelete ? (
-                <span className="flex items-center gap-2">
-                  <input
-
-                    className="input h-9 min-h-0 w-44 py-0 text-xs"
-
-                    autoFocus
-
-                    placeholder={t("deleteReasonHint")}
-
-                    value={deleteReason}
-
-                    onChange={(e) => setDeleteReason(e.target.value)}
-
-                  />
-
-                  <button
-                    className="btn-danger"
-                    disabled={busy || deleteReason.trim().length < 3}
-                    onClick={() => onDelete(user, deleteReason.trim())}
-                  >
-                    {t("confirmDeleteMember")}
-                  </button>
-                  <button
-                    className="text-xs text-fg-muted underline-offset-2 hover:underline"
-                    onClick={() => setConfirmingDelete(false)}
-                  >
-                    {t("detailClose")}
-                  </button>
-                </span>
-              ) : (
-                <button
-                  className="text-sm text-danger/80 underline-offset-2 hover:text-danger hover:underline"
-                  disabled={busy}
-                  onClick={() => setConfirmingDelete(true)}
-                >
-                  {t("deleteMember")}
-                </button>
-              )
+              <button
+                className="text-sm text-danger/80 underline-offset-2 hover:text-danger hover:underline"
+                disabled={busy}
+                onClick={() => { setDeleteReason(""); setConfirmingDelete(true); }}
+              >
+                {t("deleteMember")}
+              </button>
             ) : null}
           </div>
         ) : null}
-        {onDelete && confirmingDelete ? (
-          /* what the button DOES, said before it happens: the person is
-             emptied and their handle retired forever — not a hide */
-          <p className="mt-2 text-xs leading-6 text-fg-muted">{t("deleteMemberNote")}</p>
-        ) : null}
       </div>
+
+      {onDelete && confirmingDelete ? (
+        <ConfirmDialog
+          title={t("deleteMemberConfirmTitle", { name: personName(user, locale) })}
+          body={
+            <div className="space-y-3">
+              {/* what the button DOES, said before it happens: the person is
+                  emptied and their handle retired forever — not a hide */}
+              <p className="text-sm leading-6 text-fg-muted">{t("deleteMemberNote")}</p>
+              <label className="block text-xs text-fg-muted" htmlFor="member-delete-reason">
+                {t("deleteReasonHint")}
+              </label>
+              <input
+                id="member-delete-reason"
+                className="input h-9 min-h-0 w-full py-0 text-sm"
+                autoFocus
+                placeholder={t("deleteReasonHint")}
+                value={deleteReason}
+                onChange={(e) => setDeleteReason(e.target.value)}
+              />
+            </div>
+          }
+          confirmLabel={t("confirmDeleteMember")}
+          cancelLabel={t("detailClose")}
+          busy={busy}
+          /* the reason is the ledger's, and core requires one — the button
+             stays off and the empty field says why, rather than a refusal
+             arriving after the press */
+          confirmDisabled={deleteReason.trim().length < 3}
+          onCancel={() => setConfirmingDelete(false)}
+          onConfirm={() => {
+            setConfirmingDelete(false);
+            onDelete(user, deleteReason.trim());
+          }}
+        />
+      ) : null}
     </aside>
   );
 }

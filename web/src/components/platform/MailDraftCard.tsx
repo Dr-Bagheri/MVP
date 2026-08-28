@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { MailDraft, MailSourceMessage } from "@/api/types";
+import { ConfirmDialog } from "@/components/rowActions";
 import { notify } from "@/lib/notify";
 import { Link } from "@/i18n/routing";
 import { formatRelativeDate, formatTime } from "@/lib/format";
@@ -58,8 +59,18 @@ export function MailDraftCard({
   onChanged?: (next: MailDraft) => void;
 }) {
   const t = useTranslations("mail");
+  const tCommon = useTranslations("common");
   const locale = useLocale();
   const [busy, setBusy] = useState<"send" | "discard" | null>(null);
+  /**
+   * Discard asks first (the platform's destructive-action rule; see
+   * `confirm.guard.test.ts`). SEND does not, and the difference is the point:
+   * this whole card exists so the reply can be read before it goes, so the
+   * press IS the considered act — a second box in front of it would be the
+   * same question twice. Discarding is the one that cannot be taken back:
+   * the row is decided forever, and the reply nobody kept is unrecoverable.
+   */
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [state, setState] = useState(draft);
   /** the message this answers; null while it is in flight or unreadable */
   const [source, setSource] = useState<MailSourceMessage | null>(null);
@@ -163,7 +174,7 @@ export function MailDraftCard({
                 type="button"
                 className="tap h-9 min-h-0 rounded-lg px-3 text-xs text-fg-muted hover:text-danger"
                 disabled={busy !== null}
-                onClick={() => void act("discard")}
+                onClick={() => setConfirmDiscard(true)}
               >
                 {t("discard")}
               </button>
@@ -179,6 +190,25 @@ export function MailDraftCard({
           )}
         </div>
       </article>
+
+      {/* the platform's one destructive-action dialog. The body says the part
+          a person cannot see from here: our row is decided, and the copy
+          sitting in their own Drafts folder is not touched — the same true
+          thing the discarded header says afterwards. */}
+      {confirmDiscard ? (
+        <ConfirmDialog
+          title={t("discardTitle", { subject: state.subject })}
+          body={t("discardBody")}
+          confirmLabel={t("discard")}
+          cancelLabel={tCommon("cancel")}
+          busy={busy !== null}
+          onCancel={() => setConfirmDiscard(false)}
+          onConfirm={() => {
+            setConfirmDiscard(false);
+            void act("discard");
+          }}
+        />
+      ) : null}
     </div>
   );
 }

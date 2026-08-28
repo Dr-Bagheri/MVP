@@ -158,6 +158,10 @@ export default function CallDetailPage({
   const [newTpl, setNewTpl] = useState<{ name: string; prompt: string } | null>(null);
   /** the version about to be deleted (0095) — armed by the picker's ✕ */
   const [confirmVersionDelete, setConfirmVersionDelete] = useState<number | null>(null);
+  /** the custom template about to be deleted — armed by its card's ✕ */
+  const [confirmTemplateDelete, setConfirmTemplateDelete] = useState<string | null>(null);
+  /** the note about to be deleted — armed by the note row's «حذف» */
+  const [confirmNoteDelete, setConfirmNoteDelete] = useState<string | null>(null);
   const [regenBusy, setRegenBusy] = useState(false);
   useEffect(() => { setCustoms(customTemplates()); }, []);
 
@@ -1414,7 +1418,11 @@ export default function CallDetailPage({
                     className="absolute end-1.5 top-1.5 text-xs text-fg-muted hover:text-danger"
                     aria-label={t("templateDelete")}
                     title={t("templateDelete")}
-                    onClick={() => setCustoms(deleteCustomTemplate(c.name))}
+                    /* a ✕ in the corner of a card is the easiest mis-press
+                       on this screen, and the prompt text behind it lives
+                       only in this browser — so it asks first, like every
+                       other destructive control (confirm.guard.test.ts) */
+                    onClick={() => setConfirmTemplateDelete(c.name)}
                   >
                     <IconClose width={14} height={14} />
                   </button>
@@ -2032,13 +2040,7 @@ export default function CallDetailPage({
                     <button
                       type="button"
                       className="tap no-print shrink-0 rounded px-1.5 text-xs text-fg-muted hover:text-danger"
-                      onClick={() => {
-                        void api
-                          .deleteCallNote(note.id)
-                          .then(() => api.callNotes(id))
-                          .then(setNotes)
-                          .catch(() => undefined);
-                      }}
+                      onClick={() => setConfirmNoteDelete(note.id)}
                     >
                       {t("noteDelete")}
                     </button>
@@ -2075,6 +2077,47 @@ export default function CallDetailPage({
         ) : null}
       </Card>
       </PageContainer>
+
+      {/* deleting a NOTE. It looked like the small one on this screen and is
+          not: a note is a person's own annotation, there is one copy, and
+          nothing on the record can bring it back. Same dialog as everything
+          else destructive on the platform (confirm.guard.test.ts). */}
+      {confirmNoteDelete !== null ? (
+        <ConfirmDialog
+          title={t("noteDeleteTitle")}
+          body={t("noteDeleteBody")}
+          confirmLabel={t("noteDelete")}
+          cancelLabel={tCommon("cancel")}
+          onCancel={() => setConfirmNoteDelete(null)}
+          onConfirm={() => {
+            const noteId = confirmNoteDelete;
+            setConfirmNoteDelete(null);
+            void api
+              .deleteCallNote(noteId)
+              .then(() => api.callNotes(id))
+              .then(setNotes)
+              .catch(() => undefined);
+          }}
+        />
+      ) : null}
+
+      {/* deleting a saved EXPORT TEMPLATE (browser-local). The title names it,
+          and the body says the part that is invisible from the card: this
+          store is per-browser, so nobody else can hand the prompt back. */}
+      {confirmTemplateDelete !== null ? (
+        <ConfirmDialog
+          title={t("templateDeleteTitle", { name: confirmTemplateDelete })}
+          body={t("templateDeleteBody")}
+          confirmLabel={tCalls("delete")}
+          cancelLabel={tCommon("cancel")}
+          onCancel={() => setConfirmTemplateDelete(null)}
+          onConfirm={() => {
+            const name = confirmTemplateDelete;
+            setConfirmTemplateDelete(null);
+            setCustoms(deleteCustomTemplate(name));
+          }}
+        />
+      ) : null}
 
       {/* deleting a summary VERSION (0095) — the same are-you-sure shape
           every product delete wears */}

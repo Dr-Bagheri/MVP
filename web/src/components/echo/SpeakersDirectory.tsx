@@ -82,6 +82,16 @@ export function SpeakersDirectory() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirmBulk, setConfirmBulk] = useState(false);
   /**
+   * Withdrawing an enrolled voice asks too (the platform's destructive-action
+   * rule; confirm.guard.test.ts). It is the same act Settings · Security
+   * already asks about when a person withdraws their OWN print — doing it to
+   * somebody else, from an admin's table, is not the lighter version of that.
+   * A voiceprint cannot be handed back: restoring one means recording it
+   * again, with the person present.
+   */
+  const [confirmVoiceClear, setConfirmVoiceClear] = useState<Person | null>(null);
+  const [confirmVoiceBulk, setConfirmVoiceBulk] = useState(false);
+  /**
    * The 2026-08-25 batch: three views of one directory, a team filter, and
    * presence. (The merge door left the UI on 2026-08-26 — see the kebab.)
    *
@@ -516,7 +526,7 @@ export function SpeakersDirectory() {
             <button
               className="btn-secondary h-8 min-h-0 px-3 text-xs"
               disabled={busy}
-              onClick={() => void bulk((person) => api.clearVoice(person.id))}
+              onClick={() => setConfirmVoiceBulk(true)}
             >
               {t("voiceRemove")}
             </button>
@@ -825,7 +835,7 @@ export function SpeakersDirectory() {
                           icon: <IconMicOff />,
                           danger: true,
                           disabled: busy,
-                          onSelect: () => void clearVoiceFor(person),
+                          onSelect: () => setConfirmVoiceClear(person),
                         }]
                       : []),
                   ]
@@ -999,6 +1009,41 @@ export function SpeakersDirectory() {
           busy={busy}
           onCancel={() => setConfirmBulk(false)}
           onConfirm={() => void bulk((person) => api.deletePerson(person.id, UI_DELETE_REASON))}
+        />
+      ) : null}
+
+      {/* withdrawing an enrolled voice — one person, and the whole selection.
+          Two dialogs rather than one parameterised: the bulk title counts and
+          the single one NAMES, and a title that says «۱ نفر» where a name
+          belongs is how a bulk action gets confirmed for the wrong row. */}
+      {confirmVoiceClear !== null ? (
+        <ConfirmDialog
+          title={t("voiceRemoveTitle", { name: confirmVoiceClear.display_name })}
+          body={t("voiceRemoveBody")}
+          confirmLabel={t("voiceRemove")}
+          cancelLabel={t("voiceCancel")}
+          busy={busy}
+          onCancel={() => setConfirmVoiceClear(null)}
+          onConfirm={() => {
+            const person = confirmVoiceClear;
+            setConfirmVoiceClear(null);
+            void clearVoiceFor(person);
+          }}
+        />
+      ) : null}
+
+      {confirmVoiceBulk ? (
+        <ConfirmDialog
+          title={t("voiceRemoveBulkTitle", { n: String(selected.size) })}
+          body={t("voiceRemoveBody")}
+          confirmLabel={t("voiceRemove")}
+          cancelLabel={t("voiceCancel")}
+          busy={busy}
+          onCancel={() => setConfirmVoiceBulk(false)}
+          onConfirm={() => {
+            setConfirmVoiceBulk(false);
+            void bulk((person) => api.clearVoice(person.id));
+          }}
         />
       ) : null}
 

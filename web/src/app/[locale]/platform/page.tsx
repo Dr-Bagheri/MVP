@@ -79,6 +79,7 @@ const PAGE = 50;
  */
 
 import { CreateOrg } from "@/components/platform/CreateOrg";
+import { ConfirmDialog } from "@/components/rowActions";
 
 export default function PlatformControlPage() {
   const t = useTranslations("platformRoot");
@@ -1316,14 +1317,12 @@ function ActionDialog({
   const [failed, setFailed] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
 
+  /* focus the reason box on open. Escape is NOT bound here any more —
+     ConfirmDialog owns it, and two listeners for one key is how a dialog
+     ends up closing on a keystroke somebody thought they had guarded. */
   useEffect(() => {
     ref.current?.focus();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !busy) onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [busy, onClose]);
+  }, []);
 
   const valid = reason.trim().length >= 3 && reason.trim().length <= 500;
 
@@ -1340,71 +1339,62 @@ function ActionDialog({
     }
   }
 
+  /*
+   * The platform's ONE destructive-action dialog (`ConfirmDialog`, the rule
+   * `confirm.guard.test.ts` enforces), wearing the console's extra
+   * requirement: a REASON, which core forwards to the named DB function.
+   *
+   * This used to be a second dialog written out by hand here. Folding it in
+   * cost nothing the console needs — `body` takes a whole form for exactly
+   * this case, `confirmDisabled` is how "type a reason first" is spelled, and
+   * `busy` keeps the press from repeating — and it stops the vendor's room
+   * from drifting into its own dialect of the same question.
+   *
+   * Dismissal-while-busy stays refused: a write is in flight and closing the
+   * box would leave the operator unsure whether it landed.
+   */
   return (
-    <div
-      className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-label={action.title}
-      onClick={() => !busy && onClose()}
-    >
-      <div
-        className="w-full max-w-md rounded-2xl border border-border bg-surface p-5 shadow-lg"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2 className={`text-lg font-semibold ${action.danger ? "text-danger" : "text-fg"}`}>
-          {action.title}
-        </h2>
-        <p className="mt-1 text-xs text-fg-muted">
-          {labels.target}: <span className="font-medium text-fg">{action.target}</span>
-        </p>
-        <p className="mt-2 text-sm leading-6 text-fg-muted">{action.effect}</p>
-
-        <label htmlFor="pa-reason" className="mt-4 block text-sm font-semibold text-fg">
-          {labels.reason}
-        </label>
-        <textarea
-          id="pa-reason"
-          ref={ref}
-          rows={3}
-          maxLength={500}
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-          className="input mt-1 min-h-0 w-full resize-y text-sm"
-          aria-describedby="pa-reason-hint"
-        />
-        <div className="mt-1 flex items-center justify-between text-xs text-fg-muted">
-          <span id="pa-reason-hint">{labels.hint}</span>
-          <span className="ltr tabular-nums">{reason.trim().length}/500</span>
-        </div>
-
-        {failed ? (
-          <p role="alert" className="mt-2 text-sm text-danger">
-            {labels.failed}
+    <ConfirmDialog
+      title={action.title}
+      danger={action.danger ?? false}
+      busy={busy}
+      confirmDisabled={!valid}
+      body={
+        <>
+          <p className="text-xs text-fg-muted">
+            {labels.target}: <span className="font-medium text-fg">{action.target}</span>
           </p>
-        ) : null}
+          <p className="mt-2 text-sm leading-6 text-fg-muted">{action.effect}</p>
 
-        <div className="mt-5 flex justify-end gap-2">
-          <button
-            type="button"
-            className="tap rounded-lg border border-border px-4 py-2 text-sm font-semibold text-fg hover:bg-surface-2 disabled:opacity-50"
-            onClick={onClose}
-            disabled={busy}
-          >
-            {labels.cancel}
-          </button>
-          <button
-            type="button"
-            className={`tap rounded-lg px-4 py-2 text-sm font-semibold text-on-accent disabled:opacity-50 ${
-              action.danger ? "bg-danger" : "bg-accent"
-            }`}
-            onClick={() => void go()}
-            disabled={!valid || busy}
-          >
-            {busy ? labels.working : labels.confirm}
-          </button>
-        </div>
-      </div>
-    </div>
+          <label htmlFor="pa-reason" className="mt-4 block text-sm font-semibold text-fg">
+            {labels.reason}
+          </label>
+          <textarea
+            id="pa-reason"
+            ref={ref}
+            rows={3}
+            maxLength={500}
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            className="input mt-1 min-h-0 w-full resize-y text-sm"
+            aria-describedby="pa-reason-hint"
+          />
+          <div className="mt-1 flex items-center justify-between text-xs text-fg-muted">
+            <span id="pa-reason-hint">{labels.hint}</span>
+            <span className="ltr tabular-nums">{reason.trim().length}/500</span>
+          </div>
+
+          {failed ? (
+            <p role="alert" className="mt-2 text-sm text-danger">
+              {labels.failed}
+            </p>
+          ) : null}
+        </>
+      }
+      confirmLabel={busy ? labels.working : labels.confirm}
+      cancelLabel={labels.cancel}
+      onCancel={() => { if (!busy) onClose(); }}
+      onConfirm={() => void go()}
+    />
   );
 }

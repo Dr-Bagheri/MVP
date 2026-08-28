@@ -36,12 +36,15 @@ const providerOf = (id: string): string => (id.includes("/") ? id.split("/")[0]!
 export default function ModelsPage() {
   const t = useTranslations("management");
   const tAdmin = useTranslations("admin");
+  const tCommon = useTranslations("common");
   const [me, setMe] = useState<User | null>(null);
   const [models, setModels] = useState<AdminModelRow[]>([]);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
   const [adding, setAdding] = useState(false);
   const [search, setSearch] = useState("");
+  /** the model awaiting the platform's are-you-sure (dialog at the foot) */
+  const [confirmRemove, setConfirmRemove] = useState<AdminModelRow | null>(null);
 
   const isAdmin = me?.role === "admin" || me?.role === "owner";
 
@@ -178,7 +181,12 @@ export default function ModelsPage() {
                   icon: <IconTrash width={14} height={14} />,
                   danger: true,
                   disabled: busy,
-                  onSelect: () => void revoke(model.id),
+                  /* the press ASKS (the platform rule; confirm.guard.test.ts).
+                     Re-adding is possible, but this is not undone by pressing
+                     the same control again — the row leaves the table — and a
+                     mis-click here takes a model away from the whole
+                     organization, including automations already choosing it. */
+                  onSelect: () => setConfirmRemove(model),
                 },
               ]}
             />
@@ -230,6 +238,25 @@ export default function ModelsPage() {
           hideCancel
           onConfirm={() => setAdding(false)}
           onCancel={() => setAdding(false)}
+        />
+      ) : null}
+
+      {/* the platform's one destructive-action dialog. The title names the
+          model the way the TABLE names it (`modelLabel`), so the dialog and
+          the row it came from cannot read as two different models. */}
+      {confirmRemove !== null ? (
+        <ConfirmDialog
+          title={t("modelsRemoveTitle", { name: modelLabel(confirmRemove.id) })}
+          body={t("modelsRemoveBody")}
+          confirmLabel={t("modelsRemove")}
+          cancelLabel={tCommon("cancel")}
+          busy={busy}
+          onCancel={() => setConfirmRemove(null)}
+          onConfirm={() => {
+            const target = confirmRemove;
+            setConfirmRemove(null);
+            void revoke(target.id);
+          }}
         />
       ) : null}
     </SettingsPane>

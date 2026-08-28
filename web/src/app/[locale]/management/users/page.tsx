@@ -296,42 +296,19 @@ export default function UsersPage() {
                       cannot be PATCHed, and hiding the button beats letting
                       an admin collect a 403 they can do nothing about */}
                   {me?.role === "owner" ? (
-                    rejecting?.id === u.id ? (
-                      <span className="flex items-center gap-2">
-                        <input
-                          className="input h-9 min-h-0 w-40 py-0 text-xs"
-                          autoFocus
-                          placeholder={t("deleteReasonHint")}
-                          value={rejecting.reason}
-                          onChange={(e) => setRejecting({ id: u.id, reason: e.target.value })}
-                          onKeyDown={(e) => { if (e.key === "Escape") setRejecting(null); }}
-                        />
-                        <button
-                          className="btn-secondary h-9 min-h-0 px-3 text-xs text-danger"
-                          disabled={busy || rejecting.reason.trim().length < 3}
-                          onClick={async () => {
-                            setBusy(true);
-                            try {
-                              await api.rejectMember(u.id, rejecting.reason.trim());
-                              setRejecting(null);
-                              await load();
-                            } finally {
-                              setBusy(false);
-                            }
-                          }}
-                        >
-                          {tAdmin("reject")}
-                        </button>
-                      </span>
-                    ) : (
-                      <button
-                        className="btn-secondary h-9 min-h-0 px-3 text-xs"
-                        disabled={busy}
-                        onClick={() => setRejecting({ id: u.id, reason: "" })}
-                      >
-                        {tAdmin("reject")}
-                      </button>
-                    )
+                    <button
+                      className="btn-secondary h-9 min-h-0 px-3 text-xs"
+                      disabled={busy}
+                      /* the press ASKS, in the platform's one dialog (see the
+                         foot of this file, and confirm.guard.test.ts). This
+                         used to grow a reason box inside the row: the same
+                         question, in an affordance nothing else on the
+                         platform wears, on the one control that permanently
+                         empties a person. */
+                      onClick={() => setRejecting({ id: u.id, reason: "" })}
+                    >
+                      {tAdmin("reject")}
+                    </button>
                   ) : null}
                 </li>
               ))}
@@ -515,6 +492,53 @@ export default function UsersPage() {
             />
           )}
         </Card>
+
+        {/*
+          REJECTING A PENDING MEMBER is the owner's true delete (tombstone),
+          so it wears the platform's destructive-action dialog like every
+          other one. The reason rides INSIDE the dialog because 0085 requires
+          one in the ledger and `ConfirmDialog`'s body slot is where a
+          confirmation that needs an answer puts its question.
+
+          `personName` rather than `display_name`: the row above names them
+          that way, and a dialog naming somebody differently from the line it
+          was opened from is a dialog about somebody else.
+        */}
+        {rejecting !== null ? (() => {
+          const target = pending.find((u) => u.id === rejecting.id);
+          if (!target) return null;
+          return (
+            <ConfirmDialog
+              title={t("deleteMemberConfirmTitle", { name: personName(target, locale) })}
+              body={
+                <div className="space-y-3">
+                  <p className="text-sm leading-6 text-fg-muted">{t("deleteMemberConfirmBody")}</p>
+                  <label className="block text-xs text-fg-muted" htmlFor="reject-reason">
+                    {t("deleteReasonHint")}
+                  </label>
+                  <input
+                    id="reject-reason"
+                    className="input h-9 min-h-0 w-full py-0 text-sm"
+                    autoFocus
+                    placeholder={t("deleteReasonHint")}
+                    value={rejecting.reason}
+                    onChange={(e) => setRejecting({ id: rejecting.id, reason: e.target.value })}
+                  />
+                </div>
+              }
+              confirmLabel={tAdmin("reject")}
+              cancelLabel={tCommon("cancel")}
+              busy={busy}
+              confirmDisabled={rejecting.reason.trim().length < 3}
+              onCancel={() => setRejecting(null)}
+              onConfirm={() => {
+                const reason = rejecting.reason.trim();
+                setRejecting(null);
+                void deleteMemberFor(target, reason);
+              }}
+            />
+          );
+        })() : null}
 
         {confirmDeleteMember !== null ? (
           <ConfirmDialog

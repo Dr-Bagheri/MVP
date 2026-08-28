@@ -10,6 +10,42 @@
  *  - `ConfirmDialog` — the are-you-sure popup that replaced typed reasons
  *    on product deletes (the LEDGER still receives a reason: a fixed,
  *    platform-authored sentence — the popup's confirm IS the consent).
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ * THEME RULE — DESTRUCTIVE ACTIONS CONFIRM
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * User directive, 2026-08-28: *"for all delete buttons in the platform put
+ * the confirm pop up window like the delete button in the records. make this
+ * a rule for delete buttons on platform and put it in the theme."*
+ *
+ * **The test:** a control needs a confirmation when it cannot be undone by
+ * pressing the same control again. A switch that flips back does not (archive
+ * ⇄ unarchive, enable ⇄ disable, a webhook's on/off). Everything else does —
+ * delete, remove, revoke, discard, purge, clear, and the ones whose label
+ * says «حذف» while the wire says something gentler.
+ *
+ * **The dialog:** `ConfirmDialog`, below. There is exactly one. Do not fork
+ * it, do not hand-roll a second modal that asks the same question, and never
+ * fall back to `window.confirm` — the browser's box cannot be styled,
+ * translated, or made to say WHAT is about to be destroyed.
+ *
+ * **What it must say:** name the thing. «حذف «{title}»؟» beats «مطمئنید؟»,
+ * because a dialog that could belong to any row is a dialog nobody reads.
+ * When the act has a consequence the person cannot see from where they are
+ * standing — it also retires their username, the draft in their mailbox stays
+ * behind, this template lives only in this browser — the body says so. And
+ * when the action needs an ANSWER (the ledger's reason, a target to merge
+ * into), that form goes in `body` with `confirmDisabled` holding the button
+ * off; a confirmation that needs an answer is what the slot is for, and
+ * asking beside the button instead is how a screen grows a second dialect.
+ *
+ * **What enforces it:** `src/components/confirm.guard.test.ts`. It derives
+ * the destructive method list from `api/client.ts` (so a new `deleteFoo`
+ * fails until it is classified), requires the dialog in any file that calls
+ * one, refuses a press wired straight to the write, and carries its
+ * exceptions as entries with written reasons. Verified red on a staged
+ * violation before it was trusted.
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";

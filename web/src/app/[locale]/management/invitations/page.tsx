@@ -7,6 +7,7 @@ import { useRefreshEpoch } from "@/lib/refreshBus";
 import type { Invitation, MintedInvitation, Role, User } from "@/api/types";
 import { Pagination, usePaged } from "@/components/Pagination";
 import { ManagementPane } from "@/components/platform/ManagementPane";
+import { ConfirmDialog } from "@/components/rowActions";
 import { PageHeader } from "@/components/scaffold";
 import { Card, Chip } from "@/components/ui";
 import { formatDate } from "@/lib/format";
@@ -38,6 +39,8 @@ export default function InvitationsPage() {
   const [minted, setMinted] = useState<MintedInvitation | null>(null);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  /** the invitation awaiting the platform's are-you-sure (dialog at the foot) */
+  const [confirmRevoke, setConfirmRevoke] = useState<Invitation | null>(null);
 
   const isAdmin = me?.role === "admin" || me?.role === "owner";
   const invitationsEpoch = useRefreshEpoch("invitations");
@@ -63,6 +66,29 @@ export default function InvitationsPage() {
     (inv) => !inv.redeemed_at && !inv.revoked_at && new Date(inv.expires_at) >= new Date(),
   );
   const { page, setPage, pageCount, visible } = usePaged(open);
+
+  /**
+   * The revoke, lifted out of its button so the dialog owns the write.
+   *
+   * The refusal rides `inviteError`, the same line an issue failure uses:
+   * before the dialog this call had no catch at all, so a server refusal
+   * left the row on screen with nothing said about it.
+   */
+  async function revokeInvitationFor(inv: Invitation) {
+    if (busy) return;
+    setBusy(true);
+    setInviteError(null);
+    try {
+      await api.revokeInvitation(inv.id);
+      setInvitations(await api.invitations());
+    } catch (cause) {
+      setInviteError(
+        cause instanceof BffError ? (cause.detail ?? t("inviteFailed")) : t("inviteFailed"),
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function issueInvitation() {
     const email = inviteEmail.trim();
@@ -192,18 +218,15 @@ export default function InvitationsPage() {
                   <span className="text-xs text-fg-muted">
                     {formatDate(inv.expires_at, locale)}
                   </span>
+                  {/* revoking is terminal by design — D23's terms are
+                      immutable, so "change your mind" means issuing a NEW
+                      invitation, and the person's link dies the moment this
+                      lands. That is a destructive act, so it asks first
+                      (the platform rule; confirm.guard.test.ts). */}
                   <button
                     className="text-xs text-fg-muted underline-offset-2 hover:underline"
                     disabled={busy}
-                    onClick={async () => {
-                      setBusy(true);
-                      try {
-                        await api.revokeInvitation(inv.id);
-                        setInvitations(await api.invitations());
-                      } finally {
-                        setBusy(false);
-                      }
-                    }}
+                    onClick={() => setConfirmRevoke(inv)}
                   >
                     {t("inviteRevoke")}
                   </button>
@@ -215,6 +238,23 @@ export default function InvitationsPage() {
           )}
         </Card>
 
+        {/* the platform's one destructive-action dialog; the address is what
+            identifies an invitation to the person revoking it */}
+        {confirmRevoke !== null ? (
+          <ConfirmDialog
+            title={t("inviteRevokeTitle", { email: confirmRevoke.email })}
+            body={t("inviteRevokeBody")}
+            confirmLabel={t("inviteRevoke")}
+            cancelLabel={tCommon("cancel")}
+            busy={busy}
+            onCancel={() => setConfirmRevoke(null)}
+            onConfirm={() => {
+              const target = confirmRevoke;
+              setConfirmRevoke(null);
+              void revokeInvitationFor(target);
+            }}
+          />
+        ) : null}
       </div>
     </ManagementPane>
   );
