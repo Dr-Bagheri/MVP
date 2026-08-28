@@ -4,15 +4,21 @@ import { use, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { AuthoredWorkflow, Me, WorkflowCard, WorkflowRunRecord } from "@/api/types";
-import { Link } from "@/i18n/routing";
+import { Link, useRouter } from "@/i18n/routing";
 import { PlatformShell } from "@/components/platform/PlatformShell";
 import { AssistantMenu } from "@/components/platform/AssistantMenu";
 import { useCrumbTitle } from "@/components/platform/CrumbTitle";
+import { WorkflowRunDialog } from "@/components/platform/WorkflowRunDialog";
+import { WorkflowTile } from "@/components/platform/WorkflowTile";
 import { MenuLayout } from "@/components/scaffold";
 import { Card } from "@/components/ui";
 import { Pagination, usePaged } from "@/components/Pagination";
-import { Icon, IconRetry, type IconName } from "@/components/icons";
+import { KebabMenu, type KebabItem } from "@/components/rowActions";
+import {
+  Icon, IconPlay, IconRetry, IconToggleOff, IconToggleOn, type IconName,
+} from "@/components/icons";
 import { digits, formatDate, formatTime } from "@/lib/format";
+import { notify } from "@/lib/notify";
 
 /**
  * ONE workflow: what it does, and what it has done.
@@ -101,21 +107,6 @@ const PROCESS_KEY: Readonly<Record<string, string>> = {
   "prepare-me-for-meetings": "prepare-meetings",
 };
 
-/**
- * The hero tile's glyph, keyed by the card's own `icon` field (the same
- * field `Workflows.tsx` reads). It maps into the platform's icon SET rather
- * than to a text character: the set is the product's one visual language
- * (user directive, 2026-08-26), and a text glyph blown up to fill a 96px
- * tile wears neither its stroke nor its grid.
- */
-const TILE_ICON: Readonly<Record<string, IconName>> = {
-  calendar: "calendar",
-  /* db/0065 names the mail template's icon `send`; what it reads is an
-     inbox, so the tile shows an envelope rather than a paper plane */
-  send: "mail",
-  sparkles: "zap",
-};
-
 function isStep(value: unknown): value is ProcessStep {
   return (
     typeof value === "object" && value !== null
@@ -148,6 +139,7 @@ export default function WorkflowDetailPage({
   const { handle } = use(params);
   const t = useTranslations("workflows");
   const locale = useLocale();
+  const router = useRouter();
 
   const [cards, setCards] = useState<WorkflowCard[] | null>(null);
   const [engine, setEngine] = useState<EngineWorkflow[] | null>(null);
@@ -167,6 +159,10 @@ export default function WorkflowDetailPage({
   const [saveFailed, setSaveFailed] = useState(false);
   /** the capability was withdrawn between the read and the press */
   const [refused, setRefused] = useState(false);
+  /** Run now, on a TEMPLATE: the source picker the ⋯ menu opens */
+  const [picking, setPicking] = useState(false);
+  /** Run now, on an ENGINE workflow: the request in flight */
+  const [running, setRunning] = useState(false);
 
   useEffect(() => {
     void api.workflows().then(setCards).catch(() => setCards([]));
@@ -261,6 +257,27 @@ export default function WorkflowDetailPage({
     [runs, subject?.id],
   );
   const { page, setPage, pageCount, visible } = usePaged(mine);
+
+  /**
+   * Run now, for an ENGINE workflow: the engine's own manual trigger.
+   *
+   * A refusal is a NAMED sentence from core (a workflow needing un-runnable
+   * kinds says which) and is surfaced verbatim — the refusal copy is core's
+   * alone, because only core knows which rule was broken.
+   */
+  async function runEngine() {
+    if (running) return;
+    setRunning(true);
+    try {
+      const { run_id } = await api.runWorkflow(handle);
+      router.push({ pathname: "/workflows/runs/[id]", params: { id: run_id } } as never);
+    } catch (cause) {
+      const detail = (cause as { detail?: string }).detail;
+      notify(detail || t("runFailed"), "warn");
+    } finally {
+      setRunning(false);
+    }
+  }
 
   /** the org's switch: an admin publishing or pausing an engine workflow */
   async function toggleOrgWorkflow() {
@@ -360,6 +377,48 @@ export default function WorkflowDetailPage({
           }
         : { enabled: true, onToggle: undefined, note: t("detailNoSwitch"), hint: null };
 
+  /**
+   * The ⋯ menu — the page's second entrance to the two things a person does
+   * with a workflow, and the ONLY entrance to running one (user directive,
+   * 2026-08-28: the list's Start buttons are gone, "it should only be run
+   * from inside their own page").
+   *
+   * **Run now** means different things to the two kinds and the menu does not
+   * blur them: a TEMPLATE runs on one thing you choose, so it opens the source
+   * picker; an ENGINE workflow carries its own trigger and simply starts.
+   *
+   * **Turn on / Turn off** is the pill's handler, not a copy of it — one
+   * decision (`switchProps`) with two entrances. When the pill is read-only
+   * the item is absent rather than disabled-with-a-shrug: the pill already
+   * says in words why it cannot move, and a second dead control does not.
+   *
+   * **There is no Remove.** Nothing in the API deletes a workflow — a template
+   * is seeded and an engine workflow is paused, never destroyed — so a delete
+   * item could only ever fail, and a menu item that cannot work is worse than
+   * a missing one. Written down so the next person does not read the gap as an
+   * oversight and add one.
+   */
+  const menuItems: KebabItem[] = subject === null ? [] : [
+    {
+      key: "run",
+      label: running ? t("runStarting") : t("runNow"),
+      icon: <IconPlay width={14} height={14} />,
+      disabled: running || (subject.kind === "template" && subject.sourceKind === undefined),
+      onSelect: subject.kind === "engine" ? () => void runEngine() : () => setPicking(true),
+    },
+    ...(switchProps?.onToggle
+      ? [{
+          key: "enabled",
+          label: switchProps.enabled ? t("detailTurnOff") : t("detailTurnOn"),
+          icon: switchProps.enabled
+            ? <IconToggleOn width={14} height={14} />
+            : <IconToggleOff width={14} height={14} />,
+          disabled: saving,
+          onSelect: () => void switchProps.onToggle!(),
+        }]
+      : []),
+  ];
+
   return (
     <PlatformShell>
       <MenuLayout menu={<AssistantMenu activeSlug="workflows" />}>
@@ -369,16 +428,7 @@ export default function WorkflowDetailPage({
           ) : (
             <>
               <header className="flex flex-wrap items-start gap-6">
-                <span
-                  className={`grid h-24 w-24 shrink-0 place-items-center rounded-full ${
-                    subject.color === "coral"
-                      ? "bg-danger text-on-danger shadow-[0_18px_44px_-14px_rgb(var(--danger)/0.75)]"
-                      : "bg-accent text-on-accent shadow-[0_18px_44px_-14px_rgb(var(--accent)/0.75)]"
-                  }`}
-                  aria-hidden
-                >
-                  <Icon name={TILE_ICON[subject.icon] ?? "zap"} size="hero" />
-                </span>
+                <WorkflowTile icon={subject.icon} color={subject.color} size="hero" />
                 <div className="min-w-0 flex-1">
                   <h1 className="text-2xl font-semibold text-fg">{subject.name}</h1>
                   {subject.description ? (
@@ -390,6 +440,7 @@ export default function WorkflowDetailPage({
                     <EnableSwitch {...switchProps!} busy={saving} failed={saveFailed} />
                   </div>
                 </div>
+                <KebabMenu label={t("detailMenu")} items={menuItems} />
               </header>
 
               {/* WHO / WHAT / WITH WHAT — the three facts a person checks
@@ -554,6 +605,15 @@ export default function WorkflowDetailPage({
           )}
         </div>
       </MenuLayout>
+
+      {picking && subject?.sourceKind !== undefined ? (
+        <WorkflowRunDialog
+          slug={handle}
+          sourceKind={subject.sourceKind}
+          title={subject.name}
+          onClose={() => setPicking(false)}
+        />
+      ) : null}
     </PlatformShell>
   );
 }
@@ -625,9 +685,26 @@ function EnableSwitch({
 }) {
   const t = useTranslations("workflows");
   const live = onToggle !== undefined;
-  const on = `bg-success text-bg`;
-  const off = `border border-border-strong bg-surface-2 text-fg`;
-  const shell = `tap relative inline-flex h-9 items-center gap-2 rounded-full ps-1 pe-4 text-sm font-medium transition-colors ${enabled ? on : off}`;
+  /*
+   * THE PADDING IS ONE EXPRESSION, not a base plus an override.
+   *
+   * It used to be `ps-1 pe-4` on the shell with `pe-1 ps-4` appended for the
+   * ON state, which reads as "the later class wins" and is not how Tailwind
+   * resolves anything: two utilities from the same group are settled by the
+   * STYLESHEET's order, so `pe-4` beat `pe-1` and the ON pill carried a 16px
+   * gap after its knob — the knob floating off the edge it is supposed to sit
+   * against. Same family as the `rounded-md`/`rounded-full` trigger bug; the
+   * fix that cannot lose the coin toss is to emit exactly one value.
+   */
+  const pad = enabled ? "ps-4 pe-1" : "ps-1 pe-4";
+  /* the ON pill is FILLED green with the ground colour as its ink; the OFF
+     pill is the neutral raised control, and keeps `border-strong` because
+     `--surface-2` on `--bg` is well under the 3:1 a control boundary owes */
+  const skin = enabled ? "bg-success text-bg" : "border border-border-strong bg-surface-2 text-fg";
+  const shell = `tap relative inline-flex h-9 items-center gap-2 rounded-full text-sm font-medium transition-colors ${pad} ${skin}`;
+  /* `bg-bg` on the green rather than a literal white: `--bg` and `--success`
+     both flip with the theme, and a hard white knob is the `--on-accent`
+     contrast failure one token over */
   const knob = `grid h-7 w-7 shrink-0 place-items-center rounded-full ${enabled ? "bg-bg" : "bg-fg"}`;
 
   const face = (
@@ -648,7 +725,7 @@ function EnableSwitch({
           role="switch"
           aria-checked={enabled}
           aria-label={t("detailEnable")}
-          className={`${shell} ${enabled ? "pe-1 ps-4" : ""} disabled:opacity-60`}
+          className={`${shell} disabled:opacity-60`}
           disabled={busy}
           onClick={() => void onToggle()}
         >
@@ -660,7 +737,7 @@ function EnableSwitch({
           aria-checked={enabled}
           aria-disabled="true"
           aria-label={t("detailEnable")}
-          className={`${shell} ${enabled ? "pe-1 ps-4" : ""}`}
+          className={shell}
         >
           {face}
         </span>

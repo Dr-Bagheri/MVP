@@ -690,7 +690,11 @@ export function Hub() {
        * control that matters where the hand already is, and the empty
        * space above it is the point rather than somewhere to put things.
        */
-      className={`relative isolate mx-auto flex w-full max-w-3xl flex-col px-5 ${
+      /* the TABLE width (user directive, 2026-08-27: "as large as the
+         tables"). `max-w-3xl` was the outer cap, so widening the composer
+         alone changed nothing — the child could not exceed its parent, which
+         is why this line and not just that one. */
+      className={`relative isolate mx-auto flex w-full max-w-content flex-col px-5 ${
         idle ? "min-h-full justify-end py-6" : "min-h-full py-6"
       }`}
     >
@@ -725,7 +729,7 @@ export function Hub() {
             className="neurai-watermark pointer-events-none absolute inset-0 -z-10 bg-center bg-no-repeat opacity-[0.035] [background-size:min(68vw,680px)]"
           />
           {selectedAgent ? (
-            <section className="mx-auto mb-1 flex w-full max-w-[660px] items-center gap-4 rounded-3xl border border-border bg-surface/80 p-4 text-start shadow-sm" aria-label={t("activeAgent")}>
+            <section className="mx-auto mb-1 flex w-full max-w-content items-center gap-4 rounded-3xl border border-border bg-surface/80 p-4 text-start shadow-sm" aria-label={t("activeAgent")}>
               <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-accent-soft text-xl text-accent" aria-hidden>✦</span>
               <span className="min-w-0">
                 <span className="block text-base font-semibold text-fg">{selectedAgent.name}</span>
@@ -745,7 +749,7 @@ export function Hub() {
             const active = skills.find((s) => s.slug === skill);
             const activeStarters = active ? skillStarters(active) : [];
             return !selectedAgent && !workflowSlug && active && activeStarters.length > 0 ? (
-              <div className="mx-auto mt-4 flex w-full max-w-[660px] flex-wrap justify-center gap-2">
+              <div className="mx-auto mt-4 flex w-full max-w-content flex-wrap justify-center gap-2">
                 {activeStarters.map((q) => (
                   <button
                     key={q}
@@ -790,7 +794,12 @@ export function Hub() {
         /* focus-within: the PANEL is the control, so the panel carries the
            focus affordance — the global :focus-visible ring on the inner
            input drew a box inside a box (the user's report) */
-        className={`w-full max-w-[660px] rounded-2xl border border-border-strong bg-surface p-3 text-start transition-colors focus-within:border-accent ${
+        /* the composer takes the TABLE width (user directive, 2026-08-27:
+           "as large as the tables"). 660px was a reading measure chosen when
+           the hub was a centred landing card; on a page whose job is a
+           conversation it left the prompt floating in a column half the width
+           of every other surface in the product. */
+        className={`w-full max-w-content rounded-2xl border border-border-strong bg-surface p-3 text-start transition-colors focus-within:border-accent ${
           idle ? "mx-auto mt-auto" : "sticky bottom-0 mx-auto"
         }`}
       >
@@ -1228,10 +1237,11 @@ export function Hub() {
  * 2026-08-18: every composer menu opens when the mouse arrives and leaves
  * with it; the skill and model pickers stop being native selects).
  *
- * The `pt-2` wrapper is the load-bearing part: the visual gap between pill
+ * The padding wrapper is the load-bearing part: the visual gap between pill
  * and panel belongs to the PANEL's box, so crossing it never fires
  * mouseleave. A margin there instead closes the menu halfway to the first
- * row. Click still toggles, which is what a touch screen has.
+ * row. Click still toggles, which is what a touch screen has. (It is `pb-2`
+ * now that the panels open upward — same reason, other side.)
  */
 function HoverMenu({
   open,
@@ -1254,7 +1264,17 @@ function HoverMenu({
     <div className="relative" onMouseEnter={onOpen} onMouseLeave={onClose}>
       {button}
       {open ? (
-        <div className={`absolute ${align === "start" ? "start-0" : "end-0"} top-full z-30 pt-2`}>
+        /*
+         * UPWARD (user directive, 2026-08-27: "the kebab menus on the prompt
+         * box must open upward not downward").
+         *
+         * The composer sits at the foot of the page, so a panel dropped below
+         * it opens into the viewport's edge — the list is either clipped or it
+         * pushes the page, and on a phone it lands under the keyboard. The
+         * gap stays on the PANEL (`pb-2` here, as `pt-2` was) so crossing it
+         * never fires mouseleave and closes the menu halfway to the first row.
+         */
+        <div className={`absolute ${align === "start" ? "start-0" : "end-0"} bottom-full z-30 pb-2`}>
           <div
             className={`rounded-xl border border-border bg-surface text-start shadow-lg ${panelClass}`}
           >

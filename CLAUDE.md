@@ -2640,3 +2640,32 @@ sessions) for the cross-session narrative.
   0065 seeds `prepare-meetings`, so the toggle's own screen answered
   "no such workflow". Typecheck, 484 web tests and the build gate were
   all green while it was wrong.
+
+- 2026-08-27 (the shell turns back to the assistant): dashboard PARKED
+  (user: "deactivate dashboard for now, we will use it later") — `/`
+  redirects to `/assistant`, the board and its widget registry stay
+  untouched, so bringing it back is one nav entry and one route file.
+  **The orb stands down on the assistant's own surfaces** (assistant,
+  conversations, workflows, integrations, agents): an orb there is a
+  second door to the room you are standing in, and its panel covers
+  the thing it duplicates. Extracted as ONE predicate
+  (`orbIsSilentOn`) rather than a third early return nobody could see
+  from outside; its test's load-bearing case is the CONTROL — a
+  predicate that answers "silent" unconditionally satisfies every
+  positive assertion and is completely wrong (verified red exactly
+  there). The half that had to move with it, and would have been a
+  silent regression: History rows and the sub-menu's recent
+  conversations used `openAssistant()`, which now reaches nothing on
+  those pages — they NAVIGATE to `/assistant?c=` instead. Also:
+  answers lost their box ("just the text" — a border around every
+  reply is a rectangle the eye crosses to reach the words), messages
+  arrive with a 6px rise, an empty streaming answer shows a SPINNER
+  rather than a caret (a blinking cursor claims words are arriving
+  when none have), the composer's menus open UPWARD (a panel dropped
+  below a page-foot composer opens into the viewport edge), and the
+  hub took the table width — where the fix was the OUTER container:
+  widening the composer alone changed nothing, because a child cannot
+  exceed its parent. Minted from the thread test: **counting a style
+  class is counting the wrong thing** — `div.rounded-2xl` meant "how
+  many messages" until answers stopped being boxed; it counts
+  `.message-arrives` now, one element per message.

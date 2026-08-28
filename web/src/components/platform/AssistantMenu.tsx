@@ -5,8 +5,9 @@ import { useLocale, useTranslations } from "next-intl";
 import type { AssistantSession, Skill } from "@/api/types";
 import { api } from "@/api/client";
 import { SectionMenu } from "@/components/scaffold";
-import { IconAgent, IconAsk, IconHistory, IconPlus, IconZap } from "@/components/icons";
-import { fillComposer, openAssistant } from "@/lib/assistantBus";
+import { IconAgent, IconAsk, IconHistory, IconPlug, IconPlus, IconZap } from "@/components/icons";
+import { fillComposer } from "@/lib/assistantBus";
+import { useRouter } from "@/i18n/routing";
 import { useRefreshEpoch } from "@/lib/refreshBus";
 import { digits } from "@/lib/format";
 import { untitledNumbers } from "@/lib/sessionTitles";
@@ -26,8 +27,9 @@ import { useAssistantConversation } from "./AssistantConversationState";
 export function AssistantMenu({
   activeSlug,
 }: {
-  activeSlug: "new" | "hub" | "history" | "workflows" | "agents";
+  activeSlug: "new" | "hub" | "history" | "workflows" | "integrations" | "agents";
 }) {
+  const router = useRouter();
   const t = useTranslations("platform");
   const tConversations = useTranslations("conversations");
   const locale = useLocale();
@@ -95,7 +97,12 @@ export function AssistantMenu({
                  the indent says "under History"; the old «· » prefix retired */
               sub: true,
               preventNavigation: true,
-              onSelect: () => openAssistant({ sessionId: session.id }),
+              /* the assistant PAGE with the conversation resumed: the orb is
+                 suppressed on every surface this menu renders on, so an
+                 openAssistant() here would be a menu item that does nothing */
+              onSelect: () => router.push({
+                pathname: "/assistant", query: { c: session.id },
+              }),
             })),
           ],
         },
@@ -128,6 +135,9 @@ export function AssistantMenu({
           title: t("assistantMenuSetup"),
           items: [
             { slug: "workflows", href: "/workflows", label: t("workflows"), icon: <IconZap /> },
+            /* directly under Workflows (user directive, 2026-08-28) — the
+               accounts a workflow runs on, so the two sit together */
+            { slug: "integrations", href: "/integrations", label: t("integrations"), icon: <IconPlug /> },
             { slug: "agents", href: "/agents", label: t("agents"), icon: <IconAgent /> },
           ],
         },

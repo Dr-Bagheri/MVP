@@ -7,8 +7,13 @@ vi.mock("next-intl", () => ({
   useLocale: () => "fa",
 }));
 
+/* the menu NAVIGATES to resume a conversation now (the orb is suppressed on
+   every surface it renders on), so the stub owes it a router */
+const pushed: unknown[] = [];
 vi.mock("@/i18n/routing", () => ({
   Link: ({ href, children, ...props }: { href: string; children: React.ReactNode }) => <a href={href} {...props}>{children}</a>,
+  useRouter: () => ({ push: (to: unknown) => { pushed.push(to); }, replace: () => {} }),
+  usePathname: () => "/assistant",
 }));
 
 const { AssistantMenu } = await import("./AssistantMenu");

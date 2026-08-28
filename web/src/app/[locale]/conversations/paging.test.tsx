@@ -18,6 +18,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { resetRefreshBus } from "@/lib/refreshBus";
 
 const agentSessions = vi.fn();
+/* the History row opens the assistant PAGE now (user directive: the orb
+   stands down here), so this file owes the component a router */
+vi.mock("@/i18n/routing", () => ({
+  Link: ({ href, children, ...props }: { href: string; children: React.ReactNode }) =>
+    <a href={String(href)} {...props}>{children}</a>,
+  useRouter: () => ({ push: () => {}, replace: () => {} }),
+  usePathname: () => "/conversations",
+}));
+
 vi.mock("@/api/client", () => ({
   api: { agentSessions: (...args: unknown[]) => agentSessions(...args) },
 }));

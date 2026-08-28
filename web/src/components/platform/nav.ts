@@ -44,8 +44,13 @@ export const GITHUB_HREF = process.env.NEXT_PUBLIC_GITHUB_URL ?? "https://github
  * has no room to spare.
  */
 export const NAV_PRIMARY: readonly NavItem[] = [
-  { href: "/", key: "dashboard", inBar: true },
-  { href: "/assistant", key: "assistant", inBar: false },
+  /*
+   * The dashboard is PARKED (user directive, 2026-08-27: "deactivate
+   * dashboard for now, we will use it later"). The route and its widgets
+   * stay — `/` redirects to the assistant and nothing links to the board —
+   * so bringing it back is one entry here, not a rebuild.
+   */
+  { href: "/assistant", key: "assistant", inBar: true },
   { href: "/echo", key: "echo", inBar: true },
   { href: "/management", key: "management", inBar: true },
 ];

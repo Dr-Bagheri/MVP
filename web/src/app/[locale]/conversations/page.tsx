@@ -8,7 +8,7 @@ import { Pagination, usePaged } from "@/components/Pagination";
 import { AssistantMenu } from "@/components/platform/AssistantMenu";
 import { PlatformShell } from "@/components/platform/PlatformShell";
 import { MenuLayout, PageHeader } from "@/components/scaffold";
-import { openAssistant } from "@/lib/assistantBus";
+import { useRouter } from "@/i18n/routing";
 import { notify } from "@/lib/notify";
 import { useRefreshEpoch } from "@/lib/refreshBus";
 import { digits, formatDate } from "@/lib/format";
@@ -25,6 +25,7 @@ import { untitledNumbers } from "@/lib/sessionTitles";
  * home, the same thread continued wherever the person goes next.
  */
 export default function ConversationsPage() {
+  const router = useRouter();
   const t = useTranslations("conversations");
   const locale = useLocale();
   /** `null` = not fetched; `[]` = genuinely none. */
@@ -86,7 +87,18 @@ export default function ConversationsPage() {
                       <tr
                         key={s.id}
                         className="row-link"
-                        onClick={() => openAssistant({ sessionId: s.id })}
+                        /*
+                          The ASSISTANT PAGE, not the orb (user directive,
+                          2026-08-27: "when you go history, the main ai
+                          assistant should be open not the orb"). The dock
+                          stands down on this surface now, so handing the
+                          conversation to it would be a row that clicks into
+                          nothing — the two halves of that directive are one
+                          change, and this is the other half.
+                        */
+                        onClick={() => router.push({
+                          pathname: "/assistant", query: { c: s.id },
+                        })}
                       >
                         <td className="px-4 py-2.5 font-medium text-fg">
                           {s.title ?? t("newChat", { n: digits(numbers.get(s.id) ?? 1, locale) })}

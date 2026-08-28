@@ -196,6 +196,32 @@ export function DockHolder({ side, y, active }: {
 }
 
 
+/**
+ * Where the orb does NOT appear. One list, three reasons, each a directive:
+ *
+ *  - **the platform control** (2026-08-23) is the vendor's operations room,
+ *    not the product;
+ *  - **auth surfaces** (2026-08-25) are the door, not the room — the orb was
+ *    rendering in the sign-in page's corner;
+ *  - **the assistant's own surfaces** (2026-08-27: "when you go history, the
+ *    main ai assistant should be open not the orb"). The orb is presence in
+ *    rooms the assistant does not own. On the assistant, a conversation's
+ *    history, workflows, integrations and agents, the assistant IS the page,
+ *    and an orb there is a second door to the room you are standing in — one
+ *    whose panel covers the thing it duplicates.
+ *
+ * A pure function so the rule can be asserted without mounting the dock, and
+ * so adding a surface is one entry rather than a fourth early return.
+ */
+export function orbIsSilentOn(pathname: string): boolean {
+  const route = pathname.replace(/^\/(fa|en)(?=\/|$)/, "") || "/";
+  if (/^\/platform(\/|$)/.test(route)) return true;
+  if (/^\/(sign-in|sign-up|reset|forgot|pending|suspended)(\/|$)/.test(route)) return true;
+  /* `/` is the assistant's own door — it redirects there */
+  if (route === "/") return true;
+  return /^\/(assistant|conversations|workflows|agents|integrations)(\/|$)/.test(route);
+}
+
 export function PresenceDock() {
   const t = useTranslations("presence");
   const locale = useLocale();
@@ -901,18 +927,10 @@ export function PresenceDock() {
   }
 
   if (!member) return null;
-  /* the PLATFORM CONTROL is the vendor's operations room, not the product
-     (user directive, 2026-08-23: "remove the orb from the platform
-     control") — no assistant presence there. The loop keeps running so
-     the ears survive a visit; only the rendering stands down. */
-  if (/^\/(fa|en)\/platform(\/|$)/.test(pathname)) return null;
-  /* NO presence before the product (user directive, 2026-08-25: the orb was
-     rendering in the sign-in page's corner): auth surfaces are the door,
-     not the room — a signed-in person passing through sign-in/reset still
-     gets no orb there, and nothing renders in any corner anywhere. */
-  if (/^\/(fa|en)\/(sign-in|sign-up|reset|forgot|pending|suspended)(\/|$)/.test(pathname)) {
-    return null;
-  }
+  /* the loop above keeps running wherever the orb is silent: the ears
+     survive a visit to a surface that shows no orb, and only the RENDERING
+     stands down. */
+  if (orbIsSilentOn(pathname)) return null;
 
   /* the small ring pokes ~21/24px below the 56px bar — surfaces hang just
      under that (user redesign, 2026-08-22). A PINNED orb gets its panel

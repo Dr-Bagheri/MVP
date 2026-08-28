@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { act, cleanup, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { WorkflowCard } from "@/api/types";
 
@@ -183,5 +183,46 @@ describe("the workflow detail page", () => {
     expect(inert.tagName).not.toBe("BUTTON");
     expect(inert.getAttribute("aria-disabled")).toBe("true");
     expect(screen.getByText("این کلید هنوز روی این سرور در دسترس نیست.")).toBeTruthy();
+  });
+
+  /**
+   * The pill's knob placement, asserted through the ONE thing a class list can
+   * be wrong about here.
+   *
+   * The ON state used to be built as a base (`ps-1 pe-4`) plus an appended
+   * override (`pe-1 ps-4`), which reads as "the later one wins" and is not how
+   * Tailwind resolves anything — two utilities from the same group are settled
+   * by the stylesheet's order, so the pill carried `pe-4` and its knob floated
+   * off the edge it sits against. Nothing in jsdom computes Tailwind, so the
+   * check is that the class list states ONE value per side: a class list
+   * naming both is ambiguous whatever the stylesheet happens to decide.
+   */
+  it("states one padding per side on the pill, so the knob cannot land by coin toss", async () => {
+    ME = { ...BASE_ME, auto_draft_replies: true };
+    await open("draft-email-replies");
+    const classes = screen.getByRole("switch").className.split(/\s+/);
+    for (const [narrow, wide] of [["ps-1", "ps-4"], ["pe-1", "pe-4"]]) {
+      expect(
+        classes.includes(narrow!) && classes.includes(wide!),
+        `the pill names both ${narrow} and ${wide}`,
+      ).toBe(false);
+    }
+    // and the ON face is the one Sana shows: green, label «آماده», knob trailing
+    expect(classes).toContain("bg-success");
+    expect(screen.getByRole("switch").textContent).toBe("آماده");
+  });
+
+  /**
+   * The ⋯ menu — the page's only door to running a workflow now that the list
+   * has none. Opened rather than inspected in source: the panel is a portal,
+   * so "the trigger exists" and "the items exist" are genuinely two facts.
+   */
+  it("carries Run now and the switch's other entrance in the kebab", async () => {
+    ME = { ...BASE_ME, auto_draft_replies: true };
+    await open("draft-email-replies");
+
+    fireEvent.click(screen.getByRole("button", { name: "کارهای این گردش‌کار" }));
+    const items = within(screen.getByRole("menu")).getAllByRole("menuitem");
+    expect(items.map((item) => item.textContent)).toEqual(["اجرای اکنون", "خاموش کردن"]);
   });
 });

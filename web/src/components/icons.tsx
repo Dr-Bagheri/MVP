@@ -277,6 +277,12 @@ export const IconSpeaker = (p: SVGProps<SVGSVGElement>) => (
 export const IconMail = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><rect x="3" y="5.5" width="18" height="13" rx="2" /><path d="m3.4 7 8.6 6 8.6-6" /></svg>
 );
+/** a paper plane: the mail workflow SENDS, and db/0065 calls its icon `send`.
+    Drawn open (a stroke outline, not a filled dart) so it reads at 40px in a
+    tile the same way the envelope and the calendar do. */
+export const IconSend = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><path d="M21 3.5 10.8 13.7" /><path d="M21 3.5 14.6 21l-3.8-7.3L3.5 9.9z" /></svg>
+);
 /** a month grid — calendar as a SOURCE, beside the envelope */
 export const IconCalendar = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><rect x="3.5" y="5" width="17" height="15" rx="2" /><path d="M3.5 10h17" /><path d="M8 3.5v3M16 3.5v3" /></svg>
@@ -315,6 +321,7 @@ export const ICONS = {
   "hide": IconHide,
   "history": IconHistory,
   "mail": IconMail,
+  "send": IconSend,
   "mailPlus": IconMailPlus,
   "merge": IconMerge,
   "mic": IconMic,

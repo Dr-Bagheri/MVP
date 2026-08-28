@@ -463,6 +463,35 @@
   }
 }
 
+/* A message ARRIVES rather than appearing (user directive, 2026-08-27:
+   "give it a effect of coming slowly in to the chat"). Slow and small: the
+   thread is read, not watched, and a large motion on every turn becomes
+   something to wait through. The rise is 6px — enough to read as arrival,
+   not enough to reflow anything under it. */
+@keyframes message-arrives {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.message-arrives {
+  animation: message-arrives 0.42s cubic-bezier(0.22, 0.9, 0.3, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .message-arrives { animation: none; }
+}
+
+/* The wait, before a single token has landed. A spinner rather than a
+   caret: a blinking cursor says "typing", and the honest state here is
+   "thinking" — nothing has been written yet. */
+@keyframes thinking-spin {
+  to { transform: rotate(360deg); }
+}
+.thinking-spin {
+  animation: thinking-spin 0.9s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .thinking-spin { animation-duration: 2.4s; }
+}
+
 /* notifications EMERGE from the BELL (user directive, 2026-08-22,
    superseding pop-from-the-orb): each toast drops out of the top-bar
    bell's corner — small at the bell, settling into place below it.

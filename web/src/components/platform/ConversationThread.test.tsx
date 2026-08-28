@@ -128,12 +128,13 @@ describe("ConversationThread", () => {
     // the partial text is kept — it is what the assistant really said
     expect(screen.getByText("سه موضوع مطرح شد: نخست")).toBeTruthy();
     expect(screen.getByText(/ناتمام ماند؛ ادامه‌اش نوشته نشد/)).toBeTruthy();
-    // annotation, not a turn: still exactly two messages in the record
-    // counted STRUCTURALLY: the assistant's text now sits in a wrapper
-    // span (generative blocks), so a text-query on the bubble div matches
-    // only bare-text bubbles — the count's meaning is "how many message
-    // bubbles exist", and the DOM is the honest place to ask that
-    expect(document.querySelectorAll("div.rounded-2xl")).toHaveLength(2);
+    // annotation, not a turn: still exactly two messages in the record.
+    // Counted on `.message-arrives`, which is one element PER MESSAGE, not
+    // on a style class: this line used to count `div.rounded-2xl` and broke
+    // the day answers stopped being boxed (2026-08-27) — the styling
+    // changed and the claim did not, which is the whole reason a structural
+    // marker beats a visual one here.
+    expect(document.querySelectorAll("div.message-arrives")).toHaveLength(2);
   });
 
   it("does NOT mark a complete answer as truncated", () => {

@@ -46,10 +46,17 @@ interface TrailEntry {
  * the filesystem by `breadcrumbs.test.ts` rather than trusted.
  */
 export const TRAIL: Readonly<Record<string, TrailEntry>> = {
-  /* the landing page is the DASHBOARD (2026-08-25); the assistant hub is a
-     destination under it, at its own address */
-  "/": { label: "platform.dashboard" },
-  "/assistant": { label: "platform.assistant", parent: "/" },
+  /*
+   * The landing page is the ASSISTANT again (user directive, 2026-08-27:
+   * "deactivate dashboard for now, we will use it later"). `/` redirects to
+   * `/assistant`, so the root crumb names the room a person actually lands
+   * in — a crumb pointing at a redirect is a label whose destination is a
+   * different page, which is the /calls lesson.
+   */
+  "/": { label: "platform.assistant" },
+
+  /* the connected accounts a workflow runs on, beside the workflows */
+  "/integrations": { label: "platform.integrations", parent: "/workflows" },
 
   /*
    * Echo is an app inside the platform (the pivot), so everything of Echo's
@@ -127,6 +134,7 @@ export const TRAIL: Readonly<Record<string, TrailEntry>> = {
  * rather than letting it be skipped quietly.
  */
 export const NO_TRAIL: Readonly<Record<string, string>> = {
+  "/assistant": "the root's own destination (`/` redirects here): a crumb would read \"Assistant / Assistant\", and a one-crumb trail is a label that navigates nowhere",
   "/sign-in": "auth screens render outside the shell — there is no bar to hold a trail, and no 'up' from signing in",
   "/sign-up": "auth screens render outside the shell",
   "/pending": "auth screens render outside the shell",

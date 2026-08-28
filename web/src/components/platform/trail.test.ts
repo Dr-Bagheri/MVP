@@ -71,7 +71,9 @@ function messageKeyExists(catalogue: Record<string, unknown>, key: string): bool
 describe("breadcrumb trail", () => {
   it("puts the ancestors above the page, root first", () => {
     expect(trailFor("/management/users")).toEqual([
-      { href: "/", label: "platform.dashboard" },
+      /* the root is the ASSISTANT since 2026-08-27 (the dashboard is parked
+         and `/` redirects there) — the crumb names where clicking it lands */
+      { href: "/", label: "platform.assistant" },
       { href: "/management", label: "platform.management" },
       { href: "/management/users", label: "management.section.users" },
     ]);

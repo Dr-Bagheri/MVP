@@ -876,6 +876,22 @@ principle a number:
 
 ## M22 — The NeurAI platform [user directive + design verdict, 2026-08-13]
 
+> **[AMENDED 2026-08-27 — the landing page, and where the orb is silent]**
+> `/` is the ASSISTANT again ("deactivate dashboard for now, we will use it
+> later"): the root redirects to `/assistant`, and the dashboard is PARKED,
+> not deleted — `Dashboard.tsx`, the widget registry and every card stay, so
+> bringing the board back is one nav entry and one route file.
+>
+> And the orb stands down on the assistant's own surfaces — assistant,
+> conversations, workflows, integrations, agents ("orb will pop out only when
+> you are in somewhere else, not for history or workflow or agent"). The rule
+> is now one predicate, `orbIsSilentOn`, rather than a third early return
+> nobody could see from outside; its test carries the control that matters,
+> because a predicate answering "silent" unconditionally satisfies every
+> positive case and is completely wrong. The half that had to move with it:
+> anything that used to hand a conversation to the orb from one of those
+> surfaces now NAVIGATES, or it would be a row that clicks into nothing.
+
 **M18 is REVISED: NeurAI is the platform; Echo (اکو) is an app inside it.**
 Echo Mobile naming unaffected. Full directive record: docs/PLATFORM-BRIEF.md;
 design authority: design-system/neurai-platform/ (PROPOSAL-01/-02 +

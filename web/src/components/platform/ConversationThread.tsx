@@ -76,17 +76,45 @@ export function ConversationThread({
           isUser && !streaming && messages[i + 1] === undefined;
 
         return (
-          <div key={m.id} className={isUser ? "flex justify-end" : "flex justify-start"}>
+          <div
+            key={m.id}
+            className={`message-arrives ${isUser ? "flex justify-end" : "flex justify-start"}`}
+          >
             <div className={isUser ? "max-w-[85%]" : "w-full"}>
+              {/*
+                THE ANSWER HAS NO BOX (user directive, 2026-08-27: "lose the
+                text box in the ai assistant, just the text").
+                
+                A question is a thing someone said, so it keeps its bubble on
+                the end side. An answer is the page talking back — boxing it
+                makes the assistant a participant in a chat window instead of
+                the surface itself, and at full width a border around every
+                reply is a rectangle the eye has to cross to reach the words.
+              */}
               <div
                 className={
                   isUser
                     ? "rounded-2xl rounded-ee-sm bg-accent-soft px-3.5 py-2.5 text-sm leading-7 text-fg"
-                    : "rounded-2xl rounded-es-sm border border-border bg-surface px-3.5 py-2.5 text-sm leading-7 text-fg"
+                    : "text-sm leading-7 text-fg"
                 }
               >
                 {isUser ? m.content : <AnswerContent text={m.content} />}
-                {m.streaming ? <span className="ms-1 animate-pulse text-fg-muted">▍</span> : null}
+                {/*
+                  Two different waits, said differently. Nothing written yet =
+                  THINKING, and a spinner is the honest picture. Mid-sentence =
+                  still typing, and the caret belongs there. A blinking cursor
+                  in front of an empty answer claims words are arriving when
+                  none have.
+                */}
+                {m.streaming && m.content === "" ? (
+                  <span className="inline-flex items-center gap-2 text-fg-muted">
+                    <ThinkingMark />
+                    <span className="text-xs">{t("thinking")}</span>
+                  </span>
+                ) : null}
+                {m.streaming && m.content !== "" ? (
+                  <span className="ms-1 animate-pulse text-fg-muted">▍</span>
+                ) : null}
               </div>
 
               {m.tool_calls.length > 0 ? (
@@ -439,5 +467,21 @@ function SpeakButton({ text }: { text: string }) {
     >
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><path d="M15.54 8.46a5 5 0 0 1 0 7.07" /><path d="M19.07 4.93a10 10 0 0 1 0 14.14" /></svg>
     </button>
+  );
+}
+
+/** The wait's mark: a ring with a gap, turning. */
+function ThinkingMark() {
+  return (
+    <svg viewBox="0 0 20 20" className="thinking-spin h-4 w-4" aria-hidden>
+      <circle cx="10" cy="10" r="7.5" fill="none" stroke="currentColor" strokeOpacity="0.25" strokeWidth="2" />
+      <path
+        d="M10 2.5a7.5 7.5 0 0 1 7.5 7.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
   );
 }
