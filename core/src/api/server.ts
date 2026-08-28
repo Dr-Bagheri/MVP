@@ -40,7 +40,7 @@ import { createAgentRuntime } from "../agent/runtime.ts";
 import { findProposal, recordDecision } from "../agent/proposals.ts";
 import { applyProposal, createWriteTools } from "../agent/write-tools.ts";
 import { createNamedSkillResolver, listResolvedSkills } from "../agent/skill-store.ts";
-import { createAssistantAgent, listAssistantAgents, resolveAssistantAgent } from "../agent/agent-store.ts";
+import { agentWorkflows, createAssistantAgent, listAssistantAgents, resolveAssistantAgent, setAgentWorkflows, updateAssistantAgent } from "../agent/agent-store.ts";
 import { createConnectorsRepo, type ConnectorOAuthOptions, type ConnectorProvider } from "./connectors.ts";
 import { createMailDraftsRepo } from "./mail-drafts.ts";
 import { createTts } from "./tts.ts";
@@ -1834,8 +1834,56 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       description: typeof body.description === "string" ? body.description : undefined,
       model: body.model === null ? null : typeof body.model === "string" ? body.model : undefined,
       tools: Array.isArray(body.tools) ? [...new Set(body.tools)] as string[] : undefined,
+      icon: typeof body.icon === "string" ? body.icon : undefined,
+      color: typeof body.color === "string" ? body.color : undefined,
+      web: typeof body.web === "boolean" ? body.web : undefined,
     });
     return reply.code(201).send(agent);
+  });
+
+  /** M47: edit an agent. RLS is the wall; a row the caller may not write
+      updates nothing and answers the same not-found as a missing one. */
+  app.patch("/v1/agents/:id", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    if (typeof body.model === "string" && body.model !== "") models.assertAskable(body.model);
+    if (body.tools !== undefined && (
+      !Array.isArray(body.tools)
+      || body.tools.some((tool) => typeof tool !== "string" || !availableTools().includes(tool))
+    )) {
+      throw new ValidationError("agent tools must be known tool names");
+    }
+    return reply.send(await updateAssistantAgent(options.db, identity, id, {
+      name: typeof body.name === "string" ? body.name : undefined,
+      description: typeof body.description === "string" ? body.description : undefined,
+      instructions: typeof body.instructions === "string" ? body.instructions : undefined,
+      model: body.model === null ? null : typeof body.model === "string" ? body.model : undefined,
+      tools: Array.isArray(body.tools) ? [...new Set(body.tools)] as string[] : undefined,
+      icon: typeof body.icon === "string" ? body.icon : undefined,
+      color: typeof body.color === "string" ? body.color : undefined,
+      web: typeof body.web === "boolean" ? body.web : undefined,
+      enabled: typeof body.enabled === "boolean" ? body.enabled : undefined,
+    }));
+  });
+
+  /** M47: what an agent carries — for the overview that opens with it. */
+  app.get("/v1/agents/:id/workflows", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id } = request.params as { id: string };
+    return reply.send({ workflows: await agentWorkflows(options.db, identity, id) });
+  });
+
+  app.put("/v1/agents/:id/workflows", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { workflow_ids?: unknown };
+    if (!Array.isArray(body.workflow_ids)
+      || body.workflow_ids.some((entry) => typeof entry !== "string")) {
+      throw new ValidationError("workflow_ids must be a list of ids");
+    }
+    await setAgentWorkflows(options.db, identity, id, body.workflow_ids as string[]);
+    return reply.send({ workflows: await agentWorkflows(options.db, identity, id) });
   });
 
   const workflowRuns = createWorkflowRunsRepo(options.db);
@@ -2122,7 +2170,27 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     const parsedProvider = connectorProvider(provider);
     if (source === "calendar") return reply.send({ items: await connectors.calendarEvents(identity, parsedProvider) });
     if (source === "mail") return reply.send({ items: await connectors.mailMessages(identity, parsedProvider) });
+    /* Google-only lenses; asking Microsoft for them is a caller error, and
+       naming it beats a provider 404 three layers down */
+    if (source === "drive" && parsedProvider === "google") {
+      return reply.send({ items: await connectors.driveFiles(identity) });
+    }
+    if (source === "meet" && parsedProvider === "google") {
+      return reply.send({ items: await connectors.meetEvents(identity) });
+    }
     throw new ValidationError("unknown connector source", { code: "connector_source_invalid" });
+  });
+
+  /**
+   * Disconnect one provider (M47). The person's own act on their own grant
+   * — requireActive, never admin: an admin governs the org, not a
+   * colleague's mailbox (D29's whole point).
+   */
+  app.delete("/v1/connectors/:provider", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { provider } = request.params as { provider: unknown };
+    await connectors.disconnect(identity, connectorProvider(provider));
+    return reply.code(204).send();
   });
 
   // ---- skill authoring (M29, Part 2) --------------------------------------
@@ -3195,7 +3263,10 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       model: chosenModel ?? undefined,
       callId: typeof body.call_id === "string" ? body.call_id : null,
       callIds,
-      web: body.web === true,
+      /* the caller's toggle OR the agent's own default (M47): an agent
+         built to search the web should not need the person to remember to
+         flip the switch on every ask made through it */
+      web: body.web === true || selectedAgent?.web === true,
       clientTools: advertisedClientTools,
       autonomy,
       locale: body.locale === "en" ? "en" : "fa",

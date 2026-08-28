@@ -37,6 +37,9 @@ export interface ConnectorStatus {
   expires_at: string | null;
   /** the granted scopes include drafting — see DRAFT_SCOPE */
   can_draft: boolean;
+  /** the granted scopes include Drive's read — connections made before the
+      scope joined the consent say "reconnect", not "broken" */
+  can_drive: boolean;
   /**
    * When the poller last looked at this mailbox, and how many messages it
    * has passed through. "Connected" answers a question nobody asks; these
@@ -148,6 +151,15 @@ const GOOGLE_SCOPES = [
    * is how a connection becomes something a person is right to refuse.
    */
   "https://www.googleapis.com/auth/gmail.send",
+  /*
+   * Drive, read-only (user directive, 2026-08-28: Drive joins the
+   * integrations). `drive.readonly` and not the full `drive` scope — the
+   * product reads files as knowledge, it does not write, share or delete
+   * them, and asking for a permission with no code path is how a consent
+   * screen becomes something a person is right to refuse. Restricted scope:
+   * Google's app verification applies once the OAuth app leaves testing.
+   */
+  "https://www.googleapis.com/auth/drive.readonly",
 ] as const;
 const MICROSOFT_SCOPES = [
   "openid", "profile", "email", "offline_access", "User.Read",
@@ -539,6 +551,12 @@ export function createConnectorsRepo(db: Db, options: ConnectorOAuthOptions = {}
            * standing in for two different states again.
            */
           can_draft: strings(row?.scopes).includes(DRAFT_SCOPE[provider]),
+          /* same derivation as can_draft: what the provider GRANTED, never
+             what we asked for — a connection made before Drive joined the
+             consent is connected and cannot list files, and the screen has
+             to be able to say "reconnect to grant" instead of failing */
+          can_drive: provider === "google"
+            && strings(row?.scopes).includes("https://www.googleapis.com/auth/drive.readonly"),
           polled_at: row?.polled_at ? iso(row.polled_at) : null,
           messages_seen: Number(row?.messages_seen ?? 0),
         };
@@ -606,11 +624,129 @@ export function createConnectorsRepo(db: Db, options: ConnectorOAuthOptions = {}
            person narrowed is a connection that cannot draft, and it says so
            from the first render rather than at the first attempt */
         can_draft: payload.scopes.includes(DRAFT_SCOPE[provider]),
+        can_drive: provider === "google"
+          && payload.scopes.includes("https://www.googleapis.com/auth/drive.readonly"),
         /* a fresh connection has been looked at zero times, which is a fact
            and not a gap — the table says "Active" until the first poll */
         polled_at: null,
         messages_seen: 0,
       };
+    },
+
+    /**
+     * **Disconnect** (user directive, 2026-08-28: settings on every
+     * integration, "you can disconnect").
+     *
+     * Three moves, in the order that leaves the least behind on a failure:
+     *
+     *  1. tell the PROVIDER — Google's revoke endpoint kills the refresh
+     *     token at the source, so the grant dies even if our rows survive a
+     *     crash one line later. Best-effort: a provider outage must not
+     *     leave a person unable to disconnect their own account.
+     *  2. destroy the token material — the secret row cannot be deleted
+     *     (echo_app holds no DELETE there, by design) but its payload can
+     *     be overwritten with nothing, which is the part that matters:
+     *     after this line the database holds no credential.
+     *  3. mark the connection revoked. Reads gate on status='connected', so
+     *     the emptied payload is unreachable; a later reconnect is
+     *     complete()'s ordinary upsert.
+     *
+     * NOT a delete of the connection row: polled_at/messages_seen are the
+     * honest history of what the product did with the grant, and a
+     * reconnect should not present a used mailbox as never-seen. The mail
+     * cursor IS cleared — "on" means from now on, same as the switch.
+     */
+    async disconnect(identity: Identity, provider: ConnectorProvider): Promise<void> {
+      const conn = await connection(identity, provider);
+      if (provider === "google") {
+        try {
+          const { token: material } = await token(identity, provider);
+          await fetch("https://oauth2.googleapis.com/revoke", {
+            method: "POST",
+            headers: { "content-type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({ token: material.refreshToken ?? material.accessToken }),
+          });
+        } catch {
+          /* the provider could not be told; the local revocation below still
+             stands, and the person can also revoke at myaccount.google.com */
+        }
+      }
+      /* Microsoft has no token-revocation endpoint for this flow; local
+         revocation is the whole mechanism there, stated rather than faked */
+      await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe(
+        /* an empty bytea, passed as a PARAMETER — a string literal here has
+           already been mangled once by tooling escaping, which is its own
+           argument for never spelling bytes inside SQL text */
+        `update echo.connector_secret set encrypted_payload = $2
+          where connection_id = $1`, [conn.id, new Uint8Array(0)]));
+      await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe(
+        `update echo.connector_connection
+            set status = 'revoked', revoked_at = now(),
+                mail_cursor = null, mail_cursor_at = null
+          where id = $1`, [conn.id]));
+    },
+
+    /**
+     * The 20 most recently touched Drive files, as items (M47's knowledge
+     * listing and the integration detail page's asset table). Metadata only
+     * — name, type, when — which is what a listing is; reading a file's
+     * CONTENT is a different act with its own moment.
+     */
+    async driveFiles(identity: Identity): Promise<ConnectorItem[]> {
+      const bearer = await access(identity, "google");
+      const data = await providerFetch(
+        `https://www.googleapis.com/drive/v3/files?${new URLSearchParams({
+          pageSize: "20", orderBy: "modifiedTime desc",
+          fields: "files(id,name,mimeType,modifiedTime)",
+        })}`,
+        { headers: { authorization: `Bearer ${bearer}` } },
+      );
+      return (Array.isArray(data.files) ? data.files : []).flatMap((item): ConnectorItem[] => {
+        if (!item || typeof item !== "object") return [];
+        const record = item as Record<string, unknown>;
+        return typeof record.id === "string"
+          ? [{
+              id: record.id,
+              title: text(record.name) || "Untitled file",
+              /* the mime type is the honest subtitle — a Drive listing that
+                 hides what kind of thing each row is makes every row look
+                 like a document */
+              subtitle: text(record.mimeType),
+              occurred_at: text(record.modifiedTime) || null,
+            }]
+          : [];
+      });
+    },
+
+    /**
+     * Upcoming meetings that carry a Google Meet link — the calendar,
+     * narrowed to the rows Meet is about. Reuses the calendar read and its
+     * scope: Meet is not a second grant, it is a lens on the one the person
+     * already gave, and saying so in code keeps the consent screen honest.
+     */
+    async meetEvents(identity: Identity): Promise<ConnectorItem[]> {
+      const bearer = await access(identity, "google");
+      const now = new Date().toISOString();
+      const data = await providerFetch(
+        `https://www.googleapis.com/calendar/v3/calendars/primary/events?${new URLSearchParams({
+          timeMin: now, singleEvents: "true", orderBy: "startTime", maxResults: "50",
+        })}`,
+        { headers: { authorization: `Bearer ${bearer}` } },
+      );
+      return (Array.isArray(data.items) ? data.items : []).flatMap((item): ConnectorItem[] => {
+        if (!item || typeof item !== "object") return [];
+        const record = item as Record<string, unknown>;
+        const conference = record.conferenceData as Record<string, unknown> | undefined;
+        const hasMeet = typeof record.hangoutLink === "string" || conference !== undefined;
+        if (!hasMeet || typeof record.id !== "string") return [];
+        const start = record.start as Record<string, unknown> | undefined;
+        return [{
+          id: record.id,
+          title: text(record.summary) || "Untitled meeting",
+          subtitle: text(record.hangoutLink),
+          occurred_at: text(start?.dateTime) || text(start?.date) || null,
+        }];
+      }).slice(0, 20);
     },
 
     async calendarEvents(identity: Identity, provider: ConnectorProvider): Promise<ConnectorItem[]> {

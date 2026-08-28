@@ -1793,6 +1793,49 @@ useful.
 calendar is not less personal than an inbox, and an admin does not switch it
 on for somebody else.
 
+## M47 — Integrations you can govern; agents that carry their work
+[user directive, 2026-08-28, with Sana's integration detail and agent editor
+as the reference: per-user, changeable after the fact, selectable rows,
+connect/disconnect, "when the agent comes up the workflow it has must come
+up with it"]
+
+**Disconnect exists now, and it revokes at the provider.** Google's revoke
+endpoint is told first (best-effort — a provider outage must not trap a
+person in their own grant), the secret's payload is overwritten with empty
+bytes (the row cannot be deleted; the credential inside it can die), and the
+connection is marked revoked. The row itself survives: polled_at and
+messages_seen are the honest history of what the product did with the
+grant. The mail cursor clears — "on" means from now on. requireActive and
+never admin: an admin governs the org, not a colleague's mailbox (D29).
+
+**Drive and Meet join as lenses, not new grants.** Drive adds
+`drive.readonly` to the Google consent (read-only deliberately — the
+product reads files, it does not write, share or delete them) with
+`can_drive` derived from what was GRANTED, so a pre-Drive connection says
+"reconnect", never "broken" (the can_draft pattern). Meet is the calendar
+narrowed to events carrying a Meet link — the same scope the person already
+gave, said so in code, so the consent screen stays honest.
+
+**agent_workflow (0122/0123): what an agent carries.** A membership row in
+workflow_mute's shape — detach flips `enabled`, never deletes, because the
+first draft's DELETE grant turned the negative-space guard red within the
+hour and D3's closed list (echo_purge deletes; call_note's author-delete is
+the single exception) is worth more than a tidy row count. Write wall
+restates 0065's agent wall through the join: owners arrange their own
+user-level agents, admins the org's, and an admin cannot rearrange a
+member's private agent. **echo_agent cannot even read the table** — an
+agent reading which workflows steer it is a prompt writing itself.
+
+**Agents became editable** (PATCH, RLS as the wall: a row the caller may
+not write updates nothing and answers not-found), with icon/color/web on
+the wire. `web` is a column and not a tools[] entry — tools name CALLABLE
+functions, web is a property of the model call, and one list holding both
+is how a vocabulary grows a lie. An ask through an agent inherits the
+agent's web default.
+
+Known trade, recorded: setAgentWorkflows is a whole-set write — the
+allowed_models lost-update hazard, same shape, same acceptance.
+
 ## M46 — The mail flow becomes a graph [user directive, 2026-08-28: "all
 these is not just a text that we show, it must be editable and part of the
 puzzled structure that we built ... workflow is a loop engineering of the
