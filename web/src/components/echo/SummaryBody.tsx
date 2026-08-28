@@ -24,23 +24,42 @@ const HEADING_BOLD = /^\*\*(.+?)\*\*[:：]?\s*$/;
 const BULLET = /^[-*•]\s+(.+)$/;
 const NUMBERED = /^(?:\d+|[۰-۹]+)[.)،-]\s+(.+)$/;
 
+/**
+ * The heading a (trimmed) line declares, or null — ONE spelling of the
+ * dialect's heading rule. The parser below reads with it, and summaryLanes'
+ * `appendLaneItem` WRITES with it: a writer carrying its own copy of these
+ * regexes is how an appended action item lands outside the lane the reader
+ * claims, with both files individually correct.
+ */
+export function headingTextOf(line: string): string | null {
+  const md = HEADING_MD.exec(line);
+  const bold = HEADING_BOLD.exec(line);
+  if (md || bold) {
+    // the colon may live INSIDE the bold («**خلاصه:**») — strip either way
+    return (md?.[1] ?? bold?.[1] ?? "").trim().replace(/[:：]$/, "").trim();
+  }
+  // a short line ending with a colon is a chapter title in the models'
+  // own house style («تصمیم‌ها:») — long lines with colons are prose
+  if (line.length <= 60 && /[:：]$/.test(line) && !/[.؟?!]/.test(line)) {
+    return line.replace(/[:：]$/, "").trim();
+  }
+  return null;
+}
+
+/** Same sharing reason as `headingTextOf` — the lane writer must recognise
+    an existing bullet exactly the way this parser does. */
+export function isBulletLine(line: string): boolean {
+  return BULLET.test(line);
+}
+
 export function parseSummary(text: string): SummaryBlock[] {
   const blocks: SummaryBlock[] = [];
   for (const rawLine of text.split("\n")) {
     const line = rawLine.trim();
     if (line === "") continue;
-    const md = HEADING_MD.exec(line);
-    const bold = HEADING_BOLD.exec(line);
-    if (md || bold) {
-      // the colon may live INSIDE the bold («**خلاصه:**») — strip either way
-      const heading = (md?.[1] ?? bold?.[1] ?? "").trim().replace(/[:：]$/, "").trim();
+    const heading = headingTextOf(line);
+    if (heading !== null) {
       blocks.push({ kind: "heading", text: heading });
-      continue;
-    }
-    // a short line ending with a colon is a chapter title in the models'
-    // own house style («تصمیم‌ها:») — long lines with colons are prose
-    if (line.length <= 60 && /[:：]$/.test(line) && !/[.؟?!]/.test(line)) {
-      blocks.push({ kind: "heading", text: line.replace(/[:：]$/, "").trim() });
       continue;
     }
     const bullet = BULLET.exec(line);

@@ -17,7 +17,7 @@ import {
 } from "@/components/icons";
 import { PageContainer, SectionMenu } from "@/components/scaffold";
 import { SummaryBody, parseSummary } from "@/components/echo/SummaryBody";
-import { summaryLanes } from "@/lib/summaryLanes";
+import { appendLaneItem, summaryLanes, type Lane } from "@/lib/summaryLanes";
 import { faDisplay } from "@/lib/faDisplay";
 import { suggestSpeakerPeople } from "@/lib/speakerSuggest";
 import {
@@ -162,6 +162,18 @@ export default function CallDetailPage({
   const [confirmTemplateDelete, setConfirmTemplateDelete] = useState<string | null>(null);
   /** the note about to be deleted — armed by the note row's «حذف» */
   const [confirmNoteDelete, setConfirmNoteDelete] = useState<string | null>(null);
+  /** the notes section's own ADD box (user directive, 2026-08-28: the two
+      side-menu sections take data, not just show it) — multi-line, and
+      optionally anchored at the playhead the sticky player is showing */
+  const [noteDraft, setNoteDraft] = useState("");
+  const [noteAtPlayhead, setNoteAtPlayhead] = useState(false);
+  /** manual lane items (same directive) — each travels through the 0092
+      human-edit door as ONE new line in the summary document */
+  const [actionDraft, setActionDraft] = useState("");
+  const [decisionDraft, setDecisionDraft] = useState("");
+  /** one in-flight door write at a time — a double Enter must not mint two
+      human versions carrying the same item */
+  const [laneBusy, setLaneBusy] = useState(false);
   const [regenBusy, setRegenBusy] = useState(false);
   useEffect(() => { setCustoms(customTemplates()); }, []);
 
@@ -438,6 +450,9 @@ export default function CallDetailPage({
   const loadedIdx = useRef<number | null>(null);
   /** #1 the bounded transcript scroller (5-ish lines, its own scrollbar) */
   const listRef = useRef<HTMLDivElement | null>(null);
+  /** the section kebabs' «افزودن …» items land the cursor in these */
+  const noteBoxRef = useRef<HTMLTextAreaElement | null>(null);
+  const actionBoxRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     void api.getCall(id).then(setCall);
@@ -731,6 +746,60 @@ export default function CallDetailPage({
     }
   }
 
+  /**
+   * The notes section's own composer (user directive, 2026-08-28). The list
+   * ADOPTS the returned row — the server authored its id and stamp — and
+   * the row is slotted where the wire's own ordering would put it, so the
+   * screen and the next full load agree. No toast on success: the row
+   * appearing in the list the person is looking at IS the feedback (the
+   * line-note and selection-note toasts exist because those land in a
+   * section the person is NOT looking at).
+   */
+  async function saveNoteDraft(): Promise<void> {
+    const body = noteDraft.trim();
+    if (body === "") return;
+    try {
+      const row = await api.addCallNote(id, {
+        kind: "note",
+        at_ms: noteAtPlayhead ? Math.floor(playheadMs) : null,
+        body,
+      });
+      setNotes((prev) => [...prev, row].sort(noteOrder));
+      setNoteDraft("");
+      setNoteAtPlayhead(false);
+    } catch {
+      notify(tCommon("actionFailed"), "warn");
+    }
+  }
+
+  /**
+   * A manual action item / decision goes through the SAME door as every
+   * human summary edit (echo.edit_summary, db/0092): the item is appended
+   * into the shown summary's own structure (lib/summaryLanes writes with
+   * the reader's rule) and comes back as a new 'human' version — one
+   * writer, one document, never a parallel action-items store that could
+   * disagree with it. With no summary yet the door writes version 1, so a
+   * record whose summarizer never ran can still carry its owner's list.
+   */
+  async function addLaneItem(lane: Lane): Promise<void> {
+    const item = (lane === "actions" ? actionDraft : decisionDraft).trim();
+    if (item === "" || laneBusy) return;
+    setLaneBusy(true);
+    try {
+      const { version } = await api.editSummary(
+        id, appendLaneItem(summary?.body ?? "", lane, item),
+      );
+      (lane === "actions" ? setActionDraft : setDecisionDraft)("");
+      const all = await api.getSummaries(id);
+      setVersions(all);
+      setShownVersion(version);
+    } catch (cause) {
+      editFailNotify(cause);
+    } finally {
+      setLaneBusy(false);
+    }
+  }
+
   useCrumbTitle(call?.title);
 
   const summary = versions.find((v) => v.version === shownVersion) ?? null;
@@ -879,6 +948,85 @@ export default function CallDetailPage({
           onSelect: () => setTagsOpen((v) => !v),
         }]
       : []),
+  ];
+
+  /**
+   * THE SECTION KEBABS (user directive, 2026-08-28: "kebab menu in the
+   * action and note are not relevant — fix the items inside them"). On the
+   * actions and notes sections the only ⋯ in view was the page header's,
+   * whose items are about the whole record; each section now carries its
+   * own menu whose items are about the SECTION, and the record-wide menu
+   * keeps living on the page header alone.
+   */
+  function copyLanesText(): void {
+    const parts: string[] = [];
+    if (lanes.actions.length > 0) {
+      parts.push(`${t("actionsHeading")}:`, ...lanes.actions.map((item) => `- ${item}`));
+    }
+    if (lanes.decisions.length > 0) {
+      if (parts.length > 0) parts.push("");
+      parts.push(`${t("decisionsHeading")}:`, ...lanes.decisions.map((item) => `- ${item}`));
+    }
+    void navigator.clipboard.writeText(parts.join("\n")).then(() => notify(t("copied")));
+  }
+
+  function copyNotesText(): void {
+    const text = notes
+      .map((note) => (note.at_ms !== null
+        ? `[${formatClock(note.at_ms / 1000, locale)}] ${note.body}`
+        : note.body))
+      .join("\n");
+    void navigator.clipboard.writeText(text).then(() => notify(t("copied")));
+  }
+
+  const actionsMenuItems = [
+    {
+      key: "actions-copy",
+      label: t("copyActions"),
+      icon: <IconCopy />,
+      disabled: lanes.actions.length === 0 && lanes.decisions.length === 0,
+      onSelect: copyLanesText,
+    },
+    {
+      /* the same regenerate the summary's template cards run — the
+         actionsEmpty sentence promises exactly this move, so the menu
+         offers it where the promise is read */
+      key: "actions-regen",
+      label: t("regenTitle"),
+      icon: <IconRetry />,
+      sub: SUMMARY_TEMPLATES.map((k) => {
+        const Icon = TEMPLATE_ICON[k];
+        return {
+          key: `actions-regen-${k}`,
+          label: t(TEMPLATE_LABEL_KEY[k]),
+          icon: <Icon width={14} height={14} />,
+          disabled: regenBusy || call.status !== "ready",
+          onSelect: () => void regenerate({ template: k, label: k }),
+        };
+      }),
+    },
+    {
+      key: "actions-summary",
+      label: t("goToSummary"),
+      icon: <IconFileText />,
+      onSelect: () => setSection("summary"),
+    },
+  ];
+
+  const notesMenuItems = [
+    {
+      key: "notes-add",
+      label: t("noteAdd"),
+      icon: <IconPlus />,
+      onSelect: () => noteBoxRef.current?.focus(),
+    },
+    {
+      key: "notes-copy",
+      label: t("copyNotes"),
+      icon: <IconCopy />,
+      disabled: notes.length === 0,
+      onSelect: copyNotesText,
+    },
   ];
 
   return (
@@ -1969,59 +2117,105 @@ export default function CallDetailPage({
 
         {/* ── ACTIONS & DECISIONS — its own section (user directive,
             2026-08-25): the lanes the summary's own structure declares,
-            read as checklists; ticking is a reading aid, not a write ──── */}
+            read as checklists; ticking is a reading aid, not a write.
+            Since 2026-08-28 each lane also TAKES items — through the 0092
+            door, into the document the lanes are read from ──────────────── */}
         {section === "actions" ? (
           <section className="border-t border-border px-5 py-4">
+            <div className="no-print mb-3 flex items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold text-fg">{t("sectionActions")}</h2>
+              <KebabMenu label={t("actionsMenu")} items={actionsMenuItems} />
+            </div>
             {lanes.actions.length === 0 && lanes.decisions.length === 0 ? (
-              <p className="text-sm leading-7 text-fg-muted">{t("actionsEmpty")}</p>
-            ) : (
-              <div className="grid gap-6 md:grid-cols-2">
-                <div>
-                  <h2 className="mb-3 text-sm font-semibold text-fg">{t("actionsHeading")}</h2>
-                  {lanes.actions.length === 0 ? (
-                    <p className="text-sm text-fg-muted">{t("laneEmpty")}</p>
-                  ) : (
-                    <ul className="space-y-2">
-                      {lanes.actions.map((item, i) => (
-                        <li key={i} className="flex items-start gap-2 text-sm leading-7 text-fg">
-                          <input type="checkbox" className="mt-1.5" aria-label={item} />
-                          <span dir="auto">{faDisplay(item)}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-                <div>
-                  <h2 className="mb-3 text-sm font-semibold text-fg">{t("decisionsHeading")}</h2>
-                  {lanes.decisions.length === 0 ? (
-                    <p className="text-sm text-fg-muted">{t("laneEmpty")}</p>
-                  ) : (
-                    <ol className="list-inside list-decimal space-y-2">
-                      {lanes.decisions.map((item, i) => (
-                        <li key={i} className="text-sm leading-7 text-fg" dir="auto">
-                          {faDisplay(item)}
-                        </li>
-                      ))}
-                    </ol>
-                  )}
+              <p className="mb-4 text-sm leading-7 text-fg-muted">{t("actionsEmpty")}</p>
+            ) : null}
+            <div className="grid gap-6 md:grid-cols-2">
+              <div>
+                <h3 className="mb-3 text-sm font-semibold text-fg">{t("actionsHeading")}</h3>
+                {lanes.actions.length === 0 ? (
+                  <p className="text-sm text-fg-muted">{t("laneEmpty")}</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {lanes.actions.map((item, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm leading-7 text-fg">
+                        <input type="checkbox" className="mt-1.5" aria-label={item} />
+                        <span dir="auto">{faDisplay(item)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <div className="no-print mt-3 flex items-center gap-2">
+                  <input
+                    ref={actionBoxRef}
+                    className="input h-9 min-h-0 flex-1 py-0 text-sm"
+                    placeholder={t("actionPlaceholder")}
+                    aria-label={t("actionAdd")}
+                    value={actionDraft}
+                    onChange={(e) => setActionDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") void addLaneItem("actions");
+                    }}
+                  />
+                  <button
+                    className="btn-secondary h-9 min-h-0 shrink-0 px-3 text-xs"
+                    disabled={actionDraft.trim() === "" || laneBusy}
+                    onClick={() => void addLaneItem("actions")}
+                  >
+                    {t("actionAdd")}
+                  </button>
                 </div>
               </div>
-            )}
+              <div>
+                <h3 className="mb-3 text-sm font-semibold text-fg">{t("decisionsHeading")}</h3>
+                {lanes.decisions.length === 0 ? (
+                  <p className="text-sm text-fg-muted">{t("laneEmpty")}</p>
+                ) : (
+                  <ol className="list-inside list-decimal space-y-2">
+                    {lanes.decisions.map((item, i) => (
+                      <li key={i} className="text-sm leading-7 text-fg" dir="auto">
+                        {faDisplay(item)}
+                      </li>
+                    ))}
+                  </ol>
+                )}
+                <div className="no-print mt-3 flex items-center gap-2">
+                  <input
+                    className="input h-9 min-h-0 flex-1 py-0 text-sm"
+                    placeholder={t("decisionPlaceholder")}
+                    aria-label={t("decisionAdd")}
+                    value={decisionDraft}
+                    onChange={(e) => setDecisionDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") void addLaneItem("decisions");
+                    }}
+                  />
+                  <button
+                    className="btn-secondary h-9 min-h-0 shrink-0 px-3 text-xs"
+                    disabled={decisionDraft.trim() === "" || laneBusy}
+                    onClick={() => void addLaneItem("decisions")}
+                  >
+                    {t("decisionAdd")}
+                  </button>
+                </div>
+              </div>
+            </div>
           </section>
         ) : null}
 
-        {/* ── NOTES & ATTACHMENTS — its own section (user directive) ───── */}
-        {section === "notes" && notes.length === 0 ? (
+        {/* ── NOTES & ATTACHMENTS — its own section (user directive).
+            One branch since 2026-08-28: the empty state and the list share
+            the header, the kebab and the ADD box — an empty section that
+            hides the composer would say "nothing here" while withholding
+            the way to change that ─────────────────────────────────────── */}
+        {section === "notes" ? (
           <section className="border-t border-border px-5 py-4">
-            <p className="text-sm leading-7 text-fg-muted">{t("notesEmpty")}</p>
-            <p className="mt-3 text-xs text-fg-muted">
-              <Chip tone="neutral">{t("attachmentsSoon")}</Chip>
-            </p>
-          </section>
-        ) : null}
-        {section === "notes" && notes.length > 0 ? (
-          <section className="border-t border-border px-5 py-4">
-            <h2 className="mb-3 text-sm font-semibold text-fg">{t("notesHeading")}</h2>
+            <div className="no-print mb-3 flex items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold text-fg">{t("notesHeading")}</h2>
+              <KebabMenu label={t("notesMenu")} items={notesMenuItems} />
+            </div>
+            {notes.length === 0 ? (
+              <p className="text-sm leading-7 text-fg-muted">{t("notesEmpty")}</p>
+            ) : (
             <ul className="space-y-2">
               {notes.map((note) => (
                 <li key={note.id} className="flex items-start gap-2 text-sm leading-6 text-fg">
@@ -2048,9 +2242,44 @@ export default function CallDetailPage({
                 </li>
               ))}
             </ul>
+            )}
+            {/* the ADD box (user directive, 2026-08-28): multi-line, and the
+                checkbox anchors it at the player's moment — unchecked writes
+                at_ms null, a note about the CALL rather than an instant in it
+                (the two are different nothings and the wire keeps them so) */}
+            <div className="no-print mt-4">
+              <textarea
+                ref={noteBoxRef}
+                className="input min-h-16 w-full py-1.5 text-sm leading-7"
+                placeholder={t("notePlaceholder")}
+                aria-label={t("noteAdd")}
+                value={noteDraft}
+                onChange={(e) => setNoteDraft(e.target.value)}
+              />
+              <div className="mt-2 flex flex-wrap items-center gap-3">
+                <button
+                  className="btn-primary h-9 min-h-0 px-4 text-sm"
+                  disabled={noteDraft.trim() === ""}
+                  onClick={() => void saveNoteDraft()}
+                >
+                  {t("noteAdd")}
+                </button>
+                <label className="flex items-center gap-1.5 text-xs text-fg-muted">
+                  <input
+                    type="checkbox"
+                    checked={noteAtPlayhead}
+                    onChange={(e) => setNoteAtPlayhead(e.target.checked)}
+                  />
+                  {t("noteAtPlayhead", { clock: formatClock(playheadMs / 1000, locale) })}
+                </label>
+              </div>
+            </div>
             <p className="mt-4 text-xs text-fg-muted">
               {/* named-but-not-yet (the Management honest-inactive pattern):
-                  file/photo attachments arrive with the storage lane */}
+                  file/photo attachments arrive with the storage lane — the
+                  blocker is the PURGE, which deletes only the objects
+                  call_part rows enumerate; an attachment object would
+                  outlive its purged call (see core/src/purge/purge.ts) */}
               <Chip tone="neutral">{t("attachmentsSoon")}</Chip>
             </p>
           </section>
@@ -2235,4 +2464,16 @@ export default function CallDetailPage({
  */
 function rowSeekable(row: TranscriptSegment): boolean {
   return row.end_ms > row.start_ms;
+}
+
+/**
+ * The wire's own note ordering, mirrored (core listNotes: `order by at_ms
+ * nulls last, created_at`) — an adopted row slotted by any OTHER rule would
+ * jump to a different place on the next full load.
+ */
+function noteOrder(a: CallNote, b: CallNote): number {
+  if (a.at_ms === null && b.at_ms === null) return a.created_at < b.created_at ? -1 : 1;
+  if (a.at_ms === null) return 1;
+  if (b.at_ms === null) return -1;
+  return (a.at_ms - b.at_ms) || (a.created_at < b.created_at ? -1 : 1);
 }
