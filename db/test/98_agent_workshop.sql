@@ -78,6 +78,28 @@ select t.ok(
                        '98000000-0000-4000-8000-0000000000a2')) = 2,
   '0122: memberships read wherever the agent itself reads');
 
+-- ─── a SYSTEM agent's arrangement is per-org, admin-governed (0124) ─────
+-- the agent is shared across every org; which workflows it carries is each
+-- org's own row, scoped by org_id on both write and read
+select set_config('echo.actor_id', '01000000-0000-4000-8000-000000000001', true); -- alice (admin)
+insert into echo.agent_workflow (agent_id, workflow_id, org_id)
+select a.id, '98000000-0000-4000-8000-0000000000f1', '0a000000-0000-4000-8000-00000000000a'
+  from echo.assistant_agent a where a.level = 'system' and a.handle = 'meetings';
+select t.ok(
+  exists (select 1 from echo.agent_workflow aw
+           join echo.assistant_agent a on a.id = aw.agent_id
+          where a.handle = 'meetings'
+            and aw.org_id = '0a000000-0000-4000-8000-00000000000a'),
+  '0124: an admin arranges the org''s workflows onto a shipped system agent');
+
+select set_config('echo.actor_id', '02000000-0000-4000-8000-000000000002', true); -- bob (member)
+select t.denied(
+  $$insert into echo.agent_workflow (agent_id, workflow_id, org_id)
+    select a.id, '98000000-0000-4000-8000-0000000000f1',
+           '0a000000-0000-4000-8000-00000000000a'
+      from echo.assistant_agent a where a.level = 'system' and a.handle = 'mail'$$,
+  '0124: a member cannot arrange a system agent — same wall as the org agent');
+
 -- ─── the agent role holds NO door here ──────────────────────────────────
 reset role;
 set local role echo_agent;
@@ -91,7 +113,8 @@ reset role;
 -- sweep the fixture (suite runs fixture-scoped against the shared dev db)
 delete from echo.agent_workflow
  where agent_id in ('98000000-0000-4000-8000-0000000000a1',
-                    '98000000-0000-4000-8000-0000000000a2');
+                    '98000000-0000-4000-8000-0000000000a2')
+    or workflow_id = '98000000-0000-4000-8000-0000000000f1';
 delete from echo.workflow_version where workflow_id = '98000000-0000-4000-8000-0000000000f1';
 delete from echo.workflow where id = '98000000-0000-4000-8000-0000000000f1';
 delete from echo.assistant_agent

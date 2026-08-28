@@ -10,20 +10,23 @@ import { AssistantMenu } from "./AssistantMenu";
 import { PlatformShell } from "./PlatformShell";
 import { MenuLayout, PageContainer, PageHeader, Section } from "@/components/scaffold";
 import { Card, Chip } from "@/components/ui";
-import { Icon } from "@/components/icons";
+import { Icon, IconPencil } from "@/components/icons";
 import { AgentEditor } from "./AgentEditor";
+import { KebabMenu } from "@/components/rowActions";
+import { useAgentCopy } from "./agentAppearance";
 import { agentColorClasses, agentIconName, agentLevelTone } from "./agentAppearance";
 
 /**
  * M47 — the agents surface: browse, and EDIT (Sana's shape, our wire).
  *
- * A card press opens the editor; starting a conversation is the card's
- * explicit second act, linking the agent's handle into the hub — at
- * `/assistant`, the hub's real address. The old link went to `/`, which
- * stopped being the hub when the dashboard took the landing page, and the
- * locale redirect drops the query — the picked agent silently never arrived
- * (M42's stale-address family; the route resolves, so every reachability
- * check stays green).
+ * A card press GOES — to the assistant, with the agent picked, where its
+ * workflows and knowledge come up beside the greeting (user directive,
+ * 2026-08-28: "when clicked it must go to ai assistant page with their
+ * workflow and file that they can use. not the edit part"). Editing moved
+ * into the card's ⋯ menu, offered only where the wall would let the save
+ * land. The address is `/assistant`, the hub's real one — the old link went
+ * to `/`, whose locale redirect drops the query, so the picked agent
+ * silently never arrived (M42's stale-address family).
  *
  * Creation gates like Workflows: user-level for everyone, org-level for
  * admins only — the affordance mirrors the wall (RLS + core's admin gate),
@@ -38,6 +41,7 @@ export function Agents() {
   const [editing, setEditing] = useState<AgentCard | null | undefined>(undefined);
 
   const isAdmin = me?.role === "admin" || me?.role === "owner";
+  const agentCopy = useAgentCopy();
 
   const agentsEpoch = useRefreshEpoch("agents");
   useEffect(() => {
@@ -84,37 +88,51 @@ export function Agents() {
                   <Card><p className="text-sm text-fg-muted">{t("empty")}</p></Card>
                 ) : (
                   <div className="grid gap-x-8 gap-y-5 lg:grid-cols-2">
-                    {agents.map((agent) => (
-                      <div
-                        key={agent.id}
-                        className="flex min-h-36 items-start gap-5 rounded-2xl border border-transparent p-3 transition-colors hover:border-border hover:bg-surface"
-                      >
-                        <button
-                          type="button"
-                          className="group flex min-w-0 flex-1 items-start gap-5 text-start"
-                          onClick={() => setEditing(agent)}
-                          aria-label={`${t("edit")}: ${agent.name}`}
+                    {agents.map((agent) => {
+                      const copy = agentCopy(agent);
+                      /* the affordance mirrors the wall: yours, or the org's
+                         if you govern it. A system agent's editor would be a
+                         form whose save can only 404. */
+                      const editable = agent.level === "user"
+                        || (agent.level === "org" && isAdmin);
+                      return (
+                        <div
+                          key={agent.id}
+                          className="relative flex min-h-36 items-start gap-3 rounded-2xl border border-transparent p-3 transition-colors hover:border-border hover:bg-surface"
                         >
-                          <span className={`grid h-20 w-20 shrink-0 place-items-center rounded-3xl ${agentColorClasses(agent.color)}`} aria-hidden>
-                            <Icon name={agentIconName(agent.icon)} size="hero" />
-                          </span>
-                          <span className="min-w-0 pt-1">
-                            <span className="block text-base font-semibold text-fg group-hover:text-accent">{agent.name}</span>
-                            <span className="mt-2 block text-sm leading-6 text-fg-muted">{agent.description}</span>
-                            <span className="mt-3 flex items-center gap-2">
-                              <Chip tone={agentLevelTone(agent.level)}>{t(agent.level)}</Chip>
-                              <span className="text-xs text-fg-subtle">{t("toolCount", { count: agent.tools.length })}</span>
+                          <Link
+                            href={{ pathname: "/assistant", query: { agent: agent.handle } }}
+                            className="group flex min-w-0 flex-1 items-start gap-5 text-start"
+                            aria-label={t("openWith", { name: copy.name })}
+                          >
+                            <span className={`grid h-20 w-20 shrink-0 place-items-center rounded-3xl ${agentColorClasses(agent.color)}`} aria-hidden>
+                              <Icon name={agentIconName(agent.icon)} size="hero" />
                             </span>
-                          </span>
-                        </button>
-                        <Link
-                          href={{ pathname: "/assistant", query: { agent: agent.handle } }}
-                          className="tap mt-1 shrink-0 rounded-full border border-border px-3 py-1.5 text-xs text-fg-muted transition-colors hover:border-accent hover:text-accent"
-                        >
-                          {t("startConversation")}
-                        </Link>
-                      </div>
-                    ))}
+                            <span className="min-w-0 pt-1">
+                              <span className="block text-base font-semibold text-fg group-hover:text-accent">{copy.name}</span>
+                              <span className="mt-2 block text-sm leading-6 text-fg-muted">{copy.description}</span>
+                              <span className="mt-3 flex items-center gap-2">
+                                <Chip tone={agentLevelTone(agent.level)}>{t(agent.level)}</Chip>
+                                <span className="text-xs text-fg-subtle">{t("toolCount", { count: agent.tools.length })}</span>
+                              </span>
+                            </span>
+                          </Link>
+                          {editable ? (
+                            <span className="shrink-0">
+                              <KebabMenu
+                                label={t("cardMenu", { name: copy.name })}
+                                items={[{
+                                  key: "edit",
+                                  label: t("edit"),
+                                  icon: <IconPencil width={14} height={14} />,
+                                  onSelect: () => setEditing(agent),
+                                }]}
+                              />
+                            </span>
+                          ) : null}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </Section>

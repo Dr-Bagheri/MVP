@@ -82,3 +82,36 @@ export function toolDescription(copy: Record<string, unknown>, name: string): st
   const sentence = copy[name];
   return typeof sentence === "string" ? sentence : name.replaceAll("_", " ");
 }
+
+/**
+ * Shipped agents' copy, localized by HANDLE (the workflowName.ts shape).
+ *
+ * Simpler than the workflow resolver on purpose: a SYSTEM agent cannot be
+ * renamed (core's PATCH refuses level system outright), so its name is
+ * always product copy and there is no your-name-wins gate to build. Org and
+ * user agents render exactly as their authors wrote them, in every locale.
+ * A system handle the catalogue has not met falls back to the wire —
+ * visible and untranslated beats invisible and broken.
+ */
+import { useTranslations } from "next-intl";
+
+const SYSTEM_AGENT_KEYS: Readonly<Record<string, string>> = {
+  meetings: "sys_meetings",
+  mail: "sys_mail",
+  prep: "sys_prep",
+};
+
+export function useAgentCopy(): (agent: {
+  level: string; handle: string; name: string; description: string;
+}) => { name: string; description: string } {
+  const t = useTranslations("agents");
+  return (agent) => {
+    const key = agent.level === "system" ? SYSTEM_AGENT_KEYS[agent.handle] : undefined;
+    if (!key) return { name: agent.name, description: agent.description };
+    try {
+      return { name: t(`${key}_name`), description: t(`${key}_desc`) };
+    } catch {
+      return { name: agent.name, description: agent.description };
+    }
+  };
+}

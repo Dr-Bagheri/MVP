@@ -1393,7 +1393,15 @@
       "correct_transcript": "Proposes a transcript correction — applied only after your approval",
       "edit_speaker_roster": "Proposes speaker-roster edits — applied only after your approval",
       "replace_summary": "Proposes a new summary version — applied only after your approval"
-    }
+    },
+    "openWith": "Talk with {name}",
+    "cardMenu": "Options for {name}",
+    "sys_meetings_name": "Meetings agent",
+    "sys_meetings_desc": "Searches your call transcripts and summaries; pulls out decisions, action items and the history of any topic.",
+    "sys_mail_name": "Email agent",
+    "sys_mail_desc": "Helps write and polish email replies; works with the auto-draft workflow, and sending always stays with you.",
+    "sys_prep_name": "Meeting prep agent",
+    "sys_prep_desc": "Before a meeting, builds a working brief from your records: what happened, what is open, what to ask."
   },
   "management": {
     "title": "Management",

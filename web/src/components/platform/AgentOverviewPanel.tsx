@@ -7,7 +7,7 @@ import type { AgentCard, AgentWorkflowLink } from "@/api/types";
 import { Link } from "@/i18n/routing";
 import { Icon } from "@/components/icons";
 import { Chip } from "@/components/ui";
-import { agentColorClasses, agentIconName, agentLevelTone, toolDescription } from "./agentAppearance";
+import { agentColorClasses, agentIconName, agentLevelTone, toolDescription, useAgentCopy } from "./agentAppearance";
 
 /**
  * M47 — the overview that comes up WITH a picked agent (the user's ask, from
@@ -39,6 +39,8 @@ export function AgentOverviewPanel({
   /** the active conversation starts it folded — the thread owns that screen */
   defaultCollapsed?: boolean;
 }) {
+  /* shipped agents localize; an org's own words render as written */
+  const copy = useAgentCopy()(agent);
   const t = useTranslations("agents");
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const [workflows, setWorkflows] = useState<AgentWorkflowLink[] | null>(null);
@@ -80,11 +82,11 @@ export function AgentOverviewPanel({
         </span>
         <span className="min-w-0 flex-1">
           <span className="flex flex-wrap items-center gap-2">
-            <span className="text-base font-semibold text-fg">{agent.name}</span>
+            <span className="text-base font-semibold text-fg">{copy.name}</span>
             <Chip tone={agentLevelTone(agent.level)}>{t(agent.level)}</Chip>
           </span>
           {collapsed ? null : (
-            <span className="mt-1 block text-sm leading-5 text-fg-muted">{agent.description}</span>
+            <span className="mt-1 block text-sm leading-5 text-fg-muted">{copy.description}</span>
           )}
         </span>
         <button
