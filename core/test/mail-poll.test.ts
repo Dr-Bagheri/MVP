@@ -42,8 +42,13 @@ function fakeDb(
         return [{ connection_id: CONNECTION, owner_id: OWNER, provider: "google" }];
       }
       if (sql.includes("claim_mail_poll")) return [{ ok: true }];
-      if (sql.includes("trigger_event = 'mail.received'")) {
-        return subscribed ? [{ id: "wf-1", version_id: "v-1" }] : [];
+      if (sql.includes("trigger_event = $2")) {
+        /* the event travels as a PARAMETER now (the enqueuer serves mail and
+           meetings); the fake answers only for the event this suite is about,
+           so a wrong event name in the caller reads as "nobody subscribed"
+           and fails the control below */
+        return subscribed && params?.[1] === "mail.received"
+          ? [{ id: "wf-1", version_id: "v-1" }] : [];
       }
       if (sql.includes("insert into echo.workflow_run")) return [{ id: "run-1" }];
       if (sql.includes("workflow_graph_for_run")) return [{ graph: { entry: "s1" } }];

@@ -384,9 +384,25 @@ export const OFFERED_CONNECTOR_PROVIDERS = ["google"] as const;
 /**
  * M41 L1 — the facts that may trigger a workflow (P4; closed).
  *
- * `mail.received` is the poller's fact: it still owns detection, dedupe and
- * the cursor — machinery no author touches, exactly as every mature engine
- * arranges it — and hands the graph a REFERENCE to one new message.
+ * Every entry has a REAL emitter, and the spelling is shared with
+ * WEBHOOK_EVENTS where the fact is the same one — two spellings of one fact
+ * is the drift shape this repo keeps paying for:
+ *
+ *  · `call.created`     — the api, the moment a recording or upload makes
+ *                         its row (user directive, 2026-08-28: "add when
+ *                         the record start");
+ *  · `call.transcribed` — the worker, when the transcript lands;
+ *  · `call.summarized`  — the worker, when the summary lands;
+ *  · `mail.received`    — the mail poller, once per NEW inbox message;
+ *  · `meeting.soon`     — the calendar poller, once per meeting entering
+ *                         its lead window.
+ *
+ * The pollers still own detection, dedupe and the cursor — machinery no
+ * author touches, exactly as every mature engine arranges it — and hand the
+ * graph a REFERENCE, never content.
  */
-export const WORKFLOW_EVENTS = ["call.summarized", "mail.received"] as const;
+export const WORKFLOW_EVENTS = [
+  "call.created", "call.transcribed", "call.summarized",
+  "mail.received", "meeting.soon",
+] as const;
 export type WorkflowEvent = (typeof WORKFLOW_EVENTS)[number];

@@ -1,5 +1,6 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { WORKFLOW_EVENTS } from "@echo/core/vocabulary";
 
 /**
  * The builder is a PUZZLE, and every assertion here is about the property a
@@ -208,4 +209,38 @@ describe("the draft_mail step round-trips", () => {
     expect(cleanStep({ id: "s4", kind: "propose", proposal: "add_tags", from: "{{s2.topics}}", call: "{{trigger.call_id}}", nonsense: "x" }))
       .not.toHaveProperty("nonsense");
   });
+});
+
+/**
+ * Every trigger event has its own sentence, in both locales.
+ *
+ * The picker's label key is COMPUTED (`event_${name}`), which makes it
+ * invisible to keys.test (it skips computed keys, by design) — and that is
+ * exactly how the picker rendered "After a meeting is summarized" twice the
+ * day `mail.received` joined: the second event fell back onto the first's
+ * hardcoded key and nothing went red. The coverage list derives from the
+ * PRODUCER (rule 13½), so a sixth event fails this test until someone
+ * writes its two sentences.
+ *
+ * Distinctness is asserted too: five events sharing one sentence is the
+ * original bug wearing full coverage.
+ */
+describe("the event picker's catalogue", () => {
+  const fs = require("node:fs") as typeof import("node:fs");
+  const path = require("node:path") as typeof import("node:path");
+  const here = path.dirname(new URL(import.meta.url).pathname.replace(/^\/(\w:)/, "$1"));
+  for (const locale of ["fa", "en"] as const) {
+    it(`names every event in ${locale}`, () => {
+      const messages = JSON.parse(fs.readFileSync(
+        path.join(here, "..", "..", "messages", `${locale}.json`), "utf8"));
+      const labels = WORKFLOW_EVENTS.map((event) => {
+        const key = `event_${event.replace(".", "_")}`;
+        const label = messages.builder[key];
+        expect(typeof label, `${locale}: builder.${key} is missing`).toBe("string");
+        return label as string;
+      });
+      expect(new Set(labels).size, `${locale}: two events share one sentence`)
+        .toBe(labels.length);
+    });
+  }
 });

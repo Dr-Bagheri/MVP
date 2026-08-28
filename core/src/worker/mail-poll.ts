@@ -33,7 +33,7 @@ import type { Db, SqlTx } from "../db/identity.ts";
 import type { Identity } from "../agent/types.ts";
 import type { ConnectorItem, ConnectorProvider, MailEnvelope } from "../api/connectors.ts";
 import type { MailDraftRecord } from "../api/mail-drafts.ts";
-import { enqueueMailEvent } from "./workflow-triggers.ts";
+import { enqueueConnectorEvent } from "./workflow-triggers.ts";
 import type { Queue } from "./queue.ts";
 
 /** Only the surface the poller needs — the repo is bigger than this. */
@@ -406,8 +406,8 @@ export async function sweepMailboxes(options: MailPollOptions, log: StepLogger):
            * product shipped this morning by a different route.
            */
           if (options.queue) {
-            const fired = await enqueueMailEvent(
-              options.db, identity, provider, item.id, options.queue, log);
+            const fired = await enqueueConnectorEvent(
+              options.db, identity, "mail.received", provider, item.id, options.queue, log);
             if (fired) { drafted += 1; continue; }
           }
           if (await draftFor(options, identity, provider, item, ownAddress, log) === "drafted") drafted += 1;

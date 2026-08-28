@@ -384,10 +384,14 @@ export default function WorkflowDetailPage({
    * which is as wrong as a description gets.
    */
   const authoredTrigger: ProcessStep | undefined = authoredRow
-    ? {
-        title: tb(authoredRow.trigger_event === null ? "trigger_manual" : "trigger_event"),
-        description: tb(authoredRow.trigger_event === null ? "triggerHint_manual" : "triggerHint_event"),
-      }
+    ? authoredRow.trigger_event === null
+      ? { title: tb("trigger_manual"), description: tb("triggerHint_manual") }
+      : {
+          /* the EVENT'S OWN sentence as the title — "with an event" answers
+             a different question than the one a reader of this card asks */
+          title: tb(`event_${authoredRow.trigger_event.replace(".", "_")}`),
+          description: tb("triggerHint_event"),
+        }
     : undefined;
   const trigger = catalogueProcess?.trigger ?? served.trigger ?? authoredTrigger;
   /*

@@ -91,7 +91,10 @@ export function createLinkSpeakersStep({ db, queue, lifecycle, ml, storage, voic
 
       // Every part has settled, so the transcript is complete — this is the
       // moment `call.transcribed` becomes true, not when the summary lands.
+      // The workflow trigger fires beside the webhook, deliberately at the
+      // SAME site: one fact, one moment, two subscribers.
       await enqueueWebhooks(db, identity, "call.transcribed", payload.callId, queue, log);
+      await enqueueWorkflowEvents(db, identity, "call.transcribed", payload.callId, queue, log);
     },
   };
 }

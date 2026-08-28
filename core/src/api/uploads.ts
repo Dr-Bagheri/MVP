@@ -25,6 +25,20 @@ import { NotFoundError, ValidationError } from "./errors.ts";
 import { assertUuid, type Db, type SqlTx } from "../db/identity.ts";
 import { createStorageSigner } from "../storage/signer.ts";
 import { createQueue, Q_LINK_SPEAKERS, Q_PROCESS_PART, Q_SUMMARIZE } from "../worker/queue.ts";
+import { enqueueWorkflowEvents } from "../worker/workflow-triggers.ts";
+import pino from "pino";
+
+/*
+ * A logger of this file's own, for the one enqueue below. The api's request
+ * logger lives on the Fastify instance and this repo never sees it; the
+ * enqueuer's contract is codes-only (it logs names and ids, never content),
+ * so a module-level pino with the platform's redaction posture is enough.
+ */
+const uploadsLog = pino({
+  level: process.env.LOG_LEVEL || "info",
+  base: { svc: "api", mod: "uploads" },
+  redact: { paths: ["audio_url", "url", "text", "words", "authorization"], censor: "[redacted]" },
+});
 import { SUMMARY_INSTRUCTION_MAX, SUMMARY_TEMPLATES } from "./vocabulary.ts";
 import { hasCallSummaryModel, hasCallSummaryPrefs, hasProvisionalTranscript } from "../db/capabilities.ts";
 import type { Identity } from "../agent/types.ts";
@@ -149,6 +163,14 @@ export function createUploadsRepo(db: Db, config: UploadsConfig) {
         ),
       );
       if (!rows[0]) throw new ValidationError("could not create the call");
+      /*
+       * `call.created` — the record-start fact (user directive, 2026-08-28:
+       * "add when the record start"). Fired HERE because this is where the
+       * fact becomes true: the row exists, whether a live recording or an
+       * upload made it. Best-effort by the enqueuer's own design — a missing
+       * workflow must never fail the recording that just started.
+       */
+      await enqueueWorkflowEvents(db, identity, "call.created", rows[0].id, queue, uploadsLog);
       return { id: rows[0].id };
     },
 

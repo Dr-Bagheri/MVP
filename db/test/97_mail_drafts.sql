@@ -104,9 +104,18 @@ select t.denied(
 -- The off-switch first: a person who has not asked for this has their mail
 -- left alone. Asserted BEFORE the enabling update, so the enabled case below
 -- cannot pass by having been true all along.
+--
+-- The PROPERTY, never the census (rule 9's count trap, caught live: this
+-- line was `count(*) = 0`, and the suite runs fixture-scoped against the
+-- shared dev project — the first real member's own mailbox is due whenever
+-- the production poller has not just looked, so the check failed on their
+-- data and passed only by racing the poller's two-minute cadence). The
+-- claim is about THE FIXTURE PERSON's connection, so that is the row asked
+-- about.
 select t.ok(
-  (select count(*) from echo.due_mail_polls(10)) = 0,
-  '0115: with auto_draft_replies off, no mailbox is due a look');
+  not exists (select 1 from echo.due_mail_polls(1000)
+               where connection_id = '97000000-0000-4000-8000-00000000000c'),
+  '0115: with auto_draft_replies off, the fixture mailbox is not due a look');
 
 reset role;
 update echo.app_user set auto_draft_replies = true
@@ -115,14 +124,14 @@ update echo.app_user set auto_draft_replies = true
 set local role echo_app;
 select set_config('echo.actor_id', '02000000-0000-4000-8000-000000000002', true);
 select t.ok(
-  exists (select 1 from echo.due_mail_polls(10)
+  exists (select 1 from echo.due_mail_polls(1000)
            where connection_id = '97000000-0000-4000-8000-00000000000c'),
   '0115: once the owner switches it on, their connection is due');
 
 -- the door answers about EVERY owner, not the caller: it is the worker's,
 -- and RLS deliberately shows the worker none of these rows
 select t.ok(
-  (select owner_id from echo.due_mail_polls(10)
+  (select owner_id from echo.due_mail_polls(1000)
     where connection_id = '97000000-0000-4000-8000-00000000000c')
     = '02000000-0000-4000-8000-000000000002',
   '0115: the door names the owner the worker must run as');
@@ -134,8 +143,10 @@ select t.ok(
 select t.ok(
   echo.claim_mail_poll('97000000-0000-4000-8000-00000000000c') is null,
   '0114: the second finds nothing to claim — the predicate IS the compare-and-set (0111)');
+-- same property-not-census correction as the off-switch check above
 select t.ok(
-  (select count(*) from echo.due_mail_polls(10)) = 0,
+  not exists (select 1 from echo.due_mail_polls(1000)
+               where connection_id = '97000000-0000-4000-8000-00000000000c'),
   '0114: and a just-polled connection is no longer due');
 
 reset role;

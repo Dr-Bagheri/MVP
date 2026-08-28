@@ -24,6 +24,8 @@ import { createDomainTools } from "../agent/domain-tools.ts";
 import { firstServable } from "../api/models.ts";
 import { createSessionsRepo } from "../api/sessions.ts";
 import { resolveIdentity } from "../db/actor.ts";
+import { enqueueConnectorEvent, hasSubscribedWorkflow } from "./workflow-triggers.ts";
+import type { Queue } from "./queue.ts";
 import { hasMeetingPrep } from "../db/capabilities.ts";
 import { agentToolsDb, type Db, type SqlTx } from "../db/identity.ts";
 import type { Identity } from "../agent/types.ts";
@@ -46,6 +48,9 @@ export interface MeetingPrepOptions {
   /** how far ahead to look; Sana's is 30 minutes and so is this */
   leadMinutes?: number | undefined;
   perSweep?: number | undefined;
+  /** the engine's queue: present = a `meeting.soon` workflow may take the
+      meeting instead of the hardcoded brief; absent = the old behaviour */
+  queue?: Queue | undefined;
 }
 
 interface StepLogger {
@@ -210,9 +215,41 @@ export async function sweepMeetings(options: MeetingPrepOptions, log: StepLogger
       const events = await options.connectors.calendarEvents(identity, provider);
       const soon = startingSoon(events, Date.now(), options.leadMinutes ?? 30);
       let prepared = 0;
+      /*
+       * THE GRAPH FIRST (M46's shape, calendar half). Subscription is asked
+       * ONCE per mailbox pass, not per meeting — it cannot change mid-loop
+       * and each ask is a query.
+       *
+       * The ORDER below is load-bearing: subscribed? → mark → enqueue. The
+       * run-once index is partial on live statuses, so without a durable
+       * mark the same meeting would start a new run every sweep once the
+       * previous one finished; and marking BEFORE knowing anyone is
+       * subscribed would spend the idempotency row and silence the
+       * hardcoded fallback forever. `meeting_prep` is that mark for both
+       * paths — one spelling of "this meeting is handled".
+       */
+      const graphTakes = options.queue
+        ? await hasSubscribedWorkflow(options.db, identity, "meeting.soon")
+        : false;
       for (const event of soon) {
         if (prepared >= (options.perSweep ?? 2)) break;
         try {
+          if (graphTakes && options.queue) {
+            const marked = await options.db.withIdentity(identity, (tx: SqlTx) =>
+              tx.unsafe<{ id: string }>(
+                `insert into echo.meeting_prep
+                   (org_id, owner_id, provider, event_ref, event_title, starts_at)
+                 values ($1, $2, $3, $4, $5, $6)
+                 on conflict do nothing
+                 returning id`,
+                [identity.orgId, identity.userId, provider, event.id,
+                  event.title.slice(0, 300), event.occurred_at]));
+            if (!marked[0]) continue;          // already handled, either path
+            await enqueueConnectorEvent(
+              options.db, identity, "meeting.soon", provider, event.id, options.queue, log);
+            prepared += 1;
+            continue;
+          }
           if (await prepareFor(options, identity, provider, event, log) === "prepared") prepared += 1;
         } catch (error) {
           log.warn({ event: "meeting_prep_failed", message: (error as Error).message },

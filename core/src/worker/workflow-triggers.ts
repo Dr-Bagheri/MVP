@@ -92,9 +92,10 @@ export async function enqueueWorkflowEvents(
  * has it" from "nobody is subscribed" and do the old thing in the second
  * case. Two producers on one mailbox would be two replies.
  */
-export async function enqueueMailEvent(
+export async function enqueueConnectorEvent(
   db: Db,
   identity: Identity,
+  event: "mail.received" | "meeting.soon",
   provider: string,
   sourceRef: string,
   queue: Queue,
@@ -106,12 +107,12 @@ export async function enqueueMailEvent(
       tx.unsafe<{ id: string; version_id: string }>(
         `select w.id, w.current_version_id as version_id
            from echo.workflow w
-          where w.trigger_event = 'mail.received' and w.enabled
+          where w.trigger_event = $2 and w.enabled
             and w.archived_at is null and w.current_version_id is not null
             and not exists (
               select 1 from echo.workflow_mute m
                where m.workflow_id = w.id and m.owner_id = $1 and m.muted)`,
-        [identity.userId]));
+        [identity.userId, event]));
     for (const workflow of workflows) {
       const created = await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<{ id: string }>(
@@ -135,8 +136,8 @@ export async function enqueueMailEvent(
         ownerId: identity.userId, orgId: identity.orgId,
       });
       fired = true;
-      log.info({ event: "mail_workflow_fired", workflow_id: workflow.id, run_id: runId },
-        "a new message started a workflow run");
+      log.info({ event: "connector_workflow_fired", trigger: event, workflow_id: workflow.id, run_id: runId },
+        "a connector fact started a workflow run");
     }
   } catch (error) {
     /* NOT best-effort here, unlike the call-summarized twin: the caller uses
@@ -144,11 +145,37 @@ export async function enqueueMailEvent(
        failure reported as `false` would produce a reply from the fallback
        while the graph's run was also in flight. Say it and let the caller
        treat it as "not fired". */
-    log.warn({ event: "mail_workflow_enqueue_failed", detail: (error as Error).name },
-      "a message did not reach its workflow");
+    log.warn({ event: "connector_workflow_enqueue_failed", trigger: event, detail: (error as Error).name },
+      "a connector fact did not reach its workflow");
     return false;
   }
   return fired;
+}
+
+/**
+ * Whether this person has ANY enabled workflow on an event — the question a
+ * poller asks BEFORE spending its once-per-fact idempotency mark.
+ *
+ * The meeting sweep needs the order mark-then-enqueue (the run-once index is
+ * partial on LIVE statuses, so a finished run would fire again next sweep
+ * without a durable mark) — but marking a meeting handled and THEN finding
+ * nobody subscribed would also stop the hardcoded fallback from ever
+ * preparing it. So subscription is asked first, as its own cheap read.
+ */
+export async function hasSubscribedWorkflow(
+  db: Db, identity: Identity, event: string,
+): Promise<boolean> {
+  const rows = await db.withIdentity(identity, (tx: SqlTx) =>
+    tx.unsafe<{ id: string }>(
+      `select w.id from echo.workflow w
+        where w.trigger_event = $2 and w.enabled
+          and w.archived_at is null and w.current_version_id is not null
+          and not exists (
+            select 1 from echo.workflow_mute m
+             where m.workflow_id = w.id and m.owner_id = $1 and m.muted)
+        limit 1`,
+      [identity.userId, event]));
+  return rows.length > 0;
 }
 
 /** one pass of the belt: resume/expire waits, fire due schedules */

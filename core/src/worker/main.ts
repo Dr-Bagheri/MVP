@@ -258,6 +258,8 @@ export async function main(): Promise<void> {
       connectors: mailConnectors as never,
       apiKey: process.env.OPENROUTER_API_KEY ?? "",
       fallbackModel: process.env.WORKER_SUMMARY_MODEL,
+      /* M46: a `meeting.soon` workflow may take the meeting */
+      queue,
     }, log as never);
   }, 5 * 60_000);
   meetingTimer.unref();
