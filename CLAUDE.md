@@ -2541,3 +2541,48 @@ sessions) for the cross-session narrative.
   proposal; UI follows). Remaining epilogue: swaps 3-5 + shell
   guard, final 2 README screenshots (now possible via a
   dashboard-created test account), tunnel on user's word.
+
+- 2026-08-27 (M42 + the workflow that never ran + two filters that
+  read as satisfied): **the table rule** — ten rows then numbered
+  pages, one pager in the theme (web/src/components/Pagination.tsx),
+  built into DataTable so a table inherits it by BEING a table; the
+  clamp is the load-bearing part (page 4 of a filtered list would
+  otherwise render an empty table under a page number, which on
+  screen is indistinguishable from "no results"). Two silent
+  truncations died with it (.slice(0,10) drains, .slice(0,12) runs).
+  Audit Logs keeps its cursor button BESIDE the pager, reasoned:
+  a fetch triggered by navigation moves the last page under the
+  person standing on it, and a server page shorter than ten leaves
+  the rest with no door. **The workflow's "nothing happens"** was
+  rule 13½ again, found by reproducing in the user's own browser:
+  the launcher pushed at `/`, and `/` stopped being the hub when the
+  dashboard took the landing page — the route still RESOLVED, so
+  every reachability check stayed green while the click landed on a
+  briefing screen that reads none of its params. The pipeline was
+  never broken: driven at the right address it read the real email
+  and drafted the reply. Second half ruled per Sana's model
+  (fill inputs -> Run -> output in the chat): choosing the source IS
+  the instruction, so the hub runs it unprompted with the SERVER's
+  name for the workflow as the opening line, once per pick, never on
+  a resumed thread, and `run` is spent on start so a reload is not a
+  second run. Hub's own router.replace("/") had the same stale
+  address. **NO-CLAUDE FAILED A SECOND TIME**: production served
+  `~anthropic/claude-opus-latest` — `startsWith("anthropic/")`
+  defeated by ONE character; the rule names a model FAMILY, not a
+  routing prefix, and every fixture in the covering test was spelled
+  the way the code believed (rule 9, exactly). Minted, from my own
+  hands: **the first verify-red PASSED against the shipped bug
+  because I had put the real id in the capability list instead of
+  the catalogue mock — the fixture was in the wrong place, so the
+  instrument had nothing to check; a verify-red that goes green is
+  itself the finding.** Its regression, caught by the suite: filtering
+  the STORED preference too would have traded a refusal that names
+  the model for "no model selected" — a vaguer nothing (rule 12), so
+  the server keeps refusing by name and the CLIENT stopped sending a
+  model the server never offered. Also: `dashboard.widget.ask`
+  existed in NO locale and rendered as a raw key on the landing page
+  — keys.test skips computed keys, and locale PARITY cannot see a key
+  missing from both; widget titles are now checked against the
+  REGISTRY's own list (13½: derive the coverage list from the
+  producer). Google connectors live end to end (consent, Gmail list
+  20, the draft written from a real message).
