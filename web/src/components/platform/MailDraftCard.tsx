@@ -115,9 +115,17 @@ export function MailDraftCard({
             {t(state.status === "sent" ? "sentLabel" : state.status === "discarded" ? "discardedLabel" : "draftLabel")}
           </span>
           {state.in_provider ? (
+            /*
+             * Discarding marks OUR row; it does not reach into the person's
+             * mailbox, where the draft is still sitting. Saying "also in your
+             * Drafts folder" over a discarded reply would leave the product
+             * and the mailbox telling two different stories, so the discarded
+             * case says the true thing instead — the deletion is theirs to
+             * make, in the place the draft actually lives.
+             */
             <span className="ms-auto inline-flex items-center gap-1 text-xs text-fg-subtle">
-              <CheckMark />
-              {t("inMailbox")}
+              {state.status === "discarded" ? null : <CheckMark />}
+              {t(state.status === "discarded" ? "stillInMailbox" : "inMailbox")}
             </span>
           ) : null}
         </header>

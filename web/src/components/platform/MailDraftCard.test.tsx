@@ -40,6 +40,8 @@ const DISCARD = "کنار بگذار";
 const ALREADY = "این پاسخ پیش‌تر فرستاده یا کنار گذاشته شده بود.";
 const ENABLE = "فعال‌کردن ارسال";
 const SHOW_SOURCE = "نمایش متن";
+const IN_MAILBOX = "در پیش‌نویس‌های صندوق پستی شما هم هست";
+const STILL_IN_MAILBOX = "هنوز در پوشهٔ پیش‌نویس‌های شماست؛ از همان‌جا پاکش کنید";
 
 const DRAFT: MailDraft = {
   id: "d-1",
@@ -104,6 +106,25 @@ describe("MailDraftCard", () => {
     fireEvent.click(screen.getByText(SEND));
     await waitFor(() => expect(notified.length).toBe(1));
     expect(notified[0]).toBe(ALREADY);
+  });
+
+  it("stops claiming the mailbox agrees once a draft is discarded", async () => {
+    /*
+     * Discard writes OUR row and does not touch the mailbox, so the draft is
+     * still sitting in the person's Drafts folder. A card that kept saying
+     * "also in your Drafts folder" would be technically true and read as
+     * confirmation that the discard reached the mail — two stories about one
+     * object, which is how "why is this still here?" happens.
+     */
+    discarded.mockResolvedValue({
+      ...DRAFT, status: "discarded", decided_at: new Date().toISOString(),
+    });
+    render(<MailDraftCard draft={DRAFT} />);
+    expect(screen.getByText(IN_MAILBOX)).toBeTruthy();
+
+    fireEvent.click(screen.getByText(DISCARD));
+    await waitFor(() => expect(screen.getByText(STILL_IN_MAILBOX)).toBeTruthy());
+    expect(screen.queryByText(IN_MAILBOX)).toBeNull();
   });
 
   it("renders a decided draft as a record, with no send", () => {

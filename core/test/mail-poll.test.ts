@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { draftInstruction, readVerdict, sweepMailboxes } from "../src/worker/mail-poll.ts";
 import type { Db, SqlTx } from "../src/db/identity.ts";
 import type { Identity } from "../src/agent/types.ts";
+import type { MailPollConnectors } from "../src/worker/mail-poll.ts";
 
 /**
  * M43 — the mailbox poller.
@@ -85,7 +86,7 @@ const HOSTILE = {
   occurred_at: null,
 };
 
-function connectorsFor(items: typeof HOSTILE[]) {
+function connectorsFor(items: typeof HOSTILE[]): MailPollConnectors {
   return {
     mailEnvelope: async () => ({
       to: "amirreza@example.com",
@@ -109,7 +110,7 @@ function connectorsFor(items: typeof HOSTILE[]) {
      * hands over messages every time so the guard is the only thing that
      * can stop them.
      */
-    newMailSince: async () => ({ items, newest: "msg-2" }),
+    newMailSince: async () => ({ items, newest: "msg-2", newestAt: null }),
   };
 }
 
@@ -154,7 +155,7 @@ describe("sweepMailboxes", () => {
     const create = vi.fn();
     await sweepMailboxes({
       db,
-      connectors: connectorsFor([HOSTILE]) as never,
+      connectors: connectorsFor([HOSTILE]),
       drafts: { create } as never,
       apiKey: "k",
       runModel: async () => ({ text: '{"reply":true,"note":"n","body":"b"}' }),
@@ -171,7 +172,7 @@ describe("sweepMailboxes", () => {
     const create = vi.fn().mockResolvedValue({ id: "draft-1" });
     await sweepMailboxes({
       db,
-      connectors: connectorsFor([HOSTILE]) as never,
+      connectors: connectorsFor([HOSTILE]),
       drafts: { create } as never,
       apiKey: "k",
       runModel: async () => ({ text: '{"reply":true,"note":"drafted","body":"سلام"}' }),
@@ -188,7 +189,7 @@ describe("sweepMailboxes", () => {
     let seen = "";
     await sweepMailboxes({
       db,
-      connectors: connectorsFor([HOSTILE]) as never,
+      connectors: connectorsFor([HOSTILE]),
       drafts: { create: vi.fn().mockResolvedValue({ id: "d" }) } as never,
       apiKey: "k",
       runModel: async ({ input }) => { seen = input; return { text: '{"reply":true,"note":"","body":"ok"}' }; },
@@ -213,7 +214,7 @@ describe("sweepMailboxes", () => {
     const create = vi.fn();
     await sweepMailboxes({
       db,
-      connectors: connectorsFor([HOSTILE]) as never,
+      connectors: connectorsFor([HOSTILE]),
       drafts: { create } as never,
       apiKey: "k",
       runModel: async () => ({ text: '{"reply":true,"note":"","body":"b"}' }),
@@ -226,7 +227,7 @@ describe("sweepMailboxes", () => {
     const create = vi.fn();
     await sweepMailboxes({
       db,
-      connectors: connectorsFor([{ ...HOSTILE, subtitle: "Google <no-reply@accounts.google.com>" }]) as never,
+      connectors: connectorsFor([{ ...HOSTILE, subtitle: "Google <no-reply@accounts.google.com>" }]),
       drafts: { create } as never,
       apiKey: "k",
       runModel: async () => ({ text: '{"reply":true,"note":"","body":"b"}' }),

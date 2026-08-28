@@ -1083,6 +1083,7 @@
     "title": "Workflows",
     "subtitle": "Choose a prompt to start a guided task. Workflows run only when you start them.",
     "empty": "No prompts are available yet.",
+    "createWorkflow": "Create workflow",
     "calendarSource": "calendar event",
     "mailSource": "email",
     "connectRequired": "Connect a calendar or email account before choosing a {source}.",
@@ -2109,6 +2110,7 @@
     "draftLabel": "Draft reply",
     "sources": "Sources",
     "showSource": "Show text",
-    "hideSource": "Hide text"
+    "hideSource": "Hide text",
+    "stillInMailbox": "Still in your Drafts folder — delete it there"
   }
 }
