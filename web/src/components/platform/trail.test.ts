@@ -71,9 +71,10 @@ function messageKeyExists(catalogue: Record<string, unknown>, key: string): bool
 describe("breadcrumb trail", () => {
   it("puts the ancestors above the page, root first", () => {
     expect(trailFor("/management/users")).toEqual([
-      /* the root is the ASSISTANT since 2026-08-27 (the dashboard is parked
-         and `/` redirects there) — the crumb names where clicking it lands */
-      { href: "/", label: "platform.assistant" },
+      /* MANAGEMENT is its own root (user directive, 2026-08-28: "for echo
+         and management, they are the main roots") — the rail's three icons
+         are three domains, and a trail opening every Management page with
+         "Assistant /" claimed a hierarchy the rail contradicts */
       { href: "/management", label: "platform.management" },
       { href: "/management/users", label: "management.section.users" },
     ]);
@@ -82,7 +83,7 @@ describe("breadcrumb trail", () => {
   it("hangs Echo's surfaces under Echo, which the URL does not say", () => {
     // the reason this table exists at all: a path-derived trail renders
     // "Home > Search" and teaches an IA the rest of the product contradicts
-    expect(trailFor("/search").map((c) => c.href)).toEqual(["/", "/echo", "/search"]);
+    expect(trailFor("/search").map((c) => c.href)).toEqual(["/echo", "/search"]);
   });
 
   it("does NOT route a call through /calls, which is now only a redirect", () => {
@@ -99,7 +100,6 @@ describe("breadcrumb trail", () => {
     // record — Home / Echo / Records / <title> — via the STATIC
     // /echo/records entry (a parent must never be a dynamic pattern)
     expect(trail.map((c) => c.href)).toEqual([
-      "/",
       "/echo",
       "/echo/records",
       "/calls/0c5c0e02-1111-2222-3333-444455556666",
@@ -144,11 +144,24 @@ describe("the trail's own assumptions", () => {
     expect(parents.filter((p) => p.includes("["))).toEqual([]);
   });
 
-  it("reaches the root from every entry", () => {
+  it("reaches one of the three domain roots from every entry", () => {
+    /*
+     * The IA has THREE roots since 2026-08-28 — Assistant (/), Echo and
+     * Management — matching the rail's three icons. The root SET is pinned
+     * first, derived from the table itself: a fourth parentless entry is a
+     * new root nobody declared, and a typo that drops a parent would
+     * otherwise read as "reachable" while quietly re-rooting a page.
+     */
+    const roots = Object.entries(TRAIL)
+      .filter(([, entry]) => entry.parent === undefined)
+      .map(([pattern]) => pattern)
+      .sort();
+    expect(roots).toEqual(["/", "/echo", "/management"]);
     for (const pattern of Object.keys(TRAIL)) {
       const trail = trailFor(pattern.replace(/\[[^\]]+\]/g, "x"));
       expect(trail.length, `${pattern} produced no trail`).toBeGreaterThan(0);
-      expect(trail[0]!.href, `${pattern} does not reach the root`).toBe("/");
+      expect(roots, `${pattern} does not reach a declared root`)
+        .toContain(trail[0]!.href);
     }
   });
 });

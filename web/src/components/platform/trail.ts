@@ -73,7 +73,15 @@ export const TRAIL: Readonly<Record<string, TrailEntry>> = {
    * that is temporary. Special-casing it here would have to be undone the week
    * the merged surface lands.
    */
-  "/echo": { label: "platform.echo", parent: "/" },
+  /*
+   * ECHO IS A ROOT, not a room inside the assistant (user directive,
+   * 2026-08-28: "for echo and management, they are the main roots"). The
+   * rail's three icons are three domains — Assistant, Echo, Management —
+   * and a trail that opened every Echo page with "Assistant /" claimed a
+   * hierarchy the rail itself contradicts. No parent = the domain's own
+   * name is where its trail begins.
+   */
+  "/echo": { label: "platform.echo" },
   /** Echo's sections (Part 5): the same anatomy as Settings, so the same
    *  trail shape — the slug builds the leaf label. */
   "/echo/[section]": { labelPrefix: "echo.section", parent: "/echo" },
@@ -94,7 +102,8 @@ export const TRAIL: Readonly<Record<string, TrailEntry>> = {
   "/calls/[id]": { entity: true, parent: "/echo/records" },
   "/search": { label: "search.title", parent: "/echo" },
 
-  "/management": { label: "platform.management", parent: "/" },
+  /* a root for the same reason as /echo — see the note there */
+  "/management": { label: "platform.management" },
   /* the four assistant/service sections wear the SETTINGS menu now (user
      directive, 2026-08-26) and their pages did not move, so the TRAIL has
      to follow the menu rather than the URL: a crumb that says Management
