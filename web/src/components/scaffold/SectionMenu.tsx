@@ -252,9 +252,32 @@ export function MenuLayout({ menu, children }: { menu: ReactNode; children: Reac
   }
 
   return (
-    /* min-h-full so a content child may center itself vertically (the hub);
-       pages taller than the viewport are unaffected */
-    <div className="flex min-h-full w-full flex-col md:flex-row">
+    /*
+     * THE SHELL SCROLL (user directive, 2026-08-28: "the sub menu should not
+     * move with scroll, fix this for all platform … as you see in sana.ai
+     * the menu and sub menu is fixed as well").
+     *
+     * ONE scroller: the CONTENT COLUMN. From md up this row is exactly the
+     * height the shell grants it (`md:h-full` + `md:overflow-hidden`), so the
+     * row itself can never scroll; the menu column scrolls ITSELF when it is
+     * taller than the viewport (`md:overflow-y-auto` on its wrapper below),
+     * and the page scrolls in the content column. The section menu therefore
+     * stays put — like the rail and the top bar — while only the content
+     * moves. Nobody re-implements a page-level scroll container: a surface
+     * that wants to scroll renders inside this column, and an inner box that
+     * scrolls its own overflow (a wide table, a dialog, a thread) is a
+     * different thing from a second page scroller. scaffold.test.tsx holds
+     * these classes; the reasons a repo-wide scroller GREP does not exist
+     * live there too.
+     *
+     * Below md the stacked mobile layout is deliberately untouched: the menu
+     * sits above the content and the page scrolls as one, which is the right
+     * behaviour on a screen with no room for two fixed columns.
+     *
+     * min-h-full stays so a content child may center itself vertically (the
+     * hub); pages taller than the viewport are unaffected.
+     */
+    <div className="flex min-h-full w-full flex-col md:h-full md:flex-row md:overflow-hidden">
       {closed ? (
         /* the reopen affordance holds the menu's edge so the column doesn't
            read as missing — a slim strip, the full height of the row */
@@ -269,7 +292,11 @@ export function MenuLayout({ menu, children }: { menu: ReactNode; children: Reac
         </button>
       ) : (
         <ResizablePanel side="start" spec={MENU_PANEL} label={t("resizeMenu")} className="w-full">
-          <div className="relative h-full">
+          {/* the menu column's OWN scroller (THE SHELL SCROLL): a long menu —
+              History's recents, a deep settings tree — scrolls in place and
+              never pushes the row taller than the shell. The close affordance
+              scrolls with the menu's top, which is where the eye left it. */}
+          <div className="relative h-full md:min-h-0 md:overflow-y-auto">
             <button
               type="button"
               className="tap absolute end-2 top-2 z-10 hidden h-7 w-7 items-center justify-center rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg md:flex"
@@ -283,7 +310,11 @@ export function MenuLayout({ menu, children }: { menu: ReactNode; children: Reac
           </div>
         </ResizablePanel>
       )}
-      <div className="min-w-0 flex-1">{children}</div>
+      {/* THE scroller (THE SHELL SCROLL): the one region of a menu-bearing
+          surface that moves when the page does. Sticky elements inside pages
+          (the call player's top bar, the hub's composer) stick against THIS
+          box from md up — it is the nearest scrolling ancestor. */}
+      <div className="min-w-0 flex-1 md:min-h-0 md:overflow-y-auto">{children}</div>
     </div>
   );
 }

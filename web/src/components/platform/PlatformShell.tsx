@@ -146,6 +146,14 @@ export function PlatformShell({ children }: { children: ReactNode }) {
             The cost is a remount of the current page, and it is paid only when
             someone deliberately changes a display preference — where a redraw
             is exactly what they asked for.
+
+            SCROLL: `h-dvh` on the shell root plus this `min-h-0 flex-1`
+            column is what keeps the DOCUMENT from ever scrolling — the rail
+            and top bar stay put structurally, not by position:fixed. This
+            `overflow-y-auto` is the scroller only for MENU-LESS surfaces; a
+            menu-bearing surface renders MenuLayout, which is `md:h-full` and
+            moves the scroll into its content column so the section menu
+            holds still too (THE SHELL SCROLL, scaffold/SectionMenu.tsx).
           */}
           <main key={`${calendar}|${timezone}`} className="min-h-0 flex-1 overflow-y-auto">
             {children}

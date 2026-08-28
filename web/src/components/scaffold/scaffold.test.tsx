@@ -28,7 +28,14 @@ vi.mock("@/i18n/routing", () => ({
   ),
 }));
 
-const { SectionMenu } = await import("./SectionMenu");
+/* MenuLayout's close/resize affordances name themselves via next-intl; the
+   keys are asserted by the locale suites, not here */
+vi.mock("next-intl", () => ({
+  useTranslations: () => (key: string) => key,
+  useLocale: () => "fa",
+}));
+
+const { SectionMenu, MenuLayout } = await import("./SectionMenu");
 const { FormPanel, FormRow, PanelFooter } = await import("./FormPanel");
 const { PageContainer, PageHeader, Section } = await import("./Page");
 
@@ -155,6 +162,64 @@ describe("SectionMenu structure", () => {
   it("a badged item shows its chip — the not-yet-usable marker lives in the menu", () => {
     render(<SectionMenu navLabel="menu" heading="تنظیمات" groups={GROUPS} activeSlug="general" />);
     expect(screen.getByText("به‌زودی")).toBeTruthy();
+  });
+});
+
+describe("THE SHELL SCROLL — one scroller, the content column", () => {
+  /*
+   * User directive (2026-08-28): "the sub menu should not move with scroll,
+   * fix this for all platform … as you see in sana.ai the menu and sub menu
+   * is fixed as well." From md up MenuLayout is exactly the height the shell
+   * grants it and can never scroll itself; the menu column scrolls its own
+   * overflow; the CONTENT column is the one scroller. jsdom computes no
+   * layout, so these pin the CLASSES the behaviour hangs on — each verified
+   * red by removing it — and the computed truth (scrollHeight, the menu's
+   * bounding rect surviving a content scroll) is measured on the live render.
+   *
+   * There is deliberately NO repo-wide grep for "competing overflow-y-auto
+   * scrollers": legitimate inner scrollers are everywhere (tables in their
+   * own boxes, dialogs, dropdown panels, conversation threads), and no
+   * textual pattern separates "a box scrolling its own overflow" from "a
+   * second page scroller". A checker that manufactures false positives gets
+   * muted within a week and is then worse than absent — the honest gap is
+   * recorded here instead, and the viewport-ROOT guard (rhythm.guard.test.ts)
+   * catches the graver shape: a surface declaring its own h-dvh document.
+   */
+  function renderLayout() {
+    return render(
+      <MenuLayout menu={<nav aria-label="بخش‌ها">منو</nav>}>
+        <p>محتوا</p>
+      </MenuLayout>,
+    );
+  }
+
+  it("the row is viewport-bound from md up and never scrolls itself", () => {
+    const { container } = renderLayout();
+    const root = container.firstElementChild as HTMLElement;
+    const classes = root.className.split(" ");
+    expect(classes).toContain("md:h-full");
+    expect(classes).toContain("md:overflow-hidden");
+    /* below md the stacked mobile layout still flows as one page — the row
+       must stay min-h-full there, not become a box that clips the phone */
+    expect(classes).toContain("min-h-full");
+  });
+
+  it("the content region is THE scroller", () => {
+    renderLayout();
+    const content = screen.getByText("محتوا").parentElement as HTMLElement;
+    const classes = content.className.split(" ");
+    for (const cls of ["min-w-0", "flex-1", "md:min-h-0", "md:overflow-y-auto"]) {
+      expect(classes).toContain(cls);
+    }
+  });
+
+  it("the menu column scrolls itself — a long menu never pushes the page", () => {
+    renderLayout();
+    const menuWrap = screen.getByRole("navigation", { name: "بخش‌ها" })
+      .parentElement as HTMLElement;
+    const classes = menuWrap.className.split(" ");
+    expect(classes).toContain("h-full");
+    expect(classes).toContain("md:overflow-y-auto");
   });
 });
 

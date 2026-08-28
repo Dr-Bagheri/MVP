@@ -163,25 +163,30 @@ export function AssistantMenu({
           key: "setup",
           title: t("assistantMenuSetup"),
           items: [
-            { slug: "workflows", href: "/workflows", label: t("workflows"), icon: <IconZap /> },
-            /* CREATE, directly under Workflows (user directive, 2026-08-28:
-               "add create workflow in workflow section as well"). It is a
-               real href, not a bus message: pressed from Integrations or a
-               conversation it has to ARRIVE at the catalogue, and the page
-               opens the builder from the query it lands with. */
-            ...(canAuthor
-              ? [{
-                  slug: "workflow-new",
-                  href: "/workflows",
-                  label: tWorkflows("createWorkflow"),
-                  icon: <IconPlus />,
-                  sub: true,
-                  preventNavigation: true,
-                  onSelect: () => router.push({
-                    pathname: "/workflows", query: { new: "1" },
-                  }),
-                }]
-              : []),
+            {
+              slug: "workflows", href: "/workflows", label: t("workflows"), icon: <IconZap />,
+              /*
+               * CREATE rides the Workflows row as a ＋ at its end — the same
+               * shape as Echo's quick-memo ＋ on New meeting (user directive,
+               * 2026-08-28: "remove it from here and add it in front of it
+               * in the row … like the new record"). A sub-row underneath
+               * read as a destination; a ＋ on the row reads as what it is,
+               * an act. Its own action, never part of the row's click; it
+               * still ARRIVES at the catalogue, because pressed from a
+               * conversation the builder needs its page under it.
+               */
+              ...(canAuthor
+                ? {
+                    trailing: {
+                      label: tWorkflows("createWorkflow"),
+                      icon: <IconPlus />,
+                      onSelect: () => router.push({
+                        pathname: "/workflows", query: { new: "1" },
+                      }),
+                    },
+                  }
+                : {}),
+            },
             /* directly under Workflows (user directive, 2026-08-28) — the
                accounts a workflow runs on, so the two sit together */
             { slug: "integrations", href: "/integrations", label: t("integrations"), icon: <IconPlug /> },

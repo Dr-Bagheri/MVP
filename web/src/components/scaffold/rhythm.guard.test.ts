@@ -108,3 +108,62 @@ describe("the page rhythm is the scaffold's", () => {
     expect(offenders).toEqual([]);
   });
 });
+
+/**
+ * THE SHELL SCROLL's guard half (user directive, 2026-08-28: the menu and
+ * sub-menu hold still; only the content scrolls). The behaviour lives in
+ * MenuLayout and PlatformShell; what a guard can catch textually is the
+ * graver regression: a surface declaring its own viewport-height ROOT — a
+ * second shell, which is how a page grows its own scroll model and the menu
+ * starts moving again. Inner `overflow-y-auto` boxes are deliberately NOT
+ * policed (see scaffold.test.tsx for why: no pattern separates them from a
+ * page scroller without manufacturing false positives).
+ */
+const VIEWPORT_ROOT = /(^|["'\s])(?:min-)?h-(?:dvh|screen|\[100[dsl]?vh\])(["'\s]|$)/;
+
+/** Surfaces allowed a viewport-height root, each because it is not a page
+ *  INSIDE the shell. Anything else renders under PlatformShell and inherits
+ *  its scroll model. */
+const SHELL_ALLOWED: Readonly<Record<string, string>> = {
+  "components/platform/PlatformShell.tsx":
+    "the shell itself — its h-dvh root is what keeps the document from ever scrolling",
+  "components/AppShell.tsx":
+    "the pre-platform Echo shell; zero importers remain (checked 2026-08-28) — harmless while nothing renders it, and its removal is its own decision",
+  "app/[locale]/platform/page.tsx":
+    "the vendor operations console renders outside PlatformShell entirely and owns its own document",
+  "app/[locale]/(auth)/layout.tsx":
+    "auth screens render before any shell exists",
+  "app/[locale]/error.tsx":
+    "the error boundary can mount when the shell itself failed to",
+};
+
+describe("the shell scroll belongs to the shell", () => {
+  it("no surface declares a second viewport-height root", () => {
+    const offenders = files
+      .filter((f) => SHELL_ALLOWED[f.rel] === undefined)
+      .filter((f) => VIEWPORT_ROOT.test(f.text))
+      .map((f) => f.rel);
+    expect(offenders).toEqual([]);
+  });
+
+  it("the pattern still recognises the real shell — a guard matching nothing guards nothing", () => {
+    /* the negative-control rule: if a class rename ever makes this regex
+       blind, this fails instead of the guard passing vacuously forever */
+    const shell = files.find((f) => f.rel === "components/platform/PlatformShell.tsx");
+    expect(shell).toBeDefined();
+    expect(VIEWPORT_ROOT.test(shell!.text)).toBe(true);
+  });
+
+  it("every shell exception is a real file — a stale reason is a rule about nothing", () => {
+    const present = new Set(files.map((f) => f.rel));
+    expect(Object.keys(SHELL_ALLOWED).filter((rel) => !present.has(rel))).toEqual([]);
+  });
+
+  it("the shell still pins the document: h-dvh root, one min-h-0 scroll column", () => {
+    /* class-string pins, jsdom's honest ceiling — the computed behaviour was
+       measured on the live render when this landed */
+    const shell = files.find((f) => f.rel === "components/platform/PlatformShell.tsx")!;
+    expect(shell.text).toContain('"flex h-dvh bg-bg text-fg"');
+    expect(shell.text).toContain("min-h-0 flex-1 overflow-y-auto");
+  });
+});

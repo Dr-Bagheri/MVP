@@ -10,6 +10,7 @@ import { modelLabel } from "@/lib/format";
 import { useDictation } from "@/lib/dictation";
 import { deliverDoc } from "@/lib/deliver";
 import { subscribeComposer, takePendingDraft } from "@/lib/assistantBus";
+import { shouldStick } from "@/lib/threadFollow";
 import { useSkillName, useSkillStarters } from "@/lib/skillName";
 import { ConversationThread } from "./ConversationThread";
 import { MailDraftCard } from "./MailDraftCard";
@@ -17,6 +18,19 @@ import { useAssistantConversation } from "./AssistantConversationState";
 import { DocumentIcon, MicIcon, PlusIcon, SendIcon } from "./icons";
 
 type CreateKind = "doc" | "pdf";
+
+/**
+ * A stream that ended without `done` — the transport died (proxy timeout,
+ * dropped tunnel), it did not succeed. Its own class so the catch can tell
+ * "the run died mid-air" from "the run never started": the two nothings get
+ * different copy, and only the second one may claim nothing ever ran.
+ */
+class StreamDiedError extends Error {
+  constructor() {
+    super("stream ended without done");
+    this.name = "StreamDiedError";
+  }
+}
 
 /**
  * The AI-assistant hub — NeurAI's first page (M22, user-approved).
@@ -144,6 +158,22 @@ export function Hub() {
   const sessionId = useRef<string | undefined>(undefined);
   const abortRef = useRef<AbortController | null>(null);
   const threadEnd = useRef<HTMLDivElement>(null);
+  /** The thread's own scroll box (md+) — the page never scrolls for it. */
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  /**
+   * AUTO-FOLLOW state, a ref because it must never cause a render: whether
+   * the reader is at (or near) the bottom of the thread. While pinned, every
+   * new message and streaming delta keeps the latest answer in view. When
+   * the person has scrolled UP to re-read something older, we do NOT yank
+   * them back down — that is the difference between following and fighting.
+   * They re-pin by returning to the bottom (the scroll handler notices), or
+   * by sending a message themselves (their own act at the composer). The
+   * decision lives in lib/threadFollow, pure, where the scrolled-up case is
+   * unit-testable — jsdom cannot lay out, so the DECISION is what tests can
+   * actually hold. `overflow-anchor` alone is not reliable across our
+   * browsers; the behaviour is written, not hoped for.
+   */
+  const pinnedRef = useRef(true);
 
   /**
    * Resume is driven by a URL param (`?c=<id>`), not component state: Back
@@ -385,6 +415,10 @@ export function Hub() {
 
   useEffect(() => {
     if (!resumeId) return;
+    /* a freshly opened thread shows its LATEST turn — re-pin here, not in
+       adoptThread: adoptThread also runs after every `done`, where re-pinning
+       would yank a reader who scrolled up mid-answer */
+    pinnedRef.current = true;
     let cancelled = false;
     void adoptThread(resumeId).then(() => {
       if (cancelled) return;
@@ -406,6 +440,7 @@ export function Hub() {
     abortRef.current?.abort();
     abortRef.current = null;
     sessionId.current = undefined;
+    pinnedRef.current = true;
     setMessages([]);
     setInput("");
     setFeedback({});
@@ -423,7 +458,17 @@ export function Hub() {
   }, [resetVersion, resumeId, router]);
 
   useEffect(() => {
-    threadEnd.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    /* Follow only while pinned — see pinnedRef for the reasoning. Instant,
+       not smooth: a smooth scroll issued on every streaming delta lags its
+       own target and judders; pinning is a position, not an animation. */
+    if (!pinnedRef.current) return;
+    const el = scrollerRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+    /* Below md the thread box does not scroll (the page scrolls as one, the
+       mobile layout deliberately untouched) — the sentinel carries the
+       follow there. On md+ the box is already at its bottom, so this
+       ancestor-scroll is a no-op. */
+    threadEnd.current?.scrollIntoView({ block: "end" });
   }, [messages]);
 
   /**
@@ -471,9 +516,25 @@ export function Hub() {
      the landing PAGE now (components/platform/Dashboard.tsx), not a view of
      the hub — a briefing and a conversation are different screens */
 
-  /** One reducer for ask and regenerate — same events, same thread. */
-  async function consume(stream: AsyncGenerator<AgentEvent>, replyId: string) {
+  /**
+   * One reducer for ask and regenerate — same events, same thread.
+   *
+   * `progress` is written as events arrive so `run` can tell three endings
+   * apart: a clean finish (`sawDone`), a stream that broke after saying
+   * something (`sawAny` without `sawDone`), and one that ended before a
+   * single frame. The wire contract (core sse.ts) is explicit: `done` is
+   * ALWAYS the last event, including on failure, so **a stream that simply
+   * ends without it died in transport — it is never a success**. The pane
+   * implemented that rule from day one; the hub did not, and a dropped
+   * proxy connection walked the success path here in silence.
+   */
+  async function consume(
+    stream: AsyncGenerator<AgentEvent>,
+    replyId: string,
+    progress: { sawAny: boolean; sawDone: boolean },
+  ) {
     for await (const event of stream) {
+      progress.sawAny = true;
       switch (event.type) {
         case "session":
           sessionId.current = event.id;
@@ -499,6 +560,7 @@ export function Hub() {
           );
           break;
         case "done":
+          progress.sawDone = true;
           setMessages((prev) => {
             const idx = prev.findIndex((m) => m.id === replyId);
             const emptyFailure =
@@ -537,8 +599,28 @@ export function Hub() {
     setStreaming(true);
     const controller = new AbortController();
     abortRef.current = controller;
+    const progress = { sawAny: false, sawDone: false };
     try {
-      await consume(start(controller.signal), replyId);
+      await consume(start(controller.signal), replyId, progress);
+      /*
+       * **A stream that ends without `done` died in transport.** The wire
+       * contract (core sse.ts: "done is ALWAYS the last event, including on
+       * failure — the client treats stream-end-without-done as a transport
+       * failure") had only one half built: core never drops the stream
+       * silently, and the hub never checked. A proxy timeout closing the
+       * SSE body cleanly (the Cloudflare tunnel, Vercel's duration kill —
+       * both on record for this deployment) therefore walked the SUCCESS
+       * path: no error, no annotation, a reply stuck on "thinking" — and
+       * when the cut landed on a conversation's opening turn before the
+       * `session` frame, the id never arrived, so the person's next message
+       * silently opened a NEW conversation under the old thread. The
+       * assistant "forgot everything" while the screen looked connected
+       * (user report, 2026-08-28). Refusing the silent ending here is what
+       * makes the death visible; the session ref is deliberately left
+       * untouched below, so when the id IS known the next message continues
+       * the same conversation.
+       */
+      if (!progress.sawDone) throw new StreamDiedError();
       // adopt the persisted rows — the toolbar needs server ids
       if (sessionId.current) await adoptThread(sessionId.current);
       await refreshDrafts(sessionId.current);
@@ -555,17 +637,46 @@ export function Hub() {
         );
         if (sessionId.current) await adoptThread(sessionId.current).catch(() => undefined);
       } else {
-        setMessages((prev) => prev.filter((m) => !(m.id === replyId && m.content === "")));
+        /*
+         * Settle the turn the way `done` would have (Shape A/B, mirrored
+         * from the done-handler): a reply that said NOTHING is no turn at
+         * all — it goes, and the failed flag moves onto the question it
+         * annotates; a PARTIAL reply is a real turn that ended badly — it
+         * stays, settled and marked, so the existing annotation renders
+         * under it. Never a synthetic bubble (standing rule): the thread is
+         * the record, and our commentary must not be able to join it. The
+         * old code removed only EMPTY replies, which left a partial one
+         * blinking its caret forever on a dead stream.
+         */
+        setMessages((prev) => {
+          const idx = prev.findIndex((m) => m.id === replyId);
+          const empty = (prev[idx]?.content ?? "") === "";
+          return prev
+            .map((m, i) => {
+              if (m.id === replyId) return { ...m, streaming: false, failed: true };
+              if (empty && i === idx - 1 && m.role === "user") return { ...m, failed: true };
+              return m;
+            })
+            .filter((m) => !(m.id === replyId && empty));
+        });
         /*
          * The refusal's own sentence, rendered — the previous version knew
          * only "the run did not finish" and swallowed WHY, which left the
          * user staring at an unanswered question with no lever to pull.
          * The server names the problem ("no model selected…"); saying it
          * is the difference between a bug report and a fixed dropdown.
+         *
+         * But only where the sentence is TRUE (distinguish the kinds of
+         * nothing): `askFailed` says "refused before a run started", which
+         * is right for a refusal or a fetch that never connected, and a
+         * false claim for a stream that died mid-answer — there the run DID
+         * start, and the annotation on the turn is the honest sign.
          */
-        setAskError(
-          cause instanceof BffError && cause.detail ? cause.detail : t("askFailed"),
-        );
+        if (cause instanceof BffError) {
+          setAskError(cause.detail ?? t("askFailed"));
+        } else if (!(cause instanceof StreamDiedError) && !progress.sawAny) {
+          setAskError(t("askFailed"));
+        }
       }
     } finally {
       abortRef.current = null;
@@ -582,6 +693,9 @@ export function Hub() {
   async function send(text?: string) {
     const typed = (text ?? input).trim();
     if (typed === "" || streaming) return;
+    /* sending re-pins: the person just acted at the composer, and a thread
+       that does not show the question they sent reads as having eaten it */
+    pinnedRef.current = true;
     setStarted(true);
     setSkillOpen(false);
     setInput("");
@@ -728,8 +842,25 @@ export function Hub() {
          `pb-6` rather than the page's `pb-page-bottom`: the composer is
          sticky at the foot, and 64px under it would be dead space the
          conversation has to scroll past on every turn. */
+      /*
+       * THE ASSISTANT'S OWN SCROLL (user directive, 2026-08-28, the Sana
+       * shape: "the scroll is just for the prompt and its answers, the page
+       * does not need to scroll down"). In the ACTIVE state on md+ this
+       * column is bounded — `md:h-full` takes exactly the height the shell's
+       * content column grants, `md:overflow-hidden` refuses to grow past it,
+       * and the THREAD below is the one thing that scrolls. `md:max-h-dvh`
+       * is the belt: another lane is fixing the shell's scroller, and if
+       * that chain ever breaks (h-full degrading to auto under a parent with
+       * no height), the viewport bound still keeps the thread scrolling
+       * inside one screen instead of growing the page. Below md nothing
+       * changes: the page scrolls as one, which is right on a phone, and
+       * the sticky composer stays visible there (it is inert on md+, where
+       * the column never scrolls).
+       */
       className={`relative isolate mx-auto flex w-full max-w-content flex-col px-page-inline pt-page-sm md:px-page-inline-md md:pt-page ${
-        idle ? "min-h-full justify-end pb-6" : "min-h-full pb-6"
+        idle
+          ? "min-h-full justify-end pb-6"
+          : "min-h-full pb-6 md:min-h-0 md:h-full md:max-h-dvh md:overflow-hidden"
       }`}
     >
       {/* the conversation controls — visible whenever we are not idle */}
@@ -799,7 +930,19 @@ export function Hub() {
           })()}
         </>
       ) : (
-        <div className="mb-4 flex-1">
+        <div
+          ref={scrollerRef}
+          /* the ONE scrolling region of the active assistant page (md+):
+             `min-h-0` lets a flex child actually shrink below its content,
+             which is what makes `overflow-y-auto` mean something here. The
+             handler keeps the follow decision current — recomputed on every
+             scroll, the reader's own or ours, so returning to the bottom
+             re-pins without a button. */
+          onScroll={(e) => {
+            pinnedRef.current = shouldStick(e.currentTarget);
+          }}
+          className="mb-4 flex-1 md:min-h-0 md:overflow-y-auto"
+        >
           <ConversationThread
             messages={messages}
             streaming={streaming}
