@@ -1688,7 +1688,19 @@
     "autoDraft": "Draft replies to new email",
     "autoDraftHint": "Your connected mailbox is read every few minutes and new messages get a drafted reply. Nothing is ever sent without you pressing send.",
     "meetingPrep": "Prepare me before meetings",
-    "meetingPrepHint": "About half an hour before each meeting, the assistant writes a pre-read from your own records."
+    "meetingPrepHint": "About half an hour before each meeting, the assistant writes a pre-read from your own records.",
+    "generalWorkspaceTitle": "Workspace",
+    "generalWorkspaceName": "Workspace name",
+    "generalYourRole": "Your role",
+    "generalYourHandle": "Your handle",
+    "generalMemberSince": "Member since",
+    "generalIdentityNote": "The workspace's name and logo are edited in",
+    "generalIdentityLink": "Management",
+    "generalLocaleTitle": "Dates and time",
+    "generalLocaleHint": "How dates and times render for you, everywhere in the platform. Language switches from the toggle in the top bar.",
+    "role_owner": "Owner",
+    "role_admin": "Admin",
+    "role_member": "Member"
   },
   "audit": {
     "codesOnly": "This page says what happened, not what was said. Question text, transcripts and conversation content never enter the audit trail.",
@@ -1968,7 +1980,7 @@
     "exportHint": "A copy of your account data — available on Profile.",
     "exportAction": "Open Profile",
     "sessionsTitle": "Active sessions",
-    "sessionsHint": "Devices currently signed in to your account. Each sign-in creates a new session.",
+    "sessionsHint": "Devices that can still act as your account — a session that can no longer refresh does not appear here. Location is read from this very request, so only this device carries one.",
     "sessionsEmpty": "No sessions recorded.",
     "deviceUnknown": "Unknown device",
     "deviceMobile": "Mobile device",
@@ -1982,7 +1994,13 @@
     "voiceDeleteFailed": "The deletion did not go through.",
     "voiceConfirmTitle": "Delete your voice print?",
     "voiceConfirmBody": "After deletion, automatic recognition of your voice in meetings stops until you enroll again.",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "colDevice": "Device",
+    "colIp": "IP address",
+    "colLocation": "Location",
+    "colSignedIn": "Signed in",
+    "colLastAction": "Last action",
+    "thisDevice": "This device"
   },
   "signin": {
     "intro": "External sign-in methods for this platform — an admin or the owner can turn each on or off.",

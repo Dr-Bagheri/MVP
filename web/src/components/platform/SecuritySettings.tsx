@@ -2,13 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Link } from "@/i18n/routing";
 import { api } from "@/api/client";
 import type { AuthSessionRow } from "@/api/types";
 import { Pagination, usePaged } from "@/components/Pagination";
-import { FormPanel, FormRow } from "@/components/scaffold";
 import { ConfirmDialog } from "@/components/rowActions";
 import { notify } from "@/lib/notify";
+import { DataTable } from "@/components/DataTable";
+import { Chip } from "@/components/ui";
+import { formatDate, formatTime } from "@/lib/format";
+import { useLocale } from "next-intl";
 
 /**
  * Settings · Security (db/0112 batch).
@@ -27,12 +29,17 @@ import { notify } from "@/lib/notify";
  */
 export function SecuritySettings() {
   const t = useTranslations("security");
+  const locale = useLocale();
   const [sessions, setSessions] = useState<AuthSessionRow[] | null>(null);
+  /** the handle of the session THIS request rode — the "this device" chip */
+  const [current, setCurrent] = useState<string | null>(null);
   const [confirmVoice, setConfirmVoice] = useState(false);
   const [voiceState, setVoiceState] = useState<"unknown" | "gone">("unknown");
 
   useEffect(() => {
-    void api.mySessions().then(setSessions).catch(() => setSessions([]));
+    void api.mySessions()
+      .then((answer) => { setSessions(answer.sessions); setCurrent(answer.current); })
+      .catch(() => setSessions([]));
   }, []);
 
   /* `null` is not-fetched, so the pager is handed the empty list until the
@@ -57,35 +64,37 @@ export function SecuritySettings() {
     }
   }
 
+  /*
+   * Browser + platform, read from the user agent — two words, because
+   * "Edge" alone cannot tell a person which of their machines a row is.
+   * Order matters twice: Edge's UA contains "Chrome", Chrome's contains
+   * "Safari"; the specific brand is asked first each time.
+   */
   const agentLabel = (agent: string | null): string => {
     if (!agent) return t("deviceUnknown");
-    if (/mobile|android|iphone/i.test(agent)) return t("deviceMobile");
-    if (/firefox/i.test(agent)) return "Firefox";
-    if (/edg/i.test(agent)) return "Edge";
-    if (/chrome/i.test(agent)) return "Chrome";
-    if (/safari/i.test(agent)) return "Safari";
-    return t("deviceBrowser");
+    const browser = /edg/i.test(agent) ? "Edge"
+      : /firefox/i.test(agent) ? "Firefox"
+      : /chrome|crios/i.test(agent) ? "Chrome"
+      : /safari/i.test(agent) ? "Safari"
+      : t("deviceBrowser");
+    const platform = /windows/i.test(agent) ? "Windows"
+      : /iphone|ipad|ios/i.test(agent) ? "iOS"
+      : /android/i.test(agent) ? "Android"
+      : /mac os|macintosh/i.test(agent) ? "macOS"
+      : /linux/i.test(agent) ? "Linux"
+      : null;
+    return platform ? `${browser} · ${platform}` : browser;
   };
 
   return (
     <div className="space-y-5">
-      <FormPanel>
-        <FormRow label={t("passwordLabel")} description={t("passwordHint")}>
-          <Link href="/profile" className="btn-secondary h-10 min-h-0 px-4 text-sm">
-            {t("passwordAction")}
-          </Link>
-        </FormRow>
-        <FormRow label={t("methodsLabel")} description={t("methodsHint")}>
-          <Link href="/settings/sso" className="btn-secondary h-10 min-h-0 px-4 text-sm">
-            {t("methodsAction")}
-          </Link>
-        </FormRow>
-        <FormRow label={t("exportLabel")} description={t("exportHint")}>
-          <Link href="/profile" className="btn-secondary h-10 min-h-0 px-4 text-sm">
-            {t("exportAction")}
-          </Link>
-        </FormRow>
-      </FormPanel>
+      {/*
+        The password/sign-in/export rows LEFT this page (user directive,
+        2026-08-28: "remove this first section of security") — all three
+        were doors to pages the menu already reaches, and a security page
+        that opens with three link-buttons buries the two things only it
+        has: the live devices and the voice print.
+      */}
 
       {/* ── the caller's own devices ─────────────────────────────────── */}
       <div>
@@ -94,24 +103,66 @@ export function SecuritySettings() {
         {sessions === null ? null : sessions.length === 0 ? (
           <p className="mt-3 text-sm text-fg-muted">{t("sessionsEmpty")}</p>
         ) : (
-          <>
-          <ul className="mt-3 divide-y divide-border rounded-lg border border-border bg-surface">
-            {visible.map((session) => (
-              <li key={session.handle} className="flex flex-wrap items-center gap-3 px-4 py-2.5 text-sm">
-                <span className="min-w-0 flex-1">
-                  <span className="block font-medium text-fg">{agentLabel(session.user_agent)}</span>
-                  <span className="block truncate text-xs text-fg-muted" dir="ltr">
-                    {session.ip ?? "—"} · {session.handle}
-                  </span>
-                </span>
-                <span className="text-xs text-fg-subtle" dir="ltr">
-                  {new Date(session.refreshed_at ?? session.created_at).toLocaleString()}
-                </span>
-              </li>
-            ))}
-          </ul>
-          <Pagination page={page} pageCount={pageCount} onPage={setPage} />
-          </>
+          <div className="mt-3">
+            <DataTable
+              rows={visible}
+              rowKey={(session) => session.handle}
+              columns={[
+                {
+                  key: "device",
+                  header: t("colDevice"),
+                  cell: (session) => (
+                    <span className="flex items-center gap-2">
+                      <span className="font-medium text-fg">{agentLabel(session.user_agent)}</span>
+                      {session.handle === current ? (
+                        <Chip tone="success">{t("thisDevice")}</Chip>
+                      ) : null}
+                    </span>
+                  ),
+                },
+                {
+                  key: "ip",
+                  header: t("colIp"),
+                  cell: (session) => (
+                    <span dir="ltr" className="text-fg-muted">{session.ip ?? "—"}</span>
+                  ),
+                },
+                {
+                  /* only the CURRENT session carries one — the BFF reads it
+                     off the request in hand; an old row's IP is often the
+                     hosting provider's egress, and a city derived from it
+                     would be a guess wearing a fact's costume */
+                  key: "location",
+                  header: t("colLocation"),
+                  cell: (session) => (
+                    <span className="text-fg-muted">{session.location ?? "—"}</span>
+                  ),
+                },
+                {
+                  key: "signedIn",
+                  header: t("colSignedIn"),
+                  cell: (session) => (
+                    <span className="text-fg-muted">
+                      {`${formatDate(session.created_at, locale)} ${formatTime(session.created_at, locale)}`}
+                    </span>
+                  ),
+                },
+                {
+                  key: "lastAction",
+                  header: t("colLastAction"),
+                  cell: (session) => session.refreshed_at ? (
+                    <span className="text-fg-muted">
+                      {`${formatDate(session.refreshed_at, locale)} ${formatTime(session.refreshed_at, locale)}`}
+                    </span>
+                  ) : (
+                    /* never refreshed is a fact, not a gap */
+                    <span className="text-fg-subtle">—</span>
+                  ),
+                },
+              ]}
+            />
+            <Pagination page={page} pageCount={pageCount} onPage={setPage} />
+          </div>
         )}
       </div>
 

@@ -190,6 +190,10 @@ export interface User {
  */
 export interface Me extends User {
   locale: string;
+  /** the workspace's display name — served to every member since core's
+      me() joined the org row; typed late (the served-and-never-typed
+      inverse of the stored-and-never-served family) */
+  org_name: string | null;
   calendar: CalendarPreference;
   /** `"auto"` (follow the device, resolved at render) or an IANA zone name. */
   timezone: string;
@@ -1146,6 +1150,9 @@ export interface AuthSessionRow {
   refreshed_at: string | null;
   user_agent: string | null;
   ip: string | null;
+  /** attached by the BFF for the CURRENT session only — Vercel's geo of the
+      request in hand; other rows carry nothing rather than a guess */
+  location?: string | null;
 }
 
 /**

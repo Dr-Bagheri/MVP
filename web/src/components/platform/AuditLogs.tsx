@@ -7,7 +7,8 @@ import type { BffError } from "@/api/client";
 import { AUDIT_SOURCES } from "@echo/core/vocabulary";
 import type { AuditCursor, AuditEntry, AuditSource, User } from "@/api/types";
 import { Pagination, usePaged } from "@/components/Pagination";
-import { Chip, EmptyState } from "@/components/ui";
+import { DataTable } from "@/components/DataTable";
+import { Card, Chip, EmptyState } from "@/components/ui";
 import { digits, formatDate, formatTime } from "@/lib/format";
 
 /**
@@ -292,77 +293,92 @@ export function AuditLogs() {
         <EmptyState text={source ? t("emptyFiltered") : t("empty")} />
       ) : entries.length > 0 ? (
         <>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[44rem] border-collapse text-sm">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="table-head py-2 pe-3">{t("colWhen")}</th>
-                  <th className="table-head py-2 pe-3">{t("colWho")}</th>
-                  <th className="table-head py-2 pe-3">{t("colWhat")}</th>
-                  <th className="table-head py-2 pe-3">{t("colTarget")}</th>
-                  <th className="table-head py-2">{t("colDetail")}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {visible.map((entry) => {
+          {/*
+            The theme's ONE table (user directive, 2026-08-28: "fix the
+            table with same rule of the theme") — the hand-rolled <table>
+            predated DataTable and was the last surface wearing its own
+            skin. The cells are unchanged; only the frame moved: DataTable
+            inside a Card, exactly the members table's dress.
+          */}
+          <Card>
+          <DataTable
+            rows={visible}
+            rowKey={entryKey}
+            columns={[
+              {
+                key: "when",
+                header: t("colWhen"),
+                cell: (entry) => (
+                  <span className="block text-xs text-fg-muted">
+                    <span className="block">{formatDate(entry.at, locale)}</span>
+                    <span className="block">{formatTime(entry.at, locale)}</span>
+                  </span>
+                ),
+              },
+              { key: "who", header: t("colWho"), cell: (entry) => actorCell(entry) },
+              {
+                key: "what",
+                header: t("colWhat"),
+                cell: (entry) => {
+                  /*
+                    An unknown source is RENDERED, never skipped. A build
+                    that quietly dropped entries it did not recognise would
+                    make a deployment skew look like an organization where
+                    nothing happened — and the entries most likely to be new
+                    are the ones most worth seeing.
+                  */
                   const known = isKnownSource(entry.source);
                   return (
-                    <tr key={entryKey(entry)}>
-                      <td className="py-3 pe-3 align-top text-xs text-fg-muted">
-                        <span className="block">{formatDate(entry.at, locale)}</span>
-                        <span className="block">{formatTime(entry.at, locale)}</span>
-                      </td>
-                      <td className="py-3 pe-3 align-top">{actorCell(entry)}</td>
-                      <td className="py-3 pe-3 align-top">
-                        {/*
-                          An unknown source is RENDERED, never skipped. A build
-                          that quietly dropped entries it did not recognise
-                          would make a deployment skew look like an
-                          organization where nothing happened — and the entries
-                          most likely to be new are the ones most worth seeing.
-                        */}
-                        {known ? (
-                          <Chip tone={SOURCE_TONE[entry.source]}>
-                            {t(`source.${entry.source}`)}
-                          </Chip>
-                        ) : (
-                          <span title={t("unknownSourceNote")}>
-                            <Chip tone="warning">{t("unknownSource")}</Chip>
-                            <span className="ltr mt-1 block font-mono text-[11px] text-fg-muted">
-                              {entry.source}
-                            </span>
+                    <>
+                      {known ? (
+                        <Chip tone={SOURCE_TONE[entry.source]}>
+                          {t(`source.${entry.source}`)}
+                        </Chip>
+                      ) : (
+                        <span title={t("unknownSourceNote")}>
+                          <Chip tone="warning">{t("unknownSource")}</Chip>
+                          <span className="ltr mt-1 block font-mono text-[11px] text-fg-muted">
+                            {entry.source}
                           </span>
-                        )}
-                        <span className="mt-1 block text-xs">{actionLabel(entry)}</span>
-                      </td>
-                      <td className="py-3 pe-3 align-top text-xs">{targetCell(entry)}</td>
-                      <td className="py-3 align-top">
-                        <ul className="space-y-0.5">
-                          {detailPairs(entry).map(([key, value]) => (
-                            <li key={key} className="text-xs text-fg-muted">
-                              <span>
-                                {TRANSLATABLE_DETAILS.includes(key) ? (
-                                  t(`detail.${key}`)
-                                ) : (
-                                  <span className="ltr font-mono">{key}</span>
-                                )}
-                              </span>
-                              <span>: </span>
-                              <span className="ltr font-mono text-fg">
-                                {detailValue(key, value)}
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      </td>
-                    </tr>
+                        </span>
+                      )}
+                      <span className="mt-1 block text-xs">{actionLabel(entry)}</span>
+                    </>
                   );
-                })}
-              </tbody>
-            </table>
-          </div>
-
+                },
+              },
+              {
+                key: "target",
+                header: t("colTarget"),
+                cell: (entry) => <span className="text-xs">{targetCell(entry)}</span>,
+              },
+              {
+                key: "detail",
+                header: t("colDetail"),
+                cell: (entry) => (
+                  <ul className="space-y-0.5">
+                    {detailPairs(entry).map(([key, value]) => (
+                      <li key={key} className="text-xs text-fg-muted">
+                        <span>
+                          {TRANSLATABLE_DETAILS.includes(key) ? (
+                            t(`detail.${key}`)
+                          ) : (
+                            <span className="ltr font-mono">{key}</span>
+                          )}
+                        </span>
+                        <span>: </span>
+                        <span className="ltr font-mono text-fg">
+                          {detailValue(key, value)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ),
+              },
+            ]}
+          />
           <Pagination page={page} pageCount={pageCount} onPage={setPage} />
+          </Card>
 
           <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
             {cursor ? (

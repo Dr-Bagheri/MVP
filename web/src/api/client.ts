@@ -1806,9 +1806,8 @@ export const api = {
   },
 
   /** db/0112 - the caller's own devices (Security 43). */
-  async mySessions(): Promise<AuthSessionRow[]> {
-    const { sessions } = await bff<{ sessions: AuthSessionRow[] }>("/api/me/sessions");
-    return sessions;
+  async mySessions(): Promise<{ sessions: AuthSessionRow[]; current: string | null }> {
+    return bff<{ sessions: AuthSessionRow[]; current: string | null }>("/api/me/sessions");
   },
 
   /** db/0112 - consent withdrawal is self-service (Security 59). */

@@ -61,6 +61,7 @@ export const ORG: Org = {
 export const ME: Me = {
   id: "u-1",
   org_id: ORG.id,
+  org_name: ORG.name,
   username: "sara",
   email: "sara@example.com",
   display_name: "سارا محمدی",

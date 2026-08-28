@@ -22,12 +22,22 @@ const { SecuritySettings } = await import("./SecuritySettings");
 const { SignInMethods } = await import("./SignInMethods");
 
 describe("settings security surfaces", () => {
-  it("keeps Security focused on its linked controls rather than repeating the deployment posture", () => {
+  it("keeps Security to what only it has: the devices and the voice print", () => {
+    /*
+     * The password/sign-in/export link rows LEFT the page (user directive,
+     * 2026-08-28: "remove this first section of security") — every one was
+     * a door the menu already reaches, and this page's own subjects are
+     * the live sessions and the biometric consent. Their ABSENCE is the
+     * assertion, alongside the posture block that left earlier: the wrong
+     * version of this page renders perfectly.
+     */
     render(<SecuritySettings />);
 
-    expect(screen.getByRole("link", { name: "بازکردن پروفایل" }).getAttribute("href")).toBe("/profile");
-    expect(screen.getByRole("link", { name: "دیدن روش‌ها" }).getAttribute("href")).toBe("/settings/sso");
+    expect(screen.queryByRole("link", { name: "بازکردن پروفایل" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "دیدن روش‌ها" })).toBeNull();
     expect(screen.queryByText("آنچه این استقرار اجرا می‌کند")).toBeNull();
+    /* the control: the page still positively renders its real subjects */
+    expect(screen.getByText("نشست‌های فعال")).toBeTruthy();
   });
 
   it("lists only the two external sign-in providers", () => {

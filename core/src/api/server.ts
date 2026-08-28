@@ -717,7 +717,24 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     const identity = await auth.requireActive(request);
     const rows = await options.db.withIdentity(identity, (tx: SqlTx) =>
       tx.unsafe<Record<string, unknown>>("select * from echo.my_auth_sessions()"));
-    return reply.send({ sessions: rows });
+    /*
+     * WHICH ROW IS THIS DEVICE: the access token carries Supabase's own
+     * session_id claim, and the list's handles are the first 8 of that id
+     * — so the marker is derived from the credential in hand, never from
+     * matching an IP (which, behind a serverless BFF, is mostly the
+     * hosting provider's egress and identifies nothing).
+     */
+    let current: string | null = null;
+    try {
+      const claims = await auth.verifiedClaims(request);
+      const sessionId = claims.session_id;
+      if (typeof sessionId === "string" && sessionId.length >= 8) {
+        current = sessionId.slice(0, 8);
+      }
+    } catch {
+      /* a gateway key has no session claim — the list still serves */
+    }
+    return reply.send({ sessions: rows, current });
   });
 
   /**

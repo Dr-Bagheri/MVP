@@ -41,10 +41,18 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   /* the assistant's own configuration — the pages keep their addresses */
   { slug: "skills", group: "assistant", href: "/management/skills", labelFrom: "management" },
   { slug: "models", group: "assistant", href: "/management/models", labelFrom: "management" },
-  { slug: "connectors", group: "service", href: "/management/connectors", labelFrom: "management" },
   { slug: "audit-logs", group: "compliance" },
-  { slug: "audit-log-drains", group: "compliance" },
 ];
+
+/*
+ * LEFT THE MENU (user directive, 2026-08-28): Connectors — the
+ * Integrations page under the assistant is that door now, and two menus
+ * to one room is how a person wonders which is real — and Audit log
+ * drains, whose page was an honest not-yet shell from the day it shipped.
+ * Their PAGES still resolve (/management/connectors renders;
+ * /settings/audit-log-drains falls back to the first section), so
+ * nothing bookmarked breaks. Same rule as the 2026-08-26 removals below.
+ */
 
 /*
  * LEFT THE MENU (user directive, 2026-08-26): Connected apps, Legal
