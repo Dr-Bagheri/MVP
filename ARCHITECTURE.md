@@ -1704,6 +1704,46 @@ mailbox per sweep; and editing happens in the mailbox, since the body that
 gets sent is re-read server-side and a card that could edit-and-send would
 mean the thing sent is not necessarily the thing anyone read.
 
+**[AMENDED 2026-08-28 — what the poller may look at, and what counts as
+new.]** Two defects found in production on live mail, one after the other,
+both of the same family: the window said something the code read as a
+different fact.
+
+*The window is the INBOX.* `users/me/messages` with no label filter returns
+every label — sent mail, spam, and DRAFTS, including the ones this product
+writes. The poller was reading its own reply back as new mail and drafting a
+reply to it ("it got double time, but i got one email"). Gmail is now
+`labelIds=INBOX` and Graph is `mailFolders/inbox/messages`; a second net sits
+behind the filter, because folder semantics are the provider's to change: a
+message whose reply-to is the account's own address is skipped, since a reply
+addressed back to where it came from is a loop with a person's name on it.
+
+*The mark carries a clock.* A message id can only answer "what is new" while
+it is still visible, and the case where it is not is the SUCCESS case — the
+person archives the mail we drafted for. The old fallback took the whole
+page, which turned the window narrowing above into three replies to
+hours-old mail; taking nothing instead would make an ordinary archive
+indistinguishable from a dead poller. So `connector_connection.mail_cursor_at`
+(db/0119) records when the marked message arrived, and the missing-id branch
+filters by time. A message whose date cannot be parsed is not treated as new:
+a `Date:` header is text a sender writes, and "new" here spends a model run
+and puts a reply in somebody's mailbox.
+
+*Sending needs no more grant than drafting.* `gmail.compose` covers
+`drafts/send`, which is the path a pressed Send takes — the person's Sent
+copy is then the message they were shown rather than a second one like it.
+`gmail.send` is requested alongside it for the no-draft path, and
+`https://mail.google.com/` deliberately is NOT: full access also grants
+DELETE over the whole mailbox, which nothing here does or should be able to
+do. Asking for a permission we have no code path for is how a connection
+becomes something a person is right to refuse.
+
+*Discarding is ours, deleting is theirs.* `discard` marks our row; the draft
+stays in the mailbox. The card says so rather than continuing to report
+"also in your Drafts folder", which would read as confirmation that the
+discard reached the mail. Deleting the provider's copy is a deletion in
+somebody's real mailbox and waits on the user's word.
+
 ## M44 — Meeting prep: the pre-read that arrives before the meeting
 [user directive, 2026-08-27: "also for the meetings as well", against Sana's
 "Prepare me for meetings"]
