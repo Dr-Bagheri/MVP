@@ -157,7 +157,6 @@ const isExcluded = (id: string): boolean => {
   return EXCLUDED_PROVIDERS.includes(vendor) || normalized.includes("claude");
 };
 
-
 /** Suggested first (in the order above), then everything else unchanged. */
 function bySuggestion<T extends { id: string }>(models: T[]): T[] {
   const rank = (id: string): number => {
