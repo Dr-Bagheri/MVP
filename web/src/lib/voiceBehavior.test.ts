@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createVoiceBehavior, matchWake } from "./voiceLoop";
+import { utteranceScriptOk, createVoiceBehavior, matchWake } from "./voiceLoop";
 
 /**
  * The rebuilt voice behavior (2026-08-22, from scratch) — five rules and
@@ -153,5 +153,25 @@ describe("matchWake", () => {
   it("the name inside another word is not the name", () => {
     expect(matchWake("محمدی echoes").woke).toBe(false);
     expect(matchWake("gecko").woke).toBe(false);
+  });
+});
+
+describe("utteranceScriptOk — the loop's language wall (2026-08-29)", () => {
+  it("passes Persian, English, and their mix — the loop's two languages", () => {
+    expect(utteranceScriptOk("اکو سلام، جلسهٔ امروز چه شد؟")).toBe(true);
+    expect(utteranceScriptOk("echo what happened in today's meeting?")).toBe(true);
+    expect(utteranceScriptOk("اکو please خلاصهٔ meeting را بده")).toBe(true);
+  });
+
+  it("refuses the Korean misread — the incident, verbatim shape", () => {
+    /* the live incident: Soniox's language ID answered a mumbled wake in
+       Hangul; forwarded, it became a thread message and the assistant
+       faithfully replied in Korean. The wall must answer NO here. */
+    expect(utteranceScriptOk("그, 뭐를 들을 유저")).toBe(false);
+    expect(utteranceScriptOk("어떻게 도와드릴까요?")).toBe(false);
+  });
+
+  it("digits and punctuation alone are not a sentence", () => {
+    expect(utteranceScriptOk("۱۲۳ 456!؟")).toBe(false);
   });
 });

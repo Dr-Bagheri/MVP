@@ -205,6 +205,15 @@ export function createLiveStt(options: LiveSttOptions = {}) {
                 enable_speaker_diarization: true,
               }),
           language_hints: ["fa", "en"],
+          /*
+           * STRICT (2026-08-29, the Korean incident): hints alone only
+           * PREFER fa/en — on a mumbled wake, Soniox's language ID was
+           * free to answer in Korean, and everything downstream honored
+           * the garbage faithfully (the reply rule mirrored it back).
+           * `language_hints_strict` is the provider's own restriction:
+           * transcribe in the hinted languages only.
+           */
+          language_hints_strict: true,
           enable_language_identification: true,
         }));
       }) as never);

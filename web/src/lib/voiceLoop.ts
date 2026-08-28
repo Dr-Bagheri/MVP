@@ -42,6 +42,26 @@ import { api } from "@/api/client";
 const WAKE_RE = /(?:^|\s)(?:echo|ecco|eko|اکو|ایکو)(?![\p{L}'’])[\s.,،!?]*/iu;
 const STOP_RE = /(?:^|\s)(?:stop|بس|بسه|ساکت|کافیه)(?!\p{L})/iu;
 
+/**
+ * The loop's own language wall (2026-08-29, the Korean incident). This
+ * loop is bilingual BY CONSTRUCTION — rule 5 — so an utterance whose
+ * letters are mostly neither Persian-Arabic nor Latin is, by that same
+ * construction, a provider misread, and it must die HERE: forwarded, it
+ * becomes a message in the thread and the assistant faithfully answers
+ * in the misread language. The provider-side restriction
+ * (language_hints_strict on the relay) is the first wall; this is the
+ * loop's, so a provider regression can never reach the thread again.
+ *
+ * Mostly, not entirely: numbers, punctuation and the odd loanword
+ * letter are fine — the test is about where the LETTERS live.
+ */
+export function utteranceScriptOk(text: string): boolean {
+  const letters = text.match(/\p{L}/gu) ?? [];
+  if (letters.length === 0) return false;
+  const ours = text.match(/[\p{Script=Arabic}\p{Script=Latin}]/gu) ?? [];
+  return ours.length / letters.length >= 0.5;
+}
+
 export function matchWake(text: string): { woke: boolean; command: string } {
   const m = WAKE_RE.exec(text);
   if (!m) return { woke: false, command: "" };
@@ -348,6 +368,7 @@ export async function startVoiceLoop(handlers: VoiceHandlers): Promise<VoiceLoop
     if (Date.now() - lastTokenAt < UTTERANCE_SILENCE_MS) return;
     finalsBuf = "";
     interimBuf = "";
+    if (!utteranceScriptOk(text)) return; // a misread, not a sentence
     behavior.consume(text);
   }, 200);
 
