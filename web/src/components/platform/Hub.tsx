@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api, BffError } from "@/api/client";
-import type { AgentCard, AgentEvent, AgentMessage, ConnectorProvider, ModelInfo, SearchHit, Skill } from "@/api/types";
+import type { AgentCard, AgentEvent, AgentMessage, ConnectorProvider, ModelInfo, SearchHit, Skill, WorkflowCard } from "@/api/types";
 import { Link, useRouter } from "@/i18n/routing";
 import { useSearchParams } from "next/navigation";
 import { modelLabel } from "@/lib/format";
@@ -50,6 +50,7 @@ export function Hub() {
   const router = useRouter();
   const { resetVersion, setStarted } = useAssistantConversation();
   const [messages, setMessages] = useState<AgentMessage[]>([]);
+  const [workflowCards, setWorkflowCards] = useState<WorkflowCard[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [feedback, setFeedback] = useState<Record<string, string>>({});
@@ -144,6 +145,8 @@ export function Hub() {
   const workflowSlug = params.get("workflow");
   const connectorProviderParam = params.get("connectorProvider");
   const sourceId = params.get("sourceId");
+  /** the launcher's "this is a run, not a visit" (see the auto-run effect) */
+  const autoRun = params.get("run") === "1";
   const connectorProvider: ConnectorProvider | undefined = connectorProviderParam === "google" || connectorProviderParam === "microsoft"
     ? connectorProviderParam
     : undefined;
@@ -163,10 +166,28 @@ export function Hub() {
        * the picker offers, and the state now simply tells the truth about
        * which of them is on screen.
        */
-      setModel(res.preferred_model ?? res.models[0]?.id ?? "");
+      /*
+       * ...and it can only adopt a model the server actually OFFERED. A
+       * saved preference outlives the catalogue: the first member's was
+       * `~anthropic/claude-opus-latest`, saved while it was served and
+       * barred the day the no-Claude filter learned to spell it. The picker
+       * then showed, as the current choice, a model absent from its own
+       * option list — and every ask sent it and came back 400. The server is
+       * right to refuse by name; the client is wrong to send a name the
+       * server never offered. Same shape as the comment above, one level
+       * further out: the state must tell the truth about what is on screen,
+       * and what is on screen is the list.
+       */
+      const offered = res.preferred_model !== null
+        && res.models.some((m) => m.id === res.preferred_model);
+      setModel((offered ? res.preferred_model : res.models[0]?.id) ?? "");
     });
     void api.skills().then(setSkills);
     void api.agents().then(setAgents).catch(() => setAgents([]));
+    /* the workflow CARDS: the auto-run's opening line is the workflow's own
+       name, which is the server's string — the client never invents the
+       sentence a workflow is called by */
+    void api.workflows().then(setWorkflowCards).catch(() => setWorkflowCards([]));
   }, []);
 
   /* A workflow launcher supplies the prompt by its server-owned slug. Never
@@ -177,6 +198,46 @@ export function Hub() {
       setSkill(promptSlug);
     }
   }, [promptSlug, skills]);
+
+  /**
+   * THE WORKFLOW RUN (user report, 2026-08-27: "I clicked one and nothing
+   * happens, nothing returns").
+   *
+   * Choosing the email IS the instruction. Before this, arriving here with a
+   * workflow and a source rendered a pill and waited for the person to think
+   * of a question — so the product asked the user to describe the workflow
+   * they had just pressed. The run now starts itself, and the thread it
+   * writes is the record of it.
+   *
+   * Fires ONCE per (workflow, source): `ranRef` holds the triple rather than
+   * a boolean, so picking a second email in the same mount runs again while
+   * a re-render never re-sends. Never on a resumed thread (`?c=`) and never
+   * over an existing conversation — an auto-send into someone's open thread
+   * is a message they did not write.
+   */
+  const ranRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!autoRun || resumeId || streaming) return;
+    if (!workflowSlug || !connectorProvider || !sourceId) return;
+    if (messages.length > 0) return;
+    const card = workflowCards.find((candidate) => candidate.slug === workflowSlug);
+    /* an unknown slug is not a run: the server would refuse it, and a
+       question nobody typed failing is worse than no question */
+    if (!card) return;
+    const key = `${workflowSlug}:${connectorProvider}:${sourceId}`;
+    if (ranRef.current === key) return;
+    ranRef.current = key;
+    void send(card.name);
+    /* disarm: the source stays on the URL so follow-ups keep the email in
+       context, but `run` is spent. Without this a reload is a second run of
+       a workflow the person started once — real model spend, and a thread
+       they did not ask for. */
+    router.replace({
+      pathname: "/assistant",
+      query: { workflow: workflowSlug, connectorProvider, sourceId },
+    } as never);
+  }, [autoRun, resumeId, streaming, workflowSlug, connectorProvider, sourceId,
+      messages.length, workflowCards, router]);
 
   /**
    * The Sources search — live, debounced, against the real index. Results
@@ -306,7 +367,10 @@ export function Hub() {
     setWebSearch(false);
     setAskError(null);
     setStreaming(false);
-    if (resumeId) router.replace("/");
+    /* `/assistant`, not `/` — the hub's own address. `/` became the
+       dashboard (2026-08-25) and this line kept sending "new conversation"
+       to a briefing screen; same seam as the workflow launcher's. */
+    if (resumeId) router.replace("/assistant");
   }, [resetVersion, resumeId, router]);
 
   useEffect(() => {
@@ -459,8 +523,14 @@ export function Hub() {
     }
   }
 
-  async function send() {
-    const typed = input.trim();
+  /**
+   * `text` is the auto-run's: state is not readable in the same tick it is
+   * set, so the workflow's opening line travels as an argument rather than
+   * through `setInput` (both call sites pass nothing, deliberately — a
+   * bare `onClick={send}` would hand this a MouseEvent).
+   */
+  async function send(text?: string) {
+    const typed = (text ?? input).trim();
     if (typed === "" || streaming) return;
     setStarted(true);
     setSkillOpen(false);

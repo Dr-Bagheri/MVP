@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
 import { api } from "@/api/client";
 import type { AuthSessionRow } from "@/api/types";
+import { Pagination, usePaged } from "@/components/Pagination";
 import { FormPanel, FormRow } from "@/components/scaffold";
 import { ConfirmDialog } from "@/components/rowActions";
 import { notify } from "@/lib/notify";
@@ -33,6 +34,10 @@ export function SecuritySettings() {
   useEffect(() => {
     void api.mySessions().then(setSessions).catch(() => setSessions([]));
   }, []);
+
+  /* `null` is not-fetched, so the pager is handed the empty list until the
+     rows arrive — it draws nothing for one page either way */
+  const { page, setPage, pageCount, visible } = usePaged(sessions ?? []);
 
   async function withdrawVoice() {
     setConfirmVoice(false);
@@ -89,8 +94,9 @@ export function SecuritySettings() {
         {sessions === null ? null : sessions.length === 0 ? (
           <p className="mt-3 text-sm text-fg-muted">{t("sessionsEmpty")}</p>
         ) : (
+          <>
           <ul className="mt-3 divide-y divide-border rounded-lg border border-border bg-surface">
-            {sessions.map((session) => (
+            {visible.map((session) => (
               <li key={session.handle} className="flex flex-wrap items-center gap-3 px-4 py-2.5 text-sm">
                 <span className="min-w-0 flex-1">
                   <span className="block font-medium text-fg">{agentLabel(session.user_agent)}</span>
@@ -104,6 +110,8 @@ export function SecuritySettings() {
               </li>
             ))}
           </ul>
+          <Pagination page={page} pageCount={pageCount} onPage={setPage} />
+          </>
         )}
       </div>
 

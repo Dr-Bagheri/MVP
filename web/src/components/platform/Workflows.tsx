@@ -7,6 +7,7 @@ import { useRefreshEpoch } from "@/lib/refreshBus";
 import type { ConnectorItem, ConnectorProvider, ConnectorStatus, User, WorkflowCard, WorkflowRunRecord } from "@/api/types";
 import { notify } from "@/lib/notify";
 import { Chip } from "@/components/ui";
+import { Pagination, usePaged } from "@/components/Pagination";
 import { useRouter } from "@/i18n/routing";
 import { AssistantMenu } from "./AssistantMenu";
 import { PlatformShell } from "./PlatformShell";
@@ -112,6 +113,11 @@ export function Workflows() {
       setRunBusy(null);
     }
   }
+
+  /* the ledger pages like every other table — `slice(0, 12)` was a silent
+     truncation wearing the costume of a list (the 13th run simply was not
+     there, and nothing on screen said so) */
+  const { page: runPage, setPage: setRunPage, pageCount: runPages, visible: visibleRuns } = usePaged(runs ?? []);
 
   const workflowsEpoch = useRefreshEpoch("workflows");
   useEffect(() => {
@@ -326,27 +332,27 @@ export function Workflows() {
                               ) : sourceItems.length === 0 ? (
                                 <p className="text-sm text-fg-muted">{t("sourceEmpty", { source: sourceLabel })}</p>
                               ) : (
-                                <ul className="max-h-52 space-y-1 overflow-y-auto">
-                                  {sourceItems.map((item) => (
-                                    <li key={item.id}>
-                                      <button
-                                        type="button"
-                                        className="tap flex w-full flex-col rounded-lg px-2 py-2 text-start hover:bg-surface-2"
-                                        onClick={() => router.push({
-                                          pathname: "/",
-                                          query: {
-                                            workflow: workflow.slug,
-                                            connectorProvider: selected,
-                                            sourceId: item.id,
-                                          },
-                                        })}
-                                      >
-                                        <span className="truncate text-sm font-medium text-fg">{item.title}</span>
-                                        <span className="truncate text-xs text-fg-muted">{item.subtitle || item.occurred_at || sourceLabel}</span>
-                                      </button>
-                                    </li>
-                                  ))}
-                                </ul>
+                                <SourcePicker
+                                  items={sourceItems}
+                                  fallbackLabel={sourceLabel}
+                                  /* `/assistant`, NOT `/`. The hub moved off `/` when
+                                     the dashboard took the landing page (2026-08-25)
+                                     and this launcher kept pushing at the old address:
+                                     the route still resolved, so every reachability
+                                     check stayed green while picking an email landed on
+                                     a briefing screen that reads none of these params
+                                     and ran nothing. `run=1` starts it — choosing the
+                                     item IS the instruction. */
+                                  onPick={(item) => router.push({
+                                    pathname: "/assistant",
+                                    query: {
+                                      workflow: workflow.slug,
+                                      connectorProvider: selected,
+                                      sourceId: item.id,
+                                      run: "1",
+                                    },
+                                  })}
+                                />
                               )}
                             </div>
                           )}
@@ -417,7 +423,7 @@ export function Workflows() {
               <p className="text-sm text-fg-muted">{t("runsEmpty")}</p>
             ) : (
               <ul className="divide-y divide-border rounded-lg border border-border bg-surface">
-                {runs.slice(0, 12).map((run) => (
+                {visibleRuns.map((run) => (
                   <li key={run.id}>
                     <button
                       type="button"
@@ -438,6 +444,7 @@ export function Workflows() {
                 ))}
               </ul>
             )}
+            <Pagination page={runPage} pageCount={runPages} onPage={setRunPage} />
           </Section>
 
           {/* M41 P5 — THE BUILDER, on this page (2026-08-27): author,
@@ -529,5 +536,41 @@ export function Workflows() {
         </div>
       ) : null}
     </PlatformShell>
+  );
+}
+
+/**
+ * The source list a workflow runs ON — ten per page like every other table.
+ * Its own component because `usePaged` is a hook and the list renders inside
+ * a map over the workflow cards.
+ */
+function SourcePicker({
+  items,
+  fallbackLabel,
+  onPick,
+}: {
+  items: ConnectorItem[];
+  fallbackLabel: string;
+  onPick: (item: ConnectorItem) => void;
+}) {
+  const { page, setPage, pageCount, visible } = usePaged(items);
+  return (
+    <>
+      <ul className="space-y-1">
+        {visible.map((item) => (
+          <li key={item.id}>
+            <button
+              type="button"
+              className="tap flex w-full flex-col rounded-lg px-2 py-2 text-start hover:bg-surface-2"
+              onClick={() => onPick(item)}
+            >
+              <span className="truncate text-sm font-medium text-fg">{item.title}</span>
+              <span className="truncate text-xs text-fg-muted">{item.subtitle || item.occurred_at || fallbackLabel}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      <Pagination page={page} pageCount={pageCount} onPage={setPage} />
+    </>
   );
 }

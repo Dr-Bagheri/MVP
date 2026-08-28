@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { AssistantSession } from "@/api/types";
+import { Pagination, usePaged } from "@/components/Pagination";
 import { AssistantMenu } from "@/components/platform/AssistantMenu";
 import { PlatformShell } from "@/components/platform/PlatformShell";
 import { MenuLayout, PageHeader } from "@/components/scaffold";
@@ -44,6 +45,11 @@ export default function ConversationsPage() {
   /* numbered over the FULL list, not the filtered one — a search must not
      renumber what it merely hides */
   const numbers = untitledNumbers(sessions ?? []);
+  /* this table is markup rather than DataTable, so the house rule arrives by
+     import: ten rows, then numbers. `shown` is the FILTERED list, which is
+     what makes the pager's clamp load-bearing here — typing in the search box
+     shortens the set under whatever page the person is standing on. */
+  const { page, setPage, pageCount, visible } = usePaged(shown);
 
   return (
     <PlatformShell>
@@ -76,7 +82,7 @@ export default function ConversationsPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {shown.map((s) => (
+                    {visible.map((s) => (
                       <tr
                         key={s.id}
                         className="row-link"
@@ -122,6 +128,7 @@ export default function ConversationsPage() {
                 </table>
               </div>
             )}
+            <Pagination page={page} pageCount={pageCount} onPage={setPage} className="pb-3" />
           </div>
         </div>
       </MenuLayout>

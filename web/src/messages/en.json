@@ -165,6 +165,7 @@
       "topics": "Topics",
       "people": "People you met",
       "pipeline": "Processing",
+      "ask": "Ask the assistant",
       "recent": "Recent records",
       "watchlist": "Watchlist",
       "ledger": "Decision ledger",
@@ -396,7 +397,11 @@
     "selectAll": "Select all rows",
     "selectRow": "Select this row",
     "actions": "Actions",
-    "menuHint": "Right-click a row for its actions"
+    "menuHint": "Right-click a row for its actions",
+    "pagination": "Pagination",
+    "previousPage": "Previous page",
+    "nextPage": "Next page",
+    "goToPage": "Page {page}"
   },
   "titles": {
     "ceo": "CEO",

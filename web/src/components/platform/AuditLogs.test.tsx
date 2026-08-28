@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AuditCursor, AuditEntry, AuditPage, User } from "@/api/types";
@@ -163,6 +163,31 @@ const page = (entries: AuditEntry[], next: AuditCursor | null = null): AuditPage
   next_cursor: next,
 });
 
+/**
+ * The house pager (2026-08-27) sits between the fetched rows and the screen:
+ * a request brings 50, the table shows TEN. So "did paging lose a row" is no
+ * longer answerable from one screenful, and these three helpers walk it.
+ *
+ * `detail.kind` is rendered verbatim, which is why every fixture row's marker
+ * is its own id — the marker names the row on whatever page it lands.
+ */
+const markers = () =>
+  screen
+    .getAllByRole("row")
+    .slice(1) // the header
+    .map((row) => row.textContent?.match(/e\d\d/)?.[0])
+    .filter((found): found is string => found !== undefined);
+
+/** The pager's numbers, told apart from its two chevrons by carrying one. */
+const pageButtons = () =>
+  within(screen.getByRole("navigation")).getAllByRole("button", {
+    name: /[۰۱۲۳۴۵۶۷۸۹]/,
+  });
+
+const faDigits = (n: number) => String(n).replace(/\d/g, (d) => "۰۱۲۳۴۵۶۷۸۹"[Number(d)]!);
+const goToPage = (n: number) =>
+  userEvent.click(screen.getByRole("button", { name: new RegExp(`${faDigits(n)}$`) }));
+
 beforeEach(() => {
   me.mockReset();
   audit.mockReset();
@@ -203,22 +228,36 @@ describe("paging across an instant shared by more rows than fit on a page", () =
     // anchored on a value that exists only AFTER the first page arrives —
     // waiting for "the table" would also be satisfied mid-load
     await screen.findByText("e01");
-    expect(screen.queryByText("e49")).toBeNull(); // page one genuinely ends above it
+    expect(screen.queryByText("e49")).toBeNull(); // the request genuinely ends above it
 
     await userEvent.click(screen.getByRole("button", { name: /رویدادهای قدیمی‌تر/ }));
+    await waitFor(() => expect(audit).toHaveBeenCalledTimes(2));
 
     /*
-     * **The discriminating assertion.** `e48` and `e49` share `TIE` with rows
-     * that DID fit on page one. They are reachable only if the cursor compares
-     * all three ordered fields AND carries the microseconds — either failure
-     * makes them vanish from the record with nothing on screen to suggest
-     * anything is missing.
+     * **The discriminating assertion**, now walked across the pager rather
+     * than read off one screenful. `e48` and `e49` share `TIE` with rows that
+     * DID fit on the server's first page. They are reachable only if the
+     * cursor compares all three ordered fields AND carries the microseconds —
+     * either failure makes them vanish from the record with nothing on screen
+     * to suggest anything is missing.
+     *
+     * Collecting instead of counting also buys the assertion the pager's own
+     * boundaries: a display page that repeated a row, or skipped one, is a
+     * different bug in the same shape, and a bare `toHaveLength` on a single
+     * page could not see either.
      */
-    expect(await screen.findByText("e49")).toBeTruthy();
-    expect(screen.getByText("e48")).toBeTruthy();
+    await waitFor(() => expect(pageButtons()).toHaveLength(6)); // 55 rows, ten a page
+    const seen: string[] = [];
+    for (let p = 1; p <= 6; p += 1) {
+      if (p > 1) await goToPage(p);
+      seen.push(...markers());
+    }
 
-    // every row, once: 55 entries + the header row
-    await waitFor(() => expect(screen.getAllByRole("row")).toHaveLength(56));
+    expect(seen).toContain("e49");
+    expect(seen).toContain("e48");
+    // every row, ONCE — losing one and showing one twice are both failures here
+    expect(seen).toHaveLength(55);
+    expect(new Set(seen).size).toBe(55);
   });
 
   it("hands the cursor back verbatim, microseconds and all", async () => {

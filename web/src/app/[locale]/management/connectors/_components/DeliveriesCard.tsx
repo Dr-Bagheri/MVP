@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { GatewayDelivery, GatewayWebhook } from "@/api/types";
+import { Pagination, usePaged } from "@/components/Pagination";
 import { Card, Chip, EmptyState } from "@/components/ui";
 import { digits, formatDate, formatTime } from "@/lib/format";
 import { EVENT_LABEL_KEY } from "./events";
@@ -65,6 +66,10 @@ export function DeliveriesCard({ webhooks }: { webhooks: GatewayWebhook[] }) {
   }, [filter]);
 
   const urlById = new Map(webhooks.map((webhook) => [webhook.id, webhook.url]));
+  /* the webhook filter is a SERVER filter, so a narrowed set arrives as a
+     shorter list rather than a hidden one — the pager's clamp is what keeps
+     the page number honest across that refetch */
+  const { page, setPage, pageCount, visible } = usePaged(deliveries);
 
   return (
     <Card className="mb-4">
@@ -98,6 +103,7 @@ export function DeliveriesCard({ webhooks }: { webhooks: GatewayWebhook[] }) {
       {deliveries.length === 0 ? (
         <EmptyState text={t("deliveriesEmpty")} />
       ) : (
+        <>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[44rem] border-collapse text-sm">
             <thead>
@@ -111,7 +117,7 @@ export function DeliveriesCard({ webhooks }: { webhooks: GatewayWebhook[] }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {deliveries.map((delivery) => {
+              {visible.map((delivery) => {
                 const outcome = outcomeOf(delivery);
                 return (
                   <tr key={delivery.id}>
@@ -170,6 +176,8 @@ export function DeliveriesCard({ webhooks }: { webhooks: GatewayWebhook[] }) {
             </tbody>
           </table>
         </div>
+        <Pagination page={page} pageCount={pageCount} onPage={setPage} />
+        </>
       )}
     </Card>
   );

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { GatewayKey, User } from "@/api/types";
+import { Pagination, usePaged } from "@/components/Pagination";
 import { Card, Chip, EmptyState } from "@/components/ui";
 import { formatDate } from "@/lib/format";
 import { Dialog } from "./Dialog";
@@ -59,6 +60,9 @@ export function KeysCard({
   const [busy, setBusy] = useState(false);
 
   const memberById = new Map(members.map((member) => [member.id, member]));
+  /* server order is the page order too — revoked keys sink to the bottom, so
+     the live ones a person came here for are on page one */
+  const { page, setPage, pageCount, visible } = usePaged(keys);
 
   return (
     <Card className="mb-4">
@@ -79,6 +83,7 @@ export function KeysCard({
       ) : (
         // Tables are the one thing that legitimately outgrows a phone; scroll
         // the table, never the page.
+        <>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[46rem] border-collapse text-sm">
             <thead>
@@ -98,7 +103,7 @@ export function KeysCard({
               that only one side can own.
             */}
             <tbody className="divide-y divide-border">
-              {keys.map((key) => {
+              {visible.map((key) => {
                 const actor = memberById.get(key.actor_id);
                 const state = keyState(key, actor);
                 const dead = state !== "live";
@@ -176,6 +181,8 @@ export function KeysCard({
             </tbody>
           </table>
         </div>
+        <Pagination page={page} pageCount={pageCount} onPage={setPage} />
+        </>
       )}
 
       <MintKeyDialog

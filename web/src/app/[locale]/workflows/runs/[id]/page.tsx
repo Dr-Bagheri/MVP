@@ -228,6 +228,10 @@ export default function WorkflowRunPage({
                   rows={detail.steps}
                   rowKey={(step) => `${step.step_id}:${step.iteration}`}
                   columns={columns}
+                  /* a run's steps are bounded by the workflow that produced
+                     them and read as one sequence — paging them would put
+                     half of one answer behind a click */
+                  pageSize={null}
                 />
               )}
             </div>

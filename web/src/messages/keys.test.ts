@@ -3,6 +3,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import fa from "./fa.json";
 import en from "./en.json";
+import { WIDGET_SPECS } from "@/lib/widgetRegistry";
 
 /**
  * **Every translation key a component asks for must exist in BOTH locales.**
@@ -126,5 +127,31 @@ describe("translation keys", () => {
     const enKeys = flatten(en as Messages).sort();
     expect(faKeys.filter((k) => !enKeys.includes(k))).toEqual([]);
     expect(enKeys.filter((k) => !faKeys.includes(k))).toEqual([]);
+  });
+  /**
+   * The dashboard's widget titles, derived from the REGISTRY rather than
+   * listed here.
+   *
+   * `Dashboard.tsx` builds this key as `t(\`widget.${spec.labelKey}\`)`, and
+   * the scanner above skips computed keys on purpose (see the header). That
+   * exemption is where `dashboard.widget.ask` lived: the card rendered the
+   * literal string "dashboard.widget.ask" as its title on the platform's own
+   * landing page, and neither check above could see it — the parity test
+   * cannot either, because the key was missing from BOTH locales, which is
+   * perfectly symmetrical.
+   *
+   * A computed key is only unscannable when its inputs are unknown. These
+   * are a closed set the registry exports, so the coverage list is derived
+   * from the producer instead of hand-written beside it — the same reason
+   * the vocabulary guard derives its unions.
+   */
+  it("has a title for every widget the registry declares, in both locales", () => {
+    const missing = WIDGET_SPECS.flatMap((spec) => [
+      ...(lookup(fa as Messages, "dashboard", `widget.${spec.labelKey}`) === undefined
+        ? [`fa: dashboard.widget.${spec.labelKey}`] : []),
+      ...(lookup(en as Messages, "dashboard", `widget.${spec.labelKey}`) === undefined
+        ? [`en: dashboard.widget.${spec.labelKey}`] : []),
+    ]);
+    expect(missing).toEqual([]);
   });
 });

@@ -1580,6 +1580,37 @@ the 60s read cache (queried listings stay uncached). Items 1 and 2 of
 the pass (parallel fetch dedupe, direct-to-storage uploads) were found
 ALREADY BUILT and verified rather than rebuilt.
 
+## M42 — The table rule: ten rows, then numbered pages
+[user directive, 2026-08-27: "another general rule for tables — it shows the
+first latest 10 rows and then it must go pages with the number of pages on
+the bottom of the table; apply it for all tables as well put it in the theme"]
+
+Every tabular surface pages at **ten rows**, with numbered pages under the
+table. It is enforced where it executes rather than described where it can be
+forgotten: `web/src/components/Pagination.tsx` holds the one control and the
+one hook, and `DataTable` — already the single table of the product (user
+directive, 2026-08-26) — paginates by default, so a table inherits the rule
+by being a table. Row-shaped lists that are tables in all but markup import
+the same pager; there is no second implementation to drift.
+
+Three constraints travel with it, each because the obvious version is wrong:
+
+- **A single page renders no pager.** Chrome that answers nothing, and a lone
+  "1" reads as a control that does not work.
+- **The page clamps when the row set shrinks.** Filtering while standing on
+  page 4 must not leave an empty table under a page number: on screen that is
+  indistinguishable from "no results", and only one of the two is true.
+- **Select-all means the visible page.** A header checkbox that silently
+  takes rows the person cannot see is a bulk action they did not read.
+
+`pageSize={null}` opts out, and the only honest reason is a set bounded by
+construction (a workflow run's own steps, the fixed queue list) — there,
+paging a complete short list hides part of one answer behind a click.
+
+Two things this replaced, both silent: lists that rendered `.slice(0, 10)` or
+`.slice(0, 12)` and said nothing about the rest, and unbounded lists that
+simply grew until the page did.
+
 ## Invariants (locked)
 
 1. The transcript is the source of truth; everything else derived + rebuildable.

@@ -5,6 +5,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { api, BffError } from "@/api/client";
 import { useRefreshEpoch } from "@/lib/refreshBus";
 import type { Invitation, MintedInvitation, Role, User } from "@/api/types";
+import { Pagination, usePaged } from "@/components/Pagination";
 import { ManagementPane } from "@/components/platform/ManagementPane";
 import { PageHeader } from "@/components/scaffold";
 import { Card, Chip } from "@/components/ui";
@@ -49,6 +50,19 @@ export default function InvitationsPage() {
     if (!isAdmin) return;
     void api.invitations().then(setInvitations).catch(() => undefined);
   }, [isAdmin, invitationsEpoch]);
+
+  /* ONLY the outstanding ones (user verdict): a revoked or redeemed
+     invitation is history, and five dead rows for one address buried the
+     single link that still works. The api keeps the full history; this list
+     is the TO-DO view.
+
+     It is derived HERE rather than where it renders because the pager is a
+     hook and the refusal card below is an early return — a hook after it
+     would run conditionally. */
+  const open = invitations.filter(
+    (inv) => !inv.redeemed_at && !inv.revoked_at && new Date(inv.expires_at) >= new Date(),
+  );
+  const { page, setPage, pageCount, visible } = usePaged(open);
 
   async function issueInvitation() {
     const email = inviteEmail.trim();
@@ -163,20 +177,12 @@ export default function InvitationsPage() {
             </button>
           </div>
 
-          {(() => {
-            /* ONLY the outstanding ones (user verdict): a revoked or
-               redeemed invitation is history, and five dead rows for one
-               address buried the single link that still works. The api
-               keeps the full history; this list is the TO-DO view. */
-            const open = invitations.filter(
-              (inv) =>
-                !inv.redeemed_at && !inv.revoked_at && new Date(inv.expires_at) >= new Date(),
-            );
-            return open.length === 0 ? (
-              <p className="text-sm text-fg-muted">{t("noInvitations")}</p>
-            ) : (
+          {open.length === 0 ? (
+            <p className="text-sm text-fg-muted">{t("noInvitations")}</p>
+          ) : (
+            <>
             <ul className="divide-y divide-border">
-              {open.map((inv) => (
+              {visible.map((inv) => (
                 <li key={inv.id} className="flex flex-wrap items-center gap-3 py-2.5">
                   <span className="ltr min-w-0 flex-1 truncate text-sm text-fg">{inv.email}</span>
                   <Chip tone="neutral">
@@ -204,8 +210,9 @@ export default function InvitationsPage() {
                 </li>
               ))}
             </ul>
-            );
-          })()}
+            <Pagination page={page} pageCount={pageCount} onPage={setPage} />
+            </>
+          )}
         </Card>
 
       </div>

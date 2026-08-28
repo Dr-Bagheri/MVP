@@ -68,6 +68,11 @@ vi.mock("@/api/client", () => ({
     models: async () => ({ models: [], preferred_model: null, curated: false, tool_capability_filtered: false }),
     skills: async () => [],
     agents: async () => [],
+    /* the hub reads the workflow cards to name an auto-run's opening
+       line; EMPTY is the honest fixture here — with no card there is no
+       run, which is what these files are about (none of them arrive with
+       a workflow on the URL) */
+    workflows: async () => [],
     assistantTools: async () => [],
     sessionFeedback: async () => ({}),
     shareState: async () => false,

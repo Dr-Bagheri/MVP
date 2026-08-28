@@ -3,6 +3,7 @@
 import { Fragment, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { ContextMenu, type KebabItem } from "@/components/rowActions";
+import { PAGE_SIZE, Pagination, usePaged } from "@/components/Pagination";
 
 /**
  * THE TABLE (user directive, 2026-08-26: "make the style of the records
@@ -23,7 +24,14 @@ import { ContextMenu, type KebabItem } from "@/components/rowActions";
  *    once anything is selected — a checkbox column that is always on
  *    spends a column of width on a state most people never enter;
  *  - the whole row is the way in; a cell that is itself interactive
- *    stops the click so a toggle is never also a navigation.
+ *    stops the click so a toggle is never also a navigation;
+ *  - TEN ROWS, then numbered pages under the table (user directive,
+ *    2026-08-27). It lives here rather than in each table for the same
+ *    reason as everything above: a rule every caller has to remember is a
+ *    rule that holds until the next table. `pageSize={null}` opts out, and
+ *    the only honest reason to is a set that is bounded by construction
+ *    (a workflow's own steps, the fixed queue list) — there, paging a
+ *    complete short list would hide part of one answer behind a click.
  *
  * A table that needs something this does not do should GROW this file,
  * not fork it. The second copy is the one nobody maintains.
@@ -68,6 +76,11 @@ export interface DataTableProps<T> {
   leadRow?: ReactNode;
   /** rendered under a row when it is expanded (the enrollment panel) */
   rowDetail?: (row: T) => ReactNode;
+  /**
+   * Rows per page. Ten by default (the house rule); `null` for a set that
+   * is bounded by construction and belongs on screen whole.
+   */
+  pageSize?: number | null;
   className?: string;
 }
 
@@ -85,14 +98,22 @@ export function DataTable<T>({
   empty,
   leadRow,
   rowDetail,
+  pageSize = PAGE_SIZE,
   className = "",
 }: DataTableProps<T>) {
   const t = useTranslations("table");
   const [menu, setMenu] = useState<{ x: number; y: number; key: string } | null>(null);
 
+  /* MAX_SAFE_INTEGER rather than a branch: hooks cannot be conditional,
+     and one page of everything is exactly what "no paging" means — the
+     pager then draws nothing on its own account. */
+  const { page, setPage, pageCount, visible } = usePaged(rows, pageSize ?? Number.MAX_SAFE_INTEGER);
+
   const selecting = selected !== undefined && onSelect !== undefined;
   const canSelect = (row: T) => selecting && (selectableRow?.(row) ?? true);
-  const selectable = selecting ? rows.filter(canSelect) : [];
+  /* select-all means THIS PAGE: a header checkbox that silently takes rows
+     the person cannot see is a delete they did not read */
+  const selectable = selecting ? visible.filter(canSelect) : [];
   const allSelected =
     selectable.length > 0 && selectable.every((row) => selected!.has(rowKey(row)));
   /* once ANYTHING is selected the column stops hiding — a checkbox that
@@ -159,7 +180,7 @@ export function DataTable<T>({
           </thead>
           <tbody className="group/table">
             {leadRow}
-            {rows.map((row) => {
+            {visible.map((row) => {
               const key = rowKey(row);
               return (
                 <Fragment key={key}>
@@ -222,6 +243,7 @@ export function DataTable<T>({
           </tbody>
         </table>
       </div>
+      <Pagination page={page} pageCount={pageCount} onPage={setPage} />
 
       {menu !== null && menuItems !== undefined ? (() => {
         const row = rows.find((candidate) => rowKey(candidate) === menu.key);

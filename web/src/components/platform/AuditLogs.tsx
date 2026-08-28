@@ -6,6 +6,7 @@ import { api } from "@/api/client";
 import type { BffError } from "@/api/client";
 import { AUDIT_SOURCES } from "@echo/core/vocabulary";
 import type { AuditCursor, AuditEntry, AuditSource, User } from "@/api/types";
+import { Pagination, usePaged } from "@/components/Pagination";
 import { Chip, EmptyState } from "@/components/ui";
 import { digits, formatDate, formatTime } from "@/lib/format";
 
@@ -45,6 +46,26 @@ import { digits, formatDate, formatTime } from "@/lib/format";
  * the rule that keeps it gone: **`cursor.at` is microsecond text and
  * `entry.at` is the millisecond value we display — never make one out of the
  * other.**
+ *
+ * ── The pager and the cursor are DIFFERENT ACTS ─────────────────────────────
+ *
+ * The house rule is ten rows and numbered pages (2026-08-27), and this is the
+ * one surface where a pager alone cannot carry it. Everywhere else the row set
+ * is complete and the numbers describe all of it; here the feed is keyset-paged
+ * and has no total, so the last number only ever means "the last row we have
+ * FETCHED". The two controls therefore say two different things and both are
+ * kept: the numbers walk what is loaded, and «older events» asks the server for
+ * more, which appends and grows the numbers.
+ *
+ * Folding the fetch into the pager — auto-loading when someone steps onto the
+ * final page — was tried and rejected for two reasons that outlive the tests
+ * that showed them. It makes a network request a side effect of NAVIGATION, so
+ * the last page silently moves under the person standing on it; and it is
+ * unreachable exactly when it is most needed, because a server page shorter
+ * than ten rows leaves ONE page, at which point the pager renders nothing and
+ * the remaining rows have no door at all. A button that is always there has
+ * neither problem, and it states the one fact the numbers cannot: whether
+ * anything older exists.
  */
 
 /** One request's worth. The endpoint's own cap is 200. */
@@ -149,6 +170,9 @@ export function AuditLogs() {
       setPaging(false);
     }
   }, [cursor, source]);
+
+  /* the pager walks what is LOADED; the cursor is the button's job */
+  const { page, setPage, pageCount, visible } = usePaged(entries);
 
   /**
    * Who acted — and `null` says something specific.
@@ -280,7 +304,7 @@ export function AuditLogs() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {entries.map((entry) => {
+                {visible.map((entry) => {
                   const known = isKnownSource(entry.source);
                   return (
                     <tr key={entryKey(entry)}>
@@ -338,7 +362,9 @@ export function AuditLogs() {
             </table>
           </div>
 
-          <div className="mt-4 flex flex-wrap items-center gap-3">
+          <Pagination page={page} pageCount={pageCount} onPage={setPage} />
+
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
             {cursor ? (
               <button
                 className="btn-secondary h-10 min-h-0 px-4 text-sm"
@@ -348,6 +374,7 @@ export function AuditLogs() {
                 {paging ? t("loading") : t("loadMore")}
               </button>
             ) : (
+              /* the end is a FACT the server states, and the numbers cannot */
               <p className="text-xs text-fg-muted">{t("atEnd")}</p>
             )}
           </div>

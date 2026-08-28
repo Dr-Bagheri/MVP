@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api, BffError } from "@/api/client";
 import type { GatewayDelivery, GatewayEvent, GatewayWebhook } from "@/api/types";
+import { Pagination, usePaged } from "@/components/Pagination";
 import { FormPanel, FormRow, PanelFooter } from "@/components/scaffold";
 import { Card, Chip } from "@/components/ui";
 import { digits, formatDate } from "@/lib/format";
@@ -42,6 +43,10 @@ export function AuditLogDrains() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [forbidden, setForbidden] = useState(false);
+  /* this list used to end at a hard `.slice(0, 10)`: ten deliveries and no
+     sign that an eleventh existed — a truncation that reads as a complete
+     log. The ten stay; the rest are now a click away instead of gone. */
+  const { page, setPage, pageCount, visible } = usePaged(deliveries);
 
   async function load() {
     try {
@@ -211,7 +216,7 @@ export function AuditLogDrains() {
           <h3 className="mb-2 text-sm font-semibold text-fg">{t("deliveriesTitle")}</h3>
           <Card>
             <ul className="divide-y divide-border">
-              {deliveries.slice(0, 10).map((d) => {
+              {visible.map((d) => {
                 /* status is DERIVED from the wire's timestamps — the states
                    are which stamp exists, not a field of their own */
                 const state = d.delivered_at
@@ -239,6 +244,7 @@ export function AuditLogDrains() {
                 );
               })}
             </ul>
+            <Pagination page={page} pageCount={pageCount} onPage={setPage} />
           </Card>
         </div>
       ) : null}
