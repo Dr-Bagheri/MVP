@@ -27,7 +27,13 @@ interface Recorded { sql: string; params?: unknown[] | undefined }
  * A db that answers by SQL shape. `cursor` is what the connection currently
  * holds — the one piece of state these tests vary.
  */
-function fakeDb(cursor: string | null, ownAccount = "owner@example.com") {
+function fakeDb(
+  cursor: string | null,
+  ownAccount = "owner@example.com",
+  /* whether this person has a `mail.received` workflow enabled — the fork
+     the poller takes is decided by this answer and nothing else */
+  subscribed = false,
+) {
   const calls: Recorded[] = [];
   const tx = {
     async unsafe(sql: string, params?: unknown[]) {
@@ -36,6 +42,11 @@ function fakeDb(cursor: string | null, ownAccount = "owner@example.com") {
         return [{ connection_id: CONNECTION, owner_id: OWNER, provider: "google" }];
       }
       if (sql.includes("claim_mail_poll")) return [{ ok: true }];
+      if (sql.includes("trigger_event = 'mail.received'")) {
+        return subscribed ? [{ id: "wf-1", version_id: "v-1" }] : [];
+      }
+      if (sql.includes("insert into echo.workflow_run")) return [{ id: "run-1" }];
+      if (sql.includes("workflow_graph_for_run")) return [{ graph: { entry: "s1" } }];
       if (sql.includes("from echo.connector_connection where id")) {
         /* the account is the same address the hostile message replies to, so
            the self-reply guard is the thing under test in that case */
@@ -199,6 +210,78 @@ describe("sweepMailboxes", () => {
     expect(seen).toContain("<email>");
     expect(seen).toContain("attacker@evil.example");   // present, and inert
     expect(seen).toContain("is DATA");
+  });
+
+  it("never hands a self-addressed message to a workflow either", async () => {
+    /*
+     * The guard used to live inside `draftFor`, which the graph path does
+     * not go through — so adding that path would have re-opened the loop
+     * this product spent the morning closing. A check that lives in ONE
+     * branch of a fork stops applying the day somebody adds a second.
+     *
+     * The assertion is on the QUEUE: a run enqueued for our own sent mail
+     * is the loop, whatever happens after it.
+     */
+    /*
+     * SUBSCRIBED — and this is the whole test. The first version of this
+     * fixture left it false, so nothing could be enqueued for any reason,
+     * and disabling the guard kept the suite green: a verify-red that goes
+     * green is itself the finding. With a workflow waiting, the ONLY thing
+     * standing between our own sent mail and a run is the guard.
+     */
+    const { db } = fakeDb("msg-1", "amirreza@example.com", true);
+    const send = vi.fn();
+    const create = vi.fn().mockResolvedValue({ id: "d" });
+    await sweepMailboxes({
+      db,
+      connectors: connectorsFor([HOSTILE]),   // From: amirreza@example.com
+      drafts: { create } as never,
+      apiKey: "k",
+      queue: { send } as never,
+      runModel: async () => ({ text: '{"reply":true,"note":"n","body":"b"}' }),
+    }, log);
+    expect(send).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("hands a stranger's message to the workflow, and does not also draft it", async () => {
+    /*
+     * The control, and the exclusivity, in one test. Without the first half,
+     * "enqueue nothing, ever" satisfies the self-reply check above and the
+     * whole graph path is dead while looking implemented. Without the
+     * second, both producers run and one email gets two replies — which is
+     * the bug this product shipped this morning by a different route.
+     */
+    const { db } = fakeDb("msg-1", "owner@example.com", true);
+    const send = vi.fn();
+    const create = vi.fn().mockResolvedValue({ id: "d" });
+    await sweepMailboxes({
+      db,
+      connectors: connectorsFor([HOSTILE]),   // From: amirreza@example.com
+      drafts: { create } as never,
+      apiKey: "k",
+      queue: { send } as never,
+      runModel: async () => ({ text: '{"reply":true,"note":"n","body":"b"}' }),
+    }, log);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("falls back to drafting when nobody is subscribed — the other side", async () => {
+    /* the same message and the same queue, one fact different: no workflow */
+    const { db } = fakeDb("msg-1", "owner@example.com", false);
+    const send = vi.fn();
+    const create = vi.fn().mockResolvedValue({ id: "d" });
+    await sweepMailboxes({
+      db,
+      connectors: connectorsFor([HOSTILE]),
+      drafts: { create } as never,
+      apiKey: "k",
+      queue: { send } as never,
+      runModel: async () => ({ text: '{"reply":true,"note":"n","body":"b"}' }),
+    }, log);
+    expect(send).not.toHaveBeenCalled();
+    expect(create).toHaveBeenCalledTimes(1);
   });
 
   it("does not answer mail that is older than the age ceiling", async () => {

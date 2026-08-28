@@ -376,6 +376,21 @@ export async function sweepMailboxes(options: MailPollOptions, log: StepLogger):
         const at = item.occurred_at ? Date.parse(item.occurred_at) : Number.NaN;
         if (!Number.isNaN(at) && at < floor) { stale += 1; continue; }
         if (UNANSWERABLE.test(senderAddress(item))) continue;
+        /*
+         * NEVER ANSWER YOURSELF — hoisted here from inside `draftFor`,
+         * because the graph path below does not go through `draftFor` and
+         * would otherwise have re-opened the loop this product spent the
+         * morning closing. The check that lives in ONE branch of a fork is
+         * the check that stops applying the day somebody adds a second
+         * branch.
+         *
+         * The list item's own From is enough and costs nothing: the envelope
+         * read that `draftFor` uses is a second provider call, and a message
+         * from ourselves does not deserve one. `draftFor` keeps its copy —
+         * it is the reply-to-aware net, and this is the cheap one.
+         */
+        const from = senderAddress(item).toLowerCase();
+        if (ownAddress && from === ownAddress.toLowerCase()) continue;
         try {
           /*
            * THE GRAPH FIRST (M46). If this person has a `mail.received`
