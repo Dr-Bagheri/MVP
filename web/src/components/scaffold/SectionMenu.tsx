@@ -107,7 +107,10 @@ export function SectionMenu({
      * resizable row.
      */
     <nav aria-label={navLabel} className="h-full w-full px-3 pb-4 md:border-e md:border-border">
-      <h1 className="px-3 pb-2 pt-4 text-pane-title font-semibold text-fg">{heading}</h1>
+      {/* `pt-page-menu` is the page title's own top minus the 12px that a
+          17px pane title needs to sit on the same line as a 24px page title
+          — the pair moves together or the alignment is a coincidence */}
+      <h1 className="px-3 pb-2 pt-page-menu text-pane-title font-semibold text-fg">{heading}</h1>
       {groups.map((group, i) => (
         <div key={group.key}>
           {i > 0 ? <hr className="mx-3 my-3.5 border-border" /> : null}

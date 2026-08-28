@@ -8,7 +8,7 @@ import type { AgentCard, ModelInfo } from "@/api/types";
 import { Link } from "@/i18n/routing";
 import { AssistantMenu } from "./AssistantMenu";
 import { PlatformShell } from "./PlatformShell";
-import { MenuLayout, PageHeader, Section } from "@/components/scaffold";
+import { MenuLayout, PageContainer, PageHeader, Section } from "@/components/scaffold";
 import { Card, Chip } from "@/components/ui";
 
 const glyphs: Record<string, string> = {
@@ -66,7 +66,7 @@ export function Agents() {
   return (
     <PlatformShell>
       <MenuLayout menu={<AssistantMenu activeSlug="agents" />}>
-        <div className="mx-auto w-full max-w-content px-5 pb-16 pt-5 md:px-10 md:pt-4">
+        <PageContainer>
           <PageHeader
             title={t("title")}
             subtitle={t("subtitle")}
@@ -162,7 +162,7 @@ export function Agents() {
               </form>
             </div>
           ) : null}
-        </div>
+        </PageContainer>
       </MenuLayout>
     </PlatformShell>
   );

@@ -63,6 +63,34 @@ describe("the Tailwind theme derives from the scaffold constants", () => {
     expect(theme.lineHeight.control).toBe("1.25");
   });
 
+  it("the PAGE RHYTHM is derived, not typed twice", () => {
+    /*
+     * The block these come from used to be a COMMENT in constants.ts while
+     * every screen wrote its own numbers, which is how the platform ended up
+     * with three different meanings for "the top of a page". Deriving them
+     * makes a hand edit to either side red instead of a silent fork —
+     * verified by changing one value and watching this fail.
+     */
+    const spacing = tailwindConfig.theme?.extend?.spacing as Record<string, string>;
+    expect(spacing.page).toBe(`${SCAFFOLD.page.top / 16}rem`);
+    expect(spacing["page-sm"]).toBe(`${SCAFFOLD.page.topSm / 16}rem`);
+    expect(spacing["page-inline"]).toBe(`${SCAFFOLD.page.inline / 16}rem`);
+    expect(spacing["page-inline-md"]).toBe(`${SCAFFOLD.page.inlineMd / 16}rem`);
+    expect(spacing["page-bottom"]).toBe(`${SCAFFOLD.page.bottom / 16}rem`);
+    expect(spacing["page-menu"]).toBe(`${SCAFFOLD.page.menuTop / 16}rem`);
+  });
+
+  it("keeps the menu heading and the page title on one line", () => {
+    /*
+     * The pair is a RELATIONSHIP, not two numbers: a 17px pane title sits
+     * 12px lower than a 24px page title to share its line (user directive,
+     * 2026-08-18). Asserting the gap means raising the page's top margin
+     * cannot silently leave the menu heading behind — which is precisely
+     * what a later "just add some space" edit would do.
+     */
+    expect(SCAFFOLD.page.top - SCAFFOLD.page.menuTop).toBe(12);
+  });
+
   it("dimensions: menu, rail, content columns, controls, top bar", () => {
     expect(theme.width.menu).toBe(rem(SCAFFOLD.menuWidth));
     expect(theme.width.rail).toBe(rem(SCAFFOLD.railWidth));

@@ -84,6 +84,17 @@ const config: Config = {
       lineHeight: {
         control: "1.25",
       },
+      /* the page rhythm, named. A screen writes `pt-page` / `px-page-inline`
+         and cannot drift by picking a number; scaffold.test.tsx holds these
+         to constants.ts. */
+      spacing: {
+        page: rem(SCAFFOLD.page.top),
+        "page-sm": rem(SCAFFOLD.page.topSm),
+        "page-inline": rem(SCAFFOLD.page.inline),
+        "page-inline-md": rem(SCAFFOLD.page.inlineMd),
+        "page-bottom": rem(SCAFFOLD.page.bottom),
+        "page-menu": rem(SCAFFOLD.page.menuTop),
+      },
       width: {
         menu: rem(SCAFFOLD.menuWidth),
         rail: rem(SCAFFOLD.railWidth),

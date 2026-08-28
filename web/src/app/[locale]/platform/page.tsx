@@ -385,7 +385,7 @@ export default function PlatformControlPage() {
     <div className="min-h-dvh bg-bg text-fg">
       {/* sticky operator bar */}
       <header className="sticky top-0 z-20 border-b border-border bg-bg/90 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-5 py-3">
+        <div className="mx-auto flex max-w-content flex-wrap items-center gap-3 px-5 py-3">
           <span className="rounded-md bg-accent-soft px-2 py-1 text-xs font-bold uppercase tracking-wide text-accent">
             {t("menu")}
           </span>
@@ -408,7 +408,7 @@ export default function PlatformControlPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-5 py-6">
+      <main className="mx-auto max-w-content px-page-inline pb-page-bottom pt-page-sm md:px-page-inline-md md:pt-page">
         {error === "load" ? (
           <p role="alert" className="mt-4 text-sm text-danger">
             {t("loadFailed")}

@@ -10,7 +10,7 @@ import { AssistantMenu } from "@/components/platform/AssistantMenu";
 import { useCrumbTitle } from "@/components/platform/CrumbTitle";
 import { WorkflowRunDialog } from "@/components/platform/WorkflowRunDialog";
 import { WorkflowTile } from "@/components/platform/WorkflowTile";
-import { MenuLayout } from "@/components/scaffold";
+import { MenuLayout, PageContainer } from "@/components/scaffold";
 import { Card } from "@/components/ui";
 import { Pagination, usePaged } from "@/components/Pagination";
 import { KebabMenu, type KebabItem } from "@/components/rowActions";
@@ -422,7 +422,7 @@ export default function WorkflowDetailPage({
   return (
     <PlatformShell>
       <MenuLayout menu={<AssistantMenu activeSlug="workflows" />}>
-        <div className="mx-auto w-full max-w-content px-5 pb-16 pt-5 md:px-10 md:pt-4">
+        <PageContainer>
           {subject === null ? (
             <Card><p className="text-sm text-fg-muted">{t("detailMissing")}</p></Card>
           ) : (
@@ -603,7 +603,7 @@ export default function WorkflowDetailPage({
               </div>
             </>
           )}
-        </div>
+        </PageContainer>
       </MenuLayout>
 
       {picking && subject?.sourceKind !== undefined ? (

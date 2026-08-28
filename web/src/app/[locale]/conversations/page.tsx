@@ -7,7 +7,7 @@ import type { AssistantSession } from "@/api/types";
 import { Pagination, usePaged } from "@/components/Pagination";
 import { AssistantMenu } from "@/components/platform/AssistantMenu";
 import { PlatformShell } from "@/components/platform/PlatformShell";
-import { MenuLayout, PageHeader } from "@/components/scaffold";
+import { MenuLayout, PageContainer, PageHeader } from "@/components/scaffold";
 import { useRouter } from "@/i18n/routing";
 import { notify } from "@/lib/notify";
 import { useRefreshEpoch } from "@/lib/refreshBus";
@@ -55,7 +55,7 @@ export default function ConversationsPage() {
   return (
     <PlatformShell>
       <MenuLayout menu={<AssistantMenu activeSlug="history" />}>
-        <div className="mx-auto w-full max-w-content px-5 pb-16 pt-5 md:px-10 md:pt-4">
+        <PageContainer>
           <PageHeader title={t("title")} subtitle={t("hint")} />
           <div className="mb-4 max-w-xs">
             <input
@@ -142,7 +142,7 @@ export default function ConversationsPage() {
             )}
             <Pagination page={page} pageCount={pageCount} onPage={setPage} className="pb-3" />
           </div>
-        </div>
+        </PageContainer>
       </MenuLayout>
     </PlatformShell>
   );

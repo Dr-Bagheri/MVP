@@ -6,7 +6,7 @@ import { api } from "@/api/client";
 import type { ConnectorProvider, ConnectorStatus, Me } from "@/api/types";
 import { AssistantMenu } from "./AssistantMenu";
 import { PlatformShell } from "./PlatformShell";
-import { MenuLayout, PageHeader, Section } from "@/components/scaffold";
+import { MenuLayout, PageContainer, PageHeader, Section } from "@/components/scaffold";
 import { DataTable, StatusDot, type Column } from "@/components/DataTable";
 import { EmptyState } from "@/components/ui";
 import { Icon, type IconName } from "@/components/icons";
@@ -164,7 +164,7 @@ export function Integrations() {
   return (
     <PlatformShell>
       <MenuLayout menu={<AssistantMenu activeSlug="integrations" />}>
-        <div className="mx-auto w-full max-w-content px-5 pb-16 pt-5 md:px-10 md:pt-4">
+        <PageContainer>
           <PageHeader title={tp("integrations")} subtitle={t("subtitle")} />
 
           <Section title={t("connectedTitle")} description={t("connectedHint")}>
@@ -228,7 +228,7 @@ export function Integrations() {
             </div>
             {error ? <p role="status" className="mt-4 text-sm text-danger">{error}</p> : null}
           </Section>
-        </div>
+        </PageContainer>
       </MenuLayout>
     </PlatformShell>
   );

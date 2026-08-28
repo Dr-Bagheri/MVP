@@ -44,13 +44,41 @@ export const SCAFFOLD = {
   },
 
   /**
-   * Spacing uses the STANDARD 4px Tailwind scale — every blueprint gap maps
-   * to an existing step, so no custom spacing entries exist (fewer names to
-   * drift). Recorded here as documentation of the mapping, not as config:
-   *   page top padding 48 = pt-12 · content inline padding 40 = px-10
-   *   section rhythm 24 = py-6 · title→subtitle 4 = mt-1
-   *   section title→panel 16 = mb-4 · panel row 24×32 = py-6 px-8
-   *   panel footer 16×32 = py-4 px-8 · menu pill 5×12 = py-[5px] px-3
+   * THE PAGE'S RHYTHM — config, not prose.
+   *
+   * This block used to be a COMMENT describing the blueprint's spacing
+   * ("page top padding 48 = pt-12 · content inline padding 40 = px-10 …")
+   * while every screen wrote its own numbers. That is exactly how the
+   * platform ended up with `pt-5` here, `pt-8` there and `py-6` somewhere
+   * else: a rule nobody can execute is a rule that holds until the next
+   * page (user directive, 2026-08-27: "the margins and spaces everywhere is
+   * unset … not any part should be different").
+   *
+   * Tailwind derives named steps from these, so a page says
+   * `pt-page md:pt-page` rather than a number it chose, and
+   * `scaffold.test.tsx` holds the two sides together.
+   *
+   * `menuTop` is the one number that is not free: the section menu's own
+   * heading has to land on the page title's line (user directive,
+   * 2026-08-18, "align them, consider the left menu text start point"), so
+   * it moves WITH `top` and keeps the 12px optical offset between a 17px
+   * pane title and a 24px page title.
+   */
+  page: {
+    top: 48,        // desktop: the title's distance from the top bar
+    topSm: 32,      // below md, where vertical space is scarcer
+    inline: 20,     // below md
+    inlineMd: 40,   // desktop gutter
+    bottom: 64,     // room under the last section
+    menuTop: 36,    // the menu heading's own top — keeps the two headings level
+  },
+
+  /**
+   * Everything else still rides the STANDARD 4px Tailwind scale — section
+   * rhythm 24 = py-6, title→subtitle 4 = mt-1, section title→panel 16 =
+   * mb-4, panel row 24x32 = py-6 px-8, panel footer 16x32 = py-4 px-8, menu
+   * pill 5x12 = py-[5px] px-3. Those live inside the scaffold components
+   * that own them, which is the same rule as above: one place each.
    */
   spacingDoc: "standard-4px-scale",
 } as const;

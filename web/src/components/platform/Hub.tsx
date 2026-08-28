@@ -706,8 +706,12 @@ export function Hub() {
          tables"). `max-w-3xl` was the outer cap, so widening the composer
          alone changed nothing — the child could not exceed its parent, which
          is why this line and not just that one. */
-      className={`relative isolate mx-auto flex w-full max-w-content flex-col px-5 ${
-        idle ? "min-h-full justify-end py-6" : "min-h-full py-6"
+      /* the page rhythm's gutters and top, from the theme. The BOTTOM stays
+         `pb-6` rather than the page's `pb-page-bottom`: the composer is
+         sticky at the foot, and 64px under it would be dead space the
+         conversation has to scroll past on every turn. */
+      className={`relative isolate mx-auto flex w-full max-w-content flex-col px-page-inline pt-page-sm md:px-page-inline-md md:pt-page ${
+        idle ? "min-h-full justify-end pb-6" : "min-h-full pb-6"
       }`}
     >
       {/* the conversation controls — visible whenever we are not idle */}

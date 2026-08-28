@@ -24,21 +24,22 @@ export function PageContainer({
   const max =
     width === "default" ? "max-w-content" : width === "wide" ? "max-w-content-wide" : "max-w-none";
   /*
-   * `md:pt-4` matches the SectionMenu heading's own top padding, so a page
-   * title and the menu's pane title start on THE SAME LINE (user directive,
-   * 2026-08-18: "they all seem out of place — align them, consider the left
-   * menu text start point"). One shared offset, not two guesses: the old
-   * pt-12 dropped every page title two lines below the menu heading beside
-   * it, and each surface read as its own layout.
+   * THE PAGE'S RHYTHM, from the theme (user directives: 2026-08-26 "add a
+   * margin from the top, just a little, for all pages, and add this to the
+   * theme"; 2026-08-27 "see the margin that the title heading has from the
+   * top, add it to the theme so it apply to all pages").
+   *
+   * Every number here is a NAMED step derived from `SCAFFOLD.page`, so a
+   * screen cannot express a different rhythm by picking a value — which is
+   * how `pt-5`, `pt-8` and `py-6` all ended up meaning "the top of a page".
+   * The menu's own heading rides `SCAFFOLD.page.menuTop` and moves with
+   * this, so the two headings stay on one line (2026-08-18).
    */
-  /*
-   * THE PAGE'S TOP MARGIN (user directive, 2026-08-26: "add a margin from
-   * the top, just a little, for all pages, and add this to the theme").
-   * It lives HERE, on the one container every page renders inside, rather
-   * than as a class each page remembers — a margin that is a convention is
-   * a margin that is missing on the page nobody checked.
-   */
-  return <div className={`mx-auto w-full ${max} px-5 pb-16 pt-8 md:px-10 md:pt-7`}>{children}</div>;
+  return (
+    <div className={`mx-auto w-full ${max} px-page-inline pb-page-bottom pt-page-sm md:px-page-inline-md md:pt-page`}>
+      {children}
+    </div>
+  );
 }
 
 /**

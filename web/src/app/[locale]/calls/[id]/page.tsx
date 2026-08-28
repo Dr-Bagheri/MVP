@@ -15,7 +15,7 @@ import { RichTextEditor } from "@/components/RichTextEditor";
 import {
   IconArchive, IconAsk, IconChip, IconClose, IconCopy, IconDownload, IconEye, IconFileText, IconFilter, IconGavel, IconGlobe, IconMic, IconOutline, IconParagraph, IconPencil, IconPeople3, IconPlus, IconPrint, IconRedact, IconRetry, IconRows, IconShare, IconSparkle, IconTag, IconUsers, IconZap,
 } from "@/components/icons";
-import { SectionMenu } from "@/components/scaffold";
+import { PageContainer, SectionMenu } from "@/components/scaffold";
 import { SummaryBody, parseSummary } from "@/components/echo/SummaryBody";
 import { summaryLanes } from "@/lib/summaryLanes";
 import { faDisplay } from "@/lib/faDisplay";
@@ -934,8 +934,15 @@ export default function CallDetailPage({
           stack of separate cards. Since 2026-08-25 the summary and the
           transcript are SECTIONS picked in the side menu; the header and
           the player stay above both. */}
-      {/* the record shares the platform's ONE content width (2026-08-25) */}
-      <Card className="!mx-auto !my-5 w-[calc(100%-2.5rem)] max-w-content !p-0">
+      {/*
+        The record shares the platform's ONE content width (2026-08-25) AND
+        its rhythm (2026-08-27). The gutter used to be faked with
+        `w-[calc(100%-2.5rem)]` — a width that HAPPENED to leave 20px either
+        side, so it could not follow the theme when the theme moved, and on
+        a wide screen it was a different inset from every other page.
+      */}
+      <PageContainer>
+      <Card className="!p-0">
         {/* ── header: title · date · ⋯ ─────────────────────────────────── */}
         <div className="px-5 pb-4 pt-5">
           <div className="flex items-start justify-between gap-3">
@@ -2067,6 +2074,7 @@ export default function CallDetailPage({
           </section>
         ) : null}
       </Card>
+      </PageContainer>
 
       {/* deleting a summary VERSION (0095) — the same are-you-sure shape
           every product delete wears */}

@@ -9,7 +9,7 @@ import { Link } from "@/i18n/routing";
 import { AssistantMenu } from "./AssistantMenu";
 import { PlatformShell } from "./PlatformShell";
 import { WorkflowTile } from "./WorkflowTile";
-import { MenuLayout, PageHeader } from "@/components/scaffold";
+import { MenuLayout, PageContainer, PageHeader } from "@/components/scaffold";
 import { EmptyState } from "@/components/ui";
 
 /**
@@ -53,7 +53,7 @@ export function Workflows() {
   return (
     <PlatformShell>
       <MenuLayout menu={<AssistantMenu activeSlug="workflows" />}>
-        <div className="mx-auto w-full max-w-content px-5 pb-16 pt-5 md:px-10 md:pt-4">
+        <PageContainer>
           <PageHeader title={t("title")} subtitle={t("subtitle")} />
           {workflows === null ? null : workflows.length === 0 ? (
             <EmptyState text={t("empty")} />
@@ -78,7 +78,7 @@ export function Workflows() {
               ))}
             </div>
           )}
-        </div>
+        </PageContainer>
       </MenuLayout>
     </PlatformShell>
   );

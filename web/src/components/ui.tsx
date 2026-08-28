@@ -16,25 +16,16 @@ export function Card({
   return <div className={`card ${className}`}>{children}</div>;
 }
 
-export function PageHeader({
-  title,
-  subtitle,
-  actions,
-}: {
-  title: string;
-  subtitle?: string;
-  actions?: ReactNode;
-}) {
-  return (
-    <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
-      <div>
-        <h1 className="text-2xl font-bold text-fg">{title}</h1>
-        {subtitle ? <p className="mt-1 text-sm text-fg-muted">{subtitle}</p> : null}
-      </div>
-      {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
-    </div>
-  );
-}
+/**
+ * REMOVED (2026-08-27). This was a SECOND page header — same title, no
+ * hairline — so exactly one screen's title block was a different shape from
+ * every other screen's, which is the divergence the user pointed at ("not
+ * any part should be different"). The scaffold's `PageHeader` is the one,
+ * and re-exported here so the old import path keeps working rather than
+ * becoming a reason to write a third.
+ */
+export { PageHeader } from "@/components/scaffold";
+
 
 /** 2026-08-24 cleanup #8: an empty table offers the VERB, not just the
     fact — pass `action` (usually a Link styled as the primary button). */
