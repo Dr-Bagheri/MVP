@@ -286,6 +286,32 @@ on agent_run.
 
 ## M5 — Models: all cloud, user-chosen, admin-curated, no Claude
 
+> **[AMENDED 2026-08-27 — the rule now holds where nobody is watching]**
+> The exclusion had been enforced on the API path only. `assertAskable`
+> guards what a caller names, but the M5 LADDER was written out four separate
+> times in the worker — summarizer, workflow executor, mail poller, meeting
+> prep — and not one of those copies asked whether the model was allowed. Any
+> background run therefore honoured a barred model on nothing more than a
+> stale `preferred_model` row: the no-Claude rule was **never true for
+> anything that ran without a person watching**, and the live catalogue had
+> already served `~anthropic/claude-opus-latest` for weeks. One
+> `firstServable(...)` now applies the rule at every rung, the ENV FALLBACK
+> included — a misconfigured `WORKER_SUMMARY_MODEL` is precisely the thing
+> that would serve one silently forever, because nobody reads it after the
+> day it is set.
+>
+> **And a ruling reversed by what it did in production.** A barred model in a
+> STORED preference is no longer refused by name; it is treated as no
+> preference and the ladder moves on. The earlier ruling ("a legacy
+> preference stored before the exclusion existed is as refused as a typed
+> one") is right about a caller NAMING a model and wrong about a stale row:
+> nobody typed this one, and the cost was every run in the first member's
+> thread ending on "model is not available on this product" with no answer.
+> The refusal that names a model is kept for the case where someone actually
+> named it. Both readers — `list` (what the picker shows) and `preferred`
+> (what the ask runs) — go through one sentence, because fixing one of them
+> is how a picker comes to show a choice that is silently not in force.
+
 - **No local LLMs, no Ollama, no air-gapped profile** (user decision —
   deliberate reversal of neurai-mvp D14/D15).
 - **No default model.** Each user picks from the catalogue (tool-capable
