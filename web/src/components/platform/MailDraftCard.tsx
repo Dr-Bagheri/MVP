@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { MailDraft } from "@/api/types";
 import { notify } from "@/lib/notify";
+import { Link } from "@/i18n/routing";
 
 /**
  * M43 — the reply, in the thread, with the one button that sends it.
@@ -23,9 +24,20 @@ import { notify } from "@/lib/notify";
  */
 export function MailDraftCard({
   draft,
+  canSend = true,
   onChanged,
 }: {
   draft: MailDraft;
+  /**
+   * Whether the connection this draft belongs to may actually send.
+   *
+   * A connection made before the compose scope existed reads mail fine and
+   * refuses to send it, so the draft arrives and the button fails at the
+   * provider. Offering the upgrade instead of the press is the difference
+   * between a control that works and one that looks like it does — the
+   * failure would be Google's, and the person would read it as ours.
+   */
+  canSend?: boolean;
   onChanged?: (next: MailDraft) => void;
 }) {
   const t = useTranslations("mail");
@@ -81,9 +93,13 @@ export function MailDraftCard({
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3">
         <span className="text-xs text-fg-subtle">
-          {decided ? t("decidedNote") : t("editNote")}
+          {decided ? t("decidedNote") : canSend ? t("editNote") : t("cannotSendNote")}
         </span>
-        {decided ? null : (
+        {decided ? null : !canSend ? (
+          <Link href="/integrations" className="btn-secondary h-9 min-h-0 px-3 text-xs">
+            {t("connectToSend")}
+          </Link>
+        ) : (
           <span className="flex items-center gap-2">
             <button
               type="button"

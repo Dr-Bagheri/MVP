@@ -19,6 +19,11 @@ vi.mock("@/api/client", () => ({
 }));
 
 const notified: string[] = [];
+vi.mock("@/i18n/routing", () => ({
+  Link: ({ href, children, ...props }: { href: string; children: React.ReactNode }) =>
+    <a href={String(href)} {...props}>{children}</a>,
+}));
+
 vi.mock("@/lib/notify", () => ({
   notify: (message: string) => { notified.push(message); },
 }));
@@ -31,6 +36,7 @@ const { MailDraftCard } = await import("./MailDraftCard");
 const SEND = "همین حالا بفرست";
 const DISCARD = "کنار بگذار";
 const ALREADY = "این پاسخ پیش‌تر فرستاده یا کنار گذاشته شده بود.";
+const ENABLE = "فعال‌کردن ارسال";
 
 const DRAFT: MailDraft = {
   id: "d-1",
@@ -96,5 +102,19 @@ describe("MailDraftCard", () => {
     render(<MailDraftCard draft={{ ...DRAFT, status: "sent", decided_at: new Date().toISOString() }} />);
     expect(screen.queryByText(SEND)).toBeNull();
     expect(screen.queryByText(DISCARD)).toBeNull();
+  });
+  it("offers the upgrade instead of a Send that would fail at the provider", () => {
+    /* a connection made before the compose scope reads mail fine and refuses
+       to send it. The failure would be Google's and the person would read it
+       as ours, so the press is not offered at all. */
+    render(<MailDraftCard draft={DRAFT} canSend={false} />);
+    expect(screen.queryByText(SEND)).toBeNull();
+    expect(screen.getByText(ENABLE)).toBeTruthy();
+  });
+
+  it("offers Send when the connection can actually send — the control", () => {
+    /* without this, "never offer Send" would pass every assertion above */
+    render(<MailDraftCard draft={DRAFT} canSend />);
+    expect(screen.getByText(SEND)).toBeTruthy();
   });
 });

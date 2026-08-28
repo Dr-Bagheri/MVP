@@ -2000,6 +2000,8 @@
     "sent": "The reply was sent.",
     "discarded": "The draft was discarded.",
     "sendFailed": "The reply was not sent.",
-    "alreadyDecided": "This reply was already sent or discarded."
+    "alreadyDecided": "This reply was already sent or discarded.",
+    "connectToSend": "Enable sending",
+    "cannotSendNote": "This connection can read your mail but not send it — enable drafts and sending in Integrations."
   }
 }

@@ -59,6 +59,9 @@ export function Hub() {
    * instead of trusting what it saw written once.
    */
   const [drafts, setDrafts] = useState<MailDraft[]>([]);
+  /* which providers may SEND — a connection can read mail and refuse to send
+     it, and the card must not offer a button that fails at the provider */
+  const [canSend, setCanSend] = useState<Record<string, boolean>>({});
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [feedback, setFeedback] = useState<Record<string, string>>({});
@@ -330,7 +333,16 @@ export function Hub() {
   const refreshDrafts = useCallback(async (sessionForDrafts: string | undefined) => {
     if (!sessionForDrafts) return;
     await api.mailDrafts({ session: sessionForDrafts })
-      .then(setDrafts)
+      .then(async (found) => {
+        setDrafts(found);
+        if (found.length === 0) return;
+        /* asked only when there IS a draft: the connector list is a second
+           request, and a conversation with no drafts owes nobody one */
+        await api.connectors()
+          .then((list) => setCanSend(Object.fromEntries(
+            list.map((c) => [c.provider, c.can_draft === true]))))
+          .catch(() => { /* unknown stays unknown; the card assumes it can */ });
+      })
       .catch(() => { /* an un-migrated deployment has no drafts, not an error */ });
   }, []);
 
@@ -782,6 +794,7 @@ export function Hub() {
             <MailDraftCard
               key={draft.id}
               draft={draft}
+              canSend={canSend[draft.provider] !== false}
               onChanged={(next) => setDrafts((prev) =>
                 prev.map((entry) => (entry.id === next.id ? next : entry)))}
             />
