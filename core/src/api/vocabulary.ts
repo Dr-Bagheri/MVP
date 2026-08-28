@@ -323,6 +323,25 @@ export type WorkflowProposalKind = (typeof WORKFLOW_PROPOSAL_KINDS)[number];
  */
 export const AUTO_APPLY_ELIGIBLE = ["add_tags"] as const;
 
+/**
+ * The connector providers this platform OFFERS today (user directive,
+ * 2026-08-28: "remove the microsoft from the workflow for now we just go
+ * with the google").
+ *
+ * One list, because there were four: core's own `PROVIDERS`, the
+ * integrations catalogue, the run dialog's picker, and the workflow detail
+ * page's logo row — each a hand-kept copy of the same fact, which is the
+ * drift shape this repo keeps paying for. Narrowing it here narrows every
+ * surface at once.
+ *
+ * It is the OFFER, not the world: `connector_connection` still accepts
+ * `microsoft` and the Graph code paths are untouched, so a connection that
+ * already exists stays visible and disconnectable. Hiding a live grant
+ * would leave somebody unable to revoke it, which is a worse thing to do
+ * than showing a provider we are not currently selling.
+ */
+export const OFFERED_CONNECTOR_PROVIDERS = ["google"] as const;
+
 /** M41 L1 — the facts that may trigger a workflow (P4; closed). */
 export const WORKFLOW_EVENTS = ["call.summarized"] as const;
 export type WorkflowEvent = (typeof WORKFLOW_EVENTS)[number];

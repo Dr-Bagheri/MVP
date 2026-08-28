@@ -8,7 +8,7 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 
 import { JSONB_PARAM, toJsonb } from "../db/jsonb.ts";
-import { iso } from "./vocabulary.ts";
+import { iso, OFFERED_CONNECTOR_PROVIDERS } from "./vocabulary.ts";
 import type { Db, SqlTx } from "../db/identity.ts";
 import type { Identity } from "../agent/types.ts";
 import { NotFoundError, ValidationError } from "./errors.ts";
@@ -112,6 +112,10 @@ interface ProviderTokenResponse {
   token_type?: unknown;
 }
 
+/**
+ * Every provider the code CAN speak, which is not the same list as the one
+ * the product offers — see OFFERED_CONNECTOR_PROVIDERS in vocabulary.ts.
+ */
 const PROVIDERS: readonly ConnectorProvider[] = ["google", "microsoft"];
 /**
  * Read is the floor; DRAFTING is the reason the extra scope is here.
@@ -483,7 +487,16 @@ export function createConnectorsRepo(db: Db, options: ConnectorOAuthOptions = {}
   return {
     async list(identity: Identity): Promise<ConnectorStatus[]> {
       const current = await rows(identity);
-      return PROVIDERS.map((provider) => {
+      /*
+       * What is OFFERED, plus anything already connected. The second half is
+       * the load-bearing one: narrowing the offer must never hide a grant
+       * somebody has already made, or they cannot revoke it from inside the
+       * product that asked for it.
+       */
+      const offered = PROVIDERS.filter((provider) =>
+        (OFFERED_CONNECTOR_PROVIDERS as readonly string[]).includes(provider)
+        || current.some((entry) => entry.provider === provider));
+      return offered.map((provider) => {
         const row = current.find((entry) => entry.provider === provider);
         const isConfigured = configured(options, provider);
         return {

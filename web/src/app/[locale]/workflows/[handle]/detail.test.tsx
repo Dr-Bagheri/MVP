@@ -281,16 +281,22 @@ describe("the workflow detail page", () => {
   });
 
   /**
-   * The ⋯ menu — the page's only door to running a workflow now that the list
-   * has none. Opened rather than inspected in source: the panel is a portal,
-   * so "the trigger exists" and "the items exist" are genuinely two facts.
+   * The ⋯ menu. Opened rather than inspected in source: the panel is a
+   * portal, so "the trigger exists" and "the items exist" are genuinely two
+   * facts.
+   *
+   * **Run now is gone** (user directive, 2026-08-28: "remove the run now for
+   * now, we dont need it"), and the assertion is the WHOLE item list rather
+   * than a queryByText null — a list comparison fails if the item comes back
+   * AND if something else appears beside the switch, where an absence check
+   * only ever answers one of those.
    */
-  it("carries Run now and the switch's other entrance in the kebab", async () => {
+  it("carries the switch's other entrance in the kebab, and nothing else", async () => {
     ME = { ...BASE_ME, auto_draft_replies: true };
     await open("draft-email-replies");
 
     fireEvent.click(screen.getByRole("button", { name: "کارهای این گردش‌کار" }));
     const items = within(screen.getByRole("menu")).getAllByRole("menuitem");
-    expect(items.map((item) => item.textContent)).toEqual(["اجرای اکنون", "خاموش کردن"]);
+    expect(items.map((item) => item.textContent)).toEqual(["خاموش کردن"]);
   });
 });

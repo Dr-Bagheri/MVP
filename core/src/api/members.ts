@@ -447,6 +447,33 @@ export function createMembersRepo(db: Db) {
             patch.auto_draft_replies !== undefined, patch.auto_draft_replies ?? null,
             patch.auto_meeting_prep !== undefined, patch.auto_meeting_prep ?? null,
           ]));
+      /*
+       * TURNING DRAFTING ON RE-BASELINES THE MAILBOX.
+       *
+       * Without this, switching the feature off and on again leaves a stale
+       * cursor behind, and everything that arrived in between counts as
+       * "new" — which is a burst of replies to mail the person had already
+       * read and dealt with. It is the same complaint as the one that named
+       * this fix ("why it cycle through all email in a loop, it should only
+       * trigger with new email"), arriving by a different road.
+       *
+       * Clearing the mark puts the next sweep back on its FIRST-LOOK path:
+       * record where the mailbox is now, draft nothing, and answer what
+       * arrives after. "On" means from now on.
+       *
+       * Owner-scoped by RLS (0065's connector_connection_owner), so this can
+       * only ever touch the caller's own connections; and it is deliberately
+       * NOT done when the switch goes off, because turning something off
+       * should not throw away state you may want back within the minute.
+       */
+      if (patch.auto_draft_replies === true) {
+        await db.withIdentity(identity, (tx: SqlTx) =>
+          tx.unsafe(
+            `update echo.connector_connection
+                set mail_cursor = null, mail_cursor_at = null
+              where owner_id = $1 and mail_cursor is not null`,
+            [identity.userId]));
+      }
       return this.me(identity);
     },
 

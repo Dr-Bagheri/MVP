@@ -81,6 +81,23 @@ interface StepLogger {
  */
 const UNANSWERABLE = /(^|[._-])(no-?reply|do-?not-?reply|donotreply|mailer-daemon|postmaster|notifications?|alerts?|bounce)([._-]|@)/i;
 
+/**
+ * How old a message may be and still count as new.
+ *
+ * A belt, not the mechanism: the cursor is what decides "new", and this only
+ * catches the case where the cursor is wrong about the world — which has now
+ * happened twice, once because the window included our own drafts and once
+ * because the marked message had left the inbox. Twenty-four hours is
+ * comfortably longer than any poll gap this worker has (two minutes) and
+ * comfortably shorter than "mail I have already dealt with".
+ *
+ * The cost is named: after an outage longer than this, mail from the gap is
+ * never answered. That is the right side of the trade — a missed draft is
+ * asked for again; an unasked-for one is already in somebody's mailbox — and
+ * it is LOGGED rather than silent.
+ */
+const MAX_AGE_HOURS = 24;
+
 function senderAddress(item: ConnectorItem): string {
   const angled = /<([^>]+)>/.exec(item.subtitle ?? "");
   return (angled?.[1] ?? item.subtitle ?? "").trim();
@@ -332,8 +349,24 @@ export async function sweepMailboxes(options: MailPollOptions, log: StepLogger):
       }
 
       let drafted = 0;
+      let stale = 0;
+      const floor = Date.now() - MAX_AGE_HOURS * 3_600_000;
       for (const item of items) {
         if (drafted >= (options.perSweep ?? 3)) break;   // a burst is not a mandate
+        /*
+         * THE AGE CEILING — the belt behind the cursor.
+         *
+         * Every "it answered all my old mail" defect so far arrived as a
+         * cursor that was correct in its own terms and wrong about the
+         * world. This does not depend on the cursor being right: a message
+         * that arrived days ago is not new under any reading, whatever the
+         * mark says. Only messages we can actually DATE are refused — an
+         * unreadable `Date:` header leaves position as the only evidence,
+         * and dropping it would lose real mail to a header we could not
+         * parse.
+         */
+        const at = item.occurred_at ? Date.parse(item.occurred_at) : Number.NaN;
+        if (!Number.isNaN(at) && at < floor) { stale += 1; continue; }
         if (UNANSWERABLE.test(senderAddress(item))) continue;
         try {
           if (await draftFor(options, identity, provider, item, ownAddress, log) === "drafted") drafted += 1;
@@ -343,6 +376,12 @@ export async function sweepMailboxes(options: MailPollOptions, log: StepLogger):
           log.warn({ event: "mail_draft_failed", message: (error as Error).message },
             "could not draft a reply for one message");
         }
+      }
+      /* said out loud, because a silent skip is how a poller that has
+         stopped working looks exactly like a quiet mailbox (rule 12) */
+      if (stale > 0) {
+        log.warn({ event: "mail_skipped_stale", connection: row.connection_id, count: stale, hours: MAX_AGE_HOURS },
+          "messages were older than the age ceiling and were not answered");
       }
     } catch (error) {
       log.warn({ event: "mail_poll_failed", connection: row.connection_id, message: (error as Error).message },

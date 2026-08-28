@@ -72,6 +72,14 @@ const EXCLUDED: Record<string, string> = {
     "itself and could never fail — the bar-ceiling trap. The import is what " +
     "closed the real drift: this union sat one kind behind the database from " +
     "0107 until 0116 precisely because it WAS a local copy.",
+  OFFERED_CONNECTOR_PROVIDERS:
+    "not mirrored: this is the OFFER, and web/ consumes the array itself at " +
+    "runtime — the integrations catalogue, the run dialog's picker and the " +
+    "detail page's logo row all filter by it. It exists precisely BECAUSE " +
+    "those were three hand-kept copies of one fact; re-stating it here as a " +
+    "union would recreate the fourth. Note it is narrower than " +
+    "`ConnectorProvider`, deliberately: the type says what the code can " +
+    "speak, this says what the product currently sells.",
   WORKFLOW_PROPOSAL_KINDS:
     "not mirrored: the builder maps over the imported array itself " +
     "(one spelling, no local union to drift) — the AUDIT_SOURCES posture.",

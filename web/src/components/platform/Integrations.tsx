@@ -11,6 +11,7 @@ import { DataTable, StatusDot, type Column } from "@/components/DataTable";
 import { EmptyState } from "@/components/ui";
 import { Icon, type IconName } from "@/components/icons";
 import { digits, formatRelativeDate, formatTime, personName } from "@/lib/format";
+import { OFFERED_CONNECTOR_PROVIDERS } from "@echo/core/vocabulary";
 
 /**
  * The data sources this product reads — what is connected, and what could be
@@ -38,8 +39,12 @@ import { digits, formatRelativeDate, formatTime, personName } from "@/lib/format
  * the intersection, which is exactly the fact the person came here to check.
  */
 
-/** The catalogue: every integration the platform ACTUALLY has, once each. */
-const CATALOGUE = [
+/**
+ * The catalogue: every integration the platform ACTUALLY has, once each —
+ * filtered below by what the platform currently OFFERS, so "we just go with
+ * the google for now" is one edit in the producer rather than four here.
+ */
+const ALL_SOURCES = [
   { key: "gmail", provider: "google", icon: "mail", kind: "mail" },
   { key: "googleCalendar", provider: "google", icon: "calendar", kind: "calendar" },
   { key: "outlookMail", provider: "microsoft", icon: "mail", kind: "mail" },
@@ -50,6 +55,9 @@ const CATALOGUE = [
   icon: IconName;
   kind: "mail" | "calendar";
 }[];
+
+const CATALOGUE = ALL_SOURCES.filter((entry) =>
+  (OFFERED_CONNECTOR_PROVIDERS as readonly string[]).includes(entry.provider));
 
 /**
  * One line of the connected table: what the product reads, not what the person

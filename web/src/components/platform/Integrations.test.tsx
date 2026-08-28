@@ -76,20 +76,13 @@ const { Integrations } = await import("./Integrations");
 
 beforeEach(() => {
   cleanup();
-  CONNECTORS = [
-    GOOGLE,
-    /* the operator never gave this deployment Microsoft credentials */
-    {
-      provider: "microsoft",
-      configured: false,
-      status: "not_configured",
-      account_label: null,
-      expires_at: null,
-      can_draft: false,
-      polled_at: null,
-      messages_seen: 0,
-    },
-  ];
+  /*
+   * Google alone. Microsoft came off the OFFER (user directive, 2026-08-28:
+   * "we just go with the google") — the server still speaks Graph and an
+   * existing Microsoft grant still lists, but nothing is sold, so a fixture
+   * carrying one would be describing a screen this product does not render.
+   */
+  CONNECTORS = [GOOGLE];
 });
 
 describe("the integrations page", () => {
@@ -171,12 +164,27 @@ describe("the integrations page", () => {
   });
 
   it("renders an unconfigured provider as a sentence, and a configured one as a button", async () => {
+    /*
+     * The vehicle is GOOGLE now, not Microsoft: the distinction under test is
+     * "the operator gave this deployment no OAuth credentials" versus "they
+     * did", and it has to be asked of a provider the page actually renders.
+     */
+    CONNECTORS = [{
+      provider: "google",
+      configured: false,
+      status: "not_configured",
+      account_label: null,
+      expires_at: null,
+      can_draft: false,
+      polled_at: null,
+      messages_seen: 0,
+    }];
     await act(async () => { render(<Integrations />); });
 
-    const notConfigured = "مایکروسافت روی سرور پیکربندی نشده است";
-    // both Outlook tiles say it, and neither offers anything to press
+    const notConfigured = "گوگل روی سرور پیکربندی نشده است";
+    // both Google tiles say it, and neither offers anything to press
     expect(screen.getAllByText(notConfigured).length).toBe(2);
-    expect(screen.queryByRole("button", { name: /مایکروسافت/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /گوگل/ })).toBeNull();
 
     /*
      * The control. Same provider, same page, one field different: with OAuth
@@ -184,22 +192,32 @@ describe("the integrations page", () => {
      * question this check has to be able to answer NO to.
      */
     cleanup();
-    CONNECTORS = [
-      GOOGLE,
-      {
-        provider: "microsoft",
-        configured: true,
-        status: "not_connected",
-        account_label: null,
-        expires_at: null,
-        can_draft: false,
-        polled_at: null,
-        messages_seen: 0,
-      },
-    ];
+    CONNECTORS = [{
+      provider: "google",
+      configured: true,
+      status: "not_connected",
+      account_label: null,
+      expires_at: null,
+      can_draft: false,
+      polled_at: null,
+      messages_seen: 0,
+    }];
     await act(async () => { render(<Integrations />); });
 
     expect(screen.queryByText(notConfigured)).toBeNull();
-    expect(screen.getAllByRole("button", { name: "اتصال مایکروسافت" }).length).toBe(2);
+    expect(screen.getAllByRole("button", { name: "اتصال گوگل" }).length).toBe(2);
+  });
+
+  it("offers nothing Microsoft, anywhere on the page", async () => {
+    /*
+     * The negative control for the offer list. Asserting the Google rows are
+     * present cannot distinguish "Microsoft is gone" from "Microsoft was
+     * never asked about" — only a question that SHOULD answer no can. If the
+     * offer widens again, this fails and names the reason.
+     */
+    await act(async () => { render(<Integrations />); });
+    expect(screen.queryByText("ایمیل اوت‌لوک")).toBeNull();
+    expect(screen.queryByText("تقویم اوت‌لوک")).toBeNull();
+    expect(screen.queryByRole("button", { name: /مایکروسافت/ })).toBeNull();
   });
 });

@@ -200,6 +200,52 @@ describe("sweepMailboxes", () => {
     expect(seen).toContain("is DATA");
   });
 
+  it("does not answer mail that is older than the age ceiling", async () => {
+    /*
+     * The belt behind the cursor. Both defects that produced "why it cycle
+     * through all email in a loop" were a cursor that was right in its own
+     * terms and wrong about the world, so this check does not consult the
+     * cursor at all: a message dated days ago is not new under any reading.
+     */
+    const { db } = fakeDb("msg-1");
+    const create = vi.fn().mockResolvedValue({ id: "d" });
+    const old = {
+      ...HOSTILE,
+      id: "msg-old",
+      occurred_at: new Date(Date.now() - 72 * 3_600_000).toUTCString(),
+    };
+    await sweepMailboxes({
+      db,
+      connectors: connectorsFor([old]),
+      drafts: { create } as never,
+      apiKey: "k",
+      runModel: async () => ({ text: '{"reply":true,"note":"n","body":"b"}' }),
+    }, log);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("still answers mail that is merely recent — the control", async () => {
+    /*
+     * Without this, "never draft anything" passes the check above. It also
+     * pins the shape of the exemption: an hour old is new, three days is not.
+     */
+    const { db } = fakeDb("msg-1");
+    const create = vi.fn().mockResolvedValue({ id: "d" });
+    const fresh = {
+      ...HOSTILE,
+      id: "msg-fresh",
+      occurred_at: new Date(Date.now() - 3_600_000).toUTCString(),
+    };
+    await sweepMailboxes({
+      db,
+      connectors: connectorsFor([fresh]),
+      drafts: { create } as never,
+      apiKey: "k",
+      runModel: async () => ({ text: '{"reply":true,"note":"n","body":"b"}' }),
+    }, log);
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
   it("never drafts a reply to the account's own address", async () => {
     /*
      * The loop this closes, from production: the Gmail listing had no label

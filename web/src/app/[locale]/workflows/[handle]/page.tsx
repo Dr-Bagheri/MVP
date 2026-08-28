@@ -6,21 +6,20 @@ import { api } from "@/api/client";
 import type {
   AuthoredWorkflow, MailDraft, Me, WorkflowCard, WorkflowRunRecord,
 } from "@/api/types";
-import { Link, useRouter } from "@/i18n/routing";
+import { Link } from "@/i18n/routing";
 import { PlatformShell } from "@/components/platform/PlatformShell";
 import { AssistantMenu } from "@/components/platform/AssistantMenu";
 import { useCrumbTitle } from "@/components/platform/CrumbTitle";
-import { WorkflowRunDialog } from "@/components/platform/WorkflowRunDialog";
 import { WorkflowTile } from "@/components/platform/WorkflowTile";
 import { MenuLayout, PageContainer } from "@/components/scaffold";
 import { Card } from "@/components/ui";
 import { Pagination, usePaged } from "@/components/Pagination";
 import { KebabMenu, type KebabItem } from "@/components/rowActions";
 import {
-  Icon, IconPlay, IconRetry, IconToggleOff, IconToggleOn, type IconName,
+  Icon, IconRetry, IconToggleOff, IconToggleOn, type IconName,
 } from "@/components/icons";
 import { digits, formatDate, formatTime } from "@/lib/format";
-import { notify } from "@/lib/notify";
+import { OFFERED_CONNECTOR_PROVIDERS } from "@echo/core/vocabulary";
 
 /**
  * ONE workflow: what it does, and what it has done.
@@ -168,7 +167,6 @@ export default function WorkflowDetailPage({
   const { handle } = use(params);
   const t = useTranslations("workflows");
   const locale = useLocale();
-  const router = useRouter();
 
   const [cards, setCards] = useState<WorkflowCard[] | null>(null);
   const [engine, setEngine] = useState<EngineWorkflow[] | null>(null);
@@ -190,10 +188,6 @@ export default function WorkflowDetailPage({
   const [saveFailed, setSaveFailed] = useState(false);
   /** the capability was withdrawn between the read and the press */
   const [refused, setRefused] = useState(false);
-  /** Run now, on a TEMPLATE: the source picker the ⋯ menu opens */
-  const [picking, setPicking] = useState(false);
-  /** Run now, on an ENGINE workflow: the request in flight */
-  const [running, setRunning] = useState(false);
 
   useEffect(() => {
     void api.workflows().then(setCards).catch(() => setCards([]));
@@ -316,27 +310,6 @@ export default function WorkflowDetailPage({
   }, [runs, drafts, subject?.id, subject?.sourceKind, t]);
   const { page, setPage, pageCount, visible } = usePaged(recents);
 
-  /**
-   * Run now, for an ENGINE workflow: the engine's own manual trigger.
-   *
-   * A refusal is a NAMED sentence from core (a workflow needing un-runnable
-   * kinds says which) and is surfaced verbatim — the refusal copy is core's
-   * alone, because only core knows which rule was broken.
-   */
-  async function runEngine() {
-    if (running) return;
-    setRunning(true);
-    try {
-      const { run_id } = await api.runWorkflow(handle);
-      router.push({ pathname: "/workflows/runs/[id]", params: { id: run_id } } as never);
-    } catch (cause) {
-      const detail = (cause as { detail?: string }).detail;
-      notify(detail || t("runFailed"), "warn");
-    } finally {
-      setRunning(false);
-    }
-  }
-
   /** the org's switch: an admin publishing or pausing an engine workflow */
   async function toggleOrgWorkflow() {
     if (!subject?.manageId || saving) return;
@@ -436,14 +409,16 @@ export default function WorkflowDetailPage({
         : { enabled: true, onToggle: undefined, note: t("detailNoSwitch"), hint: null };
 
   /**
-   * The ⋯ menu — the page's second entrance to the two things a person does
-   * with a workflow, and the ONLY entrance to running one (user directive,
-   * 2026-08-28: the list's Start buttons are gone, "it should only be run
-   * from inside their own page").
+   * The ⋯ menu.
    *
-   * **Run now** means different things to the two kinds and the menu does not
-   * blur them: a TEMPLATE runs on one thing you choose, so it opens the source
-   * picker; an ENGINE workflow carries its own trigger and simply starts.
+   * **There is no Run now** (user directive, 2026-08-28: "remove the run now
+   * for now, we dont need it"). It was the only manual entrance, and the
+   * reason it can go is that these workflows are TRIGGERED: an email arrives,
+   * a meeting approaches. A button that starts one by hand mostly produces a
+   * run against whatever happens to be lying around, which is exactly the
+   * "why did it answer all my old mail" complaint in a different costume.
+   * `WorkflowRunDialog` and `runWorkflow` are untouched and still work; the
+   * wiring lives in git at 75cc8d2 if a manual start is ever wanted back.
    *
    * **Turn on / Turn off** is the pill's handler, not a copy of it — one
    * decision (`switchProps`) with two entrances. When the pill is read-only
@@ -457,13 +432,6 @@ export default function WorkflowDetailPage({
    * oversight and add one.
    */
   const menuItems: KebabItem[] = subject === null ? [] : [
-    {
-      key: "run",
-      label: running ? t("runStarting") : t("runNow"),
-      icon: <IconPlay width={14} height={14} />,
-      disabled: running || (subject.kind === "template" && subject.sourceKind === undefined),
-      onSelect: subject.kind === "engine" ? () => void runEngine() : () => setPicking(true),
-    },
     ...(switchProps?.onToggle
       ? [{
           key: "enabled",
@@ -677,23 +645,18 @@ export default function WorkflowDetailPage({
           )}
         </PageContainer>
       </MenuLayout>
-
-      {picking && subject?.sourceKind !== undefined ? (
-        <WorkflowRunDialog
-          slug={handle}
-          sourceKind={subject.sourceKind}
-          title={subject.name}
-          onClose={() => setPicking(false)}
-        />
-      ) : null}
     </PlatformShell>
   );
 }
 
 /**
- * The providers a workflow of this source kind reads through — derived from
- * the connectors the platform actually supports (google, microsoft), never
- * from a hand-kept list of logos.
+ * The providers a workflow of this source kind reads through.
+ *
+ * Filtered by what the platform currently OFFERS
+ * (`OFFERED_CONNECTOR_PROVIDERS`) rather than by a hand-kept list of logos:
+ * this row used to name Outlook beside Gmail, which is a promise the
+ * integrations page could not keep once Microsoft came off the offer (user
+ * directive, 2026-08-28: "we just go with the google").
  */
 function integrationsFor(
   /* the producer's own union, read off the wire type rather than re-spelled
@@ -701,15 +664,18 @@ function integrationsFor(
   kind: WorkflowCard["source_kind"],
   labels: { gmail: string; outlook: string; googleCalendar: string; outlookCalendar: string },
 ): { key: string; icon: IconName; label: string }[] {
-  return kind === "calendar_event"
+  const offered = OFFERED_CONNECTOR_PROVIDERS as readonly string[];
+  const rows = kind === "calendar_event"
     ? [
-        { key: "google-calendar", icon: "calendar", label: labels.googleCalendar },
-        { key: "outlook-calendar", icon: "calendar", label: labels.outlookCalendar },
+        { key: "google-calendar", provider: "google", icon: "calendar" as IconName, label: labels.googleCalendar },
+        { key: "outlook-calendar", provider: "microsoft", icon: "calendar" as IconName, label: labels.outlookCalendar },
       ]
     : [
-        { key: "gmail", icon: "mail", label: labels.gmail },
-        { key: "outlook", icon: "mail", label: labels.outlook },
+        { key: "gmail", provider: "google", icon: "mail" as IconName, label: labels.gmail },
+        { key: "outlook", provider: "microsoft", icon: "mail" as IconName, label: labels.outlook },
       ];
+  return rows.filter((row) => offered.includes(row.provider))
+    .map(({ key, icon, label }) => ({ key, icon, label }));
 }
 
 function Meta({ label, children }: { label: string; children: React.ReactNode }) {

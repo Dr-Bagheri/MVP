@@ -7,6 +7,7 @@ import type { ConnectorItem, ConnectorProvider, ConnectorStatus, WorkflowCard } 
 import { useRouter } from "@/i18n/routing";
 import { Pagination, usePaged } from "@/components/Pagination";
 import { IconClose } from "@/components/icons";
+import { OFFERED_CONNECTOR_PROVIDERS } from "@echo/core/vocabulary";
 
 /**
  * "Run this template on…" — the source picker, MOVED here from the workflows
@@ -126,7 +127,7 @@ export function WorkflowRunDialog({
               {t("connectRequired", { source: sourceLabel })}
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
-              {(["google", "microsoft"] as const).map((entry) => {
+              {OFFERED_CONNECTOR_PROVIDERS.map((entry) => {
                 const state = connections.find((connection) => connection.provider === entry);
                 /* `not_configured` is a claim about the PRODUCT (the operator
                    holds no OAuth credentials for this provider), so it renders
