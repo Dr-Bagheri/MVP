@@ -2669,3 +2669,32 @@ sessions) for the cross-session narrative.
   class is counting the wrong thing** — `div.rounded-2xl` meant "how
   many messages" until answers stopped being boxed; it counts
   `.message-arrives` now, one element per message.
+
+- 2026-08-27 (M45 — the page rhythm, and the copy nobody could see):
+  the user's "the margins and spaces everywhere is unset" had a
+  precise cause. M26 derived radii, type and widths from
+  scaffold/constants.ts but left SPACING as a COMMENT ("page top
+  padding 48 = pt-12 · content inline padding 40 = px-10") — prose
+  that was already two revisions stale — so the page column got
+  COPIED into five surfaces, the copies froze at the value the
+  original held before a one-line bump, and five screens sat 12px
+  higher than the rest of the platform. **Nothing went red because
+  nothing had ever asserted PageContainer's classes**: the divergence
+  was true and invisible at the same time, which is the whole shape of
+  it. Fixed by making the rhythm CONFIG (SCAFFOLD.page → named
+  Tailwind steps → `pt-page`, not a number a screen picked), and the
+  menu heading moves WITH the page title because **that pair is a
+  relationship, not two numbers** — the test asserts the 12px a 17px
+  pane title needs to share a 24px page title's line, so "just add
+  some space" cannot leave one behind. Also collapsed the SECOND
+  PageHeader (no hairline, one consumer — one screen's title block a
+  different shape from every other), and brought the hub, the record
+  document and the operations console onto the gutters; `max-w-6xl`,
+  the one page width outside the two themed columns, is gone. The
+  guard (`rhythm.guard.test.ts`) is the lasting part: named steps only
+  inside the scaffold, the copied literals may never return, nobody
+  re-implements the column, exceptions are entries WITH REASONS, and
+  one assertion checks the exceptions still name real files — **an
+  allow-list entry for a deleted file reads as coverage and is a
+  hole**. Its FIRST FIRE caught a sixth copy written minutes earlier
+  by its own author, which is the best evidence a guard can offer.
