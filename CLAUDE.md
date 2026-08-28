@@ -2615,3 +2615,28 @@ sessions) for the cross-session narrative.
   actually granted, so a pre-drafting connection says so instead of
   failing at the provider. Console: the scope is registered on the
   consent screen and Google accepts the new set (probed).
+
+- 2026-08-27 (M44 + the Sana-shaped workflow page): the detail screen
+  built to the reference — identity tile, on/off pill, Created by /
+  Category / Integrations, Process (trigger + numbered steps), Runs
+  (Upcoming + Recents). Its pill is FOUR states decided in one place,
+  and read-only is the ABSENCE of a handler rather than a disabled
+  button beside a live one. Shipped templates' process text comes from
+  the CATALOGUE, not the wire: the other order reads more natural and
+  breaks the default path, because core would serve one language and
+  every Persian reader would silently lose Persian the day `steps`
+  lands. **M44 meeting prep** = M43's twin with the differences as the
+  design: this output never leaves the building so the brief MAY use
+  the read tools (retrieval is the value), while the mail draft gets
+  NONE because what it produces is addressed to somebody else —
+  **blast radius decides reach**. A window, not a cursor (mail is a
+  stream, a calendar is a set of future facts); all-day entries
+  excluded ("today" is not a moment you can be thirty minutes before)
+  and meetings already under way excluded (a pre-read delivered
+  mid-meeting is worse than none — it arrives looking useful).
+  Minted, from opening the page rather than any test: **a slug is
+  data, and the heading above it is not evidence of what it is
+  called** — I wrote `prepare-me-for-meetings` off the card's title;
+  0065 seeds `prepare-meetings`, so the toggle's own screen answered
+  "no such workflow". Typecheck, 484 web tests and the build gate were
+  all green while it was wrong.
