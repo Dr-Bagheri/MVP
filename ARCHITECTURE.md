@@ -1773,6 +1773,76 @@ useful.
 calendar is not less personal than an inbox, and an admin does not switch it
 on for somebody else.
 
+## M46 — The mail flow becomes a graph [user directive, 2026-08-28: "all
+these is not just a text that we show, it must be editable and part of the
+puzzled structure that we built ... workflow is a loop engineering of the
+AI so use it like that"]
+
+The five steps on the mail template's page were product copy in a locale
+file, sitting above a hardcoded worker sweep: two descriptions of one
+process, and the editable one governed nothing. M46 makes the process a
+program the engine runs, and therefore a program a person can rearrange.
+
+**`fetch` runs, and declares a trust-labelled envelope.** That shape is the
+keystone rather than a detail. A message is not uniformly untrustworthy: its
+body is a stranger's prose and can only ever be fenced; its `reply_to` is an
+address the provider parsed out of a header. The old boolean — typed or
+content — could not express "trustworthy enough to address an email with,
+not trustworthy enough to obey". Each field now carries `id | address |
+date | untrusted_text`, the executor splices the first three and fences the
+last, and `ENVELOPE_FIELDS` is a contract a graph binds against months
+before the run — held to the producer by `workflow-fetch.test.ts`.
+
+**Which is what turns the recipient rule into a refusal.** In the hardcoded
+poller, "the model never chooses the recipient" is true because one file
+takes `to` from the headers. In a graph the author picks the binding, so
+the rule has to be checkable: `draft_mail.to` must bind an `address`, its
+`message` an `id`, and its `subject` must come from the SAME message — a
+reply carrying one message's subject and another's address reads as a
+working feature until it lands in a stranger's inbox.
+
+**`draft_mail` applies without a decision, and only because the artifact is
+inert.** `echo_agent` holds INSERT on `mail_draft` and not UPDATE (0114), so
+the draft sits `pending` until a person presses Send. The draft IS the
+decision surface; a `proposal_decision` in front of it would mean approving
+a thing in order to be asked to approve it, and would require exactly the
+null-call row 0114 ruled out. `INERT_PROPOSAL_KINDS` is closed, and the
+negative test is the load-bearing one: `add_tags` writes a call and still
+waits for a human.
+
+**`tools: "none"` stops being a comment in two worker files.** M43 gives the
+mail drafter no tools; M44 gives the meeting brief all of them. The
+difference is blast radius, not caution — a brief is read by whoever asked
+for it, a reply is read by somebody else. A graph can compose the two, so
+any graph that drafts mail must set `tools:"none"` on every model step, with
+the control that a graph addressing nobody keeps its retrieval.
+
+**The poller stays the machinery.** Detection, the cursor, the age ceiling
+and the dedupe are not things a workflow author touches — in this product or
+in any mature one (Zapier exposes no dedupe surface at all; n8n exposes one
+and names its cap). What crosses into the graph is a REFERENCE, never the
+message, because `workflow_run` is admin-readable and a member's
+correspondence is not theirs to read; the graph's first step fetches the
+content under the owner's own grant, where it stays. The two paths are
+exclusive per message BY THE ANSWER — if a graph took it, the fallback does
+not run — because two producers on one mailbox is two replies to one email.
+
+**The template keeps its identity, and its consent switch.** The installed
+starter is resolved BESIDE the template rather than replacing it as the
+page's subject: `auto_draft_replies` is the person's own permission to have
+their mail read, it renders only for a template, and trading it for the
+org's enabled flag as a side effect of adding an editor is not a thing to
+do quietly.
+
+Deliberately NOT done, each for a stated reason: no `send_mail` step, ever,
+on this design (W21 closes egress; the send is a person's press); no cycles
+(the engine is acyclic by construction and redelivery adoption depends on
+it — `foreach` and `extract`'s one retry are the loops we have); no general
+expression language (the closed grammar is why `decide` can refuse to read
+content); and the meeting template stays hardcoded, because its steps need
+connector reads that do not exist and migrating it would replace a working
+automation with steps that fetch nothing.
+
 ## M45 — The page rhythm lives in the theme
 [user directive, 2026-08-27: "see the margin that the title heading in page
 has from the top, add it to the theme so it apply to all pages … the margins
