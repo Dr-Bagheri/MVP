@@ -39,6 +39,7 @@ const SEND = "همین حالا بفرست";
 const DISCARD = "کنار بگذار";
 const ALREADY = "این پاسخ پیش‌تر فرستاده یا کنار گذاشته شده بود.";
 const ENABLE = "فعال‌کردن ارسال";
+const SHOW_SOURCE = "نمایش متن";
 
 const DRAFT: MailDraft = {
   id: "d-1",
@@ -139,7 +140,7 @@ describe("MailDraftCard", () => {
    * the provider, and it must be able to fail without taking the reply — the
    * actual record — down with it.
    */
-  it("quotes the original above the reply, and still shows the reply when it cannot be read", async () => {
+  it("names the original above the reply, and still shows the reply when it cannot be read", async () => {
     source.mockResolvedValue({
       from: "colleague@example.com",
       subject: "قرار سه‌شنبه",
@@ -148,7 +149,7 @@ describe("MailDraftCard", () => {
     });
     render(<MailDraftCard draft={DRAFT} />);
 
-    const quoted = await screen.findByText("سلام، برای سه‌شنبه وقت داری؟");
+    const quoted = await screen.findByText("قرار سه‌شنبه");
     expect(screen.getByText("colleague@example.com")).toBeTruthy();
     /* the fetch asks for THIS draft — a card that quoted a fixed message, or
        the wrong one, would satisfy every text assertion above */
@@ -157,8 +158,19 @@ describe("MailDraftCard", () => {
     const reply = screen.getByText(DRAFT.body);
     expect(
       Boolean(quoted.compareDocumentPosition(reply) & Node.DOCUMENT_POSITION_FOLLOWING),
-      "the quoted original renders BEFORE the reply",
+      "the source renders BEFORE the reply",
     ).toBe(true);
+
+    /*
+     * The BODY of someone else's email is behind one press. Identifying a
+     * source is what makes a reply checkable; reprinting it in full above
+     * every draft pushes the thing being decided off the screen. Both halves
+     * are asserted — collapsed means ABSENT here, not merely hidden, since a
+     * `display:none` quote would still be read aloud by a screen reader.
+     */
+    expect(screen.queryByText("سلام، برای سه‌شنبه وقت داری؟")).toBeNull();
+    fireEvent.click(screen.getByText(SHOW_SOURCE));
+    expect(screen.getByText("سلام، برای سه‌شنبه وقت داری؟")).toBeTruthy();
 
     // the provider refuses: no quote, and the reply is untouched
     cleanup();

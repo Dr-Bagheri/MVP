@@ -140,9 +140,24 @@ export function draftInstruction(content: string, ownerAddress: string): string 
     "Decide first whether this message wants a reply from a person at all.",
     "Automated notifications, receipts and newsletters do not.",
     "",
+    /*
+     * The SHAPE of the reply, spelled out (user directive, 2026-08-28: "give
+     * better look to our email reply"). Without these lines the model writes
+     * one unbroken paragraph, which is what a machine-written email looks
+     * like — and the person's own name is the one thing it must not guess:
+     * a reply signed with a name that is not theirs is worse than a reply
+     * with no name at all.
+     */
+    "Write the reply as plain email text:",
+    "- open with a greeting that matches how the sender addressed the owner",
+    "- keep it to short paragraphs, separated by a blank line",
+    "- no markdown, no bullet characters, no subject line inside the body",
+    "- close with a brief sign-off, and NEVER invent the owner's name: leave",
+    "  the closing without a name unless the email itself shows one",
+    "",
     "Answer with ONLY a JSON object, no prose around it:",
     '{"reply": true|false, "note": "one short sentence for the owner about what you did",',
-    ' "body": "the reply text, in the same language as the email, signed off plainly"}',
+    ' "body": "the reply text, in the same language as the email"}',
     "",
     "<email>",
     content,
@@ -206,7 +221,10 @@ async function draftFor(
 
   const context = await options.connectors.sourceContext(identity, provider, "mail_message", item.id);
   const verdict = readVerdict(await composeReply(
-    options, identity, draftInstruction(context.content, ""),
+    /* the owner's own address travels with the instruction: it is how the
+       model knows which participant in the thread is "us", and the guard
+       above already had to know it */
+    options, identity, draftInstruction(context.content, ownAddress),
   ));
   if (!verdict.reply || !verdict.body) return "skipped";
 

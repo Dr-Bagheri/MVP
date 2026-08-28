@@ -23,16 +23,20 @@ import { formatRelativeDate, formatTime } from "@/lib/format";
  * with its address still visible — a card that vanishes on success leaves the
  * person wondering whether it went.
  *
- * ── The message being answered ──────────────────────────────────────────────
+ * ── Where the sources sit ──────────────────────────────────────────────────
  *
  * A reply on its own asks somebody to approve a decision they cannot check
  * (user directive, 2026-08-28: "the draft must come like this already prepared
- * with the email on top of it as well"). The quote above the card is that
- * check, and it is fetched HERE rather than handed down: the product stores a
- * reference, not the person's mail, so reading the original is a live call to
- * the provider — one per card that is actually on screen, never one per row of
- * a list. A failure degrades to no quote at all: the reply is the record, the
- * quote is context, and an error banner over every draft would be noise about
+ * with the email on top of it as well" / "the sources when we do email reply
+ * should look like this"). So the message being answered is presented as what
+ * it is — the SOURCE the answer was written from — above the reply and outside
+ * its card, collapsed to one line until asked for.
+ *
+ * It is fetched HERE rather than handed down: the product stores a reference,
+ * not the person's mail, so reading the original is a live call to the
+ * provider — one per card that is actually on screen, never one per row of a
+ * list. A failure degrades to no source at all: the reply is the record, the
+ * source is context, and an error banner over every draft would be noise about
  * something nobody asked for.
  */
 export function MailDraftCard({
@@ -66,7 +70,7 @@ export function MailDraftCard({
       .then((message) => { if (live) setSource(message); })
       /* the provider refused, the message is gone, or the shape was
          unreadable — all of which mean the same thing to a reader: there is
-         no quote to show. The draft itself is unaffected. */
+         no source to show. The draft itself is unaffected. */
       .catch(() => {});
     return () => { live = false; };
   }, [draft.id]);
@@ -95,32 +99,49 @@ export function MailDraftCard({
 
   return (
     <div className="mt-3 max-w-[42rem]">
-      {source ? <QuotedSource message={source} locale={locale} /> : null}
-      <div className="overflow-hidden rounded-2xl border border-border bg-surface">
-        <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2.5">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-2 px-2.5 py-1 text-xs font-medium text-fg">
+      {source ? <SourcePanel message={source} locale={locale} /> : null}
+
+      <article className="overflow-hidden rounded-2xl border border-border bg-surface shadow-sm">
+        {/*
+          The header names WHO is speaking and in what state. The mark is
+          tinted rather than outlined so the card reads as one object from a
+          distance instead of three stacked rules.
+        */}
+        <header className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3">
+          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-accent-soft text-accent">
             <MailMark />
-            {t(state.status === "sent" ? "sentLabel" : state.status === "discarded" ? "discardedLabel" : "newEmail")}
+          </span>
+          <span className="text-sm font-medium text-fg">
+            {t(state.status === "sent" ? "sentLabel" : state.status === "discarded" ? "discardedLabel" : "draftLabel")}
           </span>
           {state.in_provider ? (
-            <span className="text-xs text-fg-subtle">{t("inMailbox")}</span>
+            <span className="ms-auto inline-flex items-center gap-1 text-xs text-fg-subtle">
+              <CheckMark />
+              {t("inMailbox")}
+            </span>
           ) : null}
+        </header>
+
+        {/*
+          Recipient and subject as a mail HEAD, not a definition list: the two
+          facts a person checks before pressing send are the address and the
+          subject line, and they should be readable in one glance rather than
+          in two labelled rows. The address keeps `dir="ltr"` — an email
+          address is Latin text inside a Persian page and reverses without it.
+        */}
+        <div className="px-4 pt-3">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+            <span className="text-fg-subtle">{t("to")}</span>
+            <span dir="ltr" className="max-w-full truncate rounded-full bg-surface-2 px-2.5 py-1 font-medium text-fg-muted">
+              {state.to_address}
+            </span>
+          </div>
+          <h4 className="mt-2 text-[15px] font-semibold leading-6 text-fg">{state.subject}</h4>
         </div>
 
-        <dl className="divide-y divide-border">
-          <div className="flex gap-3 px-4 py-2.5">
-            <dt className="sr-only">{t("to")}</dt>
-            <dd dir="ltr" className="truncate text-sm text-fg">{state.to_address}</dd>
-          </div>
-          <div className="flex gap-3 px-4 py-2.5">
-            <dt className="sr-only">{t("subject")}</dt>
-            <dd className="truncate text-sm font-medium text-fg">{state.subject}</dd>
-          </div>
-        </dl>
+        <p className="whitespace-pre-wrap px-4 pb-4 pt-2 text-sm leading-7 text-fg-muted">{state.body}</p>
 
-        <p className="whitespace-pre-wrap px-4 py-3 text-sm leading-7 text-fg-muted">{state.body}</p>
-
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border bg-surface-2/50 px-4 py-3">
           <span className="text-xs text-fg-subtle">
             {decided ? t("decidedNote") : canSend ? t("editNote") : t("cannotSendNote")}
           </span>
@@ -140,57 +161,87 @@ export function MailDraftCard({
               </button>
               <button
                 type="button"
-                className="btn-primary h-9 min-h-0 px-4 text-sm"
+                className="btn-primary h-9 min-h-0 gap-1.5 px-4 text-sm"
                 disabled={busy !== null}
                 onClick={() => void act("send")}
               >
-                {busy === "send" ? t("sending") : t("sendNow")}
+                {busy === "send" ? t("sending") : <><SendMark />{t("sendNow")}</>}
               </button>
             </span>
           )}
         </div>
-      </div>
+      </article>
     </div>
   );
 }
 
 /**
- * The message the reply answers, quoted above it.
+ * What the reply was written from.
  *
- * The rule under the styling: this is somebody ELSE's text, and it must never
- * be able to read as ours. So it sits outside the reply's card, on the page's
- * own ground, behind a quote rule — and its body scrolls in its own box rather
- * than being clipped, because a quote cut off at an arbitrary line can change
- * what the message says while looking complete.
+ * The rules under the styling, in the order they mattered:
+ *
+ *  * this is somebody ELSE's text, so it never sits inside the reply's card
+ *    and never wears the reply's ground — a quoted line that looks authored
+ *    is a lie about who said it;
+ *  * it opens COLLAPSED. The point of a source is that it can be checked, not
+ *    that it is re-read: an inbox message pasted at full length above every
+ *    draft pushes the thing the person is deciding on off the screen;
+ *  * expanded, the body scrolls in its own box rather than being clipped,
+ *    because a quote cut at an arbitrary line changes what the message said
+ *    while looking complete.
  *
  * The provider can hand back empty strings when it cannot read a field. An
  * empty line is skipped rather than rendered as a labelled blank, which would
  * report "this message has no sender" — a claim we cannot make.
  */
-function QuotedSource({ message, locale }: { message: MailSourceMessage; locale: string }) {
+function SourcePanel({ message, locale }: { message: MailSourceMessage; locale: string }) {
   const t = useTranslations("mail");
+  const [open, setOpen] = useState(false);
+  /* one source, always, today: the message this reply answers. The count is
+     rendered from the list rather than written as "1" so the day a reply is
+     drafted from two messages does not need this component edited. */
+  const sources = [message];
+
   return (
-    <figure className="mb-2 border-s-2 border-border-strong ps-3">
-      <figcaption className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-        <span className="text-xs font-medium text-fg-subtle">{t("originalLabel")}</span>
-        {message.occurred_at ? (
-          <span className="text-xs text-fg-subtle">
-            {`${formatRelativeDate(message.occurred_at, locale)} ${formatTime(message.occurred_at, locale)}`}
-          </span>
-        ) : null}
-      </figcaption>
-      {message.from ? (
-        <p dir="ltr" className="mt-1 truncate text-xs text-fg-muted">{message.from}</p>
-      ) : null}
-      {message.subject ? (
-        <p className="mt-0.5 truncate text-sm font-medium text-fg">{message.subject}</p>
-      ) : null}
-      {message.body ? (
-        <blockquote className="mt-1 max-h-48 overflow-y-auto whitespace-pre-wrap text-sm leading-6 text-fg-muted">
-          {message.body}
-        </blockquote>
-      ) : null}
-    </figure>
+    <section className="mb-2 rounded-xl border border-border bg-surface-2/40">
+      <button
+        type="button"
+        className="tap flex w-full items-center gap-2 rounded-xl px-3 py-2 text-start"
+        aria-expanded={open}
+        onClick={() => setOpen((was) => !was)}
+      >
+        <SourceMark />
+        <span className="text-xs font-medium text-fg-muted">{t("sources")}</span>
+        <span className="rounded-full bg-surface-2 px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-fg-subtle">
+          {sources.length}
+        </span>
+        <span className="ms-auto text-[11px] text-fg-subtle">{open ? t("hideSource") : t("showSource")}</span>
+        <Chevron open={open} />
+      </button>
+
+      {sources.map((source, index) => (
+        <div key={index} className="border-t border-border px-3 py-2">
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            {source.subject ? (
+              <span className="truncate text-sm font-medium text-fg">{source.subject}</span>
+            ) : null}
+            {source.occurred_at ? (
+              <span className="text-[11px] text-fg-subtle">
+                {`${formatRelativeDate(source.occurred_at, locale)} ${formatTime(source.occurred_at, locale)}`}
+              </span>
+            ) : null}
+          </div>
+          {source.from ? (
+            <p dir="ltr" className="truncate text-xs text-fg-subtle">{source.from}</p>
+          ) : null}
+          {open && source.body ? (
+            <blockquote className="mt-2 max-h-56 overflow-y-auto whitespace-pre-wrap border-s-2 border-border-strong ps-3 text-sm leading-6 text-fg-muted">
+              {source.body}
+            </blockquote>
+          ) : null}
+        </div>
+      ))}
+    </section>
   );
 }
 
@@ -199,6 +250,43 @@ function MailMark() {
     <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden>
       <rect x="2.5" y="4.5" width="15" height="11" rx="2" />
       <path d="m3 6 7 5 7-5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function SourceMark() {
+  return (
+    <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 text-fg-subtle" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden>
+      <path d="M4.5 3.5h8l3 3v10h-11z" strokeLinejoin="round" />
+      <path d="M12 3.5v3.5h3.5" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function SendMark() {
+  return (
+    <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 rtl:-scale-x-100" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden>
+      <path d="M3.5 10 16.5 4l-4 12-2.5-5z" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function Chevron({ open }: { open: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      className={`h-3.5 w-3.5 text-fg-subtle transition-transform ${open ? "rotate-180" : ""}`}
+      fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden
+    >
+      <path d="m6 8 4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function CheckMark() {
+  return (
+    <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden>
+      <path d="m4.5 10.5 3.5 3.5 7.5-8" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
