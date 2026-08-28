@@ -18,6 +18,10 @@ import type {
   ConnectorProvider, ConnectorSourceKind, ConnectorStatus, OrgRecord, WorkflowCard,
   PlatformAuditEntry, PlatformOrganization, PlatformOverview, PlatformPage, PlatformUser,
 } from "@echo/core/wire";
+/* the KIND set is a vocabulary value-set, not a wire shape: importing the
+   TYPE of core's own array is what keeps this union from drifting again */
+import type { AgentCardKind } from "@echo/core/vocabulary";
+export type { AgentCardKind };
 
 /** Core-owned M30 wires: these names are aliases, not browser-side copies. */
 export type { AgentCard, ConnectorItem, ConnectorProvider, ConnectorSourceKind, ConnectorStatus, WorkflowCard };
@@ -199,6 +203,16 @@ export interface Me extends User {
   assistant_reply_length?: string | null;
   assistant_instructions?: string | null;
   post_call_brief?: boolean;
+  /**
+   * db/0115 — "read my new mail and draft replies", the person's OWN switch
+   * (core's `MemberRecord.auto_draft_replies`, mirrored verbatim).
+   *
+   * **ABSENT and `false` are different facts and the type keeps them apart.**
+   * The column is capability-gated, so an un-migrated deployment omits the
+   * key entirely; rendering that as "off" would show a switch someone could
+   * press against a server with nowhere to store the answer.
+   */
+  auto_draft_replies?: boolean;
   /**
    * Profile context (db/0080): what the person does + their own words, and
    * the CONSENT flag that lets the assistant see the two texts at ask time.
@@ -712,9 +726,31 @@ export interface AgentStats {
 }
 
 /** M35: an agent-INITIATED card in the proactivity channel (dock). */
+/**
+ * M43 — a reply the assistant wrote and nobody has sent. Owner-only on the
+ * server; `in_provider` is the difference between "we wrote you one" and
+ * "it is sitting in your drafts folder".
+ */
+export interface MailDraft {
+  id: string;
+  provider: ConnectorProvider;
+  source_ref: string;
+  thread_ref: string | null;
+  to_address: string;
+  subject: string;
+  body: string;
+  status: "pending" | "sent" | "discarded";
+  in_provider: boolean;
+  session_id: string | null;
+  created_at: string;
+  decided_at: string | null;
+}
+
 export interface AgentCardItem {
   id: string;
-  kind: "post_call_brief" | "weekly_digest";
+  /* derived from core's AGENT_CARD_KINDS — this union sat one kind behind
+     the database from 0107 until 0116 because nothing compared the two */
+  kind: AgentCardKind;
   title: string;
   session_id: string | null;
   created_at: string;

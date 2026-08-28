@@ -9,6 +9,7 @@
 // notes at their former sites.)
 import type {
   AuthoredWorkflow,
+  MailDraft,
   AuthSessionRow,
   WorkflowRunDetail,
   WorkflowRunRecord,
@@ -1682,6 +1683,26 @@ export const api = {
     const { rules } = await bff<{ rules: { kind: string; allowed: boolean }[] }>("/api/workflows/auto-apply");
     return rules;
   },
+  /**
+   * M43 — the replies waiting for a person. `session` narrows to the ones
+   * written in one conversation, which is how the thread shows its own.
+   */
+  async mailDrafts(filter: { status?: string; session?: string } = {}): Promise<MailDraft[]> {
+    const query = new URLSearchParams();
+    if (filter.status) query.set("status", filter.status);
+    if (filter.session) query.set("session", filter.session);
+    const suffix = query.toString();
+    const { drafts } = await bff<{ drafts: MailDraft[] }>(
+      `/api/mail/drafts${suffix ? `?${suffix}` : ""}`);
+    return drafts;
+  },
+  async sendMailDraft(id: string): Promise<MailDraft> {
+    return bff<MailDraft>(`/api/mail/drafts/${encodeURIComponent(id)}/send`, { method: "POST" });
+  },
+  async discardMailDraft(id: string): Promise<MailDraft> {
+    return bff<MailDraft>(`/api/mail/drafts/${encodeURIComponent(id)}/discard`, { method: "POST" });
+  },
+
   /** install a SHIPPED starter — create+publish+enable in one press */
   async installStarter(key: string): Promise<void> {
     await bff("/api/workflows/starters", {
@@ -1704,6 +1725,8 @@ export const api = {
     assistant_reply_length?: string | null;
     assistant_instructions?: string | null;
     post_call_brief?: boolean;
+    /** db/0115 — the person's own "draft replies to my new mail" switch. */
+    auto_draft_replies?: boolean;
   }): Promise<Me> {
     return bff<Me>("/api/me/assistant", {
       method: "PATCH",

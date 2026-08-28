@@ -27,6 +27,10 @@ export function AssistantSettings() {
   const [instructions, setInstructions] = useState<string>("");
   const [savedInstructions, setSavedInstructions] = useState<string>("");
   const [brief, setBrief] = useState<boolean | null>(null);
+  /* db/0115. `undefined` from the wire means the deployment has not migrated
+     — a different fact from "off", and rendered as absence rather than as a
+     switch that would lie about its state. */
+  const [autoDraft, setAutoDraft] = useState<boolean | null>(null);
   const [prefsReady, setPrefsReady] = useState(false);
   const [digest, setDigest] = useState<{ enabled: boolean; available: boolean } | null>(null);
   const [notReady, setNotReady] = useState(false);
@@ -41,6 +45,7 @@ export function AssistantSettings() {
         setInstructions(me.assistant_instructions ?? "");
         setSavedInstructions(me.assistant_instructions ?? "");
         setBrief(me.post_call_brief !== false);
+        setAutoDraft(me.auto_draft_replies === undefined ? null : me.auto_draft_replies === true);
       }
     }).catch(() => undefined);
     void api.weeklyDigest()
@@ -56,6 +61,7 @@ export function AssistantSettings() {
       setInstructions(me.assistant_instructions ?? "");
       setSavedInstructions(me.assistant_instructions ?? "");
       setBrief(me.post_call_brief !== false);
+      setAutoDraft(me.auto_draft_replies === undefined ? null : me.auto_draft_replies === true);
       notify(t("assistantSaved"));
     } catch {
       notify(t("assistantSaveFailed"), "warn");
@@ -203,6 +209,25 @@ export function AssistantSettings() {
             </label>
           ) : null}
           <p className="mt-1 text-xs leading-5 text-fg-subtle">{t("postCallBriefHint")}</p>
+          {autoDraft !== null ? (
+            <>
+              <label className="mt-4 flex items-center gap-2 text-sm text-fg">
+                <input
+                  type="checkbox"
+                  checked={autoDraft}
+                  onChange={(e) => {
+                    setAutoDraft(e.target.checked);
+                    void savePrefs({ auto_draft_replies: e.target.checked });
+                  }}
+                />
+                {t("autoDraft")}
+              </label>
+              {/* the sentence has to carry the whole bargain: what gets read,
+                  how new is new, and the part people assume wrongly — that
+                  something might go out without them */}
+              <p className="mt-1 text-xs leading-5 text-fg-subtle">{t("autoDraftHint")}</p>
+            </>
+          ) : null}
         </Card>
       ) : null}
     </div>

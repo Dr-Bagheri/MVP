@@ -104,6 +104,13 @@ export const TRAIL: Readonly<Record<string, TrailEntry>> = {
   "/workflows": { label: "platform.workflows", parent: "/" },
   /** M41 P1 — one run's ledger; the leaf is the workflow's name (entity). */
   "/workflows/runs/[id]": { entity: true, parent: "/workflows" },
+  /**
+   * One workflow: what it does, and what it has done. The leaf is the
+   * workflow's own name (entity), so `/workflows/runs` — a static sibling —
+   * keeps winning over this pattern in `patternFor`, which prefers the less
+   * dynamic match.
+   */
+  "/workflows/[handle]": { entity: true, parent: "/workflows" },
   /** M32's separate metadata-only operator console. */
   "/platform": { label: "platformRoot.title", parent: "/" },
   "/profile": { label: "profile.title", parent: "/" },

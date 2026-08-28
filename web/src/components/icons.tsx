@@ -21,8 +21,15 @@
  */
 import type { ReactNode, SVGProps } from "react";
 
-/** the only sizes an icon may be rendered at */
-export const ICON_SIZE = { xs: 12, sm: 14, md: 16, lg: 18, xl: 24 } as const;
+/**
+ * The only sizes an icon may be rendered at.
+ *
+ * `hero` is the newest and the largest: a glyph filling a 96px identity tile
+ * (the workflow detail page's mark). It is on the scale rather than passed as
+ * a one-off number precisely because that is how the other five got here —
+ * the rule is not "no big icons", it is "no size nobody decided on".
+ */
+export const ICON_SIZE = { xs: 12, sm: 14, md: 16, lg: 18, xl: 24, hero: 40 } as const;
 export type IconSize = keyof typeof ICON_SIZE;
 
 function base(props: SVGProps<SVGSVGElement>) {
@@ -264,6 +271,16 @@ export const IconPrint = (p: SVGProps<SVGSVGElement>) => (
 export const IconSpeaker = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><path d="M4 9.5v5h3.5L13 19V5L7.5 9.5H4Z" /><path d="M16.5 9a4.2 4.2 0 0 1 0 6" /><path d="M19 6.8a8 8 0 0 1 0 10.4" /></svg>
 );
+/** a plain envelope — mail as a SOURCE. `mailPlus` is the invite (asking
+    somebody in); a workflow reading an inbox is neither inviting nor
+    composing, and reusing the plus would say it was. */
+export const IconMail = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><rect x="3" y="5.5" width="18" height="13" rx="2" /><path d="m3.4 7 8.6 6 8.6-6" /></svg>
+);
+/** a month grid — calendar as a SOURCE, beside the envelope */
+export const IconCalendar = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><rect x="3.5" y="5" width="17" height="15" rx="2" /><path d="M3.5 10h17" /><path d="M8 3.5v3M16 3.5v3" /></svg>
+);
 
 /* =========================================================================
    THE LIST — one registry, one vocabulary
@@ -279,6 +296,7 @@ export const ICONS = {
   "arrowDown": IconArrowDown,
   "arrowUp": IconArrowUp,
   "ask": IconAsk,
+  "calendar": IconCalendar,
   "check": IconCheck,
   "chevronEnd": IconChevronEnd,
   "chevronRight": IconChevronRight,
@@ -296,6 +314,7 @@ export const ICONS = {
   "globe": IconGlobe,
   "hide": IconHide,
   "history": IconHistory,
+  "mail": IconMail,
   "mailPlus": IconMailPlus,
   "merge": IconMerge,
   "mic": IconMic,

@@ -2586,3 +2586,32 @@ sessions) for the cross-session narrative.
   REGISTRY's own list (13½: derive the coverage list from the
   producer). Google connectors live end to end (consent, Gmail list
   20, the draft written from a real message).
+
+- 2026-08-27 (M43 — mail drafts, built to Sana's shape): a connected
+  mailbox is polled; new mail gets a drafted reply that waits in the
+  thread AND in the person's own Drafts folder until they press Send.
+  **The wall is the GRANT**: echo_agent may INSERT a mail_draft and may
+  never UPDATE one, so "the assistant will not send mail on its own" is
+  a fact about the database, not a sentence in a prompt (0114; 17
+  checks assert it both ways). A draft is its OWN table rather than a
+  fourth proposal kind — both proposal machines assume a call, and a
+  null-call decision is a row whose read policy cannot return it to its
+  own decider (95_workflow_writes had that once). **The model never
+  chooses the recipient**: to/subject/thread come from the message
+  headers, the body arrives fenced and named as data, so "reply to
+  attacker@evil instead" describes something it cannot cause —
+  verified red by letting the envelope obey the model. That is also
+  WHY the run goes through the assistant path rather than the M41
+  engine: sourceContext already fences provider text and a second
+  fence is the last thing to want two of. Switch is PER PERSON and
+  OFF (0115) — their mailbox, their consent; not even an admin reads
+  a draft. First look answers nothing (records the mark, drafts for
+  no backlog); the cursor advances even when everything is skipped.
+  **The first-look test was VACUOUS**: my fake mirrored the code's
+  belief (no cursor -> no items), so deleting the guard kept the suite
+  green — the fake is uncooperative now and the guard fails when
+  removed. Gmail gained gmail.compose (one consent line for drafts
+  AND send); connections report can_draft from what the provider
+  actually granted, so a pre-drafting connection says so instead of
+  failing at the provider. Console: the scope is registered on the
+  consent screen and Google accepts the new set (probed).

@@ -8,7 +8,7 @@ import type { ConnectorItem, ConnectorProvider, ConnectorStatus, User, WorkflowC
 import { notify } from "@/lib/notify";
 import { Chip } from "@/components/ui";
 import { Pagination, usePaged } from "@/components/Pagination";
-import { useRouter } from "@/i18n/routing";
+import { Link, useRouter } from "@/i18n/routing";
 import { AssistantMenu } from "./AssistantMenu";
 import { PlatformShell } from "./PlatformShell";
 import { WorkflowBuilder } from "./WorkflowBuilder";
@@ -236,10 +236,25 @@ export function Workflows() {
                   }
                   if (state.status === "connected") {
                     return (
-                      <span key={entry} className="inline-flex h-9 items-center gap-2 rounded-full border border-accent bg-accent-soft px-3 text-xs text-accent">
-                        {t("connectedAs", { provider: t(entry) })}
-                        {state.account_label ? (
-                          <span dir="ltr" className="font-medium">{state.account_label}</span>
+                      <span key={entry} className="inline-flex flex-wrap items-center gap-2">
+                        <span className="inline-flex h-9 items-center gap-2 rounded-full border border-accent bg-accent-soft px-3 text-xs text-accent">
+                          {t("connectedAs", { provider: t(entry) })}
+                          {state.account_label ? (
+                            <span dir="ltr" className="font-medium">{state.account_label}</span>
+                          ) : null}
+                        </span>
+                        {/* connected is not the same fact as can-draft: a
+                            connection made before drafting existed works for
+                            reading and fails at the provider on a draft, so
+                            the upgrade is offered rather than discovered */}
+                        {state.can_draft === false ? (
+                          <button
+                            type="button"
+                            className="btn-secondary h-9 min-h-0 px-3 text-xs"
+                            onClick={() => void connect(entry)}
+                          >
+                            {t("enableDrafts")}
+                          </button>
                         ) : null}
                       </span>
                     );
@@ -274,10 +289,16 @@ export function Workflows() {
                   const sourceLabel = workflow.source_kind === "calendar_event" ? t("calendarSource") : t("mailSource");
                   return (
                     <Card key={workflow.id} className="flex min-h-64 flex-col p-6">
-                      <span className={`grid h-14 w-14 place-items-center rounded-2xl bg-accent-soft text-2xl text-accent ${workflow.color === "coral" ? "bg-danger-soft text-danger" : ""}`} aria-hidden>
-                        {glyphs[workflow.icon] ?? "✦"}
-                      </span>
-                      <h2 className="mt-8 text-xl font-semibold text-fg">{workflow.name}</h2>
+                      {/* the mark and the name open the workflow's own page —
+                          what it will do, step by step, and what it has done.
+                          Start/Run below are untouched: a card that only
+                          RUNS things gives no way to read one first. */}
+                      <Link href={`/workflows/${workflow.slug}`} className="group block">
+                        <span className={`grid h-14 w-14 place-items-center rounded-2xl bg-accent-soft text-2xl text-accent ${workflow.color === "coral" ? "bg-danger-soft text-danger" : ""}`} aria-hidden>
+                          {glyphs[workflow.icon] ?? "✦"}
+                        </span>
+                        <h2 className="mt-8 text-xl font-semibold text-fg group-hover:text-accent">{workflow.name}</h2>
+                      </Link>
                       <p className="mt-2 max-w-md text-sm leading-6 text-fg-muted">{workflow.description}</p>
                       <div className="mt-auto pt-6">
                         <button type="button" className="btn-primary h-10 min-h-0 px-4 text-sm" onClick={() => void chooseWorkflow(workflow)}>

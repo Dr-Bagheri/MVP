@@ -1158,7 +1158,95 @@
     "connectionsTitle": "Connected accounts",
     "connectionsHint": "These accounts are the calendar and mail sources for workflows — the connection is personal and read-only.",
     "connectedAs": "{provider} connected:",
-    "reconnect": "Reconnect {provider}"
+    "reconnect": "Reconnect {provider}",
+    "enableDrafts": "Enable email drafts",
+    "detailProcess": "Process",
+    "detailTrigger": "Trigger",
+    "detailSteps": "Steps",
+    "detailRunsTitle": "Runs",
+    "detailUpcoming": "Upcoming",
+    "detailRecents": "Recents",
+    "detailNeverRun": "This workflow hasn't been run yet",
+    "detailCreatedBy": "Created by",
+    "detailCategory": "Category",
+    "detailIntegrations": "Integrations",
+    "detailCategoryFeatured": "Featured",
+    "detailCategoryAutomation": "Automation",
+    "detailVendor": "NeurAI",
+    "detailTurnOn": "Turn on",
+    "detailReady": "Ready",
+    "detailEnable": "Turn this workflow on or off",
+    "detailAdminControls": "An organization admin turns this one on and off.",
+    "detailNoSwitch": "There is no on/off switch for this one — it runs when you start it.",
+    "detailOwnSwitch": "This is your own switch; every member has their own.",
+    "detailSwitchUnavailable": "This switch is not available on this server yet.",
+    "detailAutoDraftHint": "While it is on, your connected mailbox is checked every couple of minutes and a reply is drafted for new mail only — nothing older. Every draft waits for you to press Send; it is never sent for you.",
+    "detailAutoDraftOn": "Your connected mailbox is being checked every couple of minutes. New mail gets a drafted reply that waits for you to press Send — nothing is ever sent for you.",
+    "detailToggleFailed": "The change was not saved; the previous state still applies.",
+    "detailMissing": "No such workflow is available.",
+    "detailNoProcess": "The steps of this workflow have not been described.",
+    "detailGmail": "Gmail",
+    "detailOutlook": "Outlook",
+    "detailGoogleCalendar": "Google Calendar",
+    "detailOutlookCalendar": "Outlook Calendar",
+    "process": {
+      "draft-email-replies": {
+        "trigger": {
+          "title": "When email is received",
+          "description": "Every time a new email arrives in your inbox"
+        },
+        "steps": [
+          {
+            "title": "Read email",
+            "description": "Read the contents of the email"
+          },
+          {
+            "title": "Gather context",
+            "description": "Search for any relevant information needed to answer the most important questions in the email"
+          },
+          {
+            "title": "Check calendar",
+            "description": "Check your calendar for availability if needed to answer the questions in the email"
+          },
+          {
+            "title": "Find related emails",
+            "description": "Search for other emails in the same thread"
+          },
+          {
+            "title": "Draft reply",
+            "description": "Draft an email reply that answers the most important questions. Use previous emails to mimic your writing style and match the tone of the email."
+          }
+        ]
+      },
+      "prepare-meetings": {
+        "trigger": {
+          "title": "Before meeting starts",
+          "description": "30 min before the meeting begins"
+        },
+        "steps": [
+          {
+            "title": "Research participants",
+            "description": "Find information about external participants attending the meeting"
+          },
+          {
+            "title": "Find past meetings",
+            "description": "Search for earlier meetings with the same title and/or participants"
+          },
+          {
+            "title": "Gather context",
+            "description": "Search for messages and documents from participants that could relate to the meeting topic"
+          },
+          {
+            "title": "Find documents",
+            "description": "Search for documents that could contain more context about the meeting"
+          },
+          {
+            "title": "Create prep",
+            "description": "Provide a clear and concise pre-read that makes you well prepared for the meeting."
+          }
+        ]
+      }
+    }
   },
   "agents": {
     "title": "Browse agents",
@@ -1473,7 +1561,9 @@
     "customInstructions": "Standing instructions (up to 2000 characters)",
     "saveInstructions": "Save instructions",
     "postCallBrief": "Post-call brief",
-    "postCallBriefHint": "After each meeting the assistant leaves a brief card on your dashboard. Turning it off is yours alone."
+    "postCallBriefHint": "After each meeting the assistant leaves a brief card on your dashboard. Turning it off is yours alone.",
+    "autoDraft": "Draft replies to new email",
+    "autoDraftHint": "Your connected mailbox is read every few minutes and new messages get a drafted reply. Nothing is ever sent without you pressing send."
   },
   "audit": {
     "codesOnly": "This page says what happened, not what was said. Question text, transcripts and conversation content never enter the audit trail.",
@@ -1899,5 +1989,22 @@
     "autoOn": "Auto — on",
     "autoOff": "Off",
     "autoFailed": "Not saved."
+  },
+  "mail": {
+    "newEmail": "New email",
+    "sentLabel": "Sent",
+    "discardedLabel": "Discarded",
+    "inMailbox": "Also in your Drafts folder",
+    "to": "To",
+    "subject": "Subject",
+    "sendNow": "Send now",
+    "sending": "Sending…",
+    "discard": "Discard",
+    "editNote": "Edit it in your mailbox before sending.",
+    "decidedNote": "This reply has been decided.",
+    "sent": "The reply was sent.",
+    "discarded": "The draft was discarded.",
+    "sendFailed": "The reply was not sent.",
+    "alreadyDecided": "This reply was already sent or discarded."
   }
 }

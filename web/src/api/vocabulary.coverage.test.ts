@@ -66,6 +66,12 @@ const EXCLUDED: Record<string, string> = {
     "is no local union or local member list to drift. Same reasoning as " +
     "AUDIT_SOURCES — the missing guard is the consequence of importing rather " +
     "than copying, not an oversight.",
+  AGENT_CARD_KINDS:
+    "not mirrored: `AgentCardItem.kind` IS core's `AgentCardKind`, imported " +
+    "rather than restated, so an Exact<> here would compare a type with " +
+    "itself and could never fail — the bar-ceiling trap. The import is what " +
+    "closed the real drift: this union sat one kind behind the database from " +
+    "0107 until 0116 precisely because it WAS a local copy.",
   WORKFLOW_PROPOSAL_KINDS:
     "not mirrored: the builder maps over the imported array itself " +
     "(one spelling, no local union to drift) — the AUDIT_SOURCES posture.",

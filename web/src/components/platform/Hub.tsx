@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api, BffError } from "@/api/client";
-import type { AgentCard, AgentEvent, AgentMessage, ConnectorProvider, ModelInfo, SearchHit, Skill, WorkflowCard } from "@/api/types";
+import type { AgentCard, AgentEvent, AgentMessage, ConnectorProvider, MailDraft, ModelInfo, SearchHit, Skill, WorkflowCard } from "@/api/types";
 import { Link, useRouter } from "@/i18n/routing";
 import { useSearchParams } from "next/navigation";
 import { modelLabel } from "@/lib/format";
@@ -12,6 +12,7 @@ import { deliverDoc } from "@/lib/deliver";
 import { subscribeComposer, takePendingDraft } from "@/lib/assistantBus";
 import { useSkillName, useSkillStarters } from "@/lib/skillName";
 import { ConversationThread } from "./ConversationThread";
+import { MailDraftCard } from "./MailDraftCard";
 import { useAssistantConversation } from "./AssistantConversationState";
 import { DocumentIcon, MicIcon, PlusIcon, SendIcon } from "./icons";
 
@@ -51,6 +52,13 @@ export function Hub() {
   const { resetVersion, setStarted } = useAssistantConversation();
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [workflowCards, setWorkflowCards] = useState<WorkflowCard[]>([]);
+  /**
+   * M43 — the replies written in THIS conversation. Fetched rather than
+   * streamed: a draft is a row with a lifecycle (it can be sent from the
+   * mailbox, or from another tab), so the thread reads the current state
+   * instead of trusting what it saw written once.
+   */
+  const [drafts, setDrafts] = useState<MailDraft[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [feedback, setFeedback] = useState<Record<string, string>>({});
@@ -319,6 +327,13 @@ export function Hub() {
     setAttachments((prev) => [...prev, { name: file.name, text }]);
   }
 
+  const refreshDrafts = useCallback(async (sessionForDrafts: string | undefined) => {
+    if (!sessionForDrafts) return;
+    await api.mailDrafts({ session: sessionForDrafts })
+      .then(setDrafts)
+      .catch(() => { /* an un-migrated deployment has no drafts, not an error */ });
+  }, []);
+
   const adoptThread = useCallback(async (id: string) => {
     const versionAtStart = resetVersionRef.current;
     const [thread, verdicts] = await Promise.all([
@@ -343,11 +358,15 @@ export function Hub() {
     let cancelled = false;
     void adoptThread(resumeId).then(() => {
       if (cancelled) return;
+      /* a resumed conversation shows its drafts again: the card is the only
+         place the reply can be sent from inside the product, so coming back
+         to the thread has to bring it back too */
+      void refreshDrafts(resumeId);
     });
     return () => {
       cancelled = true;
     };
-  }, [resumeId, adoptThread]);
+  }, [resumeId, adoptThread, refreshDrafts]);
 
   useEffect(() => {
     if (resetVersion === 0 || appliedResetVersionRef.current === resetVersion) return;
@@ -492,6 +511,7 @@ export function Hub() {
       await consume(start(controller.signal), replyId);
       // adopt the persisted rows — the toolbar needs server ids
       if (sessionId.current) await adoptThread(sessionId.current);
+      await refreshDrafts(sessionId.current);
     } catch (cause) {
       if ((cause as Error).name === "AbortError") {
         /*
@@ -754,6 +774,14 @@ export function Hub() {
               {askError}
             </p>
           ) : null}
+          {drafts.map((draft) => (
+            <MailDraftCard
+              key={draft.id}
+              draft={draft}
+              onChanged={(next) => setDrafts((prev) =>
+                prev.map((entry) => (entry.id === next.id ? next : entry)))}
+            />
+          ))}
           <div ref={threadEnd} />
         </div>
       )}
