@@ -1,18 +1,26 @@
 import { describe, expect, it } from "vitest";
 
 import { createMembersRepo } from "../src/api/members.ts";
-import { resetCapabilityCache } from "../src/db/capabilities.ts";
+import { actorAutonomy, resetCapabilityCache } from "../src/db/capabilities.ts";
 import { createDb, type SqlClient, type SqlTx } from "../src/db/identity.ts";
 import type { Identity } from "../src/agent/types.ts";
 
 /**
- * /v1/me serves the M36 dial (db/0073) — capability-gated.
+ * [REVISED 2026-08-28, user directive] "remove watch and act from everywhere
+ * in the platform. the only thing that must be in the platform is assist."
  *
- * The locale precedent, pre-empted: a column written by PUT /v1/me/autonomy
- * and read only inside the ask path is "stored and never served" the moment
- * a Settings form wants to SHOW it. Both directions asserted: present-and-
- * served, and absent-and-OMITTED (an un-migrated deployment must not invent
- * an "assist" the row cannot hold — absence and default are different facts).
+ * The M36 dial left the product: `actorAutonomy` is PINNED to "assist"
+ * (PINNED_AUTONOMY, src/db/capabilities.ts) and /v1/me serves the pin, never
+ * the stored value. The columns and the wire field deliberately STAY, which
+ * is why the load-bearing fixture here is a row that stores "act": the fakes
+ * are written so an UN-pinned resolution would read act back — delete the
+ * early return in `actorAutonomy` and the pinned tests below go red
+ * (verified red that way before this file was trusted).
+ *
+ * The pre-directive concern — "stored and never served" (the locale
+ * precedent) — is retired with the dial; the absence case is kept because
+ * capability gating still governs whether the FIELD rides the wire at all:
+ * an un-migrated deployment must not name the column in its select.
  */
 
 const ADMIN = "11111111-1111-4111-8111-111111111111";
@@ -42,17 +50,41 @@ const meRow = {
   org_name: "neurai", autonomy: "act",
 };
 
-describe("/v1/me and the autonomy dial", () => {
-  it("serves the STORED dial when db/0073 is present", async () => {
+describe("autonomy is pinned to assist — the dial left the product", () => {
+  it("actorAutonomy resolves 'assist' over a stored 'act' — the pin site itself", async () => {
+    resetCapabilityCache();
+    // a fake an UN-pinned resolver would believe: column present, row at act
+    const { db } = fakeDb((sql) =>
+      sql.includes("information_schema.columns")
+        ? [{ ok: 1 }]
+        : [{ autonomy: "act", ceiling: "act" }]);
+    expect(await actorAutonomy(db, ADMIN_ID)).toBe("assist");
+    resetCapabilityCache();
+  });
+
+  it("actorAutonomy resolves 'assist' over a stored 'watch' — no other rung survives", async () => {
+    resetCapabilityCache();
+    const { db } = fakeDb((sql) =>
+      sql.includes("information_schema.columns")
+        ? [{ ok: 1 }]
+        : [{ autonomy: "watch", ceiling: "watch" }]);
+    expect(await actorAutonomy(db, ADMIN_ID)).toBe("assist");
+    resetCapabilityCache();
+  });
+
+  it("/v1/me serves the PIN over a stored 'act' — no client renders a stale dial", async () => {
     resetCapabilityCache();
     const { db, log } = fakeDb((sql) =>
       sql.includes("information_schema.columns") ? [{ ok: 1 }] : [meRow]);
     const me = await createMembersRepo(db).me(ADMIN_ID);
-    expect(me.autonomy).toBe("act");
+    expect(me.autonomy).toBe("assist");
+    // the field still rides the wire on a migrated deployment
+    expect("autonomy" in me).toBe(true);
     expect(log.find((l) => l.sql.includes("from echo.app_user"))!.sql).toContain("u.autonomy");
+    resetCapabilityCache();
   });
 
-  it("OMITS the dial before db/0073 — absence is not an 'assist'", async () => {
+  it("OMITS the field before db/0073 — absence is still not an 'assist'", async () => {
     resetCapabilityCache();
     const { db, log } = fakeDb((sql) =>
       sql.includes("information_schema.columns") ? [] : [meRow]);

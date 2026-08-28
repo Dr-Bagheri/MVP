@@ -197,15 +197,31 @@ export async function hasAutonomyCeiling(db: Db): Promise<boolean> {
 const RANK: Record<Autonomy, number> = { watch: 0, assist: 1, act: 2 };
 
 /**
- * The caller's EFFECTIVE dial position, read fresh per ask (a dial change
- * must take effect on the next question, not the next sign-in):
- * min(the person's choice, the org's ceiling — 0075). Columns absent →
- * 'assist', the pre-dial behavior, exactly.
+ * [REVISED 2026-08-28, user directive] "remove watch and act from everywhere
+ * in the platform. the only thing that must be in the platform is assist" —
+ * the M36 dial left the product. This constant is the ONE pin: every reader
+ * (the ask path, the worker's auto-apply hold, /v1/me's served field) resolves
+ * autonomy through `actorAutonomy` or serves this value directly — a second
+ * clamp at a reader would be two spellings of one rule. The columns
+ * (`app_user.autonomy`, `org.autonomy_ceiling`) and the wire fields
+ * deliberately STAY — removing schema for a UI ruling is churn — so a stored
+ * "act" or "watch" simply stops mattering. If the ruling reverses: delete the
+ * early return in `actorAutonomy` below (the original resolution is intact
+ * under it) and serve the row's value again in members.ts.
+ */
+export const PINNED_AUTONOMY: Autonomy = "assist";
+
+/**
+ * The caller's EFFECTIVE dial position — PINNED to "assist" (see
+ * PINNED_AUTONOMY above). The pre-directive resolution (read fresh per ask:
+ * min(the person's choice, the org's ceiling — 0075); columns absent →
+ * 'assist') is kept intact below the pin so un-pinning is a one-line delete.
  */
 export async function actorAutonomy(
   db: Db,
   identity: { userId: string },
 ): Promise<Autonomy> {
+  return PINNED_AUTONOMY;
   if (!(await hasAutonomyColumn(db))) return "assist";
   try {
     const withCeiling = await hasAutonomyCeiling(db);

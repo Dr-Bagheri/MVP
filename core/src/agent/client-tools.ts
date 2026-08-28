@@ -99,7 +99,7 @@ export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
       + "/management/connectors = calendar/mail connectors. "
       + "/management/server = server status (admin). "
       + "/settings = settings home. /settings/general = general settings. "
-      + "/settings/assistant = assistant settings (autonomy, weekly digest). "
+      + "/settings/assistant = assistant settings (voice, weekly digest). "
       + "/settings/security = security. /settings/audit-logs = audit logs. ",
     parameters: obj({
       path: strEnum([

@@ -35,8 +35,13 @@ const HANDLE = /^[a-z0-9][a-z0-9-]{0,62}$/;
  *  autotag - the flagship (design doc s10): after every summarized
  *    meeting, extract topics from the transcript and PROPOSE them as tags
  *    - the human approves on the run page; the write lands on the agent
- *    role. Ships with max_autonomy act so an org MAY later enable
- *    standing auto-apply; until then every write waits for its human.
+ *    role.
+ *
+ * [REVISED 2026-08-28, user directive] every starter ships max_autonomy
+ * "assist": watch and act left the product (see PINNED_AUTONOMY in
+ * db/capabilities.ts). Existing published versions may still CARRY act or
+ * watch on their rows — the wire field stays — but nothing resolves above
+ * assist any more, so every write waits for its human everywhere.
  */
 export const STARTER_WORKFLOWS = {
   followups: {
@@ -64,7 +69,7 @@ export const STARTER_WORKFLOWS = {
     name: "\u0628\u0631\u0686\u0633\u0628\u200c\u06af\u0630\u0627\u0631\u06cc \u062e\u0648\u062f\u06a9\u0627\u0631 \u062c\u0644\u0633\u0647",
     description: "\u067e\u0633 \u0627\u0632 \u0647\u0631 \u062c\u0644\u0633\u0647 \u0645\u0648\u0636\u0648\u0639\u200c\u0647\u0627 \u0627\u0632 \u0631\u0648\u0646\u0648\u0634\u062a \u062f\u0631\u0645\u06cc\u200c\u0622\u06cc\u062f \u0648 \u0628\u0647\u200c\u0639\u0646\u0648\u0627\u0646 \u0628\u0631\u0686\u0633\u0628 \u067e\u06cc\u0634\u0646\u0647\u0627\u062f \u0645\u06cc\u200c\u0634\u0648\u062f - \u0628\u0627 \u062a\u0623\u06cc\u06cc\u062f \u0634\u0645\u0627 \u062b\u0628\u062a \u0645\u06cc\u200c\u0634\u0648\u062f.",
     trigger_event: "call.summarized" as string | null,
-    max_autonomy: "act" as "watch" | "assist" | "act",
+    max_autonomy: "assist" as "watch" | "assist" | "act",
     graph: {
       entry: "s1",
       steps: [
@@ -84,10 +89,12 @@ export const STARTER_WORKFLOWS = {
     name: "\u067e\u06cc\u0634\u200c\u0646\u0648\u06cc\u0633 \u067e\u0627\u0633\u062e \u0627\u06cc\u0645\u06cc\u0644",
     description: "\u0647\u0631 \u0627\u06cc\u0645\u06cc\u0644 \u062a\u0627\u0632\u0647\u200c\u0627\u06cc \u06a9\u0647 \u0645\u06cc\u200c\u0631\u0633\u062f \u062e\u0648\u0627\u0646\u062f\u0647 \u0645\u06cc\u200c\u0634\u0648\u062f \u0648 \u0627\u06af\u0631 \u067e\u0627\u0633\u062e \u0645\u06cc\u200c\u062e\u0648\u0627\u0647\u062f\u060c \u067e\u06cc\u0634\u200c\u0646\u0648\u06cc\u0633\u06cc \u0646\u0648\u0634\u062a\u0647 \u0645\u06cc\u200c\u0634\u0648\u062f \u06a9\u0647 \u062e\u0648\u062f\u062a\u0627\u0646 \u0628\u0627\u0632\u0628\u06cc\u0646\u06cc \u0648 \u0627\u0631\u0633\u0627\u0644 \u06a9\u0646\u06cc\u062f.",
     trigger_event: "mail.received" as string | null,
-    /* `act` because the last step WRITES — a draft, into the person's own
-       mailbox. It writes nothing anybody has sent: the grant wall (db/0114)
-       is what makes that true, not this ceiling. */
-    max_autonomy: "act" as "watch" | "assist" | "act",
+    /* The last step WRITES — a draft, into the person's own mailbox. It
+       writes nothing anybody has sent: the grant wall (db/0114) is what
+       makes that true, not this ceiling. `assist` is fine for it: the
+       validator refuses apply only under "watch", and the draft_mail apply
+       is the separately-ruled inert kind. */
+    max_autonomy: "assist" as "watch" | "assist" | "act",
     graph: {
       entry: "s1",
       steps: [

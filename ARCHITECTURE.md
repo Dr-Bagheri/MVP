@@ -1462,6 +1462,26 @@ CAPABILITY-DETECTED at boot with a loud log line and a safe default —
 code and migrations deploy in either order here, and a silent default is
 the failure mode this repo exists to refuse.
 
+**[REVISED 2026-08-28, user directive]** "remove watch and act from
+everywhere in the platform. the only thing that must be in the platform
+is assist" — the dial leaves the product. Assist is the platform's ONE
+behaviour, applied in the background and never shown or offered: no
+personal dial, no org ceiling control, no per-level copy anywhere. The
+columns (`app_user.autonomy`, `org.autonomy_ceiling`), the vocabulary,
+and the wire fields STAY (removing schema for a UI ruling is churn); a
+stored "act"/"watch" simply stops mattering, and `/v1/me` serves the pin
+so no client renders a stale value. Pin site — the ONE clamp:
+`core/src/db/capabilities.ts : actorAutonomy` (early-returns
+`PINNED_AUTONOMY = "assist"`; the original least(owner, ceiling)
+resolution is intact under it). Consequences: W13 auto-apply can never
+fire (owner+org switch can't reach act); every starter workflow ships
+`max_autonomy: "assist"` (the inert `draft_mail` apply validates —
+only "watch" refuses apply); `PUT /v1/me/autonomy` still accepts writes
+that no longer matter. To bring the dial back: delete the early return
+in `actorAutonomy`, serve the row's value again in `members.ts` `me()`,
+and rebuild the two removed controls (AssistantSettings dial,
+GeneralSettings ceiling) with their locale keys.
+
 ## M37 — The platform's own voice (server TTS) [user-directed 2026-08-21]
 
 The assistant answers OUT LOUD in the language it was asked in (voice

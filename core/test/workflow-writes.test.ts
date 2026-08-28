@@ -232,46 +232,31 @@ describe("trigger bindings are KIND-aware (the D poisoning)", () => {
   });
 });
 
-describe("auto-apply: three switches, all required (W13)", () => {
+describe("auto-apply: pinned OFF — assist is the platform's one behaviour", () => {
+  /*
+   * [REVISED 2026-08-28, user directive] "remove watch and act from
+   * everywhere in the platform." Before the pin this block walked W13's
+   * three-switch matrix: all three at act minted a via_standing decision
+   * and wrote; each switch below act parked. With actorAutonomy pinned to
+   * "assist" (PINNED_AUTONOMY, db/capabilities.ts) the owner+org switch can
+   * never read act, so the per-switch park tests could no longer fail for
+   * their own reasons (everything parks for the pin's reason) and were
+   * retired WITH the matrix — they return with the dial, if it ever does.
+   *
+   * What replaces them is the pin's own load-bearing case: the fixture
+   * stores act EVERYWHERE (owner dial, org ceiling, version ceiling,
+   * standing row) and the run still parks for its human. Un-pin
+   * actorAutonomy and this goes red on the via_standing mint.
+   */
   const allOn = { decision: null as string | null, maxAutonomy: "act",
     ownerAutonomy: "act", standingAllowed: true };
 
-  it("ALL THREE on: a via_standing decision is minted and the write proceeds", async () => {
-    const responder = scenario(allOn);
-    // after the mint, the reread must SEE the decision — stateful fake
-    let minted = false;
-    const { db, calls } = scriptedDb((sql, params) => {
-      if (/insert into echo\.proposal_decision/i.test(sql)) { minted = true; return []; }
-      if (/from echo\.proposal_decision where proposal_id/i.test(sql)) {
-        return minted ? [{ decision: "approve" }] : [];
-      }
-      return responder(sql, params);
-    });
+  it("every switch stored at act: NO decision is minted, the run PARKS", async () => {
+    const { db, calls } = scriptedDb(scenario(allOn));
     const { queue, sent } = fakeQueue();
     await createWorkflowStep({ db, queue }).handle(payload("s4"), { attempt: 1, log: silentLog });
-
-    const mint = calls.find((c) => /insert into echo\.proposal_decision/i.test(c.sql));
-    expect(mint).toBeDefined();
-    // via_standing rides as a SQL literal on the auto path — the
-    // statement itself is the assertion surface
-    expect(mint!.sql).toMatch(/via_standing/);
-    expect(mint!.sql).toMatch(/'approve',\s*\$5,\s*true/);
-    expect(calls.find((c) => /update echo\.call set tags/i.test(c.sql))!.role).toBe("agent");
-    expect(sent[0]!.body.stepId).toBe("s5");
+    expect(sent).toEqual([]);
+    expect(calls.some((c) => /insert into echo\.proposal_decision/i.test(c.sql))).toBe(false);
+    expect(writes(calls).some((c) => /'waiting'/.test(c.sql))).toBe(true);
   });
-
-  for (const [name, override] of [
-    ["the VERSION ceiling below act", { maxAutonomy: "assist" }],
-    ["the OWNER+ORG autonomy below act", { ownerAutonomy: "assist" }],
-    ["no standing row for the kind", { standingAllowed: null }],
-  ] as const) {
-    it(`${name}: the run PARKS — one switch is never enough`, async () => {
-      const { db, calls } = scriptedDb(scenario({ ...allOn, ...override }));
-      const { queue, sent } = fakeQueue();
-      await createWorkflowStep({ db, queue }).handle(payload("s4"), { attempt: 1, log: silentLog });
-      expect(sent).toEqual([]);
-      expect(calls.some((c) => /insert into echo\.proposal_decision/i.test(c.sql))).toBe(false);
-      expect(writes(calls).some((c) => /'waiting'/.test(c.sql))).toBe(true);
-    });
-  }
 });

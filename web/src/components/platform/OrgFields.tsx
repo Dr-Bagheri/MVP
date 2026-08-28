@@ -262,8 +262,8 @@ export function OrgFields() {
    * member — core serves it at `/v1/org` precisely so the shell can show the
    * org name — while the write is admin-gated, so hiding the values entirely
    * would withhold something they are allowed to see in order to express a
-   * restriction on something else. (The Section title above this component is
-   * supplied by GeneralSettings — one heading for both branches.)
+   * restriction on something else. (The Section above this component is
+   * supplied by the management/general page — one heading for both branches.)
    */
   if (me !== null && !isAdmin) {
     return (

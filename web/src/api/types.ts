@@ -194,8 +194,9 @@ export interface Me extends User {
   /** `"auto"` (follow the device, resolved at render) or an IANA zone name. */
   timezone: string;
   /**
-   * M36's dial. ABSENT (not "assist") when the deployment predates db/0073 —
-   * the Settings control renders the default but must not claim it is stored.
+   * M36's dial — [REVISED 2026-08-28, user directive] the dial left the
+   * product. The wire field stays (core always serves the pinned "assist"
+   * when migrated; ABSENT before db/0073) but no control reads or writes it.
    */
   autonomy?: "watch" | "assist" | "act";
   /** db/0112 - Settings-Assistant; absent as a group until migrated. */

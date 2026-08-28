@@ -19,7 +19,9 @@ import {
   CALENDAR_PREFERENCES, iso, isoOrNull, MEMBER_ROLES, TIMEZONE_AUTO, USER_STATUSES,
   type CalendarPreference, type MemberRole, type UserStatus,
 } from "./vocabulary.ts";
-import { hasAssistantPrefs, hasAutonomyColumn, hasProfileContext } from "../db/capabilities.ts";
+import {
+  hasAssistantPrefs, hasAutonomyColumn, hasProfileContext, PINNED_AUTONOMY,
+} from "../db/capabilities.ts";
 import { assertUuid, type Db, type SqlTx } from "../db/identity.ts";
 import type { Identity } from "../agent/types.ts";
 
@@ -128,11 +130,11 @@ export interface MeRecord extends MemberRecord {
    */
   timezone: string;
   /**
-   * M36's dial — served so the Settings control can show the STORED value
-   * rather than guessing (the locale lesson above, pre-empted: a column
-   * written by PUT /v1/me/autonomy and read only at ask time is "stored and
-   * never served" the day a form wants it). ABSENT before db/0073 — an
-   * omitted field, never a fabricated "assist".
+   * M36's dial — [REVISED 2026-08-28, user directive] the dial left the
+   * product. The FIELD stays on the wire but always carries the pin
+   * (PINNED_AUTONOMY, "assist"), never the stored value — no client may
+   * render a stale "act". Still ABSENT before db/0073 — an omitted field
+   * and a pinned one are different facts about the deployment.
    */
   autonomy?: "watch" | "assist" | "act";
   /**
@@ -532,9 +534,11 @@ export function createMembersRepo(db: Db) {
         timezone: (row.timezone as string) ?? TIMEZONE_AUTO,
         // Omitted (not defaulted) when the column is absent: "the dial does
         // not exist here yet" and "the dial is at assist" are different facts.
-        ...(withAutonomy
-          ? { autonomy: (row.autonomy as MeRecord["autonomy"]) ?? "assist" }
-          : {}),
+        // [REVISED 2026-08-28, user directive] the dial left the product:
+        // the wire FIELD stays, but it serves the pin — never the stored
+        // value, so no client can render a stale "act". One pin site
+        // (capabilities.ts), consumed here rather than re-spelled.
+        ...(withAutonomy ? { autonomy: PINNED_AUTONOMY } : {}),
         ...(withAssistant
           ? {
               assistant_reply_language: (row.assistant_reply_language as string | null) ?? null,

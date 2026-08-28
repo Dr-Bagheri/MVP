@@ -6,7 +6,6 @@ import { Link } from "@/i18n/routing";
 import { AssistantSettings } from "@/components/platform/AssistantSettings";
 import { AuditLogDrains } from "@/components/platform/AuditLogDrains";
 import { AuditLogs } from "@/components/platform/AuditLogs";
-import { GeneralSettings } from "@/components/platform/GeneralSettings";
 import { LegalDocuments } from "@/components/platform/LegalDocuments";
 import { SecuritySettings } from "@/components/platform/SecuritySettings";
 import { SignInMethods } from "@/components/platform/SignInMethods";
@@ -60,7 +59,10 @@ export default function SettingsPage({
         </Section>
       ) : null}
 
-      {active.slug === "general" ? <GeneralSettings /> : null}
+      {/* [REVISED 2026-08-28, user directive] Settings·General renders its
+          header alone for now: its one workspace control was the autonomy
+          ceiling, and the dial (watch|assist|act) left the product — assist
+          is pinned server-side and deliberately not shown or offered. */}
       {active.slug === "assistant" ? (
         <Section>
           <AssistantSettings />

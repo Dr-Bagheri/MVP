@@ -1562,7 +1562,8 @@ export const api = {
     location?: string | null;
     logo_url?: string | null;
     social_links?: string[] | null;
-    /** db/0075 — the workspace's autonomy cap (Settings · Workspace). */
+    /** db/0075 — the workspace's autonomy cap. Wire field kept; the control
+        left with the dial (2026-08-28 directive) and nothing sends it. */
     autonomy_ceiling?: string;
     /** db/0112 — the invitation domain wall; [] clears it. */
     allowed_email_domains?: string[];
@@ -2080,14 +2081,10 @@ export const api = {
     });
   },
 
-  /** M36: the autonomy dial. 409 code `not_migrated` until db/0073 lands. */
-  async setAutonomy(autonomy: "watch" | "assist" | "act"): Promise<void> {
-    await bff("/api/me/autonomy", {
-      method: "PUT",
-      body: JSON.stringify({ autonomy }),
-      headers: { "content-type": "application/json" },
-    });
-  },
+  /* [REVISED 2026-08-28, user directive] setAutonomy left with the M36 dial:
+     watch and act are gone from the product, assist is pinned server-side
+     (PINNED_AUTONOMY in core), and a client method with no control behind it
+     is a producer with no consumer. */
 
   /** M35: agent-initiated cards. `unavailable` = db/0074 pending, not "no news". */
   async cards(): Promise<{ cards: AgentCardItem[]; unavailable?: string }> {

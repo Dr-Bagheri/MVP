@@ -44,12 +44,13 @@ import {
  * legal value and making a person retype it after every re-order is how a
  * puzzle stops being one.
  *
- * ── The top-right control ───────────────────────────────────────────────
- * The reference puts a MODEL picker there. We have no per-workflow model
- * field on the wire, and shipping a picker that writes nowhere would be a
- * control that does nothing. The closest thing that is real is the version's
- * `max_autonomy` ceiling — a per-version column the publish route reads — so
- * that is what sits in that corner instead.
+ * ── The top-right corner is EMPTY, and the ceiling is gone ──────────────
+ * The reference puts a MODEL picker there; we have no per-workflow model
+ * field, so for a while the autonomy ceiling stood in. Then the user ruled
+ * the dial out of the product entirely (2026-08-28): every workflow
+ * publishes at "assist" — reads and proposes, writes wait for a human —
+ * with no control anywhere. The wire field survives because versions carry
+ * it; the choice does not.
  */
 
 /* ── the draft ───────────────────────────────────────────────────────── */
@@ -68,7 +69,7 @@ const FETCH_KINDS = FETCH_SOURCE_KINDS;
 const DECIDE_OPS = ["gt", "gte", "lt", "lte", "eq", "ne", "contains"] as const;
 /** the four ops the validator requires a NUMBER on the left of */
 const NUMERIC_OPS: readonly string[] = ["gt", "gte", "lt", "lte"];
-const AUTONOMY = ["watch", "assist", "act"] as const;
+
 
 /**
  * The kinds the executor can actually run today, as a set. `fetch` is in the
@@ -239,7 +240,14 @@ export function WorkflowBuilder({
     workflow ? (workflow.trigger_event ? "event" : "manual") : "");
   const [event, setEvent] = useState<string>(workflow?.trigger_event ?? WORKFLOW_EVENTS[0]);
   const [enabled, setEnabled] = useState(workflow?.enabled ?? false);
-  const [maxAutonomy, setMaxAutonomy] = useState("assist");
+  /*
+   * ASSIST, always (user directive, 2026-08-28: "remove watch and act from
+   * everywhere in the platform … only put assist in the background, does not
+   * need to show this"). The wire field stays — versions carry it — but no
+   * control offers a choice, and a version opened for editing republishes at
+   * assist whatever its old ceiling said.
+   */
+  const maxAutonomy = "assist";
   const [steps, setSteps] = useState<StepDraft[]>([]);
   /** the trigger menu is OPEN; closed, the section is one selector card */
   const [picking, setPicking] = useState(false);
@@ -263,7 +271,10 @@ export function WorkflowBuilder({
         if (!live) return;
         const parsed = graph as { steps?: StepDraft[] };
         setSteps(parsed.steps ?? []);
-        setMaxAutonomy(max_autonomy);
+        /* max_autonomy deliberately unread: assist is the platform's one
+           behaviour now, and re-adopting a stored "act" would resurrect a
+           choice the product no longer offers */
+        void max_autonomy;
       })
       .catch(() => { /* an unreadable version leaves an empty canvas, not a lie */ });
     return () => { live = false; };
@@ -729,15 +740,6 @@ export function WorkflowBuilder({
           <h2 className="min-w-0 flex-1 truncate text-base font-semibold text-fg">
             {workflow ? t("titleEdit", { name: savedName.current }) : t("title")}
           </h2>
-          {/* the reference's model picker slot — see the file header for why
-              the autonomy ceiling stands here instead */}
-          <SelectMenu
-            className="w-36 text-xs"
-            ariaLabel={t("ceiling")}
-            value={maxAutonomy}
-            onChange={setMaxAutonomy}
-            options={AUTONOMY.map((level) => ({ value: level, label: t(`ceiling_${level}`) }))}
-          />
           <button
             type="button"
             aria-label={t("close")}
@@ -750,20 +752,6 @@ export function WorkflowBuilder({
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-          {/*
-            The ceiling, in a sentence (user question, 2026-08-28: "what is
-            the difference between these three, act, watch and assist?").
-            Three one-word options that decide whether a workflow may WRITE
-            are not self-explanatory, and a person choosing one of them
-            deserves to know which without leaving the modal. It changes with
-            the picker, so it answers the question they are actually asking:
-            what does THIS one mean.
-          */}
-          <p className="mb-3 rounded-lg border border-border bg-surface-2/40 px-3 py-2 text-[11px] leading-5 text-fg-muted">
-            <span className="font-medium text-fg">{t(`ceiling_${maxAutonomy}`)}</span>
-            {" — "}
-            {t(`ceilingHint_${maxAutonomy}`)}
-          </p>
           {label(t("nameLabel"), (
             <input
               className="input text-sm"
@@ -860,7 +848,12 @@ export function WorkflowBuilder({
                       value={event}
                       onChange={setEvent}
                       options={WORKFLOW_EVENTS.map((name_) => ({
-                        value: name_, label: t("event_call_summarized"),
+                        /* the key DERIVES from the event name. The previous
+                           line hardcoded one key for every entry, which read
+                           fine with one event and rendered the same sentence
+                           twice the day a second landed (user screenshot,
+                           2026-08-28: "two same events") */
+                        value: name_, label: t(`event_${name_.replace(".", "_")}`),
                       }))}
                     />
                   ))}
