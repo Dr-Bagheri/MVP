@@ -292,6 +292,11 @@ export const EXECUTABLE_STEP_KINDS = [
      machinery. `fetch` alone stays gated: the connector poller it needs
      is deferred, on the record. */
   "propose", "wait", "apply",
+  /* P5 (2026-08-28): `fetch` runs. It reads ONE connector source under the
+     owner's own grant and declares a trust-labelled envelope, which is what
+     lets a reply's recipient be BOUND to a header rather than written by a
+     model. Its gate came off with that shape, not before it. */
+  "fetch",
 ] as const;
 
 /**
@@ -313,7 +318,25 @@ export const AGENT_CARD_KINDS = [
 ] as const;
 export type AgentCardKind = (typeof AGENT_CARD_KINDS)[number];
 
-export const WORKFLOW_PROPOSAL_KINDS = ["add_tags", "set_title"] as const;
+export const WORKFLOW_PROPOSAL_KINDS = ["add_tags", "set_title", "draft_mail"] as const;
+
+/**
+ * Proposal kinds whose `apply` needs no human decision first, because what
+ * it creates **cannot act**.
+ *
+ * `draft_mail` writes a row into `echo.mail_draft`, which is inert by
+ * construction: `echo_agent` holds INSERT and not UPDATE (db/0114), so the
+ * draft sits `pending` until a person presses Send on `echo_app`. The draft
+ * IS the decision surface — putting a `proposal_decision` row in front of it
+ * would mean approving a thing in order to be asked to approve it, and
+ * 0114's header already ruled out the null-call decision row that would
+ * require.
+ *
+ * Nothing else may join this list without the same argument: the test that
+ * matters is the NEGATIVE one — `add_tags` writes a call and still waits for
+ * a human, so an apply that skipped its decision would be a silent write.
+ */
+export const INERT_PROPOSAL_KINDS = ["draft_mail"] as const;
 export type WorkflowProposalKind = (typeof WORKFLOW_PROPOSAL_KINDS)[number];
 
 /**
@@ -342,6 +365,12 @@ export const AUTO_APPLY_ELIGIBLE = ["add_tags"] as const;
  */
 export const OFFERED_CONNECTOR_PROVIDERS = ["google"] as const;
 
-/** M41 L1 — the facts that may trigger a workflow (P4; closed). */
-export const WORKFLOW_EVENTS = ["call.summarized"] as const;
+/**
+ * M41 L1 — the facts that may trigger a workflow (P4; closed).
+ *
+ * `mail.received` is the poller's fact: it still owns detection, dedupe and
+ * the cursor — machinery no author touches, exactly as every mature engine
+ * arranges it — and hands the graph a REFERENCE to one new message.
+ */
+export const WORKFLOW_EVENTS = ["call.summarized", "mail.received"] as const;
 export type WorkflowEvent = (typeof WORKFLOW_EVENTS)[number];

@@ -119,6 +119,31 @@ export async function main(): Promise<void> {
     fallbackModel: process.env.WORKER_SUMMARY_MODEL,
   });
 
+  /*
+   * M43: the mailbox belt. Two minutes matches the door's own due-window —
+   * polling faster would spend provider quota to shorten a wait nobody is
+   * watching, and the drafts land in a dock, not in front of a cursor.
+   *
+   * The connector repo needs the same OAuth configuration the api has; with
+   * it absent the poller finds no usable connection and says so once per
+   * sweep rather than failing in a loop.
+   */
+  const connectorOAuth = {
+    publicWebUrl: process.env.echo_platform_web_url,
+    encryptionKey: process.env.echo_platform_connector_encryption_key,
+    providers: {
+      google: {
+        clientId: process.env.echo_platform_google_oauth_client_id,
+        clientSecret: process.env.echo_platform_google_oauth_client_secret,
+      },
+      microsoft: {
+        clientId: process.env.echo_platform_microsoft_oauth_client_id,
+        clientSecret: process.env.echo_platform_microsoft_oauth_client_secret,
+      },
+    },
+  };
+  const mailConnectors = createConnectorsRepo(db, connectorOAuth);
+
   const runner = createRunner({
     queue,
     handlers: [
@@ -134,6 +159,11 @@ export async function main(): Promise<void> {
         db, queue,
         apiKey: process.env.OPENROUTER_API_KEY,
         fallbackModel: process.env.WORKER_SUMMARY_MODEL,
+        /* M46: a graph may READ a connector source and WRITE a mail draft.
+           Both are the same repos the hardcoded automations use — the point
+           is one implementation of each wall, not two. */
+        connectors: mailConnectors as never,
+        drafts: createMailDraftsRepo(db, mailConnectors),
       }),
     ],
     config,
@@ -202,30 +232,6 @@ export async function main(): Promise<void> {
   }, 60_000);
   workflowTimer.unref();
 
-  /*
-   * M43: the mailbox belt. Two minutes matches the door's own due-window —
-   * polling faster would spend provider quota to shorten a wait nobody is
-   * watching, and the drafts land in a dock, not in front of a cursor.
-   *
-   * The connector repo needs the same OAuth configuration the api has; with
-   * it absent the poller finds no usable connection and says so once per
-   * sweep rather than failing in a loop.
-   */
-  const connectorOAuth = {
-    publicWebUrl: process.env.echo_platform_web_url,
-    encryptionKey: process.env.echo_platform_connector_encryption_key,
-    providers: {
-      google: {
-        clientId: process.env.echo_platform_google_oauth_client_id,
-        clientSecret: process.env.echo_platform_google_oauth_client_secret,
-      },
-      microsoft: {
-        clientId: process.env.echo_platform_microsoft_oauth_client_id,
-        clientSecret: process.env.echo_platform_microsoft_oauth_client_secret,
-      },
-    },
-  };
-  const mailConnectors = createConnectorsRepo(db, connectorOAuth);
   const mailTimer = setInterval(() => {
     void sweepMailboxes({
       db,
@@ -233,6 +239,9 @@ export async function main(): Promise<void> {
       drafts: createMailDraftsRepo(db, mailConnectors),
       apiKey: process.env.OPENROUTER_API_KEY ?? "",
       fallbackModel: process.env.WORKER_SUMMARY_MODEL,
+      /* M46: with a queue in hand, the poller can hand a new message to the
+         person's own workflow instead of drafting it itself */
+      queue,
     }, log as never);
   }, 2 * 60_000);
   mailTimer.unref();

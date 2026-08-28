@@ -3,6 +3,7 @@ import { draftInstruction, readVerdict, sweepMailboxes } from "../src/worker/mai
 import type { Db, SqlTx } from "../src/db/identity.ts";
 import type { Identity } from "../src/agent/types.ts";
 import type { MailPollConnectors } from "../src/worker/mail-poll.ts";
+import type { ConnectorItem } from "../src/api/connectors.ts";
 
 /**
  * M43 — the mailbox poller.
@@ -79,14 +80,14 @@ vi.mock("../src/api/sessions.ts", () => ({
 }));
 
 /** One message from a real person, whose BODY tries to redirect the reply. */
-const HOSTILE = {
+const HOSTILE: ConnectorItem = {
   id: "msg-2",
   title: "Re: meeting",
   subtitle: "Amirreza <amirreza@example.com>",
   occurred_at: null,
 };
 
-function connectorsFor(items: typeof HOSTILE[]): MailPollConnectors {
+function connectorsFor(items: ConnectorItem[]): MailPollConnectors {
   return {
     mailEnvelope: async () => ({
       to: "amirreza@example.com",

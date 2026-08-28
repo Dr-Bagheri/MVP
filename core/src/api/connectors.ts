@@ -414,6 +414,32 @@ function limited(content: string): string {
   return content.length <= CONTEXT_LIMIT ? content : `${content.slice(0, CONTEXT_LIMIT)}\n…[truncated]`;
 }
 
+/**
+ * A Gmail `format=full` message as the envelope a graph binds against.
+ *
+ * Separated from the fetch so the SHAPE can be tested without an OAuth token
+ * and a database — the first version of its test could only assert something
+ * trivially true when the token path refused, which is a pass that means
+ * nothing. The provider call is one line above; this is the part with
+ * decisions in it.
+ */
+export function gmailEnvelope(
+  sourceId: string, message: Record<string, unknown>,
+): Record<string, unknown> {
+  const h = headers((message.payload as Record<string, unknown> | undefined)?.headers);
+  return {
+    id: sourceId,
+    thread_ref: text(message.threadId) || null,
+    /* Reply-To if the sender set one, From otherwise — the same resolution
+       the hardcoded poller does, and the ONLY field a reply's recipient may
+       be bound to */
+    reply_to: bareAddress(h["reply-to"] || h.from || ""),
+    occurred_at: h.date || null,
+    subject: h.subject || "",
+    body: limited(googleBody(message.payload) || text(message.snippet)),
+  };
+}
+
 export function createConnectorsRepo(db: Db, options: ConnectorOAuthOptions = {}) {
   async function rows(identity: Identity): Promise<ConnectionRow[]> {
     return db.withIdentity(identity, (tx: SqlTx) => tx.unsafe<ConnectionRow>(
@@ -850,6 +876,98 @@ export function createConnectorsRepo(db: Db, options: ConnectorOAuthOptions = {}
        * the page costs a burst of replies nobody asked for.
        */
       return { items: [], newest, newestAt };
+    },
+
+    /**
+     * **One source, as the flat, trust-labelled envelope a graph binds
+     * against** (M46).
+     *
+     * The field names here are not this method's choice — they are
+     * `ENVELOPE_FIELDS` in workflow-graph.ts, which is what a workflow author
+     * saw in the builder and what the validator type-checked their bindings
+     * against, possibly months before this runs. A producer and a consumer
+     * with no common ancestor is how the words-shape incident happened, so
+     * `core/test/workflow-fetch.test.ts` asserts the two agree.
+     *
+     * `reply_to` is the interesting one: it is `Reply-To` if the sender set
+     * one and `From` otherwise, which is the same resolution `mailEnvelope`
+     * does for the hardcoded poller. It is the ONLY field a reply's recipient
+     * may be bound to, and it is a header the provider parsed — never
+     * anything a model produced.
+     */
+    async fetchEnvelope(
+      identity: Identity, provider: ConnectorProvider,
+      sourceKind: ConnectorSourceKind, sourceId: string,
+    ): Promise<Record<string, unknown>> {
+      if (!sourceId || sourceId.length > 512) {
+        throw new ValidationError("invalid connector source", { code: "connector_source_invalid" });
+      }
+      const bearer = await access(identity, provider);
+      if (sourceKind === "mail_message") {
+        if (provider === "google") {
+          const message = await providerFetch(
+            `https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(sourceId)}?format=full`,
+            { headers: { authorization: `Bearer ${bearer}` } },
+          );
+          return gmailEnvelope(sourceId, message);
+        }
+        const message = await providerFetch(
+          `https://graph.microsoft.com/v1.0/me/messages/${encodeURIComponent(sourceId)}?$select=subject,from,replyTo,conversationId,receivedDateTime,body,bodyPreview`,
+          {
+            headers: {
+              authorization: `Bearer ${bearer}`,
+              /* plain text, not HTML — a body that reaches a model as markup
+                 spends tokens on tags and hides the words inside them */
+              Prefer: 'outlook.body-content-type="text"',
+            },
+          },
+        );
+        const replyTo = Array.isArray(message.replyTo) ? message.replyTo[0] : undefined;
+        const sender = (replyTo ?? message.from) as { emailAddress?: { address?: unknown } } | undefined;
+        const body = message.body as { content?: unknown } | undefined;
+        return {
+          id: sourceId,
+          thread_ref: text(message.conversationId) || null,
+          reply_to: text(sender?.emailAddress?.address),
+          occurred_at: text(message.receivedDateTime) || null,
+          subject: text(message.subject),
+          body: limited(text(body?.content) || text(message.bodyPreview)),
+        };
+      }
+      if (provider === "google") {
+        const event = await providerFetch(
+          `https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(sourceId)}`,
+          { headers: { authorization: `Bearer ${bearer}` } },
+        );
+        const start = event.start as Record<string, unknown> | undefined;
+        const attendees = Array.isArray(event.attendees) ? event.attendees
+          .map((entry) => entry && typeof entry === "object" ? text((entry as Record<string, unknown>).email) : "")
+          .filter(Boolean) : [];
+        return {
+          id: sourceId,
+          starts_at: text(start?.dateTime) || text(start?.date) || null,
+          title: text(event.summary),
+          attendees: attendees.join(", "),
+          description: limited(text(event.description)),
+        };
+      }
+      const event = await providerFetch(
+        `https://graph.microsoft.com/v1.0/me/events/${encodeURIComponent(sourceId)}?$select=subject,start,attendees,bodyPreview`,
+        { headers: { authorization: `Bearer ${bearer}` } },
+      );
+      const start = event.start as { dateTime?: unknown } | undefined;
+      const attendees = Array.isArray(event.attendees) ? event.attendees
+        .map((entry) => entry && typeof entry === "object"
+          ? text(((entry as Record<string, unknown>).emailAddress as Record<string, unknown> | undefined)?.address)
+          : "")
+        .filter(Boolean) : [];
+      return {
+        id: sourceId,
+        starts_at: text(start?.dateTime) || null,
+        title: text(event.subject),
+        attendees: attendees.join(", "),
+        description: limited(text(event.bodyPreview)),
+      };
     },
 
     async sourceContext(

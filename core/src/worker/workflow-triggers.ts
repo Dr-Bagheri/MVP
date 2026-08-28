@@ -72,6 +72,85 @@ export async function enqueueWorkflowEvents(
   }
 }
 
+/**
+ * **A new message starts a run** — the connector half of the event trigger.
+ *
+ * Same shape as `enqueueWorkflowEvents` and deliberately a SECOND function
+ * rather than a parameter on the first: this one carries a provider, and the
+ * moment a call id and a mailbox id travel through one signature they are one
+ * `string` that two readers interpret differently. The schedule-id-wearing-a-
+ * call's-costume incident is the version of that mistake this repo has
+ * already paid for.
+ *
+ * The poller stays the machinery: detection, the cursor, the age ceiling and
+ * the dedupe are not things a workflow author touches, in this product or in
+ * any mature one. What crosses into the graph is a REFERENCE — never the
+ * message — because `workflow_run` is readable by admins and the message is
+ * not theirs to read.
+ *
+ * Returns whether anything was enqueued, so the caller can tell "the graph
+ * has it" from "nobody is subscribed" and do the old thing in the second
+ * case. Two producers on one mailbox would be two replies.
+ */
+export async function enqueueMailEvent(
+  db: Db,
+  identity: Identity,
+  provider: string,
+  sourceRef: string,
+  queue: Queue,
+  log: StepLogger,
+): Promise<boolean> {
+  let fired = false;
+  try {
+    const workflows = await db.withIdentity(identity, (tx: SqlTx) =>
+      tx.unsafe<{ id: string; version_id: string }>(
+        `select w.id, w.current_version_id as version_id
+           from echo.workflow w
+          where w.trigger_event = 'mail.received' and w.enabled
+            and w.archived_at is null and w.current_version_id is not null
+            and not exists (
+              select 1 from echo.workflow_mute m
+               where m.workflow_id = w.id and m.owner_id = $1 and m.muted)`,
+        [identity.userId]));
+    for (const workflow of workflows) {
+      const created = await db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe<{ id: string }>(
+          `insert into echo.workflow_run
+             (org_id, owner_id, workflow_id, workflow_version_id,
+              trigger_kind, trigger_ref, trigger_source)
+           values ($1, $2, $3, $4, 'event', $5, $6)
+           on conflict do nothing
+           returning id`,
+          [identity.orgId, identity.userId, workflow.id, workflow.version_id,
+            sourceRef, provider]));
+      const runId = created[0]?.id;
+      if (!runId) continue;                   // W26: this fact already ran
+      const door = await db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe<{ graph: { entry: string } }>(
+          `select graph from echo.workflow_graph_for_run($1)`, [runId]));
+      const entry = door[0]?.graph?.entry;
+      if (!entry) continue;
+      await queue.send(Q_WORKFLOW_STEP, {
+        runId, stepId: entry, iteration: 0,
+        ownerId: identity.userId, orgId: identity.orgId,
+      });
+      fired = true;
+      log.info({ event: "mail_workflow_fired", workflow_id: workflow.id, run_id: runId },
+        "a new message started a workflow run");
+    }
+  } catch (error) {
+    /* NOT best-effort here, unlike the call-summarized twin: the caller uses
+       the answer to decide whether to draft the old way, and a swallowed
+       failure reported as `false` would produce a reply from the fallback
+       while the graph's run was also in flight. Say it and let the caller
+       treat it as "not fired". */
+    log.warn({ event: "mail_workflow_enqueue_failed", detail: (error as Error).name },
+      "a message did not reach its workflow");
+    return false;
+  }
+  return fired;
+}
+
 /** one pass of the belt: resume/expire waits, fire due schedules */
 export async function sweepWorkflowTimers(
   db: Db,

@@ -46,12 +46,14 @@ import { JSONB_PARAM, toJsonb } from "../db/jsonb.ts";
 import {
   AUTO_APPLY_ELIGIBLE,
   EXECUTABLE_STEP_KINDS,
+  INERT_PROPOSAL_KINDS,
   WORKFLOW_PROPOSAL_KINDS,
   type WorkflowFailureCode,
 } from "../api/vocabulary.ts";
 import { firstServable } from "../api/models.ts";
 import { actorAutonomy } from "../db/capabilities.ts";
 import {
+  ENVELOPE_FIELDS,
   EXTRACT_SCHEMAS,
   parseBindingPath,
   renderSchemaContract,
@@ -88,6 +90,33 @@ export interface WorkflowStepOptions {
   /** test seam: the model call, injectable AT ITS OWN ALTITUDE — a fake
       replaces the network, never the validation/retry logic around it */
   runModel?: ((args: ModelCallArgs) => Promise<ModelCallResult>) | undefined;
+  /**
+   * The connector reader a `fetch` step needs. Optional because a
+   * deployment can run the engine with no connectors configured at all —
+   * and when it is absent, `fetch` says so by name rather than producing an
+   * empty message, which is the difference between a misconfiguration and
+   * a mailbox that had nothing in it.
+   */
+  connectors?: WorkflowConnectors | undefined;
+  /** the mail-draft writer a `draft_mail` apply needs; absent = refused by name */
+  drafts?: WorkflowDrafts | undefined;
+}
+
+/** Only the surface a graph needs. */
+export interface WorkflowDrafts {
+  create(identity: Identity, input: {
+    provider: "google" | "microsoft"; source_ref: string; thread_ref?: string | null;
+    to_address: string; subject: string; body: string;
+    session_id?: string | null; in_reply_to?: string | null; toProvider?: boolean;
+  }): Promise<{ id: string }>;
+}
+
+/** Only the surface a graph needs; the repo's connectors repo is far bigger. */
+export interface WorkflowConnectors {
+  fetchEnvelope(
+    identity: Identity, provider: "google" | "microsoft",
+    sourceKind: "mail_message" | "calendar_event", sourceId: string,
+  ): Promise<Record<string, unknown>>;
 }
 
 interface RunRow {
@@ -98,6 +127,8 @@ interface RunRow {
   status: string;
   trigger_kind: string;
   trigger_ref: string | null;
+  /** which provider `trigger_ref` belongs to (db/0120); null off that path */
+  trigger_source: string | null;
   workflow_name: string;
 }
 
@@ -191,6 +222,11 @@ async function resolveBinding(
   context: ExecutionContext, path: BindingPath,
 ): Promise<{ value: unknown; typed: boolean }> {
   if (path.source === "trigger") {
+    if (path.parts.length === 1 && path.parts[0] === "source_provider") {
+      const value = context.run.trigger_source;
+      if (!value) throw new RunFailure("binding_unresolved", "this run carries no source provider");
+      return { value, typed: true };
+    }
     if (path.parts.length === 1 && (path.parts[0] === "source_ref" || path.parts[0] === "call_id")) {
       /*
        * KIND-AWARE, after the P3 acceptance's movement D poisoned itself:
@@ -254,7 +290,41 @@ async function resolveBinding(
     }
     return { value, typed: true };
   }
-  // content-bearing whole-output bind (search/ask/fetch)
+  if (source.kind === "fetch") {
+    /*
+     * A fetched message is not uniformly untrusted, and this is where that
+     * stops being a claim. The trust label the validator bound against
+     * decides what happens to the value HERE: a provider-parsed id, address
+     * or date splices; a subject or a body — a person's words — is fenced,
+     * with no author opt-out, exactly as before.
+     *
+     * The registry is the producer's (workflow-graph's ENVELOPE_FIELDS), not
+     * a second list: a field this executor produced but the validator never
+     * declared would be unbindable, and one the validator declared but the
+     * executor never produced fails here by name rather than arriving as
+     * `undefined` inside a prompt.
+     */
+    if (path.parts.length === 0) {
+      /* the whole message, as content — 0105's shape, and the ordinary
+         "read it, then reason over it" step. Fenced, like any other blob
+         that contains somebody's prose. */
+      return { value: output, typed: false };
+    }
+    const field = typeof path.parts[0] === "string" ? path.parts[0] : "";
+    const trust = ENVELOPE_FIELDS[String(source.source_kind)]?.[field];
+    if (!trust || path.parts.length !== 1) {
+      throw new RunFailure("binding_unresolved",
+        `${path.source} does not carry ${path.parts.join(".") || "a whole-value"}`);
+    }
+    const value = (output as Record<string, unknown>)[field];
+    if (value === undefined || value === null || value === "") {
+      /* the provider had no such header. Not a crash and not a silent
+         empty string: the step that needed it says which field was absent. */
+      throw new RunFailure("binding_unresolved", `${path.source}.${field} is empty on this message`);
+    }
+    return { value, typed: trust !== "untrusted_text" };
+  }
+  // content-bearing whole-output bind (search/ask)
   return { value: output, typed: false };
 }
 
@@ -333,7 +403,16 @@ async function callModel(
     /* §3.3's intersection, P2 form: the domain READ tools — retrieval
        under the caller's identity, on the agent role's grant set. Write
        tools are not offered and cannot be: effects live in the graph. */
-    tools: createDomainTools() as never,
+    /*
+     * THE STEP'S REACH. `tools:"none"` is not caution — it is blast radius:
+     * M43 gives the mail drafter no tools because what it writes is
+     * addressed to somebody else, and M44 gives the meeting brief all of
+     * them because the brief never leaves the building. In a graph those two
+     * can be composed, so the asymmetry had to become a field; the validator
+     * REQUIRES this to be "none" on every model step of a graph that drafts
+     * mail, which is the same rule stated where it can be enforced.
+     */
+    tools: (context.step.tools === "none" ? [] : createDomainTools()) as never,
     deps: { db: agentToolsDb(db) } as never,
     apiKey: options.apiKey,
   });
@@ -383,6 +462,110 @@ export function parseModelJson(text: string): unknown {
 
 type ExecuteFn = (context: ExecutionContext) => Promise<Directive>;
 
+/**
+ * Resolve one binding and hand back the runtime's own verdict on it.
+ *
+ * The validator has already refused a graph that bound the wrong trust —
+ * this is the second half of the same rule, and the two are checked months
+ * apart on purpose: a version published against one shipped envelope must
+ * not come to mean something else because the registry moved.
+ */
+async function boundField(
+  context: ExecutionContext, raw: unknown, name: string,
+): Promise<{ value: unknown; typed: boolean }> {
+  const text = String(raw ?? "").trim().replace(/^\{\{|\}\}$/g, "");
+  const path = parseBindingPath(text);
+  if (!path) throw new RunFailure("binding_unresolved", `${name} is malformed`);
+  return resolveBinding(context, path);
+}
+
+/**
+ * **The reply, addressed by the headers.**
+ *
+ * Every dangerous field here is BOUND — the recipient, the message being
+ * answered, the subject — and the validator has already refused any graph
+ * that bound one of them to something a model produced. The only thing the
+ * model wrote is the body, and that lands in a draft nobody has sent.
+ *
+ * `typed` is re-checked rather than assumed: it is the runtime's own word
+ * for "the provider parsed this out of a header", and the distance between
+ * a reply and an incident is exactly that word.
+ */
+async function proposeDraftMail(
+  context: ExecutionContext,
+): Promise<{ kind: "output"; output: Record<string, unknown> }> {
+  const to = await boundField(context, context.step.to, "draft_mail.to");
+  if (!to.typed || typeof to.value !== "string" || !to.value.includes("@")) {
+    throw new RunFailure("binding_unresolved", "draft_mail.to did not resolve to an address");
+  }
+  const message = await boundField(context, context.step.message, "draft_mail.message");
+  if (!message.typed || typeof message.value !== "string" || message.value === "") {
+    throw new RunFailure("binding_unresolved", "draft_mail.message did not resolve to a message id");
+  }
+  const body = await boundField(context, context.step.from, "draft_mail.from");
+  if (!body.typed) throw new RunFailure("schema_invalid", "a reply body must be typed data");
+  const text = (typeof body.value === "string" ? body.value : String(body.value ?? "")).trim();
+  if (text === "") throw new RunFailure("schema_invalid", "the reply resolved to an empty body");
+
+  let subject = "";
+  if (context.step.subject !== undefined) {
+    const bound = await boundField(context, context.step.subject, "draft_mail.subject");
+    subject = (typeof bound.value === "string" ? bound.value : "").trim();
+  }
+  /* `Re:` once, however many times the thread has been round */
+  const reply = subject ? `Re: ${subject.replace(/^re:\s*/i, "")}` : "Re:";
+  return {
+    kind: "output",
+    output: {
+      proposal: "draft_mail",
+      to_address: to.value,
+      source_ref: message.value,
+      subject: reply.slice(0, 500),
+      body: text.slice(0, 20_000),
+    },
+  };
+}
+
+interface DraftMailProposal {
+  proposal: string;
+  to_address: string;
+  source_ref: string;
+  subject: string;
+  body: string;
+}
+
+/**
+ * Write the reply into the person's mailbox as a DRAFT, and into our record
+ * as a `pending` row.
+ *
+ * This calls the same repo the hardcoded poller calls, which is the point:
+ * the wall it runs into — insert as the agent, never update — is inherited
+ * rather than re-reasoned. A second implementation of a grant boundary is
+ * how a boundary comes to have two meanings.
+ */
+async function applyDraftMail(
+  context: ExecutionContext, proposal: DraftMailProposal,
+): Promise<{ kind: "output"; output: Record<string, unknown> }> {
+  const { options, identity } = context;
+  if (!options.drafts) {
+    throw new RunFailure("kind_unavailable", "this deployment cannot write mail drafts");
+  }
+  const provider = (context.run.trigger_source ?? "google") as "google" | "microsoft";
+  const record = await options.drafts.create(identity, {
+    provider,
+    source_ref: proposal.source_ref,
+    to_address: proposal.to_address,
+    subject: proposal.subject,
+    body: proposal.body,
+    /* into the real Drafts folder as well: the assistant showing its work
+       where the person already looks for it */
+    toProvider: true,
+  });
+  /* IDENTIFIERS only in the output — the body is already in the draft row,
+     and a second copy in the step ledger is a second thing to purge */
+  return { kind: "output", output: { applied: true, draft_id: record.id } };
+}
+
 const EXECUTORS: Record<(typeof EXECUTABLE_STEP_KINDS)[number], ExecuteFn> = {
   /** the platform's own retrieval, under the owner's RLS */
   async search(context) {
@@ -431,6 +614,47 @@ const EXECUTORS: Record<(typeof EXECUTABLE_STEP_KINDS)[number], ExecuteFn> = {
       throw new RunFailure("source_purged", "the bound call has no readable transcript");
     }
     return { kind: "output", output: { results: [rows.map((r) => r.text).join("\n").slice(0, 60_000)] } };
+  },
+
+  /**
+   * ONE connector source, read under the owner's own grant, as a
+   * trust-labelled envelope.
+   *
+   * The output is a flat record rather than a blob of prose, which is the
+   * point: `reply_to` can be bound where an address is demanded, `body` can
+   * only ever be fenced, and the difference is decided by the shipped
+   * registry rather than by whoever wrote the graph.
+   *
+   * The provider read is `connectors`' own — the same methods the hardcoded
+   * poller uses — so this adds a caller, not a second implementation.
+   */
+  async fetch(context) {
+    const { options, identity } = context;
+    const sourceKind = String(context.step.source_kind);
+    const of = await boundField(context, context.step.of, "fetch.of");
+    const sourceId = String(of.value ?? "");
+    if (!of.typed || sourceId === "") {
+      throw new RunFailure("binding_unresolved", "fetch.of did not resolve to a source id");
+    }
+    if (!options.connectors) {
+      /* a deployment with no connector reader is a MISCONFIGURATION, and it
+         must not read as "the message had nothing in it" */
+      throw new RunFailure("kind_unavailable", "this deployment has no connector reader");
+    }
+    const provider = (context.run.trigger_source ?? "google") as "google" | "microsoft";
+    const envelope = await options.connectors.fetchEnvelope(
+      identity, provider, sourceKind as "mail_message" | "calendar_event", sourceId,
+    );
+    /* the REGISTRY decides what travels, not the provider: a field the
+       validator never declared cannot be bound anyway, so carrying it would
+       only widen what a future graph can reach without anyone deciding to */
+    const declared = ENVELOPE_FIELDS[sourceKind] ?? {};
+    const output: Record<string, unknown> = {};
+    for (const field of Object.keys(declared)) {
+      const value = (envelope as Record<string, unknown>)[field];
+      if (value !== undefined && value !== null && value !== "") output[field] = value;
+    }
+    return { kind: "output", output };
   },
 
   /** one recorded model turn; free text out; read tools only */
@@ -541,6 +765,10 @@ const EXECUTORS: Record<(typeof EXECUTABLE_STEP_KINDS)[number], ExecuteFn> = {
     if (!(WORKFLOW_PROPOSAL_KINDS as readonly string[]).includes(kind)) {
       throw new RunFailure("kind_unavailable", `proposal kind ${kind} is not shipped`);
     }
+    /* a mail reply is addressed by headers, not by a call — its whole shape
+       is different, so it gets its own reader rather than a branch inside
+       one that assumes a call id exists */
+    if (kind === "draft_mail") return proposeDraftMail(context);
     const callRaw = String(context.step.call ?? "").trim().replace(/^\{\{|\}\}$/g, "");
     const callPath = parseBindingPath(callRaw);
     if (!callPath) throw new RunFailure("binding_unresolved", "propose.call is malformed");
@@ -614,6 +842,25 @@ const EXECUTORS: Record<(typeof EXECUTABLE_STEP_KINDS)[number], ExecuteFn> = {
       | { proposal: string; call_id: string; payload: Record<string, unknown> } | undefined;
     if (!proposeRun || !proposal) {
       throw new RunFailure("binding_unresolved", `apply found no recorded proposal at ${proposeId}`);
+    }
+
+    /*
+     * ── AN INERT PROPOSAL APPLIES WITHOUT A DECISION ────────────────────
+     *
+     * A `draft_mail` writes a row that CANNOT ACT: `echo_agent` holds INSERT
+     * on `mail_draft` and not UPDATE (db/0114), so the draft sits `pending`
+     * until a person presses Send on `echo_app`. The draft is the decision
+     * surface. Putting a `proposal_decision` in front of it would mean
+     * approving a thing in order to be asked to approve it — and 0114's
+     * header already ruled out the null-call decision row that would take,
+     * because its own read policy could not return it to its decider.
+     *
+     * The list is closed in the vocabulary and the negative test is the one
+     * that matters: `add_tags` writes a call, so it still waits for a human,
+     * and an apply that skipped ITS decision would be a silent write.
+     */
+    if ((INERT_PROPOSAL_KINDS as readonly string[]).includes(proposal.proposal)) {
+      return applyDraftMail(context, proposal as unknown as DraftMailProposal);
     }
 
     const decided = await context.db.withIdentity(context.identity, (tx: SqlTx) =>
@@ -917,7 +1164,7 @@ export function createWorkflowStep(options: WorkflowStepOptions): StepHandler {
       const runRows = await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<RunRow>(
           `select r.id, r.org_id, r.owner_id, r.workflow_id, r.status,
-                  r.trigger_kind, r.trigger_ref, w.name as workflow_name
+                  r.trigger_kind, r.trigger_ref, r.trigger_source, w.name as workflow_name
              from echo.workflow_run r
              join echo.workflow w on w.id = r.workflow_id
             where r.id = $1`, [payload.runId]));

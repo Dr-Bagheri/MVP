@@ -30,6 +30,7 @@
  */
 import { ValidationError } from "./errors.ts";
 import {
+  INERT_PROPOSAL_KINDS,
   WORKFLOW_PROPOSAL_KINDS,
   WORKFLOW_STEP_KINDS,
   type WorkflowStepKind,
@@ -61,6 +62,19 @@ export const EXTRACT_SCHEMAS: Record<string, ExtractSchema> = {
   },
   action_items_v1: { action_items: { list: ACTION_ITEM } },
   topics_v1: { topics: { list: "text" } },
+  /*
+   * The reply verdict, as a CONTRACT rather than a hopeful parse. The
+   * hardcoded poller asks for the same three fields and reads them back
+   * defensively (`readVerdict` falls through to prose when the JSON is
+   * wrong), which was the right call for a single call site and the wrong
+   * one for a graph: here the shape is validated, retried once with the
+   * errors named, and forfeits loudly if it still does not arrive.
+   *
+   * `reply` is a boolean so `decide` can branch on it — decide refuses raw
+   * content by design, so "should we answer at all" has to be typed to be
+   * askable at all.
+   */
+  mail_reply_v1: { reply: "boolean", note: "text", body: "text" },
 };
 
 /**
@@ -181,15 +195,87 @@ export function bindingsIn(text: string): (BindingPath | null)[] {
 /* ── what each kind's output looks like, for edge typing (W4) ────────── */
 
 type OutputShape =
-  | { kind: "content" }                 // search/fetch/ask: fenced at bind time (W20)
+  | { kind: "content" }                 // search/ask: fenced at bind time (W20)
+  | { kind: "envelope"; source: string; fields: Readonly<Record<string, EnvelopeTrust>> }
   | { kind: "schema"; schema: ExtractSchema }
   | { kind: "item"; of: SchemaField }   // a foreach body's view of one element
   | { kind: "none" };
 
+/**
+ * **What a fetched field may be trusted to DO** — the reason `fetch` has a
+ * shape of its own instead of being one more lump of content.
+ *
+ * A message is not uniformly untrustworthy. Its BODY is a stranger's prose
+ * and must never be anything but fenced data; its `reply_to` is an address
+ * the provider parsed out of a header, and binding a reply's recipient to it
+ * is precisely how "the model never chooses the recipient" stops being a
+ * comment in one file and becomes a property the validator can check.
+ *
+ * So the trust travels with the field:
+ *
+ *  · `id` / `address` / `date` — provider-parsed, spliced inline, and the
+ *    only things a dangerous field like a recipient may bind to;
+ *  · `untrusted_text` — a person wrote it; fenced at bind time, always,
+ *    with no author opt-out.
+ *
+ * The old boolean (typed vs content) could not express "trustworthy enough
+ * to address an email with, not trustworthy enough to obey".
+ */
+export type EnvelopeTrust = "id" | "address" | "date" | "untrusted_text";
+
+/**
+ * The envelope each `source_kind` declares. Hand-written and closed, because
+ * it is a CONTRACT rather than a description: a field named here is one the
+ * executor promises to produce, and a graph may bind it at publish time,
+ * months before the run. `core/test/workflow-fetch.test.ts` holds the
+ * executor to it — a producer and a consumer with no common ancestor is how
+ * the words-shape incident happened.
+ */
+export const ENVELOPE_FIELDS: Readonly<Record<string, Readonly<Record<string, EnvelopeTrust>>>> = {
+  mail_message: {
+    id: "id",
+    thread_ref: "id",
+    reply_to: "address",
+    occurred_at: "date",
+    subject: "untrusted_text",
+    body: "untrusted_text",
+  },
+  calendar_event: {
+    id: "id",
+    starts_at: "date",
+    title: "untrusted_text",
+    attendees: "untrusted_text",
+    description: "untrusted_text",
+  },
+};
+
+const TRUSTS: readonly string[] = ["id", "address", "date", "untrusted_text"];
+export function isEnvelopeTrust(value: unknown): value is EnvelopeTrust {
+  return typeof value === "string" && TRUSTS.includes(value);
+}
+
 /** Resolve a path against a shape. Returns the field type, "content", or null. */
-function resolveAgainst(shape: OutputShape, parts: (string | number)[]): SchemaField | "content" | "length" | null {
+function resolveAgainst(
+  shape: OutputShape, parts: (string | number)[],
+): SchemaField | EnvelopeTrust | "content" | "length" | null {
   if (shape.kind === "none") return null;
   if (shape.kind === "content") return parts.length === 0 ? "content" : null;
+  if (shape.kind === "envelope") {
+    /*
+     * A bare `{{s1}}` is THE WHOLE MESSAGE, and it stays legal: db/0105
+     * writes exactly that shape for every migrated template, and "read the
+     * email, then reason over it" is the ordinary thing to want. It resolves
+     * as content, so it fences — which is the correct treatment for a blob
+     * that contains a stranger's prose.
+     *
+     * One segment is a FIELD, and that is the new part: `s1.reply_to` is an
+     * address the provider parsed, and being able to say so is what lets a
+     * recipient be bound instead of written.
+     */
+    if (parts.length === 0) return "content";
+    if (parts.length !== 1 || typeof parts[0] !== "string") return null;
+    return shape.fields[parts[0]] ?? null;
+  }
   let current: SchemaField | { object: ExtractSchema } =
     shape.kind === "schema" ? { object: shape.schema } : shape.of;
   for (const [index, part] of parts.entries()) {
@@ -224,11 +310,11 @@ const STEP_KEYS: Record<WorkflowStepKind, readonly string[]> = {
      reason over what the run already holds. Optional and off by default —
      a workflow that searches the web when nobody asked it to is spending
      someone's money on a guess. */
-  ask: ["id", "kind", "instruction", "agent", "from", "web"],
-  extract: ["id", "kind", "instruction", "agent", "from", "schema"],
+  ask: ["id", "kind", "instruction", "agent", "from", "web", "tools"],
+  extract: ["id", "kind", "instruction", "agent", "from", "schema", "tools"],
   decide: ["id", "kind", "on", "gt", "gte", "lt", "lte", "eq", "ne", "contains", "then", "else"],
   foreach: ["id", "kind", "over", "max", "do"],
-  propose: ["id", "kind", "proposal", "from", "call"],
+  propose: ["id", "kind", "proposal", "from", "call", "to", "subject", "message"],
   apply: ["id", "kind", "from"],
   notify: ["id", "kind", "card"],
   wait: ["id", "kind", "on"],
@@ -309,7 +395,20 @@ export function validateWorkflowGraph(raw: unknown, options: ValidateOptions): W
   const foreachBody = new Map<string, string>();       // bodyId → foreachId
 
   const resolvePath = (path: BindingPath, atIndex: number, bodyOf?: string) => {
-    if (path.source === "trigger") return "content" as const; // runtime facts; fenced if content
+    if (path.source === "trigger") {
+      /*
+       * The runtime carries exactly two trigger facts and refuses the rest
+       * (`resolveBinding`, worker/workflow-step.ts). This used to answer
+       * "content" for ANY `trigger.*` path, so a mis-bound trigger published
+       * happily and died at 3am as `binding_unresolved`. A publish-time
+       * refusal is the same fact, said early — and both are ids, so they
+       * splice rather than fence.
+       */
+      if (path.parts.length !== 1) return null;
+      const fact = path.parts[0];
+      return fact === "source_ref" || fact === "call_id" || fact === "source_provider"
+        ? ("id" as const) : null;
+    }
     if (!indexOf.has(path.source)) return null;
     /* P2 tightening: a foreach BODY's output is unbindable from anywhere —
        it exists once per iteration, and a later step binding it would
@@ -347,6 +446,11 @@ export function validateWorkflowGraph(raw: unknown, options: ValidateOptions): W
   };
 
   const sawProposeAt = new Map<string, number>();      // proposeId → index
+  const proposalKind = new Map<string, string>();      // proposeId → its kind
+  /* a graph that can address a stranger gets no retrieval tools — see the
+     tools rule under `ask`/`extract` below */
+  let addressesOutward = false;
+  const waits: string[] = [];
   const jumpSpans: Array<{ from: number; into: [number, number] }> = [];
 
   for (const [index, step] of steps.entries()) {
@@ -373,8 +477,19 @@ export function validateWorkflowGraph(raw: unknown, options: ValidateOptions): W
           || !(FETCH_KINDS as readonly string[]).includes(step.source_kind)) {
           refuse("fetch needs a known source_kind", id);
         }
-        requireBinding(step.of, "of", id, index, bodyOf);
-        outputs.set(id, { kind: "content" });
+        /* WHAT it reads must be an id — a provider address, not prose. A
+           `of` bound to a model's output would let the run fetch whatever
+           the model named, which is the recipient problem one layer up. */
+        const ofPath = requireBinding(step.of, "of", id, index, bodyOf);
+        const ofShape = resolvePath(ofPath, index, bodyOf);
+        if (ofShape !== "id") {
+          refuse("fetch.of must bind an id — the trigger's source_ref, or an id field of an earlier fetch", id);
+        }
+        outputs.set(id, {
+          kind: "envelope",
+          source: step.source_kind as string,
+          fields: ENVELOPE_FIELDS[step.source_kind as string]!,
+        });
         break;
       }
       case "ask":
@@ -403,6 +518,12 @@ export function validateWorkflowGraph(raw: unknown, options: ValidateOptions): W
           }
         }
         if (step.from !== undefined) requireBinding(step.from, "from", id, index, bodyOf);
+        /* the model step's REACH. Default is today's behaviour — the domain
+           read tools — because every graph that exists was written under it;
+           `none` is the opt-out a mail-drafting graph is required to take. */
+        if (step.tools !== undefined && step.tools !== "read" && step.tools !== "none") {
+          refuse("tools must be read | none", id);
+        }
         if (step.kind === "extract") {
           if (typeof step.schema !== "string" || !(step.schema in schemas)) {
             refuse("extract needs a declared schema", id);
@@ -484,10 +605,51 @@ export function validateWorkflowGraph(raw: unknown, options: ValidateOptions): W
         if (fromShape === "content") {
           refuse("propose.from must bind typed extract output, never raw content", id);
         }
-        /* both v1 kinds are call-scoped, and the CALL is load-bearing:
-           the decision row carries it so its own decider can read it back */
-        requireBinding(step.call, "call", id, index, bodyOf);
+        if (step.proposal === "draft_mail") {
+          /*
+           * **THE RECIPIENT IS BOUND, NEVER WRITTEN.**
+           *
+           * This is the whole reason `fetch` grew a trust-labelled envelope.
+           * In the hardcoded poller "the model never chooses the recipient"
+           * is true because one file takes `to` from the headers and a
+           * comment says so. In a graph the author picks the binding — so
+           * the rule has to be a property the validator can check, or the
+           * first person to bind `to` to a model's output has published a
+           * workflow that emails whoever the email told it to.
+           *
+           * `address` trust exists only on provider-parsed header fields.
+           * An extract output, a search result and an ask's prose are all
+           * refused here BY SHAPE, at publish time, naming the step.
+           */
+          const to = requireBinding(step.to, "to", id, index, bodyOf);
+          if (resolvePath(to, index, bodyOf) !== "address") {
+            refuse("draft_mail.to must bind an address from a fetched message — never a model's output", id);
+          }
+          /* which message it answers: an id, for the same reason */
+          const message = requireBinding(step.message, "message", id, index, bodyOf);
+          if (resolvePath(message, index, bodyOf) !== "id") {
+            refuse("draft_mail.message must bind a fetched message id", id);
+          }
+          /*
+           * The subject must come from the SAME message. A reply carrying
+           * one message's subject and another's recipient is a mix-up that
+           * reads as a working feature and lands in a stranger's inbox.
+           */
+          if (step.subject !== undefined) {
+            const subject = requireBinding(step.subject, "subject", id, index, bodyOf);
+            if (resolvePath(subject, index, bodyOf) !== "untrusted_text"
+              || subject.source !== message.source) {
+              refuse("draft_mail.subject must be the subject of the message being answered", id);
+            }
+          }
+          if (step.call !== undefined) refuse("draft_mail answers a message, not a call", id);
+        } else {
+          /* the call-scoped kinds, where the CALL is load-bearing: the
+             decision row carries it so its own decider can read it back */
+          requireBinding(step.call, "call", id, index, bodyOf);
+        }
         sawProposeAt.set(id, index);
+        proposalKind.set(id, step.proposal as string);
         outputs.set(id, { kind: "none" });
         break;
       }
@@ -502,6 +664,7 @@ export function validateWorkflowGraph(raw: unknown, options: ValidateOptions): W
           refuse("apply must name an earlier propose step", id);
         }
         const proposeIndex = sawProposeAt.get(from)!;
+        if (proposalKind.get(from) === "draft_mail") addressesOutward = true;
         // span protection: no earlier decide may jump INTO (propose, apply]
         // from before the propose — the path that skips the propose is the
         // path that must not exist
@@ -524,9 +687,37 @@ export function validateWorkflowGraph(raw: unknown, options: ValidateOptions): W
         if (typeof step.on !== "string" || !(WAIT_KINDS as readonly string[]).includes(step.on)) {
           refuse("wait needs decision | until | signal", id);
         }
+        waits.push(id);
         outputs.set(id, { kind: "none" });
         break;
       }
+    }
+  }
+
+  /*
+   * ── TWO RULES ABOUT THE WHOLE GRAPH ──────────────────────────────────
+   *
+   * **A graph that can address a stranger gets no retrieval tools.** M43
+   * gives the mail drafter none and M44 gives the meeting brief all of
+   * them, and the difference is not caution levels — it is blast radius:
+   * a brief is read by the person who asked for it, a reply is read by
+   * somebody else. Today that asymmetry is a comment in two worker files.
+   * A graph can compose the two, so it becomes a refusal.
+   *
+   * **A wait cannot sit in a graph whose only proposal is inert.** An
+   * inert propose writes no decision row, so `wait on:decision` would park
+   * until its deadline and fail — a workflow that publishes cleanly and
+   * can only ever time out.
+   */
+  if (addressesOutward) {
+    for (const step of steps) {
+      if ((step.kind === "ask" || step.kind === "extract") && step.tools !== "none") {
+        refuse("a graph that drafts mail must set tools:\"none\" on every model step — what it writes is addressed to somebody else", step.id);
+      }
+    }
+    if (waits.length > 0 && [...proposalKind.values()].every((kind) =>
+      (INERT_PROPOSAL_KINDS as readonly string[]).includes(kind))) {
+      refuse("wait on a decision that nothing will ever record — a draft_mail is decided in the mailbox, not by a proposal decision", waits[0]!);
     }
   }
 

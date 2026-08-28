@@ -33,6 +33,8 @@ import type { Db, SqlTx } from "../db/identity.ts";
 import type { Identity } from "../agent/types.ts";
 import type { ConnectorItem, ConnectorProvider, MailEnvelope } from "../api/connectors.ts";
 import type { MailDraftRecord } from "../api/mail-drafts.ts";
+import { enqueueMailEvent } from "./workflow-triggers.ts";
+import type { Queue } from "./queue.ts";
 
 /** Only the surface the poller needs — the repo is bigger than this. */
 export interface MailPollConnectors {
@@ -64,6 +66,12 @@ export interface MailPollOptions {
   runModel?: (input: { identity: Identity; input: string }) => Promise<{ text: string }>;
   /** at most this many drafts per connection per sweep */
   perSweep?: number | undefined;
+  /**
+   * The engine's queue. Present = a person's `mail.received` workflow can
+   * take the message instead of the hardcoded path. Absent = the old
+   * behaviour, unchanged, which is what every existing test exercises.
+   */
+  queue?: Queue | undefined;
 }
 
 interface StepLogger {
@@ -369,6 +377,24 @@ export async function sweepMailboxes(options: MailPollOptions, log: StepLogger):
         if (!Number.isNaN(at) && at < floor) { stale += 1; continue; }
         if (UNANSWERABLE.test(senderAddress(item))) continue;
         try {
+          /*
+           * THE GRAPH FIRST (M46). If this person has a `mail.received`
+           * workflow enabled, the message becomes a run and the graph does
+           * the work — its steps are the ones on screen, so editing them
+           * changes what happens.
+           *
+           * The fallback is not a duplicate implementation kept warm: it is
+           * what runs for everyone who has not installed the starter, and
+           * the two are exclusive per message BY THE ANSWER, not by a flag
+           * somebody has to remember to flip. Two producers on one mailbox
+           * would be two replies to one email — which is the exact bug this
+           * product shipped this morning by a different route.
+           */
+          if (options.queue) {
+            const fired = await enqueueMailEvent(
+              options.db, identity, provider, item.id, options.queue, log);
+            if (fired) { drafted += 1; continue; }
+          }
           if (await draftFor(options, identity, provider, item, ownAddress, log) === "drafted") drafted += 1;
         } catch (error) {
           /* one unanswerable message must not stop the rest of the mailbox;
