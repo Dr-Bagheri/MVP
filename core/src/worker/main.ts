@@ -25,6 +25,7 @@ import { createSignalStep } from "./signal-step.ts";
 import { createWorkflowStep } from "./workflow-step.ts";
 import { sweepWorkflowTimers } from "./workflow-triggers.ts";
 import { sweepMailboxes } from "./mail-poll.ts";
+import { sweepMeetings } from "./meeting-prep.ts";
 import { createConnectorsRepo } from "../api/connectors.ts";
 import { createMailDraftsRepo } from "../api/mail-drafts.ts";
 import { hasSignalTables } from "../db/capabilities.ts";
@@ -235,6 +236,22 @@ export async function main(): Promise<void> {
     }, log as never);
   }, 2 * 60_000);
   mailTimer.unref();
+
+  /*
+   * M44: the calendar belt. Five minutes, because the trigger is a
+   * thirty-minute window rather than an instant — a brief that lands at
+   * minute 28 instead of minute 30 is the same brief, and polling a calendar
+   * as often as an inbox spends quota on facts that were already scheduled.
+   */
+  const meetingTimer = setInterval(() => {
+    void sweepMeetings({
+      db,
+      connectors: mailConnectors as never,
+      apiKey: process.env.OPENROUTER_API_KEY ?? "",
+      fallbackModel: process.env.WORKER_SUMMARY_MODEL,
+    }, log as never);
+  }, 5 * 60_000);
+  meetingTimer.unref();
 
   let running = true;
   for (const signal of ["SIGINT", "SIGTERM"] as const) {

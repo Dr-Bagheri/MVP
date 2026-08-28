@@ -89,6 +89,8 @@ interface WorkflowProcess {
  * read as a styling condition.
  */
 const AUTO_DRAFT_SLUG = "draft-email-replies";
+/** the calendar template, whose switch is db/0117's */
+const MEETING_PREP_SLUG = "prepare-me-for-meetings";
 
 const PROCESS_KEY: Readonly<Record<string, string>> = {
   "draft-email-replies": "draft-email-replies",
@@ -276,6 +278,22 @@ export default function WorkflowDetailPage({
     }
   }
 
+  /** MY switch: db/0117's `auto_meeting_prep`, the calendar's half */
+  async function toggleMeetingPrep() {
+    if (me?.auto_meeting_prep === undefined || saving) return;
+    setSaving(true);
+    setSaveFailed(false);
+    try {
+      setMe(await api.updateAssistant({ auto_meeting_prep: !me.auto_meeting_prep }));
+    } catch {
+      /* the page's own convention: the failure is shown ON the switch, not
+         in a toast that outlives the control it is about */
+      setSaveFailed(true);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   /** MY switch: db/0115's `auto_draft_replies`, one person at a time */
   async function toggleAutoDraft() {
     if (me?.auto_draft_replies === undefined || saving) return;
@@ -309,6 +327,7 @@ export default function WorkflowDetailPage({
    *  - every other template has no stored flag anywhere, and says so.
    */
   const autoDraft = subject?.kind === "template" && handle === AUTO_DRAFT_SLUG;
+  const meetingPrep = subject?.kind === "template" && handle === MEETING_PREP_SLUG;
   const switchProps = subject === null
     ? null
     : autoDraft
@@ -320,6 +339,15 @@ export default function WorkflowDetailPage({
             : t("detailOwnSwitch"),
           hint: me?.auto_draft_replies === true ? t("detailAutoDraftOn") : t("detailAutoDraftHint"),
         }
+      : meetingPrep
+        ? {
+            enabled: me?.auto_meeting_prep === true,
+            onToggle: me?.auto_meeting_prep === undefined ? undefined : toggleMeetingPrep,
+            note: me?.auto_meeting_prep === undefined
+              ? t("detailSwitchUnavailable")
+              : t("detailOwnSwitch"),
+            hint: me?.auto_meeting_prep === true ? t("detailMeetingPrepOn") : t("detailMeetingPrepHint"),
+          }
       : subject.kind === "engine"
         ? {
             enabled: subject.enabled,

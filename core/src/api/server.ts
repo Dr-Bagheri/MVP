@@ -701,6 +701,7 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       assistant_instructions: text(body.assistant_instructions),
       post_call_brief: typeof body.post_call_brief === "boolean" ? body.post_call_brief : undefined,
       auto_draft_replies: typeof body.auto_draft_replies === "boolean" ? body.auto_draft_replies : undefined,
+      auto_meeting_prep: typeof body.auto_meeting_prep === "boolean" ? body.auto_meeting_prep : undefined,
     }));
   });
 

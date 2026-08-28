@@ -151,6 +151,11 @@ export async function hasMailDrafts(db: Db): Promise<boolean> {
   return hasColumn(db, "app_user", "auto_draft_replies");
 }
 
+/** db/0117: the calendar poller and its idempotency record. */
+export async function hasMeetingPrep(db: Db): Promise<boolean> {
+  return hasColumn(db, "app_user", "auto_meeting_prep");
+}
+
 /** db/0103: the logo as BYTES (the upload path). */
 export async function hasOrgLogoBytes(db: Db): Promise<boolean> {
   return hasColumn(db, "org", "logo_bytes");

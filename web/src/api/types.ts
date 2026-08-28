@@ -213,6 +213,8 @@ export interface Me extends User {
    * press against a server with nowhere to store the answer.
    */
   auto_draft_replies?: boolean;
+  /** db/0117: prepare me before meetings. Same posture as the mail switch. */
+  auto_meeting_prep?: boolean;
   /**
    * Profile context (db/0080): what the person does + their own words, and
    * the CONSENT flag that lets the assistant see the two texts at ask time.

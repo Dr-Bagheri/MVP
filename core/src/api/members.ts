@@ -150,6 +150,8 @@ export interface MeRecord extends MemberRecord {
    * feature that arrives switched on.
    */
   auto_draft_replies?: boolean;
+  /** db/0117: "prepare me before meetings". Same posture, same default. */
+  auto_meeting_prep?: boolean;
   /**
    * Profile context (db/0080, user directive 2026-08-22): what the person
    * does and what they told us about themselves, plus the CONSENT flag —
@@ -398,6 +400,7 @@ export function createMembersRepo(db: Db) {
         assistant_instructions?: string | null | undefined;
         post_call_brief?: boolean | undefined;
         auto_draft_replies?: boolean | undefined;
+        auto_meeting_prep?: boolean | undefined;
       },
     ): Promise<MeRecord> {
       if (!(await hasAssistantPrefs(db))) {
@@ -422,7 +425,8 @@ export function createMembersRepo(db: Db) {
       }
       if (language === undefined && length === undefined
         && instructions === undefined && patch.post_call_brief === undefined
-        && patch.auto_draft_replies === undefined) {
+        && patch.auto_draft_replies === undefined
+        && patch.auto_meeting_prep === undefined) {
         throw new ValidationError("nothing to update", { code: "nothing_to_update" });
       }
       await db.withIdentity(identity, (tx: SqlTx) =>
@@ -432,7 +436,8 @@ export function createMembersRepo(db: Db) {
                   assistant_reply_length   = case when $4 then $5::text else assistant_reply_length end,
                   assistant_instructions   = case when $6 then $7::text else assistant_instructions end,
                   post_call_brief          = case when $8 then $9::boolean else post_call_brief end,
-                  auto_draft_replies       = case when $10 then $11::boolean else auto_draft_replies end
+                  auto_draft_replies       = case when $10 then $11::boolean else auto_draft_replies end,
+                  auto_meeting_prep        = case when $12 then $13::boolean else auto_meeting_prep end
             where id = $1`,
           [identity.userId,
             language !== undefined, language ?? null,
@@ -440,6 +445,7 @@ export function createMembersRepo(db: Db) {
             instructions !== undefined, instructions ?? null,
             patch.post_call_brief !== undefined, patch.post_call_brief ?? null,
             patch.auto_draft_replies !== undefined, patch.auto_draft_replies ?? null,
+            patch.auto_meeting_prep !== undefined, patch.auto_meeting_prep ?? null,
           ]));
       return this.me(identity);
     },
@@ -469,7 +475,7 @@ export function createMembersRepo(db: Db) {
                   u.preferred_model, u.locale, u.calendar, u.timezone,
                   ${withAutonomy ? "u.autonomy," : ""}
                   ${withAssistant
-                    ? "u.assistant_reply_language, u.assistant_reply_length, u.assistant_instructions, u.post_call_brief, u.auto_draft_replies,"
+                    ? "u.assistant_reply_language, u.assistant_reply_length, u.assistant_instructions, u.post_call_brief, u.auto_draft_replies, u.auto_meeting_prep,"
                     : ""}
                   ${withProfileCtx ? "u.job_title, u.about, u.assistant_context," : ""}
                   o.name as org_name
@@ -509,6 +515,7 @@ export function createMembersRepo(db: Db) {
               assistant_instructions: (row.assistant_instructions as string | null) ?? null,
               post_call_brief: row.post_call_brief !== false,
               auto_draft_replies: row.auto_draft_replies === true,
+              auto_meeting_prep: row.auto_meeting_prep === true,
             }
           : {}),
         ...(withProfileCtx

@@ -1727,6 +1727,7 @@ export const api = {
     post_call_brief?: boolean;
     /** db/0115 — the person's own "draft replies to my new mail" switch. */
     auto_draft_replies?: boolean;
+    auto_meeting_prep?: boolean;
   }): Promise<Me> {
     return bff<Me>("/api/me/assistant", {
       method: "PATCH",

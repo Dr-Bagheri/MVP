@@ -31,6 +31,7 @@ export function AssistantSettings() {
      — a different fact from "off", and rendered as absence rather than as a
      switch that would lie about its state. */
   const [autoDraft, setAutoDraft] = useState<boolean | null>(null);
+  const [meetingPrep, setMeetingPrep] = useState<boolean | null>(null);
   const [prefsReady, setPrefsReady] = useState(false);
   const [digest, setDigest] = useState<{ enabled: boolean; available: boolean } | null>(null);
   const [notReady, setNotReady] = useState(false);
@@ -46,6 +47,8 @@ export function AssistantSettings() {
         setSavedInstructions(me.assistant_instructions ?? "");
         setBrief(me.post_call_brief !== false);
         setAutoDraft(me.auto_draft_replies === undefined ? null : me.auto_draft_replies === true);
+      setMeetingPrep(me.auto_meeting_prep === undefined ? null : me.auto_meeting_prep === true);
+        setMeetingPrep(me.auto_meeting_prep === undefined ? null : me.auto_meeting_prep === true);
       }
     }).catch(() => undefined);
     void api.weeklyDigest()
@@ -226,6 +229,22 @@ export function AssistantSettings() {
                   how new is new, and the part people assume wrongly — that
                   something might go out without them */}
               <p className="mt-1 text-xs leading-5 text-fg-subtle">{t("autoDraftHint")}</p>
+            </>
+          ) : null}
+          {meetingPrep !== null ? (
+            <>
+              <label className="mt-4 flex items-center gap-2 text-sm text-fg">
+                <input
+                  type="checkbox"
+                  checked={meetingPrep}
+                  onChange={(e) => {
+                    setMeetingPrep(e.target.checked);
+                    void savePrefs({ auto_meeting_prep: e.target.checked });
+                  }}
+                />
+                {t("meetingPrep")}
+              </label>
+              <p className="mt-1 text-xs leading-5 text-fg-subtle">{t("meetingPrepHint")}</p>
             </>
           ) : null}
         </Card>

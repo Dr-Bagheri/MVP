@@ -309,7 +309,7 @@ export const EXECUTABLE_STEP_KINDS = [
  * nothing derived that list from a producer. It does now.
  */
 export const AGENT_CARD_KINDS = [
-  "post_call_brief", "weekly_digest", "workflow_result", "mail_draft",
+  "post_call_brief", "weekly_digest", "workflow_result", "mail_draft", "meeting_prep",
 ] as const;
 export type AgentCardKind = (typeof AGENT_CARD_KINDS)[number];
 

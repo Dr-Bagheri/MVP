@@ -1246,7 +1246,9 @@
           }
         ]
       }
-    }
+    },
+    "detailMeetingPrepHint": "While this is on, about half an hour before each meeting in your calendar a pre-read is written into your conversations.",
+    "detailMeetingPrepOn": "On — your next meeting will be prepared for you."
   },
   "agents": {
     "title": "Browse agents",
@@ -1563,7 +1565,9 @@
     "postCallBrief": "Post-call brief",
     "postCallBriefHint": "After each meeting the assistant leaves a brief card on your dashboard. Turning it off is yours alone.",
     "autoDraft": "Draft replies to new email",
-    "autoDraftHint": "Your connected mailbox is read every few minutes and new messages get a drafted reply. Nothing is ever sent without you pressing send."
+    "autoDraftHint": "Your connected mailbox is read every few minutes and new messages get a drafted reply. Nothing is ever sent without you pressing send.",
+    "meetingPrep": "Prepare me before meetings",
+    "meetingPrepHint": "About half an hour before each meeting, the assistant writes a pre-read from your own records."
   },
   "audit": {
     "codesOnly": "This page says what happened, not what was said. Question text, transcripts and conversation content never enter the audit trail.",
