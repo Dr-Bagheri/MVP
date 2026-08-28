@@ -1971,6 +1971,8 @@
     "ceiling_assist": "Assist",
     "ceiling_act": "Act",
     "triggerTitle": "Trigger",
+    "triggerSelect": "Select a trigger",
+    "triggerSelectHint": "A trigger is what starts the workflow.",
     "triggerChange": "Change",
     "triggerUnavailable": "This trigger cannot be configured on this server yet.",
     "trigger_manual": "Manually",
@@ -2083,12 +2085,7 @@
     "edit": "Edit “{name}”",
     "unpublished": "Unpublished",
     "versionN": "Version {n}",
-    "toggleFailed": "The change was not saved.",
-    "autoTitle": "Standing decisions",
-    "autoNote": "Only reversible kinds may apply without asking; everything else always waits for a human. Turning one on is a recorded decision under your name.",
-    "autoOn": "Auto — on",
-    "autoOff": "Off",
-    "autoFailed": "Not saved."
+    "toggleFailed": "The change was not saved."
   },
   "mail": {
     "sentLabel": "Sent",

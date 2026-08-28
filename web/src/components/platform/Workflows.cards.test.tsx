@@ -55,13 +55,35 @@ vi.mock("@/i18n/routing", () => ({
   usePathname: () => "/workflows",
 }));
 
+/**
+ * The identity the page reads. The builder's door is ADMIN-only, so the role
+ * is a variable here rather than a constant: the same page has to be asked
+ * both questions, and a fixture that can only answer one of them cannot tell
+ * a gate from a missing feature.
+ */
+let role = "member";
+
+const AUTHORED = [{
+  id: "a1", handle: "wf-a1", name: "پیگیری", description: "", enabled: false,
+  trigger_event: null, current_version: null, current_version_id: null,
+  versions: 0, created_at: "2026-08-28T10:00:00.000Z",
+}];
+
 vi.mock("@/api/client", () => ({
-  api: { workflows: async () => CARDS },
+  api: {
+    workflows: async () => CARDS,
+    me: async () => ({ role }),
+    authoredWorkflows: async () => AUTHORED,
+    autoApplyRules: async () => [],
+  },
 }));
 
 const { Workflows } = await import("./Workflows");
 
-beforeEach(cleanup);
+beforeEach(() => {
+  cleanup();
+  role = "member";
+});
 
 describe("the workflows list", () => {
   it("renders one card per template, with the WHOLE card as the link", async () => {
@@ -95,5 +117,25 @@ describe("the workflows list", () => {
     await act(async () => { render(<Workflows />); });
     const grid = screen.getAllByRole("link")[0]!.parentElement!;
     expect(within(grid).queryAllByRole("button")).toEqual([]);
+  });
+
+  /**
+   * The builder's door, asked in both directions.
+   *
+   * A single "the admin sees it" assertion cannot distinguish a gate from a
+   * button that is simply always there — which is the version that ships a
+   * member a control the server will refuse. The member half is the question
+   * that has to answer NO.
+   */
+  it("shows the builder's door to admins and to nobody else", async () => {
+    await act(async () => { render(<Workflows />); });
+    expect(screen.queryByRole("button", { name: "ساخت گردش‌کار" })).toBeNull();
+    expect(screen.queryByText("گردش‌کارهای خودکار")).toBeNull();
+
+    cleanup();
+    role = "owner";
+    await act(async () => { render(<Workflows />); });
+    expect(screen.getByRole("button", { name: "ساخت گردش‌کار" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "ویرایش «پیگیری»" })).toBeTruthy();
   });
 });

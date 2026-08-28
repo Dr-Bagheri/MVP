@@ -1,79 +1,163 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { AuthoredWorkflow } from "@/api/types";
-import { Section } from "@/components/scaffold";
-import { Card, Chip, EmptyState } from "@/components/ui";
 import { SelectMenu } from "@/components/rowActions";
+import { IconArrowDown, IconArrowUp, IconClose, IconPlus, IconTrash } from "@/components/icons";
+import { digits } from "@/lib/format";
 import { notify } from "@/lib/notify";
 import {
-  AUTO_APPLY_ELIGIBLE,
+  EXECUTABLE_STEP_KINDS,
   WORKFLOW_EVENTS,
   WORKFLOW_PROPOSAL_KINDS,
+  WORKFLOW_STEP_KINDS,
+  WORKFLOW_TRIGGER_KINDS,
 } from "@echo/core/vocabulary";
 
 /**
- * M41 P5 — THE BUILDER: an admin authors and publishes a workflow without
- * touching SQL. Lives ON the Workflows page (user directive, 2026-08-27:
- * "everything in one place") — the parent gates rendering to admins, so
- * this component carries no refusal screen of its own.
+ * M41 P5 — THE BUILDER, as a composable editor (user directive, 2026-08-28:
+ * "give it structure way that can be played with like a puzzle and make
+ * another shape out of it").
  *
- * The editor is a structured FORM over the graph — steps as ordered cards,
- * each with its kind's own fields — not a canvas. That is a deliberate v1
- * shape: the VALIDATOR is the product here (publish refuses invalid graphs
- * naming the step and the rule, and this surface shows that sentence
- * verbatim), and a form cannot express anything the grammar forbids.
- * Validation lives in exactly one place, on the server; this component
- * never pre-judges a graph, because two validators is two opinions.
+ * The shape is the reference the user handed over: a centred modal with a
+ * TRIGGER selector card at the top, an ordered list of STEP cards under it,
+ * a `+` sitting ON the connector line between any two cards, and one Save
+ * at the foot. The previous version was a flat form appended to a page —
+ * every step was a row, the only way to add one was at the end, and nothing
+ * could be moved. A graph you cannot re-order is not a graph; it is a list.
+ *
+ * ── What this surface does NOT do ───────────────────────────────────────
+ * It never judges a graph. Composition rules (which binding resolves, which
+ * jump goes forward, whether `apply` is behind its `propose`) live in
+ * `core/src/api/workflow-graph.ts` and nowhere else — publish refuses,
+ * naming the step and the rule, and that sentence renders VERBATIM below.
+ * Two validators is two opinions, and the second one always goes stale.
+ *
+ * The one thing the editor DOES construct rather than ask for is
+ * `foreach.do`: the validator requires it to name the immediately following
+ * step, so the field is derived from the step's position and shown
+ * read-only. That is construction, not validation — there is exactly one
+ * legal value and making a person retype it after every re-order is how a
+ * puzzle stops being one.
+ *
+ * ── The top-right control ───────────────────────────────────────────────
+ * The reference puts a MODEL picker there. We have no per-workflow model
+ * field on the wire, and shipping a picker that writes nowhere would be a
+ * control that does nothing. The closest thing that is real is the version's
+ * `max_autonomy` ceiling — a per-version column the publish route reads — so
+ * that is what sits in that corner instead.
  */
 
-interface StepDraft {
+/* ── the draft ───────────────────────────────────────────────────────── */
+
+export interface StepDraft {
   id: string;
   kind: string;
   [key: string]: unknown;
 }
 
-const KINDS = ["search", "extract", "decide", "foreach", "ask", "propose", "wait", "apply", "notify"] as const;
 const SCOPES = ["calls", "transcript", "summaries", "directory"] as const;
 const SCHEMAS = ["topics_v1", "decisions_v1", "action_items_v1"] as const;
+const FETCH_KINDS = ["calendar_event", "mail_message"] as const;
+const DECIDE_OPS = ["gt", "gte", "lt", "lte", "eq", "ne", "contains"] as const;
+/** the four ops the validator requires a NUMBER on the left of */
+const NUMERIC_OPS: readonly string[] = ["gt", "gte", "lt", "lte"];
+const AUTONOMY = ["watch", "assist", "act"] as const;
 
-function starterSteps(): StepDraft[] {
-  /* the follow-ups starter: pinned in spirit to core's corpus FULL_GRAPH —
-     search → extract → decide → foreach(ask) → notify, no writes, so it
-     publishes under `assist` and runs on any org untouched */
-  return [
-    { id: "s1", kind: "search", scope: "calls", limit: 5 },
-    { id: "s2", kind: "extract", from: "{{s1}}", schema: "topics_v1" },
-    { id: "s3", kind: "decide", on: "s2.topics.length", gt: 0, then: "s4", else: "s6" },
-    { id: "s4", kind: "foreach", over: "{{s2.topics}}", max: 3, do: "s5" },
-    { id: "s5", kind: "ask", instruction: "دربارهٔ «{{s4.item}}» یک جملهٔ کوتاه بنویس." },
-    { id: "s6", kind: "notify", card: "workflow_result" },
-  ];
+/**
+ * The kinds the executor can actually run today, as a set. `fetch` is in the
+ * vocabulary and the validator accepts it, but it is NOT in
+ * `EXECUTABLE_STEP_KINDS` — the connector poller it needs is deferred. It
+ * stays offered here (it publishes; a version holding it is a real, legal
+ * version) with the consequence written on the card, because "the option is
+ * missing" and "the option exists and the server will refuse the run" are
+ * different facts and only one of them is true.
+ */
+const RUNNABLE = new Set<string>(EXECUTABLE_STEP_KINDS);
+
+/**
+ * Which triggers this build can actually SET. `patchWorkflow` carries one
+ * trigger field — `trigger_event` — so `manual` (no event) and `event` are
+ * configurable and `schedule`/`signal` are not: they exist in the run
+ * ledger's vocabulary because runs can arrive that way, not because this
+ * screen can arrange one. They are listed and disabled with the reason,
+ * rather than hidden, so the absence reads as "not yet" instead of "never
+ * thought of".
+ */
+const TRIGGER_SETTABLE: Record<string, boolean> = {
+  manual: true, event: true, schedule: false, signal: false,
+};
+
+/**
+ * The keys each kind owns — the client's promise not to send junk, mirroring
+ * `STEP_KEYS` in the validator. The server refuses an unknown key outright,
+ * so a drift here surfaces as a named refusal rather than a silent write.
+ */
+const OWNED_KEYS: Record<string, readonly string[]> = {
+  search: ["scope", "of", "limit"],
+  fetch: ["source_kind", "of"],
+  ask: ["instruction", "agent", "from", "web"],
+  extract: ["instruction", "agent", "from", "schema"],
+  decide: ["on", ...DECIDE_OPS, "then", "else"],
+  foreach: ["over", "max", "do"],
+  propose: ["proposal", "from", "call"],
+  apply: ["from"],
+  notify: ["card"],
+  wait: ["on"],
+};
+
+/** what a fresh step of each kind starts as — every required key present */
+function defaultsFor(kind: string): Record<string, unknown> {
+  switch (kind) {
+    case "search": return { scope: "calls", limit: 5 };
+    case "fetch": return { source_kind: "calendar_event" };
+    case "ask": return { instruction: "" };
+    case "extract": return { schema: "topics_v1" };
+    case "decide": return { on: "", gt: "0", then: "", else: "__end" };
+    case "foreach": return { max: 3 };
+    case "propose": return { proposal: WORKFLOW_PROPOSAL_KINDS[0] };
+    case "notify": return { card: "workflow_result" };
+    case "wait": return { on: "decision" };
+    default: return {};
+  }
 }
 
-function cleanStep(step: StepDraft): Record<string, unknown> {
-  /* only the keys this kind owns travel — an empty optional stays ABSENT,
-     because the validator refuses unknown keys and treats "" as a value */
-  const keep: Record<string, readonly string[]> = {
-    search: ["scope", "of", "limit"],
-    fetch: ["source_kind", "of"],
-    ask: ["instruction", "agent", "from"],
-    extract: ["instruction", "agent", "from", "schema"],
-    decide: ["on", "gt", "gte", "lt", "lte", "eq", "ne", "contains", "then", "else"],
-    foreach: ["over", "max", "do"],
-    propose: ["proposal", "from", "call"],
-    apply: ["from"],
-    notify: ["card"],
-    wait: ["on"],
-  };
+/** `s1`, `s2`, … — the smallest free number, so a delete frees its id */
+function nextId(steps: StepDraft[]): string {
+  const taken = new Set(steps.map((step) => step.id));
+  for (let n = 1; n <= steps.length + 1; n += 1) {
+    if (!taken.has(`s${n}`)) return `s${n}`;
+  }
+  return `s${steps.length + 1}`;
+}
+
+/**
+ * One step, reduced to what may travel: only the keys its kind owns, and an
+ * empty optional stays ABSENT — the validator refuses unknown keys and reads
+ * `""` as a value rather than as nothing.
+ *
+ * `next` is the step that follows in the array: `foreach.do` must name it,
+ * so it is written from position rather than carried in the draft.
+ */
+export function cleanStep(step: StepDraft, next?: StepDraft): Record<string, unknown> {
   const out: Record<string, unknown> = { id: step.id, kind: step.kind };
-  for (const key of keep[step.kind] ?? []) {
+  for (const key of OWNED_KEYS[step.kind] ?? []) {
+    if (step.kind === "foreach" && key === "do") {
+      if (next) out.do = next.id;
+      continue;
+    }
     const value = step[key];
-    if (value === undefined || value === "") continue;
-    if ((key === "limit" || key === "max" || key === "gt" || key === "gte"
-      || key === "lt" || key === "lte") && typeof value === "string") {
+    if (value === undefined || value === null || value === "") continue;
+    /* `web: false` is "no web", which is the same fact as an absent key —
+       and the absent key is the one that cannot be mistaken for a choice */
+    if (key === "web") {
+      if (value === true) out.web = true;
+      continue;
+    }
+    if (typeof value === "string"
+      && (key === "limit" || key === "max" || NUMERIC_OPS.includes(key))) {
       const n = Number(value);
       if (!Number.isNaN(n)) { out[key] = n; continue; }
     }
@@ -82,336 +166,785 @@ function cleanStep(step: StepDraft): Record<string, unknown> {
   return out;
 }
 
+/** the graph as the publish route wants it: `entry` is the first step's id */
+export function buildGraph(steps: StepDraft[]): { entry: string; steps: Record<string, unknown>[] } {
+  return {
+    entry: steps[0]?.id ?? "",
+    steps: steps.map((step, index) => cleanStep(step, steps[index + 1])),
+  };
+}
+
+/* ── binding values, split so a person picks a source and types a path ── */
+
+/** `{{s2.topics}}` → `{ source: "s2", path: "topics" }` (braces optional) */
+function splitBinding(raw: unknown, braced: boolean): { source: string; path: string } {
+  if (typeof raw !== "string" || raw.trim() === "") return { source: "", path: "" };
+  const trimmed = raw.trim();
+  const inner = braced
+    ? (/^\{\{\s*([^{}]+?)\s*\}\}$/.exec(trimmed)?.[1] ?? "")
+    : trimmed;
+  if (inner === "") return { source: "", path: "" };
+  const dot = inner.indexOf(".");
+  return dot < 0
+    ? { source: inner, path: "" }
+    : { source: inner.slice(0, dot), path: inner.slice(dot + 1) };
+}
+
+function joinBinding(source: string, path: string, braced: boolean): string | undefined {
+  if (source === "") return undefined;
+  const inner = path.trim() === "" ? source : `${source}.${path.trim()}`;
+  return braced ? `{{${inner}}}` : inner;
+}
+
+/**
+ * The follow-ups starter, pinned in spirit to core's own corpus graph:
+ * search → extract → decide → foreach(ask) → notify. No writes, so it
+ * publishes under `assist` and gives a first-time author something already
+ * shaped to take apart.
+ */
+function starterSteps(): StepDraft[] {
+  return [
+    { id: "s1", kind: "search", scope: "calls", limit: 5 },
+    { id: "s2", kind: "extract", from: "{{s1}}", schema: "topics_v1" },
+    { id: "s3", kind: "decide", on: "s2.topics.length", gt: "0", then: "s4", else: "s6" },
+    { id: "s4", kind: "foreach", over: "{{s2.topics}}", max: 3, do: "s5" },
+    { id: "s5", kind: "ask", instruction: "دربارهٔ «{{s4.item}}» یک جملهٔ کوتاه بنویس." },
+    { id: "s6", kind: "notify", card: "workflow_result" },
+  ];
+}
+
+/* ── the modal ───────────────────────────────────────────────────────── */
+
 export function WorkflowBuilder({
-  epoch = 0,
-  onChanged,
+  workflow = null,
+  onClose,
+  onSaved,
 }: {
-  /** bump to refetch the authored list (a starter install lands one) */
-  epoch?: number;
-  /** the engine catalogue changed — the parent refreshes its own lists */
-  onChanged?: () => void;
+  /** the row being edited; `null` opens a brand-new workflow */
+  workflow?: AuthoredWorkflow | null;
+  onClose: () => void;
+  /** the catalogue changed — the page behind refetches its own list */
+  onSaved?: () => void;
 }) {
   const t = useTranslations("builder");
-  const [list, setList] = useState<AuthoredWorkflow[] | null>(null);
-  const [selected, setSelected] = useState<AuthoredWorkflow | null>(null);
-  const [steps, setSteps] = useState<StepDraft[]>([]);
+  const locale = useLocale();
+
+  const [name, setName] = useState(workflow?.name ?? "");
+  const [description, setDescription] = useState("");
+  const [trigger, setTrigger] = useState<string>(
+    workflow ? (workflow.trigger_event ? "event" : "manual") : "");
+  const [event, setEvent] = useState<string>(workflow?.trigger_event ?? WORKFLOW_EVENTS[0]);
+  const [enabled, setEnabled] = useState(workflow?.enabled ?? false);
   const [maxAutonomy, setMaxAutonomy] = useState("assist");
-  const [newName, setNewName] = useState("");
+  const [steps, setSteps] = useState<StepDraft[]>([]);
+  /** the trigger menu is OPEN; closed, the section is one selector card */
+  const [picking, setPicking] = useState(false);
   const [busy, setBusy] = useState(false);
   /** the server's refusal, verbatim — it names the step and the rule */
-  const [publishError, setPublishError] = useState<string | null>(null);
-  const [rules, setRules] = useState<{ kind: string; allowed: boolean }[]>([]);
+  const [refusal, setRefusal] = useState<string | null>(null);
+  /**
+   * The row this modal is writing to. It starts as the edited workflow and
+   * becomes the CREATED one after the first save, so a publish refusal
+   * followed by a fix publishes into the same workflow instead of leaving a
+   * trail of empty twins behind every failed attempt.
+   */
+  const created = useRef<string | null>(workflow?.id ?? null);
+  const savedName = useRef(workflow?.name ?? "");
 
   useEffect(() => {
-    void api.authoredWorkflows().then(setList).catch(() => setList([]));
-    void api.autoApplyRules().then(setRules).catch(() => setRules([]));
-  }, [epoch]);
-
-  async function open(workflow: AuthoredWorkflow) {
-    setSelected(workflow);
-    setPublishError(null);
-    if (workflow.current_version_id) {
-      try {
-        const { graph, max_autonomy } = await api.workflowGraph(workflow.id);
+    if (!workflow?.current_version_id) return;
+    let live = true;
+    void api.workflowGraph(workflow.id)
+      .then(({ graph, max_autonomy }) => {
+        if (!live) return;
         const parsed = graph as { steps?: StepDraft[] };
         setSteps(parsed.steps ?? []);
         setMaxAutonomy(max_autonomy);
-        return;
-      } catch { /* fall through to the starter */ }
-    }
-    setSteps(starterSteps());
-    setMaxAutonomy("assist");
-  }
+      })
+      .catch(() => { /* an unreadable version leaves an empty canvas, not a lie */ });
+    return () => { live = false; };
+  }, [workflow]);
 
-  async function create() {
-    if (busy || newName.trim() === "") return;
-    setBusy(true);
-    try {
-      const workflow = await api.createAuthoredWorkflow({ name: newName.trim() });
-      setNewName("");
-      setList(await api.authoredWorkflows());
-      await open(workflow);
-    } catch {
-      notify(t("createFailed"), "warn");
-    } finally {
-      setBusy(false);
-    }
-  }
+  useEffect(() => {
+    const onKey = (keyEvent: KeyboardEvent) => {
+      /* a dropdown inside the editor listens for Escape too; closing the
+         whole editor because someone dismissed a select would throw away
+         everything they had arranged */
+      if (keyEvent.key !== "Escape") return;
+      if (document.querySelector('[role="listbox"]')) return;
+      onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
-  async function publish() {
-    if (busy || !selected) return;
-    setBusy(true);
-    setPublishError(null);
-    try {
-      const graph = { entry: steps[0]?.id ?? "s1", steps: steps.map(cleanStep) };
-      const { version } = await api.publishWorkflow(selected.id, { graph, max_autonomy: maxAutonomy });
-      notify(t("published", { version: String(version) }));
-      setList(await api.authoredWorkflows());
-      onChanged?.();
-    } catch (cause) {
-      /* the refusal names the step and the rule — core's sentence IS the
-         diagnostic, so it renders verbatim rather than paraphrased */
-      const detail = (cause as { detail?: string; message?: string });
-      setPublishError(detail.detail || detail.message || t("publishFailed"));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function toggleEnabled(workflow: AuthoredWorkflow) {
-    if (busy) return;
-    setBusy(true);
-    try {
-      await api.patchWorkflow(workflow.id, { enabled: !workflow.enabled });
-      setList(await api.authoredWorkflows());
-      onChanged?.();
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function setTrigger(workflow: AuthoredWorkflow, value: string) {
-    await api.patchWorkflow(workflow.id, { trigger_event: value === "" ? null : value });
-    setList(await api.authoredWorkflows());
-    onChanged?.();
-  }
+  /* ── the puzzle moves ───────────────────────────────────────────────── */
 
   function patchStep(index: number, key: string, value: unknown) {
     setSteps((prev) => prev.map((step, i) => (i === index ? { ...step, [key]: value } : step)));
   }
-  function addStep() {
-    setSteps((prev) => [...prev, { id: `s${prev.length + 1}`, kind: "search", scope: "calls" }]);
+
+  /** a new kind means a new set of fields; only the id survives */
+  function changeKind(index: number, kind: string) {
+    setSteps((prev) => prev.map((step, i) => (
+      i === index ? { id: step.id, kind, ...defaultsFor(kind) } : step)));
   }
+
+  function insertStep(at: number) {
+    setSteps((prev) => {
+      const fresh: StepDraft = { id: nextId(prev), kind: "search", ...defaultsFor("search") };
+      return [...prev.slice(0, at), fresh, ...prev.slice(at)];
+    });
+  }
+
+  function moveStep(index: number, by: -1 | 1) {
+    setSteps((prev) => {
+      const to = index + by;
+      if (to < 0 || to >= prev.length) return prev;
+      const copy = [...prev];
+      const [moved] = copy.splice(index, 1);
+      copy.splice(to, 0, moved!);
+      return copy;
+    });
+  }
+
   function removeStep(index: number) {
     setSteps((prev) => prev.filter((_, i) => i !== index));
   }
 
-  const field = (index: number, key: string, placeholder: string, dirLtr = false) => (
-    <input
-      className="input h-8 min-h-0 py-0 text-xs"
-      dir={dirLtr ? "ltr" : undefined}
-      placeholder={placeholder}
-      value={String(steps[index]?.[key] ?? "")}
-      onChange={(event) => patchStep(index, key, event.target.value)}
-    />
+  /* ── saving ─────────────────────────────────────────────────────────── */
+
+  async function save() {
+    if (busy) return;
+    setBusy(true);
+    setRefusal(null);
+    try {
+      let target = created.current;
+      if (target === null) {
+        const row = await api.createAuthoredWorkflow(
+          description.trim() === "" ? { name } : { name, description });
+        target = row.id;
+        created.current = target;
+        savedName.current = row.name;
+      } else if (name.trim() !== savedName.current) {
+        await api.patchWorkflow(target, { name });
+        savedName.current = name.trim();
+      }
+      const { version } = await api.publishWorkflow(target, {
+        graph: buildGraph(steps),
+        max_autonomy: maxAutonomy,
+      });
+      await api.patchWorkflow(target, {
+        enabled,
+        /* an unanswered trigger question SAYS nothing rather than saying
+           "manual" on the author's behalf */
+        ...(trigger === "" ? {} : { trigger_event: trigger === "event" ? event : null }),
+      });
+      notify(t("savedV", { version: digits(version, locale) }));
+      onSaved?.();
+      onClose();
+    } catch (cause) {
+      const detail = cause as { detail?: string; message?: string };
+      setRefusal(detail.detail || detail.message || t("saveFailed"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /* ── small render helpers ───────────────────────────────────────────── */
+
+  const label = (text: string, children: ReactNode) => (
+    <label className="block">
+      <span className="mb-1 block text-[11px] font-medium text-fg-subtle">{text}</span>
+      {children}
+    </label>
   );
 
-  return (
-    <Section title={t("title")}>
-      <p className="-mt-2 mb-4 text-sm leading-6 text-fg-muted">{t("subtitle")}</p>
+  const textField = (
+    index: number, key: string, text: string,
+    opts: { ltr?: boolean; placeholder?: string; numeric?: boolean } = {},
+  ) => label(text, (
+    <input
+      className="input text-xs"
+      dir={opts.ltr ? "ltr" : undefined}
+      inputMode={opts.numeric ? "numeric" : undefined}
+      placeholder={opts.placeholder}
+      value={String(steps[index]?.[key] ?? "")}
+      onChange={(changeEvent) => patchStep(index, key, changeEvent.target.value)}
+    />
+  ));
 
-      {/* ── the list ──────────────────────────────────────────────────── */}
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <input
-          className="input h-9 min-h-0 w-56 py-0 text-sm"
-          placeholder={t("newName")}
-          value={newName}
-          onChange={(event) => setNewName(event.target.value)}
-          onKeyDown={(event) => { if (event.key === "Enter") void create(); }}
-        />
-        <button className="btn-secondary h-9 min-h-0 px-3 text-sm" disabled={busy} onClick={() => void create()}>
-          {t("create")}
-        </button>
+  const select = (
+    index: number, key: string, text: string,
+    options: { value: string; label: string; disabled?: boolean }[],
+    fallback = "",
+  ) => label(text, (
+    <SelectMenu
+      className="text-xs"
+      ariaLabel={`${text} — ${steps[index]?.id ?? ""}`}
+      value={String(steps[index]?.[key] ?? fallback)}
+      onChange={(value: string) => patchStep(index, key, value)}
+      options={options}
+    />
+  ));
+
+  /**
+   * A binding, as two halves a person can actually answer: WHICH earlier
+   * step (offered, never remembered) and WHICH field of it (typed, because
+   * the shapes live in the server's schema registry and a copy of them here
+   * would be a second spelling that rots).
+   *
+   * `braced` is false for `decide.on`, which the grammar takes as a bare
+   * path — the same two halves, one less pair of braces.
+   */
+  const bindingField = (
+    index: number, key: string, text: string, braced = true,
+  ) => {
+    const step = steps[index];
+    if (!step) return null;
+    const { source, path } = splitBinding(step[key], braced);
+    const sources = [
+      { value: "", label: t("bindingNone") },
+      { value: "trigger", label: t("bindingTrigger") },
+      ...steps.slice(0, index).map((earlier) => ({
+        value: earlier.id,
+        label: t("bindingStep", { id: earlier.id, kind: t(`kind_${earlier.kind}`) }),
+      })),
+    ];
+    const composed = joinBinding(source, path, braced);
+    return (
+      <div className="grid gap-2 sm:grid-cols-2">
+        {label(text, (
+          <SelectMenu
+            className="text-xs"
+            ariaLabel={`${text} — ${step.id}`}
+            value={source}
+            onChange={(value: string) => patchStep(index, key, joinBinding(value, path, braced) ?? "")}
+            options={sources}
+          />
+        ))}
+        {label(t("bindingPath"), (
+          <input
+            className="input text-xs"
+            dir="ltr"
+            placeholder={t("bindingPathHint")}
+            value={path}
+            onChange={(changeEvent) =>
+              patchStep(index, key, joinBinding(source, changeEvent.target.value, braced) ?? "")}
+          />
+        ))}
+        {composed ? (
+          <p dir="ltr" className="font-mono text-[11px] text-fg-subtle sm:col-span-2">{composed}</p>
+        ) : null}
       </div>
+    );
+  };
 
-      {list === null ? null : list.length === 0 ? (
-        <Card className="mb-4"><EmptyState text={t("empty")} /></Card>
-      ) : (
-        <ul className="mb-6 divide-y divide-border rounded-lg border border-border bg-surface">
-          {list.map((workflow) => (
-            <li key={workflow.id} className="flex flex-wrap items-center gap-3 px-4 py-2.5">
-              <button
-                type="button"
-                className="min-w-0 flex-1 truncate text-start text-sm font-medium text-fg hover:text-accent"
-                onClick={() => void open(workflow)}
-              >
-                {workflow.name}
-              </button>
-              <Chip tone={workflow.current_version === null ? "warning" : "success"}>
-                {workflow.current_version === null
-                  ? t("unpublished")
-                  : t("versionN", { n: String(workflow.current_version) })}
-              </Chip>
-              {/* the EVENT trigger — none, or the shipped fact */}
-              <SelectMenu
-                className="h-8 min-h-0 w-44 py-0 text-xs"
-                ariaLabel={t("trigger")}
-                value={workflow.trigger_event ?? ""}
-                onChange={(value: string) => void setTrigger(workflow, value)}
-                options={[
-                  { value: "", label: t("triggerNone") },
-                  /* core's own list — one spelling, no mirror to drift */
-                  ...WORKFLOW_EVENTS.map((event) => ({
-                    value: event, label: t("triggerSummarized"),
-                  })),
-                ]}
-              />
-              <button
-                type="button"
-                className={`tap h-8 rounded-full border px-3 text-xs ${workflow.enabled
-                  ? "border-accent bg-accent-soft text-accent"
-                  : "border-border text-fg-muted"}`}
-                disabled={busy}
-                onClick={() => void toggleEnabled(workflow)}
-              >
-                {workflow.enabled ? t("enabled") : t("disabled")}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+  /** a jump target: any LATER step, or the end of the workflow */
+  const branchField = (index: number, key: "then" | "else") => select(
+    index, key, t(`f_${key}`),
+    [
+      { value: "", label: t("branchNone") },
+      ...steps.slice(index + 1).map((later) => ({
+        value: later.id,
+        label: t("bindingStep", { id: later.id, kind: t(`kind_${later.kind}`) }),
+      })),
+      { value: "__end", label: t("endLabel") },
+    ],
+  );
 
-      {/* ── the editor ────────────────────────────────────────────────── */}
-      {selected ? (
-        <Card className="mb-6">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-            <h2 className="h-section">{t("editing", { name: selected.name })}</h2>
-            <div className="flex items-center gap-2">
-              <SelectMenu
-                className="h-8 min-h-0 w-40 py-0 text-xs"
-                ariaLabel={t("ceiling")}
-                value={maxAutonomy}
-                onChange={setMaxAutonomy}
-                options={[
-                  { value: "watch", label: t("ceiling_watch") },
-                  { value: "assist", label: t("ceiling_assist") },
-                  { value: "act", label: t("ceiling_act") },
-                ]}
-              />
-              <button className="btn-primary h-8 min-h-0 px-3 text-xs" disabled={busy} onClick={() => void publish()}>
-                {t("publish")}
-              </button>
+  function stepFields(step: StepDraft, index: number) {
+    switch (step.kind) {
+      case "search":
+        return (
+          <>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {select(index, "scope", t("f_scope"),
+                SCOPES.map((scope) => ({ value: scope, label: t(`scope_${scope}`) })), "calls")}
+              {textField(index, "limit", t("f_limit"), { ltr: true, numeric: true })}
             </div>
-          </div>
-
-          {publishError ? (
-            /* the validator's sentence, verbatim — it names step + rule */
-            <p role="alert" dir="ltr" className="mb-3 rounded-lg bg-danger/10 px-3 py-2 font-mono text-xs text-danger">
-              {publishError}
-            </p>
-          ) : null}
-
-          <ol className="space-y-2">
-            {steps.map((step, index) => (
-              <li key={index} className="rounded-lg border border-border bg-surface-2/40 p-3">
-                <div className="mb-2 flex flex-wrap items-center gap-2">
-                  <span className="font-mono text-xs text-fg-subtle">{index + 1}</span>
-                  <input
-                    className="input h-8 min-h-0 w-20 py-0 font-mono text-xs"
-                    dir="ltr"
-                    aria-label={t("stepId")}
-                    value={step.id}
-                    onChange={(event) => patchStep(index, "id", event.target.value)}
-                  />
-                  <SelectMenu
-                    className="h-8 min-h-0 w-32 py-0 text-xs"
-                    ariaLabel={t("stepKind")}
-                    value={step.kind}
-                    onChange={(value: string) => patchStep(index, "kind", value)}
-                    options={KINDS.map((kind) => ({ value: kind, label: kind }))}
-                  />
-                  <button
-                    type="button"
-                    className="ms-auto text-xs text-fg-muted underline-offset-2 hover:text-danger hover:underline"
-                    onClick={() => removeStep(index)}
-                  >
-                    {t("removeStep")}
-                  </button>
-                </div>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {step.kind === "search" ? (<>
-                    <SelectMenu className="h-8 min-h-0 py-0 text-xs" ariaLabel="scope"
-                      value={String(step.scope ?? "calls")}
-                      onChange={(value: string) => patchStep(index, "scope", value)}
-                      options={SCOPES.map((scope) => ({ value: scope, label: scope }))} />
-                    {field(index, "of", "of — {{trigger.call_id}}", true)}
-                  </>) : null}
-                  {step.kind === "extract" ? (<>
-                    <SelectMenu className="h-8 min-h-0 py-0 text-xs" ariaLabel="schema"
-                      value={String(step.schema ?? "topics_v1")}
-                      onChange={(value: string) => patchStep(index, "schema", value)}
-                      options={SCHEMAS.map((schema) => ({ value: schema, label: schema }))} />
-                    {field(index, "from", "from — {{s1}}", true)}
-                    {field(index, "instruction", t("instructionHint"))}
-                  </>) : null}
-                  {step.kind === "ask" ? (<>
-                    {field(index, "instruction", t("instructionHint"))}
-                    {field(index, "from", "from — {{s1}}", true)}
-                  </>) : null}
-                  {step.kind === "decide" ? (<>
-                    {field(index, "on", "on — s2.topics.length", true)}
-                    {field(index, "gt", "gt — 0", true)}
-                    {field(index, "then", "then — s4", true)}
-                    {field(index, "else", "else — s6 | __end", true)}
-                  </>) : null}
-                  {step.kind === "foreach" ? (<>
-                    {field(index, "over", "over — {{s2.topics}}", true)}
-                    {field(index, "max", "max — 3", true)}
-                    {field(index, "do", "do — s5", true)}
-                  </>) : null}
-                  {step.kind === "propose" ? (<>
-                    <SelectMenu className="h-8 min-h-0 py-0 text-xs" ariaLabel="proposal"
-                      value={String(step.proposal ?? "add_tags")}
-                      onChange={(value: string) => patchStep(index, "proposal", value)}
-                      options={WORKFLOW_PROPOSAL_KINDS.map((kind) => ({ value: kind, label: kind }))} />
-                    {field(index, "from", "from — {{s2.topics}}", true)}
-                    {field(index, "call", "call — {{trigger.call_id}}", true)}
-                  </>) : null}
-                  {step.kind === "apply" ? field(index, "from", "from — s3 (the propose)", true) : null}
-                  {step.kind === "wait" ? (
-                    <span className="text-xs text-fg-muted">{t("waitNote")}</span>
-                  ) : null}
-                  {step.kind === "notify" ? (
-                    <input className="input h-8 min-h-0 py-0 font-mono text-xs" dir="ltr" readOnly value="workflow_result" />
-                  ) : null}
-                </div>
-              </li>
+            {bindingField(index, "of", t("f_of"))}
+          </>
+        );
+      case "fetch":
+        return (
+          <>
+            {select(index, "source_kind", t("f_sourceKind"),
+              FETCH_KINDS.map((kind) => ({ value: kind, label: t(`source_${kind}`) })),
+              "calendar_event")}
+            {bindingField(index, "of", t("f_of"))}
+          </>
+        );
+      case "ask":
+        return (
+          <>
+            {label(t("f_instruction"), (
+              <textarea
+                className="input min-h-[88px] py-2 text-xs"
+                placeholder={t("instructionHint")}
+                value={String(step.instruction ?? "")}
+                onChange={(changeEvent) => patchStep(index, "instruction", changeEvent.target.value)}
+              />
             ))}
-          </ol>
-          <div className="mt-3 flex items-center gap-3">
-            <button className="btn-secondary h-8 min-h-0 px-3 text-xs" onClick={addStep}>
-              {t("addStep")}
-            </button>
-            <button
-              className="text-xs text-fg-muted underline-offset-2 hover:underline"
-              onClick={() => setSteps(starterSteps())}
-            >
-              {t("starter")}
-            </button>
-          </div>
-        </Card>
-      ) : null}
-
-      {/* ── the standing decisions (W13/W17) ─────────────────────────── */}
-      <Card>
-        <h2 className="h-section">{t("autoTitle")}</h2>
-        <p className="mt-1 text-sm leading-7 text-fg-muted">{t("autoNote")}</p>
-        <ul className="mt-3 space-y-2">
-          {AUTO_APPLY_ELIGIBLE.map((kind) => {
-            const rule = rules.find((r) => r.kind === kind);
-            const on = rule?.allowed === true;
-            return (
-              <li key={kind} className="flex items-center gap-3">
-                <span dir="ltr" className="font-mono text-xs text-fg">{kind}</span>
+            {bindingField(index, "from", t("f_from"))}
+            {textField(index, "agent", t("f_agent"), { ltr: true })}
+            {/* the internet option (M41, 2026-08-28): the SAME model with
+                OpenRouter's `:online` variant. It is legal on `ask` and on
+                nothing else — the validator refuses the key anywhere else —
+                so the control exists on exactly one kind of card. */}
+            <div className="rounded-lg border border-border bg-surface-2/40 p-2.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[11px] font-medium text-fg">{t("webLabel")}</span>
                 <button
                   type="button"
-                  className={`tap h-7 rounded-full border px-3 text-xs ${on
-                    ? "border-accent bg-accent-soft text-accent"
-                    : "border-border text-fg-muted"}`}
-                  disabled={busy}
-                  onClick={() => {
-                    void api.setAutoApplyRule(kind, !on)
-                      .then(() => api.autoApplyRules().then(setRules))
-                      .catch(() => notify(t("autoFailed"), "warn"));
-                  }}
+                  /* named by WHAT it toggles: a pressed button whose only
+                     accessible name is "Off" tells a screen reader nothing */
+                  aria-label={t("webLabel")}
+                  aria-pressed={step.web === true}
+                  className={`tap ms-auto h-7 rounded-full border px-3 text-[11px] ${
+                    step.web === true
+                      ? "border-accent bg-accent-soft text-accent"
+                      : "border-border text-fg-muted"}`}
+                  onClick={() => patchStep(index, "web", step.web !== true)}
                 >
-                  {on ? t("autoOn") : t("autoOff")}
+                  {step.web === true ? t("webOn") : t("webOff")}
                 </button>
-              </li>
-            );
-          })}
-        </ul>
-      </Card>
-    </Section>
+              </div>
+              <p className="mt-1 text-[11px] leading-5 text-fg-muted">{t("webHint")}</p>
+            </div>
+          </>
+        );
+      case "extract":
+        return (
+          <>
+            {select(index, "schema", t("f_schema"),
+              SCHEMAS.map((schema) => ({ value: schema, label: t(`schema_${schema}`) })),
+              "topics_v1")}
+            {bindingField(index, "from", t("f_from"))}
+            {label(t("f_instruction"), (
+              <textarea
+                className="input min-h-[64px] py-2 text-xs"
+                placeholder={t("instructionHint")}
+                value={String(step.instruction ?? "")}
+                onChange={(changeEvent) => patchStep(index, "instruction", changeEvent.target.value)}
+              />
+            ))}
+            {textField(index, "agent", t("f_agent"), { ltr: true })}
+          </>
+        );
+      case "decide": {
+        const op = DECIDE_OPS.find((candidate) => step[candidate] !== undefined) ?? "";
+        return (
+          <>
+            {bindingField(index, "on", t("f_on"), false)}
+            <div className="grid gap-2 sm:grid-cols-2">
+              {label(t("f_op"), (
+                <SelectMenu
+                  className="text-xs"
+                  ariaLabel={`${t("f_op")} — ${step.id}`}
+                  value={op}
+                  onChange={(value: string) => setSteps((prev) => prev.map((current, i) => {
+                    if (i !== index) return current;
+                    /* one operator at a time: the validator refuses two, and
+                       leaving the old key behind is exactly how you get two */
+                    const copy: StepDraft = { id: current.id, kind: current.kind };
+                    for (const [key, held] of Object.entries(current)) {
+                      if (!(DECIDE_OPS as readonly string[]).includes(key)) copy[key] = held;
+                    }
+                    if (value !== "") copy[value] = "";
+                    return copy;
+                  }))}
+                  options={[
+                    { value: "", label: t("opNone") },
+                    ...DECIDE_OPS.map((candidate) => ({
+                      value: candidate, label: t(`op_${candidate}`),
+                    })),
+                  ]}
+                />
+              ))}
+              {op === "" ? null : label(t("f_value"), (
+                <input
+                  className="input text-xs"
+                  dir="ltr"
+                  value={String(step[op] ?? "")}
+                  onChange={(changeEvent) => patchStep(index, op, changeEvent.target.value)}
+                />
+              ))}
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {branchField(index, "then")}
+              {branchField(index, "else")}
+            </div>
+          </>
+        );
+      }
+      case "foreach": {
+        const body = steps[index + 1];
+        return (
+          <>
+            {bindingField(index, "over", t("f_over"))}
+            <div className="grid gap-2 sm:grid-cols-2">
+              {textField(index, "max", t("f_max"), { ltr: true, numeric: true })}
+              {label(t("f_do"), (
+                <input
+                  className="input text-xs"
+                  dir="ltr"
+                  readOnly
+                  aria-label={`${t("f_do")} — ${step.id}`}
+                  value={body?.id ?? ""}
+                />
+              ))}
+            </div>
+            <p className="text-[11px] leading-5 text-fg-muted">
+              {body ? t("doDerived") : t("doMissing")}
+            </p>
+          </>
+        );
+      }
+      case "propose":
+        return (
+          <>
+            {select(index, "proposal", t("f_proposal"),
+              WORKFLOW_PROPOSAL_KINDS.map((kind) => ({
+                value: kind, label: t(`proposal_${kind}`),
+              })), WORKFLOW_PROPOSAL_KINDS[0])}
+            {bindingField(index, "from", t("f_from"))}
+            {bindingField(index, "call", t("f_call"))}
+          </>
+        );
+      case "apply": {
+        const proposals = steps.slice(0, index).filter((earlier) => earlier.kind === "propose");
+        return proposals.length === 0
+          ? <p className="text-[11px] leading-5 text-fg-muted">{t("applyNone")}</p>
+          : select(index, "from", t("f_applyFrom"), [
+            { value: "", label: t("branchNone") },
+            ...proposals.map((earlier) => ({
+              value: earlier.id,
+              label: t("bindingStep", { id: earlier.id, kind: t("kind_propose") }),
+            })),
+          ]);
+      }
+      case "notify":
+        return label(t("f_card"), (
+          <input className="input font-mono text-xs" dir="ltr" readOnly
+            aria-label={`${t("f_card")} — ${step.id}`} value="workflow_result" />
+        ));
+      case "wait":
+        return (
+          <p className="text-[11px] leading-5 text-fg-muted">{t("wait_decision")}</p>
+        );
+      default:
+        return null;
+    }
+  }
+
+  /** the connector line, with the `+` that inserts a step AT this position */
+  const connector = (at: number) => (
+    <div className="flex flex-col items-center">
+      <span aria-hidden className="h-3 w-px bg-border" />
+      <button
+        type="button"
+        aria-label={t("addStepAt", { position: digits(at + 1, locale) })}
+        title={t("addStep")}
+        className="tap grid h-7 w-7 place-items-center rounded-full border border-border bg-surface text-fg-muted transition-colors hover:border-accent hover:text-accent"
+        onClick={() => insertStep(at)}
+      >
+        <IconPlus width={12} height={12} />
+      </button>
+      <span aria-hidden className="h-3 w-px bg-border" />
+    </div>
+  );
+
+  const chosenTrigger = trigger === "" ? null : trigger;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 grid place-items-center bg-bg/70 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label={workflow ? t("titleEdit", { name: savedName.current }) : t("title")}
+    >
+      {/*
+        No backdrop-click close, deliberately: this is an editor holding
+        unsaved arrangement, and a stray click landing on the dim is not a
+        request to throw it away. The ✕ and Escape are the doors.
+      */}
+      <div className="flex max-h-[88dvh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl">
+        <header className="flex items-center gap-2 border-b border-border px-5 py-4">
+          <h2 className="min-w-0 flex-1 truncate text-base font-semibold text-fg">
+            {workflow ? t("titleEdit", { name: savedName.current }) : t("title")}
+          </h2>
+          {/* the reference's model picker slot — see the file header for why
+              the autonomy ceiling stands here instead */}
+          <SelectMenu
+            className="w-36 text-xs"
+            ariaLabel={t("ceiling")}
+            value={maxAutonomy}
+            onChange={setMaxAutonomy}
+            options={AUTONOMY.map((level) => ({ value: level, label: t(`ceiling_${level}`) }))}
+          />
+          <button
+            type="button"
+            aria-label={t("close")}
+            title={t("close")}
+            className="tap grid h-7 w-7 shrink-0 place-items-center rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg"
+            onClick={onClose}
+          >
+            <IconClose width={14} height={14} />
+          </button>
+        </header>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+          {label(t("nameLabel"), (
+            <input
+              className="input text-sm"
+              placeholder={t("namePlaceholder")}
+              value={name}
+              onChange={(changeEvent) => setName(changeEvent.target.value)}
+            />
+          ))}
+          {/* description travels only at CREATE: `patchWorkflow` on the
+              client carries no description field, and a box that silently
+              stops saving after the first save is worse than no box */}
+          {workflow === null ? (
+            <div className="mt-3">
+              {label(t("descriptionLabel"), (
+                <input
+                  className="input text-sm"
+                  placeholder={t("descriptionPlaceholder")}
+                  value={description}
+                  onChange={(changeEvent) => setDescription(changeEvent.target.value)}
+                />
+              ))}
+            </div>
+          ) : null}
+
+          {/* ── trigger ─────────────────────────────────────────────── */}
+          <h3 className="mt-6 text-xs font-semibold uppercase tracking-wide text-fg-subtle">
+            {t("triggerTitle")}
+          </h3>
+          {picking ? (
+            <ul className="mt-2 space-y-2">
+              {WORKFLOW_TRIGGER_KINDS.map((kind) => {
+                const settable = TRIGGER_SETTABLE[kind] === true;
+                return (
+                  <li key={kind}>
+                    <button
+                      type="button"
+                      disabled={!settable}
+                      className={`w-full rounded-xl border p-3 text-start transition-colors ${
+                        settable
+                          ? "border-border bg-surface-2/40 hover:border-accent"
+                          : "border-dashed border-border opacity-60"}`}
+                      onClick={() => { setTrigger(kind); setPicking(false); }}
+                    >
+                      <span className="block text-sm font-medium text-fg">{t(`trigger_${kind}`)}</span>
+                      <span className="mt-0.5 block text-xs leading-5 text-fg-muted">
+                        {t(`triggerHint_${kind}`)}
+                      </span>
+                      {/* the reason travels WITH the option: an unexplained
+                          disabled row reads as a broken control */}
+                      {settable ? null : (
+                        <span className="mt-1 block text-xs leading-5 text-warning">
+                          {t("triggerUnavailable")}
+                        </span>
+                      )}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : chosenTrigger === null ? (
+            /* the reference's empty selector card: one dashed target that
+               says what a trigger IS before asking which one */
+            <button
+              type="button"
+              className="mt-2 w-full rounded-xl border border-dashed border-border p-4 text-start transition-colors hover:border-accent"
+              onClick={() => setPicking(true)}
+            >
+              <span className="block text-sm font-medium text-fg">{t("triggerSelect")}</span>
+              <span className="mt-0.5 block text-xs leading-5 text-fg-muted">
+                {t("triggerSelectHint")}
+              </span>
+            </button>
+          ) : (
+            <div className="mt-2 rounded-xl border border-border bg-surface-2/40 p-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm font-medium text-fg">{t(`trigger_${chosenTrigger}`)}</span>
+                <button
+                  type="button"
+                  className="tap ms-auto h-7 rounded-full border border-border px-3 text-[11px] text-fg-muted hover:text-fg"
+                  onClick={() => setPicking(true)}
+                >
+                  {t("triggerChange")}
+                </button>
+              </div>
+              <p className="mt-0.5 text-xs leading-5 text-fg-muted">
+                {t(`triggerHint_${chosenTrigger}`)}
+              </p>
+              {chosenTrigger === "event" ? (
+                <div className="mt-3">
+                  {label(t("eventLabel"), (
+                    <SelectMenu
+                      className="text-xs"
+                      ariaLabel={t("eventLabel")}
+                      value={event}
+                      onChange={setEvent}
+                      options={WORKFLOW_EVENTS.map((name_) => ({
+                        value: name_, label: t("event_call_summarized"),
+                      }))}
+                    />
+                  ))}
+                </div>
+              ) : null}
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <span className="text-[11px] font-medium text-fg">{t("enabledLabel")}</span>
+                <button
+                  type="button"
+                  aria-label={t("enabledLabel")}
+                  aria-pressed={enabled}
+                  className={`tap ms-auto h-7 rounded-full border px-3 text-[11px] ${
+                    enabled
+                      ? "border-accent bg-accent-soft text-accent"
+                      : "border-border text-fg-muted"}`}
+                  onClick={() => setEnabled(!enabled)}
+                >
+                  {enabled ? t("enabled") : t("disabled")}
+                </button>
+                <p className="w-full text-[11px] leading-5 text-fg-muted">{t("enabledHint")}</p>
+              </div>
+            </div>
+          )}
+
+          {/* ── steps ───────────────────────────────────────────────── */}
+          <div className="mt-6 flex items-center gap-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-fg-subtle">
+              {t("stepsTitle")}
+            </h3>
+            {steps.length === 0 ? (
+              <button
+                type="button"
+                className="ms-auto text-[11px] text-fg-muted underline-offset-2 hover:text-accent hover:underline"
+                onClick={() => setSteps(starterSteps())}
+              >
+                {t("starter")}
+              </button>
+            ) : null}
+          </div>
+
+          {steps.length === 0 ? (
+            <div className="mt-2 rounded-xl border border-dashed border-border p-4 text-center">
+              <p className="text-xs leading-5 text-fg-muted">{t("stepsEmpty")}</p>
+              <button
+                type="button"
+                className="btn-secondary mt-3 h-9 min-h-0 px-3 text-xs"
+                onClick={() => insertStep(0)}
+              >
+                {t("addStep")}
+              </button>
+            </div>
+          ) : (
+            <ol className="mt-2">
+              {steps.map((step, index) => (
+                /* position AND id: the id alone collides the moment someone
+                   types over one to match another — a transient duplicate key
+                   is a React warning and a mis-rendered card, on the one
+                   field this editor invites people to rewrite */
+                <li key={`${index}:${step.id}`}>
+                  {connector(index)}
+                  <div className="rounded-xl border border-border bg-surface-2/40 p-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-surface text-[11px] text-fg-subtle">
+                        {digits(index + 1, locale)}
+                      </span>
+                      <input
+                        className="input w-24 font-mono text-xs"
+                        dir="ltr"
+                        aria-label={`${t("stepId")} — ${step.id}`}
+                        value={step.id}
+                        onChange={(changeEvent) => patchStep(index, "id", changeEvent.target.value)}
+                      />
+                      <div className="w-40">
+                        <SelectMenu
+                          className="text-xs"
+                          ariaLabel={`${t("stepKind")} — ${step.id}`}
+                          value={step.kind}
+                          onChange={(value: string) => changeKind(index, value)}
+                          options={WORKFLOW_STEP_KINDS.map((kind) => ({
+                            value: kind, label: t(`kind_${kind}`),
+                          }))}
+                        />
+                      </div>
+                      <div className="ms-auto flex items-center gap-1">
+                        <button
+                          type="button"
+                          aria-label={`${t("moveUp")} — ${step.id}`}
+                          disabled={index === 0}
+                          className="tap grid h-7 w-7 place-items-center rounded-md text-fg-muted hover:bg-surface hover:text-fg disabled:opacity-30"
+                          onClick={() => moveStep(index, -1)}
+                        >
+                          <IconArrowUp width={14} height={14} />
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={`${t("moveDown")} — ${step.id}`}
+                          disabled={index === steps.length - 1}
+                          className="tap grid h-7 w-7 place-items-center rounded-md text-fg-muted hover:bg-surface hover:text-fg disabled:opacity-30"
+                          onClick={() => moveStep(index, 1)}
+                        >
+                          <IconArrowDown width={14} height={14} />
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={`${t("removeStep")} — ${step.id}`}
+                          className="tap grid h-7 w-7 place-items-center rounded-md text-fg-muted hover:bg-danger/10 hover:text-danger"
+                          onClick={() => removeStep(index)}
+                        >
+                          <IconTrash width={14} height={14} />
+                        </button>
+                      </div>
+                    </div>
+                    <p className="mt-1 text-[11px] leading-5 text-fg-muted">
+                      {t(`kindHint_${step.kind}`)}
+                    </p>
+                    {RUNNABLE.has(step.kind) ? null : (
+                      <p className="mt-2 rounded-md bg-warning/10 px-2 py-1.5 text-[11px] leading-5 text-warning">
+                        {t("notRunnable")}
+                      </p>
+                    )}
+                    <div className="mt-3 space-y-2">{stepFields(step, index)}</div>
+                  </div>
+                </li>
+              ))}
+              <li>{connector(steps.length)}</li>
+            </ol>
+          )}
+        </div>
+
+        <footer className="border-t border-border px-5 py-4">
+          {refusal ? (
+            /* core's own sentence — it names the step and the rule, and a
+               paraphrase would name neither */
+            <p role="alert" dir="ltr"
+              className="mb-3 rounded-lg bg-danger/10 px-3 py-2 font-mono text-[11px] leading-5 text-danger">
+              {refusal}
+            </p>
+          ) : null}
+          <div className="flex items-center justify-end gap-2">
+            <button type="button" className="btn-ghost h-9 min-h-0 px-3 text-sm" onClick={onClose}>
+              {t("close")}
+            </button>
+            <button
+              type="button"
+              className="btn-primary h-9 min-h-0 px-4 text-sm"
+              disabled={busy}
+              onClick={() => void save()}
+            >
+              {busy ? t("saving") : t("save")}
+            </button>
+          </div>
+        </footer>
+      </div>
+    </div>
   );
 }
