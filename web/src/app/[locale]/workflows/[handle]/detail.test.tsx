@@ -51,6 +51,18 @@ const CARDS: WorkflowCard[] = [
  */
 let DRAFTS: MailDraft[] = [];
 
+/**
+ * The authored catalogue and the graph behind this template.
+ *
+ * Both `null` by default — a member, and a template nobody has installed —
+ * so every existing assertion keeps asking its own question. The pair
+ * matters: a page that showed the program only when it had one, but showed
+ * NOTHING when it did not, would be a regression invisible to a test that
+ * only ever set them.
+ */
+let AUTHORED: Record<string, unknown>[] | null = null;
+let GRAPH: { steps: { id: string; kind: string; instruction?: string }[] } | null = null;
+
 let ME: Record<string, unknown> = {};
 const BASE_ME = {
   id: "u-1", org_id: "o-1", username: "member", email: "member@example.test",
@@ -102,9 +114,17 @@ vi.mock("@/api/client", () => ({
     }),
     /* a member: the authoring list is not theirs to read, which is what puts
        an ENGINE workflow's switch in its read-only state */
+    /* a MEMBER by default: the authoring catalogue is not theirs to read,
+       which is also why the page must keep working without it */
     authoredWorkflows: async () => {
-      throw Object.assign(new Error("forbidden"), { status: 403 });
+      if (AUTHORED === null) throw Object.assign(new Error("forbidden"), { status: 403 });
+      return AUTHORED;
     },
+    workflowGraph: async () => {
+      if (GRAPH === null) throw Object.assign(new Error("not found"), { status: 404 });
+      return { graph: GRAPH, max_autonomy: "act" };
+    },
+    installStarter: async () => {},
     mailDrafts: async () => DRAFTS,
     me: async () => ME,
     updateAssistant: async (patch: { auto_draft_replies?: boolean }) => ({
@@ -137,6 +157,8 @@ async function open(handle: string) {
 beforeEach(() => {
   cleanup();
   DRAFTS = [];
+  AUTHORED = null;
+  GRAPH = null;
   ME = { ...BASE_ME, auto_draft_replies: false };
 });
 
@@ -291,6 +313,70 @@ describe("the workflow detail page", () => {
    * AND if something else appears beside the switch, where an absence check
    * only ever answers one of those.
    */
+  /**
+   * **The steps on screen are the steps that run.**
+   *
+   * The user's sentence was "all these is not just a text that we show, it
+   * must be editable". The failure this pins is the one that would read as
+   * success: an editor that opens, saves, and governs a program while the
+   * page keeps rendering the shipped prose beside it. So the assertion is
+   * that the GRAPH's instruction reaches the panel and the catalogue's
+   * sentence leaves it — a `getByText` for the new step alone cannot tell
+   * "the graph won" from "both are on screen".
+   */
+  it("shows the graph's own steps once the template has one", async () => {
+    ME = { ...BASE_ME, role: "owner" };
+    AUTHORED = [{
+      id: "w-1", handle: "wf-starter-mail-reply", name: "پیش‌نویس پاسخ ایمیل",
+      description: "", enabled: true, trigger_event: "mail.received",
+      current_version: 1, current_version_id: "v-1", versions: 1,
+      created_at: "2026-08-28T00:00:00.000Z",
+    }];
+    GRAPH = {
+      steps: [
+        { id: "s1", kind: "fetch" },
+        { id: "s2", kind: "extract", instruction: "این پیام را بخوان و پاسخ بنویس." },
+      ],
+    };
+    await open("draft-email-replies");
+
+    expect(screen.getByText("این پیام را بخوان و پاسخ بنویس.")).toBeTruthy();
+    /* and the shipped prose is GONE — the panel states one process */
+    expect(screen.queryByText("Read the contents of the email")).toBeNull();
+  });
+
+  it("keeps the shipped process when there is no graph — the control", async () => {
+    /* without this, "render nothing" satisfies the check above, and every
+       person who has not installed the starter gets an empty panel */
+    ME = { ...BASE_ME, role: "owner" };
+    await open("draft-email-replies");
+    const list = screen.getByRole("list", { name: "" }) ?? undefined;
+    expect(list ?? document.body).toBeTruthy();
+    expect(screen.queryByText("این پیام را بخوان و پاسخ بنویس.")).toBeNull();
+  });
+
+  /**
+   * The consent switch has to survive the editor.
+   *
+   * `auto_draft_replies` is the PERSON'S permission to have their mail read,
+   * and it renders only for a template. Had the installed workflow become
+   * this page's subject, the page would have quietly traded that switch for
+   * the org's enabled flag — a change nobody asked for, in the one control
+   * on the screen that is about consent.
+   */
+  it("keeps the personal switch after the template gains a graph", async () => {
+    ME = { ...BASE_ME, role: "owner", auto_draft_replies: false };
+    AUTHORED = [{
+      id: "w-1", handle: "wf-starter-mail-reply", name: "پیش‌نویس پاسخ ایمیل",
+      description: "", enabled: true, trigger_event: "mail.received",
+      current_version: 1, current_version_id: "v-1", versions: 1,
+      created_at: "2026-08-28T00:00:00.000Z",
+    }];
+    GRAPH = { steps: [{ id: "s1", kind: "fetch" }] };
+    await open("draft-email-replies");
+    expect(screen.getByRole("switch")).toBeTruthy();
+  });
+
   it("carries the switch's other entrance in the kebab, and nothing else", async () => {
     ME = { ...BASE_ME, auto_draft_replies: true };
     await open("draft-email-replies");

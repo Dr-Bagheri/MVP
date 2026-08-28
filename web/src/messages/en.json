@@ -1216,7 +1216,10 @@
       }
     },
     "detailMeetingPrepHint": "While this is on, about half an hour before each meeting in your calendar a pre-read is written into your conversations.",
-    "detailMeetingPrepOn": "On — your next meeting will be prepared for you."
+    "detailMeetingPrepOn": "On — your next meeting will be prepared for you.",
+    "editSteps": "Edit steps",
+    "makeEditable": "Make these steps editable",
+    "editStepsFailed": "The steps could not be opened for editing."
   },
   "integrations": {
     "subtitle": "The data sources the assistant and your workflows read from.",
@@ -2028,8 +2031,8 @@
     "f_limit": "Result limit",
     "f_of": "Of",
     "f_sourceKind": "Source kind",
-    "source_calendar_event": "Calendar event",
-    "source_mail_message": "Email",
+    "source_calendar_event": "Reads the calendar event that started this run",
+    "source_mail_message": "Reads the email that started this run",
     "f_instruction": "Instruction",
     "instructionHint": "What do you want from this step?",
     "f_from": "Input from",
@@ -2063,8 +2066,8 @@
     "doDerived": "The body is the step immediately after this one, and it follows along when you reorder.",
     "doMissing": "There is no step after this one to be its body — add one below it.",
     "f_proposal": "Proposal kind",
-    "proposal_add_tags": "Add tags",
-    "proposal_set_title": "Set title",
+    "proposal_add_tags": "Suggests tags for the meeting",
+    "proposal_set_title": "Suggests a title for the meeting",
     "f_call": "On which call",
     "f_applyFrom": "Which propose step",
     "applyNone": "There is no propose step before this one.",
@@ -2085,7 +2088,8 @@
     "edit": "Edit “{name}”",
     "unpublished": "Unpublished",
     "versionN": "Version {n}",
-    "toggleFailed": "The change was not saved."
+    "toggleFailed": "The change was not saved.",
+    "proposal_draft_mail": "Writes the reply as a draft, for you to send"
   },
   "mail": {
     "sentLabel": "Sent",

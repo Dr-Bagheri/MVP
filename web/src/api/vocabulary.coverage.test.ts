@@ -72,6 +72,12 @@ const EXCLUDED: Record<string, string> = {
     "itself and could never fail — the bar-ceiling trap. The import is what " +
     "closed the real drift: this union sat one kind behind the database from " +
     "0107 until 0116 precisely because it WAS a local copy.",
+  INERT_PROPOSAL_KINDS:
+    "server-side rule, not a wire shape: it says which proposal kinds may " +
+    "apply with no human decision, and the only reader is the executor. " +
+    "web/ renders proposals; it never decides whether one needs approving, " +
+    "and a mirror of this list here would be a second place for that rule " +
+    "to be true — which is exactly how a wall comes to have two meanings.",
   OFFERED_CONNECTOR_PROVIDERS:
     "not mirrored: this is the OFFER, and web/ consumes the array itself at " +
     "runtime — the integrations catalogue, the run dialog's picker and the " +

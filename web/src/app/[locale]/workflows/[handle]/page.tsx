@@ -19,6 +19,8 @@ import {
   Icon, IconRetry, IconToggleOff, IconToggleOn, type IconName,
 } from "@/components/icons";
 import { digits, formatDate, formatTime } from "@/lib/format";
+import { notify } from "@/lib/notify";
+import { WorkflowBuilder } from "@/components/platform/WorkflowBuilder";
 import { OFFERED_CONNECTOR_PROVIDERS } from "@echo/core/vocabulary";
 
 /**
@@ -129,6 +131,18 @@ const AUTO_DRAFT_SLUG = "draft-email-replies";
    workflow": a slug is data, not a name you can infer from a heading */
 const MEETING_PREP_SLUGS: readonly string[] = ["prepare-meetings", "prepare-me-for-meetings"];
 
+/**
+ * Which shipped STARTER implements which template.
+ *
+ * The bridge between the two catalogues: `draft-email-replies` is a
+ * `workflow_template` row with product copy, and `wf-starter-mail-reply` is
+ * the real graph that does the same job. Installing the starter is what
+ * turns the page's prose into a program someone can rearrange.
+ */
+const STARTER_FOR: Readonly<Record<string, string>> = {
+  "draft-email-replies": "wf-starter-mail-reply",
+};
+
 const PROCESS_KEY: Readonly<Record<string, string>> = {
   "draft-email-replies": "draft-email-replies",
   "prepare-meetings": "prepare-meetings",
@@ -159,6 +173,38 @@ function wireProcess(card: WorkflowCard): WorkflowProcess {
   return { trigger: isStep(wire.trigger) ? wire.trigger : undefined, steps };
 }
 
+
+/** a graph step, shape-checked off the wire */
+function isGraphStep(value: unknown): value is { id: string; kind: string } {
+  return typeof value === "object" && value !== null
+    && typeof (value as { id?: unknown }).id === "string"
+    && typeof (value as { kind?: unknown }).kind === "string";
+}
+
+/**
+ * One step, in a sentence, for the read-only Process panel.
+ *
+ * The instruction is the interesting part of an `ask` or an `extract` and it
+ * is the AUTHOR'S OWN WORDS — so it is shown, not summarised. Everything else
+ * gets its kind label alone: a `decide`'s operator and a `propose`'s bindings
+ * are the editor's business, and a numbered list that tries to narrate them
+ * turns into a worse version of the editor.
+ */
+function describeStep(
+  step: { id: string; kind: string } & Record<string, unknown>,
+  tb: (key: string, values?: Record<string, string>) => string,
+): string {
+  const instruction = typeof step.instruction === "string" ? step.instruction.trim() : "";
+  if (instruction) return instruction;
+  if (step.kind === "fetch" && typeof step.source_kind === "string") {
+    return tb(`source_${step.source_kind}`);
+  }
+  if (step.kind === "propose" && typeof step.proposal === "string") {
+    return tb(`proposal_${step.proposal}`);
+  }
+  return tb(`kind_${step.kind}`);
+}
+
 export default function WorkflowDetailPage({
   params,
 }: {
@@ -166,6 +212,7 @@ export default function WorkflowDetailPage({
 }) {
   const { handle } = use(params);
   const t = useTranslations("workflows");
+  const tb = useTranslations("builder");
   const locale = useLocale();
 
   const [cards, setCards] = useState<WorkflowCard[] | null>(null);
@@ -198,6 +245,20 @@ export default function WorkflowDetailPage({
     void api.authoredWorkflows().then(setAuthored).catch(() => setAuthored(null));
     void api.me().then(setMe).catch(() => setMe(null));
   }, []);
+
+  /**
+   * The GRAPH, when this workflow has one.
+   *
+   * This is what "the steps must be editable" comes down to: a shipped
+   * template's process is product copy over a hardcoded sweep, and an
+   * authored workflow's process is a program. When the person has the
+   * program, the panel shows the program — because those are the steps that
+   * would change if they changed them, and showing prose beside an editor
+   * that governs something else is the worst of both.
+   */
+  const [graph, setGraph] = useState<{ steps: { id: string; kind: string }[] } | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [installing, setInstalling] = useState(false);
 
   const card = cards?.find((entry) => entry.slug === handle);
   const engineRow = engine?.find((entry) => entry.handle === handle);
@@ -248,6 +309,35 @@ export default function WorkflowDetailPage({
 
   useCrumbTitle(subject?.name);
 
+  /* editing a workflow is an admin act; a member reads the process and
+     keeps their own switch */
+  const isAdmin = me?.role === "admin" || me?.role === "owner";
+  /*
+   * The workflow that IMPLEMENTS this template, when the org has installed
+   * it. Resolved separately from `subject` on purpose: if the authored row
+   * became the subject, this page would stop being a template page — and
+   * `auto_draft_replies`, which is the PERSON'S consent to have their mail
+   * read, renders only for a template. Silently trading somebody's own
+   * switch for the org's enabled flag is not a thing to do as a side effect
+   * of adding an editor.
+   */
+  const backingRow = authored?.find((entry) => entry.handle === STARTER_FOR[handle]);
+  const manageId = subject?.manageId ?? backingRow?.id;
+  useEffect(() => {
+    if (!manageId) { setGraph(null); return; }
+    void api.workflowGraph(manageId)
+      .then((answer) => {
+        const steps = (answer.graph as { steps?: unknown } | null)?.steps;
+        /* shape-checked, because a graph that arrives in some other shape
+           must fall through to the catalogue text rather than render
+           `undefined` in a numbered list */
+        setGraph(Array.isArray(steps) && steps.every(isGraphStep) ? { steps } : null);
+      })
+      /* not published yet, or not ours to read — either way there is no
+         program to show, and the shipped description is still true */
+      .catch(() => setGraph(null));
+  }, [manageId, editing]);
+
   /* the shipped text, read once per render of a known template */
   const catalogueProcess = useMemo((): WorkflowProcess | undefined => {
     const key = PROCESS_KEY[handle];
@@ -276,7 +366,23 @@ export default function WorkflowDetailPage({
    * (`lib/skillName.ts` settled the same question the same way.)
    */
   const trigger = catalogueProcess?.trigger ?? served.trigger;
-  const steps = catalogueProcess?.steps ?? served.steps ?? [];
+  /*
+   * THE GRAPH WINS over both, when there is one (user directive,
+   * 2026-08-28: "all these is not just a text that we show, it must be
+   * editable and part of the puzzled structure that we built").
+   *
+   * The catalogue-over-wire rule below still holds for everything else, and
+   * for the same reason it always did — but it was a rule about two
+   * DESCRIPTIONS of the same fixed process. A graph is not a description: it
+   * is the thing that runs, and if the two disagree the graph is right.
+   */
+  const graphSteps: ProcessStep[] | undefined = graph
+    ? graph.steps.map((step, index) => ({
+        title: `${index + 1}. ${tb(`kind_${step.kind}`)}`,
+        description: describeStep(step, tb),
+      }))
+    : undefined;
+  const steps = graphSteps ?? catalogueProcess?.steps ?? served.steps ?? [];
 
   const recents = useMemo((): RecentRow[] => {
     const fromRuns: RecentRow[] = runs
@@ -521,7 +627,42 @@ export default function WorkflowDetailPage({
 
               <div className="grid gap-6 lg:grid-cols-[3fr_2fr]">
                 <section className="rounded-xl border border-border bg-surface p-6">
-                  <h2 className="text-lg font-semibold text-fg">{t("detailProcess")}</h2>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <h2 className="text-lg font-semibold text-fg">{t("detailProcess")}</h2>
+                    {/*
+                      THE DOOR (user directive, 2026-08-28: "it must be
+                      editable and part of the puzzled structure").
+                      · with a graph → open it in the builder;
+                      · without one → install this template as a real,
+                        editable workflow of the org's own, then open it.
+                      The second is one press and not a warning, because
+                      "these steps are not yours yet" is a fact about our
+                      plumbing that nobody outside this file should have to
+                      learn.
+                    */}
+                    {isAdmin && (manageId || STARTER_FOR[handle]) ? (
+                      <button
+                        type="button"
+                        className="btn-secondary h-9 min-h-0 px-3 text-xs"
+                        disabled={installing}
+                        onClick={() => {
+                          if (manageId) { setEditing(true); return; }
+                          if (installing) return;
+                          setInstalling(true);
+                          void api.installStarter("mail_reply")
+                            .then(() => api.authoredWorkflows())
+                            .then((rows) => {
+                              setAuthored(rows);
+                              setEditing(true);
+                            })
+                            .catch(() => notify(t("editStepsFailed"), "warn"))
+                            .finally(() => setInstalling(false));
+                        }}
+                      >
+                        {manageId ? t("editSteps") : t("makeEditable")}
+                      </button>
+                    ) : null}
+                  </div>
 
                   <p className="mt-6 text-xs font-medium text-fg-subtle">{t("detailTrigger")}</p>
                   {trigger ? (
@@ -645,6 +786,18 @@ export default function WorkflowDetailPage({
           )}
         </PageContainer>
       </MenuLayout>
+
+      {editing && (authoredRow ?? backingRow) ? (
+        <WorkflowBuilder
+          workflow={(authoredRow ?? backingRow)!}
+          onClose={() => setEditing(false)}
+          /* re-read the graph on save: the panel above must show what was
+             just published, not what it showed before the edit */
+          onSaved={() => {
+            void api.authoredWorkflows().then(setAuthored).catch(() => {});
+          }}
+        />
+      ) : null}
     </PlatformShell>
   );
 }
