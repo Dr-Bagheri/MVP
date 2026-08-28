@@ -116,7 +116,11 @@ export const TRAIL: Readonly<Record<string, TrailEntry>> = {
   "/management/server": { label: "management.section.server", parent: "/settings" },
   "/management/[section]": { labelPrefix: "management.section", parent: "/management" },
 
-  "/settings": { label: "platform.settings", parent: "/" },
+  /* roots, like /echo and /management (user directive, 2026-08-28: "still
+     assistant / profile and assistant / setting. these are the main pages
+     as well, and assistant / help") — the trail's root set is pinned in
+     trail.test.ts, so a stray parentless entry cannot join unnoticed */
+  "/settings": { label: "platform.settings" },
   "/settings/[section]": { labelPrefix: "settings.section", parent: "/settings" },
 
   "/conversations": { label: "conversations.title", parent: "/" },
@@ -133,8 +137,8 @@ export const TRAIL: Readonly<Record<string, TrailEntry>> = {
   "/workflows/[handle]": { entity: true, parent: "/workflows" },
   /** M32's separate metadata-only operator console. */
   "/platform": { label: "platformRoot.title", parent: "/" },
-  "/profile": { label: "profile.title", parent: "/" },
-  "/help": { label: "platform.help", parent: "/" },
+  "/profile": { label: "profile.title" },
+  "/help": { label: "platform.help" },
   /** Help's guide sections (2026-08-16) — same anatomy as Settings/Echo. */
   "/help/[section]": { labelPrefix: "help.section", parent: "/help" },
 };

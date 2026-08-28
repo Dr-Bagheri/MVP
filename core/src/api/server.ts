@@ -738,6 +738,22 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
   });
 
   /**
+   * 0126 — end one of the caller's own sessions, by its display handle.
+   * The user_id predicate lives inside the definer door, so no argument
+   * reaches another person's session; deleting cascades the refresh
+   * tokens, and the device's next refresh signs it out.
+   */
+  app.delete("/v1/me/sessions/:handle", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const { handle } = request.params as { handle: string };
+    const rows = await options.db.withIdentity(identity, (tx: SqlTx) =>
+      tx.unsafe<{ ended: boolean }>(
+        "select echo.end_my_session($1) as ended", [handle]));
+    if (rows[0]?.ended !== true) throw new NotFoundError("no such session");
+    return reply.code(204).send();
+  });
+
+  /**
    * Security (db/0112): withdrawing one's OWN voice print. Withdrawal is
    * the other half of consent and must not need an admin; the door acts
    * only on the person row linked to the caller (app_user_id).

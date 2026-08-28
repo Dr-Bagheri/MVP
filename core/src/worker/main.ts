@@ -264,6 +264,28 @@ export async function main(): Promise<void> {
   }, 5 * 60_000);
   meetingTimer.unref();
 
+  /*
+   * The session policy's clock (0126): sessions idle beyond seven days
+   * close themselves. Daily, because the granularity of "idle for a week"
+   * is days; and through the same door a one-off cleanup uses, so the
+   * policy has exactly one spelling.
+   */
+  const sessionsTimer = setInterval(() => {
+    void db.withoutIdentity(async (tx) => {
+      const rows = await tx.unsafe<{ n: number }>(
+        "select echo.close_stale_auth_sessions(7) as n");
+      const closed = Number(rows[0]?.n ?? 0);
+      if (closed > 0) {
+        log.info({ event: "stale_sessions_closed", count: closed },
+          "idle auth sessions closed by the platform policy");
+      }
+    }).catch((error: unknown) => {
+      log.warn({ event: "stale_session_sweep_failed", detail: (error as Error).name },
+        "the session sweep did not run this round");
+    });
+  }, 24 * 60 * 60_000);
+  sessionsTimer.unref();
+
   let running = true;
   for (const signal of ["SIGINT", "SIGTERM"] as const) {
     process.on(signal, () => {

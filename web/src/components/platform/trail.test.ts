@@ -146,8 +146,10 @@ describe("the trail's own assumptions", () => {
 
   it("reaches one of the three domain roots from every entry", () => {
     /*
-     * The IA has THREE roots since 2026-08-28 — Assistant (/), Echo and
-     * Management — matching the rail's three icons. The root SET is pinned
+     * The IA's roots, 2026-08-28 (two rulings the same day): the rail's
+     * three domains — Assistant (/), Echo, Management — plus Settings,
+     * Profile and Help, which the user named main pages in their own
+     * right. The root SET is pinned
      * first, derived from the table itself: a fourth parentless entry is a
      * new root nobody declared, and a typo that drops a parent would
      * otherwise read as "reachable" while quietly re-rooting a page.
@@ -156,7 +158,7 @@ describe("the trail's own assumptions", () => {
       .filter(([, entry]) => entry.parent === undefined)
       .map(([pattern]) => pattern)
       .sort();
-    expect(roots).toEqual(["/", "/echo", "/management"]);
+    expect(roots).toEqual(["/", "/echo", "/help", "/management", "/profile", "/settings"]);
     for (const pattern of Object.keys(TRAIL)) {
       const trail = trailFor(pattern.replace(/\[[^\]]+\]/g, "x"));
       expect(trail.length, `${pattern} produced no trail`).toBeGreaterThan(0);

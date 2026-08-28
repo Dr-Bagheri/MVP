@@ -261,7 +261,6 @@ export default function WorkflowDetailPage({
    */
   const [graph, setGraph] = useState<{ steps: { id: string; kind: string }[] } | null>(null);
   const [editing, setEditing] = useState(false);
-  const [installing, setInstalling] = useState(false);
   /** Run now, for a manual workflow: the request in flight */
   const [running, setRunning] = useState(false);
   /** the are-you-sure popup, open */
@@ -721,26 +720,20 @@ export default function WorkflowDetailPage({
                       plumbing that nobody outside this file should have to
                       learn.
                     */}
-                    {isAdmin && (manageId || STARTER_FOR[handle]) ? (
+                    {/*
+                      "Make these steps editable" LEFT (user directive,
+                      2026-08-28) — the install-then-edit door on the mail
+                      template read as a warning about our plumbing. Edit
+                      remains for a workflow that HAS a graph; the shipped
+                      template's prose stays prose.
+                    */}
+                    {isAdmin && manageId ? (
                       <button
                         type="button"
                         className="btn-secondary h-9 min-h-0 px-3 text-xs"
-                        disabled={installing}
-                        onClick={() => {
-                          if (manageId) { setEditing(true); return; }
-                          if (installing) return;
-                          setInstalling(true);
-                          void api.installStarter("mail_reply")
-                            .then(() => api.authoredWorkflows())
-                            .then((rows) => {
-                              setAuthored(rows);
-                              setEditing(true);
-                            })
-                            .catch(() => notify(t("editStepsFailed"), "warn"))
-                            .finally(() => setInstalling(false));
-                        }}
+                        onClick={() => setEditing(true)}
                       >
-                        {manageId ? t("editSteps") : t("makeEditable")}
+                        {t("editSteps")}
                       </button>
                     ) : null}
                   </div>

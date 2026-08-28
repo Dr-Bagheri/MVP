@@ -1810,6 +1810,16 @@ export const api = {
     return bff<{ sessions: AuthSessionRow[]; current: string | null }>("/api/me/sessions");
   },
 
+  /** 0126 — end one of the caller's own sessions; the device signs out on
+      its next refresh */
+  async endMySession(handle: string): Promise<void> {
+    await bff<null>("/api/me/sessions", {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ handle }),
+    });
+  },
+
   /** db/0112 - consent withdrawal is self-service (Security 59). */
   async deleteMyVoiceprint(): Promise<void> {
     await bff("/api/me/voiceprint", { method: "DELETE" });

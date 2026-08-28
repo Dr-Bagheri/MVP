@@ -8,6 +8,7 @@ import { Pagination, usePaged } from "@/components/Pagination";
 import { ConfirmDialog } from "@/components/rowActions";
 import { notify } from "@/lib/notify";
 import { DataTable } from "@/components/DataTable";
+import { IconClose } from "@/components/icons";
 import { Chip } from "@/components/ui";
 import { formatDate, formatTime } from "@/lib/format";
 import { useLocale } from "next-intl";
@@ -33,8 +34,9 @@ export function SecuritySettings() {
   const [sessions, setSessions] = useState<AuthSessionRow[] | null>(null);
   /** the handle of the session THIS request rode — the "this device" chip */
   const [current, setCurrent] = useState<string | null>(null);
-  const [confirmVoice, setConfirmVoice] = useState(false);
-  const [voiceState, setVoiceState] = useState<"unknown" | "gone">("unknown");
+  /** the session a right-click chose to end; the popup is the consent */
+  const [ending, setEnding] = useState<AuthSessionRow | null>(null);
+  const [endBusy, setEndBusy] = useState(false);
 
   useEffect(() => {
     void api.mySessions()
@@ -45,24 +47,6 @@ export function SecuritySettings() {
   /* `null` is not-fetched, so the pager is handed the empty list until the
      rows arrive — it draws nothing for one page either way */
   const { page, setPage, pageCount, visible } = usePaged(sessions ?? []);
-
-  async function withdrawVoice() {
-    setConfirmVoice(false);
-    try {
-      await api.deleteMyVoiceprint();
-      setVoiceState("gone");
-      notify(t("voiceDeleted"));
-    } catch (cause) {
-      const { status } = cause as { status?: number };
-      if (status === 404) {
-        // an honest nothing: there was no print of yours to withdraw
-        setVoiceState("gone");
-        notify(t("voiceNone"));
-      } else {
-        notify(t("voiceDeleteFailed"), "warn");
-      }
-    }
-  }
 
   /*
    * Browser + platform, read from the user agent — two words, because
@@ -107,6 +91,18 @@ export function SecuritySettings() {
             <DataTable
               rows={visible}
               rowKey={(session) => session.handle}
+              /* the records table's own gesture: every action in the
+                 right-click menu. Ending THIS device is deliberately not
+                 offered here — that is sign-out, which the avatar menu
+                 already owns, and a session ending itself mid-request
+                 would look like a crash rather than a choice. */
+              menuItems={(session) => session.handle === current ? [] : [{
+                key: "end",
+                label: t("endSession"),
+                icon: <IconClose width={14} height={14} />,
+                danger: true,
+                onSelect: () => setEnding(session),
+              }]}
               columns={[
                 {
                   key: "device",
@@ -166,33 +162,40 @@ export function SecuritySettings() {
         )}
       </div>
 
-      {/* ── the voice print: withdrawal is self-service ──────────────── */}
-      <div>
-        <h2 className="h-section">{t("voiceTitle")}</h2>
-        <p className="mt-1 text-sm leading-6 text-fg-muted">{t("voiceConsent")}</p>
-        {voiceState === "gone" ? (
-          <p className="mt-2 text-sm text-fg-muted">{t("voiceGone")}</p>
-        ) : (
-          <button
-            type="button"
-            className="btn-secondary mt-3 h-9 min-h-0 px-4 text-sm text-danger"
-            onClick={() => setConfirmVoice(true)}
-          >
-            {t("voiceDelete")}
-          </button>
-        )}
-      </div>
-
-      {confirmVoice ? (
+      {ending ? (
         <ConfirmDialog
-          title={t("voiceConfirmTitle")}
-          body={t("voiceConfirmBody")}
-          confirmLabel={t("voiceDelete")}
+          title={t("endConfirmTitle", { device: agentLabel(ending.user_agent) })}
+          body={t("endConfirmBody")}
+          confirmLabel={t("endConfirm")}
           cancelLabel={t("cancel")}
-          onCancel={() => setConfirmVoice(false)}
-          onConfirm={() => void withdrawVoice()}
+          busy={endBusy}
+          onCancel={() => setEnding(null)}
+          onConfirm={() => {
+            if (endBusy) return;
+            setEndBusy(true);
+            void api.endMySession(ending.handle)
+              .then(() => {
+                /* adopt the truth by re-reading, not by splicing: the door
+                   may have refused (a race with the sweep) and the list is
+                   the record */
+                return api.mySessions().then((answer) => {
+                  setSessions(answer.sessions);
+                  setCurrent(answer.current);
+                });
+              })
+              .then(() => { setEnding(null); notify(t("endDone")); })
+              .catch(() => notify(t("endFailed"), "warn"))
+              .finally(() => setEndBusy(false));
+          }}
         />
       ) : null}
+
+      {/*
+        The voice-print block LEFT this page (user directive, 2026-08-28:
+        "remove voice print") — a member's own print is still withdrawable
+        through the speakers directory, where voices live; the wire
+        (deleteMyVoiceprint) is untouched.
+      */}
     </div>
   );
 }

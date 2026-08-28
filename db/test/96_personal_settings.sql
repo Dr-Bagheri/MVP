@@ -12,6 +12,17 @@ values ('96000000-0000-4000-8000-000000000001',
         '03000000-0000-4000-8000-000000000003', now(), now(),
         'Mozilla/5.0 Firefox/127', '203.0.113.9');
 
+-- each session carries an UNREVOKED refresh token: 0125's door serves only
+-- sessions that can still refresh, so a bare session row is a DEAD one and
+-- the fixture must be alive to be seen — the door's contract, not a hoop
+insert into auth.refresh_tokens (token, user_id, session_id, revoked, created_at, updated_at)
+values ('96-fixture-token-bob',
+        '02000000-0000-4000-8000-000000000002',
+        '96000000-0000-4000-8000-000000000001', false, now(), now()),
+       ('96-fixture-token-carol',
+        '03000000-0000-4000-8000-000000000003',
+        '96000000-0000-4000-8000-000000000002', false, now(), now());
+
 -- a directory person LINKED to bob, with a voice print to withdraw
 insert into echo.person (id, org_id, display_name, app_user_id, created_by,
                          voiceprint, voiceprint_model, voiceprint_at, voiceprint_by)
@@ -52,7 +63,7 @@ select t.denied(
 select t.ok(
   (select count(*) from echo.my_auth_sessions()) = 1
   and exists (select 1 from echo.my_auth_sessions() where ip = '203.0.113.7'),
-  '0112: bob''s door shows exactly bob''s session');
+  '0112/0127: bob''s door shows exactly bob''s LIVE session, ip as a bare address');
 -- the discriminating pair: carol's door shows HERS, not bob's — proof the
 -- door filters by actor rather than returning everything or nothing
 select set_config('echo.actor_id', '03000000-0000-4000-8000-000000000003', true); -- carol
