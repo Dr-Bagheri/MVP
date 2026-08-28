@@ -4,6 +4,7 @@ import { use } from "react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
 import { AssistantSettings } from "@/components/platform/AssistantSettings";
+import { NotificationsSettings } from "@/components/platform/NotificationsSettings";
 import { GeneralSettings } from "@/components/platform/GeneralSettings";
 import { AuditLogs } from "@/components/platform/AuditLogs";
 import { LegalDocuments } from "@/components/platform/LegalDocuments";
@@ -67,6 +68,11 @@ export default function SettingsPage({
       {active.slug === "assistant" ? (
         <Section>
           <AssistantSettings />
+        </Section>
+      ) : null}
+      {active.slug === "notifications" ? (
+        <Section>
+          <NotificationsSettings />
         </Section>
       ) : null}
       {active.slug === "security" ? (

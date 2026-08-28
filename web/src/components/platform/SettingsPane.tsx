@@ -36,6 +36,10 @@ export interface SettingsSection {
 export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   { slug: "general", group: "configuration" },
   { slug: "assistant", group: "configuration" },
+  /* every make-something-for-me-unprompted switch, one screen (user
+     directive, 2026-08-28) — beside Assistant, whose two toggles moved
+     into it */
+  { slug: "notifications", group: "configuration" },
   { slug: "security", group: "configuration" },
   { slug: "sso", group: "configuration" },
   /* the assistant's own configuration — the pages keep their addresses */

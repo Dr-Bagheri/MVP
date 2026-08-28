@@ -55,11 +55,10 @@ beforeEach(() => {
 });
 
 describe("the autonomy dial is GONE — assist is pinned, and not shown", () => {
-  it("renders the digest and voice cards, and NO watch/act control anywhere", async () => {
+  it("renders the voice card, and NO watch/act control anywhere", async () => {
     render(<AssistantSettings />);
 
     // positive identification: the screen under test actually rendered
-    expect(await screen.findByRole("heading", { name: "گزارش هفتگی" })).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "لحن و رفتار دستیار" })).toBeInTheDocument();
 
     // the instrument's positive control: this query style CAN find options
@@ -78,8 +77,38 @@ describe("the autonomy dial is GONE — assist is pinned, and not shown", () => 
     /* the wire deliberately says act (see ME) — if any code path adopted it
        back into a rendered control, one of these would light up */
     render(<AssistantSettings />);
-    await screen.findByRole("heading", { name: "گزارش هفتگی" });
+    await screen.findByRole("heading", { name: "لحن و رفتار دستیار" });
     expect(screen.queryByText("خوداجرا")).toBeNull();
     expect(screen.queryByText("فقط تماشا")).toBeNull();
+  });
+});
+
+describe("the notification switches are GONE — they live in Settings·Notifications now", () => {
+  /*
+   * MOVED (user directive, 2026-08-28): post-call brief, weekly digest,
+   * auto-draft and meeting prep are Settings·Notifications rows. The ME
+   * fixture above is load-bearing here exactly as it is for the dial: the
+   * wire STILL carries post_call_brief / auto_draft_replies /
+   * auto_meeting_prep, so a component that quietly rendered its old
+   * switches again would find every fact it needs — and go red below.
+   */
+  it("keeps the voice card and renders NO toggle of any kind", async () => {
+    render(<AssistantSettings />);
+
+    // the control: this screen still renders, and its remaining card is whole
+    expect(await screen.findByRole("heading", { name: "لحن و رفتار دستیار" })).toBeInTheDocument();
+    expect(document.querySelector('option[value="fa"]')).not.toBeNull();
+
+    /* the absence, by STRUCTURE first: after the move this screen owns no
+       boolean control at all — a re-added toggle in any dress (checkbox,
+       switch) goes red here, whatever it is labelled */
+    expect(document.querySelectorAll('input[type="checkbox"]')).toHaveLength(0);
+    expect(screen.queryByRole("switch")).toBeNull();
+
+    // and by NAME, so a row rebuilt on the new copy keys is caught too
+    expect(screen.queryByText("خلاصهٔ پس از تماس")).toBeNull();
+    expect(screen.queryByText("گزارش هفتگی")).toBeNull();
+    expect(screen.queryByText("پیش‌نویس خودکار پاسخ ایمیل")).toBeNull();
+    expect(screen.queryByText("آماده‌سازی پیش از جلسه")).toBeNull();
   });
 });

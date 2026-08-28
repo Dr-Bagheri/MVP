@@ -117,6 +117,14 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
   }, []);
   /** loudness enhance: a gain stage between the mic and the recorder */
   const [boost, setBoost] = useState(false);
+  /**
+   * NOISE SUPPRESSION (user directive, 2026-08-28): the browser's own
+   * filter, a checkbox now instead of a constant. Default ON — that is the
+   * behavior every take had before the choice existed. Held the way `boost`
+   * is held (component state for this visit, no store): the default is the
+   * right answer often enough that re-choosing per visit costs nothing.
+   */
+  const [noiseSuppression, setNoiseSuppression] = useState(true);
   /** the CHECK's own monitoring gain — how loud the meter reads, so a
       far mic can be judged before the take (it does not change the take) */
   const [monitorGain, setMonitorGain] = useState(1);
@@ -218,6 +226,7 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
           : {}),
       ...(summaryModel ? { summaryModel } : {}),
       boost,
+      noiseSuppression,
     }).then(() => {
       void refreshDevices(); // labels exist once permission does
     });
@@ -848,6 +857,13 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
                   boostLabel={t("boostOption")}
                   boostHint={t("boostHint")}
                   onBoostChange={setBoost}
+                  noiseSuppression={noiseSuppression}
+                  noiseLabel={t("noiseOption")}
+                  noiseHint={t("noiseHint")}
+                  onNoiseChange={setNoiseSuppression}
+                  /* the constraint binds at getUserMedia — mid-take the box
+                     would be a switch wired to nothing (the hint says so) */
+                  noiseLocked={live}
                 />
               }
             />
@@ -1133,6 +1149,11 @@ function MicLevelFooter({
   boostLabel,
   boostHint,
   onBoostChange,
+  noiseSuppression,
+  noiseLabel,
+  noiseHint,
+  onNoiseChange,
+  noiseLocked,
 }: {
   micId: string;
   label: string;
@@ -1146,6 +1167,14 @@ function MicLevelFooter({
   boostLabel: string;
   boostHint: string;
   onBoostChange: (next: boolean) => void;
+  /** noise suppression — the other take-changing control; the meter's own
+      stream opens with the same constraint so the bar previews the take */
+  noiseSuppression: boolean;
+  noiseLabel: string;
+  noiseHint: string;
+  onNoiseChange: (next: boolean) => void;
+  /** true while a take is live: the constraint bound at acquisition */
+  noiseLocked: boolean;
 }) {
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [failed, setFailed] = useState(false);
@@ -1157,7 +1186,9 @@ function MicLevelFooter({
         audio: {
           ...(micId ? { deviceId: { exact: micId } } : {}),
           echoCancellation: true,
-          noiseSuppression: true,
+          // the take's own setting: a meter judged with suppression the
+          // recording won't have is a preview of a different recording
+          noiseSuppression,
         },
       })
       .then((s2) => {
@@ -1174,7 +1205,8 @@ function MicLevelFooter({
       opened?.getTracks().forEach((track) => track.stop());
       setStream(null);
     };
-  }, [micId]);
+    // reopen on a suppression change too — the constraint binds at open
+  }, [micId, noiseSuppression]);
   /* the same multipliers the engine applies — the bar is a preview of
      the take, not a decoration */
   const level = Math.min(1, useAudioLevel(stream) * gain * (boost ? BOOST_GAIN : 1));
@@ -1223,6 +1255,27 @@ function MicLevelFooter({
         <span>
           {boostLabel}
           <span className="block text-fg-subtle">{boostHint}</span>
+        </span>
+      </label>
+      {/* NOISE SUPPRESSION (user directive, 2026-08-28): the second control
+          here that changes the take itself. Locked while a take is live —
+          the constraint bound at getUserMedia, and an enabled box mid-take
+          would claim an effect it cannot have (the hint carries the when). */}
+      <label
+        className={`flex items-start gap-1.5 text-[10px] leading-4 text-fg ${
+          noiseLocked ? "opacity-60" : "cursor-pointer"
+        }`}
+      >
+        <input
+          type="checkbox"
+          className="mt-0.5"
+          checked={noiseSuppression}
+          disabled={noiseLocked}
+          onChange={(e) => onNoiseChange(e.target.checked)}
+        />
+        <span>
+          {noiseLabel}
+          <span className="block text-fg-subtle">{noiseHint}</span>
         </span>
       </label>
     </div>

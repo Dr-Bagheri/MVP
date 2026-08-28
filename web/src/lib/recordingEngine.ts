@@ -91,6 +91,14 @@ export interface StartOptions {
    * only amplifies its noise floor with it.
    */
   boost?: boolean | undefined;
+  /**
+   * NOISE SUPPRESSION (user directive, 2026-08-28): the browser's own
+   * filter, previously hard-coded `true` — now the person's choice, default
+   * ON at every call site. REQUIRED rather than optional-with-a-default so
+   * a new door into recording must state it, instead of a fallback quietly
+   * deciding it for the person.
+   */
+  noiseSuppression: boolean;
 }
 
 /** the enhance stage's gain — ~+7dB, enough for a far mic, short of clipping */
@@ -146,6 +154,13 @@ let priorParts = false;
 let discarding = false;
 /** the mic vanished mid-take (unplugged headset): paused until reacquired */
 let micLost = false;
+/**
+ * The TAKE's noise-suppression choice, kept beside the other take state:
+ * a reacquired mic must come back with the same processing it left with —
+ * different suppression after an unplug would be a silent quality change
+ * inside one recording, invisible on every meter.
+ */
+let takeNoiseSuppression = true;
 /** the system-audio mixing node — where a replacement mic must connect */
 let mixDest: MediaStreamAudioDestinationNode | null = null;
 // caption lane
@@ -506,7 +521,8 @@ async function reacquireMic(): Promise<boolean> {
   let fresh: MediaStream;
   try {
     fresh = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true },
+      // the take's own setting, never a fresh default (see takeNoiseSuppression)
+      audio: { echoCancellation: true, noiseSuppression: takeNoiseSuppression },
     });
   } catch {
     patch({ error: "micDenied" });
@@ -541,13 +557,15 @@ export async function startRecording(opts: StartOptions): Promise<void> {
   }
   patch({ error: null });
   setPhase("starting");
+  // recorded BEFORE acquisition so a mic lost even seconds in reacquires alike
+  takeNoiseSuppression = opts.noiseSuppression;
   let micStream: MediaStream;
   try {
     micStream = await navigator.mediaDevices.getUserMedia({
       audio: {
         ...(opts.micId ? { deviceId: { exact: opts.micId } } : {}),
         echoCancellation: true,
-        noiseSuppression: true,
+        noiseSuppression: opts.noiseSuppression,
       },
     });
   } catch {

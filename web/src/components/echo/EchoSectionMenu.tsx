@@ -63,6 +63,7 @@ export function EchoSectionMenu({ activeSlug }: { activeSlug: EchoMenuSlug }) {
       title: `${tCapture("memoTitle")} ${at}`,
       locale,
       resume: null,
+      noiseSuppression: true, // no UI on this door — the default (on) applies
     });
     notify(tCapture("memoStarted"));
   }
