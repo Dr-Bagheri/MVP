@@ -296,7 +296,7 @@ export function MenuLayout({ menu, children }: { menu: ReactNode; children: Reac
               History's recents, a deep settings tree — scrolls in place and
               never pushes the row taller than the shell. The close affordance
               scrolls with the menu's top, which is where the eye left it. */}
-          <div className="relative h-full md:min-h-0 md:overflow-y-auto">
+          <div className="scroll-quiet relative h-full md:min-h-0 md:overflow-y-auto">
             <button
               type="button"
               className="tap absolute end-2 top-2 z-10 hidden h-7 w-7 items-center justify-center rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg md:flex"
@@ -314,7 +314,9 @@ export function MenuLayout({ menu, children }: { menu: ReactNode; children: Reac
           surface that moves when the page does. Sticky elements inside pages
           (the call player's top bar, the hub's composer) stick against THIS
           box from md up — it is the nearest scrolling ancestor. */}
-      <div className="min-w-0 flex-1 md:min-h-0 md:overflow-y-auto">{children}</div>
+      {/* scroll-quiet: the theme's thin scrollbar (globals.css) — the one
+          content scroller wears it, so every page inherits it at once */}
+      <div className="scroll-quiet min-w-0 flex-1 md:min-h-0 md:overflow-y-auto">{children}</div>
     </div>
   );
 }

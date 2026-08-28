@@ -953,7 +953,7 @@ export function Hub() {
           onScroll={(e) => {
             pinnedRef.current = shouldStick(e.currentTarget);
           }}
-          className="mb-4 flex-1 md:min-h-0 md:overflow-y-auto"
+          className="scroll-quiet mb-4 flex-1 md:min-h-0 md:overflow-y-auto"
         >
           <ConversationThread
             messages={messages}

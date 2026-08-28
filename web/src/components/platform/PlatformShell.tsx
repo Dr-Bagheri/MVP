@@ -155,7 +155,7 @@ export function PlatformShell({ children }: { children: ReactNode }) {
             moves the scroll into its content column so the section menu
             holds still too (THE SHELL SCROLL, scaffold/SectionMenu.tsx).
           */}
-          <main key={`${calendar}|${timezone}`} className="min-h-0 flex-1 overflow-y-auto">
+          <main key={`${calendar}|${timezone}`} className="scroll-quiet min-h-0 flex-1 overflow-y-auto">
             {children}
           </main>
           <BottomBar />

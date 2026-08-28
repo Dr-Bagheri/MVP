@@ -1136,3 +1136,34 @@
 .tile-tinted .spark-bar { background: rgb(var(--accent) / .35); }
 .tile-plain .spark-bar-hi,
 .tile-tinted .spark-bar-hi { background: rgb(var(--accent)); }
+
+/* --- the quiet scrollbar (user directive, 2026-08-28: "make the scroll
+   for ai assistant smaller and nicer and shader") ---------------------
+   A THEME class, not a Hub-local style: any inner scroller may wear it,
+   and the assistant's thread does first. Thin, no arrow buttons, a
+   thumb in the theme's own muted ink that darkens under the hand, and a
+   track that is simply the page — a scrollbar is an instrument, not a
+   column of chrome. Both engines: the `scrollbar-*` properties serve
+   Firefox, the `::-webkit-` rules everything Chromium. */
+.scroll-quiet {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--fg-subtle) / .45) transparent;
+}
+.scroll-quiet::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.scroll-quiet::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scroll-quiet::-webkit-scrollbar-thumb {
+  background: rgb(var(--fg-subtle) / .45);
+  border-radius: 999px;
+}
+.scroll-quiet::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--fg-subtle) / .7);
+}
+.scroll-quiet::-webkit-scrollbar-button {
+  display: none;
+  height: 0;
+}
