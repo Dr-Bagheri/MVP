@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BAR_CEILING, GITHUB_HREF, NAV_BAR, NAV_PRIMARY, NAV_UTILITY } from "./nav";
+import { BAR_CEILING, GITHUB_HREF, NAV_BAR, NAV_PRIMARY, NAV_UTILITY, activeNavHref } from "./nav";
 
 /**
  * The nav model's rules, as tests rather than as comments.
@@ -38,5 +38,37 @@ describe("platform nav", () => {
    */
   it("ships GitHub as an explicit placeholder until the user answers", () => {
     expect(GITHUB_HREF === "#" || GITHUB_HREF.startsWith("http")).toBe(true);
+  });
+});
+
+/**
+ * The ACTIVE-STATE resolver, shared by the rail and the bar. The case that
+ * made it exist: Skills and Allowed models live at /management/* but wear
+ * the Settings pane — the user selected Allowed models and watched the
+ * Management tile light (2026-08-28 screenshot). The control cases are the
+ * ones that must keep answering the OLD way: a real Management page still
+ * lights Management, and a plain settings page still lights Settings.
+ */
+describe("activeNavHref", () => {
+  it("folds the cross-homed Settings surfaces into /settings", () => {
+    expect(activeNavHref("/management/skills")).toBe("/settings");
+    expect(activeNavHref("/management/models")).toBe("/settings");
+  });
+
+  it("controls: a real Management page and a real Settings page are untouched", () => {
+    expect(activeNavHref("/management/users")).toBe("/management");
+    expect(activeNavHref("/management")).toBe("/management");
+    expect(activeNavHref("/settings/security")).toBe("/settings");
+  });
+
+  it("prefix discipline holds: /management/modelsomething is NOT Settings", () => {
+    /* startsWith on the bare string would fold this too — the boundary is
+       exact-or-slash, so a future sibling route cannot inherit the fold */
+    expect(activeNavHref("/management/modelsomething")).toBe("/management");
+  });
+
+  it("the hub matches exactly, never by prefix", () => {
+    expect(activeNavHref("/assistant")).toBe("/assistant");
+    expect(activeNavHref("/somewhere")).toBeUndefined();
   });
 });

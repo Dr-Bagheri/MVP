@@ -4,14 +4,14 @@ import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { AuthSessionRow } from "@/api/types";
-import { Pagination, usePaged } from "@/components/Pagination";
 import { ConfirmDialog } from "@/components/rowActions";
 import { notify } from "@/lib/notify";
 import { DataTable } from "@/components/DataTable";
 import { IconClose } from "@/components/icons";
-import { Chip } from "@/components/ui";
+import { Card, Chip } from "@/components/ui";
 import { formatDate, formatTime } from "@/lib/format";
 import { useLocale } from "next-intl";
+import { signOutThisDevice } from "@/lib/signOut";
 
 /**
  * Settings · Security (db/0112 batch).
@@ -44,9 +44,6 @@ export function SecuritySettings() {
       .catch(() => setSessions([]));
   }, []);
 
-  /* `null` is not-fetched, so the pager is handed the empty list until the
-     rows arrive — it draws nothing for one page either way */
-  const { page, setPage, pageCount, visible } = usePaged(sessions ?? []);
 
   /*
    * Browser + platform, read from the user agent — two words, because
@@ -87,16 +84,29 @@ export function SecuritySettings() {
         {sessions === null ? null : sessions.length === 0 ? (
           <p className="mt-3 text-sm text-fg-muted">{t("sessionsEmpty")}</p>
         ) : (
-          <div className="mt-3">
+          /* the records table's own dress: the table lives in a Card (M42)
+             — without it the rows float on the page background and the
+             user rightly asked whether this was the same table */
+          <Card className="mt-3 !p-0">
             <DataTable
-              rows={visible}
+              rows={sessions}
               rowKey={(session) => session.handle}
               /* the records table's own gesture: every action in the
                  right-click menu. Ending THIS device is deliberately not
                  offered here — that is sign-out, which the avatar menu
                  already owns, and a session ending itself mid-request
                  would look like a crash rather than a choice. */
-              menuItems={(session) => session.handle === current ? [] : [{
+              /* EVERY row answers the right-click (the user right-clicked
+                 their own row and concluded the menu did not exist). THIS
+                 device offers sign-out — the honest name for ending the
+                 session you are riding, consumed from the avatar menu's own
+                 flow — and any other device offers the end door. */
+              menuItems={(session) => session.handle === current ? [{
+                key: "signout",
+                label: t("signOutDevice"),
+                icon: <IconClose width={14} height={14} />,
+                onSelect: () => { void signOutThisDevice(locale); },
+              }] : [{
                 key: "end",
                 label: t("endSession"),
                 icon: <IconClose width={14} height={14} />,
@@ -157,8 +167,7 @@ export function SecuritySettings() {
                 },
               ]}
             />
-            <Pagination page={page} pageCount={pageCount} onPage={setPage} />
-          </div>
+          </Card>
         )}
       </div>
 

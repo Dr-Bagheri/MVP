@@ -23,6 +23,8 @@ vi.mock("@/api/client", () => ({
   },
 }));
 vi.mock("@/lib/notify", () => ({ notify: () => {} }));
+const signedOut = vi.fn();
+vi.mock("@/lib/signOut", () => ({ signOutThisDevice: (locale: string) => { signedOut(locale); return Promise.resolve(); } }));
 
 const { SecuritySettings } = await import("./SecuritySettings");
 
@@ -35,6 +37,7 @@ describe("the sessions table", () => {
   beforeEach(() => {
     cleanup();
     ended.mockReset();
+    signedOut.mockReset();
     SESSIONS = [ROW("aaaaaaaa", "Edg/1.0 Windows"), ROW("bbbbbbbb", "Firefox/1.0 Linux")];
   });
 
@@ -52,9 +55,16 @@ describe("the sessions table", () => {
     expect(ended).toHaveBeenCalledWith("bbbbbbbb");
   });
 
-  it("offers no end item on THIS device — the row that must answer NO", async () => {
+  it("offers sign-out, never end, on THIS device — the row that must answer NO", async () => {
+    /* the user right-clicked their own row and concluded the menu did not
+       exist — so the current row answers too, with the honest act for the
+       session you are riding: sign-out, through the avatar menu's own flow */
     await act(async () => { render(<SecuritySettings />); });
     fireEvent.contextMenu(screen.getByText("Edge · Windows"));
     expect(screen.queryByText("پایان این نشست")).toBeNull();
+    fireEvent.click(screen.getByText("خروج از حساب در این دستگاه"));
+    await act(async () => {});
+    expect(signedOut).toHaveBeenCalled();
+    expect(ended).not.toHaveBeenCalled();
   });
 });

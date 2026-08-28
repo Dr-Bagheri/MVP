@@ -2126,6 +2126,7 @@
     "colLastAction": "Last action",
     "thisDevice": "This device",
     "endSession": "End this session",
+    "signOutDevice": "Sign out on this device",
     "endConfirmTitle": "End the {device} session?",
     "endConfirmBody": "That device is signed out the next time it talks to the server. Its work is untouched — only the sign-in ends.",
     "endConfirm": "End session",

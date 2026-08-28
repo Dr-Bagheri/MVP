@@ -356,7 +356,13 @@ export function Integrations() {
                 return (
                   <div
                     key={entry.slug}
-                    className={`card flex flex-col ${open ? "cursor-pointer transition-colors hover:border-border-strong" : ""}`}
+                    /* the WORKFLOW template card's anatomy, verbatim (user
+                       directive, 2026-08-28: "make integration big buttons
+                       look like the workflow big buttons") — same corner,
+                       same padding, same round glowing tile, same title
+                       scale. Two big-card styles on adjacent pages read as
+                       two products. */
+                    className={`group flex min-h-56 flex-col rounded-2xl border border-border bg-surface p-7 ${open ? "cursor-pointer transition-colors hover:border-border-strong hover:bg-surface-2" : ""}`}
                     {...(open
                       ? {
                           role: "button",
@@ -372,23 +378,28 @@ export function Integrations() {
                         }
                       : {})}
                   >
-                    <div className="flex items-center gap-3">
-                      <span
-                        className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-surface-2 text-fg-muted"
-                        aria-hidden
-                      >
-                        <Icon name={entry.icon} size="lg" />
-                      </span>
-                      <span className="min-w-0">
-                        <span className="block truncate text-sm font-semibold text-fg">
-                          {copy[entry.key].name}
-                        </span>
-                        <span className="block truncate text-xs text-fg-muted">
-                          {providerName(entry.provider)}
-                        </span>
-                      </span>
-                    </div>
-                    <p className="mt-3 flex-1 text-sm leading-6 text-fg-muted">
+                    {/* the tile keeps the workflow tile's exact recipe —
+                        Gmail wears the coral family (its own mark is red;
+                        beside the mail workflow's coral plane it reads as
+                        kin), everything else the accent, the platform's
+                        only two on-color pairs */}
+                    <span
+                      className={`grid h-16 w-16 shrink-0 place-items-center rounded-full ${
+                        entry.slug === "gmail" || entry.slug === "outlook-mail"
+                          ? "bg-danger text-on-danger shadow-[0_18px_44px_-14px_rgb(var(--danger)/0.75)]"
+                          : "bg-accent text-on-accent shadow-[0_18px_44px_-14px_rgb(var(--accent)/0.75)]"
+                      }`}
+                      aria-hidden
+                    >
+                      <Icon name={entry.icon} size="xl" />
+                    </span>
+                    <h2 className="mt-7 text-xl font-semibold text-fg group-hover:text-accent">
+                      {copy[entry.key].name}
+                    </h2>
+                    <p className="mt-0.5 text-xs text-fg-muted">
+                      {providerName(entry.provider)}
+                    </p>
+                    <p className="mt-2 flex-1 max-w-md text-sm leading-6 text-fg-muted">
                       {copy[entry.key].description}
                     </p>
                     {/* the action row stops the click: a button here answers

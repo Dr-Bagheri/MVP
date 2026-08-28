@@ -8,6 +8,8 @@
  * belongs in the bar, and each surface maps over the same array.
  */
 
+import { SETTINGS_SECTIONS } from "./settingsSections";
+
 export interface NavItem {
   href: string;
   /** Key under the `platform` message namespace. */
@@ -81,3 +83,39 @@ export const NAV_BAR: readonly NavItem[] = NAV_PRIMARY.filter((i) => i.inBar);
  * A test runs, and it fails with a number in the message.
  */
 export const BAR_CEILING = 4;
+
+
+/**
+ * ONE resolver for the nav's active state, shared by the icon rail and the
+ * bottom bar — the two renderings were each carrying their own matcher,
+ * which is exactly the drift this file's header warns about, and the drift
+ * arrived: the user selected Allowed models and watched the MANAGEMENT
+ * tile light up (2026-08-28 screenshot).
+ *
+ * The cause: Skills and Allowed models live at /management/* but WEAR the
+ * Settings pane — their breadcrumb says Settings, their menu is Settings'.
+ * An address-prefix match answers "who serves this page", and the rail's
+ * question is "whose section is the person standing in". So cross-homed
+ * addresses are folded into /settings first, derived from the settings
+ * pane's own table (13½: the producer owns the list), and only then does
+ * longest-prefix-wins run.
+ *
+ * "/" would prefix-match every route, so the hub is compared exactly while
+ * the rest match by prefix (so /settings/security still lights Settings).
+ * LONGEST match wins, and only it — naive per-item matching lit two tiles
+ * at once the day the quick-access destinations joined the rail.
+ */
+export function activeNavHref(pathname: string): string | undefined {
+  const crossHomed = SETTINGS_SECTIONS
+    .filter((section) => section.href !== undefined)
+    .map((section) => section.href!);
+  const effective = crossHomed.some(
+    (href) => pathname === href || pathname.startsWith(`${href}/`),
+  )
+    ? "/settings"
+    : pathname;
+  const candidates = [...NAV_PRIMARY, ...NAV_UTILITY]
+    .map((n) => n.href)
+    .filter((href) => (href === "/" ? effective === "/" : effective.startsWith(href)));
+  return candidates.sort((a, b) => b.length - a.length)[0];
+}

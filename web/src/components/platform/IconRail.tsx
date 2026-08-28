@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useTranslations } from "next-intl";
 import { Link, usePathname } from "@/i18n/routing";
-import { NAV_PRIMARY, NAV_UTILITY, type NavItem } from "./nav";
+import { NAV_PRIMARY, NAV_UTILITY, activeNavHref, type NavItem } from "./nav";
 import { EchoMark, NAV_ICON } from "./icons";
 
 /**
@@ -24,18 +24,9 @@ export function IconRail() {
   const t = useTranslations("platform");
   const pathname = usePathname();
 
-  /*
-   * "/" would prefix-match every route, so the hub is compared exactly while
-   * the rest match by prefix (so /settings/security still lights Settings).
-   *
-   * LONGEST match wins, and only it: /management/skills is Prompts' entry AND
-   * Management's prefix — naive per-item matching lit both tiles at once the
-   * day the quick-access destinations joined the rail.
-   */
-  const candidates = [...NAV_PRIMARY, ...NAV_UTILITY]
-    .map((n) => n.href)
-    .filter((href) => (href === "/" ? pathname === "/" : pathname.startsWith(href)));
-  const activeHref = candidates.sort((a, b) => b.length - a.length)[0];
+  /* ONE matcher for both renderings of the nav — the reasoning (and the
+     cross-homed Settings surfaces that forced it) lives on activeNavHref. */
+  const activeHref = activeNavHref(pathname);
   const isActive = (href: string) => href === activeHref;
 
   const item = (nav: NavItem) => {

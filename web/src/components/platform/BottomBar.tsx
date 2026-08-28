@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { Link, usePathname } from "@/i18n/routing";
-import { NAV_BAR, NAV_PRIMARY, NAV_UTILITY } from "./nav";
+import { NAV_BAR, NAV_PRIMARY, NAV_UTILITY, activeNavHref } from "./nav";
 import { EchoMark, MoreIcon, NAV_ICON } from "./icons";
 
 /**
@@ -22,8 +22,11 @@ export function BottomBar() {
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
 
-  const isActive = (href: string) =>
-    href === "/" ? pathname === "/" : pathname.startsWith(href);
+  /* the SAME matcher the rail uses — two matchers for one nav is the
+     drift nav.ts exists to prevent (see activeNavHref for the cross-homed
+     Settings surfaces that made this a bug someone saw) */
+  const activeHref = activeNavHref(pathname);
+  const isActive = (href: string) => href === activeHref;
 
   return (
     <>

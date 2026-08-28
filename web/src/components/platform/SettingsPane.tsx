@@ -3,6 +3,7 @@
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import { TwoPane, type PaneGroup } from "./TwoPane";
+import { GROUP_ORDER, SETTINGS_SECTIONS } from "./settingsSections";
 
 /**
  * SETTINGS' two-pane menu, extracted from the settings page (2026-08-26)
@@ -22,31 +23,17 @@ import { TwoPane, type PaneGroup } from "./TwoPane";
  * one feature, which is two states to disagree.
  */
 
-export type SettingsGroup = "configuration" | "assistant" | "service" | "connections" | "compliance";
-
-export interface SettingsSection {
-  slug: string;
-  group: SettingsGroup;
-  /** an absolute href when the surface lives outside /settings */
-  href?: string;
-  /** the label comes from another namespace when the page is not ours */
-  labelFrom?: "management";
-}
-
-export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
-  { slug: "general", group: "configuration" },
-  { slug: "assistant", group: "configuration" },
-  /* every make-something-for-me-unprompted switch, one screen (user
-     directive, 2026-08-28) — beside Assistant, whose two toggles moved
-     into it */
-  { slug: "notifications", group: "configuration" },
-  { slug: "security", group: "configuration" },
-  { slug: "sso", group: "configuration" },
-  /* the assistant's own configuration — the pages keep their addresses */
-  { slug: "skills", group: "assistant", href: "/management/skills", labelFrom: "management" },
-  { slug: "models", group: "assistant", href: "/management/models", labelFrom: "management" },
-  { slug: "audit-logs", group: "compliance" },
-];
+/*
+ * The registry itself lives in settingsSections.ts (a plain module) so the
+ * NAV MODEL can read which /management/* addresses are Settings' territory
+ * without importing this client component. Re-exported here because this
+ * file is where readers look for it.
+ */
+export {
+  SETTINGS_SECTIONS,
+  type SettingsGroup,
+  type SettingsSection,
+} from "./settingsSections";
 
 /*
  * LEFT THE MENU (user directive, 2026-08-28): Connectors — the
@@ -67,9 +54,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
  * questions, and only the first one was asked.
  */
 
-const GROUP_ORDER: readonly SettingsGroup[] = [
-  "configuration", "assistant", "service", "connections", "compliance",
-];
+
 
 export function useSettingsGroups(): PaneGroup[] {
   const t = useTranslations("settings");
