@@ -34,6 +34,8 @@ export interface ConnectorStatus {
   status: "not_configured" | "not_connected" | "connected" | "expired" | "revoked";
   account_label: string | null;
   expires_at: string | null;
+  /** the granted scopes include drafting — see DRAFT_SCOPE */
+  can_draft: boolean;
 }
 
 export interface ConnectorItem {
@@ -41,6 +43,25 @@ export interface ConnectorItem {
   title: string;
   subtitle: string;
   occurred_at: string | null;
+}
+
+/** What a reply needs to know about the message it answers. */
+export interface MailEnvelope {
+  /** who to reply to, already a bare address */
+  to: string;
+  subject: string;
+  /** the provider's thread handle, so the reply lands in the conversation */
+  thread_ref: string | null;
+  /** RFC822 Message-ID, so mail clients thread it correctly */
+  message_id: string | null;
+}
+
+export interface OutgoingMail {
+  to: string;
+  subject: string;
+  body: string;
+  thread_ref?: string | null;
+  in_reply_to?: string | null;
 }
 
 export interface ConnectorContext {
@@ -81,12 +102,37 @@ interface ProviderTokenResponse {
 }
 
 const PROVIDERS: readonly ConnectorProvider[] = ["google", "microsoft"];
+/**
+ * Read is the floor; DRAFTING is the reason the extra scope is here.
+ *
+ * `gmail.compose` covers creating and updating drafts AND sending them, so it
+ * is asked for instead of `gmail.readonly` + `gmail.send`: one consent line
+ * rather than two for one capability. It is a RESTRICTED scope — Google shows
+ * it as "Manage drafts and send emails" — and it is the whole difference
+ * between an assistant that tells you what it would write and one that leaves
+ * the reply waiting in your mailbox.
+ *
+ * The grant it buys is still not permission to SEND on its own: the agent
+ * role cannot update a draft row to `sent` (db/0114 withholds the grant), so
+ * a send is a person pressing a button, enforced at the wall rather than in
+ * a prompt.
+ */
 const GOOGLE_SCOPES = [
   "openid", "email", "profile",
   "https://www.googleapis.com/auth/calendar.events.readonly",
   "https://www.googleapis.com/auth/gmail.readonly",
+  "https://www.googleapis.com/auth/gmail.compose",
 ] as const;
-const MICROSOFT_SCOPES = ["openid", "profile", "email", "offline_access", "User.Read", "Calendars.Read", "Mail.Read"] as const;
+const MICROSOFT_SCOPES = [
+  "openid", "profile", "email", "offline_access", "User.Read",
+  "Calendars.Read", "Mail.Read", "Mail.ReadWrite", "Mail.Send",
+] as const;
+
+/** The scope each provider's drafting needs, for the reconnect prompt. */
+const DRAFT_SCOPE: Record<ConnectorProvider, string> = {
+  google: "https://www.googleapis.com/auth/gmail.compose",
+  microsoft: "Mail.Send",
+};
 const CONTEXT_LIMIT = 16_000;
 
 function strings(value: unknown): string[] {
@@ -200,7 +246,50 @@ function tokenPayload(response: ProviderTokenResponse, previous?: TokenPayload):
 async function providerFetch(url: string, init: RequestInit): Promise<Record<string, unknown>> {
   const response = await fetch(url, init);
   if (!response.ok) throw new Error(`connector provider request failed (${response.status})`);
-  return await response.json() as Record<string, unknown>;
+  /* a 202/204 carries no body: Graph answers a send that way, and asking
+     `.json()` for one turns a success into a thrown parse error */
+  if (response.status === 202 || response.status === 204) return {};
+  const raw = await response.text();
+  return raw ? JSON.parse(raw) as Record<string, unknown> : {};
+}
+
+/** The bare address out of `Name <a@b.c>` — providers accept either, mail UIs read the first better. */
+function bareAddress(value: string): string {
+  const angled = /<([^>]+)>/.exec(value);
+  return (angled?.[1] ?? value).trim();
+}
+
+/**
+ * A header value that survives Persian.
+ *
+ * RFC822 headers are ASCII; a Persian subject put in raw is mojibake in every
+ * mail client. RFC2047 encoded-words are the only portable answer, and this
+ * product's default subject is Persian — so the encoded form is the path,
+ * not the exception.
+ */
+function encodedHeader(value: string): string {
+  return /^[\x20-\x7e]*$/.test(value)
+    ? value
+    : `=?UTF-8?B?${Buffer.from(value, "utf8").toString("base64")}?=`;
+}
+
+function rfc822(mail: OutgoingMail): string {
+  const lines = [
+    `To: ${mail.to}`,
+    `Subject: ${encodedHeader(mail.subject)}`,
+    ...(mail.in_reply_to ? [`In-Reply-To: ${mail.in_reply_to}`, `References: ${mail.in_reply_to}`] : []),
+    "MIME-Version: 1.0",
+    "Content-Type: text/plain; charset=UTF-8",
+    "Content-Transfer-Encoding: base64",
+    "",
+    Buffer.from(mail.body, "utf8").toString("base64"),
+  ];
+  return lines.join("\r\n");
+}
+
+function base64UrlEncode(value: string): string {
+  return Buffer.from(value, "utf8").toString("base64")
+    .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
 async function exchangeCode(
@@ -364,6 +453,14 @@ export function createConnectorsRepo(db: Db, options: ConnectorOAuthOptions = {}
           status: !isConfigured ? "not_configured" : row?.status ?? "not_connected",
           account_label: row?.account_label || null,
           expires_at: row?.expires_at ?? null,
+          /*
+           * Derived from what the PROVIDER granted, never from what we asked
+           * for. A connection made before drafting existed is `connected` and
+           * cannot draft, and the two facts have to be separable or the screen
+           * offers a button that fails at the provider: "connected" would be
+           * standing in for two different states again.
+           */
+          can_draft: strings(row?.scopes).includes(DRAFT_SCOPE[provider]),
         };
       });
     },
@@ -425,6 +522,10 @@ export function createConnectorsRepo(db: Db, options: ConnectorOAuthOptions = {}
       return {
         provider, configured: true, status: "connected", account_label: label,
         expires_at: payload.expiresAt,
+        /* what the provider ACTUALLY granted this time — a consent screen the
+           person narrowed is a connection that cannot draft, and it says so
+           from the first render rather than at the first attempt */
+        can_draft: payload.scopes.includes(DRAFT_SCOPE[provider]),
       };
     },
 
@@ -505,6 +606,145 @@ export function createConnectorsRepo(db: Db, options: ConnectorOAuthOptions = {}
           subtitle: text(from?.address) || text(record.bodyPreview), occurred_at: text(record.receivedDateTime) || null,
         }] : [];
       });
+    },
+
+    /**
+     * The envelope of the message a reply answers — typed fields only, never
+     * the body. The body is untrusted content and travels the path that
+     * fences it (`sourceContext`); this is the part a draft needs as DATA:
+     * where to send it, what to call it, which thread it belongs to.
+     */
+    async mailEnvelope(
+      identity: Identity, provider: ConnectorProvider, sourceId: string,
+    ): Promise<MailEnvelope> {
+      if (!sourceId || sourceId.length > 512) {
+        throw new ValidationError("invalid connector source", { code: "connector_source_invalid" });
+      }
+      const bearer = await access(identity, provider);
+      if (provider === "google") {
+        const message = await providerFetch(
+          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(sourceId)}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Reply-To&metadataHeaders=Message-ID`,
+          { headers: { authorization: `Bearer ${bearer}` } },
+        );
+        const h = headers((message.payload as Record<string, unknown> | undefined)?.headers);
+        return {
+          to: bareAddress(h["reply-to"] || h.from || ""),
+          subject: h.subject ? `Re: ${h.subject.replace(/^re:\s*/i, "")}` : "Re:",
+          thread_ref: text(message.threadId) || null,
+          message_id: h["message-id"] || null,
+        };
+      }
+      const message = await providerFetch(
+        `https://graph.microsoft.com/v1.0/me/messages/${encodeURIComponent(sourceId)}?$select=subject,from,replyTo,conversationId,internetMessageId`,
+        { headers: { authorization: `Bearer ${bearer}` } },
+      );
+      const replyTo = Array.isArray(message.replyTo) ? message.replyTo[0] : undefined;
+      const sender = (replyTo ?? message.from) as { emailAddress?: { address?: unknown } } | undefined;
+      const subject = text(message.subject);
+      return {
+        to: text(sender?.emailAddress?.address),
+        subject: subject ? `Re: ${subject.replace(/^re:\s*/i, "")}` : "Re:",
+        thread_ref: text(message.conversationId) || null,
+        message_id: text(message.internetMessageId) || null,
+      };
+    },
+
+    /**
+     * Put the reply in the person's own DRAFTS folder. Not a send: a draft is
+     * the assistant showing its work where the person already looks for it,
+     * and it is reversible by deleting it like any other draft.
+     */
+    async createDraft(
+      identity: Identity, provider: ConnectorProvider, mail: OutgoingMail,
+    ): Promise<string | null> {
+      const bearer = await access(identity, provider);
+      if (provider === "google") {
+        const created = await providerFetch("https://gmail.googleapis.com/gmail/v1/users/me/drafts", {
+          method: "POST",
+          headers: { authorization: `Bearer ${bearer}`, "content-type": "application/json" },
+          body: JSON.stringify({
+            message: {
+              raw: base64UrlEncode(rfc822(mail)),
+              ...(mail.thread_ref ? { threadId: mail.thread_ref } : {}),
+            },
+          }),
+        });
+        return text(created.id) || null;
+      }
+      const created = await providerFetch("https://graph.microsoft.com/v1.0/me/messages", {
+        method: "POST",
+        headers: { authorization: `Bearer ${bearer}`, "content-type": "application/json" },
+        body: JSON.stringify({
+          subject: mail.subject,
+          body: { contentType: "Text", content: mail.body },
+          toRecipients: [{ emailAddress: { address: mail.to } }],
+        }),
+      });
+      return text(created.id) || null;
+    },
+
+    /**
+     * SEND. Reached only from the route a signed-in person presses, and the
+     * agent role cannot reach that route's table write at all (db/0114) — so
+     * this method existing is not the same as the assistant being able to
+     * use it.
+     */
+    async sendMail(
+      identity: Identity, provider: ConnectorProvider, mail: OutgoingMail, providerDraftId: string | null,
+    ): Promise<void> {
+      const bearer = await access(identity, provider);
+      if (provider === "google") {
+        /* send the DRAFT when we made one, so the person's Sent copy is the
+           message they were shown rather than a second one just like it */
+        if (providerDraftId) {
+          await providerFetch("https://gmail.googleapis.com/gmail/v1/users/me/drafts/send", {
+            method: "POST",
+            headers: { authorization: `Bearer ${bearer}`, "content-type": "application/json" },
+            body: JSON.stringify({ id: providerDraftId }),
+          });
+          return;
+        }
+        await providerFetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
+          method: "POST",
+          headers: { authorization: `Bearer ${bearer}`, "content-type": "application/json" },
+          body: JSON.stringify({
+            raw: base64UrlEncode(rfc822(mail)),
+            ...(mail.thread_ref ? { threadId: mail.thread_ref } : {}),
+          }),
+        });
+        return;
+      }
+      if (providerDraftId) {
+        await providerFetch(
+          `https://graph.microsoft.com/v1.0/me/messages/${encodeURIComponent(providerDraftId)}/send`,
+          { method: "POST", headers: { authorization: `Bearer ${bearer}` } },
+        );
+        return;
+      }
+      await providerFetch("https://graph.microsoft.com/v1.0/me/sendMail", {
+        method: "POST",
+        headers: { authorization: `Bearer ${bearer}`, "content-type": "application/json" },
+        body: JSON.stringify({
+          message: {
+            subject: mail.subject,
+            body: { contentType: "Text", content: mail.body },
+            toRecipients: [{ emailAddress: { address: mail.to } }],
+          },
+        }),
+      });
+    },
+
+    /** New messages since `cursor` (a provider message id), newest first. */
+    async newMailSince(
+      identity: Identity, provider: ConnectorProvider, cursor: string | null,
+    ): Promise<{ items: ConnectorItem[]; newest: string | null }> {
+      const items = await this.mailMessages(identity, provider);
+      const newest = items[0]?.id ?? null;
+      if (cursor === null) return { items: [], newest };
+      const seen = items.findIndex((item) => item.id === cursor);
+      /* cursor not in the window: the mailbox moved further than one page, so
+         take the page — never the whole history, and never nothing */
+      return { items: seen === -1 ? items : items.slice(0, seen), newest };
     },
 
     async sourceContext(

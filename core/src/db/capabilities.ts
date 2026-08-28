@@ -146,6 +146,11 @@ export async function hasSignupPolicy(db: Db): Promise<boolean> {
   return hasColumn(db, "org", "allowed_email_domains");
 }
 
+/** db/0114-0115: mail drafts and the per-person auto-draft switch. */
+export async function hasMailDrafts(db: Db): Promise<boolean> {
+  return hasColumn(db, "app_user", "auto_draft_replies");
+}
+
 /** db/0103: the logo as BYTES (the upload path). */
 export async function hasOrgLogoBytes(db: Db): Promise<boolean> {
   return hasColumn(db, "org", "logo_bytes");

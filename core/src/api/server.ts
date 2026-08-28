@@ -42,6 +42,7 @@ import { applyProposal, createWriteTools } from "../agent/write-tools.ts";
 import { createNamedSkillResolver, listResolvedSkills } from "../agent/skill-store.ts";
 import { createAssistantAgent, listAssistantAgents, resolveAssistantAgent } from "../agent/agent-store.ts";
 import { createConnectorsRepo, type ConnectorOAuthOptions, type ConnectorProvider } from "./connectors.ts";
+import { createMailDraftsRepo } from "./mail-drafts.ts";
 import { createTts } from "./tts.ts";
 import { createLiveStt } from "./live-stt.ts";
 import { createCapabilitiesRepo, CAPABILITIES, type CapabilitiesRepo } from "./capabilities.ts";
@@ -159,6 +160,7 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
   }).catch(() => undefined);
   const webhooks: WebhooksRepo = createWebhooksRepo(options.db);
   const connectors = createConnectorsRepo(options.db, options.connectorOAuth);
+  const mailDrafts = createMailDraftsRepo(options.db, connectors);
   // One resolver for the assistant's `/slug` and the pipeline's summarizer.
   // A caller may still inject its own, but the default is the shared one —
   // if the summarizer resolved skills differently, an org that customised the
@@ -698,6 +700,7 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       assistant_reply_length: text(body.assistant_reply_length),
       assistant_instructions: text(body.assistant_instructions),
       post_call_brief: typeof body.post_call_brief === "boolean" ? body.post_call_brief : undefined,
+      auto_draft_replies: typeof body.auto_draft_replies === "boolean" ? body.auto_draft_replies : undefined,
     }));
   });
 
@@ -1974,6 +1977,39 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     const { id } = request.params as { id: string };
     return reply.send(
       await workflowAuthoring.update(identity, id, (request.body ?? {}) as Record<string, unknown>));
+  });
+
+  /**
+   * M43 — the drafts the assistant wrote and nobody has sent.
+   *
+   * Owner-only by RLS; the send is the only outward action in this file and
+   * it is a POST a signed-in person makes. A gateway key cannot reach it:
+   * an integration holding an API key must not be able to send mail as the
+   * person who minted the key (M17's argument, at its sharpest).
+   */
+  app.get("/v1/mail/drafts", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    const query = (request.query ?? {}) as { status?: unknown; session?: unknown };
+    return reply.send({
+      drafts: await mailDrafts.list(identity, {
+        status: typeof query.status === "string" ? query.status : undefined,
+        session: typeof query.session === "string" ? query.session : undefined,
+      }),
+    });
+  });
+
+  app.post("/v1/mail/drafts/:id/send", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    return reply.send(await mailDrafts.send(identity, id));
+  });
+
+  app.post("/v1/mail/drafts/:id/discard", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    return reply.send(await mailDrafts.discard(identity, id));
   });
 
   app.post("/v1/workflows/starters", async (request, reply) => {

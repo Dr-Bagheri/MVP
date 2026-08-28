@@ -145,6 +145,12 @@ export interface MeRecord extends MemberRecord {
   assistant_instructions?: string | null;
   post_call_brief?: boolean;
   /**
+   * db/0115: "read my new mail and draft replies". Absent on an un-migrated
+   * deployment; FALSE by default, because reading someone's inbox is not a
+   * feature that arrives switched on.
+   */
+  auto_draft_replies?: boolean;
+  /**
    * Profile context (db/0080, user directive 2026-08-22): what the person
    * does and what they told us about themselves, plus the CONSENT flag —
    * `assistant_context` true means the assistant may see the two texts at
@@ -391,6 +397,7 @@ export function createMembersRepo(db: Db) {
         assistant_reply_length?: string | null | undefined;
         assistant_instructions?: string | null | undefined;
         post_call_brief?: boolean | undefined;
+        auto_draft_replies?: boolean | undefined;
       },
     ): Promise<MeRecord> {
       if (!(await hasAssistantPrefs(db))) {
@@ -414,7 +421,8 @@ export function createMembersRepo(db: Db) {
           { code: "instructions_too_long", params: { max: "2000" } });
       }
       if (language === undefined && length === undefined
-        && instructions === undefined && patch.post_call_brief === undefined) {
+        && instructions === undefined && patch.post_call_brief === undefined
+        && patch.auto_draft_replies === undefined) {
         throw new ValidationError("nothing to update", { code: "nothing_to_update" });
       }
       await db.withIdentity(identity, (tx: SqlTx) =>
@@ -423,13 +431,15 @@ export function createMembersRepo(db: Db) {
               set assistant_reply_language = case when $2 then $3::text else assistant_reply_language end,
                   assistant_reply_length   = case when $4 then $5::text else assistant_reply_length end,
                   assistant_instructions   = case when $6 then $7::text else assistant_instructions end,
-                  post_call_brief          = case when $8 then $9::boolean else post_call_brief end
+                  post_call_brief          = case when $8 then $9::boolean else post_call_brief end,
+                  auto_draft_replies       = case when $10 then $11::boolean else auto_draft_replies end
             where id = $1`,
           [identity.userId,
             language !== undefined, language ?? null,
             length !== undefined, length ?? null,
             instructions !== undefined, instructions ?? null,
             patch.post_call_brief !== undefined, patch.post_call_brief ?? null,
+            patch.auto_draft_replies !== undefined, patch.auto_draft_replies ?? null,
           ]));
       return this.me(identity);
     },
@@ -459,7 +469,7 @@ export function createMembersRepo(db: Db) {
                   u.preferred_model, u.locale, u.calendar, u.timezone,
                   ${withAutonomy ? "u.autonomy," : ""}
                   ${withAssistant
-                    ? "u.assistant_reply_language, u.assistant_reply_length, u.assistant_instructions, u.post_call_brief,"
+                    ? "u.assistant_reply_language, u.assistant_reply_length, u.assistant_instructions, u.post_call_brief, u.auto_draft_replies,"
                     : ""}
                   ${withProfileCtx ? "u.job_title, u.about, u.assistant_context," : ""}
                   o.name as org_name
@@ -498,6 +508,7 @@ export function createMembersRepo(db: Db) {
               assistant_reply_length: (row.assistant_reply_length as string | null) ?? null,
               assistant_instructions: (row.assistant_instructions as string | null) ?? null,
               post_call_brief: row.post_call_brief !== false,
+              auto_draft_replies: row.auto_draft_replies === true,
             }
           : {}),
         ...(withProfileCtx

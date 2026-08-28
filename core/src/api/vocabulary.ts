@@ -301,6 +301,18 @@ export const EXECUTABLE_STEP_KINDS = [
  * decider can read it back (the read policy follows the call), and the
  * agent role's apply grant is owner-only on exactly these two columns.
  */
+/**
+ * The dock's card kinds (db/0074, widened by 0107 and 0116).
+ *
+ * Exported because the web's union drifted silently once already: 0107 added
+ * `workflow_result` and `web/src/api/types.ts` never learned it, since
+ * nothing derived that list from a producer. It does now.
+ */
+export const AGENT_CARD_KINDS = [
+  "post_call_brief", "weekly_digest", "workflow_result", "mail_draft",
+] as const;
+export type AgentCardKind = (typeof AGENT_CARD_KINDS)[number];
+
 export const WORKFLOW_PROPOSAL_KINDS = ["add_tags", "set_title"] as const;
 export type WorkflowProposalKind = (typeof WORKFLOW_PROPOSAL_KINDS)[number];
 
