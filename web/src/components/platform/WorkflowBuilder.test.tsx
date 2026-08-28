@@ -34,7 +34,7 @@ vi.mock("@/api/client", () => ({
   },
 }));
 
-const { WorkflowBuilder } = await import("./WorkflowBuilder");
+const { WorkflowBuilder, cleanStep } = await import("./WorkflowBuilder");
 
 /** the ids in the order they are RENDERED — the whole point of these tests */
 function stepIds(): string[] {
@@ -167,5 +167,45 @@ describe("the workflow builder", () => {
     });
 
     expect(screen.getByRole("alert").textContent).toBe(REFUSAL);
+  });
+});
+
+/**
+ * **A mail-reply graph survives being opened and saved.**
+ *
+ * This is what "editable" has to mean. `cleanStep` whitelists the keys a
+ * kind owns, so a kind whose new fields were never added to that list loses
+ * them silently on save — the editor opens, the person changes a word, and
+ * the reply's recipient quietly disappears from the graph. The server would
+ * refuse the result, which is the good half; the bad half is that the
+ * workflow can no longer be edited at all, which is exactly the thing this
+ * feature exists to provide.
+ */
+describe("the draft_mail step round-trips", () => {
+  it("keeps the fields that address the reply", () => {
+    const step = {
+      id: "s4", kind: "propose", proposal: "draft_mail",
+      message: "{{s1.id}}", to: "{{s1.reply_to}}", subject: "{{s1.subject}}",
+      from: "{{s2.body}}",
+    };
+    expect(cleanStep(step)).toEqual({
+      id: "s4", kind: "propose", proposal: "draft_mail",
+      message: "{{s1.id}}", to: "{{s1.reply_to}}", subject: "{{s1.subject}}",
+      from: "{{s2.body}}",
+    });
+  });
+
+  it("keeps tools:none on a model step", () => {
+    /* the server REQUIRES it on any graph that drafts mail, so dropping it
+       here would make every mail workflow unsaveable after one edit */
+    expect(cleanStep({ id: "s2", kind: "extract", schema: "mail_reply_v1", tools: "none", from: "{{s1.body}}" }))
+      .toMatchObject({ tools: "none" });
+  });
+
+  it("still drops a key the kind does not own — the control", () => {
+    /* without this, "keep everything" passes both checks above and the
+       whitelist stops being a whitelist */
+    expect(cleanStep({ id: "s4", kind: "propose", proposal: "add_tags", from: "{{s2.topics}}", call: "{{trigger.call_id}}", nonsense: "x" }))
+      .not.toHaveProperty("nonsense");
   });
 });

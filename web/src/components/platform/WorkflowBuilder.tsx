@@ -10,6 +10,8 @@ import { digits } from "@/lib/format";
 import { notify } from "@/lib/notify";
 import {
   EXECUTABLE_STEP_KINDS,
+  EXTRACT_SCHEMA_NAMES,
+  FETCH_SOURCE_KINDS,
   WORKFLOW_EVENTS,
   WORKFLOW_PROPOSAL_KINDS,
   WORKFLOW_STEP_KINDS,
@@ -59,8 +61,10 @@ export interface StepDraft {
 }
 
 const SCOPES = ["calls", "transcript", "summaries", "directory"] as const;
-const SCHEMAS = ["topics_v1", "decisions_v1", "action_items_v1"] as const;
-const FETCH_KINDS = ["calendar_event", "mail_message"] as const;
+/* both lists come from the producer: a hand-kept copy here is a picker that
+   offers what publish refuses, which is the drift shape this repo pays for */
+const SCHEMAS = EXTRACT_SCHEMA_NAMES;
+const FETCH_KINDS = FETCH_SOURCE_KINDS;
 const DECIDE_OPS = ["gt", "gte", "lt", "lte", "eq", "ne", "contains"] as const;
 /** the four ops the validator requires a NUMBER on the left of */
 const NUMERIC_OPS: readonly string[] = ["gt", "gte", "lt", "lte"];
@@ -98,11 +102,11 @@ const TRIGGER_SETTABLE: Record<string, boolean> = {
 const OWNED_KEYS: Record<string, readonly string[]> = {
   search: ["scope", "of", "limit"],
   fetch: ["source_kind", "of"],
-  ask: ["instruction", "agent", "from", "web"],
-  extract: ["instruction", "agent", "from", "schema"],
+  ask: ["instruction", "agent", "from", "web", "tools"],
+  extract: ["instruction", "agent", "from", "schema", "tools"],
   decide: ["on", ...DECIDE_OPS, "then", "else"],
   foreach: ["over", "max", "do"],
-  propose: ["proposal", "from", "call"],
+  propose: ["proposal", "from", "call", "to", "subject", "message"],
   apply: ["from"],
   notify: ["card"],
   wait: ["on"],
@@ -397,6 +401,39 @@ export function WorkflowBuilder({
    * `braced` is false for `decide.on`, which the grammar takes as a bare
    * path — the same two halves, one less pair of braces.
    */
+  /**
+   * **What this model step may REACH.**
+   *
+   * Not a caution slider — a blast-radius one. A step whose output is read
+   * by the person who asked for it may look things up; a step whose output
+   * is addressed to somebody else may not, because retrieval plus an
+   * outward-facing message is how a stranger's email reaches into our
+   * records. The server refuses `read` on any graph that drafts mail, so
+   * this control is where that refusal stops being a surprise at save time.
+   */
+  const toolsField = (index: number) => {
+    const step = steps[index]!;
+    const none = step.tools === "none";
+    return (
+      <div className="rounded-lg border border-border bg-surface-2/40 p-2.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[11px] font-medium text-fg">{t("toolsLabel")}</span>
+          <button
+            type="button"
+            aria-label={t("toolsLabel")}
+            aria-pressed={none}
+            className={`tap ms-auto h-7 rounded-full border px-3 text-[11px] ${
+              none ? "border-accent bg-accent-soft text-accent" : "border-border text-fg-muted"}`}
+            onClick={() => patchStep(index, "tools", none ? "read" : "none")}
+          >
+            {none ? t("toolsNone") : t("toolsRead")}
+          </button>
+        </div>
+        <p className="mt-1 text-[11px] leading-5 text-fg-muted">{t("toolsHint")}</p>
+      </div>
+    );
+  };
+
   const bindingField = (
     index: number, key: string, text: string, braced = true,
   ) => {
@@ -512,6 +549,7 @@ export function WorkflowBuilder({
               </div>
               <p className="mt-1 text-[11px] leading-5 text-fg-muted">{t("webHint")}</p>
             </div>
+            {toolsField(index)}
           </>
         );
       case "extract":
@@ -521,6 +559,7 @@ export function WorkflowBuilder({
               SCHEMAS.map((schema) => ({ value: schema, label: t(`schema_${schema}`) })),
               "topics_v1")}
             {bindingField(index, "from", t("f_from"))}
+            {toolsField(index)}
             {label(t("f_instruction"), (
               <textarea
                 className="input min-h-[64px] py-2 text-xs"
@@ -609,7 +648,23 @@ export function WorkflowBuilder({
                 value: kind, label: t(`proposal_${kind}`),
               })), WORKFLOW_PROPOSAL_KINDS[0])}
             {bindingField(index, "from", t("f_from"))}
-            {bindingField(index, "call", t("f_call"))}
+            {/*
+              A mail reply is addressed by HEADERS, so its fields are three
+              bindings and no call; everything else is about a call and takes
+              one. Showing both sets at once would offer a `call` the server
+              refuses on a draft_mail, and a `to` it refuses on the others —
+              two dead fields on every card.
+            */}
+            {step.proposal === "draft_mail" ? (
+              <>
+                {bindingField(index, "message", t("f_message"))}
+                {bindingField(index, "to", t("f_to"))}
+                {bindingField(index, "subject", t("f_subject"))}
+                <p className="text-[11px] leading-5 text-fg-muted">{t("draftMailHint")}</p>
+              </>
+            ) : (
+              bindingField(index, "call", t("f_call"))
+            )}
           </>
         );
       case "apply": {

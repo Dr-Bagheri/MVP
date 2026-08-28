@@ -72,6 +72,13 @@ const EXCLUDED: Record<string, string> = {
     "itself and could never fail — the bar-ceiling trap. The import is what " +
     "closed the real drift: this union sat one kind behind the database from " +
     "0107 until 0116 precisely because it WAS a local copy.",
+  EXTRACT_SCHEMA_NAMES:
+    "not mirrored: the builder's schema picker IS this array, imported at " +
+    "runtime — it exists precisely because that picker used to be a " +
+    "hand-kept copy, and a copy offers what publish refuses.",
+  FETCH_SOURCE_KINDS:
+    "not mirrored: same story as EXTRACT_SCHEMA_NAMES — the builder's " +
+    "source picker imports it rather than restating it.",
   INERT_PROPOSAL_KINDS:
     "server-side rule, not a wire shape: it says which proposal kinds may " +
     "apply with no human decision, and the only reader is the executor. " +

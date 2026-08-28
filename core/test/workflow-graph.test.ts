@@ -10,7 +10,9 @@
  * changes, this file is where the disagreement surfaces.
  */
 import { describe, expect, it } from "vitest";
+import { EXTRACT_SCHEMA_NAMES } from "../src/api/vocabulary.ts";
 import {
+  EXTRACT_SCHEMAS,
   parseBindingPath,
   validateWorkflowBudget,
   validateWorkflowGraph,
@@ -58,6 +60,18 @@ const MIGRATED_TEMPLATE_GRAPH = {
     { id: "s2", kind: "ask", from: "{{s1}}", instruction: "خلاصهٔ این جلسه را بنویس." },
   ],
 };
+
+describe("the names and the shapes are one list", () => {
+  it("every published schema name has a schema behind it, and vice versa", () => {
+    /*
+     * The builder's picker IS `EXTRACT_SCHEMA_NAMES` (web imports the array),
+     * and the shapes live here. A name with no shape is a picker offering
+     * something publish refuses; a shape with no name is a schema nobody can
+     * choose. Both directions, because only one of them is the obvious one.
+     */
+    expect([...EXTRACT_SCHEMA_NAMES].sort()).toEqual(Object.keys(EXTRACT_SCHEMAS).sort());
+  });
+});
 
 describe("the SHIPPED starters validate under their own ceilings (rule 10 pin)", () => {
   for (const [key, starter] of Object.entries(STARTER_WORKFLOWS)) {

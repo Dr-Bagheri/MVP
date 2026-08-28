@@ -2089,7 +2089,16 @@
     "unpublished": "Unpublished",
     "versionN": "Version {n}",
     "toggleFailed": "The change was not saved.",
-    "proposal_draft_mail": "Writes the reply as a draft, for you to send"
+    "proposal_draft_mail": "Writes the reply as a draft, for you to send",
+    "f_message": "The message being answered",
+    "f_to": "Reply to",
+    "f_subject": "Subject",
+    "draftMailHint": "The recipient and subject come from the message's own headers — a workflow cannot write them, and the server refuses one that tries.",
+    "toolsLabel": "Can look things up",
+    "toolsNone": "No",
+    "toolsRead": "Yes",
+    "toolsHint": "A step that writes something addressed to someone else gets no retrieval. The server requires this on any workflow that drafts mail.",
+    "schema_mail_reply_v1": "Reply verdict (answer / note / body)"
   },
   "mail": {
     "sentLabel": "Sent",

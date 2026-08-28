@@ -363,6 +363,22 @@ export const AUTO_APPLY_ELIGIBLE = ["add_tags"] as const;
  * would leave somebody unable to revoke it, which is a worse thing to do
  * than showing a provider we are not currently selling.
  */
+/**
+ * The extract schemas a graph may declare, by name.
+ *
+ * The definitions live in `workflow-graph.ts` (they are shapes, and that is
+ * where shapes are validated); the NAMES live here because the builder has
+ * to offer them and web/ imports this module and not that one. A test in
+ * core holds the two together — a name here with no schema there is a
+ * picker offering something publish refuses.
+ */
+export const EXTRACT_SCHEMA_NAMES = [
+  "topics_v1", "decisions_v1", "action_items_v1", "mail_reply_v1",
+] as const;
+
+/** the connector sources a `fetch` step may read */
+export const FETCH_SOURCE_KINDS = ["calendar_event", "mail_message"] as const;
+
 export const OFFERED_CONNECTOR_PROVIDERS = ["google"] as const;
 
 /**

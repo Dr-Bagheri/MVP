@@ -30,6 +30,7 @@
  */
 import { ValidationError } from "./errors.ts";
 import {
+  FETCH_SOURCE_KINDS,
   INERT_PROPOSAL_KINDS,
   WORKFLOW_PROPOSAL_KINDS,
   WORKFLOW_STEP_KINDS,
@@ -322,7 +323,7 @@ const STEP_KEYS: Record<WorkflowStepKind, readonly string[]> = {
 
 const SEARCH_SCOPES = ["transcript", "summaries", "calls", "directory"] as const;
 const DECIDE_OPS = ["gt", "gte", "lt", "lte", "eq", "ne", "contains"] as const;
-const FETCH_KINDS = ["calendar_event", "mail_message"] as const;
+const FETCH_KINDS = FETCH_SOURCE_KINDS;
 const WAIT_KINDS = ["decision", "until", "signal"] as const;
 
 export interface ValidateOptions {
