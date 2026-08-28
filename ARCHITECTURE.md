@@ -1662,6 +1662,35 @@ mailbox per sweep; and editing happens in the mailbox, since the body that
 gets sent is re-read server-side and a card that could edit-and-send would
 mean the thing sent is not necessarily the thing anyone read.
 
+## M44 — Meeting prep: the pre-read that arrives before the meeting
+[user directive, 2026-08-27: "also for the meetings as well", against Sana's
+"Prepare me for meetings"]
+
+M43's twin, with the differences carrying the design.
+
+**Reach is decided by blast radius.** This output never leaves the building —
+the brief is written into a conversation its owner already owns — so it MAY
+use the assistant's read tools over that person's records, and the retrieval
+is the whole value. The mail draft gets no tools at all, because what it
+produces is addressed to somebody else. Two features, one machine, opposite
+tool sets, and the reason is stated in both files.
+
+**The invitation is still fenced.** A meeting title and description are
+written by whoever sent the invite, which makes them exactly as untrusted as
+an email body.
+
+**A window, not a cursor.** Mail is a stream and needs a mark; a calendar is
+a set of future facts, so the trigger is "starts within the next thirty
+minutes" and `echo.meeting_prep` exists solely so one meeting is prepared
+once. All-day entries are excluded — "today" is not a moment you can be
+thirty minutes before — and so are meetings already under way, because a
+pre-read delivered mid-meeting is worse than none: it arrives looking
+useful.
+
+**Per-person, off by default** (`app_user.auto_meeting_prep`, db/0117): a
+calendar is not less personal than an inbox, and an admin does not switch it
+on for somebody else.
+
 ## Invariants (locked)
 
 1. The transcript is the source of truth; everything else derived + rebuildable.
