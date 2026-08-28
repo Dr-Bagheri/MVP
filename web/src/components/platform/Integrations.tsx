@@ -10,7 +10,7 @@ import { MenuLayout, PageContainer, PageHeader, Section } from "@/components/sca
 import { DataTable, StatusDot, type Column } from "@/components/DataTable";
 import { EmptyState } from "@/components/ui";
 import { Icon, type IconName } from "@/components/icons";
-import { personName } from "@/lib/format";
+import { digits, formatRelativeDate, formatTime, personName } from "@/lib/format";
 
 /**
  * The data sources this product reads — what is connected, and what could be
@@ -27,6 +27,15 @@ import { personName } from "@/lib/format";
  * for calendars, and that is the whole surface. A tile for something we do not
  * integrate with is a claim we would then have to keep, and the person who
  * clicks it learns that the page lies before they learn anything else.
+ *
+ * **The connected table lists SOURCES, not accounts** (user report,
+ * 2026-08-28: "i got the email but it did not update itself, sana.ai already
+ * showed that i received them, it must show in that table"). One Google grant
+ * is two things the product does — it reads a mailbox and it reads a calendar
+ * — and they do not have the same state: the mailbox is polled, so it has a
+ * last-looked time and a count of messages passed through, and the calendar is
+ * read on demand and has neither. A single per-provider row could only report
+ * the intersection, which is exactly the fact the person came here to check.
  */
 
 /** The catalogue: every integration the platform ACTUALLY has, once each. */
@@ -42,6 +51,32 @@ const CATALOGUE = [
   kind: "mail" | "calendar";
 }[];
 
+/**
+ * One line of the connected table: what the product reads, not what the person
+ * signed into. A provider's grant fans out into one of these per source.
+ */
+interface SourceRow {
+  key: string;
+  provider: ConnectorProvider;
+  kind: "mail" | "calendar";
+  icon: IconName;
+  name: string;
+  /** the account the grant was made on — the same label under both sources */
+  accountLabel: string | null;
+  status: ConnectorStatus["status"];
+  /** when the poller last looked; null on a mailbox it has never reached */
+  polledAt: string | null;
+  /** messages the poller has passed through; null where nothing is counted */
+  messagesSeen: number | null;
+}
+
+/**
+ * ZWNJ joins words for a reader, not for a typist: «جی‌میل» is one word on
+ * screen and «جیمیل» is what somebody types, and a search that answers "no
+ * results" for text plainly on the page is worse than no search.
+ */
+const fold = (value: string) => value.toLocaleLowerCase().replace(/‌/g, "");
+
 export function Integrations() {
   const t = useTranslations("integrations");
   /* connect / reconnect / not-configured / enable-drafts already have ONE
@@ -55,6 +90,9 @@ export function Integrations() {
   const [connectors, setConnectors] = useState<ConnectorStatus[] | null>(null);
   const [me, setMe] = useState<Me | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  /** "" = every app; otherwise the one provider whose rows are shown */
+  const [app, setApp] = useState<ConnectorProvider | "">("");
 
   useEffect(() => {
     void api.connectors().then(setConnectors).catch(() => setConnectors([]));
@@ -88,40 +126,69 @@ export function Integrations() {
     provider === "google" ? tw("google") : tw("microsoft");
 
   /*
-   * A row per provider the person has actually CONNECTED — including the ones
-   * whose grant has since expired or been revoked.
+   * A row per SOURCE of every provider the person has actually CONNECTED —
+   * including the ones whose grant has since expired or been revoked.
    *
    * Hiding those would be the wrong kind of nothing: a revoked Google
    * connection is not the same fact as never having connected Google, and a
    * table that showed only the healthy ones would say the second while the
    * first is true. It is also what makes the status column a column — a
    * column that can only ever say one word is not reporting anything.
+   *
+   * The order is the catalogue's, so a provider's two sources sit together.
    */
-  const rows = (connectors ?? []).filter((entry) => entry.status !== "not_configured"
-    && entry.status !== "not_connected");
+  const allRows: SourceRow[] = CATALOGUE.flatMap((entry) => {
+    const state = (connectors ?? []).find((row) => row.provider === entry.provider);
+    if (!state || state.status === "not_configured" || state.status === "not_connected") {
+      return [];
+    }
+    const mail = entry.kind === "mail";
+    return [{
+      key: `${entry.provider}:${entry.kind}`,
+      provider: entry.provider,
+      kind: entry.kind,
+      icon: entry.icon,
+      name: COPY[entry.key]!.name,
+      accountLabel: state.account_label,
+      status: state.status,
+      /* the calendar is read on demand, so it has no poll to report and no
+         count to give — null here is "nothing counts this", not "zero" */
+      polledAt: mail ? state.polled_at : null,
+      messagesSeen: mail ? state.messages_seen : null,
+    }];
+  });
 
-  const columns: Column<ConnectorStatus>[] = [
+  /** the apps with a row — a filter offering one option filters nothing */
+  const apps = [...new Set(allRows.map((row) => row.provider))];
+  const needle = fold(query.trim());
+  const rows = allRows.filter((row) =>
+    (app === "" || row.provider === app)
+    /* the account label is matched too: it is the other text on the row, and
+       a search that ignores what a person can plainly read is a search that
+       lies about its own result */
+    && (needle === ""
+      || fold(row.name).includes(needle)
+      || fold(row.accountLabel ?? "").includes(needle)));
+
+  const columns: Column<SourceRow>[] = [
     {
       key: "name",
       header: t("colName"),
       cell: (row) => (
         <span className="flex items-center gap-3">
-          {/* the provider's initial in a tile — the platform ships no remote
-              brand assets (CSP), and the same pattern already names the
-              creator on the workflow detail page */}
+          {/* the SOURCE's mark, not the provider's: two rows of one grant
+              differ by what they read. No remote brand assets (CSP) */}
           <span
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent-soft text-xs font-semibold text-accent"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-surface-2 text-fg-muted"
             aria-hidden
           >
-            {providerName(row.provider).slice(0, 1)}
+            <Icon name={row.icon} size="md" />
           </span>
           <span className="min-w-0">
-            <span className="block truncate text-sm font-medium text-fg">
-              {providerName(row.provider)}
-            </span>
-            {row.account_label ? (
+            <span className="block truncate text-sm font-medium text-fg">{row.name}</span>
+            {row.accountLabel ? (
               <span dir="ltr" className="block truncate text-xs text-fg-muted">
-                {row.account_label}
+                {row.accountLabel}
               </span>
             ) : null}
           </span>
@@ -131,14 +198,46 @@ export function Integrations() {
     {
       key: "status",
       header: t("colStatus"),
+      /*
+       * ACTIVE and SYNCED are two different claims and the table makes them
+       * two different words. Active says the grant is good; Synced says the
+       * poller reached this mailbox, and when — which is the question the
+       * person asked ("i got the email but it did not update itself"). A
+       * mailbox the poller has never looked at is Active, never Synced with
+       * an invented time.
+       */
       cell: (row) =>
-        row.status === "connected" ? (
-          <StatusDot label={t("statusConnected")} />
-        ) : row.status === "expired" ? (
-          <StatusDot label={t("statusExpired")} tone="warning" />
+        row.status !== "connected" ? (
+          row.status === "expired" ? (
+            <StatusDot label={t("statusExpired")} tone="warning" />
+          ) : (
+            <StatusDot label={t("statusRevoked")} tone="danger" />
+          )
+        ) : row.polledAt === null ? (
+          <StatusDot label={t("statusActive")} />
         ) : (
-          <StatusDot label={t("statusRevoked")} tone="danger" />
+          <span className="block">
+            <StatusDot label={t("statusSynced")} />
+            <span className="mt-0.5 block text-xs text-fg-subtle">
+              {`${formatRelativeDate(row.polledAt, locale)} ${formatTime(row.polledAt, locale)}`}
+            </span>
+          </span>
         ),
+    },
+    {
+      key: "assets",
+      header: t("colAssets"),
+      /*
+       * A real zero is a zero. `messagesSeen === 0` means the poller looked
+       * and found nothing yet, and rendering that as a dash would report a
+       * working connection as unmeasured — the dash belongs to the calendar
+       * rows, where nothing is counted at all.
+       */
+      cell: (row) => (
+        <span className="text-sm text-fg-muted">
+          {row.messagesSeen === null ? "—" : digits(row.messagesSeen, locale)}
+        </span>
+      ),
     },
     {
       key: "access",
@@ -168,10 +267,58 @@ export function Integrations() {
           <PageHeader title={tp("integrations")} subtitle={t("subtitle")} />
 
           <Section title={t("connectedTitle")} description={t("connectedHint")}>
-            {connectors === null ? null : rows.length === 0 ? (
+            {connectors === null ? null : allRows.length === 0 ? (
               <EmptyState text={t("noneConnected")} />
             ) : (
-              <DataTable rows={rows} columns={columns} rowKey={(row) => row.provider} />
+              <>
+                <div className="mb-4 flex flex-wrap items-center gap-2">
+                  <label className="min-w-0 flex-1 sm:max-w-xs">
+                    <span className="sr-only">{t("searchPlaceholder")}</span>
+                    <input
+                      type="search"
+                      className="input h-10 min-h-0 py-0 text-sm"
+                      placeholder={t("searchPlaceholder")}
+                      value={query}
+                      onChange={(event) => setQuery(event.target.value)}
+                    />
+                  </label>
+                  {/*
+                    Sana's row of chips is three; ours is one, because two of
+                    theirs cannot be true here. There is no owner to filter by
+                    — every connection on this page is the signed-in person's
+                    own OAuth consent — and a second app filter spelled "All"
+                    would be the same control twice. A chip that narrows
+                    nothing is a control that does nothing, which this repo
+                    treats as a defect rather than as decoration.
+                  */}
+                  {apps.length > 1 ? (
+                    <label>
+                      <span className="sr-only">{t("filterApps")}</span>
+                      <select
+                        className="input h-10 min-h-0 w-auto py-0 text-sm"
+                        value={app}
+                        onChange={(event) =>
+                          setApp(event.target.value as ConnectorProvider | "")}
+                      >
+                        <option value="">{t("filterAllApps")}</option>
+                        {apps.map((provider) => (
+                          <option key={provider} value={provider}>
+                            {providerName(provider)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
+                </div>
+                {/* "nothing matched" is not "nothing connected", and the two
+                    empty states say so in different sentences */}
+                <DataTable
+                  rows={rows}
+                  columns={columns}
+                  rowKey={(row) => row.key}
+                  empty={<EmptyState text={t("noneMatch")} />}
+                />
+              </>
             )}
           </Section>
 

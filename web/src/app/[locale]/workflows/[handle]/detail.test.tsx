@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { WorkflowCard } from "@/api/types";
+import type { MailDraft, WorkflowCard } from "@/api/types";
 
 /**
  * The workflow detail page states two things a person acts on, and both have
@@ -43,6 +43,14 @@ const CARDS: WorkflowCard[] = [
  * cover the pair that renders almost identically: `false` (a switch someone
  * can turn on) and `undefined` (a server with nowhere to store the answer).
  */
+/**
+ * The reply drafts this workflow has actually produced. Empty by default so
+ * the runs-panel test above still asks its own question — a fixture that
+ * filled the Recents list for every test would turn "the run filter works"
+ * into "something rendered".
+ */
+let DRAFTS: MailDraft[] = [];
+
 let ME: Record<string, unknown> = {};
 const BASE_ME = {
   id: "u-1", org_id: "o-1", username: "member", email: "member@example.test",
@@ -97,6 +105,7 @@ vi.mock("@/api/client", () => ({
     authoredWorkflows: async () => {
       throw Object.assign(new Error("forbidden"), { status: 403 });
     },
+    mailDrafts: async () => DRAFTS,
     me: async () => ME,
     updateAssistant: async (patch: { auto_draft_replies?: boolean }) => ({
       ...ME, auto_draft_replies: patch.auto_draft_replies,
@@ -127,6 +136,7 @@ async function open(handle: string) {
 
 beforeEach(() => {
   cleanup();
+  DRAFTS = [];
   ME = { ...BASE_ME, auto_draft_replies: false };
 });
 
@@ -157,6 +167,64 @@ describe("the workflow detail page", () => {
     expect(screen.getByText("این گردش‌کار هنوز اجرا نشده است")).toBeTruthy();
     // …while the other workflow's run is nowhere on the page
     expect(screen.queryByText("Meeting follow-ups")).toBeNull();
+  });
+
+  /**
+   * Recents, and the one thing a list of records can get wrong invisibly.
+   *
+   * A draft opens the conversation it was written in, so the row is a LINK —
+   * and a draft written outside any conversation has nowhere to open, so its
+   * row must not be one. Both are asserted together because either alone is
+   * satisfied by code that treats every row the same way: "the null-session
+   * row is not a link" passes against a list of plain text, and "the row is a
+   * link" passes against a list where every row points at `/assistant` and the
+   * person lands in a new, empty thread wondering where their draft went.
+   *
+   * The fixture is the wire's own shape, field for field, including
+   * `session_id: null` — the state the poller's own auto-drafts are in.
+   */
+  it("makes a draft's Recents row open its conversation, and refuses to link one that has none", async () => {
+    DRAFTS = [
+      {
+        id: "d-1",
+        provider: "google",
+        source_ref: "msg-1",
+        thread_ref: "t-1",
+        to_address: "colleague@example.test",
+        subject: "قرار سه‌شنبه",
+        body: "سلام، سه‌شنبه ساعت ۱۰ مناسب است.",
+        status: "pending",
+        in_provider: true,
+        session_id: "5e551011-0000-4000-8000-000000000001",
+        created_at: "2026-08-28T08:00:00.000Z",
+        decided_at: null,
+      },
+      {
+        id: "d-2",
+        provider: "google",
+        source_ref: "msg-2",
+        thread_ref: null,
+        to_address: "other@example.test",
+        subject: "فاکتور مرداد",
+        body: "دریافت شد، ممنون.",
+        status: "pending",
+        in_provider: false,
+        session_id: null,
+        created_at: "2026-08-27T08:00:00.000Z",
+        decided_at: null,
+      },
+    ];
+    await open("draft-email-replies");
+
+    const opens = await screen.findByText("پیش‌نویس پاسخ به قرار سه‌شنبه");
+    expect(opens.closest("a")?.getAttribute("href"))
+      .toBe("/assistant?c=5e551011-0000-4000-8000-000000000001");
+
+    const orphan = screen.getByText("پیش‌نویس پاسخ به فاکتور مرداد");
+    expect(orphan.closest("a")).toBeNull();
+
+    // …and the panel is no longer claiming this workflow has done nothing
+    expect(screen.queryByText("این گردش‌کار هنوز اجرا نشده است")).toBeNull();
   });
 
   /**

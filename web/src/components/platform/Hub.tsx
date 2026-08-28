@@ -342,7 +342,12 @@ export function Hub() {
 
   const refreshDrafts = useCallback(async (sessionForDrafts: string | undefined) => {
     if (!sessionForDrafts) return;
-    await api.mailDrafts({ session: sessionForDrafts })
+    /* try/catch, not only `.catch`: a client that does not have this method
+       at all throws SYNCHRONOUSLY, and a rejection handler never sees it —
+       which is how a missing method became an unhandled error beside a green
+       suite rather than the quiet degrade this line intends */
+    try {
+      await api.mailDrafts({ session: sessionForDrafts })
       .then(async (found) => {
         setDrafts(found);
         if (found.length === 0) return;
@@ -354,6 +359,9 @@ export function Hub() {
           .catch(() => { /* unknown stays unknown; the card assumes it can */ });
       })
       .catch(() => { /* an un-migrated deployment has no drafts, not an error */ });
+    } catch {
+      /* same reason: absent is not broken */
+    }
   }, []);
 
   const adoptThread = useCallback(async (id: string) => {

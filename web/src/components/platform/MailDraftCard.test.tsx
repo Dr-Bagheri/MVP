@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { MailDraft } from "@/api/types";
 
@@ -10,11 +10,13 @@ import type { MailDraft } from "@/api/types";
  */
 const sent = vi.fn();
 const discarded = vi.fn();
+const source = vi.fn();
 
 vi.mock("@/api/client", () => ({
   api: {
     sendMailDraft: (id: string) => sent(id),
     discardMailDraft: (id: string) => discarded(id),
+    mailDraftSource: (id: string) => source(id),
   },
 }));
 
@@ -57,6 +59,11 @@ describe("MailDraftCard", () => {
   beforeEach(() => {
     sent.mockReset();
     discarded.mockReset();
+    /* the default is a provider that cannot be read: every assertion about
+       the reply itself must hold with no quote above it, or the quote has
+       become load-bearing for a card that existed before it */
+    source.mockReset();
+    source.mockRejectedValue(new Error("unreadable"));
     notified.length = 0;
   });
 
@@ -116,5 +123,49 @@ describe("MailDraftCard", () => {
     /* without this, "never offer Send" would pass every assertion above */
     render(<MailDraftCard draft={DRAFT} canSend />);
     expect(screen.getByText(SEND)).toBeTruthy();
+  });
+
+  /**
+   * The message being answered, ABOVE the reply (user directive, 2026-08-28:
+   * "the draft must come like this already prepared with the email on top of
+   * it as well").
+   *
+   * "On top of" is the assertion, not "somewhere on the card": a quote
+   * rendered underneath the reply asks a person to approve a decision and
+   * only then shows them what it was about. So the check is DOM order, which
+   * is the one thing a getByText pair cannot tell you.
+   *
+   * The second half is the degrade: reading the original is a live call to
+   * the provider, and it must be able to fail without taking the reply — the
+   * actual record — down with it.
+   */
+  it("quotes the original above the reply, and still shows the reply when it cannot be read", async () => {
+    source.mockResolvedValue({
+      from: "colleague@example.com",
+      subject: "قرار سه‌شنبه",
+      body: "سلام، برای سه‌شنبه وقت داری؟",
+      occurred_at: "2026-08-28T07:30:00.000Z",
+    });
+    render(<MailDraftCard draft={DRAFT} />);
+
+    const quoted = await screen.findByText("سلام، برای سه‌شنبه وقت داری؟");
+    expect(screen.getByText("colleague@example.com")).toBeTruthy();
+    /* the fetch asks for THIS draft — a card that quoted a fixed message, or
+       the wrong one, would satisfy every text assertion above */
+    expect(source).toHaveBeenCalledWith("d-1");
+
+    const reply = screen.getByText(DRAFT.body);
+    expect(
+      Boolean(quoted.compareDocumentPosition(reply) & Node.DOCUMENT_POSITION_FOLLOWING),
+      "the quoted original renders BEFORE the reply",
+    ).toBe(true);
+
+    // the provider refuses: no quote, and the reply is untouched
+    cleanup();
+    source.mockRejectedValue(new Error("unreadable"));
+    render(<MailDraftCard draft={DRAFT} />);
+    await waitFor(() => expect(screen.getByText(SEND)).toBeTruthy());
+    expect(screen.queryByText("سلام، برای سه‌شنبه وقت داری؟")).toBeNull();
+    expect(screen.getByText(DRAFT.body)).toBeTruthy();
   });
 });

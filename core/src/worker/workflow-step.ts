@@ -286,7 +286,9 @@ async function buildInstruction(context: ExecutionContext, template: string): Pr
 
 /* ── the model call (shared by ask/extract) ────────────────────────────── */
 
-async function callModel(context: ExecutionContext, input: string): Promise<ModelCallResult> {
+async function callModel(
+  context: ExecutionContext, input: string, web = false,
+): Promise<ModelCallResult> {
   const { db, identity, options } = context;
 
   // the model-call ceiling (W12): count the linked runs already spent.
@@ -325,6 +327,9 @@ async function callModel(context: ExecutionContext, input: string): Promise<Mode
     kind: "assistant",
     callerModel: model,
     input,
+    /* the step's own choice, not the run's: one step may search the web
+       while the rest of the graph reasons over what it already holds */
+    web,
     /* §3.3's intersection, P2 form: the domain READ tools — retrieval
        under the caller's identity, on the agent role's grant set. Write
        tools are not offered and cannot be: effects live in the graph. */
@@ -431,7 +436,11 @@ const EXECUTORS: Record<(typeof EXECUTABLE_STEP_KINDS)[number], ExecuteFn> = {
   /** one recorded model turn; free text out; read tools only */
   async ask(context) {
     const instruction = await buildInstruction(context, String(context.step.instruction ?? ""));
-    const result = await callModel(context, instruction);
+    /* `web: true` rides OpenRouter's `:online` variant of the SAME model —
+       the step looks things up instead of only reasoning over what the run
+       already holds. Off unless the author asked, because a workflow that
+       searches the web unbidden spends someone's money on a guess. */
+    const result = await callModel(context, instruction, context.step.web === true);
     await recordModelSpend(context, result);
     /*
      * Two different nothings (rule 12, caught by the P2 live acceptance:

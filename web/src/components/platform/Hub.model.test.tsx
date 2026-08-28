@@ -7,11 +7,14 @@ import type { AgentEvent } from "@/api/types";
  *
  * A saved preference outlives the catalogue. The first real member's was
  * `~anthropic/claude-opus-latest`, saved while it was served and barred the
- * day the no-Claude filter learned to spell the leading `~`. `GET /models`
- * still returns the stored id in `preferred_model` — deliberately, because
- * the assistant refuses it BY NAME and a vaguer refusal would be a worse
- * answer — so the client is the layer that must not act on it: it adopted
- * the id, put it on every ask, and the server 400'd each one.
+ * day the no-Claude filter learned to spell the leading `~`.
+ *
+ * The server has since stopped reporting a barred preference at all (both
+ * readers agree it is no preference), so this is now a BELT: a client that
+ * adopts whatever `preferred_model` says would put an unservable id on every
+ * ask, and the fix must not depend on the server having already filtered it.
+ * The client's rule stands on its own — never send a model the server did
+ * not offer in this same response.
  *
  * The assertion is the ASK's model argument, not the rendered label: a
  * picker showing the right thing while the wire carries the wrong one is
@@ -55,6 +58,18 @@ async function* scriptedAsk(
 }
 
 vi.mock("@/api/client", () => ({
+  /*
+   * The mock owes `BffError` too: Hub catches it by CLASS to tell a
+   * refusal from a transport failure, and a mock without it throws
+   * "No BffError export is defined" from inside the catch — which
+   * surfaced as 15 unhandled errors beside a green suite. A green
+   * suite with unhandled rejections is not a green suite.
+   */
+  BffError: class BffError extends Error {
+    constructor(public status: number, public kind?: string, public detail?: string) {
+      super(detail ?? kind ?? String(status));
+    }
+  },
   api: {
     me: async () => ({
       id: "u-1", org_id: "o-1", username: "sara", display_name: "سارا",
@@ -80,6 +95,8 @@ vi.mock("@/api/client", () => ({
     sessionFeedback: async () => ({}),
     shareState: async () => false,
     agentSessions: async () => [],
+    /* the thread reads its own drafts on every run and resume */
+    mailDrafts: async () => [],
   },
 }));
 

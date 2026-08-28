@@ -219,7 +219,12 @@ export interface WorkflowGraph { entry: string; steps: GraphStep[] }
 const STEP_KEYS: Record<WorkflowStepKind, readonly string[]> = {
   search: ["id", "kind", "scope", "of", "limit"],
   fetch: ["id", "kind", "source_kind", "of"],
-  ask: ["id", "kind", "instruction", "agent", "from"],
+  /* `web` = OpenRouter's `:online` variant on the SAME model (M41 + the
+     assistant's own toggle): a step may look things up rather than only
+     reason over what the run already holds. Optional and off by default —
+     a workflow that searches the web when nobody asked it to is spending
+     someone's money on a guess. */
+  ask: ["id", "kind", "instruction", "agent", "from", "web"],
   extract: ["id", "kind", "instruction", "agent", "from", "schema"],
   decide: ["id", "kind", "on", "gt", "gte", "lt", "lte", "eq", "ne", "contains", "then", "else"],
   foreach: ["id", "kind", "over", "max", "do"],

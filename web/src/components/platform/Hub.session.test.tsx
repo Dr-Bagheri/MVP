@@ -75,6 +75,18 @@ async function* scriptedAsk(
 }
 
 vi.mock("@/api/client", () => ({
+  /*
+   * The mock owes `BffError` too: Hub catches it by CLASS to tell a
+   * refusal from a transport failure, and a mock without it throws
+   * "No BffError export is defined" from inside the catch — which
+   * surfaced as 15 unhandled errors beside a green suite. A green
+   * suite with unhandled rejections is not a green suite.
+   */
+  BffError: class BffError extends Error {
+    constructor(public status: number, public kind?: string, public detail?: string) {
+      super(detail ?? kind ?? String(status));
+    }
+  },
   api: {
     me: async () => ({
       id: "u-1", org_id: "o-1", username: "sara", display_name: "سارا",
@@ -103,6 +115,8 @@ vi.mock("@/api/client", () => ({
     sessionFeedback: async () => ({}),
     shareState: async () => false,
     agentSessions: async () => [],
+    /* the thread reads its own drafts on every run and resume */
+    mailDrafts: async () => [],
   },
 }));
 

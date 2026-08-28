@@ -68,6 +68,29 @@ describe("the SHIPPED starters validate under their own ceilings (rule 10 pin)",
   }
 });
 
+describe("an ask step may search the web", () => {
+  it("accepts `web` on ask, and refuses it anywhere else", () => {
+    /* the option is real (OpenRouter's `:online` on the same model) and it
+       belongs to ONE kind: a `search` step reads this org's records and a
+       `web` flag there would read as "search the internet for our data" */
+    expect(() => validateWorkflowGraph({
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "ask", instruction: "چه خبر؟", web: true },
+        { id: "s2", kind: "notify", card: "workflow_result" },
+      ],
+    }, { maxAutonomy: "assist" })).not.toThrow();
+
+    expect(() => validateWorkflowGraph({
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "search", scope: "calls", web: true },
+        { id: "s2", kind: "notify", card: "workflow_result" },
+      ],
+    }, { maxAutonomy: "assist" })).toThrow(ValidationError);
+  });
+});
+
 describe("the graphs that must validate", () => {
   it("accepts the canonical full path", () => {
     const graph = validateWorkflowGraph(FULL_GRAPH, OPTS);

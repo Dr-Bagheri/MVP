@@ -3,7 +3,9 @@
 import { use, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
-import type { AuthoredWorkflow, Me, WorkflowCard, WorkflowRunRecord } from "@/api/types";
+import type {
+  AuthoredWorkflow, MailDraft, Me, WorkflowCard, WorkflowRunRecord,
+} from "@/api/types";
 import { Link, useRouter } from "@/i18n/routing";
 import { PlatformShell } from "@/components/platform/PlatformShell";
 import { AssistantMenu } from "@/components/platform/AssistantMenu";
@@ -53,9 +55,26 @@ import { notify } from "@/lib/notify";
  * **The runs.** Rows are matched on `workflow_id`, never on the workflow's
  * NAME: two workflows may share a name, and a name match would quietly
  * attribute one workflow's history to another. Template cards have no
- * engine id, so their Recents list is empty — which is the truth (a template
- * runs through the assistant and writes no `workflow_run` row), not a
- * failure to look.
+ * engine id, so no `workflow_run` row can belong to them — which is the
+ * truth, not a failure to look.
+ *
+ * ── What "Recents" actually lists ───────────────────────────────────────────
+ *
+ * Two kinds of thing, merged, newest first (user directive, 2026-08-28: "it
+ * must be selectable. when you selected it the draft must come like this
+ * already prepared with the email on top of it as well").
+ *
+ * A mail workflow's whole output is a REPLY DRAFT, and a template writes no
+ * run row at all — so on the screen that matters most the runs list was
+ * permanently empty while the person had a dozen drafts sitting in the
+ * assistant. Drafts are attached only to a MAIL-sourced workflow: they carry
+ * no `workflow_id`, so the source kind is the only honest link, and hanging
+ * them under a calendar workflow would be a list of things it never did.
+ *
+ * Both kinds are one list rather than two panels because they answer one
+ * question — what has this done lately — and each row carries its own
+ * destination: a run opens its run page, a draft opens the conversation it
+ * was written in.
  */
 
 /** The engine catalogue's row, as `api.engineWorkflows()` serves it. */
@@ -75,6 +94,16 @@ interface ProcessStep {
 interface WorkflowProcess {
   trigger?: ProcessStep;
   steps?: ProcessStep[];
+}
+
+/** One Recents line, whatever kind of record it came from. */
+interface RecentRow {
+  key: string;
+  title: string;
+  /** ISO — the merge sorts on it, so both kinds must supply a real one */
+  at: string;
+  /** null makes the row a record rather than a link, and nothing else does */
+  href: string | null;
 }
 
 /**
@@ -152,6 +181,8 @@ export default function WorkflowDetailPage({
    */
   const [authored, setAuthored] = useState<AuthoredWorkflow[] | null | undefined>(undefined);
   const [runs, setRuns] = useState<WorkflowRunRecord[]>([]);
+  /** the person's reply drafts — a mail workflow's actual output */
+  const [drafts, setDrafts] = useState<MailDraft[]>([]);
   const [orgName, setOrgName] = useState<string | null>(null);
   /** the caller — `auto_draft_replies` is THEIR switch, not the org's */
   const [me, setMe] = useState<Me | null>(null);
@@ -168,6 +199,7 @@ export default function WorkflowDetailPage({
     void api.workflows().then(setCards).catch(() => setCards([]));
     void api.engineWorkflows().then(setEngine).catch(() => setEngine([]));
     void api.workflowRuns().then(setRuns).catch(() => setRuns([]));
+    void api.mailDrafts().then(setDrafts).catch(() => setDrafts([]));
     void api.org().then((org) => setOrgName(org.name)).catch(() => setOrgName(null));
     void api.authoredWorkflows().then(setAuthored).catch(() => setAuthored(null));
     void api.me().then(setMe).catch(() => setMe(null));
@@ -252,11 +284,37 @@ export default function WorkflowDetailPage({
   const trigger = catalogueProcess?.trigger ?? served.trigger;
   const steps = catalogueProcess?.steps ?? served.steps ?? [];
 
-  const mine = useMemo(
-    () => runs.filter((run) => run.workflow_id === subject?.id),
-    [runs, subject?.id],
-  );
-  const { page, setPage, pageCount, visible } = usePaged(mine);
+  const recents = useMemo((): RecentRow[] => {
+    const fromRuns: RecentRow[] = runs
+      .filter((run) => run.workflow_id === subject?.id)
+      .map((run) => ({
+        key: `run:${run.id}`,
+        title: run.workflow,
+        at: run.started_at,
+        href: `/workflows/runs/${run.id}`,
+      }));
+    /*
+     * A draft opens the CONVERSATION it was written in, which is where the
+     * reply, its quoted original and the send button already live — there is
+     * no second place to show one, and building a draft-detail page would be
+     * a second copy of the card that the mailbox and the thread both hold.
+     *
+     * `session_id` is null on a draft written outside a conversation (the
+     * poller's own auto-drafts, before M43's session capture). That row is
+     * not a link, because there is nothing to open: a link to `/assistant`
+     * with no conversation would land the person on a NEW empty thread and
+     * read as the draft having vanished.
+     */
+    const fromDrafts: RecentRow[] = subject?.sourceKind !== "mail_message" ? [] : drafts
+      .map((draft) => ({
+        key: `draft:${draft.id}`,
+        title: t("detailDraftTo", { subject: draft.subject }),
+        at: draft.created_at,
+        href: draft.session_id === null ? null : `/assistant?c=${draft.session_id}`,
+      }));
+    return [...fromRuns, ...fromDrafts].sort((a, b) => b.at.localeCompare(a.at));
+  }, [runs, drafts, subject?.id, subject?.sourceKind, t]);
+  const { page, setPage, pageCount, visible } = usePaged(recents);
 
   /**
    * Run now, for an ENGINE workflow: the engine's own manual trigger.
@@ -567,7 +625,7 @@ export default function WorkflowDetailPage({
                   </div>
 
                   <p className="mt-6 text-xs font-medium text-fg-subtle">{t("detailRecents")}</p>
-                  {mine.length === 0 ? (
+                  {recents.length === 0 ? (
                     <div className="py-10 text-center">
                       <span
                         className="mx-auto grid h-10 w-10 place-items-center rounded-full bg-surface-2 text-fg-subtle"
@@ -580,21 +638,35 @@ export default function WorkflowDetailPage({
                   ) : (
                     <>
                       <ul className="mt-2 divide-y divide-border">
-                        {visible.map((run) => (
-                          <li key={run.id}>
-                            <Link
-                              href={`/workflows/runs/${run.id}`}
-                              className="tap flex items-center justify-between gap-3 py-2.5 hover:text-accent"
-                            >
-                              <span className="min-w-0 truncate text-sm text-fg">
-                                {run.workflow}
-                              </span>
+                        {visible.map((row) => {
+                          const face = (
+                            <>
+                              <span className="min-w-0 truncate text-sm text-fg">{row.title}</span>
                               <span className="shrink-0 text-xs text-fg-muted">
-                                {`${formatDate(run.started_at, locale)} ${formatTime(run.started_at, locale)}`}
+                                {`${formatDate(row.at, locale)} ${formatTime(row.at, locale)}`}
                               </span>
-                            </Link>
-                          </li>
-                        ))}
+                            </>
+                          );
+                          return (
+                            <li key={row.key}>
+                              {/* a row with nowhere to go is not a link that
+                                  quietly does nothing — it is a different
+                                  element, so there is nothing to press */}
+                              {row.href === null ? (
+                                <span className="flex items-center justify-between gap-3 py-2.5">
+                                  {face}
+                                </span>
+                              ) : (
+                                <Link
+                                  href={row.href}
+                                  className="tap flex items-center justify-between gap-3 py-2.5 hover:text-accent"
+                                >
+                                  {face}
+                                </Link>
+                              )}
+                            </li>
+                          );
+                        })}
                       </ul>
                       <Pagination page={page} pageCount={pageCount} onPage={setPage} />
                     </>
