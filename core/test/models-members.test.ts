@@ -14,9 +14,14 @@ vi.mock("../src/agent/pi.ts", () => ({
   // Includes an excluded provider ON PURPOSE: the exclusion tests need the
   // upstream catalogue to contain what the product must refuse to serve, or
   // they would pass against a list that never had one.
+  // The `~anthropic/…` entry is TRANSCRIBED FROM THE LIVE CATALOGUE
+  // (2026-08-27): the picker was serving it because the filter tested
+  // `startsWith("anthropic/")` and every fixture here was spelled the way the
+  // code believed. This is the id that spells it the other way.
   catalogue: () => [
     { id: "google/gemini-3.6-flash", name: "Gemini 3.6 Flash", reasoning: true },
     { id: "anthropic/claude-opus-5", name: "Claude Opus 5", reasoning: false },
+    { id: "~anthropic/claude-opus-latest", name: "Anthropic: Claude Opus Latest", reasoning: false },
     { id: "anthropic/claude-3-haiku", name: "Claude 3 Haiku", reasoning: false },
     { id: "openai/gpt-5", name: "GPT-5", reasoning: false },
   ],
@@ -178,26 +183,41 @@ describe("model catalogue (M5)", () => {
      * one, because the test is about what must never appear rather than about
      * what happens to be there today.
      */
+    /**
+     * The third entry is TRANSCRIBED FROM PRODUCTION, not composed here.
+     * On 2026-08-27 the live picker offered `~anthropic/claude-opus-latest`
+     * — the catalogue spells some ids with a leading `~`, and the filter
+     * tested `startsWith("anthropic/")`. Every fixture in this block was
+     * written the way the implementation believed ids were spelled, so the
+     * suite agreed with the bug and stayed green while a barred model sat in
+     * the menu (rule 9: a fixture derived from the same belief as the code
+     * cannot catch it). A real id from the catalogue is the one input that
+     * could.
+     */
     const withClaude = () => [
       { id: "google/gemini-3.6-flash", name: "G", reasoning: true },
       { id: "anthropic/claude-opus-5", name: "C", reasoning: false },
+      { id: "~anthropic/claude-opus-latest", name: "Anthropic: Claude Opus Latest", reasoning: false },
       { id: "anthropic/claude-3-haiku", name: "H", reasoning: false },
       { id: "openai/gpt-5", name: "O", reasoning: false },
     ];
+
+    /** Barred whoever routes it: the rule names a model family, not a prefix. */
+    const claudeish = (id: string) => /claude/i.test(id) || /anthropic/i.test(id);
 
     it("serves no excluded provider, ever", async () => {
       const { db } = fakeDb(() => [{ allowed_models: [], preferred_model: null }]);
       const result = await createModelsRepo(db, {
         capability: capable(withClaude().map((m) => m.id)),
       }).list(ADMIN_ID);
-      expect(result.models.filter((m) => m.id.startsWith("anthropic/"))).toEqual([]);
+      expect(result.models.filter((m) => claudeish(m.id))).toEqual([]);
     });
 
     it("cannot be re-admitted by an admin's allow-list", async () => {
       // A rule any later filter could undo is not a rule. An admin naming a
       // barred model explicitly must not get it back.
       const { db } = fakeDb(() => [{
-        allowed_models: ["anthropic/claude-opus-5", "openai/gpt-5"],
+        allowed_models: ["~anthropic/claude-opus-latest", "anthropic/claude-opus-5", "openai/gpt-5"],
         preferred_model: null,
       }]);
       const result = await createModelsRepo(db, {

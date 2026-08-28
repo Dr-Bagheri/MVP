@@ -131,10 +131,31 @@ export const SUGGESTED_MODELS: readonly string[] = [
  * call-level timing column: the assertion is that nothing matching this ever
  * appears, so a future catalogue addition cannot reintroduce one quietly.
  */
-export const EXCLUDED_PROVIDERS: readonly string[] = ["anthropic/"];
+export const EXCLUDED_PROVIDERS: readonly string[] = ["anthropic"];
 
-const isExcluded = (id: string): boolean =>
-  EXCLUDED_PROVIDERS.some((prefix) => id.startsWith(prefix));
+/**
+ * ── The second time this rule failed, and why the first fix could not hold ──
+ *
+ * The filter above was written as `id.startsWith("anthropic/")`, and on
+ * 2026-08-27 the production picker was serving **`~anthropic/claude-opus-latest`**:
+ * the catalogue spells some entries with a leading `~`, so the rule was
+ * defeated by one character and the model appeared in the list a person
+ * chooses from. Every fixture in the covering test was written as
+ * `anthropic/…` — the same belief as the code, so the suite could not
+ * express the failure (rule 9: a test cannot fail when its input comes from
+ * the same place as the bug).
+ *
+ * The rule the user set is about a MODEL FAMILY, not about a routing prefix,
+ * so it is enforced as one now: the vendor segment is compared after the
+ * catalogue's punctuation is stripped, and any id naming `claude` is barred
+ * whoever routes it. A model reselling Claude under another vendor is still
+ * Claude.
+ */
+const isExcluded = (id: string): boolean => {
+  const normalized = id.toLowerCase().replace(/^[^a-z0-9]+/, "");
+  const vendor = normalized.split("/")[0] ?? "";
+  return EXCLUDED_PROVIDERS.includes(vendor) || normalized.includes("claude");
+};
 
 /** Suggested first (in the order above), then everything else unchanged. */
 function bySuggestion<T extends { id: string }>(models: T[]): T[] {

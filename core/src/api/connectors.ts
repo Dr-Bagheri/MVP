@@ -470,7 +470,11 @@ export function createConnectorsRepo(db: Db, options: ConnectorOAuthOptions = {}
     async mailMessages(identity: Identity, provider: ConnectorProvider): Promise<ConnectorItem[]> {
       const bearer = await access(identity, provider);
       if (provider === "google") {
-        const list = await providerFetch("https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=10", {
+        /* 20, the same as the other three source lists (calendar both
+           providers, Microsoft mail): one number for "the recent ones",
+           not a different one per provider. The per-message metadata
+           reads below are parallel, so the count costs latency once. */
+        const list = await providerFetch("https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=20", {
           headers: { authorization: `Bearer ${bearer}` },
         });
         const ids = (Array.isArray(list.messages) ? list.messages : [])

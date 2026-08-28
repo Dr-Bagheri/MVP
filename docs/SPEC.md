@@ -110,7 +110,13 @@ models are excluded from the catalogue entirely** [user directive]: never
 served, never selectable by name, never re-admittable by an admin allow-list.
 (Added 2026-08-13 — this directive previously lived only in the decision log,
 and the filter it described went unimplemented while everyone believed it
-existed; a product rule belongs in the product spec.)
+existed; a product rule belongs in the product spec. Amended 2026-08-27: the
+rule names a MODEL FAMILY, not a routing prefix. The live picker was offering
+`~anthropic/claude-opus-latest` because the filter tested
+`startsWith("anthropic/")` and the catalogue spells some ids with a leading
+`~` — one character, and a barred model was in the menu. Excluded now means:
+the vendor segment is `anthropic` after punctuation is stripped, OR the id
+names `claude` at all, whoever routes it.)
 
 ### Skills
 Three levels: **system** skills shipped with the product (the summarizer is
