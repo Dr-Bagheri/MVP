@@ -90,7 +90,10 @@ interface WorkflowProcess {
  */
 const AUTO_DRAFT_SLUG = "draft-email-replies";
 /** the calendar template, whose switch is db/0117's */
-const MEETING_PREP_SLUG = "prepare-me-for-meetings";
+/* the SERVER's slug (db/0065 seeds `prepare-meetings`) — I first wrote the
+   long form the card's title suggests, and the page answered "no such
+   workflow": a slug is data, not a name you can infer from a heading */
+const MEETING_PREP_SLUGS: readonly string[] = ["prepare-meetings", "prepare-me-for-meetings"];
 
 const PROCESS_KEY: Readonly<Record<string, string>> = {
   "draft-email-replies": "draft-email-replies",
@@ -327,7 +330,7 @@ export default function WorkflowDetailPage({
    *  - every other template has no stored flag anywhere, and says so.
    */
   const autoDraft = subject?.kind === "template" && handle === AUTO_DRAFT_SLUG;
-  const meetingPrep = subject?.kind === "template" && handle === MEETING_PREP_SLUG;
+  const meetingPrep = subject?.kind === "template" && MEETING_PREP_SLUGS.includes(handle);
   const switchProps = subject === null
     ? null
     : autoDraft
