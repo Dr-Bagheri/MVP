@@ -2698,3 +2698,34 @@ sessions) for the cross-session narrative.
   allow-list entry for a deleted file reads as coverage and is a
   hole**. Its FIRST FIRE caught a sixth copy written minutes earlier
   by its own author, which is the best evidence a guard can offer.
+
+- 2026-08-27 (the no-Claude rule's THIRD failure, and the biggest):
+  a user screenshot showed a workflow run ending on "model is not
+  available on this product: ~anthropic/claude-opus-latest". Two
+  causes. (1) The auto-run RACED the model catalogue — whichever
+  answered first won; when models lost, the ask carried none, the
+  server fell back to the stored preference and the run died on a
+  refusal about a model nobody chose. **A run that starts itself must
+  be at least as complete as one a person starts.** (2) Found while
+  chasing it: **the M5 ladder was written out FOUR times in the worker
+  — summarizer, workflow executor, mail poller, meeting prep — and not
+  one copy applied the exclusion.** assertAskable guards the API path
+  only, so the rule was never true for anything that ran unwatched;
+  production had been routing background runs to Claude on a stale
+  row. One `firstServable` now applies it at every rung INCLUDING the
+  env fallback ("a misconfigured WORKER_SUMMARY_MODEL is exactly what
+  serves one silently forever, because nobody reads it after the day
+  it is set"). Minted: **a rule enforced on the path a person watches
+  is not enforced** — count the copies of a ladder before believing
+  any of them. And a RULING REVERSED BY PRODUCTION: a barred model in
+  a stored preference is no longer refused by name (that rule is right
+  about a caller NAMING a model, wrong about a stale row — nobody
+  typed it, and the cost was every run in the thread ending with no
+  answer); the by-name refusal is kept for the typed case and both now
+  have their own test. Then, reading production after the fix: `list`
+  still reported the barred preference while the ask ignored it —
+  **two separate queries, one fact, and fixing one is how they come to
+  disagree**; the picker would have shown a choice silently not in
+  force. Live state after: preferred=null, four drafts pending, three
+  of them written into the real Gmail Drafts folder now that the
+  compose scope is granted.
