@@ -54,14 +54,19 @@ describe("connection factory — identity or no handle (invariant 2)", () => {
       await tx.unsafe("select 1");
       return null;
     });
-    expect(log[0]!.sql).toBe("set local role echo_app");
-    expect(log[1]!.sql).toBe("select set_config('echo.actor_id', $1, true)");
-    expect(log[1]!.params).toEqual([ALICE]);
-    // is_local / SET LOCAL throughout — nothing may outlive the transaction
-    expect(log[0]!.sql.toLowerCase()).toContain("set local");
-    expect(log[1]!.sql).toContain(", true)");
+    // ONE preamble statement, carrying the role and the actor as parameters.
+    expect(log[0]!.sql).toBe(
+      "select set_config('role', $1, true), set_config('echo.actor_id', $2, true)",
+    );
+    expect(log[0]!.params).toEqual(["echo_app", ALICE]);
+    // is_local = true on BOTH settings — nothing may outlive the transaction
+    // on a pooled connection. Counted, not merely "contains": the whole point
+    // is that neither of the two acquired a session-scoped spelling, and
+    // `toContain(", true)")` is satisfied by one of them being right.
+    expect(log[0]!.sql.match(/, true\)/g)).toHaveLength(2);
+    expect(log[0]!.sql.toLowerCase()).not.toContain("set local");
     // the identity is applied BEFORE the caller's query, in the same tx
-    expect(log[2]!.sql).toBe("select 1");
+    expect(log[1]!.sql).toBe("select 1");
   });
 
   it("passes the actor as a BOUND PARAMETER, not an interpolated string", async () => {
@@ -87,8 +92,15 @@ describe("connection factory — identity or no handle (invariant 2)", () => {
     const db = createDb(pools);
     await db.withIdentity(IDENTITY, async () => null);
     await db.withIdentity(IDENTITY, async () => null, { role: "agent" });
+    // One statement per transaction now, so these are log[0] and log[1] —
+    // and the ROLE is asserted alongside the pool deliberately. The pair is
+    // the property: `set role echo_agent` issued on the app pool is the
+    // silent-escalation shape, and either half alone reads as fine.
+    expect(log).toHaveLength(2);
     expect(log[0]!.pool).toBe("app");
-    expect(log[2]!.pool).toBe("agent");
+    expect(log[0]!.params).toEqual(["echo_app", ALICE]);
+    expect(log[1]!.pool).toBe("agent");
+    expect(log[1]!.params).toEqual(["echo_agent", ALICE]);
   });
 
   it("ASSERTS the role in-transaction, so the boundary is code and not config", async () => {
@@ -100,10 +112,15 @@ describe("connection factory — identity or no handle (invariant 2)", () => {
     const { pools, log } = fakePools();
     const db = createDb(pools);
     await db.withIdentity(IDENTITY, async () => null, { role: "agent" });
-    expect(log[0]!.sql).toBe("set local role echo_agent");
-    // and it is asserted BEFORE the actor, so an unauthorised connection
-    // fails before any identity is attached to it
-    expect(log[1]!.sql).toContain("set_config");
+    expect(log[0]!.params?.[0]).toBe("echo_agent");
+    // and the role assertion still travels with the actor in the SAME
+    // statement, so an unauthorised connection fails before the transaction
+    // can do anything at all: `set_config('role', …)` raises 42501 on a
+    // connection lacking the membership, which aborts the statement and takes
+    // the actor with it. (Verified against a real echo_app connection: both
+    // spellings return byte-identical `permission denied to set role`.)
+    expect(log[0]!.sql).toContain("set_config('role'");
+    expect(log[0]!.sql).toContain("set_config('echo.actor_id'");
   });
 
   it("assertAgentRole catches agent tools wired to the app pool", () => {
@@ -123,8 +140,9 @@ describe("identity resolution", () => {
     const identity = await resolveIdentity(createDb(pools), ALICE);
     expect(identity).toEqual({ userId: ALICE, orgId: "org-a", role: "admin", isActive: true });
     // and it read as itself — actor set before the select
-    expect(log[1]!.sql).toContain("set_config('echo.actor_id'");
-    expect(log[2]!.params).toEqual([ALICE]);
+    expect(log[0]!.sql).toContain("set_config('echo.actor_id'");
+    expect(log[0]!.params).toEqual(["echo_app", ALICE]);
+    expect(log[1]!.sql).toContain("app_user");
   });
 
   it("marks a pending signup inactive instead of throwing (M15)", async () => {
@@ -238,7 +256,7 @@ describe("worker identity — runs as the call's owner (M3/M4)", () => {
     // the call was read AS BOB — the actor was set to bob first
     const callRead = log.findIndex((l) => l.sql.includes("echo.call"));
     expect(log[callRead - 1]!.sql).toContain("set_config('echo.actor_id'");
-    expect(log[callRead - 1]!.params).toEqual([BOB]);
+    expect(log[callRead - 1]!.params).toEqual(["echo_app", BOB]);
     // no identity-less read happened anywhere
     expect(log.every((l) => l.pool === "app")).toBe(true);
   });

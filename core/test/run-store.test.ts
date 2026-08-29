@@ -54,12 +54,16 @@ describe("agent run store — identity on every write", () => {
     // error, finished_at). On echo_app, `request` and `created_at` would stay
     // rewritable and this module's append-only property would rest on nothing
     // but its own choice of SQL.
-    expect(log[0]!.sql).toBe("set local role echo_agent");
+    // The identity preamble is ONE statement carrying both the role and the
+    // actor (src/db/identity.ts), so the role is a bound PARAMETER and has to
+    // be read from params — asserting the statement TEXT can no longer tell
+    // echo_agent from echo_app, because both spell it identically.
+    expect(log[0]!.sql).toContain("set_config('role'");
+    expect(log[0]!.params).toEqual(["echo_agent", ALICE]);
     expect(log[0]!.pool).toBe("agent");
-    expect(log[1]!.params).toEqual([ALICE]);
-    expect(log[2]!.sql).toContain("insert into echo.agent_run");
+    expect(log[1]!.sql).toContain("insert into echo.agent_run");
     // the request is stored as jsonb for replay
-    expect(String(log[2]!.params?.[6])).toContain("read_call");
+    expect(String(log[1]!.params?.[6])).toContain("read_call");
   });
 
   it("fails loudly when RLS returns no row rather than inventing an id", async () => {
@@ -94,8 +98,17 @@ describe("agent run store — identity on every write", () => {
     // each append carries exactly one step, wrapped as an array
     expect(JSON.parse(String(appends[0]!.params?.[1]))).toEqual([step(0, "ok")]);
     expect(JSON.parse(String(appends[1]!.params?.[1]))[0].outcome).toBe("denied");
-    // and every write set the actor first
-    expect(log.filter((l) => l.sql.startsWith("set local")).length).toBe(2);
+    // and every write set the actor FIRST, on the agent role, in its own
+    // transaction. Asserted as "the statement immediately before each append",
+    // not as a count of preamble statements: the count was the old spelling of
+    // this and it only ever proved that two preambles happened SOMEWHERE. The
+    // guarantee is ordering — an append that reached the database before its
+    // actor was attached would satisfy any count and violate invariant 2.
+    for (const append of appends) {
+      const before = log[log.indexOf(append) - 1];
+      expect(before?.sql).toContain("set_config('role'");
+      expect(before?.params).toEqual(["echo_agent", ALICE]);
+    }
   });
 
   it("finishes a run with status, tokens and error", async () => {

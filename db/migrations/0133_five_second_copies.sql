@@ -1,0 +1,73 @@
+-- 0133 — drop five indexes that are a second copy of a UNIQUE index.
+--
+-- Each of these sits on an insert-heavy path (`transcript_segment` gains a row
+-- per spoken segment, `call_part` per part, `agent_message` per turn) and each
+-- duplicates an index the database is keeping anyway because it enforces a
+-- constraint. Two btrees maintained for one access path is write amplification
+-- with nothing bought.
+--
+-- ── the audit's `idx_scan = 0` claim is WRONG, and it matters which way ─────
+-- Part 3 item 14 says all five have `idx_scan = 0` on the live database. They
+-- do not. Read from pg_stat_all_indexes at owner altitude (stats last reset
+-- 2026-07-24, so over a month of accumulation):
+--
+--     call_part_call_idx                25,641      call_part_call_idx_key            0
+--     agent_message_session_idx         11,237      agent_message_session_seq_key     0
+--     summary_call_idx                   6,134      summary_call_version_key          0
+--     call_speaker_call_idx                417      call_speaker_label_key          894
+--     transcript_segment_call_seq_idx       81      transcript_segment_call_seq_key   0
+--
+-- It is the UNIQUE TWIN that is at zero in four of the five. The planner has
+-- been choosing the redundant copy and leaving the constraint's index unread —
+-- which is the same fact wearing the opposite face, and it changes what has to
+-- be proven before dropping. "Nothing uses it" would have needed no proof;
+-- "the busy one goes and the idle one takes over" needs the access path
+-- demonstrated. It was, before this file was written — see below.
+--
+-- Recorded rather than quietly corrected, because a number nobody re-derived
+-- is how the next drop goes wrong: the pairs are right, the reading of which
+-- member was hot was not, and only one of those is safe to take on trust.
+--
+-- ── each pair, and what answers after the drop ──────────────────────────────
+-- Measured as `echo_app` with an actor set, five reps, before and after the
+-- drop in ONE session so the cache is the same on both sides:
+--
+--   call_part_call_idx (call_id, idx)
+--     ≡ call_part_call_idx_key UNIQUE (call_id, idx)          identical
+--     after: Index Scan using call_part_call_idx_key      91 → 91 buffers
+--
+--   transcript_segment_call_seq_idx (call_id, seq)
+--     ≡ transcript_segment_call_seq_key UNIQUE (call_id, seq) identical
+--     after: Index Scan using transcript_segment_call_seq_key  869 → 869
+--
+--   agent_message_session_idx (session_id, seq)
+--     ≡ agent_message_session_seq_key UNIQUE (session_id, seq) identical
+--     after: Bitmap Index Scan + Sort on the twin              242 → 242
+--     — the plan SHAPE flipped (ordered scan → bitmap + sort) at equal cost,
+--       which is planner noise at 506 rows and not a lost capability: with
+--       `enable_bitmapscan = off` the twin serves the ordered scan directly.
+--       Checked, because "same buffers" would not have distinguished a cost
+--       tie from an ordering the twin could not produce.
+--
+--   summary_call_idx (call_id, version DESC)
+--     ⊂ summary_call_version_key UNIQUE (call_id, version)
+--     after: Index Scan BACKWARD using summary_call_version_key  91 → 91
+--     — the DESC is the reason this pair looks unlike the others and is not.
+--       A btree is scannable in either direction, so the ascending unique
+--       index answers `order by version desc limit 1` by walking backwards.
+--
+--   call_speaker_call_idx (call_id)
+--     ⊂ call_speaker_label_key UNIQUE (call_id, label)          strict prefix
+--     after: Index Scan using call_speaker_label_key            91 → 91
+--     — the only one that is a prefix rather than a copy: the twin is one
+--       column wider, so a lookup touches marginally more index bytes. On 53
+--       rows that is the same single page, and the write saved on every
+--       roster insert is not.
+--
+-- Nothing here can be dropped in the other direction: all five twins exist to
+-- enforce a constraint, so the database keeps them whatever we decide.
+drop index echo.call_part_call_idx;
+drop index echo.transcript_segment_call_seq_idx;
+drop index echo.agent_message_session_idx;
+drop index echo.summary_call_idx;
+drop index echo.call_speaker_call_idx;

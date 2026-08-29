@@ -50,18 +50,37 @@ export interface PartRow {
   call_language: string;
 }
 
+/**
+ * Join a caller's transaction instead of opening one (speed pass, 2026-08-29).
+ *
+ * `process_part` used to spend about thirteen transactions on a single part,
+ * several of them touching the same row, because every method here opened its
+ * own. Passing the caller's `tx` lets a step batch the writes that belong
+ * together without any of this SQL being copied into the step — which matters:
+ * `recomputeCallDuration`'s max-not-sum is the kind of thing that gets
+ * "simplified" the moment a second copy exists.
+ *
+ * Only the methods on the per-part hot path take it, deliberately. An optional
+ * parameter nothing passes is a producer with no consumer (rule 13½), and the
+ * cost of adding one later is a line.
+ *
+ * It is NOT a general "make everything one transaction" lever — see the
+ * ordering note in steps.ts for the pair that must stay apart.
+ */
+export type InTx = SqlTx | undefined;
+
 export interface Lifecycle {
-  getPart(identity: Identity, partId: string): Promise<PartRow | null>;
+  getPart(identity: Identity, partId: string, tx?: InTx): Promise<PartRow | null>;
   partsOfCall(identity: Identity, callId: string): Promise<PartRow[]>;
-  setPartStatus(identity: Identity, partId: string, status: PartStatus): Promise<void>;
+  setPartStatus(identity: Identity, partId: string, status: PartStatus, tx?: InTx): Promise<void>;
   setCallStatus(identity: Identity, callId: string, status: CallStatus): Promise<void>;
   markPartMissing(identity: Identity, partId: string, reason: string): Promise<void>;
   /** Why a `ready` call has no summary (db/0023). Cleared by trigger, not by us. */
   noteSummarySkipped(identity: Identity, callId: string, reason: string): Promise<void>;
   /** Recompute `call.duration_ms` from the parts that have landed. */
-  recomputeCallDuration(identity: Identity, callId: string): Promise<void>;
+  recomputeCallDuration(identity: Identity, callId: string, tx?: InTx): Promise<void>;
   failCall(identity: Identity, callId: string, reason: string): Promise<void>;
-  bumpAttempts(identity: Identity, partId: string): Promise<void>;
+  bumpAttempts(identity: Identity, partId: string, tx?: InTx): Promise<void>;
 }
 
 const PART_COLUMNS = `
@@ -71,10 +90,24 @@ const PART_COLUMNS = `
 `;
 
 export function createLifecycle(db: Db): Lifecycle {
+  /**
+   * Run on the caller's transaction if it gave one, otherwise open our own.
+   *
+   * One place, so "does this method join or start a transaction" cannot drift
+   * per method — and so the identity preamble is never skipped by accident: a
+   * caller-supplied `tx` has already had it applied by `withIdentity`, which
+   * is the only door that sets it.
+   */
+  const on = <T>(
+    identity: Identity,
+    tx: InTx,
+    fn: (t: SqlTx) => Promise<T>,
+  ): Promise<T> => (tx ? fn(tx) : db.withIdentity(identity, fn));
+
   return {
-    async getPart(identity, partId) {
-      const rows = await db.withIdentity(identity, (tx: SqlTx) =>
-        tx.unsafe<PartRow>(
+    async getPart(identity, partId, tx) {
+      const rows = await on(identity, tx, (t: SqlTx) =>
+        t.unsafe<PartRow>(
           `select ${PART_COLUMNS}
              from echo.call_part p join echo.call c on c.id = p.call_id
             where p.id = $1 limit 1`,
@@ -95,9 +128,9 @@ export function createLifecycle(db: Db): Lifecycle {
       );
     },
 
-    async setPartStatus(identity, partId, status) {
-      await db.withIdentity(identity, (tx: SqlTx) =>
-        tx.unsafe(`update echo.call_part set status = $2 where id = $1`, [partId, status]),
+    async setPartStatus(identity, partId, status, tx) {
+      await on(identity, tx, (t: SqlTx) =>
+        t.unsafe(`update echo.call_part set status = $2 where id = $1`, [partId, status]),
       );
     },
 
@@ -160,9 +193,9 @@ export function createLifecycle(db: Db): Lifecycle {
      * idempotent: a re-run of a part produces the same answer, and a part
      * written off as a gap simply stops contributing.
      */
-    async recomputeCallDuration(identity, callId) {
-      await db.withIdentity(identity, (tx: SqlTx) =>
-        tx.unsafe(
+    async recomputeCallDuration(identity, callId, tx) {
+      await on(identity, tx, (t: SqlTx) =>
+        t.unsafe(
           `update echo.call c
               set duration_ms = (
                     select max(p.offset_ms + p.duration_ms)
@@ -184,9 +217,9 @@ export function createLifecycle(db: Db): Lifecycle {
       );
     },
 
-    async bumpAttempts(identity, partId) {
-      await db.withIdentity(identity, (tx: SqlTx) =>
-        tx.unsafe(`update echo.call_part set attempts = attempts + 1 where id = $1`, [partId]),
+    async bumpAttempts(identity, partId, tx) {
+      await on(identity, tx, (t: SqlTx) =>
+        t.unsafe(`update echo.call_part set attempts = attempts + 1 where id = $1`, [partId]),
       );
     },
   };

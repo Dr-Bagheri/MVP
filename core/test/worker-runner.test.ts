@@ -7,7 +7,7 @@
  */
 import { describe, expect, it, vi } from "vitest";
 
-import { loadWorkerConfig, backoffSeconds, type WorkerConfig } from "../src/worker/config.ts";
+import { loadWorkerConfig, backoffSeconds, idleBackoffMs, type WorkerConfig } from "../src/worker/config.ts";
 import {
   MlRequestError,
   ML_DIARIZATION_SOURCES,
@@ -122,6 +122,49 @@ describe("disposition", () => {
     expect(backoffSeconds(99, config)).toBe(config.retryMaxSec);
   });
 
+  /**
+   * The IDLE curve is a different animal from the retry backoff above: this
+   * one is paid in first-message latency by whoever is waiting, so the numbers
+   * are a promise rather than an implementation detail.
+   */
+  describe("idle polling", () => {
+    const idle: WorkerConfig = {
+      ...config, idlePollMs: 2000, idleMaxPollMs: 6000, idleBackoffAfter: 30,
+    };
+
+    it("does not back off at all for the first minute of silence", () => {
+      // 30 polls x 2 s. A worker that has been quiet for under a minute
+      // behaves exactly as it did before this existed.
+      expect(idleBackoffMs(1, idle)).toBe(2000);
+      expect(idleBackoffMs(30, idle)).toBe(2000);
+    });
+
+    it("then grows gently and stops at the ceiling", () => {
+      expect(idleBackoffMs(31, idle)).toBe(3000);
+      expect(idleBackoffMs(32, idle)).toBe(4500);
+      expect(idleBackoffMs(33, idle)).toBe(6000);
+      // and never past it, however long the silence
+      expect(idleBackoffMs(10_000, idle)).toBe(6000);
+    });
+
+    it("can be switched OFF by an operator who wants the latency back", () => {
+      // The documented escape hatch: WORKER_IDLE_MAX_POLL_MS = WORKER_IDLE_POLL_MS.
+      // It has to actually work, or the sentence in config.ts is a promise the
+      // code does not keep.
+      const flat = { ...idle, idleMaxPollMs: 2000 };
+      expect(idleBackoffMs(31, flat)).toBe(2000);
+      expect(idleBackoffMs(10_000, flat)).toBe(2000);
+    });
+
+    it("ships with a ceiling a person would not notice as a hang", () => {
+      // The real defaults, not the fixture's — a config whose shipped ceiling
+      // drifted to a minute would pass every test above and still be wrong.
+      const shipped = loadWorkerConfig();
+      expect(shipped.idleMaxPollMs).toBeLessThanOrEqual(10_000);
+      expect(shipped.idleMaxPollMs).toBeGreaterThanOrEqual(shipped.idlePollMs);
+    });
+  });
+
   it("treats an unreachable ml/ as transient", () => {
     // The audio is fine; the service is not.
     expect(disposition(new MlRequestError("ml_unreachable", "down", true), 1, config)).toMatchObject({
@@ -147,6 +190,18 @@ function fakeQueue(messages: { msgId: number; readCt: number; body: JobPayload }
       if (handed) return [];
       handed = true;
       return messages;
+    },
+    // The runner reads every queue in one statement now. The fake keys the
+    // batch BY QUEUE rather than returning a flat list, because that is the
+    // part of the contract that matters: a flat list would let the runner
+    // hand a message to whichever handler happened to be first, and the
+    // queue a message arrived on is what chooses its step.
+    async readAll(queues) {
+      const out = new Map(queues.map((q) => [q, [] as typeof messages]));
+      if (handed) return out;
+      handed = true;
+      for (const message of messages) out.get(Q_PROCESS_PART)?.push(message);
+      return out;
     },
     async remove(_q, id) { calls.removed.push(id); },
     async archive(_q, id) { calls.archived.push(id); },

@@ -286,12 +286,24 @@ export function createRunner({ queue, handlers, config, sink, log }: RunnerOptio
     async poll(): Promise<PollResult> {
       const result: PollResult = { claimed: 0, done: 0, retried: 0, deadLettered: 0 };
 
+      /*
+       * ONE read for every queue (speed pass, 2026-08-29).
+       *
+       * This was `queue.read` per handler, each its own transaction: five
+       * BEGIN/read/COMMIT round trips every two seconds whether or not there
+       * was any work, which is where the idle worker's ~648,000 round trips a
+       * day came from. `readAll` asks all five in one statement, so an empty
+       * poll costs one transaction instead of five, and a busy one costs the
+       * same. No latency is traded for it.
+       */
+      const claimed = await queue.readAll(
+        handlers.map((h) => h.queue),
+        config.visibilityTimeoutSec,
+        config.batchSize,
+      );
+
       for (const handler of handlers) {
-        const messages = await queue.read(
-          handler.queue,
-          config.visibilityTimeoutSec,
-          config.batchSize,
-        );
+        const messages = claimed.get(handler.queue) ?? [];
         result.claimed += messages.length;
 
         /*

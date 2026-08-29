@@ -106,13 +106,54 @@ export function createDb(pools: Pools) {
       // PROPERTY OF THE CODE. A connection with more privilege than it should
       // have is dropped to the intended role; one with less fails loudly
       // here rather than succeeding at something it should not do.
-      await tx.unsafe(`set local role ${role === "agent" ? "echo_agent" : "echo_app"}`);
-      // set_config takes a bound parameter; `SET` cannot. This removes the
-      // last interpolated value in the data layer — assertUuid still guards
-      // it, but a guard you can delete is weaker than a parameter you cannot.
-      // is_local = true: scoped to this transaction, cannot outlive it on a
-      // pooled connection.
-      await tx.unsafe(`select set_config('echo.actor_id', $1, true)`, [actor]);
+      // ── ONE round trip, not two (speed pass, 2026-08-29) ─────────────────
+      //
+      // This preamble runs before EVERY query in the product, so its cost is
+      // paid by every endpoint, every tool call and every worker step. It used
+      // to be two separately-awaited statements — `set local role …` and then
+      // `select set_config('echo.actor_id', …)` — which is two network
+      // round trips of pure ceremony on a connection that had not yet been
+      // asked a question.
+      //
+      // `SET ROLE x` IS a GUC assignment to `role`; `set_config('role', x,
+      // true)` is the function spelling of exactly that assignment, so the two
+      // reach the same check_role/assign_role hook. That equivalence was
+      // proven against the live database rather than reasoned from the manual,
+      // because this statement is a security boundary and "should be the same"
+      // is not a standard it gets to be held to:
+      //
+      //   set_config('role','echo_app',true)   → current_user = echo_app,
+      //       rolbypassrls false, RLS still filtering, gone after rollback.
+      //   set_config('role','no_such_role',…)  → 22023, loudly.
+      //   From a real echo_app connection, asked for a role it is not a
+      //   member of, BOTH spellings return byte-identical errors:
+      //       42501  permission denied to set role "echo_agent"
+      //
+      // That last one is the reason it was worth proving. db/0012's "role
+      // memberships: NONE" makes a 42501 here mean A MISWIRED CONNECTION URL,
+      // and the repo's standing instruction is to fix the URL and never the
+      // grant. A rewrite that quietly changed that SQLSTATE would have moved a
+      // diagnostic the team reads without changing anything a test asserts.
+      //
+      // Both values are BOUND, not interpolated. The previous comment noted
+      // that set_config takes a parameter where SET cannot — that argument now
+      // covers the role as well, so this merge removes the last interpolated
+      // value in the data layer instead of adding one. `assertUuid` above
+      // stays as the belt: it is what makes the actor provably a UUID before
+      // it reaches SQL at all, and it is cheap enough that keeping it costs
+      // nothing even though the binding already closes the injection door.
+      //
+      // is_local = true on both: scoped to this transaction, cannot outlive it
+      // on a pooled connection — the property the whole file exists to hold.
+      //
+      // Evaluation order inside the target list is not guaranteed and does not
+      // need to be: `echo.actor_id` is a custom GUC with a prefix, settable by
+      // any role, so it does not depend on the role change landing first, and
+      // neither is visible to a query until this statement has returned.
+      await tx.unsafe(
+        `select set_config('role', $1, true), set_config('echo.actor_id', $2, true)`,
+        [role === "agent" ? "echo_agent" : "echo_app", actor],
+      );
       return fn(tx);
     });
   }

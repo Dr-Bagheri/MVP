@@ -31,7 +31,7 @@
 import type { Identity } from "../agent/types.ts";
 import type { Db, SqlTx } from "../db/identity.ts";
 import { hasOrgGlossary } from "../db/capabilities.ts";
-import { JSONB_PARAM, toJsonb } from "../db/jsonb.ts";
+import { JSONB_ARRAY_PARAM, JSONB_PARAM, toJsonb, toJsonbArray } from "../db/jsonb.ts";
 import { resolveJobIdentity } from "./job-identity.ts";
 import { unknownVocabulary, type MlClient } from "./ml-client.ts";
 import {
@@ -106,59 +106,87 @@ export function createPartStep({
       // work. There is no service-account path.
       const identity = await resolveJobIdentity(db, payload);
 
-      const part = await lifecycle.getPart(identity, payload.partId);
-      if (!part) {
+      /*
+       * ── PRE-FLIGHT, in ONE transaction (speed pass, 2026-08-29) ──────────
+       *
+       * The part read, the idempotency check, the attempt bump and the
+       * glossary read were four separate transactions against the same row's
+       * neighbourhood. They are one now.
+       *
+       * The branching stays INSIDE it so the attempt bump keeps its
+       * preconditions exactly: a part that is missing, already transcribed, or
+       * has no audio must not be charged an attempt, and merging the reads
+       * with the write would have bumped before the decision if the decision
+       * were made outside.
+       *
+       * This transaction COMMITS BEFORE ml/ is called, and that is
+       * load-bearing twice over. The attempt count is evidence for an operator
+       * reading a dead letter, so it has to survive the crash it is evidence
+       * of — an uncommitted bump is lost exactly when it matters. And db/0053
+       * reaps a connection idle in a transaction after five minutes, so a
+       * transaction held open across `ml.process` (minutes, for a long part)
+       * would be killed mid-job on precisely the parts that take longest.
+       * Nothing here may grow to span that call.
+       */
+      const preflight = await db.withIdentity(identity, async (tx: SqlTx) => {
+        const part = await lifecycle.getPart(identity, payload.partId!, tx);
+        if (!part) return { verdict: "not_found" as const };
+        if (part.missing) return { verdict: "missing" as const, part };
+
+        // Idempotency against the artifact, not a flag: if rows already exist
+        // for this part, a previous attempt succeeded and only the bookkeeping
+        // was lost. Re-running would duplicate a customer's transcript.
+        if (await hasTranscript(tx, part.id)) return { verdict: "already" as const, part };
+        if (!part.storage_path) return { verdict: "no_audio" as const, part };
+
+        await lifecycle.bumpAttempts(identity, part.id, tx);
+
+        /*
+         * The org GLOSSARY (0088, 2026-08-23): names and terms the org
+         * recorded to bias recognition toward — Persian proper names are
+         * where the transcriber's errors concentrate. Read under the owner's
+         * identity like everything else; absent column or empty list = no
+         * context sent. Best-effort: a failed read costs the bias, never the
+         * transcription — so the failure is caught HERE rather than allowed
+         * to roll back the attempt bump it now shares a transaction with.
+         */
+        let glossary: string[] = [];
+        if (await hasOrgGlossary(db)) {
+          try {
+            const rows = await tx.unsafe<{ glossary: string[] }>(
+              `select o.glossary from echo.org o where o.id = $1`,
+              [identity.orgId],
+            );
+            glossary = rows[0]?.glossary ?? [];
+          } catch {
+            log.warn({ part_id: part.id }, "glossary read failed; transcribing without context");
+          }
+        }
+        return { verdict: "go" as const, part, glossary };
+      });
+
+      if (preflight.verdict === "not_found") {
         throw new StepError("part_not_found", "part is not visible to the call owner", false);
       }
-
-      if (part.missing) {
-        log.info({ part_id: part.id }, "part already marked missing; nothing to do");
+      if (preflight.verdict === "missing") {
+        log.info({ part_id: preflight.part.id }, "part already marked missing; nothing to do");
         return;
       }
-
-      // Idempotency against the artifact, not a flag: if rows already exist
-      // for this part, a previous attempt succeeded and only the bookkeeping
-      // was lost. Re-running would duplicate a customer's transcript.
-      if (await hasTranscript(db, identity, part.id)) {
-        log.info({ part_id: part.id }, "transcript already present; advancing only");
-        await finishPart(identity, part, lifecycle, queue, payload, log);
+      if (preflight.verdict === "already") {
+        log.info({ part_id: preflight.part.id }, "transcript already present; advancing only");
+        await finishPart(identity, preflight.part, lifecycle, queue, payload, log);
         return;
       }
-
-      if (!part.storage_path) {
+      if (preflight.verdict === "no_audio") {
         throw new StepError("no_audio", "part has no stored audio", false);
       }
-
-      await lifecycle.bumpAttempts(identity, part.id);
+      const { part, glossary } = preflight;
 
       const audioUrl = await storage.signDownload(
         part.storage_bucket,
-        part.storage_path,
+        part.storage_path!,
         signedUrlTtlSec,
       );
-
-      /*
-       * The org GLOSSARY (0088, 2026-08-23): names and terms the org
-       * recorded to bias recognition toward — Persian proper names are
-       * where the transcriber's errors concentrate. Read under the owner's
-       * identity like everything else; absent column or empty list = no
-       * context sent. Best-effort: a failed read costs the bias, never the
-       * transcription.
-       */
-      let glossary: string[] = [];
-      if (await hasOrgGlossary(db)) {
-        try {
-          const rows = await db.withIdentity(identity, (tx: SqlTx) =>
-            tx.unsafe<{ glossary: string[] }>(
-              `select o.glossary from echo.org o where o.id = $1`,
-              [identity.orgId],
-            ),
-          );
-          glossary = rows[0]?.glossary ?? [];
-        } catch {
-          log.warn({ part_id: part.id }, "glossary read failed; transcribing without context");
-        }
-      }
 
       // The signed URL is a credential; it is passed, never logged.
       const result = await ml.process({
@@ -209,15 +237,6 @@ export function createPartStep({
         );
       }
 
-      // The roster is built HERE, while ml/'s labels are still in hand. They
-      // are local to one response (S1, S2 by first appearance) and mean
-      // nothing outside it, so if they are not resolved to call_speaker rows
-      // now, the information is gone and link_speakers has nothing to work
-      // from.
-      const speakerIds = await upsertSpeakers(db, identity, part, mapped.segments, result);
-
-      await writeTranscript(db, identity, part, mapped.segments, result, speakerIds);
-
       // db/0020: assert the flag once per part, after the segments are in, and
       // only when every one of them carries real word timings. The losing side
       // is a trigger's job — a later correction that blanks a segment's words
@@ -226,19 +245,43 @@ export function createPartStep({
       const hasWordTimestamps =
         mapped.hasWordTimestamps && mapped.segments.every((s) => s.words.length > 0);
 
-      await db.withIdentity(identity, (tx: SqlTx) =>
-        tx.unsafe(
+      /*
+       * ── THE LANDING, in ONE transaction (speed pass, 2026-08-29) ─────────
+       *
+       * Roster, transcript, the part's own row and the call's duration were
+       * four transactions; they are one. Everything this part learned from ml/
+       * now becomes visible at the same instant, which also closes a small
+       * hole: a crash between the transcript insert and the part update used
+       * to leave rows present with `duration_ms` null and a stale status, a
+       * half-written part that only the idempotency path repaired.
+       *
+       * The re-pay window widens slightly and deliberately. The file header
+       * notes that a crash between ml/'s response and the database write
+       * re-pays for the STT; that window now ends at this COMMIT rather than
+       * at the first insert. It is milliseconds of local writes against a
+       * transcription measured in minutes, and buying atomicity with it is the
+       * better trade — recorded rather than buried, because the header's
+       * sentence is now very slightly less true than it was.
+       */
+      await db.withIdentity(identity, async (tx: SqlTx) => {
+        // The roster is built HERE, while ml/'s labels are still in hand. They
+        // are local to one response (S1, S2 by first appearance) and mean
+        // nothing outside it, so if they are not resolved to call_speaker rows
+        // now, the information is gone and link_speakers has nothing to work
+        // from.
+        const ids = await upsertSpeakers(tx, identity.orgId, part, mapped.segments, result);
+        await writeTranscript(tx, identity.orgId, part, mapped.segments, result, ids);
+        await tx.unsafe(
           `update echo.call_part
               set duration_ms = $2, status = 'transcribed', has_word_timestamps = $3
             where id = $1`,
           [part.id, result.media.duration_ms, hasWordTimestamps],
-        ),
-      );
-
-      // The call's own duration, from the parts that have landed. db/0004's
-      // comment has always said "maintained by the worker as parts land";
-      // until now nothing did it, and the api served null on every live row.
-      await lifecycle.recomputeCallDuration(identity, part.call_id);
+        );
+        // The call's own duration, from the parts that have landed. db/0004's
+        // comment has always said "maintained by the worker as parts land";
+        // until now nothing did it, and the api served null on every live row.
+        await lifecycle.recomputeCallDuration(identity, part.call_id, tx);
+      });
 
       log.info(
         {
@@ -261,6 +304,29 @@ export function createPartStep({
 /**
  * Advance the part to the end of the per-part ladder, then ask whether the
  * call as a whole can move on.
+ *
+ * ── these two transactions MUST NOT be merged (speed pass, 2026-08-29) ──────
+ *
+ * Every other transaction in this step was batched. This pair was not, and the
+ * reason is a race that merging creates rather than exposes.
+ *
+ * Parts of one call are processed CONCURRENTLY (`config.concurrency` in
+ * runner.ts). Today the sequence per part is: commit my status, then read
+ * everyone's. Whichever part commits its status last is guaranteed to see all
+ * the others already committed when it reads — so at least one part always
+ * observes "settled" and enqueues `link_speakers`.
+ *
+ * Put the write and the read in one transaction and that guarantee is gone.
+ * Two parts finishing together can each write their own status and each take
+ * their read snapshot before the other COMMITS, so neither sees the other as
+ * settled, NEITHER enqueues, and the call sits in `processing` forever with a
+ * complete transcript. A stall, not an error — nothing logs, nothing retries,
+ * and it needs two parts landing within milliseconds to reproduce.
+ *
+ * The duplicate-enqueue race in the other direction already exists and is
+ * already handled ("link_speakers re-checks state before doing anything"). One
+ * of these races is absorbed by design and the other is a silent dead end, so
+ * the ordering stays: status committed, THEN the settle question asked.
  */
 async function finishPart(
   identity: Identity,
@@ -289,12 +355,10 @@ async function finishPart(
   log.info({ call_id: part.call_id }, "all parts settled; queued link_speakers");
 }
 
-async function hasTranscript(db: Db, identity: Identity, partId: string): Promise<boolean> {
-  const rows = await db.withIdentity(identity, (tx: SqlTx) =>
-    tx.unsafe<{ n: string }>(
-      `select count(*)::text as n from echo.transcript_segment where part_id = $1`,
-      [partId],
-    ),
+async function hasTranscript(tx: SqlTx, partId: string): Promise<boolean> {
+  const rows = await tx.unsafe<{ n: string }>(
+    `select count(*)::text as n from echo.transcript_segment where part_id = $1`,
+    [partId],
   );
   return Number(rows[0]?.n ?? 0) > 0;
 }
@@ -313,9 +377,9 @@ async function hasTranscript(db: Db, identity: Identity, partId: string): Promis
  * merged"). A roster that is too long is a chore; a roster that is wrong is a
  * misquote. Flagged to the steward as a product-visible choice.
  */
-async function upsertSpeakers(
-  db: Db,
-  identity: Identity,
+export async function upsertSpeakers(
+  tx: SqlTx,
+  orgId: string,
   part: PartRow,
   segments: readonly MappedSegment[],
   result: { provenance: { diarization: { source: string } }; words: { speaker: string | null; channel: number | null }[] },
@@ -333,29 +397,75 @@ async function upsertSpeakers(
     }
   }
 
-  await db.withIdentity(identity, async (tx: SqlTx) => {
-    for (const label of labels) {
-      // Unique per call, and stable across retries: the same part and the
-      // same ml/ label always produce the same roster label, so a re-run
-      // finds its own row instead of adding a duplicate.
-      const rosterLabel = `${label}·${part.idx + 1}`;
-      const rows = await tx.unsafe<{ id: string }>(
-        `insert into echo.call_speaker (call_id, org_id, label, channel)
-         values ($1, $2, $3, $4)
-         on conflict (call_id, label) do update set label = excluded.label
-         returning id`,
-        [part.call_id, identity.orgId, rosterLabel, channelOf.get(label) ?? null],
-      );
-      if (rows[0]) ids.set(label, rows[0].id);
-    }
-  });
+  // Unique per call, and stable across retries: the same part and the same
+  // ml/ label always produce the same roster label, so a re-run finds its own
+  // row instead of adding a duplicate.
+  const rosterLabel = (label: string) => `${label}·${part.idx + 1}`;
+  const mlLabelOf = new Map(labels.map((label) => [rosterLabel(label), label]));
+
+  /*
+   * ONE statement for the whole roster (speed pass, 2026-08-29).
+   *
+   * This was a loop issuing one INSERT per label inside the transaction, so a
+   * four-voice part paid four round trips to write four small rows. `unnest`
+   * turns the roster into two array parameters and one statement.
+   *
+   * The RETURNING has to carry `label` as well as `id`: the loop knew which
+   * label it had just sent, and a set-based statement does not — Postgres is
+   * free to return the rows in any order, so pairing them by position would
+   * be a silent mis-attribution of one speaker's id to another's words. That
+   * is the failure this file already warns about two paragraphs up, and it
+   * would be invisible until someone read a transcript. Mapped by name.
+   *
+   * `on conflict … do update set label = excluded.label` is a deliberate
+   * no-op write kept from the original: ON CONFLICT DO NOTHING returns no row
+   * for an existing speaker, and a retry needs the ids of rows a previous
+   * attempt already created.
+   *
+   * Safe as one statement because `labels` came from a Set and `rosterLabel`
+   * is injective, so no two rows here can share `(call_id, label)`. Postgres
+   * raises 21000 ("cannot affect row a second time") on a duplicate within one
+   * ON CONFLICT statement rather than silently keeping one — a loud floor
+   * under that reasoning rather than a claim resting on it.
+   */
+  const rows = await tx.unsafe<{ id: string; label: string }>(
+    `insert into echo.call_speaker (call_id, org_id, label, channel)
+     select $1::uuid, $2::uuid, t.label, t.channel
+       from unnest($3::text[], $4::int[]) as t(label, channel)
+     on conflict (call_id, label) do update set label = excluded.label
+     returning id, label`,
+    [
+      part.call_id,
+      orgId,
+      labels.map(rosterLabel),
+      labels.map((label) => channelOf.get(label) ?? null),
+    ],
+  );
+
+  for (const row of rows) {
+    const mlLabel = mlLabelOf.get(row.label);
+    if (mlLabel) ids.set(mlLabel, row.id);
+  }
 
   return ids;
 }
 
-async function writeTranscript(
-  db: Db,
-  identity: Identity,
+/**
+ * Exported for test/e2e/transcript-write.ts ONLY.
+ *
+ * Not a general entry point — `createPartStep` is the caller that matters, and
+ * it is the one that resolves the identity, the roster and the provenance.
+ * The export exists because the multi-row rewrite below is a claim about SQL
+ * that no fake can check: a fake accepts an invalid statement, an array bound
+ * at the wrong type, and a `words` column double-encoded into jsonb strings,
+ * all with the same green tick. Rule 10 says the fixture comes from the
+ * producer, so the live test drives THIS function rather than a hand-copied
+ * transcription of its SQL — two hand-written beliefs about one wire is the
+ * thing that keeps shipping.
+ */
+export async function writeTranscript(
+  tx: SqlTx,
+  orgId: string,
   part: PartRow,
   segments: readonly MappedSegment[],
   result: { provenance: unknown; degraded: boolean; words: { channel: number | null }[] },
@@ -378,28 +488,49 @@ async function writeTranscript(
     ...(result.provenance as Record<string, unknown>),
   };
 
-  await db.withIdentity(identity, async (tx: SqlTx) => {
-    for (const segment of segments) {
-      await tx.unsafe(
-        `insert into echo.transcript_segment
-           (call_id, org_id, part_id, seq, start_ms, end_ms, call_speaker_id, text, words, provenance)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, ${JSONB_PARAM(9)}, ${JSONB_PARAM(10)})`,
-        [
-          part.call_id,
-          identity.orgId,
-          part.id,
-          segment.seq,
-          segment.startMs,
-          segment.endMs,
-          segment.speaker ? (speakerIds.get(segment.speaker) ?? null) : null,
-          segment.text,
-          toJsonb(segment.words.map((w) => ({
-            w: w.w, s: w.startMs, e: w.endMs,
-            ...(w.confidence !== undefined ? { c: w.confidence } : {}),
-          }))),
-          toJsonb(provenance),
-        ],
-      );
-    }
-  });
+  /*
+   * ONE statement for the whole part (speed pass, 2026-08-29).
+   *
+   * This was one INSERT per segment inside the transaction. A 200-segment part
+   * therefore cost 200 round trips to write 200 small rows — the transcript
+   * write was network latency almost end to end, and it grows with the length
+   * of the call, which is the one dimension a call-intelligence product can
+   * expect to grow.
+   *
+   * Four values are constant for the whole part (call, org, part, provenance)
+   * and are sent once as scalars; the six that vary per segment are sent as
+   * six arrays and re-joined by `unnest`. Row order out of `unnest` follows
+   * array order, but nothing here depends on that: `seq` is carried
+   * explicitly, exactly as it was when each row was its own statement.
+   *
+   * `words` keeps the db/jsonb.ts discipline through the change — see
+   * JSONB_ARRAY_PARAM there for why an array is the double-encode bug's
+   * favourite hiding place and why `t.words::jsonb` at the call site is safe
+   * to leave to a reader (forgetting it is a 42804, not a quiet blob).
+   */
+  await tx.unsafe(
+    `insert into echo.transcript_segment
+       (call_id, org_id, part_id, seq, start_ms, end_ms, call_speaker_id, text, words, provenance)
+     select $1::uuid, $2::uuid, $3::uuid,
+            t.seq, t.start_ms, t.end_ms, t.call_speaker_id, t.text,
+            t.words::jsonb, ${JSONB_PARAM(4)}
+       from unnest($5::int[], $6::int[], $7::int[], $8::uuid[], $9::text[],
+                   ${JSONB_ARRAY_PARAM(10)})
+         as t(seq, start_ms, end_ms, call_speaker_id, text, words)`,
+    [
+      part.call_id,
+      orgId,
+      part.id,
+      toJsonb(provenance),
+      segments.map((s) => s.seq),
+      segments.map((s) => s.startMs),
+      segments.map((s) => s.endMs),
+      segments.map((s) => (s.speaker ? (speakerIds.get(s.speaker) ?? null) : null)),
+      segments.map((s) => s.text),
+      toJsonbArray(segments.map((s) => s.words.map((w) => ({
+        w: w.w, s: w.startMs, e: w.endMs,
+        ...(w.confidence !== undefined ? { c: w.confidence } : {}),
+      })))),
+    ],
+  );
 }

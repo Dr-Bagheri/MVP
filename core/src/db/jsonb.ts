@@ -48,3 +48,50 @@ export function toJsonb(value: unknown): string {
 export function JSONB_PARAM(position: number): string {
   return `$${position}::text::jsonb`;
 }
+
+/**
+ * The same guarantee for a COLUMN of jsonb values sent as one array.
+ *
+ * ── why this exists ─────────────────────────────────────────────────────────
+ *
+ * A multi-row insert built on `unnest(...)` sends N values as ONE parameter,
+ * which is what turns 200 round trips into one. The jsonb column in that
+ * insert is the exact place the double-encode bug comes back: binding a
+ * `jsonb[]` parameter to an array of already-stringified values encodes each
+ * element a second time, and the result is an array of jsonb STRINGS that
+ * looks right in a `select` and answers null to every `->>`. Same bug as
+ * above, one dimension up, and `transcript_segment.words` — which already
+ * burned once — is precisely the column that travels this way.
+ *
+ * So the array is bound as `text[]` and Postgres does the decoding, element by
+ * element, exactly once:
+ *
+ *   `unnest(${JSONB_ARRAY_PARAM(9)}) as t(words)`  →  "unnest($9::text[])"
+ *   tx.unsafe(SQL, [ …, toJsonbArray(rows.map(r => r.words)) ])
+ *
+ * ── the half this helper CANNOT carry, and why that is safe ─────────────────
+ *
+ * The unnested column arrives as `text` and has to be cast at the point of
+ * use: `select …, t.words::jsonb, …`. That cast cannot travel inside this
+ * function, because it belongs to a column reference rather than to a
+ * placeholder — which is the one thing JSONB_PARAM was designed to avoid
+ * having to remember.
+ *
+ * It is safe to leave to the call site only because forgetting it is LOUD:
+ * there is no assignment cast from text to jsonb, so an insert whose target
+ * column is jsonb and whose expression is text fails outright with
+ *
+ *   42804  column "words" is of type jsonb but expression is of type text
+ *
+ * That is the opposite of the failure this file exists for. The original bug
+ * was silent and produced readable-looking garbage; this one refuses to run.
+ * A rule you cannot forget quietly does not need to be mechanised.
+ */
+export function JSONB_ARRAY_PARAM(position: number): string {
+  return `$${position}::text[]`;
+}
+
+/** Exactly one JSON encode PER ELEMENT — the array twin of `toJsonb`. */
+export function toJsonbArray(values: readonly unknown[]): string[] {
+  return values.map((value) => toJsonb(value));
+}

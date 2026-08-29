@@ -118,6 +118,21 @@ export interface QueueMessage<T = QueuePayload> {
 export interface Queue {
   send(queue: QueueName, body: QueuePayload, delaySec?: number): Promise<number>;
   read(queue: QueueName, vtSec: number, qty: number): Promise<QueueMessage[]>;
+  /**
+   * Every queue in ONE statement (speed pass, 2026-08-29).
+   *
+   * The runner used to call `read` once per handler, each opening its own
+   * transaction — five queues × BEGIN/read/COMMIT, every two seconds, forever.
+   * That was ~648,000 round trips a day on an idle worker, and all but a
+   * handful returned nothing.
+   *
+   * Returned keyed by queue rather than concatenated: the handler that owns
+   * each message is chosen by which queue it came from, and a flat list would
+   * make the runner infer that from the payload's shape — which is how the
+   * wrong step ends up processing a message that happens to look right.
+   */
+  readAll(queues: readonly QueueName[], vtSec: number, qty: number):
+    Promise<Map<QueueName, QueueMessage[]>>;
   /** Done: drop it. */
   remove(queue: QueueName, msgId: number): Promise<void>;
   /** Dead-letter: keep it, out of the way, for a human to look at. */
@@ -178,6 +193,51 @@ export function createQueue(db: Db): Queue {
         readCt: Number(row.read_ct),
         body: parsePayload(row.message),
       }));
+    },
+
+    async readAll(queues, vtSec, qty) {
+      const empty = new Map<QueueName, QueueMessage[]>(queues.map((q) => [q, []]));
+      if (queues.length === 0) return empty;
+
+      /*
+       * One statement, one `union all` branch per queue.
+       *
+       * `pgmq.read` is a set-returning function with a SIDE EFFECT — it sets
+       * each returned message's visibility timeout — so the branches are not
+       * interchangeable with a join and the union may never gain a LIMIT: a
+       * branch the planner could skip is a queue that silently stops being
+       * served. There is nothing here that would let it, and this note is why
+       * a future "just add a limit" should not be applied.
+       *
+       * Queue names are bound, not interpolated, even though they are module
+       * constants. `qty` and `vtSec` go last so the branch parameters keep the
+       * same numbering whatever the queue count.
+       */
+      const branches = queues.map((_, i) =>
+        `select $${i + 1}::text as queue, msg_id, read_ct, message
+           from pgmq.read($${i + 1}::text, $${queues.length + 1}::integer, $${queues.length + 2}::integer)`,
+      );
+      const rows = await db.withoutIdentity((tx) =>
+        tx.unsafe<PgmqRow & { queue: string }>(
+          branches.join("\n union all\n"),
+          [...queues, vtSec, qty],
+        ),
+      );
+
+      for (const row of rows) {
+        const bucket = empty.get(row.queue as QueueName);
+        // A row whose queue is not one we asked for cannot happen, and
+        // dropping it silently would be the wrong kind of nothing — but the
+        // map was built from the request, so this is unreachable rather than
+        // tolerated.
+        if (!bucket) continue;
+        bucket.push({
+          msgId: Number(row.msg_id),
+          readCt: Number(row.read_ct),
+          body: parsePayload(row.message),
+        });
+      }
+      return empty;
     },
 
     async remove(queue, msgId) {

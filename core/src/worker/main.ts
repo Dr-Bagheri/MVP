@@ -11,7 +11,7 @@ import postgres from "postgres";
 
 import { agentToolsDb, createDb, type SqlClient } from "../db/identity.ts";
 import { initWatchtower, reportError } from "../observe/watchtower.ts";
-import { loadWorkerConfig } from "./config.ts";
+import { idleBackoffMs, loadWorkerConfig } from "./config.ts";
 import { createDeadLetterSink } from "./dead-letter.ts";
 import { createLifecycle } from "./lifecycle.ts";
 import { createMlClient } from "./ml-client.ts";
@@ -307,10 +307,19 @@ export async function main(): Promise<void> {
     "worker started",
   );
 
+  // Consecutive polls that found nothing — the input to the idle curve. Reset
+  // by ANY claimed message, so a burst pays the backoff at most once.
+  let emptyPolls = 0;
+
   while (running) {
     try {
       const result = await runner.poll();
-      if (result.claimed === 0) await sleep(config.idlePollMs);
+      if (result.claimed === 0) {
+        emptyPolls += 1;
+        await sleep(idleBackoffMs(emptyPolls, config));
+      } else {
+        emptyPolls = 0;
+      }
     } catch (error) {
       // The loop itself failing (database down, say) must not kill the
       // process: it backs off and tries again, because the work is still in

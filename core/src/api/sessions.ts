@@ -53,6 +53,14 @@ import { toJsonb, JSONB_PARAM } from "../db/jsonb.ts";
 import { assertUuid, type Db, type SqlTx } from "../db/identity.ts";
 import type { Identity } from "../agent/types.ts";
 
+/**
+ * One page of conversations. 50 is generous for a sidebar and small enough
+ * that the per-session message count cannot make the query grow with a heavy
+ * user's history; MAX_PAGE is the ceiling a caller may ask for.
+ */
+const DEFAULT_PAGE = 50;
+const MAX_PAGE = 200;
+
 export interface SessionRecord {
   id: string;
   title: string;
@@ -178,16 +186,58 @@ export function createSessionsRepo(db: Db) {
      *
      * `agent_session_own` already scopes this to the caller; no predicate here.
      */
-    async list(identity: Identity, options: { archived?: boolean } = {}): Promise<SessionRecord[]> {
+    async list(
+      identity: Identity,
+      options: {
+        archived?: boolean | undefined;
+        limit?: number | undefined;
+        before?: string | undefined;
+      } = {},
+    ): Promise<SessionRecord[]> {
+      /*
+       * ── BOUNDED, and paged the way the call list is (speed pass, 2026-08-29)
+       *
+       * This returned every conversation the caller has ever had, with a
+       * correlated `count(*)` over `agent_message` for each one — so the cost
+       * of opening the sidebar grew without limit for exactly the people who
+       * use the product most. Nothing above it imposed a bound either.
+       *
+       * `before` is the same keyset shape `calls.list` uses, on the same
+       * column the ORDER BY leads with. It is deliberately NOT the composite
+       * cursor the audit feed needed: this list is one person's own
+       * conversations, a tie on `last_message_at` would need two messages in
+       * the same microsecond in two different threads by one human, and the
+       * audit feed's cursor exists because dropping a row THERE is unfalsifiable
+       * to the reader. Here a tie is visible and harmless. Recorded so the
+       * difference reads as a decision rather than an oversight.
+       *
+       * NULLS LAST survives the filter: `last_message_at < $before` excludes
+       * a null, so an empty conversation appears on the first page and never
+       * again — which is correct, since it is at the end of the order.
+       */
+      const limit = Math.min(Math.max(options.limit ?? DEFAULT_PAGE, 1), MAX_PAGE);
+      const before = options.before ?? null;
+      if (before !== null && Number.isNaN(Date.parse(before))) {
+        throw new ValidationError("before must be an ISO timestamp");
+      }
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<Record<string, unknown>>(
-          `select ${SESSION_COLUMNS},
-                  (select count(*)::int from echo.agent_message m
-                    where m.session_id = agent_session.id) as message_count
+          // LEFT JOIN LATERAL rather than a correlated scalar subquery: same
+          // rows, but the count is computed once per session in one place the
+          // planner can cost, instead of being re-derived inside the select
+          // list for every row it returns.
+          `select ${SESSION_COLUMNS}, c.message_count
              from echo.agent_session
+             left join lateral (
+               select count(*)::int as message_count
+                 from echo.agent_message m
+                where m.session_id = agent_session.id
+             ) c on true
             where ($1::boolean is true) = (archived_at is not null)
-            order by last_message_at desc nulls last, created_at desc`,
-          [options.archived === true],
+              and ($3::timestamptz is null or last_message_at < $3::timestamptz)
+            order by last_message_at desc nulls last, created_at desc
+            limit $2`,
+          [options.archived === true, limit, before],
         ),
       );
       return rows.map(toSession);
