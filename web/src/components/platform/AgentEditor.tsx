@@ -79,6 +79,28 @@ export function AgentEditor({
    */
   const editable = agent === null || (agent.level === "user" ? true : agent.level === "org" ? isAdmin : false);
 
+  /*
+   * ATTACHING A WORKFLOW IS A DIFFERENT QUESTION FROM EDITING A PERSONA, and
+   * db/0124 answers them differently. `editable` asks "may I rewrite what this
+   * agent IS" — for a system agent that is nobody, which is the whole point of
+   * a shipped agent. `agent_workflow_write` asks only who may change the SET a
+   * card carries: system and org rows require an admin, a user row requires
+   * its owner.
+   *
+   * Gating the workflows step on `editable` collapsed the two, so an admin
+   * could not attach a workflow to meetings, mail or prep from this editor —
+   * exactly the complaint that sent the overview panel to `canArrange`
+   * (2026-08-29 user directive: "i can not choose the already installed
+   * workflow in the agent"). Same derivation as the panel's, deliberately, so
+   * the two surfaces cannot answer the same question differently.
+   *
+   * `isAdmin === null` is the role still in flight and answers NO: offering a
+   * write before being told about the permission and withdrawing it on the
+   * answer is worse than waiting.
+   */
+  const canArrange =
+    agent === null ? true : isAdmin === null ? false : agent.level === "user" ? true : isAdmin;
+
   const [name, setName] = useState(agent?.name ?? "");
   const [description, setDescription] = useState(agent?.description ?? "");
   /** always starts empty — see the header: write-only, empty = keep */
@@ -168,20 +190,22 @@ export function AgentEditor({
   const createReady = name.trim() !== "" && instructions.trim() !== "";
 
   async function save() {
-    if (saving || !editable) return;
+    // A person who may only arrange workflows still saves; the persona block
+    // below stays behind `editable`, so relaxing this door widens nothing.
+    if (saving || (!editable && !canArrange)) return;
     if (agent === null && !createReady) return;
     setSaving(true);
     setError(null);
     setSaved(false);
     try {
       let card = agent;
-      if (agent === null) {
+      if (agent === null && editable) {
         card = await api.createAgent({
           level, name, instructions,
           description: description || undefined,
           model, tools, icon, color, web,
         });
-      } else {
+      } else if (editable) {
         /* THE DIFF — exactly the fields the person changed, nothing else */
         const patch: Parameters<typeof api.updateAgent>[1] = {};
         if (name !== agent.name) patch.name = name;
@@ -462,7 +486,7 @@ export function AgentEditor({
                       ) : null}
                     </>
                   );
-                  return editable ? (
+                  return canArrange ? (
                     <label key={row.id} className="flex items-center gap-3 rounded-lg border border-border px-3 py-2">
                       <input
                         type="checkbox"
@@ -482,7 +506,7 @@ export function AgentEditor({
                     </Link>
                   ) : null;
                 })}
-                {!editable && attachedRows.length === 0 ? (
+                {!canArrange && attachedRows.length === 0 ? (
                   <p className="text-sm text-fg-muted">{t("overviewNoWorkflows")}</p>
                 ) : null}
               </div>
@@ -542,7 +566,7 @@ export function AgentEditor({
         ) : null}
         <span className="flex-1" />
         {saved ? <span className="text-sm text-success">{t("saved")}</span> : null}
-        {editable && (agent !== null || step === "visibility") ? (
+        {(step === "workflows" ? canArrange : editable) && (agent !== null || step === "visibility") ? (
           <button
             type="button"
             className={`h-9 min-h-0 px-4 text-sm ${step === "visibility" ? "btn-primary" : "btn-secondary"}`}

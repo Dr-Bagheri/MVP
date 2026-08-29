@@ -150,4 +150,45 @@ describe("AgentEditor — the save is a diff, the set is whole, the org door is 
     await userEvent.click(screen.getByRole("tab", { name: "دیده‌شدن" }));
     expect(screen.getByRole("radio", { name: /همهٔ اعضای سازمان/ })).toBeEnabled();
   });
+
+  /**
+   * FOURTH contract fact, added 2026-08-29 after the user reported "i can not
+   * choose the already installed workflow in the agent".
+   *
+   * Attaching a workflow and rewriting a persona are DIFFERENT permissions and
+   * db/0124 answers them differently. This editor gated both on `editable`,
+   * for which a system agent is nobody — so an admin could not attach a
+   * workflow to meetings, mail or prep from here, which is the surface a
+   * person actually reaches for.
+   *
+   * Asserted in BOTH directions on the same agent, because the whole defect
+   * was one predicate standing in for two: an admin may arrange a system
+   * agent's workflows AND may not rewrite its persona. A test that only
+   * checked the first would pass against simply deleting the read-only guard.
+   */
+  it("lets an admin arrange a SYSTEM agent's workflows while its persona stays read-only", async () => {
+    const system: AgentCard = { ...AGENT, id: "ag-sys", handle: "prepare-meetings", level: "system" };
+    render(<AgentEditor agent={system} isAdmin={true} onClose={noop} onSaved={noop} />);
+
+    await userEvent.click(screen.getByRole("tab", { name: "گردش‌کارها" }));
+    const boxes = await screen.findAllByRole("checkbox");
+    expect(boxes.length).toBeGreaterThan(0);
+
+    // and the other half of the same predicate: the persona is still theirs
+    // to read and nobody's to rewrite
+    await userEvent.click(screen.getByRole("tab", { name: "شخصیت" }));
+    expect(screen.queryByRole("textbox", { name: /نام/ })).not.toBeInTheDocument();
+  });
+
+  it("offers a MEMBER no way to arrange a system agent — the control", async () => {
+    /*
+     * The question this file should answer NO to. Without it, `canArrange`
+     * could be the constant `true` and every assertion above would still
+     * pass — the exact shape the panel's own test was verified against.
+     */
+    const system: AgentCard = { ...AGENT, id: "ag-sys", handle: "prepare-meetings", level: "system" };
+    render(<AgentEditor agent={system} isAdmin={false} onClose={noop} onSaved={noop} />);
+    await userEvent.click(screen.getByRole("tab", { name: "گردش‌کارها" }));
+    await waitFor(() => expect(screen.queryAllByRole("checkbox")).toHaveLength(0));
+  });
 });
