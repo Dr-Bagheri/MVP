@@ -11,7 +11,7 @@ export {
  * The dashboard's LAYOUT — where each card sits, how big it is, and how
  * dense the board is.
  *
- * FOUR SIZES, NOT FREE RESIZE. Every platform that ships home-screen
+ * A CLOSED SET OF SIZES, NOT FREE RESIZE. Every platform that ships home-screen
  * widgets lands on a small closed set — Windows 11 ships three, Apple's
  * system family is four, Android's quality bar names 2x2/4x1/4x2 as the
  * target set. A closed set is what lets a widget be DESIGNED at each size
@@ -33,12 +33,12 @@ export {
  */
 
 /**
- * The four tiers, on a 12-column grid. Named for what they look like
- * rather than for their span, because the name is what the size menu shows.
- * Twelve columns rather than six so a `small` tile is a genuine quarter and
- * the engine can pack without half-column rounding.
+ * The tiers, on a 12-column grid. Named for what they look like rather than
+ * for their span, because the name is what the size menu shows. Twelve
+ * columns rather than six so a `small` tile is a genuine quarter and the
+ * engine can pack without half-column rounding.
  */
-export const TILE_SIZES = ["small", "wide", "large", "hero"] as const;
+export const TILE_SIZES = ["small", "wide", "large", "tall", "hero"] as const;
 export type TileSize = (typeof TILE_SIZES)[number];
 
 export const COLUMNS = 12;
@@ -48,6 +48,14 @@ export const SIZE_SPAN: Record<TileSize, { w: number; h: number }> = {
   small: { w: 3, h: 2 },
   wide: { w: 6, h: 2 },
   large: { w: 6, h: 3 },
+  /*
+   * TALL joined the set for the calendar (2026-08-29). A month is six rows of
+   * squares, and squares only stay square if the tile has the height to hold
+   * them — at `large` the same grid renders as six rows of wide, flat boxes.
+   * It is the one tier that is taller than it is wide in grid terms, which is
+   * exactly what a calendar is.
+   */
+  tall: { w: 6, h: 5 },
   hero: { w: 12, h: 3 },
 };
 
@@ -75,7 +83,7 @@ export function sizeFromSpan(w: number, h: number): TileSize {
  * row.
  */
 export function rowsFor(size: TileSize): number {
-  return { small: 3, wide: 3, large: 6, hero: 12 }[size];
+  return { small: 3, wide: 3, large: 6, tall: 9, hero: 12 }[size];
 }
 
 export type Density = "comfortable" | "compact";

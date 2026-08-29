@@ -259,3 +259,113 @@ export function purgeDaysLeft(deletedAtIso: string): number {
   const elapsed = Date.now() - new Date(deletedAtIso).getTime();
   return Math.max(0, 30 - Math.floor(elapsed / 86_400_000));
 }
+
+/* ── the month grid ────────────────────────────────────────────────────────
+ *
+ * A real calendar (user directive, 2026-08-29: "the calender must show the
+ * real calender with dates and everything in squar shape if it get any
+ * related information from the user it will show in that date") needs three
+ * things this module already knows and no component should re-derive: which
+ * calendar the viewer reads, which timezone their days are cut in, and how a
+ * Jalali month maps onto Gregorian days.
+ *
+ * The grid is built by WALKING DAYS rather than by inverting the Jalali
+ * conversion. Inverting it would be a second implementation of the same
+ * arithmetic — the two spellings that drift — while walking uses the one
+ * conversion that every date on screen already goes through, so a month grid
+ * and a formatted date can never disagree about what day it is.
+ */
+
+const DAY_MS = 86_400_000;
+
+/**
+ * The day an instant falls on, as the UTC midnight of that calendar day in
+ * the viewer's own zone. It is a KEY, not a time: two instants get the same
+ * number exactly when a person would call them the same day.
+ */
+export function dayKeyOf(iso: string | Date): number {
+  const { y, m, d } = partsIn(typeof iso === "string" ? new Date(iso) : iso, resolvedTimezone());
+  return Date.UTC(y, m - 1, d);
+}
+
+/** the active calendar's (year, month, day) for a day key */
+function activeParts(key: number, locale: string): { y: number; m: number; d: number } {
+  const date = new Date(key);
+  const gy = date.getUTCFullYear();
+  const gm = date.getUTCMonth() + 1;
+  const gd = date.getUTCDate();
+  if (resolvedCalendar(locale) === "gregorian") return { y: gy, m: gm, d: gd };
+  const { jy, jm, jd } = jalaliFromParts(gy, gm, gd);
+  return { y: jy, m: jm, d: jd };
+}
+
+export interface MonthCell {
+  /** the day key this square stands for — matches `dayKeyOf` on an event */
+  key: number;
+  /** the day number, in the reader's digits */
+  label: string;
+  /** a day of the month being shown, rather than the padding either side */
+  inMonth: boolean;
+  today: boolean;
+}
+
+export interface MonthGrid {
+  /** «شهریور ۱۴۰۵» / "August 2026" */
+  title: string;
+  /** seven short weekday names, starting at this calendar's first day */
+  weekdays: string[];
+  /** whole weeks, so the grid is always rectangular */
+  cells: MonthCell[];
+}
+
+const JALALI_WEEKDAYS = ["ش", "ی", "د", "س", "چ", "پ", "ج"];
+const GREGORIAN_WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"];
+
+/**
+ * The month `now` falls in, as whole weeks of squares.
+ *
+ * The week starts on SATURDAY under the Jalali calendar and on Sunday under
+ * the Gregorian one — a Persian calendar whose first column is Sunday is
+ * wrong in the way that makes every date in it land one column off.
+ */
+export function monthGrid(now: Date, locale: string): MonthGrid {
+  const jalali = resolvedCalendar(locale) !== "gregorian";
+  const todayKey = dayKeyOf(now);
+  const { m: month, y: year, d: dayOfMonth } = activeParts(todayKey, locale);
+
+  /* the month's first day, reached by stepping back — the same walk the rest
+     of this function makes, rather than a second way of finding it */
+  const firstKey = todayKey - (dayOfMonth - 1) * DAY_MS;
+
+  /* how many leading squares belong to the previous month: the weekday of
+     the first, counted from this calendar's own first day */
+  const weekdayOfFirst = new Date(firstKey).getUTCDay();          // 0 = Sunday
+  const lead = jalali ? (weekdayOfFirst + 1) % 7 : weekdayOfFirst; // Saturday-first
+  const cells: MonthCell[] = [];
+
+  for (let i = 0; ; i += 1) {
+    const key = firstKey + (i - lead) * DAY_MS;
+    const parts = activeParts(key, locale);
+    const inMonth = parts.m === month && parts.y === year;
+    /* stop at the end of the week the month ends in — a grid that stopped on
+       the last day would leave a ragged final row */
+    if (!inMonth && i > lead && cells.length % 7 === 0) break;
+    cells.push({
+      key,
+      label: digits(parts.d, locale),
+      inMonth,
+      today: key === todayKey,
+    });
+  }
+
+  const monthName = jalali
+    ? JALALI_MONTHS[month - 1]!
+    : dateFormatter("en-GB", { month: "long", timeZone: "UTC" })
+      .format(new Date(Date.UTC(year, month - 1, 1)));
+
+  return {
+    title: `${monthName} ${digits(year, locale)}`,
+    weekdays: jalali ? JALALI_WEEKDAYS : GREGORIAN_WEEKDAYS,
+    cells,
+  };
+}

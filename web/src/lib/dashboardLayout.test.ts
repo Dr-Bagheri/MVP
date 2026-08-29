@@ -126,7 +126,7 @@ describe("adding a card", () => {
     // the person had positioned on purpose
     const tiles: TilePlacement[] = [
       { key: "records", x: 0, y: 0, size: "hero" },
-      { key: "members", x: 0, y: SIZE_SPAN.hero.h, size: "large" },
+      { key: "agents", x: 0, y: SIZE_SPAN.hero.h, size: "large" },
     ];
     /*
      * DERIVED, not written down. The first version of this asserted a

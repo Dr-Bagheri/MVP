@@ -1,9 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import {
-  IconAgent, IconCalendar, IconMic, IconPlug, IconRows, IconUsers, IconZap,
-} from "@/components/icons";
+import { IconAgent, IconCalendar, IconMic, IconPlug, IconRows } from "@/components/icons";
 import type { TileSize } from "@/lib/dashboardLayout";
 
 /**
@@ -20,9 +18,13 @@ import type { TileSize } from "@/lib/dashboardLayout";
  * we need new tabs there, the functions we have in the platform in mini
  * version".
  *
- * So: same grid, same four tiers, same drag and same card shell — and a
- * different catalogue. Every entry below is one of the platform's own
- * surfaces at a glance, and the tile is the surface's own door.
+ * So: same grid, same tiers, same drag and same card shell — and a different
+ * catalogue. Every entry below is one of the platform's own surfaces at a
+ * glance, and the tile is the surface's own door.
+ *
+ * The second round (2026-08-29) cut People and Workflows and reshaped the
+ * rest: a real month calendar, the connections shown big, the records list
+ * smaller, and the record transport in the middle.
  *
  * ── the colours went, and with them the `look` field ────────────────────
  * The board used to carry five visual families (three gradients, a tint, a
@@ -33,14 +35,16 @@ import type { TileSize } from "@/lib/dashboardLayout";
  * anyway.
  *
  * Each entry declares:
- *   `sizes`     which of the four tiers this widget is designed at. Not
+ *   `sizes`     which tiers this widget is designed at. Not
  *               every widget earns every tier — a card with nothing more to
  *               say at full width does not offer full width, and the menu
  *               greys it out so its range is learnable.
  *   `group`     which section of the add menu it appears under.
  */
 
-export type WidgetGroup = "overview" | "work" | "people" | "ai";
+/* `people` left with the People tile (2026-08-29): a section of the add
+   menu that nothing can ever be in is a heading with no members */
+export type WidgetGroup = "overview" | "work" | "ai";
 
 export interface WidgetSpec {
   key: string;
@@ -58,45 +62,57 @@ export interface WidgetSpec {
  * The catalogue. ORDER HERE is the add-menu's order within each group; the
  * board's own order is the layout's, which a person rearranges.
  *
- * All seven are on the default board: the point of the board is that the
+ * All of them are on the default board: the point of the board is that the
  * platform's functions are visible at once, and a default that hid half of
  * them would make the other half look like the whole product.
  */
 export const WIDGET_SPECS = [
   {
-    key: "records",
-    labelKey: "records",
-    icon: <IconRows />,
-    group: "work",
-    sizes: ["small", "large", "hero"],
-    defaultSize: "large",
-    defaultOrder: 1,
-  },
-  {
     key: "calendar",
     labelKey: "calendar",
     icon: <IconCalendar />,
     group: "overview",
-    sizes: ["small", "large", "hero"],
+    /* a month is six rows of squares: at `large` the same grid renders as
+       six rows of flat boxes, which is a table pretending to be a calendar */
+    sizes: ["large", "tall"],
+    defaultSize: "tall",
+    defaultOrder: 1,
+  },
+  {
+    key: "integrations",
+    labelKey: "integrations",
+    icon: <IconPlug />,
+    group: "overview",
+    /* BIG (user directive, 2026-08-29): four connection cards, not four rows
+       of small text — the tile answers "is my Google actually connected" */
+    sizes: ["large", "hero"],
     defaultSize: "large",
     defaultOrder: 2,
   },
   {
-    key: "members",
-    labelKey: "members",
-    icon: <IconUsers />,
-    group: "people",
-    sizes: ["small", "large", "hero"],
-    defaultSize: "large",
+    key: "records",
+    labelKey: "records",
+    icon: <IconRows />,
+    group: "work",
+    /* smaller (user directive): the list is a glance, and the full table is
+       one click away on Echo */
+    sizes: ["small", "large"],
+    defaultSize: "small",
     defaultOrder: 3,
   },
   {
-    key: "workflows",
-    labelKey: "workflows",
-    icon: <IconZap />,
-    group: "ai",
-    sizes: ["small", "large", "hero"],
-    defaultSize: "large",
+    key: "record",
+    labelKey: "record",
+    icon: <IconMic />,
+    group: "work",
+    /*
+     * IN THE MIDDLE (user directive), which the default layout expresses
+     * through this order: it lands between records and agents on the second
+     * row, where a transport belongs — the thing you reach for, flanked by
+     * the things you read.
+     */
+    sizes: ["wide", "large"],
+    defaultSize: "wide",
     defaultOrder: 4,
   },
   {
@@ -104,31 +120,11 @@ export const WIDGET_SPECS = [
     labelKey: "agents",
     icon: <IconAgent />,
     group: "ai",
-    /* FOUR named agents, always the same four: there is no longer list for a
+    /* four named agents, always the same four: there is no longer list for a
        bigger tier to reveal, so it does not offer one */
     sizes: ["small", "large"],
     defaultSize: "small",
     defaultOrder: 5,
-  },
-  {
-    key: "integrations",
-    labelKey: "integrations",
-    icon: <IconPlug />,
-    group: "overview",
-    sizes: ["small", "large"],
-    defaultSize: "small",
-    defaultOrder: 6,
-  },
-  {
-    key: "record",
-    labelKey: "record",
-    icon: <IconMic />,
-    group: "work",
-    /* one button: a taller tile would be a taller button, and the law of the
-       four sizes is that a bigger tile says MORE */
-    sizes: ["small", "wide"],
-    defaultSize: "wide",
-    defaultOrder: 7,
   },
 ] as const satisfies readonly WidgetSpec[];
 
@@ -162,5 +158,4 @@ export const DEFAULT_WIDGETS: WidgetKey[] = SPECS
   .map((w) => w.key as WidgetKey);
 
 /** the add menu's sections, in the order they appear */
-export const WIDGET_GROUPS: readonly WidgetGroup[] =
-  ["overview", "work", "people", "ai"];
+export const WIDGET_GROUPS: readonly WidgetGroup[] = ["overview", "work", "ai"];

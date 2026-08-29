@@ -143,21 +143,17 @@
     "group": {
       "overview": "Overview",
       "work": "Your work",
-      "people": "People",
       "ai": "Assistant"
     },
     "readFailed": "Could not read your records just now.",
-    "miniNoMembers": "No people here yet.",
-    "miniMemberMenu": "Actions for {name}",
     "miniStartRecording": "Start recording",
     "miniNotConnected": "Not connected",
     "miniNoAgents": "No record agents are available.",
-    "miniNoWorkflows": "No workflows yet.",
     "miniNoMeetings": "Nothing on the calendar.",
     "miniCalendarConnect": "Connect Google to see your calendar here.",
     "miniCalendarConnectLink": "Connect an account",
     "miniNoAccess": "You do not have access to this list.",
-    "miniMembersAdminOnly": "The people list is for admins."
+    "miniDayEvents": "{count} on this day"
   },
   "conversations": {
     "title": "History",
@@ -1592,7 +1588,6 @@
     "overviewWorkflowsFailed": "The workflow list could not be loaded.",
     "overviewHint": "Picking a workflow opens that workflow's own page.",
     "overviewStarters": "Workflows to choose from",
-    "overviewStartersHint": "Ready-made workflows this agent can take on. Each opens on its own page.",
     "overviewInstalledHint": "These are the organization's installed workflows. Tick one to give it to this agent; untick it to take it back.",
     "overviewArrangeAdminOnly": "Giving an agent a workflow is an organization admin's to do.",
     "overviewAttachFailed": "Not saved — the list is unchanged.",
@@ -1632,7 +1627,8 @@
     "sys_recorder_desc": "About the take you just made: what it was about, what was decided, what is still open — and it can start a new recording when you ask.",
     "sys_commitments_name": "Commitments assistant",
     "sys_commitments_desc": "Pulls out who took on what, and by when, with the words from the conversation as evidence.",
-    "recordOnUse": "Start a recording when I use this agent"
+    "recordOnUse": "Start a recording when I use this agent",
+    "overviewTools": "Tools"
   },
   "management": {
     "title": "Management",

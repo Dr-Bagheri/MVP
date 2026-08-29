@@ -480,10 +480,24 @@ export function AgentOverviewPanel({
                     );
                   })}
                 </ul>
-                <p className="mt-2 text-xs leading-5 text-fg-subtle">{t("overviewStartersHint")}</p>
               </>
             ) : null}
+            {/*
+              THE TOOL CHIPS, now under a heading of their own (user, looking
+              at this block: "explain to me what are these? steps? tools?").
+              They are TOOLS — the functions this agent may call while it
+              answers — and they sat directly under the starter list's
+              sentence with nothing between them, so the sentence read as
+              their caption and called them ready-made workflows. That
+              sentence is gone and this heading is why the question does not
+              come back: an unlabelled row of chips borrows the meaning of
+              whatever text is above it.
+            */}
             {agent.tools.length > 0 ? (
+              <>
+                <h3 className="mt-4 text-xs font-medium uppercase tracking-wide text-fg-subtle">
+                  {t("overviewTools")}
+                </h3>
               <ul className="mt-2 flex flex-wrap gap-1.5">
                 {agent.tools.map((tool) => (
                   <li
@@ -495,6 +509,7 @@ export function AgentOverviewPanel({
                   </li>
                 ))}
               </ul>
+              </>
             ) : null}
             {/*
               "Web search OFF" is gone (user directive, 2026-08-29). It

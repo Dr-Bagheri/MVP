@@ -71,11 +71,15 @@ describe("the dashboard board", () => {
     const cards = document.querySelectorAll("section.tile");
     expect(cards).toHaveLength(DEFAULT_WIDGETS.length);
 
-    /* and each one has a BODY — a case missing from `renderBody` returns
-       null, which is a titled card with nothing under it */
+    /*
+     * And each one has a BODY. A case missing from `renderBody` returns null,
+     * which renders as a titled card with an empty div under it — so the
+     * check is for a rendered ELEMENT, not for text: the record tile is a row
+     * of icon buttons and has no words in it at all.
+     */
     for (const card of Array.from(cards)) {
       const body = card.lastElementChild!;
-      expect(body.textContent, card.getAttribute("aria-label") ?? "").not.toBe("");
+      expect(body.childElementCount, card.getAttribute("aria-label") ?? "").toBeGreaterThan(0);
     }
   });
 

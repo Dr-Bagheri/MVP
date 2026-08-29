@@ -143,21 +143,17 @@
     "group": {
       "overview": "نمای کلی",
       "work": "کارهای شما",
-      "people": "افراد",
       "ai": "دستیار"
     },
     "readFailed": "فعلاً نمی‌توان رکوردهای شما را خواند.",
-    "miniNoMembers": "هنوز کسی اینجا نیست.",
-    "miniMemberMenu": "کارهای {name}",
     "miniStartRecording": "شروع ضبط",
     "miniNotConnected": "وصل نشده",
     "miniNoAgents": "دستیاری برای رکوردها در دسترس نیست.",
-    "miniNoWorkflows": "هنوز گردش‌کاری نیست.",
     "miniCalendarConnect": "برای دیدن تقویم‌تان، گوگل را وصل کنید.",
     "miniNoMeetings": "چیزی در تقویم نیست.",
     "miniCalendarConnectLink": "وصل کردن حساب",
     "miniNoAccess": "به این فهرست دسترسی ندارید.",
-    "miniMembersAdminOnly": "فهرست افراد برای مدیران است."
+    "miniDayEvents": "{count} مورد در این روز"
   },
   "conversations": {
     "title": "تاریخچه",
@@ -1592,7 +1588,6 @@
     "overviewWorkflowsFailed": "فهرست گردش‌کارها بارگیری نشد.",
     "overviewHint": "با انتخاب هر گردش‌کار به صفحهٔ همان گردش‌کار می‌روید.",
     "overviewStarters": "گردش‌کارهای پیشنهادی",
-    "overviewStartersHint": "گردش‌کارهای آماده برای این عامل؛ هر کدام در صفحهٔ خودش باز می‌شود.",
     "overviewInstalledHint": "این‌ها گردش‌کارهای نصب‌شدهٔ سازمان هستند؛ تیک هر کدام آن را به این عامل می‌سپارد و برداشتن تیک آن را پس می‌گیرد.",
     "overviewArrangeAdminOnly": "سپردن گردش‌کار به یک عامل کارِ مدیر سازمان است.",
     "overviewAttachFailed": "ذخیره نشد؛ فهرست همان است که بود.",
@@ -1632,7 +1627,8 @@
     "sys_recorder_desc": "دربارهٔ همین ضبط: موضوع، تصمیم‌ها و آنچه باز ماند — و می‌تواند به‌خواست شما ضبط تازه‌ای را شروع کند.",
     "sys_commitments_name": "دستیار قول‌ها",
     "sys_commitments_desc": "از دل ضبط‌ها درمی‌آورد چه کسی چه چیزی را بر عهده گرفته و تا کِی — با شاهد از خود گفت‌وگو.",
-    "recordOnUse": "وقتی از این عامل استفاده می‌کنم، ضبط شروع شود"
+    "recordOnUse": "وقتی از این عامل استفاده می‌کنم، ضبط شروع شود",
+    "overviewTools": "ابزارها"
   },
   "management": {
     "title": "مدیریت",

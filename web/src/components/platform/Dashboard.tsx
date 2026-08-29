@@ -5,10 +5,8 @@ import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { Me } from "@/api/types";
 import { personName } from "@/lib/format";
-import { Link } from "@/i18n/routing";
 import { KebabMenu } from "@/components/rowActions";
 import { IconPlus, IconTrash } from "@/components/icons";
-import { EchoMark } from "./icons";
 import {
   WIDGET_GROUPS, WIDGET_SPECS,
   defaultLayout, defaultSizeFor, nextFreeSpot, readLayout, writeLayout, specFor,
@@ -16,8 +14,7 @@ import {
 } from "@/lib/dashboardLayout";
 import { WidgetBoard } from "./dashboard/WidgetBoard";
 import {
-  AgentsWidget, CalendarWidget, IntegrationsWidget, MembersWidget,
-  RecordsMiniWidget, StartRecordWidget, WorkflowsWidget,
+  AgentsWidget, CalendarWidget, IntegrationsWidget, RecordsMiniWidget, StartRecordWidget,
 } from "./dashboard/miniWidgets";
 
 /**
@@ -29,7 +26,7 @@ import {
  *     it is designed at, which section of the add menu it lives in. Adding
  *     a gadget is an entry there plus a renderer.
  *   LAYOUT (`lib/dashboardLayout`) — where each card sits and how big.
- *     Free x/y, four fixed sizes, validated against the registry on read so
+ *     Free x/y, a closed set of sizes, validated against the registry on read so
  *     a stored board can never name something that no longer exists.
  *   ENGINE (`dashboard/WidgetBoard`) — gridstack, doing collision and
  *     reflow. React owns content; the engine owns geometry; neither writes
@@ -37,7 +34,7 @@ import {
  *
  * The rules the board keeps:
  *
- * · **Four sizes, from a menu — and a resize handle that snaps to them.**
+ * · **A closed set of sizes, and a resize handle that snaps to them.**
  *   A closed set is what lets each tier be designed rather than stretched.
  * · **A bigger tile says MORE.** Each widget takes its tier as a prop and
  *   branches; none of them measures itself.
@@ -48,7 +45,6 @@ import {
  */
 export function Dashboard() {
   const t = useTranslations("dashboard");
-  const tPlatform = useTranslations("platform");
   const locale = useLocale();
   const [me, setMe] = useState<Me | null>(null);
   const [layout, setLayout] = useState<DashboardLayout>(() => defaultLayout());
@@ -135,11 +131,9 @@ export function Dashboard() {
   function renderBody(key: WidgetKey, size: TileSize): ReactNode {
     switch (key) {
       case "records": return <RecordsMiniWidget size={size} />;
-      case "calendar": return <CalendarWidget size={size} />;
-      case "members": return <MembersWidget size={size} />;
-      case "workflows": return <WorkflowsWidget size={size} />;
+      case "calendar": return <CalendarWidget />;
       case "agents": return <AgentsWidget />;
-      case "integrations": return <IntegrationsWidget size={size} />;
+      case "integrations": return <IntegrationsWidget />;
       case "record": return <StartRecordWidget />;
       default: return null;
     }
@@ -150,22 +144,16 @@ export function Dashboard() {
 
   return (
     <div className="space-y-5">
-      {/* ── the head: who, and the way into the app ──────────────────── */}
+      {/* ── the head: who, and the board's own controls ──────────────── */}
+      {/*
+        The ECHO LAUNCHER is gone (user directive, 2026-08-29: "remove the
+        echo button from the top for now in dashboard"). The rail carries
+        Echo on every screen, and a second door beside the greeting was
+        competing with the board for the top of the page. Marked "for now" in
+        their words, so the reason it left is on record if it comes back.
+      */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-4">
-          {/*
-            THE ECHO BUTTON, AT THE TOP (user directive, 2026-08-26). It is
-            the first thing on the page because opening the app is the most
-            common reason to be here — every tile below is something you
-            read, and this is the one thing you LEAVE for.
-          */}
-          <Link href="/echo" className="launcher tap">
-            <span className="launcher-mark"><EchoMark size={20} /></span>
-            <span className="text-start leading-tight">
-              <span className="block text-sm font-semibold">{tPlatform("echo")}</span>
-              <span className="block text-[11px] opacity-80">{tPlatform("echoDesc")}</span>
-            </span>
-          </Link>
           <div className="min-w-0">
             <h1 className="truncate text-xl font-bold leading-tight text-fg">
               {me ? t("greeting", { name: personName(me, locale) }) : t("greetingPlain")}
