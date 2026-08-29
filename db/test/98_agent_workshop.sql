@@ -100,6 +100,78 @@ select t.denied(
       from echo.assistant_agent a where a.level = 'system' and a.handle = 'mail'$$,
   '0124: a member cannot arrange a system agent — same wall as the org agent');
 
+-- ─── the ATTACH/DETACH the product actually issues (0134) ──────────────
+-- Why this block exists, and why the two above it did not catch the defect
+-- it now covers: they write `insert … values`, which needs only INSERT. The
+-- product writes `insert … on conflict (agent_id, workflow_id) do update set
+-- enabled = true`, which needs UPDATE — Postgres checks that privilege on
+-- the STATEMENT, whether or not a row conflicts. `echo.agent_workflow`
+-- carried no UPDATE grant at all, so every attach and every detach was
+-- refused with 42501 while these tests stayed green.
+--
+-- A test that writes its own statement instead of the producer's is two
+-- correct sides and an unowned boundary. So the SQL below is copied from
+-- core/src/agent/agent-store.ts and must stay a copy of it.
+select set_config('echo.actor_id', '01000000-0000-4000-8000-000000000001', true); -- alice (admin)
+
+insert into echo.agent_workflow (agent_id, workflow_id, org_id, enabled)
+select a.id, w.id, w.org_id, true
+  from echo.assistant_agent a, echo.workflow w
+ where a.level = 'system' and a.handle = 'meetings'
+   and w.id = '98000000-0000-4000-8000-0000000000f1'
+on conflict (agent_id, workflow_id) do update set enabled = true;
+
+select t.ok(
+  exists (select 1 from echo.agent_workflow aw
+           join echo.assistant_agent a on a.id = aw.agent_id
+          where a.handle = 'meetings' and aw.enabled),
+  '0134: the attach the PRODUCT issues (on conflict do update) is granted');
+
+-- the same statement twice: a re-attach must revive the kept row rather than
+-- raise, which is the entire reason it is written as an upsert
+insert into echo.agent_workflow (agent_id, workflow_id, org_id, enabled)
+select a.id, w.id, w.org_id, true
+  from echo.assistant_agent a, echo.workflow w
+ where a.level = 'system' and a.handle = 'meetings'
+   and w.id = '98000000-0000-4000-8000-0000000000f1'
+on conflict (agent_id, workflow_id) do update set enabled = true;
+
+update echo.agent_workflow set enabled = false
+ where workflow_id = '98000000-0000-4000-8000-0000000000f1'
+   and agent_id in (select id from echo.assistant_agent
+                     where level = 'system' and handle = 'meetings');
+
+select t.ok(
+  exists (select 1 from echo.agent_workflow aw
+           join echo.assistant_agent a on a.id = aw.agent_id
+          where a.handle = 'meetings' and not aw.enabled),
+  '0134: the detach the PRODUCT issues is granted, and keeps the row');
+
+-- the wall did not widen with the grant: the column list is `enabled` alone,
+-- so re-pointing a membership row at another agent is still refused
+select t.denied(
+  $$update echo.agent_workflow set agent_id = '98000000-0000-4000-8000-0000000000a2'
+     where workflow_id = '98000000-0000-4000-8000-0000000000f1'$$,
+  '0134: the grant is UPDATE(enabled) — a membership cannot be re-pointed');
+
+-- and the ordinary refusal still refuses, now for the RIGHT reason (before
+-- 0134 this passed because nobody could write the table at all)
+select set_config('echo.actor_id', '02000000-0000-4000-8000-000000000002', true); -- bob (member)
+-- SCOPED TO THE SYSTEM AGENT. The first draft matched on workflow_id alone
+-- and went red claiming a member had breached the wall — but the fixture
+-- also gives bob a membership row on his OWN agent for the same workflow,
+-- and flipping that one is exactly his right. The red was my where-clause,
+-- not the policy; a security finding that turns out to be a bad test is the
+-- expensive kind to relay.
+select t.writes_nothing(
+  $$update echo.agent_workflow set enabled = true
+     where workflow_id = '98000000-0000-4000-8000-0000000000f1'
+       and agent_id in (select id from echo.assistant_agent
+                         where level = 'system' and handle = 'meetings')$$,
+  '0134: a member cannot flip a system agent''s arrangement');
+reset role;
+set local role echo_app;
+
 -- ─── the agent role holds NO door here ──────────────────────────────────
 reset role;
 set local role echo_agent;

@@ -61,8 +61,15 @@ select t.ok(
   'the neighbour person is untouched');
 
 -- ── the raw wall still stands: no DELETE policy grew alongside the door ───
+-- `denied`, not `writes_nothing`, and the switch is the point (2026-08-29).
+-- This claim's whole mechanism is that echo_app holds NO DELETE grant here —
+-- D3 keeps that list closed at one entry — so the statement RAISES rather
+-- than filtering, and `denied` is both the honest helper and the stronger
+-- one. `writes_nothing` used to accept a grant refusal as proof of a policy
+-- filter, which is how a table nobody could write at all stayed green
+-- through a milestone on the agent_workflow surface.
 select set_config('echo.actor_id', '01000000-0000-4000-8000-000000000001', true);
-select t.writes_nothing(
+select t.denied(
   $$delete from echo.person where id = '76000000-0000-4000-8000-000000000002'$$,
   'a bare DELETE on echo.person still touches nothing, even for the owner — the function is the only door');
 

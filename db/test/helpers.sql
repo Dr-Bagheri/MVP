@@ -41,6 +41,35 @@ begin
 end;
 $$;
 
+/*
+ * `writes_nothing` means "the POLICY refuses this caller". It used to accept
+ * any exception as proof, and that made it blind to the one nothing it must
+ * never accept.
+ *
+ * ── the bug it hid, found 2026-08-29 by a user ────────────────────────────
+ * `echo.agent_workflow` carried `echo_app=ar` — SELECT and INSERT, no UPDATE
+ * of any kind. So `update … set enabled = false` raised 42501 "permission
+ * denied for table" for EVERYONE, and this helper recorded that as the
+ * policy correctly filtering a member out. The test read
+ * "an admin cannot rearrange a member's private agent" and passed because
+ * nobody could rearrange anything at all; the whole feature was dead and the
+ * suite was green.
+ *
+ * Two different nothings wearing one answer, which is rule 12 arriving inside
+ * a test helper. A refusal by GRANT is a claim about the table — it is true
+ * for every caller, so it can never be evidence about THIS one.
+ *
+ * ── how they are told apart ───────────────────────────────────────────────
+ * Both are SQLSTATE 42501, so the sqlstate cannot discriminate and the
+ * message is the only thing that can. Postgres says "permission denied for
+ * table/relation/column …" when a grant is missing and "new row violates
+ * row-level security policy" when a policy refuses. Matching on message text
+ * is normally the wrong instrument in this repo; it is the only available one
+ * here, and the failure direction is safe — a message this does not
+ * recognise falls through to the old behaviour rather than passing something
+ * new. (It assumes the server's lc_messages is English, which is true of
+ * every database this suite runs against.)
+ */
 create or replace function t.writes_nothing(stmt text, label text) returns void
   language plpgsql as $$
 declare
@@ -53,6 +82,12 @@ begin
     get diagnostics n = row_count;
     if n = 0 then blocked := true; end if;
   exception when others then
+    if sqlerrm like 'permission denied for%' then
+      raise exception 'FAIL: % — refused by a missing GRANT, not by the policy (%). '
+        'That is true for every caller, so it proves nothing about this one, '
+        'and it means the write is dead for the people who SHOULD have it.',
+        label, sqlerrm;
+    end if;
     blocked := true;
     why := sqlerrm;
   end;
