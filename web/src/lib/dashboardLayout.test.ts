@@ -1,10 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   COLUMNS, SIZE_SPAN, TILE_SIZES, WIDGET_SPECS,
-  clampSize, defaultLayout, defaultSizeFor, nextFreeSpot, sizeFromSpan, specFor,
+  clampSize, defaultLayout, defaultSizeFor, nextFreeSpot, rowsFor, sizeFromSpan, specFor,
   type TilePlacement,
 } from "./dashboardLayout";
-import { rowsFor } from "@/components/platform/dashboard/widgets";
 
 /**
  * The registry is the dashboard's structure, so most of what matters is a
@@ -41,15 +40,34 @@ describe("the widget catalogue", () => {
 });
 
 describe("sizes", () => {
+  /*
+   * The subject is FOUND, not named: a test that hardcoded one widget's key
+   * broke every time the catalogue changed, while the rule it protects had
+   * not moved. What it needs is any widget that does not offer the top
+   * tier — and the assertion below fails loudly if the catalogue ever stops
+   * containing one, which is itself worth knowing.
+   *
+   * Read through `specFor`, the accessor the app itself uses: the
+   * catalogue's own `as const` narrows `sizes` to a tuple of literals per
+   * entry, which makes asking an entry about a tier it does not have a
+   * compile error rather than the question this test needs to ask.
+   */
+  const narrow = WIDGET_SPECS.find((spec) => !specFor(spec.key)!.sizes.includes("hero"));
+
+  it("has a widget that is not designed at every tier", () => {
+    expect(narrow, "no widget declines a tier — the clamp is untestable").toBeDefined();
+  });
+
   it("clamps a size the widget no longer supports", () => {
-    // `topics` is designed small and large; a board saved when it also had
-    // a hero tier must not resurrect as a hero-sized topics card
-    expect(specFor("topics")!.sizes).not.toContain("hero");
-    expect(clampSize("topics", "hero")).toBe(defaultSizeFor("topics"));
+    // a board saved when this widget also had a hero tier must not
+    // resurrect as a hero-sized card at a tier nobody designed
+    expect(specFor(narrow!.key)!.sizes).not.toContain("hero");
+    expect(clampSize(narrow!.key, "hero")).toBe(defaultSizeFor(narrow!.key));
   });
 
   it("honours a size the widget DOES support", () => {
-    expect(clampSize("topics", "large")).toBe("large");
+    const size = specFor(narrow!.key)!.sizes[0]!;
+    expect(clampSize(narrow!.key, size)).toBe(size);
   });
 
   it("keeps every tier inside the grid", () => {
@@ -107,8 +125,8 @@ describe("adding a card", () => {
     // never on top of an existing tile: the engine would then shove a card
     // the person had positioned on purpose
     const tiles: TilePlacement[] = [
-      { key: "tiles", x: 0, y: 0, size: "hero" },
-      { key: "pulse", x: 0, y: SIZE_SPAN.hero.h, size: "large" },
+      { key: "records", x: 0, y: 0, size: "hero" },
+      { key: "members", x: 0, y: SIZE_SPAN.hero.h, size: "large" },
     ];
     /*
      * DERIVED, not written down. The first version of this asserted a

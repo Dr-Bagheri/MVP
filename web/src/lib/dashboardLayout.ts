@@ -4,7 +4,7 @@ import { DEFAULT_WIDGETS, WIDGETS, specFor, type WidgetKey } from "@/lib/widgetR
 
 export type { WidgetKey } from "@/lib/widgetRegistry";
 export {
-  WIDGETS, DEFAULT_WIDGETS, specFor, WIDGET_SPECS, WIDGET_GROUPS, TILE_LOOKS,
+  WIDGETS, DEFAULT_WIDGETS, specFor, WIDGET_SPECS, WIDGET_GROUPS,
 } from "@/lib/widgetRegistry";
 
 /**
@@ -68,6 +68,16 @@ export function sizeFromSpan(w: number, h: number): TileSize {
   return best;
 }
 
+/**
+ * How many list rows a tier has room for — the one place the ladder lives,
+ * and the reason every list widget can be written without measuring itself.
+ * The layout suite asserts it never dips: growing a tile must never hide a
+ * row.
+ */
+export function rowsFor(size: TileSize): number {
+  return { small: 3, wide: 3, large: 6, hero: 12 }[size];
+}
+
 export type Density = "comfortable" | "compact";
 
 /** one card's placement — the unit the engine and the store both speak */
@@ -83,7 +93,19 @@ export interface DashboardLayout {
   density: Density;
 }
 
-const KEY = "neurai-dashboard-layout-v2";
+/*
+ * v3 because the CATALOGUE changed, not because the shape did.
+ *
+ * A v2 board names widgets that no longer exist, and `readLayout` drops
+ * unknown keys one by one — which would leave a person who had arranged the
+ * old board with a board of NO tiles. That is a real state here (hiding
+ * every card is allowed, and an empty board must survive a reload), so it
+ * would be honoured rather than repaired: the dashboard would come back
+ * blank for exactly the people who had used it most. A new key means their
+ * old arrangement is simply not this board's arrangement, and they get the
+ * default one.
+ */
+const KEY = "neurai-dashboard-layout-v3";
 
 /** the tier a widget takes when added, clamped to what it supports */
 export function defaultSizeFor(key: WidgetKey): TileSize {

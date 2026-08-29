@@ -2,64 +2,43 @@
 
 import type { ReactNode } from "react";
 import {
-  IconAgent, IconArchive, IconAsk, IconGauge, IconGavel, IconMic, IconPeople3,
-  IconPulse, IconRows, IconSparkle, IconTag, IconUsers, IconVoice, IconZap,
+  IconAgent, IconCalendar, IconMic, IconPlug, IconRows, IconUsers, IconZap,
 } from "@/components/icons";
 import type { TileSize } from "@/lib/dashboardLayout";
 
 /**
  * THE WIDGET REGISTRY — the dashboard's actual structure.
  *
- * The board does not know what a "briefing" or a "watchlist" is. It reads
+ * The board does not know what a "records" or a "workflows" tile is. It reads
  * this table, and everything downstream is derived from it: the add-a-card
- * menu, the size menu's options, the card's colour and icon, the default
- * layout, the persisted layout's validation. Adding a gadget is ONE entry
- * here plus a renderer — not an edit in five files that must agree.
+ * menu, the size menu's options, the card's icon, the default layout, the
+ * persisted layout's validation. Adding a gadget is ONE entry here plus a
+ * renderer — not an edit in five files that must agree.
+ *
+ * ── what the board is now (user directive, 2026-08-29) ───────────────────
+ * "keep the grid and size and the visual we have and get rid of the colors,
+ * we need new tabs there, the functions we have in the platform in mini
+ * version".
+ *
+ * So: same grid, same four tiers, same drag and same card shell — and a
+ * different catalogue. Every entry below is one of the platform's own
+ * surfaces at a glance, and the tile is the surface's own door.
+ *
+ * ── the colours went, and with them the `look` field ────────────────────
+ * The board used to carry five visual families (three gradients, a tint, a
+ * plain). Removing the gradients would have left `look` as a field with one
+ * value — a producer with no consumer wearing a design system's name — so
+ * the field went with them and the shell paints itself. The card's identity
+ * is now its icon and its title, which is what a glance surface reads by
+ * anyway.
  *
  * Each entry declares:
- *   `size`      which of the four tiers this widget is designed at. Not
+ *   `sizes`     which of the four tiers this widget is designed at. Not
  *               every widget earns every tier — a card with nothing more to
  *               say at full width does not offer full width, and the menu
  *               greys it out so its range is learnable.
- *   `look`      the tile's visual family (see TILE_LOOKS below). This is
- *               the part the reference design turns on: a board where every
- *               card is the same grey rectangle reads as a table with extra
- *               steps.
  *   `group`     which section of the add menu it appears under.
- *   `needs`     what the widget reads. `records` widgets go quiet with an
- *               honest line when the org has none, rather than rendering a
- *               confident zero.
  */
-
-/** the visual families a tile can wear — the board's whole colour story */
-export const TILE_LOOKS = {
-  /** the hero: the accent blue as a full gradient, white ink */
-  feature: {
-    className: "tile-feature",
-    ink: "on-gradient",
-  },
-  /** the second accent — warmer, for the tile that answers a question */
-  warm: {
-    className: "tile-warm",
-    ink: "on-gradient",
-  },
-  /** cool: reserved for pipeline/health, where blue reads as "system" */
-  cool: {
-    className: "tile-cool",
-    ink: "on-gradient",
-  },
-  /** the quiet default — surface with a hairline, ordinary ink */
-  plain: {
-    className: "tile-plain",
-    ink: "normal",
-  },
-  /** a plain tile with a tinted icon chip — most list cards */
-  tinted: {
-    className: "tile-tinted",
-    ink: "normal",
-  },
-} as const;
-export type TileLook = keyof typeof TILE_LOOKS;
 
 export type WidgetGroup = "overview" | "work" | "people" | "ai";
 
@@ -68,190 +47,88 @@ export interface WidgetSpec {
   /** the message key under `dashboard.widget.*` */
   labelKey: string;
   icon: ReactNode;
-  look: TileLook;
   group: WidgetGroup;
   sizes: readonly TileSize[];
   defaultSize: TileSize;
-  /** what it reads — drives the honest empty state */
-  needs: "records" | "people" | "nothing";
   /** in the default board, and in what order */
   defaultOrder?: number;
-  /**
-   * A decorative mark for the card's corner — white line-art on
-   * transparency, drawn from `web/public/art/marks.html`. Only the
-   * gradient families carry one: on a plain surface a white flourish is
-   * invisible, and a tinted one competes with the content.
-   */
-  art?: string;
 }
 
 /**
  * The catalogue. ORDER HERE is the add-menu's order within each group; the
  * board's own order is the layout's, which a person rearranges.
+ *
+ * All seven are on the default board: the point of the board is that the
+ * platform's functions are visible at once, and a default that hid half of
+ * them would make the other half look like the whole product.
  */
 export const WIDGET_SPECS = [
   {
-    key: "tiles",
-    labelKey: "tiles",
-    art: "tiles",
-    icon: <IconGauge />,
-    look: "feature",
-    group: "overview",
-    sizes: ["wide", "hero"],
-    defaultSize: "hero",
-    needs: "records",
+    key: "records",
+    labelKey: "records",
+    icon: <IconRows />,
+    group: "work",
+    sizes: ["small", "large", "hero"],
+    defaultSize: "large",
     defaultOrder: 1,
   },
   {
-    key: "briefing",
-    labelKey: "briefing",
-    art: "briefing",
-    icon: <IconSparkle />,
-    look: "warm",
-    group: "ai",
-    sizes: ["large", "hero"],
+    key: "calendar",
+    labelKey: "calendar",
+    icon: <IconCalendar />,
+    group: "overview",
+    sizes: ["small", "large", "hero"],
     defaultSize: "large",
-    needs: "records",
     defaultOrder: 2,
   },
   {
-    key: "pulse",
-    labelKey: "pulse",
-    icon: <IconPulse />,
-    look: "plain",
-    group: "overview",
-    sizes: ["wide", "large", "hero"],
+    key: "members",
+    labelKey: "members",
+    icon: <IconUsers />,
+    group: "people",
+    sizes: ["small", "large", "hero"],
     defaultSize: "large",
-    needs: "records",
     defaultOrder: 3,
   },
   {
-    key: "commitments",
-    labelKey: "commitments",
+    key: "workflows",
+    labelKey: "workflows",
     icon: <IconZap />,
-    look: "tinted",
-    group: "work",
+    group: "ai",
     sizes: ["small", "large", "hero"],
     defaultSize: "large",
-    needs: "records",
     defaultOrder: 4,
   },
   {
-    key: "decisions",
-    labelKey: "decisions",
-    icon: <IconGavel />,
-    look: "tinted",
-    group: "work",
-    sizes: ["small", "large", "hero"],
-    defaultSize: "large",
-    needs: "records",
+    key: "agents",
+    labelKey: "agents",
+    icon: <IconAgent />,
+    group: "ai",
+    /* FOUR named agents, always the same four: there is no longer list for a
+       bigger tier to reveal, so it does not offer one */
+    sizes: ["small", "large"],
+    defaultSize: "small",
     defaultOrder: 5,
   },
   {
-    key: "recent",
-    labelKey: "recent",
-    icon: <IconRows />,
-    look: "tinted",
-    group: "work",
-    sizes: ["small", "large", "hero"],
-    defaultSize: "large",
-    needs: "records",
+    key: "integrations",
+    labelKey: "integrations",
+    icon: <IconPlug />,
+    group: "overview",
+    sizes: ["small", "large"],
+    defaultSize: "small",
     defaultOrder: 6,
   },
   {
-    key: "next",
-    labelKey: "next",
+    key: "record",
+    labelKey: "record",
     icon: <IconMic />,
-    look: "tinted",
-    group: "people",
-    sizes: ["small", "large"],
-    defaultSize: "large",
-    needs: "people",
-    defaultOrder: 7,
-  },
-  {
-    key: "pipeline",
-    labelKey: "pipeline",
-    art: "pipeline",
-    icon: <IconArchive />,
-    look: "cool",
-    group: "overview",
+    group: "work",
+    /* one button: a taller tile would be a taller button, and the law of the
+       four sizes is that a bigger tile says MORE */
     sizes: ["small", "wide"],
-    defaultSize: "small",
-    needs: "records",
-    defaultOrder: 8,
-  },
-  {
-    key: "ask",
-    labelKey: "ask",
-    art: "ask",
-    icon: <IconAsk />,
-    look: "feature",
-    group: "ai",
-    sizes: ["wide", "hero"],
     defaultSize: "wide",
-    needs: "nothing",
-    defaultOrder: 9,
-  },
-  {
-    key: "topics",
-    labelKey: "topics",
-    icon: <IconTag />,
-    look: "tinted",
-    group: "work",
-    sizes: ["small", "large"],
-    defaultSize: "small",
-    needs: "records",
-  },
-  {
-    key: "people",
-    labelKey: "people",
-    icon: <IconPeople3 />,
-    look: "tinted",
-    group: "people",
-    sizes: ["small", "large"],
-    defaultSize: "small",
-    needs: "people",
-  },
-  {
-    key: "watchlist",
-    labelKey: "watchlist",
-    icon: <IconVoice />,
-    look: "tinted",
-    group: "work",
-    sizes: ["small", "large", "hero"],
-    defaultSize: "small",
-    needs: "records",
-  },
-  {
-    key: "ledger",
-    labelKey: "ledger",
-    icon: <IconGavel />,
-    look: "plain",
-    group: "work",
-    sizes: ["large", "hero"],
-    defaultSize: "large",
-    needs: "records",
-  },
-  {
-    key: "team",
-    labelKey: "team",
-    icon: <IconUsers />,
-    look: "tinted",
-    group: "people",
-    sizes: ["small", "large"],
-    defaultSize: "small",
-    needs: "people",
-  },
-  {
-    key: "agent",
-    labelKey: "agent",
-    icon: <IconAgent />,
-    look: "plain",
-    group: "ai",
-    sizes: ["small", "large"],
-    defaultSize: "small",
-    needs: "nothing",
+    defaultOrder: 7,
   },
 ] as const satisfies readonly WidgetSpec[];
 

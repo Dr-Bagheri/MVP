@@ -10,26 +10,24 @@ import { KebabMenu } from "@/components/rowActions";
 import { IconPlus, IconTrash } from "@/components/icons";
 import { EchoMark } from "./icons";
 import {
-  WIDGET_GROUPS, WIDGET_SPECS, TILE_LOOKS,
+  WIDGET_GROUPS, WIDGET_SPECS,
   defaultLayout, defaultSizeFor, nextFreeSpot, readLayout, writeLayout, specFor,
   type DashboardLayout, type TilePlacement, type TileSize, type WidgetKey,
 } from "@/lib/dashboardLayout";
 import { WidgetBoard } from "./dashboard/WidgetBoard";
-import { useDashboardData } from "./dashboard/useDashboardData";
 import {
-  AgentWidget, AskWidget, BriefingWidget, LaneWidget, LedgerWidget, NextWidget,
-  PeopleWidget, PipelineWidget, PulseWidget, RecentWidget, TeamWidget, TilesWidget,
-  TopicsWidget, WatchlistWidget,
-} from "./dashboard/widgets";
+  AgentsWidget, CalendarWidget, IntegrationsWidget, MembersWidget,
+  RecordsMiniWidget, StartRecordWidget, WorkflowsWidget,
+} from "./dashboard/miniWidgets";
 
 /**
  * THE DASHBOARD — the platform's landing page, as a real board.
  *
  * Three layers, and the separation is the point:
  *
- *   REGISTRY (`lib/widgetRegistry`) — what a widget IS. Its icon, its
- *     colour family, the sizes it is designed at, which section of the add
- *     menu it lives in. Adding a gadget is an entry there plus a renderer.
+ *   REGISTRY (`lib/widgetRegistry`) — what a widget IS. Its icon, the sizes
+ *     it is designed at, which section of the add menu it lives in. Adding
+ *     a gadget is an entry there plus a renderer.
  *   LAYOUT (`lib/dashboardLayout`) — where each card sits and how big.
  *     Free x/y, four fixed sizes, validated against the registry on read so
  *     a stored board can never name something that no longer exists.
@@ -56,7 +54,6 @@ export function Dashboard() {
   const [layout, setLayout] = useState<DashboardLayout>(() => defaultLayout());
   /** the store is only read after mount — SSR has no localStorage */
   const [ready, setReady] = useState(false);
-  const data = useDashboardData();
 
   useEffect(() => {
     setLayout(readLayout());
@@ -89,32 +86,17 @@ export function Dashboard() {
   const removeWidget = (key: WidgetKey) =>
     update({ ...layout, tiles: layout.tiles.filter((tile) => tile.key !== key) });
 
-  /** one card's chrome — the chip, the title, the ⋯, and the drag grip */
+  /** one card's chrome — the chip, the title, the remove, and the drag grip */
   function Tile({ tile }: { tile: TilePlacement }) {
     const spec = specFor(tile.key);
     if (!spec) return null;
-    const look = TILE_LOOKS[spec.look];
-    const label = t(`widget.${spec.labelKey}` as "widget.tiles");
+    const label = t(`widget.${spec.labelKey}` as "widget.records");
     const compact = layout.density === "compact";
     return (
       <section
-        className={`tile group/card ${look.className} ${look.ink === "on-gradient" ? "on-gradient" : ""} ${
-          compact ? "p-3" : "p-4"
-        }`}
+        className={`tile group/card ${compact ? "p-3" : "p-4"}`}
         aria-label={label}
       >
-        {/* the card's mark — decorative, so it is aria-hidden and sits
-            behind everything with pointer events off */}
-        {spec.art ? (
-          <img
-            src={`/art/${spec.art}.png`}
-            alt=""
-            aria-hidden
-            className="tile-art"
-            width={260}
-            height={260}
-          />
-        ) : null}
         <header className="mb-2.5 flex items-center gap-3">
           <span className="tile-chip">{spec.icon}</span>
           <h2 className="min-w-0 flex-1 select-none truncate text-[0.95rem] font-semibold">
@@ -152,33 +134,13 @@ export function Dashboard() {
    */
   function renderBody(key: WidgetKey, size: TileSize): ReactNode {
     switch (key) {
-      case "tiles": return <TilesWidget data={data} size={size} />;
-      case "briefing": return <BriefingWidget data={data} size={size} />;
-      case "ask": return <AskWidget size={size} />;
-      case "pulse": return <PulseWidget data={data} size={size} />;
-      case "commitments":
-        return (
-          <LaneWidget
-            items={data.actions} depth={data.laneDepth} size={size}
-            empty={t("commitmentsEmpty")}
-          />
-        );
-      case "decisions":
-        return (
-          <LaneWidget
-            items={data.decisions} depth={data.laneDepth} size={size} numbered
-            empty={t("decisionsEmpty")}
-          />
-        );
-      case "topics": return <TopicsWidget data={data} size={size} />;
-      case "people": return <PeopleWidget data={data} size={size} />;
-      case "pipeline": return <PipelineWidget data={data} size={size} />;
-      case "recent": return <RecentWidget data={data} size={size} />;
-      case "watchlist": return <WatchlistWidget data={data} size={size} />;
-      case "ledger": return <LedgerWidget data={data} size={size} />;
-      case "next": return <NextWidget data={data} size={size} />;
-      case "team": return <TeamWidget data={data} size={size} />;
-      case "agent": return <AgentWidget size={size} />;
+      case "records": return <RecordsMiniWidget size={size} />;
+      case "calendar": return <CalendarWidget size={size} />;
+      case "members": return <MembersWidget size={size} />;
+      case "workflows": return <WorkflowsWidget size={size} />;
+      case "agents": return <AgentsWidget />;
+      case "integrations": return <IntegrationsWidget size={size} />;
+      case "record": return <StartRecordWidget />;
       default: return null;
     }
   }
@@ -247,7 +209,7 @@ export function Dashboard() {
                         .filter((spec) => spec.group === group)
                         .map((spec) => ({
                           key: spec.key,
-                          label: t(`widget.${spec.labelKey}` as "widget.tiles"),
+                          label: t(`widget.${spec.labelKey}` as "widget.records"),
                           icon: spec.icon,
                           onSelect: () => addWidget(spec.key),
                         })),

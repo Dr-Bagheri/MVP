@@ -46,12 +46,19 @@ export const GITHUB_HREF = process.env.NEXT_PUBLIC_GITHUB_URL ?? "https://github
  */
 export const NAV_PRIMARY: readonly NavItem[] = [
   /*
-   * The dashboard is PARKED (user directive, 2026-08-27: "deactivate
-   * dashboard for now, we will use it later"). The route and its widgets
-   * stay — `/` redirects to the assistant and nothing links to the board —
-   * so bringing it back is one entry here, not a rebuild.
+   * The dashboard is BACK (user directive, 2026-08-29: "now bring back the
+   * dashboard as well"), and with it the pre-park arrangement: the board is
+   * the landing page and the rail's first tile, the assistant keeps its own
+   * address and its own tile.
+   *
+   * The assistant is out of the MOBILE BAR rather than out of the rail, and
+   * for the reason it was out before: M22's four-item ceiling (asserted in
+   * nav.test.ts) leaves three slots beside "More", and the presence orb is
+   * a door to the assistant on every screen that is not already one of the
+   * assistant's own.
    */
-  { href: "/assistant", key: "assistant", inBar: true },
+  { href: "/", key: "dashboard", inBar: true },
+  { href: "/assistant", key: "assistant", inBar: false },
   { href: "/echo", key: "echo", inBar: true },
   { href: "/management", key: "management", inBar: true },
 ];
