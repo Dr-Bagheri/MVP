@@ -110,6 +110,13 @@ const config: Config = {
       minHeight: {
         control: rem(SCAFFOLD.controlHeight),
       },
+      /* the SECTION SCROLL's one height (2026-08-29): a section body ends
+         where the viewport does, minus the chrome standing around it.
+         Written only by scaffold/SectionScroller — rhythm.guard.test.ts
+         keeps the name inside the scaffold, like every other named step. */
+      maxHeight: {
+        section: `calc(100dvh - ${rem(SCAFFOLD.page.sectionReserve)})`,
+      },
       boxShadow: {
         // soft depth: two-layer, never heavy
         card: "0 1px 2px rgb(2 6 23 / 0.04), 0 4px 12px rgb(2 6 23 / 0.06)",
