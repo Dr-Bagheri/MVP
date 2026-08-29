@@ -14,6 +14,7 @@
  * keeps the definition attached to the runs that used it (invariant 5).
  */
 import { ConflictError, NotActivatedError, NotFoundError, ValidationError } from "./errors.ts";
+import { firstServable } from "./models.ts";
 import { iso, isoOrNull } from "./vocabulary.ts";
 import { toJsonb, JSONB_PARAM } from "../db/jsonb.ts";
 import { assertUuid, type Db, type SqlTx } from "../db/identity.ts";
@@ -109,6 +110,37 @@ function assertTools(tools: string[] | undefined): void {
   }
 }
 
+/**
+ * A pinned model must be one the product will actually serve.
+ *
+ * The no-Claude rule's other 2026-08-29 gap. A skill's `model` column pins a
+ * model for every run of that skill, and it was free text on both create and
+ * patch — so an admin could pin a barred model and every run of that skill
+ * would route to it, on a path no `assertAskable` ever sees because nobody
+ * types a model at run time.
+ *
+ * Refused BY NAME here, and only here, which is the ruling from the day the
+ * stale-preference case was found: a person typing a model deserves to be
+ * told which model was refused and why. The RUN side (`modelForRun`) treats
+ * a barred pin as an absent rung instead, so a row written before this wall
+ * existed costs the caller's choice rather than the whole run.
+ *
+ * Deliberately the exclusion only, NOT catalogue membership. `assertAskable`
+ * additionally requires the id to be in the live catalogue, which is right
+ * for an ask happening now and wrong for a durable pin: a catalogue fetch
+ * outage would start refusing edits to skills whose model is perfectly fine,
+ * and the skill editor is not where someone should meet OpenRouter's uptime.
+ */
+function assertPinnable(model: string | null | undefined): void {
+  if (typeof model !== "string" || model === "") return;
+  if (firstServable(model) === null) {
+    throw new ValidationError(`model is not available on this product: ${model}`, {
+      code: "model_not_available",
+      params: { model },
+    });
+  }
+}
+
 function assertQuestions(questions: string[] | undefined): void {
   if (!questions) return;
   if (questions.length > 8) {
@@ -190,6 +222,7 @@ export function createSkillAuthoring(db: Db) {
       if (!input.name.trim()) throw new ValidationError("name cannot be empty");
       if (!input.prompt.trim()) throw new ValidationError("prompt cannot be empty");
       assertTools(input.tools);
+      assertPinnable(input.model);
       assertQuestions(input.starter_questions);
 
       try {
@@ -242,6 +275,7 @@ export function createSkillAuthoring(db: Db) {
         throw new ValidationError("prompt cannot be empty");
       }
       assertTools(patch.tools);
+      assertPinnable(patch.model);
       assertQuestions(patch.starter_questions);
 
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>

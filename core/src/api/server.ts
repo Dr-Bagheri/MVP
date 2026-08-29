@@ -30,7 +30,7 @@ import { createCallsRepo, type CallsRepo } from "./calls.ts";
 import { ConflictError, mapError, NotActivatedError, NotFoundError, pgErrorFields, ValidationError } from "./errors.ts";
 import { reportError } from "../observe/watchtower.ts";
 import { createMembersRepo, type MembersRepo } from "./members.ts";
-import { createModelsRepo, type ModelsRepo } from "./models.ts";
+import { createModelsRepo, firstServable, type ModelsRepo } from "./models.ts";
 import { createPlatformRepo, type PlatformRepo } from "./platform.ts";
 import { createTranscriptsRepo, type TranscriptsRepo } from "./transcripts.ts";
 import { createDomainTools } from "../agent/domain-tools.ts";
@@ -530,9 +530,35 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       // a SYSTEM skill failing to resolve is never a fallback
       throw new Error("system skill 'translator' is missing — broken deployment");
     }
-    const callerModel = typeof body.model === "string" && body.model
-      ? body.model
-      : ((await members.me(identity)).preferred_model ?? undefined);
+    /*
+     * The no-Claude rule's FIFTH escape (2026-08-29 audit, C2), and it had
+     * both halves of the hole rather than one:
+     *
+     *  · `body.model` arrived as free text with no `assertAskable`. Five
+     *    routes called it; this was not one of them. So a barred model was
+     *    selectable by anyone who typed its id — the same hole closed on
+     *    `preferred`, then on the ask wire, reopened a third time here.
+     *  · The fallback read `preferred_model` RAW, where `models.list` and
+     *    `models.preferred` both read it through `servablePreference`. A
+     *    stale stored row routed a billed run to an excluded model with
+     *    nobody having typed anything at all.
+     *
+     * The two halves want opposite treatments, and that distinction is the
+     * ruling from the day the stored-preference case was found: a model a
+     * caller NAMED is refused BY NAME, because they asked for something
+     * specific and deserve to be told why; a model nobody typed is simply
+     * not a rung — refusing it would turn a stale row into "translation
+     * failed" for a person who never chose it. Hence `assertAskable` on the
+     * typed path and `firstServable` on the stored one.
+     */
+    let callerModel: string | undefined;
+    if (typeof body.model === "string" && body.model !== "") {
+      models.assertAskable(body.model);
+      callerModel = body.model;
+    } else {
+      const stored = (await members.me(identity)).preferred_model;
+      callerModel = firstServable(stored) ?? undefined;
+    }
 
     const runs = createAgentRunStore({ db: options.db, identity });
     const runtime = createAgentRuntime({ runs });
@@ -2915,9 +2941,21 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
    */
   app.get("/v1/assistant/sessions", async (request, reply) => {
     const identity = await auth.requireActive(request);
-    const query = request.query as { archived?: string };
+    const query = request.query as { archived?: string; limit?: string; before?: string };
+    const limit = query.limit === undefined ? undefined : Number(query.limit);
+    if (limit !== undefined && !Number.isFinite(limit)) {
+      throw new ValidationError("limit must be a number");
+    }
+    // The list is bounded now, so the door out of the first page has to exist:
+    // a limit with no `before` is a silent truncation, and a sidebar that
+    // stops at fifty with no way past looks exactly like a person who has had
+    // fifty conversations.
     return reply.send({
-      sessions: await sessions.list(identity, { archived: query.archived === "true" }),
+      sessions: await sessions.list(identity, {
+        archived: query.archived === "true",
+        limit,
+        before: query.before,
+      }),
     });
   });
 

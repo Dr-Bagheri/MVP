@@ -125,3 +125,55 @@ describe("slug collisions get a named sentence", () => {
       .rejects.toMatchObject({ code: "slug_taken_by_successor" });
   });
 });
+
+describe("a pinned model must be one the product will serve", () => {
+  /*
+   * The no-Claude rule's sixth door (2026-08-29 audit). `skill.model` pins a
+   * model for EVERY run of that skill, and it was free text on both create
+   * and patch — a path no `assertAskable` can cover, because nobody types a
+   * model at run time.
+   *
+   * The id below is the one production actually served, transcribed from the
+   * user's screenshot rather than invented: `startsWith("anthropic/")` had
+   * already shipped and lost to that one leading character, and a fixture
+   * spelled the way the code believes is exactly how that survived a test.
+   */
+  const BARRED = "~anthropic/claude-opus-latest";
+
+  it("REFUSES a barred pin at create, by name", async () => {
+    const { db, log } = fakeDb();
+    await expect(
+      createSkillAuthoring(db).create(ADMIN, {
+        level: "org", slug: "x", name: "x", prompt: "x", model: BARRED,
+      }),
+    ).rejects.toMatchObject({ code: "model_not_available" });
+    // and the row never reached the database: a refusal that writes first is
+    // not a refusal
+    expect(log.some((l) => /insert into echo\.skill/.test(l.sql))).toBe(false);
+  });
+
+  it("REFUSES a barred pin at patch", async () => {
+    const { db, log } = fakeDb();
+    await expect(createSkillAuthoring(db).update(ADMIN, ROW.id, { model: BARRED }))
+      .rejects.toMatchObject({ code: "model_not_available" });
+    expect(log.some((l) => /update echo\.skill/.test(l.sql))).toBe(false);
+  });
+
+  it("ACCEPTS a legitimate pin, and accepts clearing one", async () => {
+    /*
+     * The control, and the half that matters most: a wall that refuses every
+     * pin satisfies both assertions above and is completely wrong. Clearing
+     * is here too because `null` means "back to the caller's choice" — the
+     * supplied-flag shape this patch was built around — and a guard that
+     * treated null as an unservable model would break that.
+     */
+    const { db } = fakeDb();
+    await expect(
+      createSkillAuthoring(db).create(ADMIN, {
+        level: "org", slug: "x", name: "x", prompt: "x", model: "google/gemini-3.1-flash",
+      }),
+    ).resolves.toBeTruthy();
+    await expect(createSkillAuthoring(db).update(ADMIN, ROW.id, { model: null }))
+      .resolves.toBeTruthy();
+  });
+});

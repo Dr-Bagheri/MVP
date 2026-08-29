@@ -250,11 +250,6 @@ export const ENVELOPE_FIELDS: Readonly<Record<string, Readonly<Record<string, En
   },
 };
 
-const TRUSTS: readonly string[] = ["id", "address", "date", "untrusted_text"];
-export function isEnvelopeTrust(value: unknown): value is EnvelopeTrust {
-  return typeof value === "string" && TRUSTS.includes(value);
-}
-
 /** Resolve a path against a shape. Returns the field type, "content", or null. */
 function resolveAgainst(
   shape: OutputShape, parts: (string | number)[],
