@@ -36,8 +36,12 @@ const workflowCalls: string[] = [];
 /** producer-shaped AgentCard (core/src/agent/agent-store.ts), the M47 wire */
 const AGENT = {
   id: "ag-7",
-  handle: "sales",
-  name: "Sales agent",
+  /* deliberately OUTSIDE every platform map — "sales" sat here until
+     db/0129 made it a real system agent and this fixture's two controls
+     silently changed subject (the catalogue name took over the wire
+     name, and the starter menu became legitimate) */
+  handle: "growth",
+  name: "Growth agent",
   description: "Helps qualify opportunities.",
   level: "system" as const,
   icon: "chart",
@@ -48,7 +52,7 @@ const AGENT = {
 };
 
 /** a PLATFORM agent (db/0124 handle), for the starter-options tests: its
-    handle is a key of AGENT_STARTER_HANDLES where "sales" is not */
+    handle is a key of AGENT_STARTER_HANDLES where "growth" is not */
 const MAIL_AGENT = {
   id: "ag-8",
   handle: "mail",
@@ -111,12 +115,12 @@ describe("Hub — the agent overview panel", () => {
   });
 
   it("renders the picked agent's workflows from the wire, fetched by its id", async () => {
-    search = new URLSearchParams("agent=sales");
+    search = new URLSearchParams("agent=growth");
     render(<Hub />);
 
     /* the panel identifies itself and carries the agent's face */
     expect(await screen.findByLabelText("عامل انتخاب‌شده")).toBeInTheDocument();
-    expect(screen.getByText("Sales agent")).toBeInTheDocument();
+    expect(screen.getByText("Growth agent")).toBeInTheDocument();
 
     /* the workflows arrive from the wire, asked by ID (the URL only ever
        held the handle — this is the seam the assertion pins) */
@@ -168,10 +172,10 @@ describe("Hub — the agent overview panel", () => {
   });
 
   it("offers NO starter menu for an agent outside the platform map", async () => {
-    /* the control that keeps the menu tied to the catalogue: "sales" is no
-       platform agent, so only its one attached workflow may link out —
+    /* the control that keeps the menu tied to the catalogue: "growth" is
+       no platform agent, so only its one attached workflow may link out —
        a menu here would be seven links to workflows nobody assigned it */
-    search = new URLSearchParams("agent=sales");
+    search = new URLSearchParams("agent=growth");
     render(<Hub />);
     await screen.findByRole("link", { name: /Weekly brief/ });
     expect(screen.queryByText("گردش‌کارهای پیشنهادی")).toBeNull();
