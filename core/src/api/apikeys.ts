@@ -204,9 +204,25 @@ export function createApiKeysRepo(db: Db) {
      *
      * `actorId` defaults to the creating admin. Naming another member is
      * allowed and is the useful case (a service integration acting as a
-     * dedicated account), but it is bounded by the schema: db/0009's
-     * composite FK refuses an actor from another org, so an admin cannot mint
-     * a key that borrows a stranger's authority even by uuid.
+     * dedicated account), but it may never be an ESCALATION.
+     *
+     * The bound used to be db/0009's composite FK alone, and the reasoning
+     * written here was that it "refuses an actor from another org, so an
+     * admin cannot mint a key that borrows a stranger's authority even by
+     * uuid". Same-org is not the same as not-a-stranger: the OWNER is in the
+     * same org. An admin could read the members list, find the owner's uuid,
+     * mint a key naming it, and hold owner authority permanently — keys are
+     * immutable and nothing alerts. Found by the 2026-08-29 audit and proven
+     * with a probe: the same admin's key answered 403 as a member and 204 on
+     * owner-only routes as the owner.
+     *
+     * The rule is the one the rest of the product already uses for authority
+     * over another person — you may act for yourself, or for someone you
+     * strictly OUTRANK. `echo.actor_outranks` is that comparison and it is
+     * definer, so it answers even when the caller cannot read the target's
+     * row; `role_rank` is the only place the ordering lives. Restating "owner
+     * beats admin" here would be a second spelling of a rule that already has
+     * a home.
      */
     async create(
       identity: Identity,
@@ -220,6 +236,19 @@ export function createApiKeysRepo(db: Db) {
       const name = (input.name ?? "").trim();
       if (name === "") throw new ValidationError("name is required");
       const actorId = input.actorId ? assertUuid(input.actorId, "actor id") : identity.userId;
+      if (actorId !== identity.userId) {
+        const [rank] = await db.withIdentity(identity, (tx: SqlTx) =>
+          tx.unsafe<{ outranks: boolean | null }>(
+            "select echo.actor_outranks($1) as outranks", [actorId]));
+        if (rank?.outranks !== true) {
+          /* the refusal names the rule, not the target's role — telling an
+             admin "that person is the owner" would answer a question they
+             did not get to ask */
+          throw new ValidationError(
+            "a key may name yourself, or a member you outrank",
+            { code: "actor_outranks_you" });
+        }
+      }
       const expiresAt = input.expiresAt ?? null;
       if (expiresAt !== null && Number.isNaN(Date.parse(expiresAt))) {
         throw new ValidationError("expires_at must be an ISO timestamp");

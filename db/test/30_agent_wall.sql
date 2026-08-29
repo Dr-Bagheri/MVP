@@ -42,6 +42,58 @@ select t.ok(
     where grantee = 'echo_agent' and privilege_type = 'DELETE'
   ),
   'echo_agent holds no DELETE grant on any table in the database');
+
+/*
+ * ...and no DELETE through a DOOR either (0130, from the 2026-08-29 audit).
+ *
+ * The check above was true the whole time `delete_summary_version` sat there
+ * with PUBLIC's default EXECUTE, because a security-definer function that
+ * deletes is structurally invisible to `role_table_grants` — the view is
+ * about TABLES. So "the agent holds no DELETE grant on any table" was true,
+ * and "the agent deletes nothing, ever" was not. Two different sentences,
+ * and the wall means the second one.
+ *
+ * pg_proc.proacl is the instrument that can tell them apart. A NULL acl is
+ * the trap: it means "defaults", and the default for a function is EXECUTE
+ * to PUBLIC — so a door that simply forgot its revoke reads as null here,
+ * which is exactly the state this catches.
+ */
+select t.ok(
+  not exists (
+    select 1
+      from pg_proc p
+      join pg_namespace n on n.oid = p.pronamespace
+     where n.nspname = 'echo'
+       and p.prosecdef
+       and pg_get_functiondef(p.oid) ilike '%delete from%'
+       and has_function_privilege('echo_agent', p.oid, 'EXECUTE')
+  ),
+  'echo_agent can execute no security-definer function that deletes');
+
+/*
+ * The same rule stated as structure rather than as a consequence: NO
+ * security-definer door in `echo` is PUBLIC's to call.
+ *
+ * `has_function_privilege('public', …)` is the question that discriminates,
+ * and the first draft of this check got it wrong in an instructive way: it
+ * asked whether proacl was NULL. That would have stayed green through the
+ * entire life of the bug, because 0095 DID grant to echo_app explicitly —
+ * the ACL was non-null and still admitted everyone. Verified both ways by
+ * staging the grant back: `public` answers true with the bug, false without.
+ *
+ * Absolute, with no allow-list. An allow-list of harmless entries is where
+ * the next one would hide.
+ */
+select t.ok(
+  not exists (
+    select 1
+      from pg_proc p
+      join pg_namespace n on n.oid = p.pronamespace
+     where n.nspname = 'echo'
+       and p.prosecdef
+       and has_function_privilege('public', p.oid, 'EXECUTE')
+  ),
+  'no security-definer door in echo is PUBLIC''s to call');
 set local role echo_agent;
 select set_config('echo.actor_id', '02000000-0000-4000-8000-000000000002', true);
 

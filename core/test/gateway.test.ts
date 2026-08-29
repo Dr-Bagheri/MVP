@@ -22,6 +22,8 @@ import type { Identity } from "../src/agent/types.ts";
 
 const ADMIN = "11111111-1111-4111-8111-111111111111";
 const MEMBER = "22222222-2222-4222-8222-222222222222";
+/* the uuid an escalation would name: same org, higher rank */
+const OWNER = "33333333-3333-4333-8333-333333333333";
 const KEY_ID = "44444444-4444-4444-8444-444444444444";
 const IDENTITY: Identity = { userId: ADMIN, orgId: "org-a", role: "admin", isActive: true };
 
@@ -198,12 +200,31 @@ describe("key lifecycle", () => {
     expect((log.find((l) => l.sql.includes("insert"))!.params)?.[1]).toBe(ADMIN);
   });
 
-  it("accepts another member as the actor — bounded by the schema, not by us", async () => {
-    // db/0009's composite FK (actor_id, org_id) refuses an actor from another
-    // org, so an admin cannot mint a key borrowing a stranger's authority.
-    const { db, log } = fakeDb(() => [keyRow({ actor_id: MEMBER })]);
+  it("accepts another member as the actor when the minter OUTRANKS them", async () => {
+    /* the useful case: a service integration acting as a dedicated account */
+    const { db, log } = fakeDb((sql) =>
+      sql.includes("actor_outranks") ? [{ outranks: true }] : [keyRow({ actor_id: MEMBER })]);
     await createApiKeysRepo(db).create(IDENTITY, { name: "svc", actorId: MEMBER });
     expect((log.find((l) => l.sql.includes("insert"))!.params)?.[1]).toBe(MEMBER);
+  });
+
+  it("REFUSES a key that names someone the minter does not outrank", async () => {
+    /*
+     * The escalation (2026-08-29 audit, S1): the bound used to be db/0009's
+     * composite FK alone, and the reasoning written beside it was that the FK
+     * "refuses an actor from another org, so an admin cannot mint a key
+     * borrowing a stranger's authority". Same-org is not not-a-stranger — the
+     * OWNER is in the same org — so an admin could mint a key naming the
+     * owner and hold owner authority permanently.
+     *
+     * The load-bearing half is the second assertion: no insert. A refusal
+     * that still wrote the row would read as a fix and mint the key anyway.
+     */
+    const { db, log } = fakeDb((sql) =>
+      sql.includes("actor_outranks") ? [{ outranks: false }] : [keyRow()]);
+    await expect(createApiKeysRepo(db).create(IDENTITY, { name: "x", actorId: OWNER }))
+      .rejects.toBeInstanceOf(ValidationError);
+    expect(log.find((l) => l.sql.includes("insert"))).toBeUndefined();
   });
 
   it("validates the actor id before it reaches SQL", async () => {
