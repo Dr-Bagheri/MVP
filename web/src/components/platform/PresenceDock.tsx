@@ -19,7 +19,25 @@ import {
   currentSpeechAudio, speak, speakQueued, stopSpeaking, subscribeSpeechPlayback,
 } from "@/lib/voice";
 import { startVoiceLoop, voiceLoopSupported, type VoiceLoopHandle } from "@/lib/voiceLoop";
-import { AuroraOrb, type AuroraState } from "./AuroraOrb";
+import dynamic from "next/dynamic";
+import type { AuroraState } from "./EchoEOrb";
+/*
+ * The orb's renderer is three.js — 560,777 B, the single largest thing web/
+ * ships, and the only importer of `three` in the repo. This dock is imported
+ * statically by the root layout, so a static import here put the whole engine
+ * in EVERY route's first-load set: 37 of 38 routes, including the seven where
+ * `orbIsSilentOn` returns true and this component renders nothing at all.
+ * Loading it on demand moves the engine to the routes that actually draw it.
+ * Measured: 37 of 38 routes carried it before, 0 of 38 after, and mean
+ * first-load JS went 1,169,873 -> 656,798 B.
+ *
+ * `ssr: false` here — unlike the Settings and Echo section splits, where it
+ * was measured to buy nothing — because it also keeps three.js out of the
+ * SERVER bundle, and costs no first paint: the dock renders nothing at all
+ * until `identityState()` answers, so the orb has always appeared after
+ * hydration rather than in the HTML.
+ */
+const AuroraOrb = dynamic(() => import("./EchoEOrb").then((m) => m.EchoEOrb), { ssr: false });
 import { recorderControls } from "@/components/echo/recorderControls";
 import {
   getPresenceAnchorSnapshot,
@@ -77,6 +95,31 @@ interface OrbPin {
 
 /** how close to a side a release must land to dock there, in px */
 const EDGE = 72;
+
+/**
+ * ONE sizing rule for every control in the panel's header (user report,
+ * 2026-08-29: "put the speaker icon in orb AI in center vertically also").
+ *
+ * The cause was not a stray margin. A `<button>` is `inline-block` and
+ * `.icon` is `inline-grid`, so an icon sitting alone in a button is laid
+ * out as INLINE CONTENT: its bottom edge lands on the text baseline, and
+ * the line box keeps descender space underneath it. The glyph therefore
+ * rides high inside its 28px box. The ears button had been written with
+ * `inline-flex items-center justify-center` and was centred; the speaker,
+ * the new-conversation plus and the close ✕ had not, and were not — so
+ * the speaker read as misaligned against the one sibling that was right.
+ *
+ * Fixed at the CLASS rather than at the instance (the `.btn`/`.tap`
+ * precedent: stop the claim being local). A header control that opts out
+ * of this constant is a visible edit, not an invisible omission —
+ * PresenceDock.header.test.tsx asserts they all share it.
+ *
+ * `ms-auto` and the state colours stay OUT of it: this constant is the
+ * box and what it does to its contents, not where the box sits or what
+ * colour it is.
+ */
+export const DOCK_HEADER_BUTTON =
+  "tap inline-flex h-7 w-7 items-center justify-center rounded-md";
 
 /**
  * THE HOLDER's geometry (user directive, 2026-08-26): a solid circle at the
@@ -1035,7 +1078,7 @@ export function PresenceDock() {
                 now (user directive) — the dock carries conversation only */}
             <button
               type="button"
-              className={`tap ms-auto h-7 w-7 rounded-md ${
+              className={`${DOCK_HEADER_BUTTON} ms-auto ${
                 silent ? "bg-accent-soft text-accent" : "text-fg-muted hover:bg-surface-2 hover:text-fg"
               }`}
               aria-label={t("silentLabel")}
@@ -1056,7 +1099,7 @@ export function PresenceDock() {
                 off = same glyph, red slash, same quiet chrome as the speaker */}
             <button
               type="button"
-              className={`tap inline-flex h-7 w-7 items-center justify-center rounded-md ${
+              className={`${DOCK_HEADER_BUTTON} ${
                 ears ? "text-fg-muted hover:bg-surface-2 hover:text-fg" : "bg-accent-soft text-fg-muted"
               }`}
               aria-label={t("earsLabel")}
@@ -1072,7 +1115,7 @@ export function PresenceDock() {
                 under Assistant → History, where archiving lives */}
             <button
               type="button"
-              className="tap h-7 w-7 rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg"
+              className={`${DOCK_HEADER_BUTTON} text-fg-muted hover:bg-surface-2 hover:text-fg`}
               aria-label={t("newConversation")}
               title={t("newConversation")}
               onClick={freshConversation}
@@ -1081,7 +1124,7 @@ export function PresenceDock() {
             </button>
             <button
               type="button"
-              className="tap h-7 w-7 rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg"
+              className={`${DOCK_HEADER_BUTTON} text-fg-muted hover:bg-surface-2 hover:text-fg`}
               aria-label={t("close")}
               onClick={closeDock}
             >

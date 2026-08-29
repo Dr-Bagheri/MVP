@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { AgentMessage } from "@/api/types";
@@ -59,8 +59,31 @@ export function ConversationThread({
   /** Offered only on the LAST assistant turn; absent hides the control. */
   onRegenerate?: () => void;
 }) {
-  const t = useTranslations("platform");
-  const lastAssistantId = [...messages].reverse().find((m) => m.role === "assistant")?.id;
+  /* `findLast` rather than copying the array and reversing it: the old form
+     allocated a whole new array on every render — and during a stream this
+     component renders on every token. */
+  const lastAssistantId = messages.findLast((m) => m.role === "assistant")?.id;
+
+  /*
+   * **Stable handler identities, so the rows below can actually skip.**
+   *
+   * The hub passes inline arrows (`onFeedback={(id, v) => void judge(id, v)}`),
+   * which are a new function on every render — under a shallow `memo` that
+   * alone would defeat every bail-out and the extraction would be ceremony.
+   * These wrappers keep one identity for the life of the component and
+   * dispatch through a ref that is refreshed on every render, so a row always
+   * calls the CURRENT closure and never a stale one. Presence still travels:
+   * a caller that passes no `onFeedback` gets `undefined`, because absent
+   * means "this view offers no controls", not "the control does nothing".
+   */
+  const handlers = useRef({ onFeedback, onRegenerate });
+  handlers.current = { onFeedback, onRegenerate };
+  const stableFeedback = useCallback(
+    (messageId: string, verdict: "up" | "down") =>
+      handlers.current.onFeedback?.(messageId, verdict),
+    [],
+  );
+  const stableRegenerate = useCallback(() => handlers.current.onRegenerate?.(), []);
 
   return (
     <div className="flex flex-col gap-4">
@@ -76,8 +99,64 @@ export function ConversationThread({
           isUser && !streaming && messages[i + 1] === undefined;
 
         return (
-          <div
+          <MessageRow
             key={m.id}
+            message={m}
+            unanswered={unanswered}
+            verdict={feedback?.[m.id]}
+            onFeedback={onFeedback ? stableFeedback : undefined}
+            onRegenerate={
+              onRegenerate && m.id === lastAssistantId && !streaming
+                ? stableRegenerate
+                : undefined
+            }
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * ONE message, memoised.
+ *
+ * **Why this is its own component.** `AnswerContent` runs `parseAnswerBlocks`
+ * — a global regex sweep plus a `JSON.parse` per block — and it ran inside the
+ * thread's render body, for every message, on every render. A stream produces
+ * ten to thirty deltas a second and each one replaces the messages array, so
+ * the cost of typing one answer scaled with the length of the whole
+ * conversation: a forty-turn thread re-parsed forty answers, thirty times a
+ * second, to add one character to the last one.
+ *
+ * The bail-out works because of how the hub updates: `prev.map(m => m.id ===
+ * replyId ? {...m, content: m.content + delta} : m)` gives a NEW object only
+ * to the message that changed and hands every other message back by
+ * reference. So a default shallow comparison is exactly right here — no
+ * custom comparator, nothing to keep in sync with the props, and no way for
+ * this to render something stale that the shallow check could not see.
+ *
+ * Deliberately the only memo added: it is the one path measured hot, and a
+ * memo on a cheap component is a comparison that costs more than the render
+ * it skips.
+ */
+const MessageRow = memo(function MessageRow({
+  message: m,
+  unanswered,
+  verdict,
+  onFeedback,
+  onRegenerate,
+}: {
+  message: AgentMessage;
+  unanswered: boolean;
+  verdict?: string | undefined;
+  onFeedback?: ((messageId: string, verdict: "up" | "down") => void) | undefined;
+  onRegenerate?: (() => void) | undefined;
+}) {
+  const t = useTranslations("platform");
+  const isUser = m.role === "user";
+
+  return (
+          <div
             className={`message-arrives ${isUser ? "flex justify-end" : "flex justify-start"}`}
           >
             <div className={isUser ? "max-w-[85%]" : "w-full"}>
@@ -180,22 +259,15 @@ export function ConversationThread({
               {!isUser && !m.streaming && m.content ? (
                 <MessageToolbar
                   message={m}
-                  verdict={feedback?.[m.id]}
+                  verdict={verdict}
                   onFeedback={onFeedback}
-                  onRegenerate={
-                    onRegenerate && m.id === lastAssistantId && !streaming
-                      ? onRegenerate
-                      : undefined
-                  }
+                  onRegenerate={onRegenerate}
                 />
               ) : null}
             </div>
           </div>
-        );
-      })}
-    </div>
   );
-}
+});
 
 /**
  * Copy / judge / regenerate, one row under an answer. Copy is always

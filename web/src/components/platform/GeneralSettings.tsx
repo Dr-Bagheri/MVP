@@ -1,81 +1,68 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useLocale, useTranslations } from "next-intl";
-import { api } from "@/api/client";
-import type { Me } from "@/api/types";
-import { Card, Chip } from "@/components/ui";
-import { Link } from "@/i18n/routing";
-import { formatDate } from "@/lib/format";
+import { useState } from "react";
+import { useTranslations } from "next-intl";
+import { Card } from "@/components/ui";
 import { saveCalendarPreference, saveTimezonePreference } from "@/lib/preferences";
 import { useCalendarPreference, useTimezonePreference } from "@/lib/usePreferences";
+import { storeTheme, type Theme } from "@/lib/theme";
+import { useTheme } from "@/lib/useTheme";
 import type { CalendarPreference } from "@/lib/preferences";
 
 /**
- * Settings·General, rebuilt (user directive, 2026-08-28: "general setting
- * is empty, put the general thing you think that needed here" — the page
- * had emptied when the autonomy dial, its only control, left the product).
+ * Settings · General — the preferences a person reaches for first, and
+ * nothing else.
  *
- * Two ideas, both bounded by what the wire actually serves:
+ * **The workspace card is GONE** (user directive, 2026-08-29: "remove this
+ * the workspace section from the general settings"). It rendered name,
+ * role, handle and member-since as read-only facts with a pointer at
+ * Management, which is where they are actually edited — a second, weaker
+ * copy of a screen that already exists. Its `me()` fetch went with it:
+ * nothing else on this screen needed an identity, so keeping the request
+ * would have been a network call for a card nobody can see.
  *
- * **The workspace, as facts.** Name, your role, your handle, member-since —
- * read from `me()`, which every member may call. Deliberately READ-ONLY:
- * the organization's identity is edited on its own Management page (user
- * ruling, 2026-08-27, when identity LEFT this screen), and a second
- * editable copy would be the two-writers drift this repo keeps burying.
+ * **Theme** (user directive, same day: "add the dark or light theme
+ * options in the general settings"). It CONSUMES `useTheme` / `storeTheme`
+ * — the one store the avatar menu and the profile page already write —
+ * rather than introducing a third opinion about the document's theme.
+ * That is not tidiness: this platform has already shipped the bug where
+ * two stores held one theme, so the pre-paint script read a key the toggle
+ * never wrote and caused the exact flash it exists to prevent. The store
+ * offers two values, `light` and `dark`, so those are the two options;
+ * there is no `system` because there is nothing behind it.
  *
- * **Calendar and timezone.** The two preferences a person reaches for
- * first, previously living only in the avatar menu — a settings page is
- * where people go LOOKING for them, so the same store answers here too:
- * the identical save-then-adopt functions, CONSUMED, never forked (a
- * second copy of a preference writer is two sources for one fact).
+ * **Calendar and timezone** stay as they were: the identical
+ * save-then-adopt functions, consumed, never forked.
  */
 export function GeneralSettings() {
   const t = useTranslations("settings");
   const tAvatar = useTranslations("platform");
-  const locale = useLocale();
-  const [me, setMe] = useState<Me | null>(null);
+  const theme = useTheme();
   const calendar = useCalendarPreference();
   const timezone = useTimezonePreference();
   const [saveFailed, setSaveFailed] = useState(false);
 
-  useEffect(() => {
-    void api.me().then(setMe).catch(() => setMe(null));
-  }, []);
-
   return (
     <div className="space-y-5">
-      {/* ── the workspace, as facts ─────────────────────────────────── */}
+      {/* ── theme ───────────────────────────────────────────────────── */}
       <Card>
-        <h2 className="h-section">{t("generalWorkspaceTitle")}</h2>
-        <dl className="mt-3 space-y-2.5 text-sm">
-          <div className="flex flex-wrap items-center gap-2">
-            <dt className="w-40 text-fg-muted">{t("generalWorkspaceName")}</dt>
-            <dd className="font-medium text-fg">{me?.org_name ?? "—"}</dd>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <dt className="w-40 text-fg-muted">{t("generalYourRole")}</dt>
-            <dd>{me ? <Chip tone="accent">{t(`role_${me.role}`)}</Chip> : "—"}</dd>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <dt className="w-40 text-fg-muted">{t("generalYourHandle")}</dt>
-            <dd dir="ltr" className="font-mono text-fg">
-              {me?.username ? `@${me.username}` : "—"}
-            </dd>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <dt className="w-40 text-fg-muted">{t("generalMemberSince")}</dt>
-            <dd className="text-fg">{me ? formatDate(me.created_at, locale) : "—"}</dd>
-          </div>
-        </dl>
-        {(me?.role === "admin" || me?.role === "owner") ? (
-          <p className="mt-3 text-xs text-fg-subtle">
-            {t("generalIdentityNote")}{" "}
-            <Link href="/management" className="text-accent hover:underline">
-              {t("generalIdentityLink")}
-            </Link>
-          </p>
-        ) : null}
+        <h2 className="h-section">{t("theme")}</h2>
+        <p className="mt-1 text-sm leading-6 text-fg-muted">{t("themeHint")}</p>
+        <div className="mt-4 grid max-w-xl gap-4 sm:grid-cols-2">
+          <label className="block">
+            {/* the card's own heading is the visible label — a second
+                «پوسته» above the box would be the same word twice */}
+            <span className="sr-only">{t("theme")}</span>
+            <select
+              className="input h-10 min-h-0 text-sm"
+              value={theme}
+              onChange={(changeEvent) => storeTheme(changeEvent.target.value as Theme)}
+            >
+              <option value="dark">{t("themeDark")}</option>
+              <option value="light">{t("themeLight")}</option>
+            </select>
+          </label>
+        </div>
       </Card>
 
       {/* ── calendar · timezone ─────────────────────────────────────── */}

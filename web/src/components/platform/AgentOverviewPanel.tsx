@@ -32,6 +32,26 @@ import { agentColorClasses, agentIconName, agentLevelTone, toolDescription, useA
  *    panel claims nothing — a "no workflows" sentence during loading is the
  *    "—"-tile bug wearing new copy); `[]` = truly none; a failed fetch says
  *    it failed instead of impersonating an agent with no workflows.
+ *
+ * ── The org's INSTALLED workflows are attachable from here ────────────────
+ *
+ * User report, 2026-08-29: "i can not choose the already installed workflow
+ * in the agent, make that ones selectable". The panel offered exactly two
+ * things — what the agent already carries, and starter workflows the org has
+ * NOT installed — so the one set in between, the workflows the organization
+ * actually runs, was the only set with no door. Installing a starter a
+ * second time to reach it is not an answer.
+ *
+ * The write is `setAgentWorkflows`, the producer's WHOLE-SET contract, and
+ * the answer is adopted rather than assumed: **save-then-adopt, never
+ * optimistic** (the preferences ruling). A refusal therefore leaves the
+ * ticks exactly as the server last stated them, with a line saying nothing
+ * was saved — instead of a checkbox that moved and a database that did not.
+ *
+ * The union with `attachedRows` is load-bearing and is AgentEditor's rule,
+ * not a nicety: a workflow attached but no longer listed (unpublished since)
+ * must still render, or the next whole-set write silently detaches a row
+ * nobody touched.
  */
 export function AgentOverviewPanel({
   agent,
@@ -47,6 +67,13 @@ export function AgentOverviewPanel({
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const [workflows, setWorkflows] = useState<AgentWorkflowLink[] | null>(null);
   const [failed, setFailed] = useState(false);
+  /** the org's installed workflows — what an arranger may tick */
+  const [offers, setOffers] = useState<AgentWorkflowLink[]>([]);
+  /** `null` = the role has not answered yet; the arrangement UI waits for it
+      rather than briefly rendering the member's read-only shape at an admin */
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveFailed, setSaveFailed] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -63,6 +90,103 @@ export function AgentOverviewPanel({
     }
     return () => { alive = false; };
   }, [agent.id]);
+
+  /* `me()` is a CACHED read in the client, so asking here costs nothing the
+     shell has not already paid — and the alternative, threading `isAdmin`
+     down from the hub, would put the gate two files from the wall it
+     mirrors. Every one of these degrades to "not an arranger": a panel that
+     cannot establish a role must not offer a write. */
+  useEffect(() => {
+    let alive = true;
+    try {
+      void api.me()
+        .then((who) => {
+          if (alive) setIsAdmin(who?.role === "admin" || who?.role === "owner");
+        })
+        .catch(() => { if (alive) setIsAdmin(false); });
+    } catch {
+      setIsAdmin(false);
+    }
+    return () => { alive = false; };
+  }, []);
+
+  /**
+   * May this person arrange THIS agent's workflows?
+   *
+   * Read off db/0124's `agent_workflow_write` policy rather than guessed:
+   * an org agent and a SYSTEM agent both require `echo.actor_is_admin()`
+   * (0124 widened the policy for system agents precisely so the three
+   * shipped platform agents could carry an org's workflows at all — the
+   * agent is shared, the arrangement is per-org), while a user agent
+   * requires `a.user_id = echo.actor_id()`.
+   *
+   * A user-level agent reaching this panel is always the caller's own —
+   * `assistant_agent_read` returns no one else's — which is the same
+   * reasoning the agent editor states for its own gate.
+   *
+   * Deliberately NOT the editor's `editable`: that answers "may I rewrite
+   * this agent's persona", where a system agent is nobody's to edit. These
+   * are different questions and 0124 gives them different answers.
+   *
+   * `isAdmin === null` is the role still in flight, and it answers NO. A
+   * panel that offered the write first and withdrew it on the answer would
+   * be asserting a permission it has not yet been told about.
+   */
+  const canArrange =
+    isAdmin === null ? false : agent.level === "user" ? true : isAdmin;
+
+  /**
+   * The installed catalogue: the engine's published list, plus the builder's
+   * drafts — the same two the agent editor merges, and for the same reason
+   * (one union by id; they overlap on everything published).
+   *
+   * Fetched ONLY for someone who can arrange. A reader never sees this list
+   * — their panel shows what the agent carries — so asking for it on their
+   * behalf is a request whose answer is discarded, and in the admin-gated
+   * case a guaranteed 403 in their console on every agent pick.
+   */
+  useEffect(() => {
+    if (!canArrange) return;
+    let alive = true;
+    const take = (rows: { id: string; handle: string; name: string }[]) => {
+      if (alive) setOffers((current) => mergeOffers(current, rows));
+    };
+    try {
+      void api.engineWorkflows().then(take).catch(() => { /* none installed is a real state */ });
+    } catch { /* a client without the method — the list simply stays empty */ }
+    if (isAdmin) {
+      /* the builder's list is admin-gated server-side; only an admin asks */
+      try {
+        void api.authoredWorkflows().then(take).catch(() => { /* same */ });
+      } catch { /* same */ }
+    }
+    return () => { alive = false; };
+  }, [canArrange, isAdmin]);
+
+  /**
+   * The whole set, written and then ADOPTED.
+   *
+   * Nothing moves on screen until the server has answered, so a refusal
+   * leaves the ticks reading exactly what the database holds. The
+   * alternative — flip now, reconcile later — puts a checkbox and a row in
+   * disagreement for as long as the request takes, and permanently if it
+   * fails.
+   */
+  async function arrange(workflowId: string, attach: boolean) {
+    if (!canArrange || saving || workflows === null) return;
+    const next = attach
+      ? [...workflows.map((row) => row.id), workflowId]
+      : workflows.map((row) => row.id).filter((id) => id !== workflowId);
+    setSaving(true);
+    setSaveFailed(false);
+    try {
+      setWorkflows(await api.setAgentWorkflows(agent.id, next));
+    } catch {
+      setSaveFailed(true);
+    } finally {
+      setSaving(false);
+    }
+  }
 
   const toolCopy = useMemo<Record<string, unknown>>(() => {
     try {
@@ -93,11 +217,39 @@ export function AgentOverviewPanel({
    */
   const starterOptions = useMemo(() => {
     const offered = AGENT_STARTER_HANDLES[agent.handle] ?? [];
-    const attached = new Set((workflows ?? []).map((workflow) => workflow.handle));
+    /* deduped against BOTH lists now. A starter the org has already
+       installed belongs in the installed list, where it can be ticked —
+       leaving it here too would show one handle as two different workflows,
+       one of them a link that says "go install this" about something that
+       is installed. */
+    const known = new Set([
+      ...(workflows ?? []).map((workflow) => workflow.handle),
+      ...offers.map((offer) => offer.handle),
+    ]);
     return offered.filter(
-      (handle) => !attached.has(handle) && SEEDED_STARTERS[handle] !== undefined,
+      (handle) => !known.has(handle) && SEEDED_STARTERS[handle] !== undefined,
     );
-  }, [agent.handle, workflows]);
+  }, [agent.handle, workflows, offers]);
+
+  /**
+   * The installed rows this panel offers: the catalogue, UNION anything the
+   * agent already carries that the catalogue no longer lists.
+   *
+   * The union is the half that matters. `setAgentWorkflows` writes the whole
+   * set, so a row that is attached but missing from this list would be
+   * dropped by the next tick of any other row — a detach nobody asked for,
+   * from a control nobody touched.
+   */
+  const installedRows = useMemo(() => {
+    const listed = new Set(offers.map((row) => row.id));
+    const extras = (workflows ?? []).filter((row) => !listed.has(row.id));
+    return [...offers, ...extras].sort((a, b) => a.name.localeCompare(b.name));
+  }, [offers, workflows]);
+
+  const attachedIds = useMemo(
+    () => new Set((workflows ?? []).map((row) => row.id)),
+    [workflows],
+  );
 
   return (
     <section
@@ -131,10 +283,83 @@ export function AgentOverviewPanel({
         <div className="grid gap-5 border-t border-border p-4 sm:grid-cols-2">
           <div>
             <h3 className="text-xs font-medium uppercase tracking-wide text-fg-subtle">{t("overviewWorkflows")}</h3>
+            {/*
+              ONE list, two shapes.
+
+              An arranger gets the org's installed workflows with a tick each,
+              because for them the arrangement IS the list: ticked = carried.
+              A second, separate "what it carries" list above it would print
+              every attached workflow twice — one handle rendering as two
+              different workflows, the thing the starter menu is deduped to
+              avoid one block down.
+
+              Everyone else gets what this panel always showed: the workflows
+              the agent carries, each a link to its own page. Read-only is the
+              ABSENCE of the controls (the M44 pill's rule), not disabled
+              boxes beside live ones — with one line saying whose job the
+              arranging is, so "not for you" cannot read as "never thought
+              of".
+            */}
             {failed ? (
               <p className="mt-2 text-sm text-fg-muted">{t("overviewWorkflowsFailed")}</p>
-            ) : workflows === null ? null : workflows.length === 0 ? (
-              <p className="mt-2 text-sm text-fg-muted">{t("overviewNoWorkflows")}</p>
+            ) : workflows === null ? null : canArrange ? (
+              installedRows.length === 0 ? (
+                <p className="mt-2 text-sm text-fg-muted">{t("overviewNoWorkflows")}</p>
+              ) : (
+                <>
+                  <ul className="mt-2 max-h-44 space-y-1.5 overflow-y-auto">
+                    {installedRows.map((row) => {
+                      const checked = attachedIds.has(row.id);
+                      /* the label targets the input BY ID rather than
+                         wrapping the row, so the handle beside it can be a
+                         real link: a link inside a label toggles the box on
+                         its way to navigating */
+                      const boxId = `agent-workflow-${row.id}`;
+                      return (
+                        <li
+                          key={row.id}
+                          className="flex items-center gap-3 rounded-lg border border-border px-3 py-2"
+                        >
+                          <input
+                            id={boxId}
+                            type="checkbox"
+                            checked={checked}
+                            disabled={saving}
+                            onChange={() => void arrange(row.id, !checked)}
+                          />
+                          <label
+                            htmlFor={boxId}
+                            className="min-w-0 flex-1 truncate text-sm text-fg"
+                          >
+                            {row.name}
+                          </label>
+                          <Link
+                            href={`/workflows/${row.handle}`}
+                            className="shrink-0 text-xs text-fg-subtle hover:text-accent"
+                            dir="ltr"
+                          >
+                            {row.handle}
+                          </Link>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  <p className="mt-2 text-xs leading-5 text-fg-subtle">{t("overviewInstalledHint")}</p>
+                  {/* the tick still shows what the SERVER holds, which is
+                      true — this says why, rather than leaving a change that
+                      silently did not happen */}
+                  {saveFailed ? (
+                    <p role="alert" className="mt-1 text-xs leading-5 text-danger">
+                      {t("overviewAttachFailed")}
+                    </p>
+                  ) : null}
+                </>
+              )
+            ) : workflows.length === 0 ? (
+              <>
+                <p className="mt-2 text-sm text-fg-muted">{t("overviewNoWorkflows")}</p>
+                <p className="mt-2 text-xs leading-5 text-fg-subtle">{t("overviewArrangeAdminOnly")}</p>
+              </>
             ) : (
               <>
                 <ul className="mt-2 max-h-44 space-y-1.5 overflow-y-auto">
@@ -151,8 +376,10 @@ export function AgentOverviewPanel({
                   ))}
                 </ul>
                 <p className="mt-2 text-xs leading-5 text-fg-subtle">{t("overviewHint")}</p>
+                <p className="mt-1 text-xs leading-5 text-fg-subtle">{t("overviewArrangeAdminOnly")}</p>
               </>
             )}
+
             {/* the starter menu renders once the attached list has ANSWERED —
                 loaded or failed — never during loading (the panel claims
                 nothing it cannot yet dedupe). On a failed fetch nothing can
@@ -209,4 +436,18 @@ export function AgentOverviewPanel({
       )}
     </section>
   );
+}
+
+/** union by id — the engine catalogue and the builder's list overlap on
+    every published workflow, and two rows for one workflow would be two
+    checkboxes writing the same id */
+function mergeOffers(
+  current: AgentWorkflowLink[],
+  incoming: { id: string; handle: string; name: string }[],
+): AgentWorkflowLink[] {
+  const seen = new Set(current.map((row) => row.id));
+  const added = incoming
+    .filter((row) => !seen.has(row.id))
+    .map(({ id, handle, name }) => ({ id, handle, name }));
+  return added.length === 0 ? current : [...current, ...added];
 }

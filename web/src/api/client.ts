@@ -40,12 +40,8 @@ import type {
   PlatformOverview,
   PlatformPage,
   PlatformUser,
-  GatewayDelivery,
-  GatewayEvent,
   GatewayKey,
   GatewayKeyCreated,
-  GatewayWebhook,
-  GatewayWebhookCreated,
   Invitation,
   MintedInvitation,
   AdminModelRow,
@@ -199,6 +195,41 @@ function cachedRead<T>(key: string, fetcher: () => Promise<T>): Promise<T> {
   });
   readCache.set(key, { at: Date.now(), value });
   return value;
+}
+
+/**
+ * ONE `/api/me` per page load — the shared read behind BOTH `me()` and
+ * `identityState()`.
+ *
+ * `me()` was cached from the day the cache existed, so its ~25 callers
+ * collapse to a single request. `identityState()` asked the SAME endpoint
+ * with a raw `bff()` call, and `PresenceDock` calls it from a mount effect on
+ * every route — so the hottest read in the product was fetched twice on every
+ * page load. Giving `identityState` a cache key of its own would not have
+ * fixed that: two keys over one endpoint is still two requests. The fix is
+ * that the two functions are two READINGS of one answer, so they share the
+ * answer and each classifies it its own way.
+ *
+ * **What is cached and what is not.** A 401 or a 403 is a settled fact about
+ * who the caller is — the same thing `me()`'s cached `null` already was — and
+ * it is returned as a value so the cache keeps it. Anything else (a 500, a
+ * dropped connection, a parse failure) is transient and is rethrown, which
+ * makes `cachedRead` evict it: a blip must not stick to the identity for a
+ * minute. Write invalidation is unchanged — every non-GET through `bff`
+ * clears the whole read cache, so a saved profile, a changed preference or a
+ * fresh sign-in re-reads immediately.
+ */
+function meOutcome(): Promise<{ row: MeRecord } | { refusal: BffError }> {
+  return cachedRead("me", async () => {
+    try {
+      return { row: await bff<MeRecord>("/api/me") };
+    } catch (error) {
+      if (error instanceof BffError && (error.status === 401 || error.status === 403)) {
+        return { refusal: error };
+      }
+      throw error;
+    }
+  });
 }
 
 /**
@@ -429,22 +460,27 @@ export const api = {
   },
 
   async identityState(): Promise<IdentityState> {
-    try {
-      const row = await bff<MeRecord>("/api/me");
+    /* Shares `me()`'s cached read — see `meOutcome`. The classification below
+       is unchanged; only where the answer comes from moved. A non-`BffError`
+       (a dropped connection, a parse failure) is not an identity verdict and
+       propagates, exactly as the old `if (!(error instanceof BffError)) throw`
+       branch did. */
+    const outcome = await meOutcome();
+    if (!("refusal" in outcome)) {
+      const row = outcome.row;
       return { state: "member", me: { ...row, model_id: row.preferred_model } };
-    } catch (error) {
-      if (!(error instanceof BffError)) throw error;
-      if (error.status === 401) {
-        return error.kind === "unknown_actor" ? { state: "unregistered" } : { state: "signed_out" };
-      }
-      if (error.status === 403 && error.kind === "pending") {
-        return { state: "pending", detail: error.detail };
-      }
-      if (error.status === 403 && error.kind === "suspended") {
-        return { state: "suspended", detail: error.detail };
-      }
-      throw error;
     }
+    const error = outcome.refusal;
+    if (error.status === 401) {
+      return error.kind === "unknown_actor" ? { state: "unregistered" } : { state: "signed_out" };
+    }
+    if (error.status === 403 && error.kind === "pending") {
+      return { state: "pending", detail: error.detail };
+    }
+    if (error.status === 403 && error.kind === "suspended") {
+      return { state: "suspended", detail: error.detail };
+    }
+    throw error;
   },
 
   /**
@@ -484,18 +520,12 @@ export const api = {
    * that rename touches other sessions' files, so it is not in this hot path.
    */
   async me(): Promise<Me | null> {
-    /* Cached: the hottest read in the product — one navigation used to fire
-       it six times (server logs), each a ~350ms round trip. Every write
-       (profile save, preference change, sign-in) clears the cache in bff. */
-    return cachedRead("me", async () => {
-      try {
-        const row = await bff<MeRecord>("/api/me");
-        return { ...row, model_id: row.preferred_model };
-      } catch (error) {
-        if (error instanceof BffError && error.status === 401) return null;
-        throw error;
-      }
-    });
+    const outcome = await meOutcome();
+    if ("refusal" in outcome) {
+      if (outcome.refusal.status === 401) return null;
+      throw outcome.refusal;
+    }
+    return { ...outcome.row, model_id: outcome.row.preferred_model };
   },
   /** M32: caller-owned platform-root status, safe for shell navigation. */
   async platformAccess(): Promise<{ platform_root: boolean }> {
@@ -1878,56 +1908,6 @@ export const api = {
     if (!res.ok) throw new BffError(res.status);
     return api.gatewayKeys();
   },
-  async gatewayWebhooks(): Promise<GatewayWebhook[]> {
-    /* **LIVE** — `GET /api/gateway/webhooks` (admin; url/secret stay admin-only). */
-    const { webhooks } = await bff<{ webhooks: GatewayWebhook[] }>("/api/gateway/webhooks");
-    return webhooks;
-  },
-  async setWebhookEnabled(id: string, enabled: boolean): Promise<GatewayWebhook[]> {
-    /* **LIVE** — disabled rows are returned-not-filtered downstream (D19/M21). */
-    await bff(`/api/gateway/webhooks/${id}`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ enabled }),
-    });
-    return api.gatewayWebhooks();
-  },
-  /**
-   * Create. `secret` comes back once — same one-way-door rule as a key token.
-   *
-   * `events` is forwarded verbatim and never client-filtered: core/ 400s an
-   * unknown event BY NAME, and swallowing it here would recreate exactly the
-   * silence that naming it prevents.
-   */
-  async createGatewayWebhook(
-    url: string,
-    events: GatewayEvent[],
-  ): Promise<GatewayWebhookCreated> {
-    /* **LIVE** — `secret` comes back once, same one-way-door as a key token.
-       `events` forwarded verbatim: core 400s an unknown event BY NAME. */
-    return bff<GatewayWebhookCreated>("/api/gateway/webhooks", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ url, events }),
-    });
-  },
-  /**
-   * `webhookId` is a SERVER filter — the BFF forwards it and core/ pages at
-   * limit 50. Filtering client-side would silently drop a quiet webhook's
-   * deliveries off the end of a busy one's page, so the mock filters here to
-   * mirror where the real filtering happens.
-   */
-  async gatewayDeliveries(webhookId?: string): Promise<GatewayDelivery[]> {
-    /* **LIVE** — `webhook_id` is a SERVER filter (core pages at 50); a
-       client-side filter would drop a quiet webhook's rows off a busy one's
-       page. */
-    const suffix = webhookId ? `?webhook_id=${encodeURIComponent(webhookId)}` : "";
-    const { deliveries } = await bff<{ deliveries: GatewayDelivery[] }>(
-      `/api/gateway/deliveries${suffix}`,
-    );
-    return deliveries;
-  },
-
   /**
    * Approve or refuse an inferred write.
    *

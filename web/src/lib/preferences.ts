@@ -59,7 +59,13 @@ const listeners = new Set<() => void>();
 let calendar: CalendarPreference = "auto";
 let timezone: TimezonePreference = TIMEZONE_AUTO;
 
+/** the browser's own zone, resolved once — see `resolvedTimezone` below */
+let autoZone: string | null = null;
+
 function emit(): void {
+  /* a preference change re-reads the browser's zone rather than serving one
+     resolved before the change */
+  autoZone = null;
   for (const listener of listeners) listener();
 }
 
@@ -115,14 +121,26 @@ export async function saveTimezonePreference(next: TimezonePreference): Promise<
  * The zone dates are actually rendered in. `auto` resolves to the browser's,
  * which is what every screen did before this existed — so `auto` is not a
  * special case in the formatter, just the resolved value.
+ *
+ * **The browser's own zone is resolved ONCE.** This is called by every
+ * rendered date, and on the `auto` path it was constructing an
+ * `Intl.DateTimeFormat` each time purely to read one string back off it — a
+ * formatter construction per date, on top of the ones `format.ts` was making.
+ * The value cannot change while the page is open unless the operating
+ * system's zone changes underneath it, and a tab that has already painted its
+ * dates would not repaint for that anyway. `emit()` clears it, so switching to
+ * an explicit zone and back re-reads rather than serving a value from before
+ * the change.
  */
 export function resolvedTimezone(): string {
   if (timezone !== TIMEZONE_AUTO) return timezone;
+  if (autoZone !== null) return autoZone;
   try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+    autoZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   } catch {
-    return "UTC";
+    autoZone = "UTC";
   }
+  return autoZone;
 }
 
 /**

@@ -26,7 +26,6 @@ import type {
   AgentProposal,
   Call,
   CallStatus,
-  GatewayEvent,
   PartStatus,
   Role,
   UserStatus,
@@ -42,7 +41,6 @@ import {
   PROPOSAL_KINDS,
   TRANSCRIPT_TIMINGS,
   USER_STATUSES,
-  WEBHOOK_EVENTS,
   WORKFLOW_RUN_STATUSES,
   WORKFLOW_STEP_STATUSES,
 } from "@echo/core/vocabulary";
@@ -56,7 +54,6 @@ type Exact<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never;
 
 export const CALL_STATUS_MATCHES: Exact<CallStatus, (typeof CALL_STATUSES)[number]> = true;
 export const PART_STATUS_MATCHES: Exact<PartStatus, (typeof PART_STATUSES)[number]> = true;
-export const GATEWAY_EVENT_MATCHES: Exact<GatewayEvent, (typeof WEBHOOK_EVENTS)[number]> = true;
 
 /**
  * The union this file existed to protect and didn't cover.

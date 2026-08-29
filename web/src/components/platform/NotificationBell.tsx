@@ -36,9 +36,17 @@ export function NotificationBell() {
   const [notices, setNotices] = useState<PlatformNotice[]>(() => notifyHistory());
   const rootRef = useRef<HTMLDivElement>(null);
 
+  /**
+   * Read on mount (the badge has to be right before anyone clicks) and on
+   * OPEN (so the panel shows what arrived since). Not on close: `[open]`
+   * fires on both edges of the toggle, so every glance at the bell cost two
+   * requests instead of one — and the second one landed on a panel nobody was
+   * looking at any more.
+   */
+  const [opened, setOpened] = useState(0);
   useEffect(() => {
     void api.cards().then((res) => setCards(res.cards)).catch(() => undefined);
-  }, [open]);
+  }, [opened]);
 
   useEffect(() => {
     return subscribeNotify(() => setNotices(notifyHistory()));
@@ -89,7 +97,14 @@ export function NotificationBell() {
         aria-expanded={open}
         title={t("bellLabel")}
         className="tap relative grid h-9 w-9 place-items-center rounded-lg border border-border bg-surface text-fg-muted transition-colors hover:border-accent hover:text-accent"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          /* the OPENING edge only — see the fetch effect above. Computed
+             here rather than inside the updater: an updater runs twice under
+             StrictMode, and a counter bumped in one would fetch twice. */
+          const next = !open;
+          setOpen(next);
+          if (next) setOpened((n) => n + 1);
+        }}
       >
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
           <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />

@@ -1,15 +1,41 @@
 "use client";
 
 import { use, useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { useTranslations } from "next-intl";
 import { EchoAppShell } from "@/components/echo/EchoAppShell";
 import { EchoSectionMenu } from "@/components/echo/EchoSectionMenu";
-import { RecordsSection } from "@/components/echo/RecordsSection";
-import { SpeakersDirectory } from "@/components/echo/SpeakersDirectory";
-import { SummariesSection } from "@/components/echo/SummariesSection";
-import { NewMeetingSection } from "@/components/echo/NewMeetingSection";
 import { PageContainer, PageHeader } from "@/components/scaffold";
 import { useRouter } from "@/i18n/routing";
+
+/**
+ * **One section is rendered and one section is loaded.** The four section
+ * bodies were imported statically, so `/echo` — the recorder, the app's first
+ * verb — downloaded the records table, the speakers directory and the
+ * summaries reader before drawing a single control. They are the heaviest
+ * modules under `components/echo`, and no URL ever shows two of them.
+ *
+ * **SSR is left ON**, for the reason spelled out on the Settings page: an
+ * unmounted dynamic component is not fetched whether or not it can render on
+ * the server, so the flag buys nothing (this route measured 667,666 B with SSR
+ * against 667,694 B without it) and only decides whether the ACTIVE section
+ * appears in the HTML. These four were plain static imports in a client page a
+ * moment ago, which means they were already being server-rendered — so leaving
+ * SSR on is the change that alters nothing, and turning it off would have been
+ * the one that did.
+ */
+const NewMeetingSection = dynamic(
+  () => import("@/components/echo/NewMeetingSection").then((m) => m.NewMeetingSection),
+);
+const RecordsSection = dynamic(
+  () => import("@/components/echo/RecordsSection").then((m) => m.RecordsSection),
+);
+const SummariesSection = dynamic(
+  () => import("@/components/echo/SummariesSection").then((m) => m.SummariesSection),
+);
+const SpeakersDirectory = dynamic(
+  () => import("@/components/echo/SpeakersDirectory").then((m) => m.SpeakersDirectory),
+);
 
 /**
  * **Echo on the platform anatomy** (Part 5, user directive): the same

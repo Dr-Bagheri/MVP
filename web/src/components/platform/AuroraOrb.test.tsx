@@ -1,7 +1,13 @@
-import { render } from "@testing-library/react";
+import { render, waitFor } from "@testing-library/react";
+import dynamic from "next/dynamic";
 import { beforeAll, describe, expect, it, vi } from "vitest";
-import { AuroraOrb } from "./AuroraOrb";
-import { createOrbParticleGeometry } from "./EchoEOrb";
+/*
+ * The `AuroraOrb.tsx` re-export barrel is gone: `PresenceDock` now loads the
+ * renderer through `next/dynamic`, and a static re-export beside it is a
+ * second, non-splitting door into three.js. The name stays as the local
+ * alias because that is what the dock still calls it on screen.
+ */
+import { EchoEOrb as AuroraOrb, createOrbParticleGeometry } from "./EchoEOrb";
 import { computeRms } from "@/lib/useAudioLevel";
 
 beforeAll(() => {
@@ -43,6 +49,33 @@ describe("AuroraOrb", () => {
     expect(container.querySelector("img")).toBeNull();
     expect(container.querySelectorAll("canvas")).toHaveLength(1);
     expect(container.querySelectorAll("span > span")).toHaveLength(0);
+  });
+
+  /**
+   * The dynamic boundary `PresenceDock` now loads the orb through.
+   *
+   * three.js is 560 KB and was in every route's first-load set because the
+   * dock is statically imported by the root layout; it is a `next/dynamic`
+   * import now. The failure that change can produce is a SILENT one — a wrong
+   * module path or a renamed export makes the dock render nothing where the
+   * orb used to be, on the routes where it is the product's only visible
+   * presence, and no other test in this directory would notice.
+   *
+   * `tsc` catches a misspelled export name; this catches the rest of the
+   * mechanism — that the lazy module resolves and mounts a real canvas. It is
+   * NOT a substitute for seeing the orb in a signed-in browser: the dock gates
+   * the orb on `member`, so that check needs a live session and is owed.
+   */
+  it("survives the next/dynamic boundary the dock loads it through", async () => {
+    const Lazy = dynamic(() => import("./EchoEOrb").then((m) => m.EchoEOrb), { ssr: false });
+    const { container } = render(<Lazy state="listening" level={0.5} />);
+
+    await waitFor(() => {
+      expect(container.querySelector("canvas")).not.toBeNull();
+    });
+    const canvas = container.querySelector("canvas") as HTMLCanvasElement;
+    expect(canvas.dataset.renderState).toBe("listening");
+    expect(canvas.dataset.renderer).toBe("webgl-particles");
   });
 
   it("uses exactly 300 GPU points spanning a true 1x to 5x size range", () => {

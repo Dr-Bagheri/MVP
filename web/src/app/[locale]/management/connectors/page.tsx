@@ -3,12 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { api } from "@/api/client";
-import type { GatewayKey, GatewayWebhook, User } from "@/api/types";
+import type { GatewayKey, User } from "@/api/types";
 import { SettingsPane } from "@/components/platform/SettingsPane";
 import { Card, Chip, PageHeader } from "@/components/ui";
-import { DeliveriesCard } from "./_components/DeliveriesCard";
 import { KeysCard } from "./_components/KeysCard";
-import { WebhooksCard } from "./_components/WebhooksCard";
 
 /**
  * Connectors & the API gateway (M17).
@@ -25,9 +23,10 @@ import { WebhooksCard } from "./_components/WebhooksCard";
  * catalogue that used to sit under it was removed (user directive: no
  * coming-soons; a fabricated catalogue is a roadmap we would have to keep).
  *
- * Two sentences carry this screen, and they are the ones the steward blessed:
- * a key **can do what you can do** — never "full API access", which is both
- * false and dangerous — and a webhook is **a doorbell, not a delivery**.
+ * The sentence that carries this screen is the one the steward blessed: a key
+ * **can do what you can do** — never "full API access", which is both false
+ * and dangerous. (A second sentence about webhooks stood beside it until the
+ * feature was removed on 2026-08-29.)
  */
 export default function ConnectorsPage() {
   const t = useTranslations("connectors");
@@ -35,13 +34,12 @@ export default function ConnectorsPage() {
 
   const [me, setMe] = useState<User | null>(null);
   const [keys, setKeys] = useState<GatewayKey[]>([]);
-  const [webhooks, setWebhooks] = useState<GatewayWebhook[]>([]);
   const [members, setMembers] = useState<User[]>([]);
 
   /*
-   * Managing keys and webhooks is admin-only, enforced by RLS (db/0013's
-   * api_key_admin / webhook_admin) with core/'s requireAdmin in front of it so
-   * a member gets one legible 403 instead of a confusing empty result.
+   * Managing keys is admin-only, enforced by RLS (db/0013's api_key_admin)
+   * with core/'s requireAdmin in front of it so a member gets one legible 403
+   * instead of a confusing empty result.
    *
    * This flag is an AFFORDANCE and never the wall — the same posture as
    * `Skill.editable`. It decides what to ASK FOR, so that a member does not
@@ -54,12 +52,7 @@ export default function ConnectorsPage() {
   const isAdmin = me?.role === "admin" || me?.role === "owner";
 
   const refreshGateway = useCallback(async () => {
-    const [nextKeys, nextWebhooks] = await Promise.all([
-      api.gatewayKeys(),
-      api.gatewayWebhooks(),
-    ]);
-    setKeys(nextKeys);
-    setWebhooks(nextWebhooks);
+    setKeys(await api.gatewayKeys());
   }, []);
 
   useEffect(() => {
@@ -87,16 +80,12 @@ export default function ConnectorsPage() {
       </Card>
 
       {me === null ? null : isAdmin ? (
-        <>
-          <KeysCard
-            keys={keys}
-            members={members}
-            meId={me.id}
-            onChanged={() => void refreshGateway()}
-          />
-          <WebhooksCard webhooks={webhooks} onChanged={() => void refreshGateway()} />
-          <DeliveriesCard webhooks={webhooks} />
-        </>
+        <KeysCard
+          keys={keys}
+          members={members}
+          meId={me.id}
+          onChanged={() => void refreshGateway()}
+        />
       ) : (
         /*
          * Not an empty list. A member who saw "no keys" would read it as "this

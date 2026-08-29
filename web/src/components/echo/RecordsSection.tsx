@@ -114,14 +114,23 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
    * everything is terminal. `recording` is deliberately not in the set:
    * only client actions move it, and those announce; polling on it would
    * spin forever on an abandoned take.
+   *
+   * **Depends on the ANSWER, not on the array.** With `calls` in the deps the
+   * effect tore down its interval and built a new one on every tick — `load()`
+   * sets a freshly parsed array, which is never `Object.is`-equal to the last
+   * one — so the poll restarted its own clock every five seconds and its real
+   * period drifted with the request. The only thing it reads out of `calls` is
+   * a yes/no, so that is what it depends on: while the answer stays "yes" the
+   * timer is left alone, and it still stops on the tick that turns it "no".
    */
+  const workerBusy = calls?.some((c) =>
+    c.status === "processing" || c.status === "linking" || c.status === "summarizing") === true;
   useEffect(() => {
-    const WORKER_MOVED = new Set(["processing", "linking", "summarizing"]);
-    if (!calls?.some((c) => WORKER_MOVED.has(c.status))) return;
+    if (!workerBusy) return;
     const timer = setInterval(() => { void load(); }, 5000);
     return () => clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- load is stable per mount
-  }, [calls]);
+  }, [workerBusy]);
 
   /** id → display name, falling back to the id rather than to `undefined`. */
   function ownerName(id: string): string {

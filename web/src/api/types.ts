@@ -917,15 +917,7 @@ export interface Connector {
   status: "preview";
 }
 
-/**
- * The M17 gateway wire types.
- *
- * Events are a CLOSED set: core/ 400s on an unknown one and names the bad
- * value, because subscribing to a typo would otherwise mean receiving nothing
- * forever and reasonably concluding the feature is broken. Any event picker
- * must therefore be a fixed list, never free text.
- */
-export type GatewayEvent = "call.created" | "call.transcribed" | "call.summarized" | "call.failed";
+/** The M17 gateway wire types. */
 
 export interface GatewayKey {
   id: string;
@@ -965,31 +957,6 @@ export interface GatewayKey {
  */
 export interface GatewayKeyCreated extends GatewayKey {
   token: string;
-}
-
-export interface GatewayWebhook {
-  id: string;
-  url: string;
-  events: GatewayEvent[];
-  enabled: boolean;
-  created_at: string;
-}
-
-/** Same once-only rule as the key token. */
-export interface GatewayWebhookCreated extends GatewayWebhook {
-  secret: string;
-}
-
-export interface GatewayDelivery {
-  id: string;
-  webhook_id: string;
-  event: GatewayEvent;
-  attempts: number;
-  response_code: number | null;
-  delivered_at: string | null;
-  failed_at: string | null;
-  next_attempt_at: string | null;
-  created_at: string;
 }
 
 /**

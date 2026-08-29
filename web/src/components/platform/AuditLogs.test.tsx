@@ -156,7 +156,7 @@ vi.mock("@/api/client", () => ({
   api: { me: () => me(), audit: (query?: unknown) => audit(query) },
 }));
 
-const { AuditLogs } = await import("./AuditLogs");
+const { AuditLogs, auditDetailValue } = await import("./AuditLogs");
 
 const page = (entries: AuditEntry[], next: AuditCursor | null = null): AuditPage => ({
   entries,
@@ -625,5 +625,154 @@ describe("when the feed cannot be read", () => {
      * is the entire claim this surface makes.
      */
     expect(screen.queryByText("e01")).toBeNull();
+  });
+});
+
+/**
+ * **The deletion arm — the fourth source, and the one nothing pointed at.**
+ *
+ * The shape is transcribed from the producer rather than imagined. core/'s
+ * `DELETION_FEED_ARM` (core/src/api/audit.ts) selects, in order:
+ *
+ *   'deletion', d.id, d.created_at, d.actor_id, **d.kind**, 'deletion',
+ *   d.target_id, jsonb_build_object('reason', d.reason)
+ *
+ * — so `action` is the ledger's `kind` and `detail` has exactly one key. And
+ * db/0085 closes that kind at the column:
+ * `check (kind in ('call', 'person', 'member'))`, with
+ * `reason text not null check (length(btrim(reason)) between 3 and 500)`.
+ *
+ * Both facts matter to this screen and neither was honoured. `kind` is a
+ * CLOSED vocabulary, so it belongs in the translate-what-we-know map — it
+ * was absent, and every deletion rendered the bare word `call` while
+ * `audit.action.call` sat authored in both locales. And `reason` is the one
+ * value on this page a PERSON wrote — 3 to 500 characters of, in a
+ * Persian-first product, Persian — while every detail value on the screen
+ * was being forced left-to-right into a monospace face.
+ */
+const DELETED_REASON = "درخواست خود مشتری برای پاک شدن جلسه‌های قدیمی";
+
+const CAPTURED_DELETION: AuditEntry = {
+  source: "deletion",
+  id: "b1f2b0e2-7c4e-4f22-9d3a-0e6d5a4c1188",
+  at: "2026-08-29T09:41:11.204Z",
+  actor_id: ADMIN_ID,
+  actor_name: "مدیر سازمان",
+  action: "call",
+  target_type: "deletion",
+  target_id: "3f9a6c11-2b77-4a0e-8c55-9d1e2f3a4b5c",
+  detail: { reason: DELETED_REASON },
+} as unknown as AuditEntry;
+
+describe("a deletion row", () => {
+  it("reads its kind as the translated word, not as a code", async () => {
+    audit.mockResolvedValue(page([CAPTURED_DELETION]));
+    render(<AuditLogs />);
+
+    /*
+     * **The discriminating assertion for the whole fix.** «حذف رکورد» is
+     * `audit.action.call`, and it can only render if `deletion` is in the
+     * translatable map — which it was not. The second half matters as much:
+     * the raw `call` must be GONE, or a screen that rendered both would pass
+     * the first line while still showing the code.
+     */
+    expect(await screen.findByText("حذف رکورد")).toBeTruthy();
+    expect(screen.queryByText("call")).toBeNull();
+  });
+
+  it("labels the reason instead of showing the key", async () => {
+    audit.mockResolvedValue(page([CAPTURED_DELETION]));
+    render(<AuditLogs />);
+    await screen.findByText("حذف رکورد");
+
+    expect(screen.getByText(/^دلیل$/)).toBeTruthy();   // audit.detail.reason
+    expect(screen.queryByText("reason")).toBeNull();
+  });
+
+  it("lets the person's own sentence pick its own direction", async () => {
+    audit.mockResolvedValue(page([CAPTURED_DELETION]));
+    render(<AuditLogs />);
+
+    /*
+     * `dir="auto"` is the whole visible half of this in jsdom: the value
+     * declares a direction derived from its CONTENT, which the code branch
+     * never does (it is isolated left-to-right by the shared `.ltr`
+     * utility). The other half — that it is no longer in a monospace face —
+     * is a computed style, and jsdom computes none; the decision behind it
+     * is asserted directly further down instead of through a class name.
+     */
+    const reason = await screen.findByText(DELETED_REASON);
+    expect(reason.getAttribute("dir")).toBe("auto");
+  });
+
+  it("still dresses an identifier as an identifier — the control", async () => {
+    /*
+     * Without this, "the reason is not forced LTR" cannot tell the rule from
+     * a change that simply stopped forcing anything. A uuid must still take
+     * the code branch, and the code branch never carries a `dir` of its own.
+     */
+    audit.mockResolvedValue(CAPTURED);
+    render(<AuditLogs />);
+    const runId = await screen.findByText("7308f777-b016-4325-9a7a-3c9f9a28bae9");
+    expect(runId.getAttribute("dir")).toBeNull();
+  });
+
+  it("does NOT translate a deletion kind this build has never heard of", async () => {
+    /*
+     * The negative control on the map itself. `kind` is closed at the column
+     * TODAY; a deployment ahead of this bundle can widen it, and the answer
+     * must be the code — never the nearest label that happens to exist. This
+     * is the same rule the unknown-source test guards one column over.
+     */
+    audit.mockResolvedValue(
+      page([{ ...CAPTURED_DELETION, action: "workflow" } as AuditEntry]),
+    );
+    render(<AuditLogs />);
+    expect(await screen.findByText("workflow")).toBeTruthy();
+    expect(screen.queryByText("حذف رکورد")).toBeNull();
+    expect(screen.queryByText("حذف عضو")).toBeNull();
+  });
+});
+
+describe("the value/code decision itself", () => {
+  /*
+   * Asserted directly, because the property it drives — a monospace face —
+   * is a computed style and this runtime computes none. A render test can
+   * see the direction and never the font, so the rule is pinned where it is
+   * actually decided.
+   */
+  it("calls a person's sentence text, and everything opaque a code", () => {
+    expect(auditDetailValue("reason", DELETED_REASON, "fa").code).toBe(false);
+    expect(auditDetailValue("run_id", "7308f777-b016-4325-9a7a-3c9f9a28bae9", "fa").code).toBe(true);
+    expect(auditDetailValue("model", "google/gemini-3.6-flash", "fa").code).toBe(true);
+    expect(auditDetailValue("error", "upstream refused", "fa").code).toBe(true);
+  });
+
+  it("hands back what it FORMATTED in the reader's own dress", () => {
+    /*
+     * A date through `formatDate` already carries the reader's calendar and
+     * digits; a count through `digits()` already carries the digits. Marking
+     * either a code puts it in a Latin monospace stack forced left-to-right
+     * — undoing, one line later, exactly the work the formatter just did.
+     */
+    const date = auditDetailValue("finished_at", "2026-08-13T11:08:52.062643+00:00", "fa");
+    expect(date.code).toBe(false);
+    expect(date.text).not.toMatch(/Invalid/);
+
+    const count = auditDetailValue("tokens_in", 6335, "fa");
+    expect(count.code).toBe(false);
+    expect(count.text).toBe("۶۳۳۵");
+  });
+
+  it("treats a key it does not know as a code", () => {
+    /*
+     * The safe default, and the direction it errs in is deliberate:
+     * rendering an unknown CODE in the document's direction can visually
+     * reorder it into a different string, while rendering unknown prose
+     * left-to-right merely looks wrong.
+     */
+    expect(auditDetailValue("vendor_ref", "vr-7", "fa").code).toBe(true);
+    expect(auditDetailValue("fields", ["locale", "name"], "fa"))
+      .toEqual({ text: '["locale","name"]', code: true });
   });
 });

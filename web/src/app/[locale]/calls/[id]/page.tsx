@@ -542,7 +542,6 @@ export default function CallDetailPage({
     void api.directory().then(setDirectory).catch(() => setDirectory([]));
     void api.callNotes(id).then(setNotes).catch(() => setNotes([]));
     void api.me().then(setMe).catch(() => setMe(null));
-    void api.listCalls({ includeArchived: false }).then(setAllCalls).catch(() => setAllCalls([]));
     void api.getSummaries(id).then((all) => {
       setVersions(all);
       setShownVersion(all.at(-1)?.version ?? null);
@@ -569,6 +568,26 @@ export default function CallDetailPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-once per call
   }, [id]);
 
+  /**
+   * The whole call list, fetched ONLY when it can produce something.
+   *
+   * `allCalls` has exactly one consumer — the related-records sidebar (#16),
+   * which matches on SHARED TAGS and returns `[]` the moment this record has
+   * none. Fetching it in the mount effect meant every untagged record — the
+   * common case — downloaded the org's entire list to render an empty aside.
+   *
+   * It waits for this record's own tags to arrive, which costs the sidebar one
+   * round trip of latency on a tagged record and costs the request entirely on
+   * an untagged one. `hasTags` is a boolean, so re-tagging inside the page
+   * still fires it once and editing tags on an already-tagged record does not
+   * refetch — the same as the mount-once behaviour it replaces.
+   */
+  const hasTags = (call?.tags?.length ?? 0) > 0;
+  useEffect(() => {
+    if (!hasTags) return;
+    void api.listCalls({ includeArchived: false }).then(setAllCalls).catch(() => setAllCalls([]));
+  }, [hasTags]);
+
   /** the chosen section rides the URL (replace, not push — switching
       sections is not a navigation someone should have to back out of) */
   useEffect(() => {
@@ -586,10 +605,22 @@ export default function CallDetailPage({
     return () => window.removeEventListener("beforeprint", onBefore);
   }, []);
 
-  /** pipeline polling — the page re-reads while the worker moves the call */
+  /**
+   * pipeline polling — the page re-reads while the worker moves the call.
+   *
+   * **Depends on the STATUS, not on the call.** With `call` in the deps this
+   * effect tore down its interval and built a new one on every tick: the tick
+   * calls `setCall(fresh)` with a freshly parsed object, a new object is never
+   * `Object.is`-equal to the old one, so the deps changed every five seconds
+   * even when nothing about the call had. A restarted interval also restarts
+   * its clock, so the poll's real period drifted with however long the request
+   * took. The status is the only thing the effect actually reads, and it is a
+   * string — a tick that changes nothing now leaves the timer alone.
+   */
+  const pollStatus = call?.status;
   useEffect(() => {
     const WORKER_MOVED = new Set(["processing", "linking", "summarizing"]);
-    if (!call || !WORKER_MOVED.has(call.status)) return;
+    if (!pollStatus || !WORKER_MOVED.has(pollStatus)) return;
     const timer = setInterval(() => {
       void api.getCall(id).then((fresh) => {
         if (!fresh) return;
@@ -608,7 +639,7 @@ export default function CallDetailPage({
       }).catch(() => undefined);
     }, 5000);
     return () => clearInterval(timer);
-  }, [call, id]);
+  }, [pollStatus, id]);
 
   const partFor = (ms: number) => {
     if (!audioParts || audioParts.length === 0) return null;

@@ -1,7 +1,7 @@
 "use client";
 
 import { cloneElement, isValidElement, useId, type ReactElement, type ReactNode } from "react";
-import type { CallStatus, CallScope } from "@/api/types";
+import type { CallStatus } from "@/api/types";
 
 /** Shared primitives — one visual system across every screen. */
 
@@ -95,10 +95,6 @@ export function StatusChip({ status, label }: { status: string; label: string })
   return <Chip tone={STATUS_TONE[status as CallStatus] ?? "neutral"}>{label}</Chip>;
 }
 
-export function ScopeChip({ scope, label }: { scope: CallScope; label: string }) {
-  return <Chip tone={scope === "org" ? "accent" : "neutral"}>{label}</Chip>;
-}
-
 /**
  * A labelled form control.
  *
@@ -154,17 +150,6 @@ export function Field({
           {hint}
         </p>
       ) : null}
-    </div>
-  );
-}
-
-export function Progress({ value }: { value: number }) {
-  return (
-    <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-2" dir="ltr">
-      <div
-        className="h-full rounded-full bg-accent transition-[width]"
-        style={{ width: `${Math.min(100, Math.max(0, value))}%` }}
-      />
     </div>
   );
 }

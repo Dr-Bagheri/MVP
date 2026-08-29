@@ -53,13 +53,16 @@ export function currentSpeechAudio(): HTMLAudioElement | null {
   return serverAudio;
 }
 
-/** everything the assistant has SAID OUT LOUD recently — the echo filter's
-    reference text (acks and replies both; capped so it stays a fingerprint
-    of the recent voice, not a transcript archive) */
-let spokenHistory = "";
-export function recentSpokenText(): string {
-  return spokenHistory;
-}
+/*
+ * `spokenHistory` and its `recentSpokenText()` getter stood here until
+ * 2026-08-29. They were the echo filter's reference text — what the assistant
+ * had said out loud, so the loop could recognise its own voice arriving back
+ * through the microphone. The rewritten loop compares BREATHS instead
+ * (voiceLoop.ts's `compareBreath`), so nothing read the string any more while
+ * `speakQueued` kept appending to it on every utterance: a write with no
+ * reader, which is a producer with no consumer wearing a smaller hat, and it
+ * cost a string concatenation on every reply forever.
+ */
 
 // ── the language of a sentence, with the locale as the tiebreaker ──────
 
@@ -236,7 +239,6 @@ export function speakQueued(text: string): void {
   if (recordingSilence) return; // a live take: the mouth stays shut
   const cleaned = cleanForSpeech(text);
   if (!cleaned) return;
-  spokenHistory = `${spokenHistory} ${cleaned}`.slice(-2000);
   const blob = synthesizeCached(cleaned);
   blob.catch(() => undefined); // its failure is speakOne's to report
   speechQueue.push({ text: cleaned, blob });

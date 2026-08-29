@@ -85,6 +85,15 @@ const OPT_OUT_MARKER = ["sweep", "allow", "mojibake"].join("-");
 const BINARY = /\.(png|jpe?g|gif|webp|ico|svgz|ttf|otf|woff2?|eot|pdf|docx|xlsx|zip|gz|mp3|wav|m4a|onnx|wasm)$/i;
 
 /**
+ * Extensions that ASSERT the file is text. Used only to decide whether a NUL
+ * byte means "unrecognised binary" (skip) or "damaged source" (report) — see
+ * the loop. Deliberately a positive list: a new binary format nobody thought
+ * of still skips, while every file we actually write is covered.
+ */
+const TEXT_BY_EXTENSION =
+  /\.(ts|tsx|js|jsx|mjs|cjs|json|jsonc|md|mdx|sql|css|scss|html?|ya?ml|sh|ps1|cmd|bat|txt|toml|ini|env|example|gitignore|npmrc|editorconfig)$/i;
+
+/**
  * U+00E2 U+20AC, assembled rather than typed — see the header. Writing it as a
  * literal is what made the first version unable to pass.
  */
@@ -150,8 +159,25 @@ for (const relative of files) {
   } catch {
     continue; // deleted-but-tracked; not this check's business
   }
-  // a NUL byte means binary regardless of extension
-  if (bytes.includes(0)) continue;
+  /*
+   * A NUL byte used to mean "binary regardless of extension", and this line
+   * used to `continue` on it unconditionally. That made the sweep blind in
+   * the worst possible way: a control byte on its own was caught, and the
+   * SAME control byte with a NUL in front of it passed — the file left the
+   * corpus entirely and the tracked-file count silently dropped by one. A
+   * check that a single byte can switch off is the could-only-ever-have-
+   * passed shape, in the check added that morning to catch invisible bytes.
+   *
+   * Found by another session's positive control after they wrote a NUL into
+   * `web/src/lib/format.ts` by accident — which is also the proof that a NUL
+   * lands in real source files rather than only in real binaries.
+   *
+   * So the NUL heuristic now only applies where it was ever justified: a file
+   * whose extension does NOT say it is text. A `.ts` or `.sql` file
+   * containing a NUL is not an unrecognised binary, it is a damaged source
+   * file, and it reports as one.
+   */
+  if (bytes.includes(0) && !TEXT_BY_EXTENSION.test(relative)) continue;
   scanned += 1;
 
   const text = bytes.toString("utf8");

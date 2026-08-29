@@ -66,6 +66,45 @@ function div(a: number, b: number) {
 }
 
 /**
+ * One `Intl.DateTimeFormat` per distinct (locale, options) pair, for the life
+ * of the page.
+ *
+ * Constructing a formatter is the expensive part of `Intl` — locale
+ * negotiation and pattern resolution — and formatting with an existing one is
+ * cheap. This module was building a new one on EVERY rendered date (two in
+ * `partsIn`'s two branches, a third for the Gregorian month name), so a
+ * ten-row table cost about thirty constructions per render, and the tables
+ * that show dates re-render on every keystroke of their search boxes.
+ *
+ * The key is derived from the options object itself rather than hand-written
+ * beside each call site: a second spelling of the same option set is exactly
+ * the drift this codebase keeps finding, and `JSON.stringify` on a
+ * six-property literal is roughly two orders of magnitude cheaper than the
+ * constructor it replaces. Two call sites listing the same options in a
+ * different order simply get two entries — both correct.
+ *
+ * The map is unbounded by construction, and bounded in practice by what a
+ * page can ask for: the option sets are three literals and the only variable
+ * is the viewer's timezone, which is one value (two if they change it).
+ */
+const formatterCache = new Map<string, Intl.DateTimeFormat>();
+
+function dateFormatter(locale: string, options: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
+  const key = `${locale} ${JSON.stringify(options)}`;
+  const hit = formatterCache.get(key);
+  if (hit) return hit;
+  const made = new Intl.DateTimeFormat(locale, options);
+  formatterCache.set(key, made);
+  return made;
+}
+
+/** the shape `partsIn` reads, named once so both branches cannot drift apart */
+const PARTS_OPTIONS = {
+  year: "numeric", month: "2-digit", day: "2-digit",
+  hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+} as const satisfies Intl.DateTimeFormatOptions;
+
+/**
  * The calendar/clock parts of an instant IN A GIVEN ZONE.
  *
  * Every date on screen used to be extracted with `getFullYear()` and friends,
@@ -83,30 +122,13 @@ function partsIn(date: Date, timeZone: string): {
 } {
   let parts: Intl.DateTimeFormatPart[];
   try {
-    parts = new Intl.DateTimeFormat("en-US", {
-      timeZone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      hourCycle: "h23",
-    }).formatToParts(date);
+    parts = dateFormatter("en-US", { timeZone, ...PARTS_OPTIONS }).formatToParts(date);
   } catch {
     // an invalid stored zone must not blank every date on the screen
-    parts = new Intl.DateTimeFormat("en-US", {
-      year: "numeric", month: "2-digit", day: "2-digit",
-      hour: "2-digit", minute: "2-digit", hourCycle: "h23",
-    }).formatToParts(date);
+    parts = dateFormatter("en-US", { ...PARTS_OPTIONS }).formatToParts(date);
   }
   const get = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? "0");
   return { y: get("year"), m: get("month"), d: get("day"), hh: get("hour"), mm: get("minute") };
-}
-
-/** Gregorian → Jalali (standard 33-year cycle arithmetic, no dependency). */
-export function toJalali(date: Date): { jy: number; jm: number; jd: number } {
-  const { y: gy, m: gm, d: gd } = partsIn(date, resolvedTimezone());
-  return jalaliFromParts(gy, gm, gd);
 }
 
 function jalaliFromParts(gy: number, gm: number, gd: number): {
@@ -166,7 +188,7 @@ export function formatDate(iso: string, locale: string): string {
   const zone = resolvedTimezone();
   if (resolvedCalendar(locale) === "gregorian") {
     const { y, m, d } = partsIn(date, zone);
-    const month = new Intl.DateTimeFormat("en-GB", { month: "short", timeZone: "UTC" }).format(
+    const month = dateFormatter("en-GB", { month: "short", timeZone: "UTC" }).format(
       new Date(Date.UTC(y, m - 1, d)),
     );
     return bidiIsolate(`${digits(d, locale)} ${month} ${digits(y, locale)}`);

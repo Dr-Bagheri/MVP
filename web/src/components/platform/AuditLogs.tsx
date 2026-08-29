@@ -92,16 +92,87 @@ const isKnownSource = (value: string): value is AuditSource =>
 const TRANSLATABLE_ACTIONS: Record<string, readonly string[]> = {
   proposal_decision: ["approve", "reject"],
   agent_run: ["ok", "error", "running"],
+  /*
+   * The deletion ledger's action is `deletion_record.kind`, and db/0085
+   * closes it at the column: `check (kind in ('call', 'person', 'member'))`.
+   * A closed vocabulary belongs in this map — without its entry every
+   * deletion row fell to the free-text branch and rendered the bare word
+   * `call` in a monospace face, on a page whose whole job is to say what
+   * happened. `audit.action.call` / `.person` / `.member` were already
+   * authored in both locales; nothing pointed at them.
+   */
+  deletion: ["call", "person", "member"],
 };
 
 const TRANSLATABLE_TARGETS = ["proposal", "agent_run", "member", "org", "call", "deletion"];
 
-/** Keys the three sources are known to build. Anything else renders under its
+/** Keys the four sources are known to build. Anything else renders under its
  *  raw name rather than being hidden — a detail we do not recognise is still a
  *  detail, and dropping it would be this screen editing the record. */
 const TRANSLATABLE_DETAILS = [
   "kind", "model", "skill_id", "run_id", "tokens_in", "tokens_out", "error", "finished_at",
+  /* the deletion arm's only key (core's DELETION_FEED_ARM builds
+     `jsonb_build_object('reason', d.reason)`) */
+  "reason",
 ];
+
+/**
+ * Detail keys whose value is a SENTENCE A PERSON WROTE.
+ *
+ * Everything else this screen shows is machine text — an id, a model name, a
+ * status word — and machine text is rendered `ltr font-mono` on purpose: a
+ * uuid read right-to-left is a different uuid, and a monospace face is what
+ * makes one scannable.
+ *
+ * `reason` is not machine text. db/0085 requires it on every product
+ * deletion (3–500 characters, the actor's own words), and in a
+ * Persian-first product it is a Persian sentence — which was arriving
+ * forced left-to-right in a Latin monospace stack: the one field on the
+ * page written by a human, dressed as a hash.
+ *
+ * `error` deliberately stays with the codes. It is whatever the runner
+ * handed the row — machine text that can carry a model id or a path — and
+ * LTR isolation is the non-destructive way to show one of those.
+ */
+const HUMAN_TEXT_DETAILS = ["reason"];
+
+/**
+ * A detail value, AND whether it is machine text — one function, because
+ * they are one decision.
+ *
+ * The branch that knows a value is a date is the only branch that knows it
+ * has already been through `formatDate`, which gave it the reader's calendar
+ * and the reader's digits. Putting that back into a Latin monospace face
+ * forced left-to-right undoes exactly the work it just did: «۲۲ مرداد ۱۴۰۵»
+ * is not a code and does not read like one. Same for a count through
+ * `digits()`.
+ *
+ * So `code` is false for anything this screen FORMATTED itself and for the
+ * sentences a person wrote, and true for everything that arrived opaque —
+ * including an unrecognised key, which is the safe default: rendering an
+ * unknown code in the document's direction can visually reorder it, while
+ * rendering unknown prose left-to-right merely looks wrong.
+ *
+ * **Exported, and outside the component, because the half that matters is
+ * unmeasurable from the DOM.** Whether a value ends up in a monospace face
+ * is a computed style, and jsdom computes none — so a render assertion can
+ * see the direction and never the font. Extracting the decision is the
+ * answer to that ("a test that is hard to write correctly against the DOM is
+ * an argument for extracting the decision, not for trusting it"): the rule
+ * is asserted here, directly, and the screen is asserted to obey it.
+ */
+export function auditDetailValue(
+  key: string,
+  value: unknown,
+  locale: string,
+): { text: string; code: boolean } {
+  if (key === "finished_at" && typeof value === "string") {
+    return { text: `${formatDate(value, locale)} ${formatTime(value, locale)}`, code: false };
+  }
+  if (typeof value === "number") return { text: digits(value, locale), code: false };
+  if (typeof value === "object") return { text: JSON.stringify(value), code: true };
+  return { text: String(value), code: !HUMAN_TEXT_DETAILS.includes(key) };
+}
 
 const SOURCE_TONE: Record<AuditSource, "accent" | "info" | "neutral"> = {
   admin_action: "accent",
@@ -190,7 +261,12 @@ export function AuditLogs() {
     ) : (
       <span className="text-fg-muted" title={t("actorRemovedNote")}>
         <span className="block text-xs">{t("actorRemoved")}</span>
-        <span className="ltr block font-mono text-[11px] text-fg-muted/80">
+        {/* `--fg-subtle`, not `fg-muted/80`. The platform HAS a third,
+            quieter foreground — round 2's grouped-menu ruling minted it and
+            `verify-pairs.mjs` asserts subtle-recedes-from-muted in both
+            themes. A hand-rolled alpha is a fourth tone nothing measures,
+            and it drifts the moment either token moves. */}
+        <span className="ltr block font-mono text-[11px] text-fg-subtle">
           {entry.actor_id.slice(0, 8)}
         </span>
       </span>
@@ -210,8 +286,9 @@ export function AuditLogs() {
       ) : (
         <span className="ltr font-mono text-xs text-fg-muted">{entry.target_type}</span>
       )}
+      {/* `--fg-subtle` here too — see actorCell */}
       {entry.target_id ? (
-        <span className="ltr block font-mono text-[11px] text-fg-muted/80">
+        <span className="ltr block font-mono text-[11px] text-fg-subtle">
           {entry.target_id.slice(0, 8)}
         </span>
       ) : null}
@@ -230,15 +307,6 @@ export function AuditLogs() {
   const detailPairs = (entry: AuditEntry) =>
     Object.entries(entry.detail).filter(([, value]) => value !== null && value !== undefined);
 
-  const detailValue = (key: string, value: unknown) => {
-    if (key === "finished_at" && typeof value === "string") {
-      return `${formatDate(value, locale)} ${formatTime(value, locale)}`;
-    }
-    if (typeof value === "number") return digits(value, locale);
-    if (typeof value === "object") return JSON.stringify(value);
-    return String(value);
-  };
-
   /*
    * `me === null` renders nothing rather than the refusal: identity in flight
    * and identity refused are different states, and showing an admin a locked
@@ -246,10 +314,16 @@ export function AuditLogs() {
    */
   if (me !== null && !isAdmin) {
     return (
-      <div className="rounded-lg border border-border bg-surface-2 p-3">
-        <p className="text-sm font-medium text-fg">{tAdmin("adminOnly")}</p>
-        <p className="mt-1 text-sm leading-6 text-fg-muted">{t("adminOnlyNote")}</p>
-      </div>
+      /* the platform's ONE refusal card (management/models, /users, /server,
+         /invitations, /privileges all render exactly this): a Card, an
+         `h-section` heading, the note under it. This screen had a
+         hand-rolled div with its own border, its own ground and its own
+         type scale — the single most-repeated shape on the product wearing
+         a different face on one page. */
+      <Card>
+        <h2 className="h-section">{tAdmin("adminOnly")}</h2>
+        <p className="mt-1 text-sm leading-7 text-fg-muted">{t("adminOnlyNote")}</p>
+      </Card>
     );
   }
 
@@ -276,7 +350,10 @@ export function AuditLogs() {
       </div>
 
       {failed ? (
-        <div className="mb-4 rounded-lg border border-danger/40 bg-danger/10 p-3">
+        /* the same failure banner Management · Server renders, and the same
+           way it renders it: a Card tinted danger, not a second hand-drawn
+           box that happens to pick the same two tokens */
+        <Card className="mb-4 border-danger/40 bg-danger/10">
           <p className="text-sm font-medium text-fg">{t("failed")}</p>
           <button
             className="btn-secondary mt-2 h-9 min-h-0 px-3 text-xs"
@@ -284,7 +361,7 @@ export function AuditLogs() {
           >
             {t("retry")}
           </button>
-        </div>
+        </Card>
       ) : null}
 
       {loading ? (
@@ -357,21 +434,32 @@ export function AuditLogs() {
                 header: t("colDetail"),
                 cell: (entry) => (
                   <ul className="space-y-0.5">
-                    {detailPairs(entry).map(([key, value]) => (
-                      <li key={key} className="text-xs text-fg-muted">
-                        <span>
-                          {TRANSLATABLE_DETAILS.includes(key) ? (
-                            t(`detail.${key}`)
+                    {detailPairs(entry).map(([key, value]) => {
+                      const { text, code } = auditDetailValue(key, value, locale);
+                      return (
+                        <li key={key} className="text-xs leading-5 text-fg-muted">
+                          <span>
+                            {TRANSLATABLE_DETAILS.includes(key) ? (
+                              t(`detail.${key}`)
+                            ) : (
+                              <span className="ltr font-mono">{key}</span>
+                            )}
+                          </span>
+                          <span>: </span>
+                          {code ? (
+                            <span className="ltr font-mono text-fg">{text}</span>
                           ) : (
-                            <span className="ltr font-mono">{key}</span>
+                            /* `dir="auto"` rather than a fixed direction: the
+                               value picks its own from its first strong
+                               character, so a Persian reason reads RTL and an
+                               English one written by the same admin reads LTR
+                               — and either way the browser ISOLATES it, so it
+                               cannot drag the label's punctuation around it. */
+                            <span className="text-fg" dir="auto">{text}</span>
                           )}
-                        </span>
-                        <span>: </span>
-                        <span className="ltr font-mono text-fg">
-                          {detailValue(key, value)}
-                        </span>
-                      </li>
-                    ))}
+                        </li>
+                      );
+                    })}
                   </ul>
                 ),
               },
