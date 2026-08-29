@@ -90,14 +90,19 @@ describe("the Tailwind theme derives from the scaffold constants", () => {
     expect(spacing["page-menu"]).toBe(`${SCAFFOLD.page.menuTop / 16}rem`);
   });
 
-  it("the SECTION SCROLL's height is derived from the same block", () => {
-    /* one number, one home: the height a section body ends at is
-       `SCAFFOLD.page.sectionReserve`, and the theme emits it in the rem the
-       rest of the chrome is measured in. A hand-typed calc on either side
-       goes red here — verified by changing the constant and watching this
-       fail. */
-    expect(theme.maxHeight.section)
-      .toBe(`calc(100dvh - ${rem(SCAFFOLD.page.sectionReserve)})`);
+  it("a section body takes the space LEFT, and computes no ceiling", () => {
+    /*
+     * The cap used to be arithmetic — the viewport minus a reserve in rem
+     * that stood for the title, the player and the section header. It was
+     * measured on one window height and was wrong on a shorter one, which
+     * put the whole page back into scroll mode. This asserts the mechanism
+     * that replaced it: leftover space, no number.
+     */
+    const { container } = render(<SectionScroller>body</SectionScroller>);
+    const box = container.querySelector("[data-section-scroll]")!;
+    expect(box.className).toContain("flex-1");
+    expect(box.className).toContain("min-h-0");
+    expect(box.className).not.toMatch(/max-h-/);
   });
 
   it("keeps the menu heading and the page title on one line", () => {
@@ -281,15 +286,15 @@ describe("SectionScroller — a section body ends at the viewport", () => {
     expect(rule).toContain("max-height: none !important");
   });
 
-  it("takes its height from the theme, never a literal of its own", () => {
+  it("never writes a height literal of its own", () => {
     /* the fork this component exists to prevent: `max-h-[calc(…)]` written
-       at a call site. If the class ever becomes a literal here, the rhythm
-       guard cannot see it (it polices the NAME) — so the name is pinned. */
+       at a call site — the shape that put the page back into scroll mode
+       when its arithmetic missed by a few pixels. There is no ceiling to
+       fork now, and this keeps one from growing back. */
     const { container } = render(<SectionScroller><p>x</p></SectionScroller>);
     const classes = (container.firstElementChild as HTMLElement).className.split(" ");
-    expect(classes).toContain("max-h-section");
     expect(classes).toContain("overflow-y-auto");
-    expect(classes.filter((c) => c.startsWith("max-h-["))).toEqual([]);
+    expect(classes.filter((c) => c.startsWith("max-h-"))).toEqual([]);
   });
 });
 

@@ -16,9 +16,26 @@ import type { ReactNode } from "react";
  */
 export function PageContainer({
   width = "default",
+  fill = false,
   children,
 }: {
   width?: "default" | "wide" | "full";
+  /**
+   * Fill the height the shell grants instead of growing with the content.
+   *
+   * Opt-in, because it changes what a page IS: a filling page never makes
+   * the shell's content column scroll — its own body does. The record
+   * screen is the case it exists for (a player and a section menu must not
+   * walk off the top while a transcript is read), and any page that wants
+   * the same must say so, rather than every page silently inheriting a
+   * height model it was not designed for.
+   *
+   * It needs no `md:` guard: the shell's content column is only bounded
+   * from md up (`md:h-full`), so below md `h-full` resolves against an auto
+   * height, the sections keep their natural size, and the mobile layout
+   * scrolls as one page exactly as before.
+   */
+  fill?: boolean;
   children: ReactNode;
 }) {
   const max =
@@ -36,7 +53,11 @@ export function PageContainer({
    * this, so the two headings stay on one line (2026-08-18).
    */
   return (
-    <div className={`mx-auto w-full ${max} px-page-inline pb-page-bottom pt-page-sm md:px-page-inline-md md:pt-page`}>
+    <div
+      className={`mx-auto w-full ${max} px-page-inline pb-page-bottom pt-page-sm md:px-page-inline-md md:pt-page${
+        fill ? " flex h-full min-h-0 flex-col" : ""
+      }`}
+    >
       {children}
     </div>
   );

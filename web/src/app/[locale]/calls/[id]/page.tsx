@@ -1222,8 +1222,17 @@ export default function CallDetailPage({
         side, so it could not follow the theme when the theme moved, and on
         a wide screen it was a different inset from every other page.
       */}
-      <PageContainer>
-      <Card className="!p-0">
+      {/*
+        FILL, not grow (2026-08-29, user: "it still does the scroll mode in
+        transcription page for the main page ... only the table of
+        transcription should go to scroll mode as we agreed"). The card is
+        the height the shell grants, its header and player are fixed, and
+        the open section's body is the only thing that scrolls. Nothing here
+        computes a height — see SectionScroller for why the arithmetic that
+        used to went away.
+      */}
+      <PageContainer fill>
+      <Card className="flex min-h-0 flex-1 flex-col !p-0">
         {/* ── header: title · date · ⋯ ─────────────────────────────────── */}
         <div className="px-5 pb-4 pt-5">
           <div className="flex items-start justify-between gap-3">
@@ -1467,7 +1476,7 @@ export default function CallDetailPage({
 
         {/* ── the summary document (its own SECTION since 2026-08-25) ──── */}
         {section === "summary" ? (
-        <section className="border-t border-border px-5 py-4">
+        <section className="flex min-h-0 flex-1 flex-col border-t border-border px-5 py-4">
           <div className="no-print mb-3 flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-sm font-semibold text-fg">{t("summary")}</h2>
             <div className="flex flex-wrap items-center gap-1.5">
@@ -1667,7 +1676,7 @@ export default function CallDetailPage({
 
         {/* ── the transcript (the menu's second section) ────────────────── */}
         {section === "transcript" ? (
-        <section className="border-t border-border">
+        <section className="flex min-h-0 flex-1 flex-col border-t border-border">
           <div className="no-print border-b border-border px-5 py-3">
             <div className="flex items-center gap-3">
               <h2 className="text-sm font-semibold text-fg">{t("transcript")}</h2>
@@ -2163,7 +2172,7 @@ export default function CallDetailPage({
             Since 2026-08-28 each lane also TAKES items — through the 0092
             door, into the document the lanes are read from ──────────────── */}
         {section === "actions" ? (
-          <section className="border-t border-border px-5 py-4">
+          <section className="flex min-h-0 flex-1 flex-col border-t border-border px-5 py-4">
             <div className="no-print mb-3 flex items-center justify-between gap-2">
               <h2 className="text-sm font-semibold text-fg">{t("sectionActions")}</h2>
               <KebabMenu label={t("actionsMenu")} items={actionsMenuItems} />
@@ -2254,7 +2263,7 @@ export default function CallDetailPage({
             hides the composer would say "nothing here" while withholding
             the way to change that ─────────────────────────────────────── */}
         {section === "notes" ? (
-          <section className="border-t border-border px-5 py-4">
+          <section className="flex min-h-0 flex-1 flex-col border-t border-border px-5 py-4">
             <div className="no-print mb-3 flex items-center justify-between gap-2">
               <h2 className="text-sm font-semibold text-fg">{t("notesHeading")}</h2>
               <KebabMenu label={t("notesMenu")} items={notesMenuItems} />

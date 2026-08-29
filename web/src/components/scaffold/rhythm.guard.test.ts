@@ -40,7 +40,6 @@ const RHYTHM = [
      `max-h-[calc(100dvh-13rem)]`, and a section that picks its own height is
      the page column's story repeating one level down. `SectionScroller` is
      the only place this may be written. */
-  "max-h-section",
 ];
 
 /**
