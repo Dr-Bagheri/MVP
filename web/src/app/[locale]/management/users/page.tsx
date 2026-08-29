@@ -438,8 +438,24 @@ export default function UsersPage() {
                 {
                   key: "name",
                   header: t("colName"),
+                  /*
+                   * The HANDLE moved in here under the name, and its own
+                   * column went (user directive, 2026-08-29: the table must
+                   * fit without scrolling sideways).
+                   *
+                   * It is the column that could most afford to go: nearly
+                   * every cell in it read "—", so it was spending the widest
+                   * thing a table has — horizontal room — on a placeholder.
+                   * Under the name it costs nothing when absent, because the
+                   * row is already as tall as a name.
+                   */
                   cell: (u) => (
-                    <span className="font-medium text-fg">{personName(u, locale)}</span>
+                    <span className="block leading-tight">
+                      <span className="block font-medium text-fg">{personName(u, locale)}</span>
+                      {u.username ? (
+                        <span className="ltr block text-[11px] text-fg-subtle">@{u.username}</span>
+                      ) : null}
+                    </span>
                   ),
                 },
                 {
@@ -447,14 +463,6 @@ export default function UsersPage() {
                   header: t("colEmail"),
                   className: "text-xs text-fg-muted",
                   cell: (u) => <span className="ltr">{u.email}</span>,
-                },
-                {
-                  key: "username",
-                  header: t("colUsername"),
-                  className: "text-xs text-fg-muted",
-                  /* a column keeps its placeholder so the rows stay
-                     aligned; "@" with nothing after it is not a handle */
-                  cell: (u) => (u.username ? `@${u.username}` : "—"),
                 },
                 {
                   key: "status",
@@ -470,6 +478,33 @@ export default function UsersPage() {
                       <Chip tone={statusTone(u.status)}>{statusLabel(u.status)}</Chip>
                     ),
                 },
+                ...(presenceServed
+                  ? [{
+                      key: "online",
+                      header: t("colOnline"),
+                      headClassName: "whitespace-nowrap",
+                      /*
+                       * Beside STATUS, because the two answer the same kind
+                       * of question about a person and a reader compares them
+                       * (user directive). And on the SAME `StatusDot` the
+                       * status cell uses — the first version hand-rolled its
+                       * own `h-2 w-2` dot beside a component whose dot is
+                       * `h-1.5`, and the mismatch was visible enough that the
+                       * user asked for it to be fixed. One component is the
+                       * only version of "the same size" that stays true.
+                       *
+                       * Offline is `muted`, not absent: a person who is not
+                       * here is a fact, and a blank cell reads as missing
+                       * data.
+                       */
+                      cell: (u: User) => (
+                        <StatusDot
+                          label={u.signed_in === true ? t("onlineYes") : t("onlineNo")}
+                          tone={u.signed_in === true ? "success" : "muted"}
+                        />
+                      ),
+                    }]
+                  : []),
                 {
                   key: "role",
                   header: t("colRole"),
@@ -517,29 +552,6 @@ export default function UsersPage() {
                            * indistinguishable from "nothing to show".
                            */
                           <span className="text-fg-muted/70">{t("neverSeen")}</span>
-                        ),
-                    }]
-                  : []),
-                ...(presenceServed
-                  ? [{
-                      key: "signedIn",
-                      header: t("colSignedIn"),
-                      headClassName: "whitespace-nowrap",
-                      className: "text-xs",
-                      cell: (u: User) =>
-                        u.signed_in === true ? (
-                          <span className="inline-flex items-center gap-1.5 text-fg">
-                            {/* a dot, not a word, because the column is scanned
-                                down rather than read across — and it carries a
-                                text label for anyone not reading colour */}
-                            <span
-                              aria-hidden
-                              className="inline-block h-2 w-2 rounded-full bg-success"
-                            />
-                            {t("signedInYes")}
-                          </span>
-                        ) : (
-                          <span className="text-fg-muted/70">{t("signedInNo")}</span>
                         ),
                     }]
                   : []),

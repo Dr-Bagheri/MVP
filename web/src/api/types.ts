@@ -1177,6 +1177,20 @@ export interface AuthSessionRow {
 export interface OrgSessionRow extends AuthSessionRow {
   user_id: string;
   can_end: boolean;
+  /**
+   * Heard from inside `echo.online_window()` — db/0138.
+   *
+   * The SESSION's own last sign of life, not its owner's, so a person
+   * active on their phone leaves the laptop's row offline. That is the row
+   * being about a device; the Users column beside it is about a person, and
+   * the two are allowed to differ because they are answering about
+   * different things.
+   *
+   * Distinct from the list's own filter, which is still "can this session
+   * still refresh" — a device that can get back in belongs on a list of
+   * devices whether or not anyone is holding it right now.
+   */
+  online: boolean;
   /* both names, resolved per locale by `personName()` — one rule, one
      implementation, rather than a server-side copy that would show up as
      one screen calling someone by a different name than every other */

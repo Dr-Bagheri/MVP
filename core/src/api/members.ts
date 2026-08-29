@@ -948,24 +948,29 @@ export function createMembersRepo(db: Db) {
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<Record<string, unknown>>(
           /*
-           * PRESENCE IS JOINED ONLY FOR AN ADMIN, and the branch is the
-           * point rather than an optimisation.
+           * ONLINE IS `last_seen_at` INSIDE `echo.online_window()`, not
+           * "holds a session that could still refresh" (db/0138).
            *
-           * `echo.org_session_presence()` RAISES for a non-admin instead of
-           * returning an empty set, because an empty set here would render
-           * as "nobody in this org is signed in" — a claim about the
-           * organisation assembled out of a fact about the caller's
-           * permissions. So a member's query must not ask at all, and their
-           * rows carry no `signed_in` column, which `toMember` turns into
-           * null: the question was not asked, not answered no.
+           * The first version of this joined a presence function built on
+           * the second definition, and the user read the result off the
+           * screen: seventeen sessions called live, one person actually
+           * there. A refresh token stays valid for weeks after a laptop
+           * closes, so "could still sign in" and "is here now" are
+           * different questions that had one answer.
            *
-           * A LEFT JOIN, so someone with no live session is a row with a
-           * null count rather than a missing row — a filter here would
-           * quietly shorten the directory to whoever happens to be online.
+           * `last_seen_at` is our OWN request path — it moves when someone
+           * uses the product, and deliberately not for gateway-key traffic,
+           * so a polling integration cannot make its owner look permanently
+           * present. The window lives in the database so this list and the
+           * sessions list cannot drift into two thresholds.
+           *
+           * Still admin-only, and still a BRANCH rather than a filter: a
+           * member's rows carry no `signed_in` column at all, which
+           * `toMember` turns into null — the question was not asked, not
+           * answered no.
            */
-          `select ${MEMBER_COLUMNS}${withPresence ? ", (p.user_id is not null) as signed_in" : ""}
+          `select ${MEMBER_COLUMNS}${withPresence ? ", (u.last_seen_at > now() - echo.online_window()) as signed_in" : ""}
              from echo.app_user u
-             ${withPresence ? "left join echo.org_session_presence() p on p.user_id = u.id" : ""}
             where u.tombstoned_at is null
               and ($1::text is null
                    or u.display_name ilike $1 escape '\\'

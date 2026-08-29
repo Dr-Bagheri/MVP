@@ -1833,9 +1833,6 @@
     "modelsActiveCount": "{n} models allowed",
     "modelsNoCuration": "No models chosen — members may use any model the platform offers. Add one to start curating.",
     "modelsSaveFailed": "That change was not saved.",
-    "colSignedIn": "Signed in",
-    "signedInYes": "Now",
-    "signedInNo": "No",
     "setPassword": "Set password",
     "passwordSetTitle": "Set a password for {name}",
     "passwordSetHint": "They will be signed out of every device, and you will need to give them the new password yourself — this does not email anyone.",
@@ -1847,7 +1844,10 @@
     "passwordSetBusy": "Setting…",
     "passwordSetDone": "Password set. Signed out of {count} device(s).",
     "passwordSetFailed": "Could not set the password.",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "colOnline": "Online",
+    "onlineYes": "Online",
+    "onlineNo": "Offline"
   },
   "settings": {
     "title": "Settings",
@@ -2188,7 +2188,10 @@
     "orgSessionsEmpty": "Nobody else has a device signed in.",
     "colPerson": "Person",
     "endOrgConfirmTitle": "End {person}’s session?",
-    "endOrgConfirmBody": "That device is signed out the next time it tries to refresh. They can sign in again."
+    "endOrgConfirmBody": "That device is signed out the next time it tries to refresh. They can sign in again.",
+    "colOnline": "Online",
+    "onlineYes": "Online",
+    "onlineNo": "Offline"
   },
   "signin": {
     "intro": "External sign-in methods for this platform — an admin or the owner can turn each on or off.",

@@ -15,31 +15,43 @@ reset role;
 -- session that CAN STILL REFRESH, so each needs an unrevoked token: a bare
 -- session row is a dead one, and a fixture that skipped this would be
 -- testing an empty list very thoroughly.
+-- Ids that differ in their FIRST EIGHT characters, because that prefix IS
+-- the display handle. The first version numbered them 99000000-…0001/2/3,
+-- which gave all three the same handle and made a lookup by handle return
+-- three rows — a fixture that could not represent the thing it was testing.
 insert into auth.sessions (id, user_id, created_at, updated_at, user_agent, ip)
-values ('99000000-0000-4000-8000-000000000001',
+values ('99a00000-0000-4000-8000-000000000001',
         '01000000-0000-4000-8000-000000000001', now(), now(),
         'Mozilla/5.0 Safari/605', '203.0.113.11'),
-       ('99000000-0000-4000-8000-000000000002',
+       ('99b00000-0000-4000-8000-000000000002',
         '06000000-0000-4000-8000-000000000006', now(), now(),
         'Mozilla/5.0 Chrome/140', '203.0.113.12'),
        -- and a MEMBER, seeded here rather than borrowed from 96's fixture.
        -- The first version of this file leaned on that one and went red:
        -- a check that depends on ambient data is a check that passes or
        -- fails on what ran before it, and this one must be runnable alone.
-       ('99000000-0000-4000-8000-000000000003',
+       ('99c00000-0000-4000-8000-000000000003',
         '02000000-0000-4000-8000-000000000002', now(), now(),
         'Mozilla/5.0 Firefox/141', '203.0.113.13');
 
 insert into auth.refresh_tokens (token, user_id, session_id, revoked, created_at, updated_at)
 values ('99-fixture-token-alice',
         '01000000-0000-4000-8000-000000000001',
-        '99000000-0000-4000-8000-000000000001', false, now(), now()),
+        '99a00000-0000-4000-8000-000000000001', false, now(), now()),
        ('99-fixture-token-dave',
         '06000000-0000-4000-8000-000000000006',
-        '99000000-0000-4000-8000-000000000002', false, now(), now()),
+        '99b00000-0000-4000-8000-000000000002', false, now(), now()),
        ('99-fixture-token-bob',
         '02000000-0000-4000-8000-000000000002',
-        '99000000-0000-4000-8000-000000000003', false, now(), now());
+        '99c00000-0000-4000-8000-000000000003', false, now(), now());
+
+-- 0138: two activity times, so ONLINE can be asserted in BOTH directions.
+-- A test that only proved "the active one reads online" would pass against
+-- an expression that returns true unconditionally.
+update echo.app_user set last_seen_at = now()
+ where id = '01000000-0000-4000-8000-000000000001';           -- alice: here now
+update echo.app_user set last_seen_at = now() - interval '2 hours'
+ where id = '02000000-0000-4000-8000-000000000002';           -- bob: long gone
 
 set local role echo_app;
 select t.ok(
@@ -54,10 +66,17 @@ select t.ok(
            where user_id = '01000000-0000-4000-8000-000000000001'),
   '0135: an admin SEES the owner''s session — a security surface that hides rows cannot be reasoned from');
 
+-- 0138: ONLINE is activity inside echo.online_window(), not "holds a
+-- session that could still refresh" — the presence function that answered
+-- the second question is dropped. This is the expression the members query
+-- uses, asserted on both sides of the window in one statement so it cannot
+-- pass against a constant.
 select t.ok(
-  exists (select 1 from echo.org_session_presence()
-           where user_id = '02000000-0000-4000-8000-000000000002'),
-  '0135: presence names a member who is signed in');
+  (select last_seen_at > now() - echo.online_window() from echo.app_user
+    where id = '01000000-0000-4000-8000-000000000001')
+  and not (select last_seen_at > now() - echo.online_window() from echo.app_user
+            where id = '02000000-0000-4000-8000-000000000002'),
+  '0138: online is activity inside the window — true for the present, false for the absent');
 
 -- The property the whole feature turns on, asserted as a DIFFERENCE rather
 -- than as two separate truths: the same admin, the same list, two answers.
@@ -70,13 +89,13 @@ select t.ok(
 
 -- ─── ending is rank-bound ───────────────────────────────────────────────
 select t.denied(
-  $$select echo.end_member_session('01000000-0000-4000-8000-000000000001', '99000000')$$,
+  $$select echo.end_member_session('01000000-0000-4000-8000-000000000001', '99b00000')$$,
   '0135: an admin cannot end the OWNER''s session');
 
 -- same rank is not "outranks": strictly-greater is the rule (0077)
 select set_config('echo.actor_id', '01000000-0000-4000-8000-000000000001', true); -- alice (owner)
 select t.ok(
-  echo.end_member_session('06000000-0000-4000-8000-000000000006', '99000000'),
+  echo.end_member_session('06000000-0000-4000-8000-000000000006', '99b00000'),
   '0135: the owner ends the admin''s session');
 
 select t.ok(
@@ -93,11 +112,17 @@ select set_config('echo.actor_id', '02000000-0000-4000-8000-000000000002', true)
 select t.denied(
   $$select * from echo.org_auth_sessions()$$,
   '0135: a member cannot read the org''s sessions — and is refused, not answered empty');
+-- and the SESSION's own online flag is per-device, not per-person: this
+-- file's seeded rows were created seconds ago, so they are inside the
+-- window, while the fixture's older sessions are not
+select set_config('echo.actor_id', '06000000-0000-4000-8000-000000000006', true); -- dave
+select t.ok(
+  (select online from echo.org_auth_sessions()
+    where handle = '99a00000') is true,
+  '0138: a session seeded moments ago reads ONLINE');
+select set_config('echo.actor_id', '02000000-0000-4000-8000-000000000002', true); -- bob
 select t.denied(
-  $$select * from echo.org_session_presence()$$,
-  '0135: a member cannot read presence either');
-select t.denied(
-  $$select echo.end_member_session('01000000-0000-4000-8000-000000000001', '99000000')$$,
+  $$select echo.end_member_session('01000000-0000-4000-8000-000000000001', '99b00000')$$,
   '0135: a member cannot end anyone else''s session');
 
 -- their OWN is still theirs, through the door that was always for that
@@ -133,6 +158,6 @@ reset role;
 
 -- sweep this file's own residue (alice's row; dave's was ended by the test)
 delete from auth.sessions
- where id in ('99000000-0000-4000-8000-000000000001',
-              '99000000-0000-4000-8000-000000000002',
-              '99000000-0000-4000-8000-000000000003');
+ where id in ('99a00000-0000-4000-8000-000000000001',
+              '99b00000-0000-4000-8000-000000000002',
+              '99c00000-0000-4000-8000-000000000003');

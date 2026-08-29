@@ -6,7 +6,7 @@ import { api } from "@/api/client";
 import type { AuthSessionRow, OrgSessionRow, User } from "@/api/types";
 import { ConfirmDialog } from "@/components/rowActions";
 import { notify } from "@/lib/notify";
-import { DataTable } from "@/components/DataTable";
+import { DataTable, StatusDot } from "@/components/DataTable";
 import { IconClose } from "@/components/icons";
 import { Card, Chip } from "@/components/ui";
 import { formatDate, formatTime, personName } from "@/lib/format";
@@ -241,6 +241,19 @@ export function SecuritySettings() {
                           <Chip tone="success">{t("thisDevice")}</Chip>
                         ) : null}
                       </span>
+                    ),
+                  },
+                  {
+                    key: "online",
+                    header: t("colOnline"),
+                    headClassName: "whitespace-nowrap",
+                    /* the same StatusDot the members list uses, so "online"
+                       looks identical wherever it is said */
+                    cell: (session) => (
+                      <StatusDot
+                        label={session.online ? t("onlineYes") : t("onlineNo")}
+                        tone={session.online ? "success" : "muted"}
+                      />
                     ),
                   },
                   {

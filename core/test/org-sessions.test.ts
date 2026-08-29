@@ -7,6 +7,11 @@
  * layer above it: that the API asks the right question, of the right door,
  * and that the members list does not ask a question a member may not ask.
  *
+ * ONLINE means active inside `echo.online_window()`, not "holds a session
+ * that could still refresh" (db/0138). The first version used the second
+ * definition and the user read the result off the screen: seventeen sessions
+ * called live, one person actually there.
+ *
  * The property worth naming, because it is what makes the feature honest:
  * reading is org-wide and ending is rank-bound, so `can_end` genuinely
  * differs per row. Measured on the live database — the owner sees 17
@@ -66,17 +71,17 @@ const listSql = (log: { sql: string }[]) =>
   log.find((l) => l.sql.includes("from echo.app_user"))?.sql ?? "";
 
 describe("the members list asks for presence only when it may", () => {
-  it("joins org_session_presence for an ADMIN", async () => {
+  it("asks the online question for an ADMIN", async () => {
     const { db, log } = fakeDb(() => [{ ...ROW, signed_in: true }]);
     const rows = await createMembersRepo(db).list(ADMIN);
-    expect(listSql(log)).toContain("echo.org_session_presence()");
+    expect(listSql(log)).toContain("echo.online_window()");
     expect(rows[0]?.signed_in).toBe(true);
   });
 
-  it("joins org_session_presence for an OWNER — M23's rank is not just 'admin'", async () => {
+  it("asks it for an OWNER too — M23's rank is not just 'admin'", async () => {
     const { db, log } = fakeDb(() => [{ ...ROW, signed_in: false }]);
     const rows = await createMembersRepo(db).list(OWNER);
-    expect(listSql(log)).toContain("echo.org_session_presence()");
+    expect(listSql(log)).toContain("echo.online_window()");
     expect(rows[0]?.signed_in).toBe(false);
   });
 
@@ -90,7 +95,7 @@ describe("the members list asks for presence only when it may", () => {
      */
     const { db, log } = fakeDb(() => [ROW]);
     const rows = await createMembersRepo(db).list(MEMBER);
-    expect(listSql(log)).not.toContain("org_session_presence");
+    expect(listSql(log)).not.toContain("online_window");
     expect(rows[0]?.signed_in).toBeNull();
   });
 
