@@ -237,4 +237,31 @@ describe("attaching and detaching", () => {
     expect(engineWorkflows).toHaveBeenCalled();
     expect(authoredWorkflows).toHaveBeenCalled();
   });
+
+  it("leaves a RENAMED workflow's name alone", async () => {
+    /*
+     * The half of the localization rule that a Persian-only test harness CAN
+     * see, and it is the half worth guarding: localizing by handle must
+     * never reach words a person chose. `workflowCopy` substitutes the
+     * catalogue only while the stored name still equals the seeded one — an
+     * org that renamed a shipped starter keeps its own words in every
+     * locale, and a helper that overwrote them would be worse than the bug
+     * it fixed.
+     *
+     * The other half — that a shipped starter renders in ENGLISH for an
+     * English reader — cannot be asserted here: the stub is Persian-only, so
+     * the catalogue string and the stored string are the same characters and
+     * a raw render is indistinguishable from a localized one. That direction
+     * is covered by `agentSurfaces.copy.test.ts`, which reads the source.
+     */
+    agentWorkflows.mockResolvedValue([
+      { id: "wf-8", handle: "our-own-thing", name: "STORED-NOT-CATALOGUE" },
+    ]);
+    engineWorkflows.mockResolvedValue([]);
+    authoredWorkflows.mockResolvedValue([]);
+    me.mockResolvedValue(person("member"));
+
+    render(<AgentOverviewPanel agent={SYSTEM_AGENT} />);
+    expect(await screen.findByRole("link", { name: /STORED-NOT-CATALOGUE/ })).toBeTruthy();
+  });
 });

@@ -103,6 +103,9 @@ const SYSTEM_AGENT_KEYS: Readonly<Record<string, string>> = {
   sales: "sys_sales",
   interview: "sys_interview",
   manager: "sys_manager",
+  /* the 2026-08-29 wave (db/0139): the recording itself as a subject */
+  recorder: "sys_recorder",
+  commitments: "sys_commitments",
 };
 
 export function useAgentCopy(): (agent: {

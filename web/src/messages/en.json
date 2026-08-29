@@ -1683,7 +1683,11 @@
     "sys_interview_name": "Interview agent",
     "sys_interview_desc": "Turns recorded interviews into scorecards, candidate comparisons and next-round questions — all with evidence from the conversation itself.",
     "sys_manager_name": "Manager agent",
-    "sys_manager_desc": "Builds the management view: decisions, everyone's load, risks and whatever is left unowned — from your own meetings."
+    "sys_manager_desc": "Builds the management view: decisions, everyone's load, risks and whatever is left unowned — from your own meetings.",
+    "sys_recorder_name": "Recording assistant",
+    "sys_recorder_desc": "About the take you just made: what it was about, what was decided, what is still open — and it can start a new recording when you ask.",
+    "sys_commitments_name": "Commitments assistant",
+    "sys_commitments_desc": "Pulls out who took on what, and by when, with the words from the conversation as evidence."
   },
   "management": {
     "title": "Management",

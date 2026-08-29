@@ -7,6 +7,7 @@ import type { AgentCard, AgentWorkflowLink, ModelInfo } from "@/api/types";
 import { Link } from "@/i18n/routing";
 import { Icon } from "@/components/icons";
 import { Chip } from "@/components/ui";
+import { useWorkflowCopy } from "@/lib/workflowName";
 import {
   AGENT_COLOR_CHOICES, AGENT_ICON_CHOICES,
   agentColorClasses, agentIconName, agentLevelTone, toolDescription,
@@ -77,6 +78,7 @@ export function AgentEditor({
    * the form that produces that request. A user-level agent in the list is
    * always the caller's own.
    */
+  const workflowCopy = useWorkflowCopy();
   const editable = agent === null || (agent.level === "user" ? true : agent.level === "org" ? isAdmin : false);
 
   /*
@@ -478,7 +480,10 @@ export function AgentEditor({
                   const body = (
                     <>
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-medium text-fg">{row.name}</span>
+                        {/* a shipped starter renders in the reader's
+                            language here too — these rows carry the Persian
+                            the starter was seeded with */}
+                        <span className="block truncate text-sm font-medium text-fg">{workflowCopy(row).name}</span>
                         <span className="block text-xs text-fg-subtle" dir="ltr">{row.handle}</span>
                       </span>
                       {!offeredIds.has(row.id) ? (

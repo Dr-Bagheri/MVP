@@ -331,7 +331,9 @@ export function AgentOverviewPanel({
                             htmlFor={boxId}
                             className="min-w-0 flex-1 truncate text-sm text-fg"
                           >
-                            {row.name}
+                            {/* see the read-only list below: a shipped
+                                starter renders in the reader's language */}
+                            {workflowCopy(row).name}
                           </label>
                           <Link
                             href={`/workflows/${row.handle}`}
@@ -369,7 +371,16 @@ export function AgentOverviewPanel({
                         href={`/workflows/${workflow.handle}`}
                         className="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2 text-sm text-fg transition-colors hover:border-accent hover:text-accent"
                       >
-                        <span className="truncate">{workflow.name}</span>
+                        {/*
+                          A SHIPPED starter renders in the reader's language wherever it
+   appears. These rows come from echo.workflow, whose `name` is the
+   Persian the starter was seeded with — so rendering the stored
+   string put Persian names in the English UI, directly above a
+   catalogue list that localized correctly. `workflowCopy` returns the
+   stored words untouched for a workflow an org authored, and the
+   catalogue's words for one we shipped.
+                        */}
+                        <span className="truncate">{workflowCopy(workflow).name}</span>
                         <span className="shrink-0 text-xs text-fg-subtle" dir="ltr">{workflow.handle}</span>
                       </Link>
                     </li>
