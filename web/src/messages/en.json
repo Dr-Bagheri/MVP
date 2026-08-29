@@ -58,7 +58,9 @@
     "suspendedBody": "This is not about your account, and an organization admin cannot lift it. Contact NeurAI support to restore access.",
     "suspendedContact": "Contact NeurAI support",
     "resetReady": "Your password is set. Sign in with it now.",
-    "oauthDisabled": "This sign-in method has been turned off by an admin — sign in with email."
+    "oauthDisabled": "This sign-in method has been turned off by an admin — sign in with email.",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password"
   },
   "calls": {
     "title": "Records",
@@ -1017,7 +1019,9 @@
     "traceUnavailable": "The trace is not available.",
     "traceNoTools": "No tools were used — answered directly.",
     "speak": "Read aloud",
-    "thinking": "Thinking…"
+    "thinking": "Thinking…",
+    "record": "Record",
+    "startRecording": "Start recording a call"
   },
   "platformRoot": {
     "menu": "Platform control",
@@ -1831,7 +1835,19 @@
     "modelsSaveFailed": "That change was not saved.",
     "colSignedIn": "Signed in",
     "signedInYes": "Now",
-    "signedInNo": "No"
+    "signedInNo": "No",
+    "setPassword": "Set password",
+    "passwordSetTitle": "Set a password for {name}",
+    "passwordSetHint": "They will be signed out of every device, and you will need to give them the new password yourself — this does not email anyone.",
+    "passwordSetNew": "New password",
+    "passwordSetRule": "At least 8 characters.",
+    "passwordSetConfirm": "Confirm password",
+    "passwordSetMismatch": "The two passwords do not match.",
+    "passwordSetConfirmAction": "Set password",
+    "passwordSetBusy": "Setting…",
+    "passwordSetDone": "Password set. Signed out of {count} device(s).",
+    "passwordSetFailed": "Could not set the password.",
+    "cancel": "Cancel"
   },
   "settings": {
     "title": "Settings",

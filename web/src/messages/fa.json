@@ -58,7 +58,9 @@
     "suspendedBody": "این وضعیت به حساب شما مربوط نیست و مدیر سازمان نمی‌تواند آن را باز کند. برای رفع آن با پشتیبانی نورای تماس بگیرید.",
     "suspendedContact": "تماس با پشتیبانی نورای",
     "resetReady": "رمز شما تنظیم شد. حالا با همان رمز وارد شوید.",
-    "oauthDisabled": "این روش ورود توسط مدیر غیرفعال شده است — با ایمیل وارد شوید."
+    "oauthDisabled": "این روش ورود توسط مدیر غیرفعال شده است — با ایمیل وارد شوید.",
+    "showPassword": "نمایش گذرواژه",
+    "hidePassword": "پنهان کردن گذرواژه"
   },
   "calls": {
     "title": "ضبط‌ها",
@@ -1017,7 +1019,9 @@
     "traceUnavailable": "ردپا در دسترس نیست.",
     "traceNoTools": "ابزاری به کار نرفت — مستقیم پاسخ داده شد.",
     "speak": "خواندن با صدا",
-    "thinking": "در حال فکر کردن…"
+    "thinking": "در حال فکر کردن…",
+    "record": "ضبط",
+    "startRecording": "شروع ضبط یک تماس"
   },
   "platformRoot": {
     "menu": "کنترل پلتفرم",
@@ -1831,7 +1835,19 @@
     "modelsSaveFailed": "این تغییر ذخیره نشد.",
     "colSignedIn": "ورود فعال",
     "signedInYes": "هم‌اکنون",
-    "signedInNo": "خیر"
+    "signedInNo": "خیر",
+    "setPassword": "تعیین گذرواژه",
+    "passwordSetTitle": "تعیین گذرواژه برای {name}",
+    "passwordSetHint": "این شخص از همهٔ دستگاه‌ها خارج می‌شود و گذرواژهٔ تازه را باید خودتان به او بدهید — ایمیلی فرستاده نمی‌شود.",
+    "passwordSetNew": "گذرواژهٔ تازه",
+    "passwordSetRule": "دست‌کم ۸ نویسه.",
+    "passwordSetConfirm": "تکرار گذرواژه",
+    "passwordSetMismatch": "دو گذرواژه یکسان نیستند.",
+    "passwordSetConfirmAction": "تعیین گذرواژه",
+    "passwordSetBusy": "در حال تعیین…",
+    "passwordSetDone": "گذرواژه تعیین شد. خروج از {count} دستگاه.",
+    "passwordSetFailed": "تعیین گذرواژه ممکن نشد.",
+    "cancel": "انصراف"
   },
   "settings": {
     "title": "تنظیمات",

@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { api, BffError } from "@/api/client";
 import { FormPanel, FormRow, PanelFooter } from "@/components/scaffold";
 import { Chip } from "@/components/ui";
+import { PasswordInput } from "@/components/PasswordInput";
 
 /**
  * Change your own password, from inside the product.
@@ -65,39 +66,30 @@ export function ChangePassword() {
     <form onSubmit={submit}>
       <FormPanel>
         <FormRow label={t("current")} htmlFor="pw-current">
-          <input
+          <PasswordInput
             id="pw-current"
-            className="input"
-            dir="ltr"
-            type="password"
             value={current}
-            onChange={(e) => setCurrent(e.target.value)}
+            onChange={setCurrent}
             autoComplete="current-password"
           />
         </FormRow>
         <FormRow label={t("new")} htmlFor="pw-new">
-          <input
+          <PasswordInput
             id="pw-new"
-            className="input"
-            dir="ltr"
-            type="password"
             value={next}
-            onChange={(e) => setNext(e.target.value)}
+            onChange={setNext}
             autoComplete="new-password"
           />
         </FormRow>
         <FormRow label={t("confirm")} htmlFor="pw-confirm">
           <div className="w-full">
-            <input
+            <PasswordInput
               id="pw-confirm"
-              className="input"
-              dir="ltr"
-              type="password"
               value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
+              onChange={setConfirm}
               autoComplete="new-password"
-              aria-invalid={mismatch || undefined}
-              aria-describedby={mismatch ? "password-mismatch" : undefined}
+              aria-invalid={mismatch}
+              {...(mismatch ? { "aria-describedby": "password-mismatch" } : {})}
             />
             {mismatch ? (
               <span id="password-mismatch" className="mt-1 block text-xs text-danger">

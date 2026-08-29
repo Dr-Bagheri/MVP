@@ -16,8 +16,9 @@ import { MemberDetail } from "@/components/platform/MemberDetail";
 import { Card, Chip, EmptyState } from "@/components/ui";
 import { ConfirmDialog, SelectMenu } from "@/components/rowActions";
 import { DataTable, StatusDot } from "@/components/DataTable";
-import { IconPencil, IconToggleOff, IconToggleOn, IconTrash } from "@/components/icons";
+import { IconKey, IconPencil, IconToggleOff, IconToggleOn, IconTrash } from "@/components/icons";
 import { digits, formatDate, personName } from "@/lib/format";
+import { SetMemberPassword } from "@/components/platform/SetMemberPassword";
 
 /**
  * User management (M24) — the platform-level people surface.
@@ -134,6 +135,26 @@ export default function UsersPage() {
    * a column of "signed out" for an org that is mostly online.
    */
   const presenceServed = rows.some((m) => typeof m.signed_in === "boolean");
+
+  /** the member whose password is being set, if any */
+  const [passwordFor, setPasswordFor] = useState<User | null>(null);
+
+  /*
+   * STRICTLY outranked, and never yourself — the same rule db/0137 enforces,
+   * spelled here only to decide what to OFFER.
+   *
+   * Self is excluded deliberately rather than by omission: your own password
+   * changes in Settings, where it asks for the CURRENT one, and that check is
+   * what stops a hijacked session locking you out. An admin door does not ask
+   * for it, so offering this at yourself would route around the only thing
+   * protecting the self path. The database refuses it either way; this keeps
+   * the menu from promising otherwise.
+   */
+  const canSetPasswordFor = (u: User): boolean => {
+    if (!me || u.id === me.id) return false;
+    const rank = (r: User["role"]): number => (r === "owner" ? 3 : r === "admin" ? 2 : 1);
+    return rank(me.role) > rank(u.role);
+  };
   const pending = rows.filter((m) => m.status === "pending");
   const listed = rows.filter((m) => m.status !== "pending");
 
@@ -394,6 +415,14 @@ export default function UsersPage() {
                       onSelect: () => void toggleStatusFor(u),
                     }]
                   : []),
+                ...(canSetPasswordFor(u)
+                  ? [{
+                      key: "password",
+                      label: t("setPassword"),
+                      icon: <IconKey />,
+                      onSelect: () => setPasswordFor(u),
+                    }]
+                  : []),
                 ...(me?.role === "owner" && u.role !== "owner" && u.id !== me?.id
                   ? [{
                       key: "delete",
@@ -584,6 +613,18 @@ export default function UsersPage() {
               const target = confirmDeleteMember;
               setConfirmDeleteMember(null);
               void deleteMemberFor(target, "حذف با تأیید کاربر در پنجرهٔ تأیید");
+            }}
+          />
+        ) : null}
+
+        {passwordFor ? (
+          <SetMemberPassword
+            member={passwordFor}
+            onClose={() => {
+              setPasswordFor(null);
+              /* re-read: the reset ended their sessions, so this person's
+                 signed-in cell is now stale on the row behind the dialog */
+              void load();
             }}
           />
         ) : null}

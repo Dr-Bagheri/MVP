@@ -30,6 +30,7 @@ import { createCallsRepo, type CallsRepo } from "./calls.ts";
 import { ConflictError, mapError, NotActivatedError, NotFoundError, pgErrorFields, ValidationError } from "./errors.ts";
 import { reportError } from "../observe/watchtower.ts";
 import { createMembersRepo, type MembersRepo } from "./members.ts";
+import { createMemberPasswordRepo } from "./member-password.ts";
 import { createModelsRepo, firstServable, type ModelsRepo } from "./models.ts";
 import { createPlatformRepo, type PlatformRepo } from "./platform.ts";
 import { createTranscriptsRepo, type TranscriptsRepo } from "./transcripts.ts";
@@ -120,6 +121,10 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
   const models: ModelsRepo = createModelsRepo(options.db);
   const members: MembersRepo = createMembersRepo(options.db);
   const keys: ApiKeysRepo = createApiKeysRepo(options.db);
+  const memberPassword = createMemberPasswordRepo(options.db, {
+    supabaseUrl: process.env.SUPABASE_URL,
+    serviceKey: options.storageServiceKey,
+  });
   const audit: AuditRepo = createAuditRepo(options.db);
   /* db/0101 — member privileges. A NARROWING layer: it refuses actions the
      database would have allowed, and can never widen anything. */
@@ -794,6 +799,27 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
    * that itself would eventually disagree with the database in front of a
    * user.
    */
+  /**
+   * 0137 — an admin or owner sets a member's password.
+   *
+   * `requireAdmin` gates the door; the RANK rule inside decides which
+   * members are reachable through it, and the database re-asks the same
+   * question when the sessions are torn down. The body is the password and
+   * nothing else — no "notify" flag, no "force change" flag: both would be
+   * promises this deployment cannot keep today, and a checkbox that does
+   * nothing is worse than its absence.
+   */
+  app.put("/v1/admin/members/:id/password", async (request, reply) => {
+    const identity = await auth.requireAdmin(request);
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { password?: unknown };
+    if (typeof body.password !== "string") {
+      throw new ValidationError("password is required");
+    }
+    const result = await memberPassword.set(identity, id, body.password);
+    return reply.send(result);
+  });
+
   app.get("/v1/admin/sessions", async (request, reply) => {
     const identity = await auth.requireAdmin(request);
     /*

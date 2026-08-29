@@ -105,6 +105,30 @@ select t.ok(
   exists (select 1 from echo.my_auth_sessions() where ip = '203.0.113.13'),
   '0135: a member still sees their own session — the new doors took nothing away');
 
+-- ─── 0137: ending EVERY session, the password reset's other half ────────
+-- The rule here is STRICTER than 0135's: strictly outranked, with NO self
+-- case. A person changing their own password goes through Settings, which
+-- asks for the CURRENT one — routing through an admin door at yourself
+-- would skip exactly that check, which is the whole security of the self
+-- path.
+select t.denied(
+  $$select echo.end_all_member_sessions('02000000-0000-4000-8000-000000000002')$$,
+  '0137: a member cannot end all of their OWN sessions through the admin door');
+
+select set_config('echo.actor_id', '06000000-0000-4000-8000-000000000006', true); -- dave (admin)
+select t.denied(
+  $$select echo.end_all_member_sessions('01000000-0000-4000-8000-000000000001')$$,
+  '0137: an admin cannot end all of the OWNER''s sessions');
+
+select t.ok(
+  echo.end_all_member_sessions('02000000-0000-4000-8000-000000000002') >= 1,
+  '0137: an admin ends every session of a member they outrank');
+
+select set_config('echo.actor_id', '02000000-0000-4000-8000-000000000002', true); -- bob
+select t.ok(
+  (select count(*) from echo.my_auth_sessions()) = 0,
+  '0137: and the member has none left — the reset actually closed the door');
+
 reset role;
 
 -- sweep this file's own residue (alice's row; dave's was ended by the test)

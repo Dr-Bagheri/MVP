@@ -63,6 +63,13 @@ export const ADMIN_ACTIONS = [
    *  a name is a person). */
   "member_renamed",
   "member_accepted",
+  /** An admin set a member's password (0137). The password itself is never
+   *  recorded, obviously — but neither is anything about it: no length, no
+   *  strength score, no hash prefix. What the log carries is that it
+   *  happened, to whom, by whom, and how many sessions the reset ended,
+   *  because that last number is the part an auditor is actually reading
+   *  for. */
+  "member_password_set",
   "member_deleted",
   "invitation_issued",
   "invitation_revoked",

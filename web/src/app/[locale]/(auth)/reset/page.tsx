@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/routing";
 import { api, BffError } from "@/api/client";
 import { Card, Field } from "@/components/ui";
+import { PasswordInput } from "@/components/PasswordInput";
 
 /**
  * The recovery link's landing page — **the consumer that did not exist.**
@@ -117,24 +118,18 @@ export default function ResetPasswordPage() {
 
       <form className="mt-4 space-y-4" onSubmit={submit}>
         <Field label={t("new")}>
-          <input
-            className="input"
-            dir="ltr"
-            type="password"
-            value={next}
-            onChange={(e) => setNext(e.target.value)}
-            autoComplete="new-password"
-          />
+          <PasswordInput
+              value={next}
+              onChange={setNext}
+              autoComplete="new-password"
+            />
         </Field>
         <Field label={t("confirm")}>
-          <input
-            className="input"
-            dir="ltr"
-            type="password"
+          <PasswordInput
             value={confirm}
-            onChange={(e) => setConfirm(e.target.value)}
+            onChange={setConfirm}
             autoComplete="new-password"
-            aria-invalid={mismatch || undefined}
+            aria-invalid={mismatch}
           />
           {mismatch ? <span className="mt-1 block text-xs text-danger">{t("mismatch")}</span> : null}
         </Field>

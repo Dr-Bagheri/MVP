@@ -6,6 +6,7 @@ import { Link, useRouter } from "@/i18n/routing";
 import { api, BffError } from "@/api/client";
 import { Card, Field } from "@/components/ui";
 import { OAuthButtons } from "../OAuthButtons";
+import { PasswordInput } from "@/components/PasswordInput";
 
 /**
  * Sign-in — **and this form did not sign anyone in.**
@@ -259,22 +260,16 @@ export default function SignInPage() {
         <form className="space-y-4" onSubmit={enrollOAuthPassword}>
           <p className="text-sm leading-7 text-fg-muted">{t("finishPasswordOauth")}</p>
           <Field label={t("choosePassword")}>
-            <input
-              className="input"
-              dir="ltr"
-              type="password"
+            <PasswordInput
               value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
+              onChange={setNewPassword}
               autoComplete="new-password"
             />
           </Field>
           <Field label={t("confirmPassword")}>
-            <input
-              className="input"
-              dir="ltr"
-              type="password"
+            <PasswordInput
               value={confirmNewPassword}
-              onChange={(e) => setConfirmNewPassword(e.target.value)}
+              onChange={setConfirmNewPassword}
               autoComplete="new-password"
             />
           </Field>
@@ -318,12 +313,9 @@ export default function SignInPage() {
             />
           </Field>
           <Field label={t("password")}>
-            <input
-              className="input"
-              dir="ltr"
-              type="password"
+            <PasswordInput
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={setPassword}
               autoComplete="current-password"
             />
           </Field>

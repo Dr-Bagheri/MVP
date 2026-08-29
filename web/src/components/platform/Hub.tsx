@@ -17,6 +17,8 @@ import { AgentOverviewPanel } from "./AgentOverviewPanel";
 import { MailDraftCard } from "./MailDraftCard";
 import { useAssistantConversation } from "./AssistantConversationState";
 import { DocumentIcon, MicIcon, PlusIcon, SendIcon } from "./icons";
+import { SURFACE_TOOLS } from "@/lib/agentSurface";
+import { EchoMark } from "./icons";
 
 type CreateKind = "doc" | "pdf";
 
@@ -757,6 +759,23 @@ export function Hub() {
           sourceId: sourceId || undefined,
           web: webSearch,
           locale,
+          /*
+           * THE ASSISTANT PAGE CAN ACT, not only answer (user directive,
+           * 2026-08-29: "for the agents to add this so they can also start
+           * the call").
+           *
+           * `SURFACE_TOOLS` was advertised by the voice orb alone, so a
+           * TYPED ask — including every ask made through an agent, since
+           * agents are asked from here — reached a model that had been told
+           * about no client tools at all. Asking "start recording" got a
+           * polite explanation instead of a recording, and the cause was
+           * invisible from either side: the orb worked, so the tools worked;
+           * this page answered, so the page worked.
+           *
+           * One list, spread from the module that owns it, so the two
+           * surfaces cannot drift into advertising different capabilities.
+           */
+          clientTools: [...SURFACE_TOOLS],
           signal,
         }),
       replyId,
@@ -1168,6 +1187,30 @@ export function Hub() {
 
           {/* SOURCES — attach real context: search meetings, add a text file.
               What the reference fakes as toggles, this menu does as acts. */}
+          {/*
+            START A TAKE, from the page where you are already talking to the
+            assistant (user directive, 2026-08-29).
+            
+            A LINK, not a second recorder. It carries `?agentStart=` — the
+            same M33 query the agent's own `start_recording` uses — so the
+            recorder starts through its OWN start(), the one the button on
+            /echo calls. Two ways in, one implementation: a recorder embedded
+            here would be a second microphone path to keep in step with the
+            first, and the first is the one that has been proven on real
+            hardware.
+            
+            Empty title on purpose: the recorder's own field is where a name
+            belongs, and pre-filling it from nothing would put an empty
+            string where the person expects a placeholder.
+          */}
+          <Link
+            href="/echo/record?agentStart="
+            className={headerBtn}
+            aria-label={t("startRecording")}
+          >
+            <EchoMark size={14} />
+            {t("record")}
+          </Link>
           <HoverMenu
             open={sourcesOpen}
             onOpen={() => {

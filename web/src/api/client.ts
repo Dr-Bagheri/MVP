@@ -1861,6 +1861,24 @@ export const api = {
   },
 
   /**
+   * db/0137 — set a member's password, for someone you outrank.
+   *
+   * **LIVE.** Returns how many of their sessions the reset ended: setting a
+   * password does not sign anyone out on its own, so that count is the part
+   * that says the door actually closed.
+   */
+  async setMemberPassword(memberId: string, password: string): Promise<{ sessions_ended: number }> {
+    return bff<{ sessions_ended: number }>(
+      `/api/admin/members/${encodeURIComponent(memberId)}/password`,
+      {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ password }),
+      },
+    );
+  },
+
+  /**
    * db/0135 — every live session in the org, for an admin or owner.
    *
    * **LIVE.** The server refuses a non-admin, so this is only ever called

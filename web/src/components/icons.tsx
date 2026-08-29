@@ -170,9 +170,34 @@ export const IconPause = (p: SVGProps<SVGSVGElement>) => (
 export const IconClock = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" /></svg>
 );
-/** settings — a gear */
+/**
+ * settings — SLIDERS, not the old radial mark.
+ *
+ * User directive, 2026-08-29: "change the setting icon to something else
+ * more look like setting". The previous drawing was a small circle ringed
+ * by eight short radial strokes, which is a gear only if you already know
+ * it is one — at 16-18px the teeth stop reading as teeth and the whole mark
+ * becomes a sun. A gear needs an actual toothed silhouette to survive that
+ * size, which costs far more nodes than the rest of this set uses.
+ *
+ * Sliders are the other convention for the same idea and they hold up at
+ * any size, because the shape is three lines and three knobs rather than a
+ * texture. Knobs sit at DIFFERENT x on each row: aligned, they read as a
+ * list with bullets.
+ */
 export const IconSettings = (p: SVGProps<SVGSVGElement>) => (
-  <svg {...base(p)}><circle cx="12" cy="12" r="3.2" /><path d="M12 3.5v2M12 18.5v2M20.5 12h-2M5.5 12h-2M18 6l-1.4 1.4M7.4 16.6 6 18M18 18l-1.4-1.4M7.4 7.4 6 6" /></svg>
+  <svg {...base(p)}>
+    <path d="M4 7h16M4 12h16M4 17h16" />
+    <circle cx="9" cy="7" r="2" /><circle cx="15" cy="12" r="2" /><circle cx="8" cy="17" r="2" />
+  </svg>
+);
+
+/** a credential — a key, for setting someone's password (0137) */
+export const IconKey = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}>
+    <circle cx="8" cy="14" r="4" />
+    <path d="M11 11.5 20 3M17.5 5.5 19.5 7.5M15 8l2 2" />
+  </svg>
 );
 /** confirm / finish */
 export const IconCheck = (p: SVGProps<SVGSVGElement>) => (
@@ -337,6 +362,7 @@ export const ICONS = {
   "gavel": IconGavel,
   "globe": IconGlobe,
   "hide": IconHide,
+  "key": IconKey,
   "history": IconHistory,
   "mail": IconMail,
   "send": IconSend,

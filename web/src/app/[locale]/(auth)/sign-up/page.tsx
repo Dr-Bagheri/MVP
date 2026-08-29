@@ -6,6 +6,7 @@ import { Link, useRouter } from "@/i18n/routing";
 import { api, BffError } from "@/api/client";
 import { Card, Field } from "@/components/ui";
 import { OAuthButtons } from "../OAuthButtons";
+import { PasswordInput } from "@/components/PasswordInput";
 
 /**
  * Self-registration — **and this form registered nobody.**
@@ -126,14 +127,11 @@ export default function SignUpPage() {
           <input className="input" value={orgName} onChange={(e) => setOrgName(e.target.value)} />
         </Field>
         <Field label={t("password")}>
-          <input
-            className="input"
-            dir="ltr"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete="new-password"
-          />
+          <PasswordInput
+              value={password}
+              onChange={setPassword}
+              autoComplete="new-password"
+            />
         </Field>
         {error ? (
           <p role="alert" className="text-sm text-danger">
