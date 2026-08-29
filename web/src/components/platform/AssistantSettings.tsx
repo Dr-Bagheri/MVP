@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import { notify } from "@/lib/notify";
-import { forgetVoiceGenders } from "@/lib/voice";
 import { Card } from "@/components/ui";
 
 /**
@@ -62,9 +61,6 @@ export function AssistantSettings() {
       setSavedInstructions(me.assistant_instructions ?? "");
       setVoiceFa(me.assistant_voice_fa ?? "female");
       setVoiceEn(me.assistant_voice_en ?? "female");
-      /* the speech module caches the choice — a saved change must reach
-         the very next spoken sentence, not the next five-minute window */
-      forgetVoiceGenders();
       notify(t("assistantSaved"));
     } catch {
       notify(t("assistantSaveFailed"), "warn");

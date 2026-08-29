@@ -1999,3 +1999,21 @@ now also a LIBRARY in the workflows section: every uninstalled starter
 lists there and renders its own page, where an admin installs it — "make
 all the workflows real in the workflow section, so anyone else can use
 them for real later."
+
+**M37 re-amended (2026-08-29, user directive: "change the TTS to gemini
+… when it starts recording it gets silence … good speed … bound to the
+role of the users").** The primary voice is Gemini 3.1 Flash TTS through
+OpenRouter (/audio/speech, PCM-only — the adapter wraps WAV), one
+multilingual model for fa and en, gender mapped to its prebuilt voices
+(Kore/Charon); the on-box piper units stay as the per-voice FALLBACK
+rung (the acceptance probe itself caught the provider 502ing twice), and
+a fall is logged as a named forfeit. The browser-speechSynthesis rung is
+DELETED — one platform, one voice per choice; the gender preference is
+applied server-side only. /v1/tts is role-bound (refuseApiKey — machine
+keys have no mouth). The mouth goes SILENT while a recording is live
+(one producer: the engine's recording-live announcement; queued speech
+drops, mid-sentence speech cuts). Sentence prefetch pays the model's
+latency once per reply, not once per sentence. Language of speech:
+script decides; a letterless sentence follows the UI locale — fa speaks
+Persian by default, en English (the same tiebreaker the reply-language
+mirror rule already used).

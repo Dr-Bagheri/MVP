@@ -1,30 +1,37 @@
 /**
- * Voice in and voice out (user directive, 2026-08-21: wake words «echo /
- * salam echo / hi echo / سلام اکو», commands sent by voice alone, and the
- * assistant replying "by its own voice" — Persian in → Persian out).
+ * The assistant's MOUTH — rebuilt whole, 2026-08-29 (user directive:
+ * "change the TTS to gemini … in fa it starts talking in Persian, in en
+ * in English … when it starts recording it gets silence until after it
+ * finished … good speed"; and the grand rule — a rework replaces the
+ * unit, it does not decorate it).
  *
- * Everything here is feature-detected: SpeechRecognition is Chrome-shaped
- * (webkit prefix) and simply absent elsewhere; speechSynthesis is broader.
- * Absence is reported to the caller as null/false — never a throw — so the
- * dock can say "this browser can't do voice" instead of dying quietly.
+ * What was deleted with intent: the whole browser-speechSynthesis rung
+ * (voice pickers, gender heuristics, Dilara/Farid name lists, the
+ * client-side gender cache). The platform now speaks with ONE voice per
+ * language-and-gender — the server's Gemini registry — so every listener
+ * hears the same assistant, and the gender choice lives in exactly one
+ * place (the person's stored preference, applied server-side at
+ * synthesis). A browser voice was a second voice wearing the same name.
+ *
+ * What this file is now:
+ *  · one playback path (an <audio> element over the server's WAV),
+ *  · the sentence queue with PREFETCH — while sentence N plays, N+1 is
+ *    already synthesizing, so the multi-second model latency is paid once
+ *    at the start of a reply instead of between every sentence,
+ *  · the recording gate — while a recording is live the mouth is SILENT:
+ *    whatever was playing stops, whatever arrives is dropped, and speech
+ *    resumes only for what is said after the take ends,
+ *  · the playback state the ears subscribe to, and the watchdogs that
+ *    keep a jammed pipeline from muting them forever.
+ *
+ * LISTENING LIVES ELSEWHERE (lib/voiceLoop.ts — the M38 relay + local VAD
+ * + the five-rule behavior). This file never touches a microphone.
  */
 
-/*
- * LISTENING LIVES ELSEWHERE (2026-08-22 rebuild, user directive: "remove
- * its main codes for behavior, do it from scratch"): the wake machine,
- * greeting/goodbye grammar, echo fingerprinting, noise and dedupe filters
- * that used to fill this file are GONE — the one listener is
- * lib/voiceLoop.ts (the M38 relay + local VAD + a five-rule behavior).
- * This file is the assistant's MOUTH only: voices, speech queues, the
- * playback state the loop needs, and the watchdogs that keep a jammed
- * engine from muting the ears forever.
- */
+import { subscribeRecordingLive } from "@/lib/assistantBus";
 
-/**
- * The assistant's own PLAYBACK state, published so the voice control can
- * deafen itself while the speakers carry its voice — otherwise the mic
- * transcribes the reply and the assistant starts answering itself.
- */
+// ── playback state, published for the ears ─────────────────────────────
+
 const playbackListeners = new Set<(speaking: boolean) => void>();
 let playbackToken = 0;
 function publishPlayback(speaking: boolean): void {
@@ -37,8 +44,10 @@ export function subscribeSpeechPlayback(listener: (speaking: boolean) => void): 
   return () => playbackListeners.delete(listener);
 }
 
-/** the M37 server-voice element currently playing, if any — the one audio
-    source the level meter can actually tap (speechSynthesis has none) */
+/** the server-voice element currently playing, if any — the one audio
+    source the level meter can actually tap */
+let serverAudio: HTMLAudioElement | null = null;
+
 export function currentSpeechAudio(): HTMLAudioElement | null {
   return serverAudio;
 }
@@ -51,88 +60,56 @@ export function recentSpokenText(): string {
   return spokenHistory;
 }
 
+// ── the language of a sentence, with the locale as the tiebreaker ──────
+
 const PERSIAN_RE = /[؀-ۿ]/;
+const LATIN_RE = /[a-z]/i;
 
 /**
- * Voices load ASYNC in Chrome: getVoices() is [] until `voiceschanged`.
- * Waiting bounded — a browser that never fires it still answers.
+ * Which voice speaks this text. Script decides when it can — Persian
+ * letters mean the Persian voice, Latin letters the English one — and
+ * when the text carries no letters of either (digits, punctuation, an
+ * emoji), the UI LOCALE decides (user rule, 2026-08-29: fa starts in
+ * Persian by default, en in English). The locale is read off the
+ * document, where next-intl already stamped it.
  */
+export function speechLangOf(text: string, docLang?: string): "fa" | "en" {
+  if (PERSIAN_RE.test(text)) return "fa";
+  if (LATIN_RE.test(text)) return "en";
+  const locale = docLang
+    ?? (typeof document !== "undefined" ? document.documentElement.lang : "fa");
+  return locale.toLowerCase().startsWith("en") ? "en" : "fa";
+}
+
+// ── the recording gate: a live take silences the mouth ─────────────────
+
+let recordingSilence = false;
+
 /**
- * The person's spoken-voice choice (0128), cached for five minutes — this
- * module has no identity context of its own, and asking /me once per
- * utterance would make every sentence a network round trip. Signed-out or
- * unreadable = the female defaults, re-asked next window.
+ * While a recording is live the assistant does not speak — its voice on
+ * the speakers would land in the take (user rule, 2026-08-29: "when it
+ * starts recording it gets silence until after it finished"). Activation
+ * also CUTS whatever is mid-sentence; queued sentences are dropped, not
+ * held — a burst of stale replies after pressing stop would be noise
+ * wearing patience's costume.
  */
-let voiceGenderCache: { fa: "female" | "male"; en: "female" | "male" } | null = null;
-let voiceGenderAt = 0;
-async function voiceGenders(): Promise<{ fa: "female" | "male"; en: "female" | "male" }> {
-  if (voiceGenderCache && Date.now() - voiceGenderAt < 300_000) return voiceGenderCache;
-  try {
-    const { api } = await import("@/api/client");
-    const me = await api.me();
-    voiceGenderCache = {
-      fa: me?.assistant_voice_fa === "male" ? "male" : "female",
-      en: me?.assistant_voice_en === "male" ? "male" : "female",
-    };
-  } catch {
-    voiceGenderCache = voiceGenderCache ?? { fa: "female", en: "female" };
-  }
-  voiceGenderAt = Date.now();
-  return voiceGenderCache;
+export function setRecordingSilence(active: boolean): void {
+  recordingSilence = active;
+  if (active) stopSpeaking();
 }
 
-/** the settings screen saved a new choice — the next sentence uses it */
-export function forgetVoiceGenders(): void {
-  voiceGenderCache = null;
-  voiceGenderAt = 0;
+// one producer: the recording engine announces phase changes on the bus,
+// and the mouth subscribes exactly like the ears' suspension does
+if (typeof window !== "undefined") {
+  subscribeRecordingLive((live) => setRecordingSilence(live));
 }
 
-/*
- * Browser-voice gender heuristics: engines name voices after people, not
- * genders, so the pick is by KNOWN NAMES first (Edge's own catalogue) and
- * the literal words female/male second. A miss falls back to any voice of
- * the language — a voice of the wrong gender beats silence, and the server
- * rung underneath honors the choice exactly.
- */
-const FEMALE_NAMES = /female|dilara|aria|jenny|zira|sonia|libby|michelle|emma|clara|ana|amy|natasha|hazel|susan/i;
-const MALE_NAMES = /(?<!fe)male|farid|guy|ryan|davis|tony|william|liam|christopher|eric|andrew|brian|david|mark|george|james/i;
+// ── stop: cut the voice NOW ────────────────────────────────────────────
 
-function pickBrowserVoice(
-  voices: readonly SpeechSynthesisVoice[],
-  lang: "fa" | "en",
-  gender: "female" | "male",
-): SpeechSynthesisVoice | undefined {
-  const pool = voices.filter((v) => v.lang.toLowerCase().startsWith(lang));
-  const wanted = gender === "female" ? FEMALE_NAMES : MALE_NAMES;
-  return pool.find((v) => wanted.test(v.name)) ?? pool[0];
-}
-
-function loadVoices(): Promise<SpeechSynthesisVoice[]> {
-  const synth = window.speechSynthesis;
-  const now = synth.getVoices();
-  if (now.length > 0) return Promise.resolve(now);
-  return new Promise((resolve) => {
-    let settled = false;
-    const done = () => {
-      if (settled) return;
-      settled = true;
-      resolve(synth.getVoices());
-    };
-    synth.addEventListener("voiceschanged", done, { once: true });
-    setTimeout(done, 1500);
-  });
-}
-
-/** the audio element playing the SERVER-side Persian voice, if any */
-let serverAudio: HTMLAudioElement | null = null;
-let warnedNoPersian = false;
-
-/** exported for the dock's LOCAL stop: cut whatever voice is playing NOW */
+/** exported for the dock's LOCAL stop: cut whatever voice is playing */
 export function stopSpeaking(): void {
   speechQueue.length = 0; // whatever was waiting to be said is unsaid
-  if (typeof window !== "undefined" && "speechSynthesis" in window) {
-    window.speechSynthesis.cancel();
-  }
+  prefetched = null;
   if (serverAudio) {
     serverAudio.pause();
     serverAudio = null;
@@ -141,25 +118,101 @@ export function stopSpeaking(): void {
   publishPlayback(false);
 }
 
-/* ── the SENTENCE QUEUE (2026-08-21 latency rework): the reply is spoken
-   sentence-by-sentence AS IT STREAMS, instead of one long synthesis after
-   the whole answer arrived — the first sentence is audible while the rest
-   is still being written. speakQueued() appends; one pump plays the queue
-   in order; stopSpeaking() empties it mid-word. ──────────────────────── */
+// ── synthesis + playback ───────────────────────────────────────────────
+
+/**
+ * A watchdog around every awaited utterance (2026-08-22, the dead-orb
+ * report): a pipeline that fires NEITHER ended NOR error would leave the
+ * pump open, `publishPlayback(false)` never runs, and the wake machine
+ * stays MUTED forever. The ceiling is generous; firing it also stops the
+ * jammed element so the next utterance starts clean.
+ */
+function speechWatchdogMs(text: string): number {
+  return Math.min(30_000, 3_000 + text.length * 120);
+}
+
+async function synthesize(text: string): Promise<Blob> {
+  const { api } = await import("@/api/client");
+  return api.tts(text.slice(0, 1200), speechLangOf(text));
+}
+
+/** play one WAV blob to its end (or its watchdog) */
+function playBlob(blob: Blob, text: string): Promise<void> {
+  const audio = new Audio(URL.createObjectURL(blob));
+  serverAudio = audio;
+  return new Promise<void>((resolve) => {
+    let settled = false;
+    const finish = (jammed: boolean) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(watchdog);
+      if (jammed) { try { audio.pause(); } catch { /* fine */ } }
+      URL.revokeObjectURL(audio.src);
+      if (serverAudio === audio) serverAudio = null;
+      resolve();
+    };
+    const watchdog = setTimeout(() => finish(true), speechWatchdogMs(text) + 15_000);
+    audio.onended = () => finish(false);
+    audio.onerror = () => finish(false);
+    audio.onpause = () => finish(false); // stopSpeaking() pauses mid-word
+    void audio.play().catch(() => finish(false));
+  });
+}
+
+let warnedNoVoice = false;
+async function speakOne(text: string, ready?: Promise<Blob> | null): Promise<void> {
+  try {
+    const blob = await (ready ?? synthesize(text));
+    if (recordingSilence) return; // a take started while synthesizing
+    await playBlob(blob, text);
+  } catch {
+    if (!warnedNoVoice) {
+      warnedNoVoice = true;
+      const { notify } = await import("@/lib/notify");
+      notify("صدای دستیار در دسترس نیست — سرویس گفتار پاسخ نداد.", "warn");
+    }
+  }
+}
+
+// ── the sentence queue, with prefetch ──────────────────────────────────
+
+/* The reply is spoken sentence-by-sentence AS IT STREAMS. The queue keeps
+   order; the PUMP plays it; and while sentence N plays, sentence N+1 is
+   already at the synthesizer — a played sentence is seconds long, which
+   is more than the model needs, so from the listener's side the reply is
+   one continuous voice with a single initial breath. */
 const speechQueue: string[] = [];
 let queuePumping = false;
+let prefetched: { text: string; blob: Promise<Blob> } | null = null;
+
+function cleanForSpeech(text: string): string {
+  return text
+    .replace(/```[\s\S]*?```/g, " ") // fenced blocks are for eyes, not voice
+    .replace(/[`*_#]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 export function speakQueued(text: string): void {
   if (typeof window === "undefined") return;
-  const cleaned = text
-    .replace(/```[\s\S]*?```/g, " ")
-    .replace(/[`*_#]/g, " ") // md residue reads terribly aloud
-    .replace(/\s+/g, " ")
-    .trim();
+  if (recordingSilence) return; // a live take: the mouth stays shut
+  const cleaned = cleanForSpeech(text);
   if (!cleaned) return;
   spokenHistory = `${spokenHistory} ${cleaned}`.slice(-2000);
   speechQueue.push(cleaned);
   void pumpSpeechQueue();
+}
+
+/**
+ * Speak a reply in its own language — Persian text through the Persian
+ * voice, English through the English one, the locale deciding when the
+ * text cannot. Cancels whatever was still being spoken: newest wins.
+ */
+export function speak(text: string): void {
+  if (typeof window === "undefined") return;
+  if (recordingSilence) return;
+  stopSpeaking();
+  speakQueued(text);
 }
 
 async function pumpSpeechQueue(): Promise<void> {
@@ -168,204 +221,23 @@ async function pumpSpeechQueue(): Promise<void> {
   const token = ++playbackToken;
   publishPlayback(true);
   try {
-    while (speechQueue.length > 0 && token === playbackToken) {
+    while (speechQueue.length > 0 && token === playbackToken && !recordingSilence) {
       const next = speechQueue.shift()!;
-      await speakOne(next);
+      const ready = prefetched?.text === next ? prefetched.blob : null;
+      prefetched = null;
+      // start the NEXT sentence's synthesis before this one plays
+      const upcoming = speechQueue[0];
+      if (upcoming !== undefined) {
+        const blob = synthesize(upcoming);
+        blob.catch(() => undefined); // its failure is speakOne's to report
+        prefetched = { text: upcoming, blob };
+      }
+      await speakOne(next, ready);
     }
   } finally {
     queuePumping = false;
     if (token === playbackToken) publishPlayback(false);
     // a sentence that arrived while we were closing down starts a new pump
-    if (speechQueue.length > 0) void pumpSpeechQueue();
-  }
-}
-
-/**
- * A watchdog around every awaited utterance (2026-08-22, the dead-orb
- * report's second cause): Chrome's speechSynthesis is known to sometimes
- * fire NEITHER onend NOR onerror — the await never settles, the pump never
- * closes, `publishPlayback(false)` never runs, and the wake machine stays
- * MUTED forever. From the outside that is indistinguishable from "the orb
- * stopped hearing me". The ceiling is generous (real speech finishes long
- * before it) and firing it also cancels the jammed engine so the NEXT
- * utterance starts clean.
- */
-function speechWatchdogMs(text: string): number {
-  return Math.min(30_000, 3_000 + text.length * 120);
-}
-
-function speakUtterance(utterance: SpeechSynthesisUtterance, text: string): Promise<void> {
-  return new Promise<void>((resolve) => {
-    let settled = false;
-    const finish = (jammed: boolean) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(watchdog);
-      if (jammed) {
-        try { window.speechSynthesis.cancel(); } catch { /* fine */ }
-      }
-      resolve();
-    };
-    const watchdog = setTimeout(() => finish(true), speechWatchdogMs(text));
-    utterance.onend = () => finish(false);
-    utterance.onerror = () => finish(false);
-    window.speechSynthesis.speak(utterance);
-  });
-}
-
-/** one utterance, AWAITED to its end — sequential, never cancelling */
-async function speakOne(cleaned: string): Promise<void> {
-  const persian = PERSIAN_RE.test(cleaned);
-  const synthAvailable = "speechSynthesis" in window;
-  const genders = await voiceGenders();
-  if (!persian) {
-    if (!synthAvailable) return;
-    const utterance = new SpeechSynthesisUtterance(cleaned);
-    const enVoice = pickBrowserVoice(await loadVoices(), "en", genders.en);
-    if (enVoice) utterance.voice = enVoice;
-    utterance.lang = enVoice?.lang ?? "en-US";
-    await speakUtterance(utterance, cleaned);
-    return;
-  }
-  const voices = synthAvailable ? await loadVoices() : [];
-  const faVoice = pickBrowserVoice(voices, "fa", genders.fa);
-  if (faVoice) {
-    const utterance = new SpeechSynthesisUtterance(cleaned);
-    utterance.voice = faVoice;
-    utterance.lang = faVoice.lang;
-    await speakUtterance(utterance, cleaned);
-    return;
-  }
-  try {
-    const { api } = await import("@/api/client");
-    const blob = await api.tts(cleaned.slice(0, 1200), "fa");
-    const audio = new Audio(URL.createObjectURL(blob));
-    serverAudio = audio; // the orb's level meter taps the CURRENT element
-    await new Promise<void>((resolve) => {
-      let settled = false;
-      const finish = (jammed: boolean) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(watchdog);
-        if (jammed) { try { audio.pause(); } catch { /* fine */ } }
-        resolve();
-      };
-      // same wedge, other engine: a stalled download or a never-firing
-      // 'ended' must not hold the mute open forever
-      const watchdog = setTimeout(() => finish(true), speechWatchdogMs(cleaned) + 15_000);
-      audio.onended = () => { URL.revokeObjectURL(audio.src); finish(false); };
-      audio.onerror = () => finish(false);
-      audio.onpause = () => finish(false); // stopSpeaking() pauses mid-word
-      void audio.play().catch(() => finish(false));
-    });
-    if (serverAudio === audio) serverAudio = null;
-  } catch {
-    if (!warnedNoPersian) {
-      warnedNoPersian = true;
-      const { notify } = await import("@/lib/notify");
-      notify("صدای فارسی در دسترس نیست — سرویس گفتار پاسخ نداد.", "warn");
-    }
-  }
-}
-
-/**
- * Speak a reply in its own language — the mirror of the assistant's
- * language rule. Cancels whatever was still being spoken: newest wins.
- *
- * Persian is the ladder (user directive, 2026-08-21: "I want TTS for the
- * Persian version, that can talk Persian"): a REAL fa voice in the browser
- * if one exists (Edge ships one; Windows Chrome ships none), else the
- * platform's own TTS lane (M37: piper on the server via POST /v1/tts) —
- * never a non-Persian voice mangling Persian text, and never silence
- * without a word: if both rungs are missing the person is told once.
- */
-export function speak(text: string): void {
-  void speakAsync(text);
-}
-
-async function speakAsync(text: string): Promise<void> {
-  if (typeof window === "undefined") return;
-  const cleaned = text
-    .replace(/```[\s\S]*?```/g, " ") // fenced blocks are for eyes, not voice
-    .replace(/\s+/g, " ")
-    .trim();
-  if (!cleaned) return;
-  // remember what the voice is about to say — the echo filter's reference
-  spokenHistory = `${spokenHistory} ${cleaned}`.slice(-2000);
-  stopSpeaking();
-
-  /*
-   * Publish "the speakers carry my voice" for the duration — the voice
-   * control deafens itself on this signal. Token-guarded: a newer speak
-   * cancelling this one must not have its playback=false land after the
-   * newer playback=true.
-   */
-  const token = ++playbackToken;
-  const done = () => { if (token === playbackToken) publishPlayback(false); };
-  const fireUtterance = (utterance: SpeechSynthesisUtterance) => {
-    publishPlayback(true);
-    // the same never-fires wedge as speakOne's, same watchdog: an ack that
-    // jams the engine would leave the wake machine muted — a dead orb
-    const watchdog = setTimeout(() => {
-      try { window.speechSynthesis.cancel(); } catch { /* fine */ }
-      done();
-    }, speechWatchdogMs(cleaned));
-    utterance.onend = () => { clearTimeout(watchdog); done(); };
-    utterance.onerror = () => { clearTimeout(watchdog); done(); };
-    window.speechSynthesis.speak(utterance);
-  };
-
-  const persian = PERSIAN_RE.test(cleaned);
-  /* 0128: the person's own gender choice steers BOTH rungs — the browser
-     pick here, the piper model on the server underneath */
-  const genders = await voiceGenders();
-  if (!persian) {
-    if (!("speechSynthesis" in window)) return;
-    const utterance = new SpeechSynthesisUtterance(cleaned);
-    const enVoice = pickBrowserVoice(await loadVoices(), "en", genders.en);
-    if (enVoice) utterance.voice = enVoice;
-    utterance.lang = enVoice?.lang ?? "en-US";
-    fireUtterance(utterance);
-    return;
-  }
-
-  const voices = "speechSynthesis" in window ? await loadVoices() : [];
-  const faVoice = pickBrowserVoice(voices, "fa", genders.fa);
-  if (faVoice) {
-    const utterance = new SpeechSynthesisUtterance(cleaned);
-    utterance.voice = faVoice;
-    utterance.lang = faVoice.lang;
-    fireUtterance(utterance);
-    return;
-  }
-
-  // no browser voice speaks Persian — the server does (M37)
-  try {
-    const { api } = await import("@/api/client");
-    const blob = await api.tts(cleaned.slice(0, 1200), "fa");
-    serverAudio = new Audio(URL.createObjectURL(blob));
-    publishPlayback(true);
-    serverAudio.onended = () => {
-      if (serverAudio) URL.revokeObjectURL(serverAudio.src);
-      done();
-    };
-    serverAudio.onerror = done;
-    // watchdog: a stalled stream must not hold the mute open forever
-    const audioWatchdog = setTimeout(() => {
-      try { serverAudio?.pause(); } catch { /* fine */ }
-      done();
-    }, speechWatchdogMs(cleaned) + 15_000);
-    serverAudio.addEventListener("ended", () => clearTimeout(audioWatchdog));
-    serverAudio.addEventListener("pause", () => { clearTimeout(audioWatchdog); done(); });
-    await serverAudio.play();
-  } catch {
-    done();
-    if (!warnedNoPersian) {
-      warnedNoPersian = true;
-      const { notify } = await import("@/lib/notify");
-      // hard-coded Persian: the only audience for this sentence asked for
-      // Persian speech, and this module has no i18n context to reach
-      notify("صدای فارسی در دسترس نیست — سرویس گفتار پاسخ نداد.", "warn");
-    }
+    if (speechQueue.length > 0 && !recordingSilence) void pumpSpeechQueue();
   }
 }

@@ -968,6 +968,10 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
    */
   app.post("/v1/tts", async (request, reply) => {
     const identity = await auth.requireActive(request);
+    /* role-bound (user directive 2026-08-29): the voice is a signed-in
+       person's feature — a machine key synthesizing speech on the org's
+       OpenRouter budget is not a thing this route offers */
+    refuseApiKey(identity);
     const body = (request.body ?? {}) as { text?: unknown; lang?: unknown };
     if (typeof body.text !== "string" || body.text.trim() === "") {
       throw new ValidationError("text is required");
@@ -995,15 +999,18 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
        every deployment has had (fa_male = TTS_URL) only for fa — for en it
        refuses, because a Persian voice reading English is not a fallback,
        it is a malfunction with a confident face */
-    const chosen = tts.available(voice) ? voice
-      : lang === "fa" && tts.available("fa_male") ? "fa_male" as const
-      : null;
-    if (chosen === null) {
+    if (!tts.available(voice)) {
       return reply.code(503).send({ error: "tts_unavailable" });
     }
     try {
-      const audio = await tts.synthesize(body.text, chosen);
-      return reply.type("audio/wav").send(Buffer.from(audio));
+      const spoken = await tts.synthesize(body.text, voice);
+      if (spoken.rung === "piper") {
+        /* the primary fell and the fallback carried it — a forfeit said
+           out loud (M21), codes only, so a flaky provider is visible in
+           the journal instead of only in a slightly different timbre */
+        request.log.warn({ event: "tts_gemini_forfeit", voice });
+      }
+      return reply.type(spoken.mime).send(Buffer.from(spoken.audio));
     } catch (cause) {
       // codes only — the failure names itself, the text stays out of logs
       request.log.warn({ event: "tts_failed", detail: cause instanceof Error ? cause.message : "unknown" });

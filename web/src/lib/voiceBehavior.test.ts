@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { utteranceScriptOk, createVoiceBehavior, matchWake } from "./voiceLoop";
+import { speechLangOf } from "./voice";
 
 /**
  * The rebuilt voice behavior (2026-08-22, from scratch) — five rules and
@@ -173,5 +174,23 @@ describe("utteranceScriptOk — the loop's language wall (2026-08-29)", () => {
 
   it("digits and punctuation alone are not a sentence", () => {
     expect(utteranceScriptOk("۱۲۳ 456!؟")).toBe(false);
+  });
+});
+
+describe("speechLangOf — script decides, the locale breaks ties (2026-08-29)", () => {
+  it("Persian letters take the Persian voice; Latin the English one", () => {
+    expect(speechLangOf("جلسهٔ امروز آماده است")).toBe("fa");
+    expect(speechLangOf("your meeting is ready")).toBe("en");
+    /* mixed text: Persian letters present → the Persian voice reads it,
+       exactly as before the rebuild */
+    expect(speechLangOf("جلسه با John آماده است")).toBe("fa");
+  });
+
+  it("letterless text follows the LOCALE — fa starts Persian, en starts English", () => {
+    expect(speechLangOf("۱۲:۳۰", "fa")).toBe("fa");
+    expect(speechLangOf("12:30 ✓", "en-US")).toBe("en");
+    /* and the default with no document at all is the platform's first
+       language, not a silent English */
+    expect(speechLangOf("...", "fa-IR")).toBe("fa");
   });
 });
