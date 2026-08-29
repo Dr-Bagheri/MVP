@@ -6,7 +6,7 @@ import { api } from "@/api/client";
 import type { Me } from "@/api/types";
 import { personName } from "@/lib/format";
 import { KebabMenu } from "@/components/rowActions";
-import { IconPlus, IconTrash } from "@/components/icons";
+import { IconCheck, IconPencil, IconPin, IconPlus, IconTrash } from "@/components/icons";
 import {
   WIDGET_GROUPS, WIDGET_SPECS,
   defaultLayout, defaultSizeFor, nextFreeSpot, readLayout, writeLayout, specFor,
@@ -50,6 +50,17 @@ export function Dashboard() {
   const [layout, setLayout] = useState<DashboardLayout>(() => defaultLayout());
   /** the store is only read after mount — SSR has no localStorage */
   const [ready, setReady] = useState(false);
+  /**
+   * ARRANGING, or reading.
+   *
+   * The board is LOCKED by default (user directive, 2026-08-29: "add a edit
+   * button on top for moving hand and pins to become visible then a save and
+   * they get fixed"). Everything that changes the arrangement — the drag, the
+   * resize grips, the pins, remove, add, density — belongs to this mode, so
+   * a board you are reading cannot be rearranged by a stray press, and the
+   * things that would rearrange it are not even on screen.
+   */
+  const [editing, setEditing] = useState(false);
 
   useEffect(() => {
     setLayout(readLayout());
@@ -82,6 +93,19 @@ export function Dashboard() {
   const removeWidget = (key: WidgetKey) =>
     update({ ...layout, tiles: layout.tiles.filter((tile) => tile.key !== key) });
 
+  /**
+   * PIN one card in place. Its job is inside edit mode: a pinned card is not
+   * dragged and — the half that matters — is not SHOVED by a card you are
+   * dragging past it, so settling the last tile cannot rearrange the three
+   * you already settled.
+   */
+  const togglePin = (key: WidgetKey) =>
+    update({
+      ...layout,
+      tiles: layout.tiles.map((tile) =>
+        tile.key === key ? { ...tile, pinned: tile.pinned !== true } : tile),
+    });
+
   /** one card's chrome — the chip, the title, the remove, and the drag grip */
   function Tile({ tile }: { tile: TilePlacement }) {
     const spec = specFor(tile.key);
@@ -99,24 +123,39 @@ export function Dashboard() {
             {label}
           </h2>
           {/*
-            One control, not a menu (user directive, 2026-08-26). Moving is
-            press-and-hold on the card; resizing is the corner grip. Neither
-            needs a menu entry, and a menu holding only "remove" is a menu
-            that should have been a button.
+            The card's controls appear ONLY while the board is being edited:
+            a pin and a remove. Outside edit mode there is nothing here at
+            all — a control that is visible on a locked board is a control
+            that does nothing when pressed.
 
             `data-nodrag` keeps a press here from becoming a drag — the
             engine's cancel list reads it.
           */}
-          <button
-            type="button"
-            data-nodrag
-            aria-label={t("hide")}
-            title={t("hide")}
-            className="tile-remove"
-            onClick={() => removeWidget(tile.key)}
-          >
-            <IconTrash width={16} height={16} />
-          </button>
+          {editing ? (
+            <>
+              <button
+                type="button"
+                data-nodrag
+                aria-pressed={tile.pinned === true}
+                aria-label={tile.pinned === true ? t("unpin") : t("pin")}
+                title={tile.pinned === true ? t("unpin") : t("pin")}
+                className={`tile-remove tile-pin ${tile.pinned === true ? "is-pinned" : ""}`}
+                onClick={() => togglePin(tile.key)}
+              >
+                <IconPin width={16} height={16} />
+              </button>
+              <button
+                type="button"
+                data-nodrag
+                aria-label={t("hide")}
+                title={t("hide")}
+                className="tile-remove"
+                onClick={() => removeWidget(tile.key)}
+              >
+                <IconTrash width={16} height={16} />
+              </button>
+            </>
+          ) : null}
         </header>
         <div className="min-h-0 flex-1">{renderBody(tile.key, tile.size)}</div>
       </section>
@@ -162,49 +201,82 @@ export function Dashboard() {
           </div>
         </div>
 
+        {/*
+          READING, or ARRANGING. Everything that changes the board lives
+          behind Edit: the density, the add menu, the pins, the remove
+          buttons, the drag and the resize grips. Save is the way out, and it
+          says "Save" rather than "Done" because what it does is fix the
+          arrangement in place — which is the sentence the person used.
+        */}
         <span className="flex items-center gap-2">
-          <span className="flex overflow-hidden rounded-lg border border-border" role="group" aria-label={t("density")}>
-            {(["comfortable", "compact"] as const).map((d) => (
+          {editing ? (
+            <>
+              <span className="flex overflow-hidden rounded-lg border border-border" role="group" aria-label={t("density")}>
+                {(["comfortable", "compact"] as const).map((d) => (
+                  <button
+                    key={d}
+                    type="button"
+                    aria-pressed={layout.density === d}
+                    className={`h-8 px-2.5 text-xs transition-colors ${
+                      layout.density === d
+                        ? "bg-accent-soft font-semibold text-accent"
+                        : "bg-surface text-fg-muted hover:text-fg"
+                    }`}
+                    onClick={() => update({ ...layout, density: d })}
+                  >
+                    {t(d)}
+                  </button>
+                ))}
+              </span>
+              {/* ADD — grouped by the registry's own sections, so the menu
+                  organises itself as the catalogue grows */}
+              <KebabMenu
+                label={t("addWidget")}
+                trigger={<span className="text-xs">＋ {t("addWidget")}</span>}
+                items={
+                  hidden.length === 0
+                    ? [{ key: "none", label: t("allShown"), icon: null, disabled: true }]
+                    : WIDGET_GROUPS.filter((group) => hidden.some((s) => s.group === group)).map(
+                        (group) => ({
+                          key: group,
+                          label: t(`group.${group}` as "group.overview"),
+                          icon: <IconPlus />,
+                          sub: hidden
+                            .filter((spec) => spec.group === group)
+                            .map((spec) => ({
+                              key: spec.key,
+                              label: t(`widget.${spec.labelKey}` as "widget.records"),
+                              icon: spec.icon,
+                              onSelect: () => addWidget(spec.key),
+                            })),
+                        }),
+                      )
+                }
+              />
               <button
-                key={d}
                 type="button"
-                aria-pressed={layout.density === d}
-                className={`h-8 px-2.5 text-xs transition-colors ${
-                  layout.density === d
-                    ? "bg-accent-soft font-semibold text-accent"
-                    : "bg-surface text-fg-muted hover:text-fg"
-                }`}
-                onClick={() => update({ ...layout, density: d })}
+                className="tap inline-flex h-8 items-center gap-1.5 rounded-lg bg-accent px-3 text-xs font-semibold text-on-accent hover:opacity-90"
+                onClick={() => {
+                  /* the layout is already stored on every change — Save
+                     LOCKS it, which is the promise the button makes */
+                  writeLayout(layout);
+                  setEditing(false);
+                }}
               >
-                {t(d)}
+                <IconCheck width={14} height={14} />
+                {t("saveBoard")}
               </button>
-            ))}
-          </span>
-          {/* ADD — grouped by the registry's own sections, so the menu
-              organises itself as the catalogue grows */}
-          <KebabMenu
-            label={t("addWidget")}
-            trigger={<span className="text-xs">＋ {t("addWidget")}</span>}
-            items={
-              hidden.length === 0
-                ? [{ key: "none", label: t("allShown"), icon: null, disabled: true }]
-                : WIDGET_GROUPS.filter((group) => hidden.some((s) => s.group === group)).map(
-                    (group) => ({
-                      key: group,
-                      label: t(`group.${group}` as "group.overview"),
-                      icon: <IconPlus />,
-                      sub: hidden
-                        .filter((spec) => spec.group === group)
-                        .map((spec) => ({
-                          key: spec.key,
-                          label: t(`widget.${spec.labelKey}` as "widget.records"),
-                          icon: spec.icon,
-                          onSelect: () => addWidget(spec.key),
-                        })),
-                    }),
-                  )
-            }
-          />
+            </>
+          ) : (
+            <button
+              type="button"
+              className="tap inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-surface px-3 text-xs text-fg-muted hover:text-fg"
+              onClick={() => setEditing(true)}
+            >
+              <IconPencil width={14} height={14} />
+              {t("editBoard")}
+            </button>
+          )}
         </span>
       </div>
 
@@ -212,6 +284,7 @@ export function Dashboard() {
       {ready ? (
         <WidgetBoard
           layout={layout}
+          locked={!editing}
           onChange={onBoardChange}
           renderTile={(key) => {
             const tile = layout.tiles.find((candidate) => candidate.key === key);

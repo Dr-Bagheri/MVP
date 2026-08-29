@@ -153,7 +153,11 @@
     "miniCalendarConnect": "Connect Google to see your calendar here.",
     "miniCalendarConnectLink": "Connect an account",
     "miniNoAccess": "You do not have access to this list.",
-    "miniDayEvents": "{count} on this day"
+    "miniDayEvents": "{count} on this day",
+    "editBoard": "Edit",
+    "saveBoard": "Save",
+    "pin": "Pin in place",
+    "unpin": "Unpin"
   },
   "conversations": {
     "title": "History",

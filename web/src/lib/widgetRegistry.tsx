@@ -56,6 +56,15 @@ export interface WidgetSpec {
   defaultSize: TileSize;
   /** in the default board, and in what order */
   defaultOrder?: number;
+  /**
+   * Where this card sits on the default board.
+   *
+   * Written down because the arrangement was DRAWN by the person who wants
+   * it ("fix this as these sizes") and a packer cannot express it: the
+   * calendar runs full height down one side while two rows of cards fill the
+   * rest, which is not any left-to-right walk of this list.
+   */
+  defaultAt?: { x: number; y: number };
 }
 
 /**
@@ -68,52 +77,39 @@ export interface WidgetSpec {
  */
 export const WIDGET_SPECS = [
   {
-    key: "calendar",
-    labelKey: "calendar",
-    icon: <IconCalendar />,
-    group: "overview",
-    /* a month is six rows of squares: at `large` the same grid renders as
-       six rows of flat boxes, which is a table pretending to be a calendar */
-    sizes: ["large", "tall"],
-    defaultSize: "tall",
-    defaultOrder: 1,
-  },
-  {
     key: "integrations",
     labelKey: "integrations",
     icon: <IconPlug />,
     group: "overview",
-    /* BIG (user directive, 2026-08-29): four connection cards, not four rows
-       of small text — the tile answers "is my Google actually connected" */
-    sizes: ["large", "hero"],
-    defaultSize: "large",
-    defaultOrder: 2,
-  },
-  {
-    key: "records",
-    labelKey: "records",
-    icon: <IconRows />,
-    group: "work",
-    /* smaller (user directive): the list is a glance, and the full table is
-       one click away on Echo */
-    sizes: ["small", "large"],
-    defaultSize: "small",
-    defaultOrder: 3,
+    /* the four connections as cards, two by two */
+    sizes: ["column", "large", "hero"],
+    defaultSize: "column",
+    defaultOrder: 1,
+    defaultAt: { x: 0, y: 0 },
   },
   {
     key: "record",
     labelKey: "record",
     icon: <IconMic />,
     group: "work",
-    /*
-     * IN THE MIDDLE (user directive), which the default layout expresses
-     * through this order: it lands between records and agents on the second
-     * row, where a transport belongs — the thing you reach for, flanked by
-     * the things you read.
-     */
+    /* IN THE MIDDLE (user directive): the transport sits between the things
+       you read, which is where you reach for it */
     sizes: ["wide", "large"],
     defaultSize: "wide",
-    defaultOrder: 4,
+    defaultOrder: 2,
+    defaultAt: { x: 3, y: 0 },
+  },
+  {
+    key: "calendar",
+    labelKey: "calendar",
+    icon: <IconCalendar />,
+    group: "overview",
+    /* full height down the side: a month is five or six rows of squares, and
+       at any shorter tier the squares stop being squares */
+    sizes: ["tall", "column"],
+    defaultSize: "tall",
+    defaultOrder: 3,
+    defaultAt: { x: 9, y: 0 },
   },
   {
     key: "agents",
@@ -121,10 +117,21 @@ export const WIDGET_SPECS = [
     icon: <IconAgent />,
     group: "ai",
     /* four named agents, always the same four: there is no longer list for a
-       bigger tier to reveal, so it does not offer one */
-    sizes: ["small", "large"],
+       bigger tier to reveal */
+    sizes: ["small", "column"],
     defaultSize: "small",
+    defaultOrder: 4,
+    defaultAt: { x: 0, y: 3 },
+  },
+  {
+    key: "records",
+    labelKey: "records",
+    icon: <IconRows />,
+    group: "work",
+    sizes: ["large", "wide", "hero"],
+    defaultSize: "large",
     defaultOrder: 5,
+    defaultAt: { x: 3, y: 2 },
   },
 ] as const satisfies readonly WidgetSpec[];
 

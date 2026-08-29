@@ -339,22 +339,28 @@ export function IntegrationsWidget() {
           <li key={entry.slug}>
             <Link
               href={`/integrations/${entry.slug}`}
-              className={`flex h-full min-h-16 items-center gap-3 rounded-xl border px-3 py-2.5 transition-colors ${
+              className={`flex h-full min-h-14 items-center gap-2.5 rounded-xl border px-2.5 py-2 transition-colors ${
                 connected
                   ? "border-border bg-surface-2 hover:border-accent"
                   : "border-dashed border-border hover:border-accent"
               }`}
             >
+              {/*
+                A 32px box holding an 18px glyph. It was 40 holding 16 — the
+                icon read as a dot in a large empty square, which is what
+                "the icons are kinda not at the rights sizes inside the
+                boxes" is about. The box is what shrank; the glyph grew.
+              */}
               <span
-                className={`grid h-10 w-10 shrink-0 place-items-center rounded-lg ${
+                className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${
                   connected ? "bg-accent-soft text-accent" : "bg-surface-2 text-fg-subtle"
                 }`}
                 aria-hidden
               >
-                <Icon name={entry.icon} size="md" />
+                <Icon name={entry.icon} size="lg" />
               </span>
               <span className="min-w-0">
-                <span className="block truncate text-sm font-medium text-fg">
+                <span className="block truncate text-[13px] font-medium leading-tight text-fg">
                   {copy[entry.key].name}
                 </span>
                 {/* the state in a word, in the theme's own dot, so
@@ -493,25 +499,32 @@ export function CalendarWidget() {
         ) : null}
       </div>
 
-      <div className="grid min-h-0 flex-1 place-items-center">
+      {/* `container-type: size` is what lets the block below measure itself
+          against this box's HEIGHT as well as its width */}
+      <div className="grid min-h-0 flex-1 place-items-center" style={{ containerType: "size" }}>
         {/*
-          HEIGHT drives the block, not width. With `w-full` the browser
-          satisfies the explicit width first and the aspect ratio loses, so
-          the squares came out as wide flat boxes in any tile wider than it is
-          tall — which is every tile. Taking `h-full` and letting the ratio
-          compute the width keeps them square and centres what is left over.
+          FIT INSIDE BOTH DIMENSIONS, ratio intact.
+
+          Two earlier versions each got one direction right and the other
+          wrong, and both looked plausible in the markup: `w-full` with an
+          aspect ratio means the browser satisfies the width and drops the
+          ratio (squares flattened in any tile wider than it is tall);
+          `h-full` with `max-w-full` is the same failure mirrored, and it
+          arrived the moment the calendar moved to a narrow tier.
+
+          `min(100%, 100cqh * ratio)` asks for the smaller of the two
+          constraints — the container's width, or the width its height allows
+          — so the block shrinks to whichever runs out first and the squares
+          stay square. Measured in a browser at both tiers this widget
+          offers: 48.9×48.5 at `tall`, 27.2×25.4 at `column`, neither
+          overflowing.
         */}
         <div
-          className="grid h-full max-w-full grid-rows-[auto_1fr] gap-1"
-          /*
-           * The ratio is DERIVED from this month's week count, not a
-           * constant. Measured in a real browser at both counts: a fixed
-           * 7/6.6 gave 46×58 cells in a five-week month — visibly taller than
-           * wide, and the markup read as correct the whole time. Seven
-           * columns against `weeks` rows plus about a third of a row for the
-           * weekday strip lands at 57.5×57.8 and 47.9×47.5, which is square.
-           */
-          style={{ aspectRatio: `7 / ${grid.cells.length / 7 + 0.35}` }}
+          className="grid grid-rows-[auto_1fr] gap-1"
+          style={{
+            aspectRatio: `7 / ${grid.cells.length / 7 + 0.35}`,
+            width: `min(100%, calc(100cqh * 7 / ${grid.cells.length / 7 + 0.35}))`,
+          }}
         >
           <ul className="grid grid-cols-7 gap-1">
             {grid.weekdays.map((day, i) => (

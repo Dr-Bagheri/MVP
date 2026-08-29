@@ -101,6 +101,14 @@ export const IconPulse = (p: SVGProps<SVGSVGElement>) => (
 export const IconPencil = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><path d="m4.5 19.5.9-3.6L16.6 4.7a1.8 1.8 0 0 1 2.6 0l.1.1a1.8 1.8 0 0 1 0 2.6L8.1 18.6l-3.6.9Z" /><path d="m14.5 6.5 3 3" /></svg>
 );
+/**
+ * A PUSH PIN, drawn head-on: the round head, the collar, and the point going
+ * into the board. The map-marker teardrop was the other candidate and is the
+ * wrong idea entirely — that one says "a place", this one says "held down".
+ */
+export const IconPin = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><path d="M9 3.5h6l-.8 5.2 3.1 2.6a1 1 0 0 1-.6 1.7H7.3a1 1 0 0 1-.6-1.7l3.1-2.6L9 3.5Z" /><path d="M12 13v7.5" /></svg>
+);
 export const IconTrash = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><path d="M4.5 6.5h15" /><path d="M9 6.5V4.8A1.3 1.3 0 0 1 10.3 3.5h3.4A1.3 1.3 0 0 1 15 4.8v1.7" /><path d="M6.5 6.5 7.4 19a1.5 1.5 0 0 0 1.5 1.4h6.2A1.5 1.5 0 0 0 16.6 19l.9-12.5" /><path d="M10 10.5v6M14 10.5v6" /></svg>
 );
@@ -377,6 +385,7 @@ export const ICONS = {
   "pause": IconPause,
   "pencil": IconPencil,
   "people3": IconPeople3,
+  "pin": IconPin,
   "play": IconPlay,
   "plug": IconPlug,
   "plus": IconPlus,

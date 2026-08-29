@@ -38,7 +38,7 @@ export {
  * columns rather than six so a `small` tile is a genuine quarter and the
  * engine can pack without half-column rounding.
  */
-export const TILE_SIZES = ["small", "wide", "large", "tall", "hero"] as const;
+export const TILE_SIZES = ["small", "wide", "column", "large", "tall", "hero"] as const;
 export type TileSize = (typeof TILE_SIZES)[number];
 
 export const COLUMNS = 12;
@@ -47,15 +47,15 @@ export const COLUMNS = 12;
 export const SIZE_SPAN: Record<TileSize, { w: number; h: number }> = {
   small: { w: 3, h: 2 },
   wide: { w: 6, h: 2 },
+  /* a quarter-width card with room for a real list or a 2x2 grid of cards */
+  column: { w: 3, h: 3 },
   large: { w: 6, h: 3 },
   /*
-   * TALL joined the set for the calendar (2026-08-29). A month is six rows of
-   * squares, and squares only stay square if the tile has the height to hold
-   * them — at `large` the same grid renders as six rows of wide, flat boxes.
-   * It is the one tier that is taller than it is wide in grid terms, which is
-   * exactly what a calendar is.
+   * TALL is the calendar's tier: a month is five or six rows of squares, and
+   * squares only stay square if the tile has the height to hold them. It is
+   * the one tier taller than it is wide, which is exactly what a month is.
    */
-  tall: { w: 6, h: 5 },
+  tall: { w: 3, h: 5 },
   hero: { w: 12, h: 3 },
 };
 
@@ -83,7 +83,7 @@ export function sizeFromSpan(w: number, h: number): TileSize {
  * row.
  */
 export function rowsFor(size: TileSize): number {
-  return { small: 3, wide: 3, large: 6, tall: 9, hero: 12 }[size];
+  return { small: 3, wide: 3, column: 5, large: 6, tall: 9, hero: 12 }[size];
 }
 
 export type Density = "comfortable" | "compact";
@@ -94,6 +94,15 @@ export interface TilePlacement {
   x: number;
   y: number;
   size: TileSize;
+  /**
+   * PINNED: this card holds its place even while the board is being edited.
+   *
+   * The board is locked outside edit mode, so a pin is not what stops a card
+   * moving in ordinary use — it is what stops a card being SHOVED by another
+   * one you are dragging. Without it, arranging the last tile rearranges the
+   * three you had already settled.
+   */
+  pinned?: boolean;
 }
 
 export interface DashboardLayout {
@@ -130,28 +139,28 @@ export function clampSize(key: WidgetKey, size: TileSize): TileSize {
 }
 
 /**
- * The starting board: the registry's default widgets, packed left to right
- * at their default sizes. Computed rather than hand-written, so changing a
- * widget's default size cannot leave a stale coordinate behind.
+ * The starting board — the arrangement the user drew and asked to keep
+ * ("fix this as these sizes", 2026-08-29).
+ *
+ * WRITTEN DOWN, not packed. The earlier version walked the catalogue placing
+ * cards left to right and wrapping at the edge, which can express "in this
+ * order" and cannot express "the calendar runs full height down the side
+ * while two rows of cards fill the rest" — the arrangement that was actually
+ * asked for. So each entry carries its own corner in the registry.
+ *
+ * The SIZES still come from the registry rather than from a coordinate here:
+ * a spec change moves the card without leaving a stale span behind, and the
+ * layout suite asserts that whatever comes out has no overlaps and fits
+ * inside the grid.
  */
 export function defaultLayout(): DashboardLayout {
-  const tiles: TilePlacement[] = [];
-  let x = 0;
-  let y = 0;
-  let rowHeight = 0;
-  for (const key of DEFAULT_WIDGETS) {
-    const size = defaultSizeFor(key);
-    const span = SIZE_SPAN[size];
-    if (x + span.w > COLUMNS) {
-      x = 0;
-      y += rowHeight;
-      rowHeight = 0;
-    }
-    tiles.push({ key, x, y, size });
-    x += span.w;
-    rowHeight = Math.max(rowHeight, span.h);
-  }
-  return { tiles, density: "comfortable" };
+  return {
+    tiles: DEFAULT_WIDGETS.map((key) => {
+      const spec = specFor(key)!;
+      return { key, x: spec.defaultAt?.x ?? 0, y: spec.defaultAt?.y ?? 0, size: defaultSizeFor(key) };
+    }),
+    density: "comfortable",
+  };
 }
 
 export function readLayout(): DashboardLayout {
@@ -180,6 +189,7 @@ export function readLayout(): DashboardLayout {
         x: Math.max(0, Math.min(COLUMNS - 1, Number(tile.x) || 0)),
         y: Math.max(0, Number(tile.y) || 0),
         size,
+        ...(tile.pinned === true ? { pinned: true } : {}),
       });
     }
     /* an EMPTY board is a real state a person can reach by hiding every
@@ -189,6 +199,30 @@ export function readLayout(): DashboardLayout {
   } catch {
     return defaultLayout();
   }
+}
+
+/**
+ * Is a change the ENGINE reported one to write down?
+ *
+ * The board lost its arrangement on every reload without this (user report,
+ * 2026-08-29: "when i refreshed they go all around"), and both halves have
+ * to hold:
+ *
+ * COLUMNS — gridstack re-lays the board out under a narrower window, twelve
+ * columns becoming six and then one, rewriting every x/y/w to fit. That is
+ * the engine describing THIS VIEWPORT, not a person moving a tile: saved at
+ * six columns, a full-width card reports as half-width and comes back a
+ * smaller tier. Storing it overwrites the arrangement with a projection of
+ * itself.
+ *
+ * LOCKED — outside edit mode nothing a person does can move a card, so any
+ * change event is the engine's own reflow.
+ *
+ * It lives here, as a function, because it is a RULE rather than a detail of
+ * the adapter: a rule in prose protects whoever is currently remembering it.
+ */
+export function isPersistableChange(opts: { locked: boolean; columns: number }): boolean {
+  return !opts.locked && opts.columns === COLUMNS;
 }
 
 export function writeLayout(next: DashboardLayout): void {

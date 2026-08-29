@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   COLUMNS, SIZE_SPAN, TILE_SIZES, WIDGET_SPECS,
-  clampSize, defaultLayout, defaultSizeFor, nextFreeSpot, rowsFor, sizeFromSpan, specFor,
+  clampSize, defaultLayout, defaultSizeFor, isPersistableChange, nextFreeSpot, readLayout,
+  rowsFor, sizeFromSpan, specFor, writeLayout,
   type TilePlacement,
 } from "./dashboardLayout";
 
@@ -144,5 +145,41 @@ describe("adding a card", () => {
 
   it("starts at the origin on an empty board", () => {
     expect(nextFreeSpot([])).toEqual({ x: 0, y: 0 });
+  });
+});
+
+describe("what counts as a change worth storing", () => {
+  /**
+   * The board came back rearranged after every reload until this rule
+   * existed, and BOTH halves of it are load-bearing — which is why all four
+   * combinations are here rather than the one that happened to break.
+   *
+   * The one that did break is the third: gridstack re-lays the board out
+   * under a narrower window and reports the result as a change. Written
+   * down, that six-column arrangement replaces the twelve-column one, and a
+   * full-width card comes back a tier smaller.
+   */
+  it("stores only a person's change, at the board's own width", () => {
+    expect(isPersistableChange({ locked: false, columns: COLUMNS })).toBe(true);
+    // locked: nothing a person did can have moved a card
+    expect(isPersistableChange({ locked: true, columns: COLUMNS })).toBe(false);
+    // narrower: the engine describing this viewport, not an arrangement
+    expect(isPersistableChange({ locked: false, columns: 6 })).toBe(false);
+    expect(isPersistableChange({ locked: true, columns: 1 })).toBe(false);
+  });
+});
+
+describe("the stored board", () => {
+  it("keeps a pin through a round trip", () => {
+    /* a pin is a decision a person made about one card; losing it on reload
+       is the same class of bug as losing the arrangement */
+    const layout = defaultLayout();
+    const first = layout.tiles[0]!;
+    writeLayout({ ...layout, tiles: [{ ...first, pinned: true }, ...layout.tiles.slice(1)] });
+
+    const read = readLayout();
+    expect(read.tiles.find((tile) => tile.key === first.key)?.pinned).toBe(true);
+    // and the control: an unpinned card does not come back pinned
+    expect(read.tiles.find((tile) => tile.key !== first.key)?.pinned).toBeUndefined();
   });
 });

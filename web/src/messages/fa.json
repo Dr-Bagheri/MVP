@@ -153,7 +153,11 @@
     "miniNoMeetings": "چیزی در تقویم نیست.",
     "miniCalendarConnectLink": "وصل کردن حساب",
     "miniNoAccess": "به این فهرست دسترسی ندارید.",
-    "miniDayEvents": "{count} مورد در این روز"
+    "miniDayEvents": "{count} مورد در این روز",
+    "editBoard": "ویرایش",
+    "saveBoard": "ذخیره",
+    "pin": "سنجاق کردن",
+    "unpin": "برداشتن سنجاق"
   },
   "conversations": {
     "title": "تاریخچه",

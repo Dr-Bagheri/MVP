@@ -5,7 +5,7 @@ import { useLocale } from "next-intl";
 import { GridStack, type GridStackNode } from "gridstack";
 import "gridstack/dist/gridstack.min.css";
 import {
-  COLUMNS, SIZE_SPAN, clampSize, sizeFromSpan,
+  COLUMNS, SIZE_SPAN, clampSize, isPersistableChange, sizeFromSpan,
   type DashboardLayout, type TilePlacement, type WidgetKey,
 } from "@/lib/dashboardLayout";
 
@@ -73,6 +73,12 @@ export function WidgetBoard({ layout, onChange, renderTile, locked = false }: Wi
    */
   const fromEngine = useRef(false);
 
+  /** the pinned keys, readable from inside the engine's own callbacks */
+  const pinnedRef = useRef<Set<string>>(new Set());
+  pinnedRef.current = new Set(
+    layout.tiles.filter((tile) => tile.pinned === true).map((tile) => tile.key),
+  );
+
   const rtl = locale === "fa";
   const compact = layout.density === "compact";
 
@@ -124,6 +130,27 @@ export function WidgetBoard({ layout, onChange, renderTile, locked = false }: Wi
     gridRef.current = grid;
 
     const emit = () => {
+      /*
+       * TWO GUARDS, and the board lost its arrangement on every reload
+       * without them (user report, 2026-08-29: "when i refreshed they go all
+       * around").
+       *
+       * COLUMN COUNT. `columnOpts` re-lays the board out under a narrower
+       * window — twelve columns become six, then one — and rewrites every
+       * node's x/y/w to fit. That is the engine describing THIS VIEWPORT,
+       * not a person moving a tile; `grid.save()` at six columns reports a
+       * `hero` card as six wide, which `sizeFromSpan` reads as `large`. Store
+       * it and the arrangement is overwritten by a projection of itself, so
+       * the next full-width load restores something nobody ever arranged.
+       * The same shape as the RLS counting corollary: "I counted N" and
+       * "there are N" are different statements, and this one is "the board
+       * looks like this HERE".
+       *
+       * LOCKED. Outside edit mode nothing a person does can move a card, so
+       * any change event is the engine's own reflow — never something to
+       * write down.
+       */
+      if (!isPersistableChange({ locked, columns: grid.getColumn() })) return;
       const nodes = grid.save(false) as GridStackNode[];
       fromEngine.current = true;
       onChangeRef.current(
@@ -133,6 +160,10 @@ export function WidgetBoard({ layout, onChange, renderTile, locked = false }: Wi
             const key = node.id as WidgetKey;
             return {
               key,
+              /* the pin is the PERSON's, not the engine's — it is read back
+                 off the layout rather than off the node, so a reflow can
+                 never quietly unpin a card */
+              ...(pinnedRef.current.has(key) ? { pinned: true as const } : {}),
               x: node.x ?? 0,
               y: node.y ?? 0,
               /**
@@ -187,12 +218,22 @@ export function WidgetBoard({ layout, onChange, renderTile, locked = false }: Wi
         const el = host.querySelector<HTMLElement>(`.grid-stack-item[gs-id="${tile.key}"]`);
         if (!el) continue;
         const node = (el as HTMLElement & { gridstackNode?: GridStackNode }).gridstackNode;
+        const pinned = tile.pinned === true;
         if (!node) {
-          grid.makeWidget(el, { id: tile.key, x: tile.x, y: tile.y, w: span.w, h: span.h });
+          grid.makeWidget(el, {
+            id: tile.key, x: tile.x, y: tile.y, w: span.w, h: span.h,
+            /* `locked` is gridstack's "cannot be PUSHED by another widget",
+               which is the half a pin is actually for; noMove/noResize are
+               the half about your own pointer */
+            noMove: pinned, noResize: pinned, locked: pinned,
+          });
           continue;
         }
         if (node.x !== tile.x || node.y !== tile.y || node.w !== span.w || node.h !== span.h) {
           grid.update(el, { x: tile.x, y: tile.y, w: span.w, h: span.h });
+        }
+        if (node.noMove !== pinned) {
+          grid.update(el, { noMove: pinned, noResize: pinned, locked: pinned });
         }
       }
     } finally {
@@ -201,7 +242,10 @@ export function WidgetBoard({ layout, onChange, renderTile, locked = false }: Wi
   }, [layout.tiles]);
 
   return (
-    <div ref={hostRef} className="grid-stack">
+    /* the cursor and the resize grips are scoped to this class: a board you
+       cannot move should not offer a hand to move it (user directive: "the
+       moving hand will disapear") */
+    <div ref={hostRef} className={`grid-stack ${locked ? "grid-locked" : "grid-editing"}`}>
       {layout.tiles.map((tile) => {
         const span = SIZE_SPAN[tile.size];
         return (
@@ -213,6 +257,18 @@ export function WidgetBoard({ layout, onChange, renderTile, locked = false }: Wi
             gs-y={String(tile.y)}
             gs-w={String(span.w)}
             gs-h={String(span.h)}
+            /*
+             * The pin is rendered as ATTRIBUTES as well as pushed through
+             * `grid.update`, and both are needed. Toggling edit mode
+             * destroys and re-initialises the engine — it reads the board
+             * back off these attributes — while the reconcile effect only
+             * runs when `layout.tiles` changes. Without the attributes a pin
+             * survived until the moment you pressed Save, which is the one
+             * moment it has to survive.
+             */
+            {...(tile.pinned === true
+              ? { "gs-no-move": "true", "gs-no-resize": "true", "gs-locked": "true" }
+              : {})}
           >
             <div className="grid-stack-item-content">{renderTile(tile.key)}</div>
           </div>

@@ -858,23 +858,26 @@
 }
 
 /* --- the icon chip ---------------------------------------------------
-   Bigger (user directive, 2026-08-26): a 48px chip with a 24px glyph. At
-   40/16 the icon read as a bullet beside the title rather than as the
-   card's mark. */
+   40px with a 20px glyph (user directive, 2026-08-29: "the icons are kinda
+   not at the rights sizes inside the boxes"). It went to 48/24 when the
+   cards were half the board; on a quarter-width tile that chip was taking
+   the height the card's own content needed, and the glyph inside it read as
+   oversized rather than as a mark. The RATIO is the part that matters and it
+   is unchanged: a glyph at half its box. */
 .tile-chip {
   display: grid;
   place-items: center;
-  width: 48px;
-  height: 48px;
-  border-radius: 15px;
+  width: 40px;
+  height: 40px;
+  border-radius: 13px;
   flex-shrink: 0;
   background: rgb(var(--accent) / .14);
   color: rgb(var(--accent));
 }
 .tile-chip svg {
-  width: 24px;
-  height: 24px;
-  stroke-width: 1.6;
+  width: 20px;
+  height: 20px;
+  stroke-width: 1.7;
 }
 
 /* --- the one control on a card --------------------------------------- */
@@ -893,7 +896,13 @@
   background: rgb(var(--danger) / .14);
   color: rgb(var(--danger));
 }
+/* the PIN is not a destructive control, so it does not borrow the red — and
+   a pinned card's pin stays lit, because the state has to be readable
+   without hovering every card to find out which ones are held */
+.tile-pin:hover { background: rgb(var(--accent) / .14); color: rgb(var(--accent)); }
+.tile-pin.is-pinned { opacity: 1; color: rgb(var(--accent)); }
 .tile:hover .tile-remove,
+.tile-pin.is-pinned,
 .tile-remove:focus-visible { opacity: 1; }
 .tile-remove:focus-visible { outline: 2px solid rgb(var(--accent)); outline-offset: 2px; }
 
@@ -966,50 +975,22 @@
 .grid-stack > .grid-stack-item > .ui-resizable-se:hover,
 .grid-stack > .grid-stack-item > .ui-resizable-sw:hover { opacity: 1; }
 
-/* the whole card is the drag handle now — say so with the cursor */
-.grid-stack-item-content { cursor: grab; }
+/* The whole card is the drag handle — WHILE THE BOARD IS BEING EDITED.
+   Outside edit mode the board is locked, and a hand cursor on something that
+   cannot move is an affordance that lies (user directive, 2026-08-29: "the
+   moving hand will disapear"). A PINNED card says so too: it keeps its place
+   even while everything around it is being arranged. */
+.grid-editing .grid-stack-item-content { cursor: grab; }
+.grid-editing .grid-stack-item[gs-no-move="true"] .grid-stack-item-content { cursor: default; }
 .grid-stack-item.ui-draggable-dragging .grid-stack-item-content { cursor: grabbing; }
+/* no grips on a locked board: the corner is not a control right now */
+.grid-locked > .grid-stack-item > .ui-resizable-handle { display: none; }
 .grid-stack-item-content :where(button, a, input, select, textarea) { cursor: pointer; }
 .grid-stack-item-content :where(input, textarea) { cursor: text; }
 
 @media (prefers-reduced-motion: reduce) {
   .tile,
   .grid-stack-item.ui-draggable-dragging .tile { transition: none; transform: none; }
-}
-
-/* --- the app launcher row (the Echo button, at the top) --------------- */
-.launcher {
-  display: inline-flex;
-  align-items: center;
-  gap: .7rem;
-  padding: .55rem 1.15rem .55rem .6rem;
-  border-radius: 999px;
-  background:
-    radial-gradient(120% 200% at 0% 0%, rgb(var(--accent) / .5) 0%, transparent 60%),
-    linear-gradient(135deg, #6C4BD6 0%, #8B5CF6 100%);
-  color: #ffffff;
-  border: 1px solid rgb(255 255 255 / .14);
-  box-shadow: 0 8px 20px -10px rgb(var(--accent) / .8);
-  transition: transform .16s cubic-bezier(.2,.9,.3,1), box-shadow .16s ease;
-}
-.launcher:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 12px 26px -10px rgb(var(--accent) / .95);
-}
-.launcher:focus-visible {
-  outline: 2px solid rgb(var(--accent));
-  outline-offset: 3px;
-}
-.launcher .launcher-mark {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 999px;
-  background: rgb(255 255 255 / .22);
-}
-@media (prefers-reduced-motion: reduce) {
-  .launcher, .launcher:hover { transition: none; transform: none; }
 }
 
 /* --- the quiet scrollbar (user directive, 2026-08-28: "make the scroll

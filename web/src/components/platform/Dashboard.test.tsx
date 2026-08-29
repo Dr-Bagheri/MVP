@@ -1,4 +1,4 @@
-import { act, cleanup, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_WIDGETS } from "@/lib/dashboardLayout";
 
@@ -28,15 +28,28 @@ vi.mock("@/i18n/routing", () => ({
   usePathname: () => "/",
 }));
 
-/** the engine, replaced by the one thing it does for React: render each tile */
+/**
+ * The engine, replaced by the one thing it does for React: render each tile.
+ *
+ * `lockedProp` is captured rather than asserted through a rendered class,
+ * because the class belongs to the real WidgetBoard — asserting it against
+ * this stub would be asserting the stub. What the Dashboard is responsible
+ * for is the PROP, and that is the seam this file can honestly check.
+ */
+const boardProps: { locked?: boolean } = {};
 vi.mock("./dashboard/WidgetBoard", () => ({
   WidgetBoard: ({
     layout,
+    locked,
     renderTile,
   }: {
     layout: { tiles: { key: string }[] };
+    locked?: boolean;
     renderTile: (key: string) => React.ReactNode;
-  }) => <div>{layout.tiles.map((tile) => <div key={tile.key}>{renderTile(tile.key)}</div>)}</div>,
+  }) => {
+    boardProps.locked = locked;
+    return <div>{layout.tiles.map((tile) => <div key={tile.key}>{renderTile(tile.key)}</div>)}</div>;
+  },
 }));
 
 vi.mock("@/api/client", () => ({
@@ -98,5 +111,50 @@ describe("the dashboard board", () => {
           .toBe(false);
       }
     }
+  });
+});
+
+describe("reading, or arranging", () => {
+  /**
+   * The board is LOCKED until somebody presses Edit (user directive,
+   * 2026-08-29). The assertions are paired on purpose: "there is no pin" is
+   * satisfied by a board that never renders one, so each case checks what is
+   * absent in the one mode AND present in the other.
+   */
+  it("offers no way to rearrange until Edit is pressed", async () => {
+    await act(async () => { render(<Dashboard />); });
+
+    expect(screen.queryAllByTitle("سنجاق کردن")).toHaveLength(0);
+    expect(screen.queryAllByTitle("برداشتن از تخته")).toHaveLength(0);
+    expect(screen.queryByText("ذخیره")).toBeNull();
+    // and the engine is told: the cursor and the grips are downstream of this
+    expect(boardProps.locked).toBe(true);
+  });
+
+  it("shows the pins and the remove buttons while editing, and locks again on Save", async () => {
+    await act(async () => { render(<Dashboard />); });
+
+    await act(async () => { fireEvent.click(screen.getByText("ویرایش")); });
+    const tiles = document.querySelectorAll("section.tile").length;
+    expect(screen.getAllByTitle("سنجاق کردن")).toHaveLength(tiles);
+    expect(screen.getAllByTitle("برداشتن از تخته")).toHaveLength(tiles);
+    expect(boardProps.locked).toBe(false);
+
+    await act(async () => { fireEvent.click(screen.getByText("ذخیره")); });
+    expect(screen.queryAllByTitle("سنجاق کردن")).toHaveLength(0);
+    expect(boardProps.locked).toBe(true);
+  });
+
+  it("pins one card without pinning the rest", async () => {
+    await act(async () => { render(<Dashboard />); });
+    await act(async () => { fireEvent.click(screen.getByText("ویرایش")); });
+
+    const pins = screen.getAllByTitle("سنجاق کردن");
+    await act(async () => { fireEvent.click(pins[0]!); });
+
+    /* exactly one — a toggle that pinned everything would satisfy any
+       "is it pinned" assertion just as happily */
+    expect(screen.getAllByTitle("برداشتن سنجاق")).toHaveLength(1);
+    expect(screen.getAllByTitle("سنجاق کردن")).toHaveLength(pins.length - 1);
   });
 });
