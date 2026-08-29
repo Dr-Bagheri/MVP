@@ -40,6 +40,16 @@ import { api } from "@/api/client";
  * command. It asked itself questions in a loop.
  */
 const WAKE_RE = /(?:^|\s)(?:echo|ecco|eko|اکو|ایکو)(?![\p{L}'’])[\s.,،!?]*/iu;
+/**
+ * The same vocabulary as a LOOKUP, for the same-breath rules (a wake word
+ * is an address, not content, so it is stripped before two breaths are
+ * compared). Written out rather than built from the regex — a regex
+ * assembled from an array through a template literal ate its own
+ * backslashes (`\s` in a template is just "s"), which is a silent
+ * miscompile of the wake word itself. `voiceBehavior.test.ts` asserts the
+ * two spellings agree, so drift is caught by a check instead of by luck.
+ */
+export const WAKE_WORDS = new Set(["echo", "ecco", "eko", "اکو", "ایکو"]);
 const STOP_RE = /(?:^|\s)(?:stop|بس|بسه|ساکت|کافیه)(?!\p{L})/iu;
 
 /**
@@ -68,13 +78,94 @@ export function matchWake(text: string): { woke: boolean; command: string } {
   return { woke: true, command: text.slice(m.index + m[0].length).trim() };
 }
 
-function canonical(text: string): string {
-  /* ZWNJ survives: it is Cf, not \p{L}, and stripping it to a space split
-     «می‌خواهم» into two canonical words — which broke the word-count
-     arithmetic the same-breath suffix rule depends on (canonical must
-     never merge or split words, and for Persian that means the joiner is
-     part of the word) */
-  return text.toLowerCase().replace(/[^\p{L}\p{N}\s‌]/gu, " ").replace(/\s+/g, " ").trim();
+/**
+ * A heard word, kept as BOTH what was said and what compares.
+ *
+ * Paired on purpose: the same-breath rules match on the compared form and
+ * then hand back the RAW words they did not cover, so a matched prefix has
+ * to map to exact raw words. Canonicalising a whole sentence and slicing by
+ * word index cannot do that — "don't" loses its apostrophe and becomes two
+ * words, «می‌خواهم» splits at the joiner, and the arithmetic drifts by one
+ * word per contraction. Per-word canonicalisation cannot drift: one word
+ * in, one word out, punctuation stripped INSIDE the word.
+ */
+export interface HeardWord {
+  raw: string;
+  canon: string;
+}
+
+export function heardWords(text: string): HeardWord[] {
+  return text
+    .split(/\s+/)
+    .map((raw) => ({
+      raw,
+      /* the ZWNJ stays: it is Cf, not \p{L}, and in Persian the joiner is
+         part of the word — dropping it makes a different token than the
+         next breath produces */
+      canon: raw.toLowerCase().replace(/[^\p{L}\p{N}‌]/gu, ""),
+    }))
+    .filter((word) => word.canon !== "");
+}
+
+/** the words that COMPARE: the wake word is an address, not content */
+function comparable(words: readonly HeardWord[]): string[] {
+  const canon = words.map((word) => word.canon);
+  return WAKE_WORDS.has(canon[0] ?? "") ? canon.slice(1) : canon;
+}
+
+/** is `needle` a contiguous run of words inside `haystack`? */
+function containsRun(haystack: readonly string[], needle: readonly string[]): boolean {
+  if (needle.length === 0 || needle.length > haystack.length) return false;
+  for (let from = 0; from + needle.length <= haystack.length; from += 1) {
+    let all = true;
+    for (let i = 0; i < needle.length; i += 1) {
+      if (haystack[from + i] !== needle[i]) { all = false; break; }
+    }
+    if (all) return true;
+  }
+  return false;
+}
+
+export type BreathVerdict =
+  /** the same content said again */
+  | { kind: "same" }
+  /** a piece of the previous breath, re-finalised by the provider */
+  | { kind: "fragment" }
+  /** the previous breath plus words it had not spent yet */
+  | { kind: "extends"; fresh: HeardWord[] }
+  /** something else entirely */
+  | { kind: "new" };
+
+/**
+ * How this utterance relates to the previous one — the WHOLE same-breath
+ * decision, in one pure function (rebuilt 2026-08-29 after the live
+ * double-hear survived a first fix).
+ *
+ * The comparison runs on the WAKE-STRIPPED words, and that is what the
+ * first attempt missed: the relay re-finalises a breath without its wake
+ * word, so «echo, go to the users» and «go to the users, okay go to
+ * settings» looked unrelated to a whole-sentence prefix test — and one
+ * sentence got two answers, exactly as the screenshot showed.
+ *
+ * The caller owns the CLOCK: this says what the utterance IS; the windows
+ * in `consume` say how long each kind stays believable.
+ */
+export function compareBreath(
+  previous: readonly string[],
+  current: readonly HeardWord[],
+): BreathVerdict {
+  const core = comparable(current);
+  if (previous.length === 0 || core.length === 0) return { kind: "new" };
+  if (core.length === previous.length && core.every((w, i) => w === previous[i])) {
+    return { kind: "same" };
+  }
+  if (containsRun(previous, core)) return { kind: "fragment" };
+  if (core.length > previous.length && previous.every((w, i) => w === core[i])) {
+    /* map the uncovered tail back to raw words by counting from the END,
+       which both forms share whether or not a wake word led this one */
+    return { kind: "extends", fresh: current.slice(current.length - (core.length - previous.length)) };
+  }
+  return { kind: "new" };
 }
 
 export interface VoiceHandlers {
@@ -108,8 +199,9 @@ export function createVoiceBehavior(
   let inSession = false;
   let sessionTimer: ReturnType<typeof setTimeout> | null = null;
   let speaking = false;
-  let lastCanon = "";
-  let lastCanonAt = 0;
+  /** the previous breath's comparable words, and when it landed */
+  let lastBreath: string[] = [];
+  let lastBreathAt = 0;
 
   const endSession = () => {
     if (sessionTimer) clearTimeout(sessionTimer);
@@ -134,51 +226,34 @@ export function createVoiceBehavior(
     get inSession() { return inSession; },
 
     consume(text: string, now = Date.now()) {
-      const canon = canonical(text);
-      if (!canon) return;
-      /*
-       * The same-breath rules (rebuilt 2026-08-29 after a live double-hear:
-       * the silence gate fired mid-sentence, answered the fragment, and the
-       * FULL sentence then arrived as "new" — two answers for one breath).
-       *
-       *  · identical or CONTAINED in the last utterance → the provider
-       *    re-finalized words already consumed; drop.
-       *  · EXTENDS the last utterance (canon startsWith lastCanon) → the
-       *    same breath, longer: only the words not yet consumed are new,
-       *    so the suffix alone goes forward. Word-count arithmetic maps
-       *    the canonical prefix back onto the raw text — canonical strips
-       *    punctuation but never merges or splits words.
-       *
-       * The window is 15s, not 6: the assistant's own multi-second reply
-       * to the fragment routinely pushed the full sentence past the old
-       * window, which is exactly when the dedupe was needed most.
-       */
-      /*
-       * Two windows, because the cases mean different things:
-       *  · an IDENTICAL utterance within 6s is the provider re-finalizing
-       *    — but the same words ten seconds later are a person REPEATING
-       *    a command that got no visible result, and must act again;
-       *  · a PROPER FRAGMENT of the last breath, or an extension of it,
-       *    stays deduped for 15s — the assistant's own multi-second reply
-       *    routinely pushed those artifacts past the old 6s window, and a
-       *    person does not re-ask with a torn-off piece of their sentence.
-       */
-      if (now - lastCanonAt < 6_000 && canon === lastCanon) return;
-      const withinBreath = now - lastCanonAt < 15_000;
-      if (withinBreath && canon !== lastCanon && lastCanon.includes(canon)) return;
-      if (withinBreath && lastCanon !== "" && canon.startsWith(`${lastCanon} `)) {
-        const consumedWords = lastCanon.split(" ").length;
-        const suffix = text.trim().split(/\s+/).slice(consumedWords).join(" ");
-        lastCanon = canon;
-        lastCanonAt = now;
-        if (!suffix) return;
-        text = suffix;
-      } else {
-        lastCanon = canon;
-        lastCanonAt = now;
-      }
+      const heard = heardWords(text);
+      if (heard.length === 0) return;
 
-      const words = canon.split(" ").length;
+      /*
+       * TWO WINDOWS, because the kinds mean different things:
+       *  · the SAME words within 6s are the provider re-finalising — ten
+       *    seconds later they are a person repeating a command that got no
+       *    visible result, and that must act again;
+       *  · a FRAGMENT or an EXTENSION of the last breath stays believable
+       *    for 15s, because the assistant's own multi-second reply sits in
+       *    the middle of exactly those artifacts, and nobody re-asks with a
+       *    torn-off piece of their own sentence.
+       * The anchor stays on the last REAL breath: a dropped artifact does
+       * not renew the window, or a re-finalisation storm would hold it
+       * open forever.
+       */
+      const elapsed = now - lastBreathAt;
+      const verdict = compareBreath(lastBreath, heard);
+      if (verdict.kind === "same" && elapsed < 6_000) return;
+      if (verdict.kind === "fragment" && elapsed < 15_000) return;
+      if (verdict.kind === "extends" && elapsed < 15_000) {
+        /* only the words this breath has not already spent go forward */
+        text = verdict.fresh.map((word) => word.raw).join(" ");
+      }
+      lastBreath = comparable(heard);
+      lastBreathAt = now;
+
+      const words = heardWords(text).length;
       const wake = matchWake(text);
       const stops = STOP_RE.test(text);
 

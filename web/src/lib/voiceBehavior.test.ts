@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { utteranceScriptOk, createVoiceBehavior, matchWake } from "./voiceLoop";
+import {
+  WAKE_WORDS, createVoiceBehavior, heardWords, matchWake, utteranceScriptOk,
+} from "./voiceLoop";
 import { speechLangOf } from "./voice";
 
 /**
@@ -195,42 +197,76 @@ describe("speechLangOf — script decides, the locale breaks ties (2026-08-29)",
   });
 });
 
-describe("the same-breath rules (rebuilt 2026-08-29, the live double-hear)", () => {
+describe("the same-breath rules — rebuilt on the live double-hear", () => {
   function harness() {
     const commands: string[] = [];
     const behavior = createVoiceBehavior({
-      onWake: () => {},
-      onCommand: (command) => commands.push(command),
-      onStop: () => {},
+      onWake: () => {}, onCommand: (c) => commands.push(c), onStop: () => {},
     });
     return { commands, behavior };
   }
 
-  it("a breath that EXTENDS the last one forwards only the new words", () => {
-    /* the incident verbatim: the gate fired mid-sentence, the fragment was
-       answered, then the full sentence arrived as "new" — the old rules
-       answered it whole, and one breath got two answers */
+  it("THE INCIDENT: a re-finalised breath WITHOUT its wake word forwards only the new words", () => {
+    /*
+     * The screenshot, verbatim (2026-08-29). The relay re-finalises the
+     * sentence without the wake word, which is what defeated the first
+     * fix: a whole-sentence prefix test saw two unrelated sentences and
+     * the user got two navigations for one request.
+     */
     const { commands, behavior } = harness();
-    behavior.consume("اکو خب، امروز می‌خواهم در مورد", 1_000);
-    behavior.consume("اکو خب، امروز می‌خواهم در مورد کارهایی که کردیم صحبت کنیم", 4_000);
+    behavior.consume("Echo. Uh, okay, can you go to the users", 1_000);
+    behavior.consume("Uh, okay, can you go to the users? Okay, go to Settings,", 5_000);
     expect(commands).toHaveLength(2);
-    expect(commands[1]).toBe("کارهایی که کردیم صحبت کنیم");
+    expect(commands[0]).toBe("Uh, okay, can you go to the users");
+    expect(commands[1]).toBe("Okay, go to Settings,");
   });
 
-  it("a re-finalized piece CONTAINED in the last breath is dropped — even after a long reply", () => {
-    /* 12s apart: inside the widened window. The old 6s window expired
-       exactly while the assistant spoke its multi-second reply, which is
-       when the re-finalized tail arrived in the incident. */
+  it("THE INCIDENT, Persian: a tail of the same breath is dropped, not re-answered", () => {
     const { commands, behavior } = harness();
-    behavior.consume("اکو خب، امروز می‌خواهم در مورد کارهایی که کردیم صحبت کنیم", 1_000);
-    behavior.consume("در مورد کارهایی که کردیم صحبت کنیم", 13_000);
+    behavior.consume("اکو برو به تنظیمات پلتفرم", 1_000);
+    behavior.consume("تنظیمات پلتفرم.", 6_000);
     expect(commands).toHaveLength(1);
   });
 
-  it("a genuinely new breath after the window is a new breath", () => {
+  it("an extension keeps working across the assistant's own long reply", () => {
     const { commands, behavior } = harness();
-    behavior.consume("اکو سلام", 1_000);
-    behavior.consume("اکو سلام", 20_000);
+    behavior.consume("اکو برو تو مهارت‌ها", 1_000);
+    behavior.consume("برو تو مهارت‌ها مرسی", 12_000); // 11s of spoken reply
     expect(commands).toHaveLength(2);
+    expect(commands[1]).toBe("مرسی");
+  });
+
+  it("the control: the same words said AGAIN later are a person repeating", () => {
+    const { commands, behavior } = harness();
+    behavior.consume("اکو برو به تنظیمات", 1_000);
+    behavior.consume("اکو برو به تنظیمات", 20_000);
+    expect(commands).toHaveLength(2);
+  });
+
+  it("the control: a different sentence is never mistaken for a fragment", () => {
+    const { commands, behavior } = harness();
+    behavior.consume("اکو برو به تنظیمات", 1_000);
+    behavior.consume("خلاصهٔ این جلسه را بنویس", 3_000);
+    expect(commands).toHaveLength(2);
+    expect(commands[1]).toBe("خلاصهٔ این جلسه را بنویس");
+  });
+});
+
+describe("heardWords — one word in, one word out", () => {
+  it("keeps contractions and ZWNJ words WHOLE (the arithmetic depends on it)", () => {
+    expect(heardWords("don't stop").map((w) => w.canon)).toEqual(["dont", "stop"]);
+    expect(heardWords("می‌خواهم بروم").map((w) => w.canon)).toEqual(["می‌خواهم", "بروم"]);
+    /* raw survives beside canon, so a matched prefix maps back exactly */
+    expect(heardWords("Okay, go!").map((w) => w.raw)).toEqual(["Okay,", "go!"]);
+  });
+});
+
+describe("the wake vocabulary has ONE meaning in both shapes", () => {
+  it("every wake word the breath rules strip is a wake word the matcher wakes on", () => {
+    /* the two spellings drifted apart once already (a template-literal
+       regex ate its backslashes); this is the check that says so */
+    for (const word of WAKE_WORDS) {
+      expect(matchWake(`${word} برو به تنظیمات`).woke, word).toBe(true);
+    }
   });
 });
