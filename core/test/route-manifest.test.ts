@@ -101,10 +101,6 @@ const REQUIRED_ROUTES: [method: string, path: string, why: string][] = [
   ["POST", "/v1/gateway/keys", "M17 — per-org API keys"],
   ["GET", "/v1/gateway/keys", "M17"],
   ["DELETE", "/v1/gateway/keys/:id", "M17 — revoke, never delete"],
-  ["POST", "/v1/gateway/webhooks", "M17 — webhooks"],
-  ["GET", "/v1/gateway/webhooks", "M17"],
-  ["PATCH", "/v1/gateway/webhooks/:id", "M17 — disable, never delete"],
-  ["GET", "/v1/gateway/deliveries", "M17 — delivery history"],
 ];
 
 /**

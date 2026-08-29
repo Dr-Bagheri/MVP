@@ -315,7 +315,17 @@ question — `agent_run` and the admin action log are where history lives, not a
 column on the live row.
 
 **D19 — A subscription's existence is an org fact; its URL and secret are a
-credential.** *(`0026`, M17.)* `echo.subscribed_webhooks(event)` returns
+credential.** *(`0026`, M17.)*
+
+> **[FEATURE REMOVED 2026-08-29 — `0132`.]** The webhook tables, the queue and
+> `subscribed_webhooks` are dropped; the M17 amendment in ARCHITECTURE.md has
+> the reasoning. D19 is kept rather than deleted because a decision log records
+> what was decided and why, not only what currently exists — and the rule it
+> carries is general: **the existence of a thing and the credential that
+> operates it are two different visibility classes.** The next outbound
+> integration inherits that, not the function name.
+
+`echo.subscribed_webhooks(event)` returns
 `{id, events, enabled}` for the caller's own org to active members, and never
 `url` or `secret_sha256`. `echo.webhook` itself stays admin-only for every
 command.

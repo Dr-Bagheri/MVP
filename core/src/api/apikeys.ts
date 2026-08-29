@@ -166,7 +166,7 @@ export function assistantAllowed(identity: Identity): boolean {
 }
 
 /**
- * Constant-time compare, exported because the gateway's webhook verification
+ * Constant-time compare, exported because the gateway's key verification
  * documentation tells integrators to use one and it should be the same
  * function we use.
  */

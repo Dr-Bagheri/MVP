@@ -35,7 +35,7 @@ import { createHealthRepo } from "../../src/api/health.ts";
 import { createDb, type SqlClient } from "../../src/db/identity.ts";
 import {
   AGENT_RUN_STATUSES, CALL_STATUSES, MEMBER_ROLES, PART_STATUSES,
-  USER_STATUSES, WEBHOOK_EVENTS,
+  USER_STATUSES,
 } from "../../src/api/vocabulary.ts";
 
 const url = process.env.ECHO_APP_DB_URL;
@@ -191,8 +191,6 @@ try {
   const names = resolverColumns[0]?.argnames ?? [];
   check("resolve_api_key returns allow_assistant", names.includes("allow_assistant"), names);
 
-  console.log("webhook events are identifiers the schema will accept");
-  check("core/ publishes a non-empty closed event set", WEBHOOK_EVENTS.length > 0, [...WEBHOOK_EVENTS]);
 
   /**
    * Seeded SYSTEM ROWS, not just types (the frontend's suggestion, and they

@@ -181,19 +181,6 @@ export const USER_STATUSES = ["pending", "active", "disabled"] as const;
 export type UserStatus = (typeof USER_STATUSES)[number];
 
 /**
- * Webhook events (M17). Not a database enum — a `text[]` column with an
- * application-level closed set, so this list IS the authority rather than a
- * mirror of one. An unknown event is a 400 that names the bad value.
- */
-export const WEBHOOK_EVENTS = [
-  "call.created",
-  "call.transcribed",
-  "call.summarized",
-  "call.failed",
-] as const;
-export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
-
-/**
  * Proposed-write kinds (M4). Published here rather than left in agent/ for
  * the reason every list in this file is published: a consumer had already
  * hand-written `edit_speakers` and nothing in the system could contradict it
@@ -384,9 +371,9 @@ export const OFFERED_CONNECTOR_PROVIDERS = ["google"] as const;
 /**
  * M41 L1 — the facts that may trigger a workflow (P4; closed).
  *
- * Every entry has a REAL emitter, and the spelling is shared with
- * WEBHOOK_EVENTS where the fact is the same one — two spellings of one fact
- * is the drift shape this repo keeps paying for:
+ * Every entry has a REAL emitter. (These spellings were shared with the
+ * gateway's WEBHOOK_EVENTS until 2026-08-29, when the webhook feature was
+ * removed — this list is now the only place a call fact is named.)
  *
  *  · `call.created`     — the api, the moment a recording or upload makes
  *                         its row (user directive, 2026-08-28: "add when

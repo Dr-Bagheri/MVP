@@ -16,7 +16,6 @@ import { identityForJob, resolveIdentity } from "../db/actor.ts";
 import type { Db } from "../db/identity.ts";
 import { allPartsMissing, partsSettled, type Lifecycle } from "./lifecycle.ts";
 import {
-  isDeliveryPayload,
   isSignalPayload,
   isWorkflowStepPayload,
   PART_QUEUES,
@@ -41,19 +40,6 @@ const isPartQueue = (queue: QueueName): boolean =>
 export function createDeadLetterSink({ db, lifecycle, queue, log }: DeadLetterOptions): DeadLetterSink {
   return {
     async onDeadLetter(queueName, body: QueuePayload, info) {
-      // A dead-lettered DELIVERY has no call to fail and no part to gap. Its
-      // own row already carries `failed_at` and the reason, written by the
-      // step before it threw — so the only thing left is to say so. Reaching
-      // for `payload.callId` here would fail a call that has nothing to do
-      // with a webhook that could not be delivered.
-      if (isDeliveryPayload(body)) {
-        log.error(
-          { queue: queueName, delivery_id: body.deliveryId, webhook_id: body.webhookId,
-            org_id: body.orgId, error_type: info.errorType, exhausted: info.exhausted },
-          "webhook delivery dead-lettered",
-        );
-        return;
-      }
       if (isSignalPayload(body)) {
         // M35: a dead signal costs one brief/digest, never anyone's data —
         // identifiers only, and the archived message is the replay handle.

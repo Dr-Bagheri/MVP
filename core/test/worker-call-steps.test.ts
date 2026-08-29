@@ -38,7 +38,7 @@ function fakeDb(rows: unknown[]) {
   return { db, executed };
 }
 
-/** The fan-out is exercised in webhook-enqueue tests; here it must simply not interfere. */
+/** Workflow triggers are exercised in their own tests; here they must simply not interfere. */
 const noopQueue = { send: async () => 1 } as unknown as Queue;
 
 function fakeLifecycle() {

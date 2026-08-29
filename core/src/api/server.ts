@@ -26,7 +26,6 @@ import { createDirectoryRepo, type DirectoryRepo } from "./directory.ts";
 import { createInvitationsRepo, type InvitationsRepo } from "./invitations.ts";
 import { createHealthRepo, type HealthRepo } from "./health.ts";
 import { createAuth, type Auth } from "./auth.ts";
-import { createWebhooksRepo, type WebhooksRepo } from "./webhooks.ts";
 import { createCallsRepo, type CallsRepo } from "./calls.ts";
 import { ConflictError, mapError, NotActivatedError, NotFoundError, pgErrorFields, ValidationError } from "./errors.ts";
 import { reportError } from "../observe/watchtower.ts";
@@ -159,7 +158,6 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       );
     }
   }).catch(() => undefined);
-  const webhooks: WebhooksRepo = createWebhooksRepo(options.db);
   const connectors = createConnectorsRepo(options.db, options.connectorOAuth);
   const mailDrafts = createMailDraftsRepo(options.db, connectors);
   // One resolver for the assistant's `/slug` and the pipeline's summarizer.
@@ -2868,8 +2866,8 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
 
   // ---- gateway administration (M17) --------------------------------------
   //
-  // Managing keys and webhooks is admin-only, enforced by RLS (db/0013's
-  // api_key_admin / webhook_admin). `requireAdmin` is here so a non-admin
+  // Managing keys is admin-only, enforced by RLS (db/0013's api_key_admin).
+  // `requireAdmin` is here so a non-admin
   // gets one legible 403 instead of a confusing empty result, not because it
   // is the authority — if these two ever disagree, SQL wins, which is the
   // right way round.
@@ -2905,38 +2903,6 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     return reply.code(204).send();
   });
 
-  app.post("/v1/gateway/webhooks", async (request, reply) => {
-    const identity = await auth.requireAdmin(request);
-    const body = (request.body ?? {}) as { url?: unknown; events?: unknown };
-    if (typeof body.url !== "string") throw new ValidationError("url is required");
-    if (!Array.isArray(body.events)) throw new ValidationError("events must be an array");
-    return reply.code(201).send(await webhooks.create(identity, {
-      url: body.url, events: body.events as string[],
-    }));
-  });
-
-  app.get("/v1/gateway/webhooks", async (request, reply) => {
-    const identity = await auth.requireAdmin(request);
-    return reply.send({ webhooks: await webhooks.list(identity) });
-  });
-
-  app.patch("/v1/gateway/webhooks/:id", async (request, reply) => {
-    const identity = await auth.requireAdmin(request);
-    const { id } = request.params as { id: string };
-    const body = (request.body ?? {}) as { enabled?: unknown };
-    if (typeof body.enabled !== "boolean") throw new ValidationError("enabled must be a boolean");
-    return reply.send(await webhooks.setEnabled(identity, id, body.enabled));
-  });
-
-  app.get("/v1/gateway/deliveries", async (request, reply) => {
-    const identity = await auth.requireAdmin(request);
-    const query = request.query as { webhook_id?: string; limit?: string };
-    return reply.send({
-      deliveries: await webhooks.deliveries(identity, {
-        webhookId: query.webhook_id, limit: num(query.limit, "limit"),
-      }),
-    });
-  });
 
   // ---- assistant (SSE) ---------------------------------------------------
 

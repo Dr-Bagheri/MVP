@@ -150,9 +150,13 @@ Profile: display name, avatar, interface language. Admins: members list
 settings.
 
 ### Connectors & API gateway
-The public API gateway remains available: per-org API keys and webhooks let
-any platform push audio in and pull results out, under the same permission
-wall. Google and Microsoft calendar/email can now be connected by an
+The public API gateway remains available: per-org API keys let any platform
+push audio in and pull results out, under the same permission wall. Outbound
+webhooks were part of this and were **removed on 2026-08-29** (user
+directive; M17 amendment, db/0132) — they were never reachable end to end,
+because the dispatcher was never registered as a worker handler, so the
+delivery queue carried nothing for its entire life. Integration is inbound:
+a caller with a key comes and reads. Google and Microsoft calendar/email can now be connected by an
 individual through OAuth with PKCE. The provider's tokens are encrypted
 server-side, never returned to the browser or placed in prompts. A missing
 provider configuration is clearly reported as unavailable; the UI never

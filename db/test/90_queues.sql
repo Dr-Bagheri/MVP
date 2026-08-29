@@ -14,8 +14,6 @@ declare
   expected text[] := array[
     -- M35 signals: rule firings, run as the owner (0074)
     'echo_agent_rules',
-    -- outbound: one message per delivery attempt (M17)
-    'echo_deliver_webhook',
     -- per-call: genuinely one step per message
     'echo_link_speakers',
     -- per-part: ONE message walks the whole ml/ ladder
@@ -47,6 +45,15 @@ begin
   perform t.ok(
     not (found && array['echo_vad', 'echo_transcribe', 'echo_diarize', 'echo_transcode']),
     'no queue exists for a rung that ml/ performs inside /process'
+  );
+
+  -- A retired name may never come back (0021's rule, and 0132's case). This
+  -- queue existed for two months and carried zero messages, because its
+  -- consumer was never registered — so the name returning is a signal that
+  -- someone is rebuilding a feature that was removed, not a typo.
+  perform t.ok(
+    not (found && array['echo_deliver_webhook']),
+    'the webhook delivery queue stays retired (0132)'
   );
 end;
 $$;

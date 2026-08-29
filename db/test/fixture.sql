@@ -147,19 +147,6 @@ insert into echo.agent_run
    '02000000-0000-4000-8000-000000000002', 'c4000000-0000-4000-8000-000000000004',
    'assistant', 'running', 'test/model', now() - interval '40 days', null);
 
--- Webhooks: one live subscriber, one disabled, one in the other org. Created
--- by alice, the admin — which is who the dispatcher runs as (M17).
-insert into echo.webhook (id, org_id, url, secret_sha256, events, enabled, created_by) values
-  ('31000000-0000-4000-8000-000000000001', '0a000000-0000-4000-8000-00000000000a',
-   'https://hooks.example.invalid/echo', 'sha-hook-live', '{call.ready,call.failed}', true,
-   '01000000-0000-4000-8000-000000000001'),
-  ('32000000-0000-4000-8000-000000000002', '0a000000-0000-4000-8000-00000000000a',
-   'https://hooks.example.invalid/off', 'sha-hook-off', '{call.ready}', false,
-   '01000000-0000-4000-8000-000000000001'),
-  ('33000000-0000-4000-8000-000000000003', '0b000000-0000-4000-8000-00000000000b',
-   'https://hooks.example.invalid/orgb', 'sha-hook-orgb', '{call.ready}', true,
-   '05000000-0000-4000-8000-000000000005');
-
 -- The combination that broke the purge job: someone asked the assistant about
 -- a call, so a message points at a run that points at that call — and the call
 -- later expires. Without ON DELETE SET NULL (0018) the purge dies on a foreign

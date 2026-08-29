@@ -709,6 +709,52 @@ transport for agent-side connectors when they arrive.
   route code — declined because it moves an authorization rule out of RLS,
   against M3's premise.
 
+**[AMENDED 2026-08-29, user directive — WEBHOOKS ARE REMOVED]**
+
+User directive: *"i dont need the webhook, and the others that are not
+already being used as well"*. The webhook half of M17 is deleted from the
+product (db/0132). **Per-org API keys, `allow_assistant`, the immutable-
+capability rule and the whole inbound gateway are untouched** — the
+integration story M17 exists for is the keys, and they stay.
+
+Why the amendment says *removed* rather than *deferred*: it was never
+reachable end to end, and the catalogue rather than anyone's memory says
+so. `echo.webhook` and `echo.webhook_delivery` held **0 rows**, and the
+`echo_deliver_webhook` queue reported **`total_messages = 0` over its
+entire life** — meaning not one message was ever enqueued, let alone
+delivered. The reason is one line: the dispatcher was written, tested,
+line-reviewed, given an SSRF connect-time address guard and a signing
+scheme with replay protection — and **never registered as a handler in
+`runner.ts`**. A drain created through Settings would have written a row,
+enqueued a delivery, and waited forever.
+
+That is rule 13½ at feature scale: a producer with no consumer, invisible
+from the side that built the producer, and invisible to every suite
+because each half was correct about itself. The three existing 13½
+instruments (granted-vs-called, route-manifest, table-consumed) each check
+ONE seam; none of them asks whether a queue has a registered handler.
+**That gap is the finding, and it outlives the feature** — recorded here
+so the next queue does not repeat it.
+
+What went, precisely: both tables and their six policies, the created_by
+immutability trigger (0030), `subscribed_webhooks(text)` (0026/D19), the
+pgmq queue, `core/src/api/webhooks.ts`, the four worker modules, the four
+`/v1/gateway/webhooks|deliveries` routes, `core/src/net/address-guard.ts`
+(it had no non-webhook consumer), `WEBHOOK_EVENTS`, and the Audit-log-
+drains surface, which was this feature wearing a different name.
+
+Two things deliberately kept. `platform_purge_org` was recreated in the
+same transaction with its two webhook deletes removed — a purge that
+raises is a purge that does not run, on the one path where failing to
+delete is the worst outcome in the product. And the four event spellings
+(`call.created` / `call.transcribed` / `call.summarized` / `call.failed`)
+survive in core's M41 trigger vocabulary, where they have real emitters.
+
+The invariant that outlives the feature, restated because it will apply to
+whatever ships outbound next: **an outbound body carries identifiers and
+status only.** That was never a fact about webhooks; it is a fact about
+leaving the wall.
+
 ## M18 — Name: Echo (اکو) [user decision; revised by M22]
 
 Echo is one brand family with the Android recorder, which is referred to as

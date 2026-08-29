@@ -1,5 +1,5 @@
 /**
- * M17 gateway: per-org keys and webhooks.
+ * M17 gateway: per-org API keys.
  *
  * The load-bearing property is that a key is NOT a bypass — it names a member
  * and the request proceeds as that member, through the same wall. Most of
@@ -14,9 +14,6 @@ import {
   KEY_PREFIX, safeEqual,
 } from "../src/api/apikeys.ts";
 import { mapError, pgErrorFields, UnauthenticatedError, ValidationError } from "../src/api/errors.ts";
-import {
-  createWebhooksRepo, signPayload, verifySignature, WEBHOOK_EVENTS,
-} from "../src/api/webhooks.ts";
 import { createDb, type SqlClient, type SqlTx } from "../src/db/identity.ts";
 import type { Identity } from "../src/agent/types.ts";
 
@@ -370,89 +367,15 @@ describe("a database failure is logged by field, never by message", () => {
   });
 });
 
-describe("webhook signatures", () => {
-  const SECRET = "whsec_test";
-  const BODY = JSON.stringify({ event: "call.summarized", call_id: "c1" });
-
-  it("round-trips a signature the documented way", () => {
-    const now = Math.floor(Date.now() / 1000);
-    expect(verifySignature(SECRET, BODY, now, signPayload(SECRET, BODY, now))).toBe(true);
-  });
-
-  it("SIGNS the timestamp, so a captured delivery cannot be replayed forever", () => {
-    // The timestamp is inside the signed string, not merely beside it —
-    // otherwise a signature stays valid indefinitely and an attacker replays
-    // an old body with a fresh timestamp.
-    const now = Math.floor(Date.now() / 1000);
-    const signature = signPayload(SECRET, BODY, now);
-    expect(signPayload(SECRET, BODY, now + 1)).not.toBe(signature);
-    // stale beyond tolerance → refused even though the mac is genuine
-    expect(verifySignature(SECRET, BODY, now - 3_600, signature)).toBe(false);
-  });
-
-  it("refuses a tampered body and a wrong secret", () => {
-    const now = Math.floor(Date.now() / 1000);
-    const signature = signPayload(SECRET, BODY, now);
-    expect(verifySignature(SECRET, `${BODY} `, now, signature)).toBe(false);
-    expect(verifySignature("whsec_other", BODY, now, signature)).toBe(false);
-  });
-
+describe("constant-time comparison", () => {
+  /*
+   * Lived under "webhook signatures" until the webhook feature was removed
+   * (2026-08-29). `safeEqual` is apikeys.ts's own — every presented key is
+   * compared with it — so the check moved rather than went with the feature.
+   */
   it("compares in constant time, and unequal lengths are not an error", () => {
     expect(safeEqual("abc", "abc")).toBe(true);
     expect(safeEqual("abc", "abd")).toBe(false);
     expect(safeEqual("abc", "abcd")).toBe(false);
-  });
-});
-
-describe("webhooks carry identifiers, never content", () => {
-  const hookRow = (over: Record<string, unknown> = {}) => ({
-    id: "55555555-5555-4555-8555-555555555555",
-    url: "https://example.com/hook", events: ["call.summarized"],
-    enabled: true, created_at: "2026-08-12T09:00:00.000Z", ...over,
-  });
-
-  it("does not select the payload column in the delivery listing", async () => {
-    // payload holds only identifiers by construction (db/0009), but an
-    // endpoint that returns it invites someone to start putting more in it.
-    const { db, log } = fakeDb(() => []);
-    await createWebhooksRepo(db).deliveries(IDENTITY);
-    const query = log.find((l) => l.sql.includes("webhook_delivery"))!;
-    expect(query.sql).not.toContain("payload");
-    expect(query.sql).toContain("response_code");
-  });
-
-  it("requires https and rejects an unknown event by name", async () => {
-    const { db } = fakeDb(() => [hookRow()]);
-    const repo = createWebhooksRepo(db);
-    await expect(repo.create(IDENTITY, { url: "http://x.test", events: ["call.created"] }))
-      .rejects.toThrow(/https/);
-    await expect(repo.create(IDENTITY, { url: "https://x.test", events: [] }))
-      .rejects.toThrow(/at least one event/);
-    // named, so an integrator does not silently subscribe to nothing
-    await expect(repo.create(IDENTITY, { url: "https://x.test", events: ["call.finished"] }))
-      .rejects.toThrow(/call\.finished/);
-  });
-
-  it("returns the signing secret once and stores only a derivative", async () => {
-    const { db, log } = fakeDb(() => [hookRow()]);
-    const minted = await createWebhooksRepo(db).create(IDENTITY, {
-      url: "https://x.test", events: ["call.summarized"],
-    });
-    expect(minted.secret.startsWith("whsec_")).toBe(true);
-    const insert = log.find((l) => l.sql.includes("insert into echo.webhook"))!;
-    expect(insert.params?.some((p) => p === minted.secret)).toBe(false);
-  });
-
-  it("disables instead of deleting, keeping the delivery history readable", async () => {
-    const { db, log } = fakeDb(() => [hookRow({ enabled: false })]);
-    const record = await createWebhooksRepo(db).setEnabled(IDENTITY, hookRow().id as string, false);
-    expect(record.enabled).toBe(false);
-    expect(log.find((l) => l.sql.includes("echo.webhook"))!.sql).not.toMatch(/\bdelete\s+from\b/i);
-  });
-
-  it("publishes a closed event set", () => {
-    expect([...WEBHOOK_EVENTS]).toEqual([
-      "call.created", "call.transcribed", "call.summarized", "call.failed",
-    ]);
   });
 });

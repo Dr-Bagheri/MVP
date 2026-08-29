@@ -370,7 +370,9 @@ same.
 caller, so a guard like "this delivery must name a webhook in my org" — written
 as a subquery against `echo.webhook`, which members cannot see — denies every
 insert instead of the wrong ones. This was written, and caught by re-reading,
-within hours of the paragraph above being added.
+within hours of the paragraph above being added. *(The webhook tables were
+removed in `0132`; the example is kept as it happened, because the trap is
+about policies and joins, not about that feature.)*
 
 So: **when a policy needs a fact about another protected table, reach for a
 constraint, not a subquery.** The cross-org guard is a composite foreign key
@@ -511,8 +513,6 @@ table with RLS enabled and forced.
   member is disabled
 - a gateway key cannot reach the assistant unless an admin opened it, and no
   key written before that feature existed acquired it
-- a member can learn that a webhook subscribes to an event, and never where it
-  points or what signs it; they can enqueue a delivery and cannot read it back
 - the `call_current_summary` view respects the caller's RLS rather than its
   owner's
 

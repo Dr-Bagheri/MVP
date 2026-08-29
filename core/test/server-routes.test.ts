@@ -762,8 +762,6 @@ describe("gateway administration routes", () => {
   it("is closed to a non-admin member", async () => {
     for (const [method, url] of [
       ["GET", "/v1/gateway/keys"], ["POST", "/v1/gateway/keys"],
-      ["GET", "/v1/gateway/webhooks"], ["POST", "/v1/gateway/webhooks"],
-      ["GET", "/v1/gateway/deliveries"],
     ] as const) {
       const res = await server().inject({
         method, url, headers: authed, payload: { name: "x", url: "https://x.test", events: ["call.created"] },
@@ -772,13 +770,6 @@ describe("gateway administration routes", () => {
     }
   });
 
-  it("400s a webhook with a non-https url before touching the database", async () => {
-    const res = await server(adminDb()).inject({
-      method: "POST", url: "/v1/gateway/webhooks", headers: authed,
-      payload: { url: "http://x.test", events: ["call.created"] },
-    });
-    expect(res.statusCode).toBe(400);
-  });
 });
 
 describe("assistant SSE route", () => {

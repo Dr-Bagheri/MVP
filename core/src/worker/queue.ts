@@ -23,8 +23,6 @@ export const Q_PROCESS_PART = "echo_process_part";
 /** Per call, once its parts are done. */
 export const Q_LINK_SPEAKERS = "echo_link_speakers";
 export const Q_SUMMARIZE = "echo_summarize";
-/** Webhook fan-out (db/0026). One message per delivery, not per event. */
-export const Q_DELIVER_WEBHOOK = "echo_deliver_webhook";
 
 /** M35 signals: rule firings, each run AS the owner (db/0074). */
 export const Q_AGENT_RULES = "echo_agent_rules";
@@ -35,7 +33,7 @@ export const Q_WORKFLOW_STEP = "echo_workflow_step";
 export const PART_QUEUES = [Q_PROCESS_PART] as const;
 export const CALL_QUEUES = [Q_LINK_SPEAKERS, Q_SUMMARIZE] as const;
 export const ALL_QUEUES = [
-  ...PART_QUEUES, ...CALL_QUEUES, Q_DELIVER_WEBHOOK, Q_AGENT_RULES, Q_WORKFLOW_STEP,
+  ...PART_QUEUES, ...CALL_QUEUES, Q_AGENT_RULES, Q_WORKFLOW_STEP,
 ] as const;
 
 export type QueueName = (typeof ALL_QUEUES)[number];
@@ -69,24 +67,6 @@ export interface JobPayload {
   label?: string;
 }
 
-/**
- * A webhook delivery carries a DIFFERENT identity to a pipeline job.
- *
- * A pipeline job runs as the call's owner. A delivery has no call and no
- * owner — it runs as the webhook's `created_by`, an admin by construction
- * (db/0013's `webhook_admin` required admin at creation). M17, ratified: this
- * matches D6's posture for inbound keys, where "disabling an employee stops
- * their integrations immediately" was ratified as a feature. Outbound behaves
- * the same way, and it fails closed: demote that admin and their org's
- * deliveries stop.
- */
-export interface DeliveryPayload {
-  deliveryId: string;
-  webhookId: string;
-  orgId: string;
-  /** The webhook's created_by. Written at enqueue time, when a caller existed. */
-  actorId: string;
-}
 
 /**
  * M35: a signal firing. `event` names WHY (the signal), the owner names WHO
@@ -117,11 +97,7 @@ export interface WorkflowStepPayload {
   orgId: string;
 }
 
-export type QueuePayload = JobPayload | DeliveryPayload | SignalPayload | WorkflowStepPayload;
-
-export function isDeliveryPayload(body: QueuePayload): body is DeliveryPayload {
-  return typeof (body as DeliveryPayload).deliveryId === "string";
-}
+export type QueuePayload = JobPayload | SignalPayload | WorkflowStepPayload;
 
 export function isSignalPayload(body: QueuePayload): body is SignalPayload {
   return typeof (body as SignalPayload).event === "string";

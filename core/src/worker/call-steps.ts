@@ -11,7 +11,6 @@ import type { Lifecycle } from "./lifecycle.ts";
 import { Q_AGENT_RULES, Q_LINK_SPEAKERS, Q_SUMMARIZE, type JobPayload, type Queue } from "./queue.ts";
 import { enqueueWorkflowEvents } from "./workflow-triggers.ts";
 import { StepError, type StepHandler } from "./runner.ts";
-import { enqueueWebhooks } from "./webhook-enqueue.ts";
 import type { MlClient } from "./ml-client.ts";
 import { matchEnrolledVoices, type StorageSignerLike, type VoiceMatchOptions } from "./voice-match.ts";
 import { hasCallSummaryModel, hasCallSummaryPrefs, hasSummaryGrounding, hasSummaryTemplate } from "../db/capabilities.ts";
@@ -102,9 +101,9 @@ export function createLinkSpeakersStep({ db, queue, lifecycle, ml, storage, voic
 
       // Every part has settled, so the transcript is complete — this is the
       // moment `call.transcribed` becomes true, not when the summary lands.
-      // The workflow trigger fires beside the webhook, deliberately at the
-      // SAME site: one fact, one moment, two subscribers.
-      await enqueueWebhooks(db, identity, "call.transcribed", payload.callId, queue, log);
+      // The workflow trigger fires at the moment the fact becomes true.
+      // (A webhook fan-out stood beside it until 2026-08-29, when the
+      // feature was removed — it had never had a consumer.)
       await enqueueWorkflowEvents(db, identity, "call.transcribed", payload.callId, queue, log);
     },
   };
@@ -156,7 +155,7 @@ export interface SummarizeOptions {
   db: Db;
   lifecycle: Lifecycle;
   summarizer: Summarizer;
-  /** For the webhook fan-out; the summarize step queues nothing else. */
+  /** For the post-call signal and the workflow triggers (M35, M41). */
   queue: Queue;
   /** Ceiling on transcript characters handed to the model. Context is the budget (M8). */
   maxTranscriptChars?: number;
@@ -211,7 +210,6 @@ export function createSummarizeStep({
         // cannot do.
         await lifecycle.failCall(identity, payload.callId, "no transcript to summarize");
         log.error({ call_id: payload.callId }, "no transcript; call failed rather than summarized");
-        await enqueueWebhooks(db, identity, "call.failed", payload.callId, queue, log);
         return;
       }
 
@@ -359,7 +357,6 @@ export function createSummarizeStep({
 
       await lifecycle.setCallStatus(identity, payload.callId, "ready");
       log.info({ call_id: payload.callId, run_id: result.runId }, "call ready");
-      await enqueueWebhooks(db, identity, "call.summarized", payload.callId, queue, log);
       /*
        * M35: announce call.processed on the signals queue — the post-call
        * brief's trigger. Best-effort BY DESIGN: the queue may not exist yet
