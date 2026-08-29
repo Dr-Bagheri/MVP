@@ -35,6 +35,12 @@ const RHYTHM = [
   "px-page-inline", "px-page-inline-md",
   "pt-page", "pt-page-sm", "pt-page-menu",
   "pb-page-bottom",
+  /* the SECTION SCROLL's height (2026-08-29). Same rule for the same reason:
+     the record page had already grown one hand-written
+     `max-h-[calc(100dvh-13rem)]`, and a section that picks its own height is
+     the page column's story repeating one level down. `SectionScroller` is
+     the only place this may be written. */
+  "max-h-section",
 ];
 
 /**

@@ -592,6 +592,18 @@
   body {
     background: #ffffff;
   }
+  /*
+   * A SECTION'S SCROLLER PRINTS WHOLE (2026-08-29, with the section-scroll
+   * mechanism it belongs to). On screen a summary or a transcript ends at the
+   * viewport and scrolls inside itself; on paper there is no viewport, and a
+   * capped box would print the first screenful and silently drop the rest —
+   * a minute of a meeting that looks complete and is not. The one place the
+   * cap is written is the one place it is lifted.
+   */
+  [data-section-scroll] {
+    max-height: none !important;
+    overflow: visible !important;
+  }
 }
 
 /* ===========================================================================

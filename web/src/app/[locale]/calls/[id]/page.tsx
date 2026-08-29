@@ -10,12 +10,14 @@ import { useCrumbTitle } from "@/components/platform/CrumbTitle";
 import { Card, Chip } from "@/components/ui";
 import { formatClock, formatDate, formatDuration, digits } from "@/lib/format";
 import { isFillerWord, stripFillers } from "@/lib/cleanRead";
-import { ConfirmDialog, IconAction, KebabMenu, SelectMenu } from "@/components/rowActions";
+import {
+  ConfirmDialog, IconAction, KebabMenu, SelectMenu, type KebabItem,
+} from "@/components/rowActions";
 import { RichTextEditor } from "@/components/RichTextEditor";
 import {
-  IconArchive, IconAsk, IconChip, IconClose, IconCopy, IconDownload, IconEye, IconFileText, IconFilter, IconGavel, IconGlobe, IconMic, IconOutline, IconParagraph, IconPencil, IconPeople3, IconPlus, IconPrint, IconRedact, IconRetry, IconRows, IconShare, IconSparkle, IconTag, IconUsers, IconZap,
+  IconArchive, IconAsk, IconChip, IconCopy, IconDownload, IconEye, IconFileText, IconFilter, IconGavel, IconGlobe, IconMic, IconOutline, IconParagraph, IconPencil, IconPeople3, IconPlus, IconPrint, IconRedact, IconRetry, IconRows, IconShare, IconSparkle, IconTag, IconTrash, IconUsers, IconWarn, IconZap,
 } from "@/components/icons";
-import { PageContainer, SectionMenu } from "@/components/scaffold";
+import { PageContainer, SectionMenu, SectionScroller } from "@/components/scaffold";
 import { SummaryBody, parseSummary } from "@/components/echo/SummaryBody";
 import { appendLaneItem, summaryLanes, type Lane } from "@/lib/summaryLanes";
 import { faDisplay } from "@/lib/faDisplay";
@@ -79,6 +81,85 @@ const PIPELINE_LADDER: readonly string[] = ["recording", "processing", "linking"
     a roster is small and its order is stable within a call). */
 const SPEAKER_TEXT = ["text-accent", "text-info", "text-success", "text-warning"] as const;
 const SPEAKER_BORDER = ["border-accent/60", "border-info/60", "border-success/60", "border-warning/60"] as const;
+
+/**
+ * THE SUMMARY'S WARNINGS (user directive, 2026-08-29: *"add a warning small
+ * icon next to kebab menu icon and put these kind of warning that are related
+ * to the summary there"*).
+ *
+ * The 0087 grounding verdict used to render as an amber box under the
+ * document — a permanent block of apology standing between the reader and the
+ * text it is about. It lives behind this icon now, and the icon exists ONLY
+ * when there is something to read: no flags, no icon, and never an empty
+ * panel. A marker that is always on screen is one nobody reads, which would
+ * cost exactly the readers this check exists for.
+ *
+ * The whole "is there a warning" rule lives HERE, in one place. The caller
+ * hands over the verdict as the wire gave it — absent (deployment not
+ * migrated), null (never checked), clean, or flagged — and never decides for
+ * itself which of those is a warning.
+ */
+function SummaryWarnings({
+  label,
+  heading,
+  grounding,
+}: {
+  label: string;
+  heading: string;
+  grounding?: { clean: boolean; model: string; flags: { claim: string; note: string }[] } | null;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLSpanElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (event: MouseEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  /* absent, null and clean are three different nothings and none of them is
+     a warning — only a checked-and-flagged verdict is */
+  const flags = grounding && !grounding.clean ? grounding.flags : [];
+  if (flags.length === 0) return null;
+
+  return (
+    <span ref={rootRef} className="relative inline-flex">
+      <IconAction
+        label={label}
+        onClick={() => setOpen((v) => !v)}
+        className="text-warning hover:bg-warning/10 hover:text-warning"
+      >
+        <IconWarn />
+      </IconAction>
+      {open ? (
+        <div
+          role="dialog"
+          aria-label={label}
+          className="absolute end-0 top-8 z-30 w-72 rounded-lg border border-warning/30 bg-surface p-3 shadow-xl"
+        >
+          <p className="text-xs font-semibold text-warning">{heading}</p>
+          <ul className="mt-1.5 space-y-1.5">
+            {flags.map((flag, i) => (
+              <li key={i} className="text-xs leading-5 text-fg-muted">
+                «{flag.claim}»{flag.note ? ` — ${flag.note}` : ""}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </span>
+  );
+}
 
 export default function CallDetailPage({
   params,
@@ -855,8 +936,10 @@ export default function CallDetailPage({
         void translate("transcript");
       },
     },
-    /* regenerate LEFT the kebab (user directive, 2026-08-25): it lives as
-       the template cards under the summary now */
+    /* regenerate is NOT here: it belongs to the summary, so it lives on the
+       SUMMARY SECTION's own kebab (user directive, 2026-08-29 — reversing
+       the 2026-08-25 template cards, which this comment used to describe).
+       This menu is the record-wide one. */
     ...(call.status === "failed"
       ? [{
           key: "retry",
@@ -979,6 +1062,64 @@ export default function CallDetailPage({
     void navigator.clipboard.writeText(text).then(() => notify(t("copied")));
   }
 
+  /**
+   * THE REGENERATE OFFER (user directive, 2026-08-29: *"put the regenerate
+   * summary into the kebab menu with sub menu in the kebab menu as well for
+   * its options"*) — reversing the 2026-08-25 template CARDS, which took a
+   * whole section of the page body to say what a menu says in one row.
+   *
+   * ONE list, built once and worn by both menus that offer it (the summary's
+   * own and the actions section's, whose `actionsEmpty` sentence promises
+   * exactly this move). Two hand-written copies of an offer is how one of
+   * them quietly stops matching the other — the cards had the person's own
+   * templates and the «+»; the actions menu had only the five ruled ones.
+   *
+   * `prefix` keeps the two menus' item keys distinct where they are read
+   * together in a test; the LABELS are the same list by construction.
+   */
+  const regenBlocked = regenBusy || call.status !== "ready";
+  function regenerateItems(prefix: string): KebabItem[] {
+    return [
+      ...SUMMARY_TEMPLATES.map((k) => {
+        const Icon = TEMPLATE_ICON[k];
+        return {
+          key: `${prefix}-${k}`,
+          label: t(TEMPLATE_LABEL_KEY[k]),
+          icon: <Icon width={14} height={14} />,
+          disabled: regenBlocked,
+          onSelect: () => void regenerate({ template: k, label: k }),
+        };
+      }),
+      /* the person's own templates — INTERIM browser-local store */
+      ...customs.map((c) => ({
+        key: `${prefix}-custom-${c.name}`,
+        label: c.name,
+        icon: <IconSparkle width={14} height={14} />,
+        disabled: regenBlocked,
+        onSelect: () => void regenerate({ instruction: c.prompt, label: c.name }),
+      })),
+      {
+        /* authoring one is NOT a regeneration — it opens the composer and
+           runs nothing, which is why it is never disabled with the rest */
+        key: `${prefix}-new`,
+        label: t("templateAdd"),
+        icon: <IconPlus width={14} height={14} />,
+        onSelect: () => setNewTpl({ name: "", prompt: "" }),
+      },
+    ];
+  }
+
+  /** the SUMMARY section's own menu — the regenerate offer's home since
+      2026-08-29, as a parent item that opens the template list */
+  const summaryMenuItems: KebabItem[] = [
+    {
+      key: "summary-regen",
+      label: t("regenTitle"),
+      icon: <IconRetry />,
+      sub: regenerateItems("summary-regen"),
+    },
+  ];
+
   const actionsMenuItems = [
     {
       key: "actions-copy",
@@ -988,22 +1129,10 @@ export default function CallDetailPage({
       onSelect: copyLanesText,
     },
     {
-      /* the same regenerate the summary's template cards run — the
-         actionsEmpty sentence promises exactly this move, so the menu
-         offers it where the promise is read */
       key: "actions-regen",
       label: t("regenTitle"),
       icon: <IconRetry />,
-      sub: SUMMARY_TEMPLATES.map((k) => {
-        const Icon = TEMPLATE_ICON[k];
-        return {
-          key: `actions-regen-${k}`,
-          label: t(TEMPLATE_LABEL_KEY[k]),
-          icon: <Icon width={14} height={14} />,
-          disabled: regenBusy || call.status !== "ready",
-          onSelect: () => void regenerate({ template: k, label: k }),
-        };
-      }),
+      sub: regenerateItems("actions-regen"),
     },
     {
       key: "actions-summary",
@@ -1338,7 +1467,6 @@ export default function CallDetailPage({
 
         {/* ── the summary document (its own SECTION since 2026-08-25) ──── */}
         {section === "summary" ? (
-        <>
         <section className="border-t border-border px-5 py-4">
           <div className="no-print mb-3 flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-sm font-semibold text-fg">{t("summary")}</h2>
@@ -1392,9 +1520,25 @@ export default function CallDetailPage({
                   <IconPencil />
                 </IconAction>
               ) : null}
+              {/* the grounding flags, beside the ⋯ and only when there are
+                  any (user directive, 2026-08-29) — the component owns the
+                  rule, so nothing here decides what counts as a warning */}
+              <SummaryWarnings
+                label={t("summaryWarnings")}
+                heading={t("groundingFlagged")}
+                grounding={summary?.grounding}
+              />
+              {/* the SUMMARY's own menu: the regenerate offer, as a submenu */}
+              <KebabMenu label={t("summaryMenu")} items={summaryMenuItems} />
             </div>
           </div>
 
+          {/* the document SCROLLS ITSELF (user directive, 2026-08-29): the
+              header above stays put — with the version picker, the warnings
+              and the ⋯ always in reach — and only the summary moves. One
+              mechanism, shared with the transcript and both list sections;
+              the height is the scaffold's, never this page's. */}
+          <SectionScroller>
           {summary ? (
             <>
               {editingSummary ? (
@@ -1482,23 +1626,17 @@ export default function CallDetailPage({
               ) : (
                 <SummaryBody text={summary.body} />
               )}
-              {summary.grounding ? (
-                summary.grounding.clean ? (
-                  <p className="mt-2 flex items-center gap-1.5 text-xs text-success">
-                    <span aria-hidden>✓</span> {t("groundingClean")}
-                  </p>
-                ) : (
-                  <div className="mt-2 rounded-md border border-warning/30 bg-warning/10 px-3 py-2">
-                    <p className="text-xs font-semibold text-warning">{t("groundingFlagged")}</p>
-                    <ul className="mt-1 space-y-1">
-                      {summary.grounding.flags.map((flag, i) => (
-                        <li key={i} className="text-xs leading-5 text-fg-muted">
-                          «{flag.claim}»{flag.note ? ` — ${flag.note}` : ""}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )
+              {/* the PASS still says so here, in one line: it is a fact
+                  about the document, and it costs the reader nothing. The
+                  FLAGS left this body for the header's warning icon
+                  (2026-08-29) — an amber box under every checked summary is
+                  a paragraph the eye has to cross to reach the text it is
+                  about, and it was the only part of this block that could
+                  grow without limit. */}
+              {summary.grounding?.clean ? (
+                <p className="mt-2 flex items-center gap-1.5 text-xs text-success">
+                  <span aria-hidden>✓</span> {t("groundingClean")}
+                </p>
               ) : null}
               {showSummaryEn && typeof summaryEn === "string" ? (
                 <div className="no-print mt-3 flex justify-end">
@@ -1516,117 +1654,15 @@ export default function CallDetailPage({
               {call.status === "ready" ? t("noSummaryYet") : t("processing", { status: tStatus(call.status) })}
             </p>
           )}
+          </SectionScroller>
+          {/* a refusal stays OUTSIDE the scroller: an alert that can be
+              scrolled out of sight is an alert nobody reads */}
           {translateError ? (
             <p role="alert" className="mt-2 text-xs text-danger">
               {translateError}
             </p>
           ) : null}
-
         </section>
-
-        {/* ── REGENERATE — its OWN section (user directive, 2026-08-25):
-            icon + name cards, the WHOLE card is the button; «+» authors a
-            new template (name + prompt); one press = one new version.
-            While the new version is being written the section STAYS,
-            deactivated — it must not vanish under the person's pointer. */}
-        {call.status === "ready" || call.status === "summarizing" ? (
-          <section className="no-print border-t border-border px-5 py-4">
-            <h2 className="mb-3 text-sm font-semibold text-fg">{t("regenTitle")}</h2>
-            <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-6">
-              {SUMMARY_TEMPLATES.map((k) => {
-                const Icon = TEMPLATE_ICON[k];
-                return (
-                  <button
-                    key={k}
-                    type="button"
-                    disabled={regenBusy || call.status !== "ready"}
-                    title={t(TEMPLATE_LABEL_KEY[k])}
-                    onClick={() => void regenerate({ template: k, label: k })}
-                    className="tap flex min-h-28 flex-col items-center justify-center gap-2.5 rounded-xl border border-border bg-surface-2/40 px-3 py-4 text-fg-muted transition-colors hover:border-accent hover:text-fg disabled:opacity-50"
-                  >
-                    <Icon width={24} height={24} />
-                    <span className="text-xs font-semibold">{t(TEMPLATE_LABEL_KEY[k])}</span>
-                  </button>
-                );
-              })}
-              {customs.map((c) => (
-                <span key={c.name} className="relative">
-                  <button
-                    type="button"
-                    disabled={regenBusy || call.status !== "ready"}
-                    title={c.name}
-                    onClick={() => void regenerate({ instruction: c.prompt, label: c.name })}
-                    className="tap flex min-h-28 w-full flex-col items-center justify-center gap-2.5 rounded-xl border border-accent/40 bg-surface-2/40 px-3 py-4 text-fg-muted transition-colors hover:border-accent hover:text-fg disabled:opacity-50"
-                  >
-                    <IconSparkle width={24} height={24} />
-                    <span className="max-w-full truncate text-xs font-semibold">{c.name}</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="absolute end-1.5 top-1.5 text-xs text-fg-muted hover:text-danger"
-                    aria-label={t("templateDelete")}
-                    title={t("templateDelete")}
-                    /* a ✕ in the corner of a card is the easiest mis-press
-                       on this screen, and the prompt text behind it lives
-                       only in this browser — so it asks first, like every
-                       other destructive control (confirm.guard.test.ts) */
-                    onClick={() => setConfirmTemplateDelete(c.name)}
-                  >
-                    <IconClose width={14} height={14} />
-                  </button>
-                </span>
-              ))}
-              {newTpl ? (
-                <div className="col-span-full flex flex-col rounded-xl border border-dashed border-border-strong p-3 sm:col-span-2">
-                  <input
-                    className="input mb-2 h-8 min-h-0 py-0 text-xs"
-                    maxLength={60}
-                    placeholder={t("templateNameHint")}
-                    value={newTpl.name}
-                    autoFocus
-                    onChange={(e) => setNewTpl({ ...newTpl, name: e.target.value })}
-                  />
-                  <textarea
-                    className="input min-h-20 flex-1 resize-none py-1.5 text-xs leading-6"
-                    aria-label={t("templatePromptLabel")}
-                    maxLength={500}
-                    placeholder={t("templatePromptHint")}
-                    value={newTpl.prompt}
-                    onChange={(e) => setNewTpl({ ...newTpl, prompt: e.target.value })}
-                  />
-                  <span className="mt-2 flex items-center gap-2">
-                    <button
-                      className="btn-primary h-9 min-h-0 flex-1 text-xs"
-                      disabled={!newTpl.name.trim() || !newTpl.prompt.trim()}
-                      onClick={() => {
-                        setCustoms(saveCustomTemplate(newTpl));
-                        setNewTpl(null);
-                      }}
-                    >
-                      {t("templateSave")}
-                    </button>
-                    <button
-                      className="text-xs text-fg-muted underline-offset-2 hover:underline"
-                      onClick={() => setNewTpl(null)}
-                    >
-                      {t("regenCancel")}
-                    </button>
-                  </span>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  className="tap flex min-h-28 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-border-strong text-fg-muted transition-colors hover:border-accent hover:text-fg"
-                  onClick={() => setNewTpl({ name: "", prompt: "" })}
-                >
-                  <span className="text-2xl leading-none" aria-hidden><IconPlus width={14} height={14} /></span>
-                  <span className="text-xs">{t("templateAdd")}</span>
-                </button>
-              )}
-            </div>
-          </section>
-        ) : null}
-        </>
         ) : null}
 
         {/* ── the transcript (the menu's second section) ────────────────── */}
@@ -1774,14 +1810,33 @@ export default function CallDetailPage({
             ) : null}
           </div>
 
+          {/* the transcript's body, in the SAME scroller the summary uses
+              (user directive, 2026-08-29): the header above — find box,
+              speaker chips, view menu — holds still, and every branch below
+              scrolls inside this one box rather than each picking a height.
+              The ref reaches the scrolling element itself: follow-playback,
+              find-and-centre and the jump-back all scroll it. */}
+          <SectionScroller
+            scrollRef={listRef}
+            onMouseUp={onListMouseUp}
+            onScroll={(e) => {
+              const el = e.currentTarget;
+              if (el.scrollTop + el.clientHeight > el.scrollHeight - 200
+                  && rowLimit < visibleRows.length) {
+                setRowLimit((n) => n + 30);
+              }
+            }}
+          >
           {showTranscriptEn && transcriptEn === "loading" ? (
             <p className="p-4 text-sm text-fg-muted">{t("translating")}</p>
           ) : showTranscriptEn && typeof transcriptEn === "string" ? (
             /* SIDE-BY-SIDE (user directive): the Persian record stays on
                screen beside its English rendering — a translation is a lens,
-               not a replacement */
+               not a replacement. The two columns share the SECTION's
+               scroller now — they used to carry a 24rem box each, which was
+               two more heights nobody had decided on. */
             <div className="grid divide-y divide-border md:grid-cols-2 md:divide-x md:divide-y-0">
-              <div className="max-h-[24rem] overflow-y-auto p-4">
+              <div className="p-4">
                 {rows.slice(0, 200).map((r) => (
                   <p key={r.id} dir="auto" className="mb-2 text-sm leading-8 text-fg">
                     <span className="me-2 text-xs text-fg-muted ltr">
@@ -1791,7 +1846,7 @@ export default function CallDetailPage({
                   </p>
                 ))}
               </div>
-              <p className="ltr max-h-[24rem] overflow-y-auto whitespace-pre-wrap p-4 text-start text-sm leading-8 text-fg">
+              <p className="ltr whitespace-pre-wrap p-4 text-start text-sm leading-8 text-fg">
                 {transcriptEn}
               </p>
             </div>
@@ -1811,21 +1866,7 @@ export default function CallDetailPage({
               <p className="mt-3 text-xs text-fg-muted">{t("provisionalHint")}</p>
             </div>
           ) : (
-          /* a FULL-SCREEN window before any scrolling (user directive,
-             2026-08-25 — superseding the 5-line box): the transcript fills
-             the viewport's height first, then scrolls inside its own box */
-          <div
-            ref={listRef}
-            className="max-h-[calc(100dvh-13rem)] overflow-y-auto"
-            onMouseUp={onListMouseUp}
-            onScroll={(e) => {
-              const el = e.currentTarget;
-              if (el.scrollTop + el.clientHeight > el.scrollHeight - 200
-                  && rowLimit < visibleRows.length) {
-                setRowLimit((n) => n + 30);
-              }
-            }}
-          >
+          <>
           {paragraphMode ? (
             /* #8: consecutive same-speaker lines flow as paragraphs */
             <ul className="divide-y divide-border">
@@ -2110,8 +2151,9 @@ export default function CallDetailPage({
             ))}
           </ul>
           )}
-          </div>
+          </>
           )}
+          </SectionScroller>
         </section>
         ) : null}
 
@@ -2126,6 +2168,9 @@ export default function CallDetailPage({
               <h2 className="text-sm font-semibold text-fg">{t("sectionActions")}</h2>
               <KebabMenu label={t("actionsMenu")} items={actionsMenuItems} />
             </div>
+            {/* same scroller as the summary and the transcript: long lanes
+                scroll here, and the section's header stays where it was */}
+            <SectionScroller>
             {lanes.actions.length === 0 && lanes.decisions.length === 0 ? (
               <p className="mb-4 text-sm leading-7 text-fg-muted">{t("actionsEmpty")}</p>
             ) : null}
@@ -2199,6 +2244,7 @@ export default function CallDetailPage({
                 </div>
               </div>
             </div>
+            </SectionScroller>
           </section>
         ) : null}
 
@@ -2213,6 +2259,11 @@ export default function CallDetailPage({
               <h2 className="text-sm font-semibold text-fg">{t("notesHeading")}</h2>
               <KebabMenu label={t("notesMenu")} items={notesMenuItems} />
             </div>
+            {/* the section's body — list, composer and the attachments note
+                — scrolls as ONE box (2026-08-29). The composer travels with
+                the list deliberately: a long list must not be able to push
+                the way to add to it off the bottom of the page. */}
+            <SectionScroller>
             {notes.length === 0 ? (
               <p className="text-sm leading-7 text-fg-muted">{t("notesEmpty")}</p>
             ) : (
@@ -2282,6 +2333,7 @@ export default function CallDetailPage({
                   outlive its purged call (see core/src/purge/purge.ts) */}
               <Chip tone="neutral">{t("attachmentsSoon")}</Chip>
             </p>
+            </SectionScroller>
           </section>
         ) : null}
 
@@ -2327,6 +2379,71 @@ export default function CallDetailPage({
               .then(setNotes)
               .catch(() => undefined);
           }}
+        />
+      ) : null}
+
+      {/* AUTHORING a summary template. The «+» card left the page body with
+          the rest of the regenerate offer (2026-08-29), so the composer is
+          the theme's own dialog now, opened from the submenu's «الگوی تازه».
+          It also carries the SAVED list, because deleting one has to stay
+          reachable from somewhere and the cards were that somewhere. */}
+      {newTpl !== null ? (
+        <ConfirmDialog
+          danger={false}
+          title={t("templateAdd")}
+          confirmLabel={t("templateSave")}
+          cancelLabel={tCommon("cancel")}
+          confirmDisabled={newTpl.name.trim() === "" || newTpl.prompt.trim() === ""}
+          onCancel={() => setNewTpl(null)}
+          onConfirm={() => {
+            setCustoms(saveCustomTemplate(newTpl));
+            setNewTpl(null);
+          }}
+          body={
+            <div className="space-y-3">
+              <input
+                className="input h-9 min-h-0 w-full py-0 text-sm"
+                maxLength={60}
+                autoFocus
+                aria-label={t("templateNameHint")}
+                placeholder={t("templateNameHint")}
+                value={newTpl.name}
+                onChange={(e) => setNewTpl({ ...newTpl, name: e.target.value })}
+              />
+              <textarea
+                className="input min-h-20 w-full resize-none py-1.5 text-sm leading-6"
+                maxLength={500}
+                aria-label={t("templatePromptLabel")}
+                placeholder={t("templatePromptHint")}
+                value={newTpl.prompt}
+                onChange={(e) => setNewTpl({ ...newTpl, prompt: e.target.value })}
+              />
+              {customs.length > 0 ? (
+                <div className="border-t border-border pt-3">
+                  <p className="text-group-label font-medium text-fg-subtle">
+                    {t("templatesSaved")}
+                  </p>
+                  <ul className="mt-1.5 space-y-1">
+                    {customs.map((c) => (
+                      <li key={c.name} className="flex items-center gap-2 text-sm text-fg-muted">
+                        <span className="min-w-0 flex-1 truncate">{c.name}</span>
+                        {/* the prompt behind this name lives only in this
+                            browser — so it asks first, like every other
+                            destructive control (confirm.guard.test.ts) */}
+                        <IconAction
+                          danger
+                          label={t("templateDelete")}
+                          onClick={() => setConfirmTemplateDelete(c.name)}
+                        >
+                          <IconTrash width={14} height={14} />
+                        </IconAction>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </div>
+          }
         />
       ) : null}
 

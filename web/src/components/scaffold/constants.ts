@@ -71,6 +71,38 @@ export const SCAFFOLD = {
     inlineMd: 40,   // desktop gutter
     bottom: 64,     // room under the last section
     menuTop: 36,    // the menu heading's own top — keeps the two headings level
+    /**
+     * THE SECTION SCROLL's one number (user directive, 2026-08-29: "for
+     * transcription page and summary page they have to have their own scroll
+     * and not make the page scroll mode").
+     *
+     * A section whose body can be arbitrarily long — a transcript, a
+     * summary, a list of notes — scrolls INSIDE itself, so the frame around
+     * it (the page title, the record's player, the section menu) holds still
+     * instead of sliding away under the reader. `scaffold/SectionScroller`
+     * is the only consumer: `max-h-section` = the viewport minus this.
+     *
+     * The number is what stands ABOVE and BELOW such a body on the deepest
+     * stack the platform has, the record page, in the units the theme scales
+     * with (rem, so the reserve tracks the root font-size exactly as the
+     * chrome it stands for does):
+     *
+     *   3rem   top bar            (topBarHeight)
+     * + 3rem   the page's own top (page.top)
+     * + 4rem   the page's bottom  (page.bottom)
+     * + 4.2rem the record card's header row (title · date · ⋯)
+     * + 3.5rem the sticky player
+     * + 4rem   the section's own header row and padding
+     * ≈ 23rem
+     *
+     * ONE number, deliberately, rather than a measurement per surface: five
+     * copies of "the top of a page" is exactly how M45 happened. A section
+     * carrying MORE chrome than this (the transcript's speaker chips) can
+     * still push the page an em or two; the reserve errs toward reserving
+     * too much, because the failure it exists to prevent is the page
+     * scrolling at all.
+     */
+    sectionReserve: 368,
   },
 
   /**

@@ -93,6 +93,7 @@ vi.mock("@/api/client", () => ({
       created_by: "u-1",
       created_at: "2026-08-28T09:00:00.000Z",
     })),
+    resummarize: vi.fn(async () => ({ id: "r-1", status: "queued" })),
     editSummary: vi.fn(async (_id: string, body: string) => {
       SUMMARIES = [
         ...SUMMARIES,
@@ -252,5 +253,227 @@ describe("the section kebabs", () => {
       "بایگانی",
       "برچسب‌ها",
     ]);
+  });
+});
+
+/**
+ * ── TASK 1 · each section owns its scroll ───────────────────────────────────
+ *
+ * User directive (2026-08-29): *"for transcription page and summary page they
+ * have to have their own scroll and not make the page scroll mode."*
+ *
+ * jsdom computes no layout, so nothing here can prove a box actually scrolls —
+ * that is a live-render claim and it is reported as unmeasured. What IS
+ * checkable, and is the thing that broke, is WHERE the split falls: the
+ * section's body inside one scroller, the section's frame outside it. The
+ * outside half is the assertion that can answer NO — a scroller wrapped
+ * around the whole section satisfies every "is the body inside" check and is
+ * exactly the wrong shape.
+ */
+describe("each section owns its scroll", () => {
+  it("puts the summary document inside ONE scroller and leaves its header outside", async () => {
+    await open();
+    const boxes = document.querySelectorAll("[data-section-scroll]");
+    // one per rendered section — not one per branch, and not one per page
+    expect(boxes.length).toBe(1);
+    const box = boxes[0] as HTMLElement;
+
+    // the document moves…
+    expect(box.textContent).toContain("تهیهٔ گزارش هزینه‌ها");
+    // …the frame does not: version picker, warnings slot and the ⋯ stay put
+    expect(box.contains(screen.getByRole("button", { name: "نسخه‌ها" }))).toBe(false);
+    expect(box.contains(screen.getByRole("button", { name: "گزینه‌های خلاصه" }))).toBe(false);
+    expect(box.contains(screen.getByRole("heading", { name: "خلاصه" }))).toBe(false);
+  });
+
+  it("gives the transcript the same one box, with its own header outside it", async () => {
+    await open();
+    await openSection("رونوشت");
+    const boxes = document.querySelectorAll("[data-section-scroll]");
+    expect(boxes.length).toBe(1);
+    const box = boxes[0] as HTMLElement;
+
+    /* this fixture's transcript is empty, so the body is the which-nothing
+       sentence — still the body, and still the part that scrolls */
+    expect(box.textContent).toContain("رونویسی تمام شد");
+    expect(box.contains(screen.getByRole("button", { name: "نمایش" }))).toBe(false);
+    expect(box.contains(screen.getByRole("heading", { name: "رونوشت" }))).toBe(false);
+  });
+
+  it("is ONE mechanism, not four: every section renders exactly one, and its ⋯ stays outside", async () => {
+    /* the whole point of extracting it — four sections that each picked a
+       height is how the page ended up with one capped box and one that grew
+       forever (and how M45's five page columns happened one level up) */
+    await open();
+    for (const [section, menu] of [
+      ["خلاصه", "گزینه‌های خلاصه"],
+      ["رونوشت", "نمایش"],
+      ["کارها و تصمیم‌ها", "گزینه‌های کارها و تصمیم‌ها"],
+      ["یادداشت‌ها و پیوست‌ها", "گزینه‌های یادداشت‌ها"],
+    ] as const) {
+      await openSection(section);
+      const boxes = document.querySelectorAll("[data-section-scroll]");
+      expect(`${section}: ${boxes.length}`).toBe(`${section}: 1`);
+      expect(
+        (boxes[0] as HTMLElement).contains(screen.getByRole("button", { name: menu })),
+      ).toBe(false);
+    }
+  });
+});
+
+/**
+ * ── TASK 2 · the regenerate offer moved into the summary's kebab ────────────
+ *
+ * User directive (2026-08-29): *"put the regenerate summary into the kebab
+ * menu with sub menu in the kebab menu as well for its options"* — reversing
+ * the 2026-08-25 cards, which took a section of the body to say it.
+ *
+ * The load-bearing pair: the cards are GONE from the body (a menu that merely
+ * ALSO offers regeneration would pass every positive check below), and a
+ * template chosen inside the submenu reaches `resummarize` with exactly the
+ * arguments the card sent.
+ */
+describe("the regenerate offer lives in the summary's kebab", () => {
+  it("no longer renders template cards in the page body", async () => {
+    await open();
+    expect(screen.queryByRole("button", { name: "جلسهٔ هیئت‌مدیره" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "الگوی تازه" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "بازتولید خلاصه" })).toBeNull();
+  });
+
+  it("opens the whole template list as a submenu, and a pick regenerates exactly as the card did", async () => {
+    await open();
+    fireEvent.click(screen.getByRole("button", { name: "گزینه‌های خلاصه" }));
+
+    const parents = within(screen.getByRole("menu")).getAllByRole("menuitem");
+    expect(parents.map((item) => item.textContent)).toEqual(["بازتولید خلاصه"]);
+
+    // the parent OPENS the list rather than regenerating something itself
+    fireEvent.click(parents[0]!);
+    expect((api.resummarize as Mock).mock.calls).toEqual([]);
+
+    const menus = screen.getAllByRole("menu");
+    expect(menus.length).toBe(2);
+    const templates = within(menus[1]!).getAllByRole("menuitem");
+    expect(templates.map((item) => item.textContent)).toEqual([
+      "جلسهٔ هیئت‌مدیره",
+      "جلسهٔ گروهی",
+      "جلسهٔ تیمی",
+      "جلسهٔ تیم فنی",
+      "مصاحبه",
+      "الگوی تازه",
+    ]);
+
+    await act(async () => {
+      fireEvent.click(within(menus[1]!).getByRole("menuitem", { name: "جلسهٔ تیمی" }));
+    });
+    /* the card's own call, argument for argument (page.tsx: regenerate({
+       template: k, label: k })) — a menu that regenerated with no template
+       would look identical on screen */
+    expect((api.resummarize as Mock).mock.calls).toEqual([
+      ["c-1", { template: "team", label: "team" }],
+    ]);
+  });
+
+  it("«الگوی تازه» opens the composer instead of regenerating anything", async () => {
+    await open();
+    fireEvent.click(screen.getByRole("button", { name: "گزینه‌های خلاصه" }));
+    fireEvent.click(within(screen.getByRole("menu")).getByRole("menuitem", { name: "بازتولید خلاصه" }));
+    fireEvent.click(
+      within(screen.getAllByRole("menu")[1]!).getByRole("menuitem", { name: "الگوی تازه" }),
+    );
+
+    expect((api.resummarize as Mock).mock.calls).toEqual([]);
+    const dialog = screen.getByRole("alertdialog", { name: "الگوی تازه" });
+    expect(within(dialog).getByRole("textbox", { name: "نام الگو" })).toBeTruthy();
+    // an unnamed template cannot be saved — the button says so by staying off
+    expect(
+      (within(dialog).getByRole("button", { name: "ذخیرهٔ الگو" }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
+});
+
+/**
+ * ── TASK 3 · the grounding flags moved behind a warning icon ────────────────
+ *
+ * User directive (2026-08-29): *"add a warning small icon next to kebab menu
+ * icon and put these kind of warning that are related to the summary there."*
+ *
+ * The load-bearing assertion is the NEGATIVE one: a clean pass renders no
+ * icon at all. Everything else here would pass against a component that
+ * always shows the icon — which is the version that teaches people to ignore
+ * it. Verified red by making `SummaryWarnings` ignore `clean` before this was
+ * trusted.
+ */
+describe("the summary's warnings", () => {
+  const withGrounding = (
+    grounding: { clean: boolean; model: string; flags: { claim: string; note: string }[] },
+  ) => {
+    SUMMARIES = [{
+      id: "s-1", version: 1, body: DOC, created_at: "2026-08-27T11:00:00.000Z",
+      model: "google/gemini-3.6-pro", agent_run_id: null, template: null, grounding,
+    }];
+  };
+
+  it("renders NO icon when the pass is clean — and says so in one quiet line instead", async () => {
+    withGrounding({ clean: true, model: "google/gemini-3.6-pro", flags: [] });
+    await open();
+    expect(screen.queryByRole("button", { name: "هشدارهای خلاصه" })).toBeNull();
+    /* the positive control: the verdict DID render, so the absence above is
+       "nothing to warn about" and not "the grounding block never arrived" */
+    expect(screen.getByText(/سنجیده شد/)).toBeTruthy();
+  });
+
+  it("still renders no icon when a CLEAN verdict arrives carrying flags — the verdict's own word decides", async () => {
+    /*
+     * THE DISCRIMINATING CASE, and the reason the test above cannot stand
+     * alone: a clean verdict normally carries an empty array, so "no icon"
+     * there is satisfied by a component that never reads `clean` at all.
+     *
+     * The fixture is not invented: core's own parser
+     * (worker/summarizer.ts · parseGroundingVerdict) refuses `clean:false`
+     * with no flags — and accepts `clean:true` WITH them, storing it
+     * verbatim. So this shape can reach the wire, and the rule that decides
+     * it is the one under test.
+     */
+    withGrounding({
+      clean: true,
+      model: "google/gemini-3.6-pro",
+      flags: [{ claim: "ادعا", note: "یادداشت" }],
+    });
+    await open();
+    expect(screen.queryByRole("button", { name: "هشدارهای خلاصه" })).toBeNull();
+  });
+
+  it("renders no icon when the version was never checked — absent is not clean and neither is a warning", async () => {
+    SUMMARIES = [{
+      id: "s-1", version: 1, body: DOC, created_at: "2026-08-27T11:00:00.000Z",
+      model: "google/gemini-3.6-pro", agent_run_id: null, template: null,
+    }];
+    await open();
+    expect(screen.queryByRole("button", { name: "هشدارهای خلاصه" })).toBeNull();
+    expect(screen.queryByText(/سنجیده شد/)).toBeNull();
+  });
+
+  it("shows the icon when claims are flagged, lists them in its panel, and Escape closes it", async () => {
+    withGrounding({
+      clean: false,
+      model: "google/gemini-3.6-pro",
+      flags: [{ claim: "بودجه دو برابر شد", note: "در رونوشت پشتوانه‌ای ندارد" }],
+    });
+    await open();
+
+    // the amber box is out of the document body…
+    const summaryBody = document.querySelector("[data-section-scroll]") as HTMLElement;
+    expect(summaryBody.textContent).not.toContain("بودجه دو برابر شد");
+
+    // …and behind the icon beside the ⋯
+    fireEvent.click(screen.getByRole("button", { name: "هشدارهای خلاصه" }));
+    const panel = screen.getByRole("dialog", { name: "هشدارهای خلاصه" });
+    expect(panel.textContent).toContain("بودجه دو برابر شد");
+    expect(panel.textContent).toContain("در رونوشت پشتوانه‌ای ندارد");
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "هشدارهای خلاصه" })).toBeNull();
   });
 });

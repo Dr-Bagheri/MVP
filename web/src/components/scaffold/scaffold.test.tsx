@@ -1,5 +1,7 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import tailwindConfig from "../../../tailwind.config";
 import { SCAFFOLD } from "./constants";
 
@@ -38,6 +40,7 @@ vi.mock("next-intl", () => ({
 const { SectionMenu, MenuLayout } = await import("./SectionMenu");
 const { FormPanel, FormRow, PanelFooter } = await import("./FormPanel");
 const { PageContainer, PageHeader, Section } = await import("./Page");
+const { SectionScroller } = await import("./SectionScroller");
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const theme = (tailwindConfig as any).theme.extend;
@@ -85,6 +88,16 @@ describe("the Tailwind theme derives from the scaffold constants", () => {
     expect(spacing["page-inline-md"]).toBe(`${SCAFFOLD.page.inlineMd / 16}rem`);
     expect(spacing["page-bottom"]).toBe(`${SCAFFOLD.page.bottom / 16}rem`);
     expect(spacing["page-menu"]).toBe(`${SCAFFOLD.page.menuTop / 16}rem`);
+  });
+
+  it("the SECTION SCROLL's height is derived from the same block", () => {
+    /* one number, one home: the height a section body ends at is
+       `SCAFFOLD.page.sectionReserve`, and the theme emits it in the rem the
+       rest of the chrome is measured in. A hand-typed calc on either side
+       goes red here — verified by changing the constant and watching this
+       fail. */
+    expect(theme.maxHeight.section)
+      .toBe(`calc(100dvh - ${rem(SCAFFOLD.page.sectionReserve)})`);
   });
 
   it("keeps the menu heading and the page title on one line", () => {
@@ -220,6 +233,63 @@ describe("THE SHELL SCROLL — one scroller, the content column", () => {
     const classes = menuWrap.className.split(" ");
     expect(classes).toContain("h-full");
     expect(classes).toContain("md:overflow-y-auto");
+  });
+});
+
+describe("SectionScroller — a section body ends at the viewport", () => {
+  /*
+   * User directive (2026-08-29): a long summary or transcript must scroll
+   * INSIDE its section instead of growing the page. jsdom computes no
+   * layout, so what is honest here is the box's contract: the capped,
+   * scrolling element is the one the caller's ref reaches, it carries the
+   * theme's ONE height (never a literal of its own), and the marker a page
+   * test greps for is really on it. The computed behaviour — that the frame
+   * holds still while the body moves — is a live-render claim, and is
+   * recorded as unmeasured in this batch's report rather than pretended
+   * here.
+   */
+  it("is the scrolling box itself: the ref, the handlers and the marker land on one element", () => {
+    const ref = { current: null as HTMLDivElement | null };
+    const scrolled = vi.fn();
+    const { container } = render(
+      <SectionScroller scrollRef={ref} onScroll={scrolled}>
+        <p>بدنهٔ بخش</p>
+      </SectionScroller>,
+    );
+    const box = container.querySelector("[data-section-scroll]") as HTMLElement;
+    expect(box).toBeTruthy();
+    // the ref must reach the SCROLLER — a wrapper would break scrollIntoView
+    // inside it and the record's jump-back, silently
+    expect(ref.current).toBe(box);
+    expect(box.textContent).toContain("بدنهٔ بخش");
+    fireEvent.scroll(box);
+    expect(scrolled).toHaveBeenCalled();
+  });
+
+  it("prints whole — the one place the cap is written is the one place it is lifted", () => {
+    /*
+     * On paper there is no viewport: a capped box would print its first
+     * screenful and drop the rest, which on a meeting record is a document
+     * that looks complete and is not. jsdom applies no media query, so what
+     * is honest here is that the rule EXISTS and names this component's own
+     * marker — a source read, deliberately, and stated as one.
+     */
+    const css = readFileSync(join(process.cwd(), "src/app/globals.css"), "utf8");
+    const print = css.slice(css.indexOf("@media print"));
+    const rule = print.slice(0, print.indexOf("\n}\n"));
+    expect(rule).toContain("[data-section-scroll]");
+    expect(rule).toContain("max-height: none !important");
+  });
+
+  it("takes its height from the theme, never a literal of its own", () => {
+    /* the fork this component exists to prevent: `max-h-[calc(…)]` written
+       at a call site. If the class ever becomes a literal here, the rhythm
+       guard cannot see it (it polices the NAME) — so the name is pinned. */
+    const { container } = render(<SectionScroller><p>x</p></SectionScroller>);
+    const classes = (container.firstElementChild as HTMLElement).className.split(" ");
+    expect(classes).toContain("max-h-section");
+    expect(classes).toContain("overflow-y-auto");
+    expect(classes.filter((c) => c.startsWith("max-h-["))).toEqual([]);
   });
 });
 

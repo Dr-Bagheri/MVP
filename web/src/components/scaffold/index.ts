@@ -4,6 +4,7 @@
  */
 export { SCAFFOLD } from "./constants";
 export { PageContainer, PageHeader, Section } from "./Page";
+export { SectionScroller } from "./SectionScroller";
 export { FormPanel, FormRow, PanelFooter } from "./FormPanel";
 export { SectionMenu, MenuLayout } from "./SectionMenu";
 export type { MenuItem, MenuGroup } from "./SectionMenu";

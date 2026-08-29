@@ -297,6 +297,13 @@ export const IconFolder = (p: SVGProps<SVGSVGElement>) => (
 export const IconVideo = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><rect x="3" y="7" width="12" height="10" rx="2" /><path d="m15 12 6-3.5v7z" /></svg>
 );
+/** a caution triangle — something about THIS content needs reading before it
+    is trusted (the summary's grounding flags). Deliberately not the danger
+    trash/close family: nothing is destroyed and nothing failed; a claim is
+    unsupported, which is a thing to look at, not a thing to undo. */
+export const IconWarn = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><path d="M12 3.8 21 19.4a1.4 1.4 0 0 1-1.2 2.1H4.2A1.4 1.4 0 0 1 3 19.4L12 3.8Z" /><path d="M12 9.5v4.4" /><circle cx="12" cy="17.4" r="1" fill="currentColor" stroke="none" /></svg>
+);
 
 /* =========================================================================
    THE LIST — one registry, one vocabulary
@@ -371,6 +378,7 @@ export const ICONS = {
   "users": IconUsers,
   "video": IconVideo,
   "voice": IconVoice,
+  "warn": IconWarn,
   "zap": IconZap,
 } as const;
 export type IconName = keyof typeof ICONS;
