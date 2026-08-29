@@ -2729,3 +2729,88 @@ sessions) for the cross-session narrative.
   force. Live state after: preferred=null, four drafts pending, three
   of them written into the real Gmail Drafts folder now that the
   compose scope is granted.
+
+- 2026-08-29 (THE REMOVAL: webhooks, and the others nothing was using):
+  user directive — "i dont need the webhook, and the others that are
+  not already being used as well". The webhook feature is GONE (M17
+  amended, db/0132): both tables, six policies, the created_by
+  trigger, `subscribed_webhooks` (D19), the pgmq queue, api/webhooks
+  .ts, four worker modules, four routes, `net/address-guard.ts`,
+  `WEBHOOK_EVENTS`, the drains surface, three BFF routes, four client
+  methods, three wire types and 59 orphaned locale keys. **It was
+  never reachable end to end and the catalogue said so**: 0 rows, 0
+  rows, and `total_messages = 0` on the queue over its ENTIRE LIFE —
+  the dispatcher was written, tested, line-reviewed, given an SSRF
+  connect-time guard and a replay-protected signing scheme, and
+  **never registered as a handler in runner.ts**. Rule 13½ at feature
+  scale, and the three existing 13½ instruments each watch ONE seam;
+  none asks whether a queue has a consumer. **That gap is the finding
+  and it outlives the feature** → core/test/queue-handlers.test.ts
+  (fourth instrument; ALL_QUEUES from the producer, handlers parsed
+  from main.ts's createRunner argument because an import scan would
+  call an imported-but-unregistered factory covered; verified red by
+  unregistering createSignalStep — it named echo_agent_rules).
+  `createRunner` already refused TWO handlers for one queue; **nobody
+  had written the symmetric half, and the symmetric half is the one
+  that ships silently**. The drains component turned out to have no
+  consumer EITHER (audit-log-drains had already left
+  SETTINGS_SECTIONS) — a producer with no consumer inside a feature
+  that was one. 0132 recreates `platform_purge_org` minus its two
+  webhook deletes in the same transaction as the drop ("a purge that
+  raises is a purge that does not run, on the one path where failing
+  to delete is the worst outcome") — **generated from
+  pg_get_functiondef, not retyped**: the first hand-written attempt
+  had a one-argument signature, the wrong guard and half the delete
+  list missing, which `create or replace` installs as a SECOND
+  OVERLOAD beside the real one rather than rejecting. Hence the
+  self-checks at its foot, which fired twice on their own defects
+  before passing and were then verified against a staged truncation
+  and a staged overload — **a check whose only reds were its own has
+  never failed for its reason**. Also removed: mock-data.ts (993
+  lines, 0 importers — it surfaced by failing to typecheck),
+  AssistantPane (558), NavGroup, ScopeChip, Progress, toJalali, and
+  `recentSpokenText` — whose backing `spokenHistory` was still being
+  WRITTEN on every utterance, **a write with no reader, the same
+  defect one layer down**.
+- 2026-08-29 (two instruments, two false-positive lessons, one
+  deleted): **the encoding sweep had a hole a single byte could open**
+  — `if (bytes.includes(0)) continue` meant a bare 0x08 was caught and
+  the SAME 0x08 behind a NUL passed, with the tracked-file count
+  silently dropping by one. Found by a lane writing a NUL into
+  format.ts by accident, proven with a three-case control, closed (the
+  heuristic now applies only where the extension does not say "text").
+  The sweep also gained a **third signature: a C0 control byte**,
+  which cost two migration runs and a wrong diagnosis — a non-raw
+  Python string turned a backslash-b into BACKSPACE inside a SQL regex, so it
+  matched nothing and 0132's self-check called an intact body broken.
+  **Invisible to grep, to a diff and to the eye.** The first draft of
+  that check wrote the class literally, putting a NUL into the checker
+  — which would have made the sweep skip its own source as binary
+  forever. And `core/scripts/unused-exports.mjs`, which needed two
+  corrections and carries its own false-positive rate in its header:
+  177 findings of which 165 were types that are not dead at all, then
+  1 real out of 21 "dead values" (the other twenty used inside their
+  own file). **A rate is what tells you how much to trust a line of
+  output**, and a muted check still reads as coverage.
+- 2026-08-29 (the model wall's fifth and sixth doors — and a checker
+  thrown away): `/v1/calls/:id/translate` took `body.model` as free
+  text with no assertAskable (five routes called it; this was not one)
+  AND read `preferred_model` raw where list/preferred both read it
+  through the ladder. Sixth door: **a skill PINS a model and that
+  column was free text on create and patch** — a path no assertAskable
+  can ever cover, because nobody types a model at run time. Fixed with
+  the ruling that governs the whole class: **a model a caller NAMED is
+  refused by name; a model nobody typed is not a rung**. And the shape
+  underneath — `modelForRun` was `skill?.model ?? callerModel`, asking
+  neither rung anything; it runs `firstServable` now, so it is a
+  FUNNEL and a route that forgets the wall reaches the caller's next
+  rung instead of a barred model. **The wrong state made
+  unrepresentable rather than watched for.** The thrown-away part is
+  the lesson: a source checker demanding a guard inside each route
+  handler found four routes and **all four were false positives** —
+  two guard in the repo, one validates at write time, and the fourth
+  hit those words inside a COMMENT (the name-matching-itself trap, in
+  a checker written to catch that trap). Deleted rather than tuned: **a
+  guard living one layer down in a repo is correct design, and an
+  instrument that calls the right shape wrong pushes code toward the
+  wrong shape.**

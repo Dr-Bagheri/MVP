@@ -212,7 +212,7 @@ try {
       mismatched.slice(0, 2).map((r) => r.seq));
 
     check("the Persian survived byte for byte",
-      written.map((r) => r.text).join(" ") === source.map((r) => r.text).join(" "));
+      written.map((r) => r.text).join("\0") === source.map((r) => r.text).join("\0"));
 
     // THE words question, asked in SQL — the shape a JS-side JSON.parse
     // cannot distinguish from the broken one.
