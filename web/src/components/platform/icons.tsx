@@ -39,30 +39,23 @@ export const UsersIcon = (p: SVGProps<SVGSVGElement>) => (
 );
 
 /**
- * Settings — SLIDERS, and THIS is the one the rail renders.
+ * A REAL GEAR — six teeth with an actual toothed silhouette, and a hub.
  *
- * The user asked for a settings mark that reads as settings, and the first
- * attempt changed `IconSettings` in `components/icons.tsx` — a different set,
- * used by the recorder's own settings popover. The rail imports NAV_ICON from
- * HERE, so the icon on screen did not move and the user reported the same
- * thing twice. One idea, two drawings, and only one of them was looked at.
+ * Third drawing for this one mark (user directive, 2026-08-29). The first
+ * was a circle ringed by eight radial strokes, which reads as a sun at rail
+ * size because unattached ticks never become teeth. The second was sliders,
+ * which is a legitimate settings convention and was not what was wanted.
  *
- * The two files stay separate because their `base()` helpers differ (this one
- * has no default size and a 1.8 stroke; the other defaults to 16px and 1.7),
- * so a re-export would quietly resize every rail icon. What keeps them in
- * step instead is `icons.settings.test.ts`, which fails if these two marks
- * stop drawing the same geometry.
- *
- * Why sliders rather than a better gear: the old drawing was a circle ringed
- * by eight radial strokes, which is a gear only if you already know it is
- * one — at rail size the teeth stop reading as teeth and it becomes a sun,
- * which is exactly how it looked in the screenshot. A gear that survives that
- * size needs a real toothed silhouette and far more nodes than this set uses.
+ * A gear survives small sizes only if its OUTLINE is toothed, so this path
+ * is computed rather than eyeballed: 6 teeth on a 60-degree period, tip
+ * radius 10.4, valley 6.8, giving a 3.6-unit cut that still reads at 16px.
+ * Six rather than eight because fewer, chunkier teeth stay legible where
+ * eight go mushy — the cut is the thing the eye resolves, not the count.
  */
 export const CogIcon = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}>
-    <path d="M4 7h16M4 12h16M4 17h16" />
-    <circle cx="9" cy="7" r="2" /><circle cx="15" cy="12" r="2" /><circle cx="8" cy="17" r="2" />
+    <path d="M9.7 1.9L14.3 1.9L14.3 5.6L16.4 6.8L19.6 4.9L21.9 9.0L18.7 10.8L18.7 13.2L21.9 15.0L19.6 19.1L16.4 17.2L14.3 18.4L14.3 22.1L9.7 22.1L9.7 18.4L7.6 17.2L4.4 19.1L2.1 15.0L5.3 13.2L5.3 10.8L2.1 9.0L4.4 4.9L7.6 6.8L9.7 5.6Z" />
+    <circle cx="12" cy="12" r="3.4" />
   </svg>
 );
 
