@@ -732,6 +732,9 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       post_call_brief: typeof body.post_call_brief === "boolean" ? body.post_call_brief : undefined,
       auto_draft_replies: typeof body.auto_draft_replies === "boolean" ? body.auto_draft_replies : undefined,
       auto_meeting_prep: typeof body.auto_meeting_prep === "boolean" ? body.auto_meeting_prep : undefined,
+      record_on_workflows: Array.isArray(body.record_on_workflows)
+        ? (body.record_on_workflows as unknown[]).filter((s): s is string => typeof s === "string")
+        : undefined,
       assistant_voice_fa: typeof body.assistant_voice_fa === "string" ? body.assistant_voice_fa : undefined,
       assistant_voice_en: typeof body.assistant_voice_en === "string" ? body.assistant_voice_en : undefined,
     }));

@@ -243,6 +243,17 @@ export interface Me extends User {
   /** db/0117: prepare me before meetings. Same posture as the mail switch. */
   auto_meeting_prep?: boolean;
   /**
+   * db/0142 — template slugs this person wants a recording started for when
+   * THEY run the workflow from their own surface.
+   *
+   * Per-person, because that is what the choice is: two people may want
+   * opposite answers for one template. It is NOT on the workflow — a graph
+   * step executes in the worker, which has no microphone, and
+   * `workflow_template` has no org_id, so a flag there would toggle
+   * recording for every organization on the deployment.
+   */
+  record_on_workflows?: string[];
+  /**
    * Profile context (db/0080): what the person does + their own words, and
    * the CONSENT flag that lets the assistant see the two texts at ask time.
    * All three ABSENT before 0080 — the form renders only what is stored.

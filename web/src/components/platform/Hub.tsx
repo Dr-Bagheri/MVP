@@ -188,6 +188,17 @@ export function Hub() {
   const promptSlug = params.get("prompt");
   const agentHandle = params.get("agent");
   const workflowSlug = params.get("workflow");
+
+  /*
+   * WHICH workflows this person wants recorded when they run them (db/0142).
+   * Read once; an empty set is the ordinary case and costs nothing.
+   */
+  const [recordOnRun, setRecordOnRun] = useState<readonly string[]>([]);
+  useEffect(() => {
+    void api.me()
+      .then((who) => setRecordOnRun(who?.record_on_workflows ?? []))
+      .catch(() => setRecordOnRun([]));
+  }, []);
   const connectorProviderParam = params.get("connectorProvider");
   const sourceId = params.get("sourceId");
   /** the launcher's "this is a run, not a visit" (see the auto-run effect) */
@@ -282,6 +293,32 @@ export function Hub() {
     const key = `${workflowSlug}:${connectorProvider}:${sourceId}`;
     if (ranRef.current === key) return;
     ranRef.current = key;
+    /*
+     * START A TAKE ALONGSIDE THE RUN, if this person asked for it on this
+     * workflow (db/0142, user directive 2026-08-29).
+     *
+     * Here rather than in the graph, because this is the only place a
+     * workflow runs with a microphone present: steps execute in the worker.
+     * `startRecording` is the ENGINE the record button uses, so the mini
+     * recorder appears in the top bar and the take is captured while the
+     * workflow does its work.
+     *
+     * Guarded by the same `ranRef` as the run itself, so a reload cannot
+     * start a second recording — and the engine refuses a second take
+     * anyway, which is the belt to this brace.
+     */
+    if (recordOnRun.includes(workflowSlug)) {
+      void startRecording({
+        micId: "",
+        language: locale === "en" ? "en" : "fa",
+        source: "mic",
+        title: card.name,
+        locale,
+        resume: null,
+        boost: false,
+        noiseSuppression: true,
+      });
+    }
     void send(card.name);
     /* disarm: the source stays on the URL so follow-ups keep the email in
        context, but `run` is spent. Without this a reload is a second run of
@@ -292,7 +329,7 @@ export function Hub() {
       query: { workflow: workflowSlug, connectorProvider, sourceId },
     } as never);
   }, [autoRun, resumeId, streaming, model, workflowSlug, connectorProvider, sourceId,
-      messages.length, workflowCards, router]);
+      messages.length, workflowCards, router, recordOnRun, locale]);
 
   /**
    * The Sources search — live, debounced, against the real index. Results

@@ -530,6 +530,45 @@ export default function WorkflowDetailPage({
     }
   }
 
+  /**
+   * START A TAKE WHEN I RUN THIS (db/0142, user directive 2026-08-29).
+   *
+   * A switch rather than a step in the graph, and MINE rather than the
+   * workflow's — both for reasons the migration spells out. A graph step
+   * runs in the worker, which has no microphone; and `workflow_template`
+   * has no org_id, so a flag there would switch recording on for every
+   * organization on the deployment. "Start a recording when I run this" is
+   * a statement about how somebody works.
+   *
+   * Turn it on and running the workflow from the assistant starts a take
+   * through the same engine the record button uses, so the mini recorder
+   * appears in the top bar exactly as it does for any other take.
+   */
+  /* the route param IS the template slug — `cards.find(e => e.slug === handle)`
+     a few lines up — and it is the same string the assistant sends as its
+     `workflow` parameter, so the switch and the run agree by construction */
+  const recordSlug = handle;
+  const recordsOnRun = (me?.record_on_workflows ?? []).includes(recordSlug);
+
+  async function toggleRecordOnRun() {
+    if (me?.record_on_workflows === undefined || saving) return;
+    setSaving(true);
+    setSaveFailed(false);
+    try {
+      const current = me.record_on_workflows ?? [];
+      const next = recordsOnRun
+        ? current.filter((slug) => slug !== recordSlug)
+        : [...current, recordSlug];
+      /* the server's answer is adopted, never an optimistic flip — it
+         dedupes and bounds the set, and that is the value */
+      setMe(await api.updateAssistant({ record_on_workflows: next }));
+    } catch {
+      setSaveFailed(true);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   /** MY switch: db/0117's `auto_meeting_prep`, the calendar's half */
   async function toggleMeetingPrep() {
     if (me?.auto_meeting_prep === undefined || saving) return;
@@ -828,6 +867,46 @@ export default function WorkflowDetailPage({
                   )}
                 </Meta>
               </dl>
+
+              {/*
+                THE RECORDING SWITCH — its own row, because it is a different
+                kind of fact from the on/off pill above. That one says whether
+                the workflow runs at all; this one says what happens on the
+                person's own screen when it does.
+                
+                Only for an engine workflow this caller may manage: a shipped
+                template has no row to store the flag on, and offering the
+                switch to somebody whose write RLS will refuse would be an
+                affordance that does not mirror the wall.
+              */}
+              {me?.record_on_workflows !== undefined ? (
+                <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-surface p-4">
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium text-fg">{t("detailRecordTitle")}</span>
+                    <span className="mt-0.5 block text-xs leading-5 text-fg-muted">
+                      {t("detailRecordHint")}
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={recordsOnRun}
+                    aria-label={t("detailRecordTitle")}
+                    disabled={saving}
+                    onClick={() => void toggleRecordOnRun()}
+                    className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
+                      recordsOnRun ? "bg-success" : "border border-border bg-surface-2"
+                    }`}
+                  >
+                    <span
+                      aria-hidden
+                      className={`absolute top-0.5 h-5 w-5 rounded-full bg-bg transition-all ${
+                        recordsOnRun ? "end-0.5" : "start-0.5"
+                      }`}
+                    />
+                  </button>
+                </div>
+              ) : null}
 
               <div className="grid gap-6 lg:grid-cols-[3fr_2fr]">
                 <section className="rounded-xl border border-border bg-surface p-6">

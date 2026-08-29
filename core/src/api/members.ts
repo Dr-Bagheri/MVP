@@ -173,6 +173,17 @@ export interface MeRecord extends MemberRecord {
   /** db/0117: "prepare me before meetings". Same posture, same default. */
   auto_meeting_prep?: boolean;
   /**
+   * db/0142 — template slugs this person wants a recording started for when
+   * THEY run the workflow.
+   *
+   * Per-person because that is what the choice is: two people may want
+   * opposite answers for one template, and neither is configuring the other.
+   * `workflow_template` has no org_id at all, so a flag there would have
+   * been one customer switching recording on for every organization on the
+   * deployment.
+   */
+  record_on_workflows?: string[];
+  /**
    * Profile context (db/0080, user directive 2026-08-22): what the person
    * does and what they told us about themselves, plus the CONSENT flag —
    * `assistant_context` true means the assistant may see the two texts at
@@ -428,6 +439,7 @@ export function createMembersRepo(db: Db) {
         post_call_brief?: boolean | undefined;
         auto_draft_replies?: boolean | undefined;
         auto_meeting_prep?: boolean | undefined;
+        record_on_workflows?: string[] | undefined;
         /* 0128: the spoken voice, per language — 'female' | 'male' */
         assistant_voice_fa?: string | undefined;
         assistant_voice_en?: string | undefined;
@@ -462,6 +474,7 @@ export function createMembersRepo(db: Db) {
         && instructions === undefined && patch.post_call_brief === undefined
         && patch.auto_draft_replies === undefined
         && patch.auto_meeting_prep === undefined
+        && patch.record_on_workflows === undefined
         && patch.assistant_voice_fa === undefined
         && patch.assistant_voice_en === undefined) {
         throw new ValidationError("nothing to update", { code: "nothing_to_update" });
@@ -476,7 +489,8 @@ export function createMembersRepo(db: Db) {
                   auto_draft_replies       = case when $10 then $11::boolean else auto_draft_replies end,
                   auto_meeting_prep        = case when $12 then $13::boolean else auto_meeting_prep end,
                   assistant_voice_fa       = case when $14 then $15::text else assistant_voice_fa end,
-                  assistant_voice_en       = case when $16 then $17::text else assistant_voice_en end
+                  assistant_voice_en       = case when $16 then $17::text else assistant_voice_en end,
+                  record_on_workflows      = case when $18 then $19::text[] else record_on_workflows end
             where id = $1`,
           [identity.userId,
             language !== undefined, language ?? null,
@@ -487,6 +501,14 @@ export function createMembersRepo(db: Db) {
             patch.auto_meeting_prep !== undefined, patch.auto_meeting_prep ?? null,
             patch.assistant_voice_fa !== undefined, patch.assistant_voice_fa ?? null,
             patch.assistant_voice_en !== undefined, patch.assistant_voice_en ?? null,
+            patch.record_on_workflows !== undefined,
+            /* deduped and bounded: this is a SET, and a client that sent the
+               same slug twice would otherwise store it twice. The cap is a
+               row-size guard, not a product rule — there are tens of
+               templates, and a list longer than this is a bug upstream. */
+            patch.record_on_workflows === undefined
+              ? null
+              : [...new Set(patch.record_on_workflows.filter((slug) => typeof slug === "string"))].slice(0, 100),
           ]));
       /*
        * TURNING DRAFTING ON RE-BASELINES THE MAILBOX.
@@ -543,7 +565,7 @@ export function createMembersRepo(db: Db) {
                   u.preferred_model, u.locale, u.calendar, u.timezone,
                   ${withAutonomy ? "u.autonomy," : ""}
                   ${withAssistant
-                    ? "u.assistant_reply_language, u.assistant_reply_length, u.assistant_instructions, u.post_call_brief, u.auto_draft_replies, u.auto_meeting_prep, u.assistant_voice_fa, u.assistant_voice_en,"
+                    ? "u.assistant_reply_language, u.assistant_reply_length, u.assistant_instructions, u.post_call_brief, u.auto_draft_replies, u.auto_meeting_prep, u.assistant_voice_fa, u.assistant_voice_en, u.record_on_workflows,"
                     : ""}
                   ${withProfileCtx ? "u.job_title, u.about, u.assistant_context," : ""}
                   o.name as org_name
@@ -588,6 +610,8 @@ export function createMembersRepo(db: Db) {
               post_call_brief: row.post_call_brief !== false,
               auto_draft_replies: row.auto_draft_replies === true,
               auto_meeting_prep: row.auto_meeting_prep === true,
+              record_on_workflows: Array.isArray(row.record_on_workflows)
+                ? (row.record_on_workflows as string[]) : [],
             }
           : {}),
         ...(withProfileCtx

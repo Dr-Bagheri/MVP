@@ -1752,7 +1752,10 @@ export const api = {
   },
   async patchWorkflow(
     id: string,
-    patch: { enabled?: boolean; name?: string; trigger_event?: string | null; current_version_id?: string },
+    patch: {
+      enabled?: boolean; name?: string; trigger_event?: string | null;
+      current_version_id?: string;
+    },
   ): Promise<AuthoredWorkflow> {
     return bff<AuthoredWorkflow>(`/api/workflows/manage/${encodeURIComponent(id)}`, {
       method: "PATCH",
@@ -1834,6 +1837,9 @@ export const api = {
     /** db/0115 — the person's own "draft replies to my new mail" switch. */
     auto_draft_replies?: boolean;
     auto_meeting_prep?: boolean;
+    /* db/0142 — the whole set, not a delta: the server stores what it is
+       sent, deduped and bounded */
+    record_on_workflows?: string[];
     /* 0128: the spoken voice per language */
     assistant_voice_fa?: string;
     assistant_voice_en?: string;
