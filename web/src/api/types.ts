@@ -253,6 +253,8 @@ export interface Me extends User {
    * recording for every organization on the deployment.
    */
   record_on_workflows?: string[];
+  /** db/0143 — the same switch, for agent handles. */
+  record_on_agents?: string[];
   /**
    * Profile context (db/0080): what the person does + their own words, and
    * the CONSENT flag that lets the assistant see the two texts at ask time.

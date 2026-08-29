@@ -9,12 +9,12 @@ import { Link } from "@/i18n/routing";
 import { AssistantMenu } from "./AssistantMenu";
 import { PlatformShell } from "./PlatformShell";
 import { MenuLayout, PageContainer, PageHeader, Section } from "@/components/scaffold";
-import { Card, Chip } from "@/components/ui";
+import { Card } from "@/components/ui";
 import { Icon, IconPencil } from "@/components/icons";
 import { AgentEditor } from "./AgentEditor";
 import { KebabMenu } from "@/components/rowActions";
 import { useAgentCopy } from "./agentAppearance";
-import { agentColorClasses, agentIconName, agentLevelTone } from "./agentAppearance";
+import { agentColorClasses, agentIconName } from "./agentAppearance";
 
 /**
  * M47 — the agents surface: browse, and EDIT (Sana's shape, our wire).
@@ -112,7 +112,9 @@ export function Agents() {
                               <span className="block text-base font-semibold text-fg group-hover:text-accent">{copy.name}</span>
                               <span className="mt-2 block text-sm leading-6 text-fg-muted">{copy.description}</span>
                               <span className="mt-3 flex items-center gap-2">
-                                <Chip tone={agentLevelTone(agent.level)}>{t(agent.level)}</Chip>
+                                {/* the level chip is gone (user directive, 2026-08-29): it named where
+    an agent came from, which is a fact about our catalogue rather than
+    about what the agent does — and every shipped one said the same word */}
                                 <span className="text-xs text-fg-subtle">{t("toolCount", { count: agent.tools.length })}</span>
                               </span>
                             </span>

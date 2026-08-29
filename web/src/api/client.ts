@@ -1840,6 +1840,7 @@ export const api = {
     /* db/0142 — the whole set, not a delta: the server stores what it is
        sent, deduped and bounded */
     record_on_workflows?: string[];
+    record_on_agents?: string[];
     /* 0128: the spoken voice per language */
     assistant_voice_fa?: string;
     assistant_voice_en?: string;

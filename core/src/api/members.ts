@@ -183,6 +183,9 @@ export interface MeRecord extends MemberRecord {
    * deployment.
    */
   record_on_workflows?: string[];
+  /** db/0143 — the same, for agent handles. A separate column from the
+      workflow set because a handle and a slug are different namespaces. */
+  record_on_agents?: string[];
   /**
    * Profile context (db/0080, user directive 2026-08-22): what the person
    * does and what they told us about themselves, plus the CONSENT flag —
@@ -440,6 +443,7 @@ export function createMembersRepo(db: Db) {
         auto_draft_replies?: boolean | undefined;
         auto_meeting_prep?: boolean | undefined;
         record_on_workflows?: string[] | undefined;
+        record_on_agents?: string[] | undefined;
         /* 0128: the spoken voice, per language — 'female' | 'male' */
         assistant_voice_fa?: string | undefined;
         assistant_voice_en?: string | undefined;
@@ -475,6 +479,7 @@ export function createMembersRepo(db: Db) {
         && patch.auto_draft_replies === undefined
         && patch.auto_meeting_prep === undefined
         && patch.record_on_workflows === undefined
+        && patch.record_on_agents === undefined
         && patch.assistant_voice_fa === undefined
         && patch.assistant_voice_en === undefined) {
         throw new ValidationError("nothing to update", { code: "nothing_to_update" });
@@ -490,7 +495,8 @@ export function createMembersRepo(db: Db) {
                   auto_meeting_prep        = case when $12 then $13::boolean else auto_meeting_prep end,
                   assistant_voice_fa       = case when $14 then $15::text else assistant_voice_fa end,
                   assistant_voice_en       = case when $16 then $17::text else assistant_voice_en end,
-                  record_on_workflows      = case when $18 then $19::text[] else record_on_workflows end
+                  record_on_workflows      = case when $18 then $19::text[] else record_on_workflows end,
+                  record_on_agents         = case when $20 then $21::text[] else record_on_agents end
             where id = $1`,
           [identity.userId,
             language !== undefined, language ?? null,
@@ -509,6 +515,10 @@ export function createMembersRepo(db: Db) {
             patch.record_on_workflows === undefined
               ? null
               : [...new Set(patch.record_on_workflows.filter((slug) => typeof slug === "string"))].slice(0, 100),
+            patch.record_on_agents !== undefined,
+            patch.record_on_agents === undefined
+              ? null
+              : [...new Set(patch.record_on_agents.filter((h) => typeof h === "string"))].slice(0, 100),
           ]));
       /*
        * TURNING DRAFTING ON RE-BASELINES THE MAILBOX.
@@ -565,7 +575,7 @@ export function createMembersRepo(db: Db) {
                   u.preferred_model, u.locale, u.calendar, u.timezone,
                   ${withAutonomy ? "u.autonomy," : ""}
                   ${withAssistant
-                    ? "u.assistant_reply_language, u.assistant_reply_length, u.assistant_instructions, u.post_call_brief, u.auto_draft_replies, u.auto_meeting_prep, u.assistant_voice_fa, u.assistant_voice_en, u.record_on_workflows,"
+                    ? "u.assistant_reply_language, u.assistant_reply_length, u.assistant_instructions, u.post_call_brief, u.auto_draft_replies, u.auto_meeting_prep, u.assistant_voice_fa, u.assistant_voice_en, u.record_on_workflows, u.record_on_agents,"
                     : ""}
                   ${withProfileCtx ? "u.job_title, u.about, u.assistant_context," : ""}
                   o.name as org_name
@@ -612,6 +622,8 @@ export function createMembersRepo(db: Db) {
               auto_meeting_prep: row.auto_meeting_prep === true,
               record_on_workflows: Array.isArray(row.record_on_workflows)
                 ? (row.record_on_workflows as string[]) : [],
+              record_on_agents: Array.isArray(row.record_on_agents)
+                ? (row.record_on_agents as string[]) : [],
             }
           : {}),
         ...(withProfileCtx

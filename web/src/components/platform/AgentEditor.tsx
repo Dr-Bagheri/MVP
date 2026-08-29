@@ -10,7 +10,7 @@ import { Chip } from "@/components/ui";
 import { useWorkflowCopy } from "@/lib/workflowName";
 import {
   AGENT_COLOR_CHOICES, AGENT_ICON_CHOICES,
-  agentColorClasses, agentIconName, agentLevelTone, toolDescription,
+  agentColorClasses, agentIconName, toolDescription,
 } from "./agentAppearance";
 
 /**
@@ -269,7 +269,9 @@ export function AgentEditor({
         </h2>
         {agent ? (
           <>
-            <Chip tone={agentLevelTone(agent.level)}>{t(agent.level)}</Chip>
+            {/* the level chip is gone (user directive, 2026-08-29): it named where
+    an agent came from, which is a fact about our catalogue rather than
+    about what the agent does — and every shipped one said the same word */}
             <Link
               href={{ pathname: "/assistant", query: { agent: agent.handle } }}
               className="ms-auto text-sm font-medium text-accent hover:underline"
@@ -551,7 +553,9 @@ export function AgentEditor({
               </fieldset>
             ) : (
               <div>
-                <Chip tone={agentLevelTone(agent.level)}>{t(agent.level)}</Chip>
+                {/* the level chip is gone (user directive, 2026-08-29): it named where
+    an agent came from, which is a fact about our catalogue rather than
+    about what the agent does — and every shipped one said the same word */}
                 {/* no level control on an existing agent: the wire has no
                     level patch, and a control with no wire is a lie */}
                 <p className="mt-3 text-sm leading-6 text-fg-muted">{t("visibilityFixed")}</p>

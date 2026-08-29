@@ -1689,7 +1689,8 @@
     "sys_recorder_name": "Recording assistant",
     "sys_recorder_desc": "About the take you just made: what it was about, what was decided, what is still open — and it can start a new recording when you ask.",
     "sys_commitments_name": "Commitments assistant",
-    "sys_commitments_desc": "Pulls out who took on what, and by when, with the words from the conversation as evidence."
+    "sys_commitments_desc": "Pulls out who took on what, and by when, with the words from the conversation as evidence.",
+    "recordOnUse": "Start a recording when I use this agent"
   },
   "management": {
     "title": "Management",

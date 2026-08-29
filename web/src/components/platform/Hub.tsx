@@ -194,11 +194,34 @@ export function Hub() {
    * Read once; an empty set is the ordinary case and costs nothing.
    */
   const [recordOnRun, setRecordOnRun] = useState<readonly string[]>([]);
+  const [recordOnAgent, setRecordOnAgent] = useState<readonly string[]>([]);
   useEffect(() => {
     void api.me()
-      .then((who) => setRecordOnRun(who?.record_on_workflows ?? []))
-      .catch(() => setRecordOnRun([]));
+      .then((who) => {
+        setRecordOnRun(who?.record_on_workflows ?? []);
+        setRecordOnAgent(who?.record_on_agents ?? []);
+      })
+      .catch(() => { setRecordOnRun([]); setRecordOnAgent([]); });
   }, []);
+
+  /*
+   * OPENING A FLAGGED AGENT STARTS A TAKE (db/0143, user directive).
+   *
+   * Once per agent per visit: `startedFor` remembers which handle it fired
+   * for, so a re-render does not start a second recording and switching
+   * agents and back does not either. The engine refuses a second take
+   * anyway, which is the belt to this brace.
+   */
+  const startedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!agentHandle || !recordOnAgent.includes(agentHandle)) return;
+    if (startedFor.current === agentHandle) return;
+    startedFor.current = agentHandle;
+    void startRecording({
+      micId: "", language: locale === "en" ? "en" : "fa", source: "mic",
+      title: "", locale, resume: null, boost: false, noiseSuppression: true,
+    });
+  }, [agentHandle, recordOnAgent, locale]);
   const connectorProviderParam = params.get("connectorProvider");
   const sourceId = params.get("sourceId");
   /** the launcher's "this is a run, not a visit" (see the auto-run effect) */

@@ -271,7 +271,6 @@ export default function WorkflowDetailPage({
   const [graph, setGraph] = useState<{ steps: { id: string; kind: string }[] } | null>(null);
   const [editing, setEditing] = useState(false);
   /** Run now, for a manual workflow: the request in flight */
-  const [running, setRunning] = useState(false);
   /** the are-you-sure popup, open */
   const [removing, setRemoving] = useState(false);
   const [removeBusy, setRemoveBusy] = useState(false);
@@ -717,31 +716,39 @@ export default function WorkflowDetailPage({
     setInstalling(false);
   }
 
-  async function runManually() {
-    if (running) return;
-    setRunning(true);
-    try {
-      const { run_id } = await api.runWorkflow(handle);
-      router.push({ pathname: "/workflows/runs/[id]", params: { id: run_id } } as never);
-    } catch (cause) {
-      /* core's refusal NAMES the rule it broke (a graph needing un-runnable
-         kinds says which), and only core knows that — so it is surfaced
-         verbatim rather than translated into a shrug */
-      const detail = (cause as { detail?: string }).detail;
-      notify(detail || t("runFailed"), "warn");
-    } finally {
-      setRunning(false);
-    }
+  /**
+   * RUN NOW LANDS IN THE ASSISTANT (user directive, 2026-08-29: "fix the run
+   * now for all the workflow as well that when you run them they will land
+   * in the AI assistant page like the agent and we can use them there with
+   * the confirm").
+   *
+   * It used to start a GRAPH run and navigate to a run page, and the run
+   * page answered "No such run is available" — the engine and that page
+   * disagreeing about what exists. More to the point, a graph run is a
+   * machine executing steps somewhere: there is nothing to confirm, nothing
+   * to follow up, and nothing to say if it goes wrong except a status.
+   *
+   * The assistant is where a workflow is USABLE. `?workflow=<handle>` is the
+   * same address the composer's own picker uses, so this button and that
+   * menu are one path — and once there the person can talk to it, confirm
+   * what it proposes, and keep the thread. It is also what makes the
+   * recording switch work: a take can only start where somebody is.
+   *
+   * No API call, so no failure to report — the navigation IS the action, and
+   * the assistant surfaces core's refusal in the thread if the workflow
+   * cannot run.
+   */
+  function runManually() {
+    router.push({ pathname: "/assistant", query: { workflow: handle } } as never);
   }
 
   const menuItems: KebabItem[] = subject === null ? [] : [
     ...(isManual
       ? [{
           key: "run",
-          label: running ? t("runStarting") : t("runNow"),
+          label: t("runNow"),
           icon: <IconPlay width={14} height={14} />,
-          disabled: running,
-          onSelect: () => void runManually(),
+          onSelect: () => runManually(),
         }]
       : []),
     ...(switchProps?.onToggle

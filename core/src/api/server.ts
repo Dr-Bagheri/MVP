@@ -735,6 +735,9 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       record_on_workflows: Array.isArray(body.record_on_workflows)
         ? (body.record_on_workflows as unknown[]).filter((s): s is string => typeof s === "string")
         : undefined,
+      record_on_agents: Array.isArray(body.record_on_agents)
+        ? (body.record_on_agents as unknown[]).filter((s): s is string => typeof s === "string")
+        : undefined,
       assistant_voice_fa: typeof body.assistant_voice_fa === "string" ? body.assistant_voice_fa : undefined,
       assistant_voice_en: typeof body.assistant_voice_en === "string" ? body.assistant_voice_en : undefined,
     }));

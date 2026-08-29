@@ -6,10 +6,9 @@ import { api } from "@/api/client";
 import type { AgentCard, AgentWorkflowLink } from "@/api/types";
 import { Link } from "@/i18n/routing";
 import { Icon } from "@/components/icons";
-import { Chip } from "@/components/ui";
 import { AGENT_STARTER_HANDLES } from "@/lib/agentStarters";
 import { SEEDED_STARTERS, useWorkflowCopy } from "@/lib/workflowName";
-import { agentColorClasses, agentIconName, agentLevelTone, toolDescription, useAgentCopy } from "./agentAppearance";
+import { agentColorClasses, agentIconName, toolDescription, useAgentCopy } from "./agentAppearance";
 
 /**
  * M47 — the overview that comes up WITH a picked agent (the user's ask, from
@@ -200,6 +199,33 @@ export function AgentOverviewPanel({
   /* shipped-starter names localize exactly as they do on /workflows */
   const workflowCopy = useWorkflowCopy();
 
+  /*
+   * START A RECORDING WHEN I USE THIS AGENT (db/0143, user directive).
+   *
+   * The person's own switch, not the agent's: a shipped agent belongs to
+   * nobody, and two colleagues may reasonably want opposite answers. Same
+   * shape as the workflow switch — the surface holds the microphone, so the
+   * flag is read here and nowhere in the worker.
+   */
+  const [recordAgents, setRecordAgents] = useState<readonly string[] | null>(null);
+  useEffect(() => {
+    void api.me()
+      .then((who) => setRecordAgents(who?.record_on_agents ?? []))
+      .catch(() => setRecordAgents(null));
+  }, []);
+  const recordsOnUse = (recordAgents ?? []).includes(agent.handle);
+
+  async function toggleRecordOnUse() {
+    if (recordAgents === null) return;
+    const next = recordsOnUse
+      ? recordAgents.filter((h) => h !== agent.handle)
+      : [...recordAgents, agent.handle];
+    /* adopt the server's answer — it dedupes and bounds the set */
+    const updated = await api.updateAssistant({ record_on_agents: [...next] })
+      .catch(() => null);
+    if (updated) setRecordAgents(updated.record_on_agents ?? []);
+  }
+
   /**
    * The agent's SEVEN STARTER OPTIONS (user directive, 2026-08-28) — a
    * static catalogue lookup by the agent's handle, no wire involved.
@@ -261,12 +287,44 @@ export function AgentOverviewPanel({
           <Icon name={agentIconName(agent.icon)} size="xl" />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="flex flex-wrap items-center gap-2">
-            <span className="text-base font-semibold text-fg">{copy.name}</span>
-            <Chip tone={agentLevelTone(agent.level)}>{t(agent.level)}</Chip>
-          </span>
+          {/*
+            THE LEVEL CHIP IS GONE (user directive, 2026-08-29: "remove the
+            .system for all agents"). It labelled where an agent came from —
+            a fact about our catalogue, not about what the agent does — and
+            every shipped agent carried the same word, so the column of
+            identical chips distinguished nothing.
+          */}
+          <span className="text-base font-semibold text-fg">{copy.name}</span>
           {collapsed ? null : (
-            <span className="mt-1 block text-sm leading-5 text-fg-muted">{copy.description}</span>
+            <>
+              <span className="mt-1 block text-sm leading-5 text-fg-muted">{copy.description}</span>
+              {/* the knowledge sentence belongs under the NAME: it is a fact
+                  about this agent, and as a column heading it read like a
+                  section of settings */}
+              <span className="mt-1 block text-xs leading-5 text-fg-subtle">{t("knowledgeIntro")}</span>
+              {recordAgents === null ? null : (
+                <span className="mt-2 flex items-center gap-2">
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={recordsOnUse}
+                    aria-label={t("recordOnUse")}
+                    onClick={() => void toggleRecordOnUse()}
+                    className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${
+                      recordsOnUse ? "bg-success" : "border border-border bg-surface-2"
+                    }`}
+                  >
+                    <span
+                      aria-hidden
+                      className={`absolute top-0.5 h-4 w-4 rounded-full bg-bg transition-all ${
+                        recordsOnUse ? "end-0.5" : "start-0.5"
+                      }`}
+                    />
+                  </button>
+                  <span className="text-xs text-fg-muted">{t("recordOnUse")}</span>
+                </span>
+              )}
+            </>
           )}
         </span>
         <button
@@ -391,19 +449,20 @@ export function AgentOverviewPanel({
               </>
             )}
 
-            {/* the starter menu renders once the attached list has ANSWERED —
-                loaded or failed — never during loading (the panel claims
-                nothing it cannot yet dedupe). On a failed fetch nothing can
-                render twice, because the attached rows are not rendered at
-                all; the options are static catalogue links and stay useful. */}
+          </div>
+          <div>
+            {/*
+              THE RIGHT COLUMN now holds the starter menu, which used to sit
+              under the workflows list and left this side empty once the
+              knowledge sentence moved up to the name (user directive). Tools
+              stay here as a quiet footer: they are reference, not a heading.
+            */}
             {starterOptions.length > 0 && (workflows !== null || failed) ? (
               <>
-                <h3 className="mt-4 text-xs font-medium uppercase tracking-wide text-fg-subtle">{t("overviewStarters")}</h3>
-                <ul className="mt-2 max-h-44 space-y-1.5 overflow-y-auto">
+                <h3 className="text-xs font-medium uppercase tracking-wide text-fg-subtle">{t("overviewStarters")}</h3>
+                <ul className="mt-2 max-h-56 space-y-1.5 overflow-y-auto">
                   {starterOptions.map((handle) => {
                     const seeded = SEEDED_STARTERS[handle]!;
-                    /* the catalogue strings are by definition untouched, so
-                       workflowCopy localizes them exactly as /workflows does */
                     const copyFor = workflowCopy({
                       handle, name: seeded.name, description: seeded.description,
                     });
@@ -424,10 +483,6 @@ export function AgentOverviewPanel({
                 <p className="mt-2 text-xs leading-5 text-fg-subtle">{t("overviewStartersHint")}</p>
               </>
             ) : null}
-          </div>
-          <div>
-            <h3 className="text-xs font-medium uppercase tracking-wide text-fg-subtle">{t("overviewKnowledge")}</h3>
-            <p className="mt-2 text-xs leading-5 text-fg-muted">{t("knowledgeIntro")}</p>
             {agent.tools.length > 0 ? (
               <ul className="mt-2 flex flex-wrap gap-1.5">
                 {agent.tools.map((tool) => (
@@ -441,7 +496,20 @@ export function AgentOverviewPanel({
                 ))}
               </ul>
             ) : null}
-            <p className="mt-2 text-xs text-fg-muted">{agent.web ? t("webOn") : t("webOff")}</p>
+            {/*
+              "Web search OFF" is gone (user directive, 2026-08-29). It
+              stated the absence of a capability on every agent that lacks
+              one, which is most of them — and an absence announced
+              everywhere says nothing anywhere.
+              
+              The ON line stays: that one is a real fact about what this
+              agent can reach, and it is worth knowing before you ask it
+              something. Removing both would have been the tidier edit and
+              the worse one.
+            */}
+            {agent.web ? (
+              <p className="mt-2 text-xs text-fg-muted">{t("webOn")}</p>
+            ) : null}
           </div>
         </div>
       )}
