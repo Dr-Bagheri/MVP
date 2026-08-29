@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import { notify } from "@/lib/notify";
+import { clearSpeechCache } from "@/lib/voice";
 import { Card } from "@/components/ui";
 
 /**
@@ -61,6 +62,9 @@ export function AssistantSettings() {
       setSavedInstructions(me.assistant_instructions ?? "");
       setVoiceFa(me.assistant_voice_fa ?? "female");
       setVoiceEn(me.assistant_voice_en ?? "female");
+      /* cached short phrases wear the voice they were spoken in — a saved
+         gender change must reach the very next ack, not outlive it */
+      clearSpeechCache();
       notify(t("assistantSaved"));
     } catch {
       notify(t("assistantSaveFailed"), "warn");

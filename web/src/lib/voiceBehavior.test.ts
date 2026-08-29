@@ -194,3 +194,43 @@ describe("speechLangOf — script decides, the locale breaks ties (2026-08-29)",
     expect(speechLangOf("...", "fa-IR")).toBe("fa");
   });
 });
+
+describe("the same-breath rules (rebuilt 2026-08-29, the live double-hear)", () => {
+  function harness() {
+    const commands: string[] = [];
+    const behavior = createVoiceBehavior({
+      onWake: () => {},
+      onCommand: (command) => commands.push(command),
+      onStop: () => {},
+    });
+    return { commands, behavior };
+  }
+
+  it("a breath that EXTENDS the last one forwards only the new words", () => {
+    /* the incident verbatim: the gate fired mid-sentence, the fragment was
+       answered, then the full sentence arrived as "new" — the old rules
+       answered it whole, and one breath got two answers */
+    const { commands, behavior } = harness();
+    behavior.consume("اکو خب، امروز می‌خواهم در مورد", 1_000);
+    behavior.consume("اکو خب، امروز می‌خواهم در مورد کارهایی که کردیم صحبت کنیم", 4_000);
+    expect(commands).toHaveLength(2);
+    expect(commands[1]).toBe("کارهایی که کردیم صحبت کنیم");
+  });
+
+  it("a re-finalized piece CONTAINED in the last breath is dropped — even after a long reply", () => {
+    /* 12s apart: inside the widened window. The old 6s window expired
+       exactly while the assistant spoke its multi-second reply, which is
+       when the re-finalized tail arrived in the incident. */
+    const { commands, behavior } = harness();
+    behavior.consume("اکو خب، امروز می‌خواهم در مورد کارهایی که کردیم صحبت کنیم", 1_000);
+    behavior.consume("در مورد کارهایی که کردیم صحبت کنیم", 13_000);
+    expect(commands).toHaveLength(1);
+  });
+
+  it("a genuinely new breath after the window is a new breath", () => {
+    const { commands, behavior } = harness();
+    behavior.consume("اکو سلام", 1_000);
+    behavior.consume("اکو سلام", 20_000);
+    expect(commands).toHaveLength(2);
+  });
+});

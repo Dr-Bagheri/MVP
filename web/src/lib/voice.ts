@@ -15,9 +15,10 @@
  *
  * What this file is now:
  *  · one playback path (an <audio> element over the server's WAV),
- *  · the sentence queue with PREFETCH — while sentence N plays, N+1 is
- *    already synthesizing, so the multi-second model latency is paid once
- *    at the start of a reply instead of between every sentence,
+ *  · the sentence queue with ENQUEUE-TIME synthesis — every sentence is
+ *    at the synthesizer the moment it is queued, so the model's latency
+ *    overlaps playback and the reply's own streaming instead of standing
+ *    between sentences as an audible gap,
  *  · the recording gate — while a recording is live the mouth is SILENT:
  *    whatever was playing stops, whatever arrives is dropped, and speech
  *    resumes only for what is said after the take ends,
@@ -109,7 +110,6 @@ if (typeof window !== "undefined") {
 /** exported for the dock's LOCAL stop: cut whatever voice is playing */
 export function stopSpeaking(): void {
   speechQueue.length = 0; // whatever was waiting to be said is unsaid
-  prefetched = null;
   if (serverAudio) {
     serverAudio.pause();
     serverAudio = null;
@@ -174,16 +174,54 @@ async function speakOne(text: string, ready?: Promise<Blob> | null): Promise<voi
   }
 }
 
-// ── the sentence queue, with prefetch ──────────────────────────────────
+// ── the sentence queue: synthesis starts at ENQUEUE ────────────────────
 
-/* The reply is spoken sentence-by-sentence AS IT STREAMS. The queue keeps
-   order; the PUMP plays it; and while sentence N plays, sentence N+1 is
-   already at the synthesizer — a played sentence is seconds long, which
-   is more than the model needs, so from the listener's side the reply is
-   one continuous voice with a single initial breath. */
-const speechQueue: string[] = [];
+/*
+ * The reply is spoken sentence-by-sentence AS IT STREAMS, and every
+ * sentence's synthesis starts the moment it is QUEUED — not when its turn
+ * to play arrives. The first cut of this queue prefetched only "the next
+ * item at pump time", which missed the common case entirely: sentences
+ * stream in one at a time WHILE the previous one plays, so the queue was
+ * empty at every pump step and each sentence paid the model's full
+ * latency as an audible gap (the live complaint: "between its sentences
+ * it waits"). Enqueue-time synthesis overlaps the model with playback
+ * and with the reply still being written; order is kept by the queue.
+ *
+ * Short phrases are CACHED: the acks («بله؟», «متوجه شدم») repeat all
+ * day, and the second «بله؟» should cost nothing. The cache empties when
+ * the person changes their voice gender — a cached ack in the old voice
+ * would outlive the choice.
+ */
+interface QueuedSpeech { text: string; blob: Promise<Blob> }
+const speechQueue: QueuedSpeech[] = [];
 let queuePumping = false;
-let prefetched: { text: string; blob: Promise<Blob> } | null = null;
+
+const PHRASE_CACHE_MAX_LENGTH = 60;
+const phraseCache = new Map<string, Blob>();
+
+/** the settings screen saved a new voice — cached audio wears the old one */
+export function clearSpeechCache(): void {
+  phraseCache.clear();
+}
+
+function synthesizeCached(text: string): Promise<Blob> {
+  const cacheable = text.length <= PHRASE_CACHE_MAX_LENGTH;
+  if (cacheable) {
+    const hit = phraseCache.get(text);
+    if (hit) return Promise.resolve(hit);
+  }
+  const blob = synthesize(text);
+  if (cacheable) {
+    void blob.then((b) => {
+      phraseCache.set(text, b);
+      if (phraseCache.size > 24) {
+        const oldest = phraseCache.keys().next().value;
+        if (oldest !== undefined) phraseCache.delete(oldest);
+      }
+    }).catch(() => undefined);
+  }
+  return blob;
+}
 
 function cleanForSpeech(text: string): string {
   return text
@@ -199,7 +237,9 @@ export function speakQueued(text: string): void {
   const cleaned = cleanForSpeech(text);
   if (!cleaned) return;
   spokenHistory = `${spokenHistory} ${cleaned}`.slice(-2000);
-  speechQueue.push(cleaned);
+  const blob = synthesizeCached(cleaned);
+  blob.catch(() => undefined); // its failure is speakOne's to report
+  speechQueue.push({ text: cleaned, blob });
   void pumpSpeechQueue();
 }
 
@@ -223,16 +263,7 @@ async function pumpSpeechQueue(): Promise<void> {
   try {
     while (speechQueue.length > 0 && token === playbackToken && !recordingSilence) {
       const next = speechQueue.shift()!;
-      const ready = prefetched?.text === next ? prefetched.blob : null;
-      prefetched = null;
-      // start the NEXT sentence's synthesis before this one plays
-      const upcoming = speechQueue[0];
-      if (upcoming !== undefined) {
-        const blob = synthesize(upcoming);
-        blob.catch(() => undefined); // its failure is speakOne's to report
-        prefetched = { text: upcoming, blob };
-      }
-      await speakOne(next, ready);
+      await speakOne(next.text, next.blob);
     }
   } finally {
     queuePumping = false;

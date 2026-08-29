@@ -69,7 +69,12 @@ export function matchWake(text: string): { woke: boolean; command: string } {
 }
 
 function canonical(text: string): string {
-  return text.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").replace(/\s+/g, " ").trim();
+  /* ZWNJ survives: it is Cf, not \p{L}, and stripping it to a space split
+     «می‌خواهم» into two canonical words — which broke the word-count
+     arithmetic the same-breath suffix rule depends on (canonical must
+     never merge or split words, and for Persian that means the joiner is
+     part of the word) */
+  return text.toLowerCase().replace(/[^\p{L}\p{N}\s‌]/gu, " ").replace(/\s+/g, " ").trim();
 }
 
 export interface VoiceHandlers {
@@ -131,12 +136,47 @@ export function createVoiceBehavior(
     consume(text: string, now = Date.now()) {
       const canon = canonical(text);
       if (!canon) return;
-      // the one dedupe rule: the provider re-finalizes words the silence
-      // gate already consumed — an identical (or contained) utterance
-      // within 6s is the same breath, not a new one
-      if (now - lastCanonAt < 6_000 && (canon === lastCanon || lastCanon.includes(canon))) return;
-      lastCanon = canon;
-      lastCanonAt = now;
+      /*
+       * The same-breath rules (rebuilt 2026-08-29 after a live double-hear:
+       * the silence gate fired mid-sentence, answered the fragment, and the
+       * FULL sentence then arrived as "new" — two answers for one breath).
+       *
+       *  · identical or CONTAINED in the last utterance → the provider
+       *    re-finalized words already consumed; drop.
+       *  · EXTENDS the last utterance (canon startsWith lastCanon) → the
+       *    same breath, longer: only the words not yet consumed are new,
+       *    so the suffix alone goes forward. Word-count arithmetic maps
+       *    the canonical prefix back onto the raw text — canonical strips
+       *    punctuation but never merges or splits words.
+       *
+       * The window is 15s, not 6: the assistant's own multi-second reply
+       * to the fragment routinely pushed the full sentence past the old
+       * window, which is exactly when the dedupe was needed most.
+       */
+      /*
+       * Two windows, because the cases mean different things:
+       *  · an IDENTICAL utterance within 6s is the provider re-finalizing
+       *    — but the same words ten seconds later are a person REPEATING
+       *    a command that got no visible result, and must act again;
+       *  · a PROPER FRAGMENT of the last breath, or an extension of it,
+       *    stays deduped for 15s — the assistant's own multi-second reply
+       *    routinely pushed those artifacts past the old 6s window, and a
+       *    person does not re-ask with a torn-off piece of their sentence.
+       */
+      if (now - lastCanonAt < 6_000 && canon === lastCanon) return;
+      const withinBreath = now - lastCanonAt < 15_000;
+      if (withinBreath && canon !== lastCanon && lastCanon.includes(canon)) return;
+      if (withinBreath && lastCanon !== "" && canon.startsWith(`${lastCanon} `)) {
+        const consumedWords = lastCanon.split(" ").length;
+        const suffix = text.trim().split(/\s+/).slice(consumedWords).join(" ");
+        lastCanon = canon;
+        lastCanonAt = now;
+        if (!suffix) return;
+        text = suffix;
+      } else {
+        lastCanon = canon;
+        lastCanonAt = now;
+      }
 
       const words = canon.split(" ").length;
       const wake = matchWake(text);
@@ -180,7 +220,12 @@ const PREROLL_MS = 1_200;
 const SPEECH_RMS = 0.012;
 const HANGOVER_MS = 1_800;
 const SESSION_LINGER_MS = 20_000;
-const UTTERANCE_SILENCE_MS = 800;
+/* 1200, was 800 (2026-08-29): Persian sentences carry mid-breath pauses
+   («…می‌خواهم در موردِ …») and an early fire costs a whole wasted model
+   round trip plus a double answer — far more time than the 400ms this
+   adds to every turn's end. The suffix rule above catches what still
+   slips through. */
+const UTTERANCE_SILENCE_MS = 1_200;
 
 export interface VoiceLoopHandle {
   stop: () => void;
