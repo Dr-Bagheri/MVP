@@ -120,9 +120,6 @@
     "failed": "Failed"
   },
   "dashboard": {
-    "greeting": "Hi, {name}",
-    "greetingPlain": "Your day at a glance",
-    "subtitle": "What happened while you were away, and what wants you now.",
     "density": "Density",
     "comfortable": "Comfortable",
     "compact": "Compact",

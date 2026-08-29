@@ -857,6 +857,36 @@
   box-shadow: 0 0 8px rgb(var(--accent) / .6);
 }
 
+/* --- the record transport, on the board ------------------------------
+   The controls size themselves against the TILE (user directive,
+   2026-08-29: "make the button inside this dashboard section for record to
+   adjust to the size, they must get bigger"), which is what the container
+   units do: `cqh` is 1% of the tile body's height, `cqmin` of its shorter
+   side. `min()` caps them, so a tall tile grows the transport to a size
+   somebody designed rather than to whatever fits.
+
+   Both rules are two classes deep on purpose. A single-class rule ties with
+   Tailwind's own `h-10`, and which one wins is then a question about
+   stylesheet order — the class list would read as correct while the
+   computed size disagreed, which is a failure this project has already paid
+   for once. */
+.rec-row {
+  /* measured in a browser at both tiers this widget offers, with a
+     stand-in for the `h-10` the picker's own face carries declared both
+     before and after these rules: 45.8 / 74.3 at `wide` with 4.8px of
+     vertical slack, 52 / 84 at `large` where the cap takes over. Bigger
+     than the 40 / 64 they replace at every size. */
+  --rec-side: min(52px, 58cqmin);
+  --rec-main: min(84px, 94cqh);
+}
+.rec-row .rec-btn { width: var(--rec-side); height: var(--rec-side); }
+.rec-row .rec-main { width: var(--rec-main); height: var(--rec-main); }
+/* the glyph is a FRACTION of its button, so growing the button grows the
+   icon with it — the alternative is a big circle with a small mark in it */
+.rec-row .rec-btn svg { width: 45%; height: 45%; }
+.rec-row .rec-main svg { width: 42%; height: 42%; }
+.rec-row .rec-stop { width: 30%; height: 30%; }
+
 /* --- the icon chip ---------------------------------------------------
    40px with a 20px glyph (user directive, 2026-08-29: "the icons are kinda
    not at the rights sizes inside the boxes"). It went to 48/24 when the

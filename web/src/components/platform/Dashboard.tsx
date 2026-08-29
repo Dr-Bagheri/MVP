@@ -1,10 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { useLocale, useTranslations } from "next-intl";
-import { api } from "@/api/client";
-import type { Me } from "@/api/types";
-import { personName } from "@/lib/format";
+import { useTranslations } from "next-intl";
 import { KebabMenu } from "@/components/rowActions";
 import { IconCheck, IconPencil, IconPin, IconPlus, IconTrash } from "@/components/icons";
 import {
@@ -45,8 +42,6 @@ import {
  */
 export function Dashboard() {
   const t = useTranslations("dashboard");
-  const locale = useLocale();
-  const [me, setMe] = useState<Me | null>(null);
   const [layout, setLayout] = useState<DashboardLayout>(() => defaultLayout());
   /** the store is only read after mount — SSR has no localStorage */
   const [ready, setReady] = useState(false);
@@ -66,7 +61,6 @@ export function Dashboard() {
     setLayout(readLayout());
     setReady(true);
   }, []);
-  useEffect(() => { void api.me().then(setMe).catch(() => setMe(null)); }, []);
 
   function update(next: DashboardLayout): void {
     setLayout(next);
@@ -191,15 +185,16 @@ export function Dashboard() {
         competing with the board for the top of the page. Marked "for now" in
         their words, so the reason it left is on record if it comes back.
       */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="min-w-0">
-            <h1 className="truncate text-xl font-bold leading-tight text-fg">
-              {me ? t("greeting", { name: personName(me, locale) }) : t("greetingPlain")}
-            </h1>
-            <p className="text-xs text-fg-muted">{t("subtitle")}</p>
-          </div>
-        </div>
+      {/*
+        NO GREETING (user directive, 2026-08-29: "remove the hi amirreza at
+        the top"). It went with its subtitle rather than leaving a stray line
+        under a missing heading — they were one block saying one thing, and
+        half of it is not a smaller version of it.
+
+        What is left is the board's own control, aligned to the end. A person
+        arriving here knows who they are; the tiles are what they came for.
+      */}
+      <div className="flex flex-wrap items-center justify-end gap-3">
 
         {/*
           READING, or ARRANGING. Everything that changes the board lives

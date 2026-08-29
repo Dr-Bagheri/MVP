@@ -120,9 +120,6 @@
     "failed": "ناموفق"
   },
   "dashboard": {
-    "greeting": "سلام، {name}",
-    "greetingPlain": "روز شما در یک نگاه",
-    "subtitle": "در نبودتان چه گذشت و چه چیزی منتظر شماست.",
     "density": "فشردگی",
     "comfortable": "راحت",
     "compact": "فشرده",

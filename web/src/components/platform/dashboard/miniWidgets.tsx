@@ -11,7 +11,7 @@ import {
   Icon, IconCheck, IconGlobe, IconMic, IconPause, IconPlay, IconPulse, IconSettings,
 } from "@/components/icons";
 import { EchoMark } from "@/components/platform/icons";
-import { dayKeyOf, formatClock, monthGrid } from "@/lib/format";
+import { dayKeyOf, monthGrid } from "@/lib/format";
 import { useCalendarPreference, useTimezonePreference } from "@/lib/usePreferences";
 import { useAgentCopy } from "@/components/platform/agentAppearance";
 import {
@@ -203,19 +203,28 @@ export function StartRecordWidget() {
   const live = phase === "recording" || phase === "paused" || phase === "finishing";
 
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-3">
-      {live ? (
-        <span className="ltr text-sm tabular-nums text-fg-muted">
-          {formatClock(Math.floor(snapshot.recordedMs / 1000), locale)}
-        </span>
-      ) : null}
+    /*
+     * `container-type: size` so the controls can measure themselves against
+     * THIS TILE (user directive, 2026-08-29: "make the button inside this
+     * dashboard section for record to adjust to the size, they must get
+     * bigger"). The row is sized in container units with a cap, so it fills
+     * a short tile and grows to a designed maximum in a taller one rather
+     * than sitting at one hard-coded size in both.
+     *
+     * NO CLOCK (same directive: "when the record start it does not need to
+     * show the time in it. remove the counter as well"). The elapsed time is
+     * on the mini recorder in the top bar, which is visible from every screen
+     * — a second copy here is a second thing that can disagree, and it was
+     * costing the transport the height it needed.
+     */
+    <div className="grid h-full place-items-center" style={{ containerType: "size" }}>
       {/* dir="ltr" so the transport keeps ONE order in both locales — a row
           of controls is an instrument panel, not a sentence */}
-      <div className="flex items-center justify-center gap-3" dir="ltr">
+      <div className="rec-row flex items-center justify-center gap-3" dir="ltr">
         <KebabMenu
           label={tCapture("settingsMenu")}
           trigger={<IconSettings width={18} height={18} />}
-          triggerClassName="h-10 w-10 rounded-full border border-border bg-surface text-fg-muted hover:border-border-strong hover:bg-surface-2 hover:text-fg"
+          triggerClassName="rec-btn grid place-items-center rounded-full border border-border bg-surface text-fg-muted hover:border-border-strong hover:bg-surface-2 hover:text-fg"
           items={[{
             key: "language",
             label: tCapture("languageField"),
@@ -233,7 +242,7 @@ export function StartRecordWidget() {
           title={phase === "recording" ? tCapture("pause") : tCapture("resume")}
           aria-label={phase === "recording" ? tCapture("pause") : tCapture("resume")}
           disabled={!live}
-          className="tap grid h-10 w-10 place-items-center rounded-full border border-border bg-surface text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg disabled:opacity-40"
+          className="rec-btn tap grid place-items-center rounded-full border border-border bg-surface text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg disabled:opacity-40"
           onClick={phase === "recording" ? pause : resume}
         >
           {phase === "recording"
@@ -245,10 +254,10 @@ export function StartRecordWidget() {
             type="button"
             title={tCapture("stopButton")}
             aria-label={tCapture("stopButton")}
-            className="tap grid h-16 w-16 place-items-center rounded-full bg-fg shadow-lg transition-transform hover:scale-105 active:scale-95"
+            className="rec-main tap grid place-items-center rounded-full bg-fg shadow-lg transition-transform hover:scale-105 active:scale-95"
             onClick={() => { void finish(); }}
           >
-            <span aria-hidden className="block h-5 w-5 rounded-[4px] bg-record" />
+            <span aria-hidden className="rec-stop block rounded-[5px] bg-record" />
           </button>
         ) : (
           <button
@@ -256,7 +265,7 @@ export function StartRecordWidget() {
             title={t("miniStartRecording")}
             aria-label={t("miniStartRecording")}
             disabled={phase === "starting"}
-            className="tap grid h-16 w-16 place-items-center rounded-full bg-record text-white shadow-lg transition-transform hover:scale-105 active:scale-95 disabled:opacity-60"
+            className="rec-main tap grid place-items-center rounded-full bg-record text-white shadow-lg transition-transform hover:scale-105 active:scale-95 disabled:opacity-60"
             onClick={() => {
               void startRecording({
                 micId, language, source, title: "", locale,
