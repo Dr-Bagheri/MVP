@@ -60,6 +60,20 @@ export interface MemberRecord {
    * a null one are different nothings, and only one of them is a fact.
    */
   last_seen_at: string | null;
+  /**
+   * Whether this person holds a LIVE auth session right now — a device that
+   * could still refresh (db/0125's predicate, read through db/0135's
+   * org-wide door).
+   *
+   * `null` is a THIRD answer rather than a slower "no": it means the
+   * question was not asked, because only an admin or owner may ask it. A
+   * member listing colleagues gets null on every row and renders no column
+   * at all — which is a different thing from rendering "not signed in" for
+   * an org full of people who are. The same distinction `last_seen_at`
+   * makes one line above, one step further out: absent, false and unknown
+   * are three states, and only two of them are facts about a person.
+   */
+  signed_in: boolean | null;
   created_at: string;
 }
 
@@ -256,6 +270,13 @@ const toMember = (row: Record<string, unknown>): MemberRecord => ({
   accepted_at: isoOrNull(row.accepted_at),
   last_seen_at: isoOrNull(row.last_seen_at),
   created_at: iso(row.created_at),
+  /*
+   * A query that did not join presence has no such column, and that must
+   * arrive as null rather than false. `=== true` rather than truthiness so
+   * `undefined` cannot quietly become "not signed in" — the absent case is
+   * the one this field exists to keep separate.
+   */
+  signed_in: row.signed_in === undefined ? null : row.signed_in === true,
 });
 
 export interface RegisterInput {
@@ -915,17 +936,44 @@ export function createMembersRepo(db: Db) {
         ? `%${search.replace(/[\\%_]/g, (c) => `\\${c}`)}%`
         : null;
 
+      /*
+       * The affordance mirrors the wall and never widens it: this decides
+       * what to ASK FOR, and `org_session_presence()` decides what may be
+       * answered. If the two ever disagreed the database would win and the
+       * caller would get a refusal — never a silent success — which is the
+       * posture every role flag in this codebase takes.
+       */
+      const withPresence = identity.role === "admin" || identity.role === "owner";
+
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<Record<string, unknown>>(
-          `select ${MEMBER_COLUMNS} from echo.app_user
-            where tombstoned_at is null
+          /*
+           * PRESENCE IS JOINED ONLY FOR AN ADMIN, and the branch is the
+           * point rather than an optimisation.
+           *
+           * `echo.org_session_presence()` RAISES for a non-admin instead of
+           * returning an empty set, because an empty set here would render
+           * as "nobody in this org is signed in" — a claim about the
+           * organisation assembled out of a fact about the caller's
+           * permissions. So a member's query must not ask at all, and their
+           * rows carry no `signed_in` column, which `toMember` turns into
+           * null: the question was not asked, not answered no.
+           *
+           * A LEFT JOIN, so someone with no live session is a row with a
+           * null count rather than a missing row — a filter here would
+           * quietly shorten the directory to whoever happens to be online.
+           */
+          `select ${MEMBER_COLUMNS}${withPresence ? ", (p.user_id is not null) as signed_in" : ""}
+             from echo.app_user u
+             ${withPresence ? "left join echo.org_session_presence() p on p.user_id = u.id" : ""}
+            where u.tombstoned_at is null
               and ($1::text is null
-                   or display_name ilike $1 escape '\\'
-                   or coalesce(display_name_en, '') ilike $1 escape '\\'
-                   or coalesce(username, '') ilike $1 escape '\\'
-                   or email::text ilike $1 escape '\\')
-              and ($2::echo.user_status is null or status = $2::echo.user_status)
-              and ($3::echo.member_role is null or role = $3::echo.member_role)
+                   or u.display_name ilike $1 escape '\\'
+                   or coalesce(u.display_name_en, '') ilike $1 escape '\\'
+                   or coalesce(u.username, '') ilike $1 escape '\\'
+                   or u.email::text ilike $1 escape '\\')
+              and ($2::echo.user_status is null or u.status = $2::echo.user_status)
+              and ($3::echo.member_role is null or u.role = $3::echo.member_role)
             order by ${SORTS[sort]}`,
           [pattern, options.status ?? null, options.role ?? null],
         ),

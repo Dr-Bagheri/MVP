@@ -12,6 +12,7 @@ import type {
   MailDraft,
   MailSourceMessage,
   AuthSessionRow,
+  OrgSessionRow,
   WorkflowRunDetail,
   WorkflowRunRecord,
   CapabilityState,
@@ -1856,6 +1857,29 @@ export const api = {
       method: "DELETE",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ handle }),
+    });
+  },
+
+  /**
+   * db/0135 — every live session in the org, for an admin or owner.
+   *
+   * **LIVE.** The server refuses a non-admin, so this is only ever called
+   * behind the same role check the screen uses for the section itself.
+   */
+  async orgSessions(): Promise<OrgSessionRow[]> {
+    const { sessions } = await bff<{ sessions: OrgSessionRow[] }>("/api/admin/sessions");
+    return sessions;
+  },
+
+  /**
+   * db/0135 — end one session belonging to someone the caller outranks.
+   *
+   * **LIVE.** The rank rule lives in the database; a refusal arrives as a
+   * BffError rather than being predicted here.
+   */
+  async endMemberSession(userId: string, handle: string): Promise<void> {
+    await bff<null>(`/api/admin/sessions/${encodeURIComponent(userId)}/${encodeURIComponent(handle)}`, {
+      method: "DELETE",
     });
   },
 

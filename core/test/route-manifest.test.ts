@@ -32,6 +32,8 @@ const REQUIRED_ROUTES: [method: string, path: string, why: string][] = [
   ["PATCH", "/v1/me", "M24 round 1 — the caller edits their own names (display_name, display_name_en, username)"],
   ["PATCH", "/v1/me/assistant", "db/0112 — the person's standing assistant voice (Settings·Assistant)"],
   ["GET", "/v1/me/sessions", "db/0112 — the caller's own devices (Security 43)"],
+  ["GET", "/v1/admin/sessions", "db/0135 — the ORG's live sessions, admin/owner"],
+  ["DELETE", "/v1/admin/sessions/:userId/:handle", "db/0135 — end a session you outrank"],
   ["DELETE", "/v1/me/voiceprint", "db/0112 — consent withdrawal is self-service (Security 59)"],
   ["POST", "/v1/signup", "M15 — the only caller of echo.register_account(); without it a signed-up person 401s forever and never reaches the pending queue"],
 

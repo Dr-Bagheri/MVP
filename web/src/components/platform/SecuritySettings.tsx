@@ -3,13 +3,13 @@
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { api } from "@/api/client";
-import type { AuthSessionRow } from "@/api/types";
+import type { AuthSessionRow, OrgSessionRow, User } from "@/api/types";
 import { ConfirmDialog } from "@/components/rowActions";
 import { notify } from "@/lib/notify";
 import { DataTable } from "@/components/DataTable";
 import { IconClose } from "@/components/icons";
 import { Card, Chip } from "@/components/ui";
-import { formatDate, formatTime } from "@/lib/format";
+import { formatDate, formatTime, personName } from "@/lib/format";
 import { useLocale } from "next-intl";
 import { signOutThisDevice } from "@/lib/signOut";
 
@@ -38,10 +38,34 @@ export function SecuritySettings() {
   const [ending, setEnding] = useState<AuthSessionRow | null>(null);
   const [endBusy, setEndBusy] = useState(false);
 
+  /*
+   * THE ORG'S SESSIONS (db/0135) — admin and owner only.
+   *
+   * `null` is "not asked or not permitted" and renders nothing at all; an
+   * empty array is "asked, and this org has none". Keeping them apart is
+   * what stops a member's screen from showing an empty security table that
+   * reads as "nobody in this company is signed in".
+   */
+  const [orgSessions, setOrgSessions] = useState<OrgSessionRow[] | null>(null);
+  const [endingOrg, setEndingOrg] = useState<OrgSessionRow | null>(null);
+
   useEffect(() => {
     void api.mySessions()
       .then((answer) => { setSessions(answer.sessions); setCurrent(answer.current); })
       .catch(() => setSessions([]));
+  }, []);
+
+  useEffect(() => {
+    /*
+     * Asked unconditionally and REFUSED for a member, rather than gated on a
+     * role this component would have to fetch. The wall answers in one round
+     * trip either way, and a client-side gate here would be a third copy of
+     * a rule the API and the database already hold — the copy that drifts.
+     * A refusal simply leaves the section unrendered.
+     */
+    void api.orgSessions()
+      .then(setOrgSessions)
+      .catch(() => setOrgSessions(null));
   }, []);
 
 
@@ -171,6 +195,79 @@ export function SecuritySettings() {
         )}
       </div>
 
+      {/* ── everyone's devices, for an admin or owner (db/0135) ───────── */}
+      {orgSessions === null ? null : (
+        <div>
+          <h2 className="h-section">{t("orgSessionsTitle")}</h2>
+          <p className="mt-1 text-sm leading-6 text-fg-muted">{t("orgSessionsHint")}</p>
+          {orgSessions.length === 0 ? (
+            <p className="mt-3 text-sm text-fg-muted">{t("orgSessionsEmpty")}</p>
+          ) : (
+            <Card className="mt-3 !p-0">
+              <DataTable
+                rows={orgSessions}
+                rowKey={(session) => `${session.user_id}:${session.handle}`}
+                /*
+                 * The menu appears only where the wall says it may act. An
+                 * admin sees the owner's session and gets NO end item on
+                 * that row — the affordance mirrors the wall rather than
+                 * offering a button that produces a refusal. `can_end` is
+                 * the server's answer, never re-derived here.
+                 */
+                menuItems={(session) => session.can_end ? [{
+                  key: "end",
+                  label: t("endSession"),
+                  icon: <IconClose width={14} height={14} />,
+                  danger: true,
+                  onSelect: () => setEndingOrg(session),
+                }] : []}
+                columns={[
+                  {
+                    key: "person",
+                    header: t("colPerson"),
+                    cell: (session) => (
+                      <span className="font-medium text-fg">
+                        {personName(session as unknown as User, locale)}
+                      </span>
+                    ),
+                  },
+                  {
+                    key: "device",
+                    header: t("colDevice"),
+                    cell: (session) => (
+                      <span className="flex items-center gap-2">
+                        <span className="text-fg">{agentLabel(session.user_agent)}</span>
+                        {session.handle === current ? (
+                          <Chip tone="success">{t("thisDevice")}</Chip>
+                        ) : null}
+                      </span>
+                    ),
+                  },
+                  {
+                    key: "ip",
+                    header: t("colIp"),
+                    cell: (session) => (
+                      <span dir="ltr" className="text-fg-muted">{session.ip ?? "—"}</span>
+                    ),
+                  },
+                  {
+                    key: "lastAction",
+                    header: t("colLastAction"),
+                    cell: (session) => session.refreshed_at ? (
+                      <span className="text-fg-muted">
+                        {`${formatDate(session.refreshed_at, locale)} ${formatTime(session.refreshed_at, locale)}`}
+                      </span>
+                    ) : (
+                      <span className="text-fg-subtle">—</span>
+                    ),
+                  },
+                ]}
+              />
+            </Card>
+          )}
+        </div>
+      )}
+
       {ending ? (
         <ConfirmDialog
           title={t("endConfirmTitle", { device: agentLabel(ending.user_agent) })}
@@ -193,6 +290,30 @@ export function SecuritySettings() {
                 });
               })
               .then(() => { setEnding(null); notify(t("endDone")); })
+              .catch(() => notify(t("endFailed"), "warn"))
+              .finally(() => setEndBusy(false));
+          }}
+        />
+      ) : null}
+
+      {endingOrg ? (
+        <ConfirmDialog
+          title={t("endOrgConfirmTitle", {
+            person: personName(endingOrg as unknown as User, locale),
+          })}
+          body={t("endOrgConfirmBody")}
+          confirmLabel={t("endConfirm")}
+          cancelLabel={t("cancel")}
+          busy={endBusy}
+          onCancel={() => setEndingOrg(null)}
+          onConfirm={() => {
+            if (endBusy) return;
+            setEndBusy(true);
+            void api.endMemberSession(endingOrg.user_id, endingOrg.handle)
+              /* re-read rather than splice: the rank rule or a sweep may
+                 have moved under us, and the list is the record */
+              .then(() => api.orgSessions().then(setOrgSessions))
+              .then(() => { setEndingOrg(null); notify(t("endDone")); })
               .catch(() => notify(t("endFailed"), "warn"))
               .finally(() => setEndBusy(false));
           }}

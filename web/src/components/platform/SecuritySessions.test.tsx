@@ -19,6 +19,16 @@ vi.mock("@/api/client", () => ({
   api: {
     mySessions: async () => ({ sessions: SESSIONS, current: "aaaaaaaa" }),
     endMySession: (handle: string) => { ended(handle); return Promise.resolve(); },
+    /*
+     * A MEMBER's answer, which is a refusal (db/0135 admins-only). This file
+     * is about the caller's own devices, and the refusal is what keeps the
+     * org section off this screen while these tests look at that one.
+     *
+     * Not a stub returning `[]`: an empty array is "asked, and the org has
+     * none", which would render an empty org table here and quietly change
+     * what these tests are looking at.
+     */
+    orgSessions: async () => { throw new Error("forbidden"); },
     deleteMyVoiceprint: async () => {},
   },
 }));

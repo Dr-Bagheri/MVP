@@ -169,6 +169,25 @@ export interface User {
    * behaviour.
    */
   last_seen_at?: string | null;
+  /**
+   * Whether this person has a device signed in RIGHT NOW — db/0135, served
+   * only to an admin or owner.
+   *
+   * Three states, and the third is the reason this is not a plain boolean:
+   * `true` and `false` are facts about the person, `null` means the question
+   * was not asked because the caller may not ask it. A member listing
+   * colleagues gets null on every row, and the column does not render —
+   * rather than rendering "signed out" for an org full of people who are
+   * signed in, which would be a claim about the org assembled out of a fact
+   * about permissions.
+   *
+   * Distinct from `last_seen_at` one field up, and the pair is worth reading
+   * together: that one is when a human last DID something and deliberately
+   * ignores gateway-key traffic; this one is whether a session exists at
+   * this moment. Someone can be signed in and idle for a week, or active
+   * yesterday with every device signed out since.
+   */
+  signed_in?: boolean | null;
 }
 
 /**
@@ -1140,6 +1159,29 @@ export interface AuthSessionRow {
   /** attached by the BFF for the CURRENT session only — Vercel's geo of the
       request in hand; other rows carry nothing rather than a guess */
   location?: string | null;
+}
+
+/**
+ * One live session belonging to ANYONE in the org — db/0135, admin/owner.
+ *
+ * `AuthSessionRow` plus the two things a colleague's session needs and your
+ * own does not: whose it is, and whether you may end it.
+ *
+ * `can_end` comes FROM the server rather than being re-derived here, and
+ * that is the load-bearing part. Reading is org-wide while ending is
+ * rank-bound, so an admin sees the owner's session and cannot end it — the
+ * two answers differ per row. A client computing that rule itself would be
+ * a second copy of an authorization rule, and the visible cost of the copy
+ * drifting is a Stop button that produces a refusal.
+ */
+export interface OrgSessionRow extends AuthSessionRow {
+  user_id: string;
+  can_end: boolean;
+  /* both names, resolved per locale by `personName()` — one rule, one
+     implementation, rather than a server-side copy that would show up as
+     one screen calling someone by a different name than every other */
+  display_name: string;
+  display_name_en?: string | null;
 }
 
 /**

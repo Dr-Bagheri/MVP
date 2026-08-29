@@ -1828,7 +1828,10 @@
     "modelsDone": "Done",
     "modelsActiveCount": "{n} models allowed",
     "modelsNoCuration": "No models chosen — members may use any model the platform offers. Add one to start curating.",
-    "modelsSaveFailed": "That change was not saved."
+    "modelsSaveFailed": "That change was not saved.",
+    "colSignedIn": "Signed in",
+    "signedInYes": "Now",
+    "signedInNo": "No"
   },
   "settings": {
     "title": "Settings",
@@ -2163,7 +2166,13 @@
     "endConfirmBody": "That device is signed out the next time it talks to the server. Its work is untouched — only the sign-in ends.",
     "endConfirm": "End session",
     "endDone": "The session was ended.",
-    "endFailed": "The session was not ended."
+    "endFailed": "The session was not ended.",
+    "orgSessionsTitle": "Everyone in this organization",
+    "orgSessionsHint": "Devices signed in across the organization right now. You can end a session for anyone you outrank; the owner’s own sessions are shown but cannot be ended by an admin.",
+    "orgSessionsEmpty": "Nobody else has a device signed in.",
+    "colPerson": "Person",
+    "endOrgConfirmTitle": "End {person}’s session?",
+    "endOrgConfirmBody": "That device is signed out the next time it tries to refresh. They can sign in again."
   },
   "signin": {
     "intro": "External sign-in methods for this platform — an admin or the owner can turn each on or off.",

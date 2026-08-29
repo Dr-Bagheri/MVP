@@ -125,6 +125,15 @@ export default function UsersPage() {
 
 
   const lastSeenServed = rows.some((m) => m.last_seen_at !== undefined);
+  /*
+   * Presence is served only to an admin or owner (db/0135), and a member's
+   * rows carry `signed_in: null` rather than the field being absent — so the
+   * question here is "did anyone ANSWER", not "is the key present".
+   * `typeof === "boolean"` is what separates an answer from a refusal to
+   * answer; `!== undefined` would be true for a member too and would render
+   * a column of "signed out" for an org that is mostly online.
+   */
+  const presenceServed = rows.some((m) => typeof m.signed_in === "boolean");
   const pending = rows.filter((m) => m.status === "pending");
   const listed = rows.filter((m) => m.status !== "pending");
 
@@ -479,6 +488,29 @@ export default function UsersPage() {
                            * indistinguishable from "nothing to show".
                            */
                           <span className="text-fg-muted/70">{t("neverSeen")}</span>
+                        ),
+                    }]
+                  : []),
+                ...(presenceServed
+                  ? [{
+                      key: "signedIn",
+                      header: t("colSignedIn"),
+                      headClassName: "whitespace-nowrap",
+                      className: "text-xs",
+                      cell: (u: User) =>
+                        u.signed_in === true ? (
+                          <span className="inline-flex items-center gap-1.5 text-fg">
+                            {/* a dot, not a word, because the column is scanned
+                                down rather than read across — and it carries a
+                                text label for anyone not reading colour */}
+                            <span
+                              aria-hidden
+                              className="inline-block h-2 w-2 rounded-full bg-success"
+                            />
+                            {t("signedInYes")}
+                          </span>
+                        ) : (
+                          <span className="text-fg-muted/70">{t("signedInNo")}</span>
                         ),
                     }]
                   : []),

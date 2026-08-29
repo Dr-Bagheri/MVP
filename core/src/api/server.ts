@@ -781,6 +781,59 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
   });
 
   /**
+   * 0135 — the ORG's live sessions, for an admin or owner.
+   *
+   * `requireAdmin` in front of a door that already refuses non-admins, for
+   * the reason every gateway route gives: the caller gets one legible 403
+   * instead of a raw 42501 from inside a function they cannot see.
+   *
+   * Each row carries `can_end` from the wall itself rather than the client
+   * re-deriving the rank rule. Reading is org-wide and ending is
+   * rank-bound, so the two answers genuinely differ per row — an admin
+   * sees the owner's session and cannot end it — and a client computing
+   * that itself would eventually disagree with the database in front of a
+   * user.
+   */
+  app.get("/v1/admin/sessions", async (request, reply) => {
+    const identity = await auth.requireAdmin(request);
+    /*
+     * The NAMES come from `echo.app_user` in the same statement, not from a
+     * wider door. The definer function's job is the auth store — sessions
+     * are the one thing echo_app cannot read for itself — and who a person
+     * is was never part of that: `app_user` is already readable by any
+     * active member under RLS, so joining here keeps the privileged surface
+     * as narrow as it was while still costing one round trip.
+     *
+     * Both name columns travel because the client resolves them per locale
+     * through `personName()`. Sending a pre-resolved name would put a second
+     * copy of that rule on the server, and it is the kind that only shows up
+     * as one screen calling someone by a different name than every other.
+     */
+    const rows = await options.db.withIdentity(identity, (tx: SqlTx) =>
+      tx.unsafe<Record<string, unknown>>(
+        `select s.*, u.display_name, u.display_name_en
+           from echo.org_auth_sessions() s
+           join echo.app_user u on u.id = s.user_id`));
+    return reply.send({ sessions: rows });
+  });
+
+  /**
+   * 0135 — end one session belonging to a member the caller outranks (or
+   * to themselves). The rank rule lives in the door; this route only
+   * translates its refusal into a status.
+   */
+  app.delete("/v1/admin/sessions/:userId/:handle", async (request, reply) => {
+    const identity = await auth.requireAdmin(request);
+    const { userId, handle } = request.params as { userId: string; handle: string };
+    const rows = await options.db.withIdentity(identity, (tx: SqlTx) =>
+      tx.unsafe<{ ended: boolean }>(
+        "select echo.end_member_session($1, $2) as ended",
+        [assertUuid(userId, "user id"), handle]));
+    if (rows[0]?.ended !== true) throw new NotFoundError("no such session");
+    return reply.code(204).send();
+  });
+
+  /**
    * Security (db/0112): withdrawing one's OWN voice print. Withdrawal is
    * the other half of consent and must not need an admin; the door acts
    * only on the person row linked to the caller (app_user_id).
