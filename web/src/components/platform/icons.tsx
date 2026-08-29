@@ -38,10 +38,31 @@ export const UsersIcon = (p: SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
+/**
+ * Settings — SLIDERS, and THIS is the one the rail renders.
+ *
+ * The user asked for a settings mark that reads as settings, and the first
+ * attempt changed `IconSettings` in `components/icons.tsx` — a different set,
+ * used by the recorder's own settings popover. The rail imports NAV_ICON from
+ * HERE, so the icon on screen did not move and the user reported the same
+ * thing twice. One idea, two drawings, and only one of them was looked at.
+ *
+ * The two files stay separate because their `base()` helpers differ (this one
+ * has no default size and a 1.8 stroke; the other defaults to 16px and 1.7),
+ * so a re-export would quietly resize every rail icon. What keeps them in
+ * step instead is `icons.settings.test.ts`, which fails if these two marks
+ * stop drawing the same geometry.
+ *
+ * Why sliders rather than a better gear: the old drawing was a circle ringed
+ * by eight radial strokes, which is a gear only if you already know it is
+ * one — at rail size the teeth stop reading as teeth and it becomes a sun,
+ * which is exactly how it looked in the screenshot. A gear that survives that
+ * size needs a real toothed silhouette and far more nodes than this set uses.
+ */
 export const CogIcon = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}>
-    <circle cx="12" cy="12" r="3.2" />
-    <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.2 2.2M16.9 16.9l2.2 2.2M19.1 4.9l-2.2 2.2M7.1 16.9l-2.2 2.2" />
+    <path d="M4 7h16M4 12h16M4 17h16" />
+    <circle cx="9" cy="7" r="2" /><circle cx="15" cy="12" r="2" /><circle cx="8" cy="17" r="2" />
   </svg>
 );
 

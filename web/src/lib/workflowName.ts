@@ -47,6 +47,62 @@ import { useTranslations } from "next-intl";
 export const SEEDED_STARTERS: Readonly<
   Record<string, { name: string; description: string }>
 > = {
+  "wf-starter-record-recap": {
+    name: "جمع‌بندی پس از ضبط",
+    description: "تا ضبط تمام شود، از روی رونوشت یک جمع‌بندی کوتاه می‌نویسد: موضوع، تصمیم‌ها و آنچه باز مانده.",
+  },
+  "wf-starter-record-commitments": {
+    name: "قول‌های این ضبط",
+    description: "پس از هر ضبط، قول‌ها را با نام گوینده درمی‌آورد تا معلوم باشد چه کسی چه چیزی را بر عهده گرفته.",
+  },
+  "wf-starter-record-decisions": {
+    name: "تصمیم‌های این ضبط",
+    description: "هر تصمیمی که در این ضبط گرفته شد، با جملهٔ خودِ گوینده.",
+  },
+  "wf-starter-record-open": {
+    name: "آنچه باز ماند",
+    description: "پرسش‌ها و موضوع‌هایی که در این ضبط بی‌پاسخ ماندند.",
+  },
+  "wf-starter-record-speakers": {
+    name: "چه کسی چه گفت",
+    description: "به‌ازای هر گوینده، خلاصه‌ای از سهم او در این گفت‌وگو.",
+  },
+  "wf-starter-record-quotes": {
+    name: "جمله‌های کلیدی",
+    description: "چند جملهٔ مهم این ضبط، دقیقاً همان‌طور که گفته شد.",
+  },
+  "wf-starter-record-next": {
+    name: "قدم بعدی پس از این ضبط",
+    description: "پس از این گفت‌وگو چه چیزی باید انجام شود و به دست چه کسی.",
+  },
+  "wf-starter-record-timeline": {
+    name: "خط زمانی گفت‌وگو",
+    description: "این ضبط از کجا شروع شد و به کجا رسید — به ترتیب.",
+  },
+  "wf-starter-commit-by-person": {
+    name: "قول‌ها به تفکیک افراد",
+    description: "از جلسه‌های اخیر، هر شخص چه چیزهایی را بر عهده گرفته.",
+  },
+  "wf-starter-commit-overdue": {
+    name: "قول‌های از موعد گذشته",
+    description: "قول‌هایی که زمانشان گفته شده بود و آن زمان گذشته است.",
+  },
+  "wf-starter-commit-unowned": {
+    name: "کارهای بی‌صاحب",
+    description: "چیزهایی که قرار شد انجام شود ولی کسی آن را بر عهده نگرفت.",
+  },
+  "wf-starter-commit-recent": {
+    name: "قول‌های تازه",
+    description: "قول‌هایی که در جلسه‌های اخیر داده شده‌اند.",
+  },
+  "wf-starter-commit-followup": {
+    name: "یادآوری قول‌ها",
+    description: "برای هر قول باز، یک خط یادآوری که خودتان بفرستید.",
+  },
+  "wf-starter-commit-history": {
+    name: "سابقهٔ یک موضوع",
+    description: "یک موضوع در جلسه‌های پیاپی چه مسیری را طی کرده.",
+  },
   "wf-starter-followups": {
     name: "پیگیری جلسه‌ها",
     description: "از جلسه‌های اخیر موضوع‌ها را درمی‌آورد و برای هر کدام یک خط پیگیری می‌نویسد.",
@@ -59,10 +115,6 @@ export const SEEDED_STARTERS: Readonly<
     name: "پیش‌نویس پاسخ ایمیل",
     description: "هر ایمیل تازه‌ای که می‌رسد خوانده می‌شود و اگر پاسخ می‌خواهد، پیش‌نویسی نوشته می‌شود که خودتان بازبینی و ارسال کنید.",
   },
-  /* the 2026-08-28 wave: seven options per platform agent (AGENT_STARTERS
-     in core) — the parity test compares every literal below against the
-     producer's, so a rename in core goes red here instead of silently
-     falling back to Persian on the English UI */
   "wf-starter-meeting-title": {
     name: "پیشنهاد عنوان جلسه",
     description: "پس از هر جلسه یک عنوان کوتاه از رونوشت پیشنهاد می‌شود — با تأیید شما ثبت می‌شود.",
@@ -135,8 +187,6 @@ export const SEEDED_STARTERS: Readonly<
     name: "پیش‌نویس دستور جلسهٔ بعد",
     description: "پس از هر جلسه از تصمیم‌ها و کارهای آن، دستور جلسهٔ بعدی پیش‌نویس می‌شود.",
   },
-
-  /* the 2026-08-28 second wave (sales / interview / manager, db 0129) */
   "wf-starter-sales-debrief": {
     name: "گزارش تماس فروش",
     description: "پس از هر تماس، یک گزارش فروش کوتاه نوشته می‌شود: نیاز مشتری، دغدغه‌ها و قدم بعدی.",

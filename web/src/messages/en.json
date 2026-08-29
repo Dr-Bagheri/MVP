@@ -1399,6 +1399,62 @@
       "wf-starter-mgr-one-on-one": {
         "name": "One-on-one prep",
         "description": "Before each one-on-one, that person's history is reviewed: what they took on, what they said, and what is worth asking."
+      },
+      "wf-starter-record-recap": {
+        "name": "Recap after a recording",
+        "description": "As soon as a take ends, writes a short recap from the transcript: what it was about, what was decided, what is still open."
+      },
+      "wf-starter-record-commitments": {
+        "name": "Commitments in this recording",
+        "description": "After a take, pulls out what people took on, with the speaker named."
+      },
+      "wf-starter-record-decisions": {
+        "name": "Decisions in this recording",
+        "description": "Every decision made in this take, in the speaker’s own words."
+      },
+      "wf-starter-record-open": {
+        "name": "What was left open",
+        "description": "Questions and topics raised in this take that never got an answer."
+      },
+      "wf-starter-record-speakers": {
+        "name": "Who said what",
+        "description": "A short paragraph per speaker: what they talked about and where they stood."
+      },
+      "wf-starter-record-quotes": {
+        "name": "Key quotes",
+        "description": "A handful of quotes from this take, exactly as they were said."
+      },
+      "wf-starter-record-next": {
+        "name": "Next steps after this recording",
+        "description": "What should happen after this conversation, and whose it is."
+      },
+      "wf-starter-record-timeline": {
+        "name": "Conversation timeline",
+        "description": "Where this take started, where it turned, and where it ended."
+      },
+      "wf-starter-commit-by-person": {
+        "name": "Commitments by person",
+        "description": "Across recent meetings, what each person has taken on."
+      },
+      "wf-starter-commit-overdue": {
+        "name": "Past their date",
+        "description": "Commitments that were given a time in the conversation, and that time has passed."
+      },
+      "wf-starter-commit-unowned": {
+        "name": "Nobody’s job",
+        "description": "Things everyone agreed were needed, that nobody took on."
+      },
+      "wf-starter-commit-recent": {
+        "name": "Recent commitments",
+        "description": "What people have promised in the last few meetings."
+      },
+      "wf-starter-commit-followup": {
+        "name": "Commitment reminders",
+        "description": "A line per open commitment, ready for you to send yourself."
+      },
+      "wf-starter-commit-history": {
+        "name": "How a topic has gone",
+        "description": "How a recurring topic has moved across meetings — raised, promised, returned to."
       }
     },
     "process": {

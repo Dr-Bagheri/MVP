@@ -20,6 +20,24 @@
  * failure, so callers index with `?? []`.
  */
 export const AGENT_STARTER_HANDLES: Readonly<Record<string, readonly string[]>> = {
+  recorder: [
+    "wf-starter-record-recap",
+    "wf-starter-record-decisions",
+    "wf-starter-record-open",
+    "wf-starter-record-speakers",
+    "wf-starter-record-quotes",
+    "wf-starter-record-next",
+    "wf-starter-record-timeline",
+  ],
+  commitments: [
+    "wf-starter-record-commitments",
+    "wf-starter-commit-by-person",
+    "wf-starter-commit-overdue",
+    "wf-starter-commit-unowned",
+    "wf-starter-commit-recent",
+    "wf-starter-commit-followup",
+    "wf-starter-commit-history",
+  ],
   meetings: [
     "wf-starter-autotag",
     "wf-starter-followups",
@@ -47,7 +65,6 @@ export const AGENT_STARTER_HANDLES: Readonly<Record<string, readonly string[]>> 
     "wf-starter-prep-today",
     "wf-starter-prep-agenda",
   ],
-  /* the 2026-08-28 second wave (db/0129): sales, interview, manager */
   sales: [
     "wf-starter-sales-debrief",
     "wf-starter-sales-objections",

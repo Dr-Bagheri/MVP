@@ -19,6 +19,7 @@ import { useAssistantConversation } from "./AssistantConversationState";
 import { DocumentIcon, MicIcon, PlusIcon, SendIcon } from "./icons";
 import { SURFACE_TOOLS } from "@/lib/agentSurface";
 import { EchoMark } from "./icons";
+import { startRecording } from "@/lib/recordingEngine";
 
 type CreateKind = "doc" | "pdf";
 
@@ -1187,30 +1188,6 @@ export function Hub() {
 
           {/* SOURCES — attach real context: search meetings, add a text file.
               What the reference fakes as toggles, this menu does as acts. */}
-          {/*
-            START A TAKE, from the page where you are already talking to the
-            assistant (user directive, 2026-08-29).
-            
-            A LINK, not a second recorder. It carries `?agentStart=` — the
-            same M33 query the agent's own `start_recording` uses — so the
-            recorder starts through its OWN start(), the one the button on
-            /echo calls. Two ways in, one implementation: a recorder embedded
-            here would be a second microphone path to keep in step with the
-            first, and the first is the one that has been proven on real
-            hardware.
-            
-            Empty title on purpose: the recorder's own field is where a name
-            belongs, and pre-filling it from nothing would put an empty
-            string where the person expects a placeholder.
-          */}
-          <Link
-            href="/echo/record?agentStart="
-            className={headerBtn}
-            aria-label={t("startRecording")}
-          >
-            <EchoMark size={14} />
-            {t("record")}
-          </Link>
           <HoverMenu
             open={sourcesOpen}
             onOpen={() => {
@@ -1308,6 +1285,45 @@ export function Hub() {
                 </button>
             </div>
           </HoverMenu>
+          {/*
+            START A TAKE, in place (user directive, 2026-08-29: "it must just
+            start recording not navigating back to the new record but to add
+            the mini record on top").
+            
+            The first version was a Link to /echo/record?agentStart= — the
+            agent's own path — which starts the right recording and takes you
+            off the page you were talking on. `startRecording` is the ENGINE,
+            not the screen: it survives navigation, and the FloatingRecorder
+            already docks into the top bar from anywhere a take is live. So
+            pressing this leaves you where you are and the mini recorder
+            appears above.
+            
+            Defaults rather than a form: no title, the page's own language,
+            the default microphone. The full recorder is where a take gets
+            configured, and this button's whole reason to exist is that
+            someone wanted to start one without going there. The engine
+            refuses a second take on its own, so a double press is not a
+            second recording.
+          */}
+          <button
+            type="button"
+            className={headerBtn}
+            onClick={() => {
+              void startRecording({
+                micId: "",
+                language: locale === "en" ? "en" : "fa",
+                source: "mic",
+                title: "",
+                locale,
+                resume: null,
+                boost: false,
+                noiseSuppression: true,
+              });
+            }}
+          >
+            <EchoMark size={14} />
+            {t("record")}
+          </button>
           {/* The Tools menu was REMOVED from the composer (user directive,
               2026-08-20). It listed the assistant's tool registry — facts,
               not switches — and reads better as documentation than as a

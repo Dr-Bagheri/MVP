@@ -63,6 +63,248 @@ const HANDLE = /^[a-z0-9][a-z0-9-]{0,62}$/;
  * never ship.
  */
 export const STARTER_WORKFLOWS = {
+  /*
+   * ── the two recording starters (user directive, 2026-08-29) ───────────
+   *
+   * They fire AFTER a take, not before it, and that is a constraint rather
+   * than a preference: a workflow step runs in the WORKER, which has no
+   * microphone and no browser. Starting a recording needs a person's own
+   * surface, which is why `start_recording` is a CLIENT tool — the agent
+   * asks the screen to do it, and the screen is the thing holding the mic.
+   *
+   * So "record" is not a step kind here. A kind the executor could never
+   * run would be a producer with no consumer wearing a feature's name, and
+   * a scheduled workflow reaching one at 3 a.m. would fail every night.
+   * Asking an agent to start a recording works today, through the tool.
+   */
+  record_recap: {
+    handle: "wf-starter-record-recap",
+    name: "جمع‌بندی پس از ضبط",
+    description: "تا ضبط تمام شود، از روی رونوشت یک جمع‌بندی کوتاه می‌نویسد: موضوع، تصمیم‌ها و آنچه باز مانده.",
+    trigger_event: "call.transcribed" as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "search", scope: "transcript", of: "{{trigger.call_id}}" },
+        { id: "s2", kind: "ask",
+          instruction: "از این رونوشت یک جمع‌بندی کوتاه بنویس: موضوع گفت‌وگو، تصمیم‌هایی که گرفته شد، و آنچه بی‌پاسخ ماند. هر ادعا را به همین گفت‌وگو مستند کن و چیزی به آن اضافه نکن." },
+        { id: "s3", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
+  record_commitments: {
+    handle: "wf-starter-record-commitments",
+    name: "قول‌های این ضبط",
+    description: "پس از هر ضبط، قول‌ها را با نام گوینده درمی‌آورد تا معلوم باشد چه کسی چه چیزی را بر عهده گرفته.",
+    trigger_event: "call.summarized" as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "search", scope: "transcript", of: "{{trigger.call_id}}" },
+        { id: "s2", kind: "extract", from: "{{s1}}", schema: "topics_v1",
+          instruction: "هر جایی که کسی چیزی را بر عهده گرفته، آن را به‌صورت یک عبارت کوتاه دربیاور. اگر کسی چیزی را بر عهده نگرفته، فهرست را خالی بگذار." },
+        { id: "s3", kind: "decide", on: "s2.topics.length", gt: 0, then: "s4", else: "s6" },
+        { id: "s4", kind: "foreach", over: "{{s2.topics}}", max: 5, do: "s5" },
+        { id: "s5", kind: "ask",
+          instruction: "برای «{{s4.item}}» بنویس چه کسی آن را گفته و تا چه زمانی — فقط از روی همین گفت‌وگو." },
+        { id: "s6", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
+  record_decisions: {
+    handle: "wf-starter-record-decisions",
+    name: "تصمیم‌های این ضبط",
+    description: "هر تصمیمی که در این ضبط گرفته شد، با جملهٔ خودِ گوینده.",
+    trigger_event: "call.transcribed" as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "search", scope: "transcript", of: "{{trigger.call_id}}" },
+        { id: "s2", kind: "ask",
+          instruction: "فقط تصمیم‌ها را فهرست کن: چه چیزی قطعی شد و چه کسی آن را گفت. برای هر تصمیم جملهٔ خودِ گفت‌وگو را نقل کن. اگر تصمیمی گرفته نشده، همین را بنویس و چیزی نساز." },
+        { id: "s3", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
+  record_open: {
+    handle: "wf-starter-record-open",
+    name: "آنچه باز ماند",
+    description: "پرسش‌ها و موضوع‌هایی که در این ضبط بی‌پاسخ ماندند.",
+    trigger_event: "call.transcribed" as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "search", scope: "transcript", of: "{{trigger.call_id}}" },
+        { id: "s2", kind: "ask",
+          instruction: "پرسش‌ها و موضوع‌هایی را فهرست کن که مطرح شدند و پاسخی نگرفتند. برای هر کدام بنویس چه کسی آن را پرسید. چیزی را که پاسخ گرفته باز نشمار." },
+        { id: "s3", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
+  record_speakers: {
+    handle: "wf-starter-record-speakers",
+    name: "چه کسی چه گفت",
+    description: "به‌ازای هر گوینده، خلاصه‌ای از سهم او در این گفت‌وگو.",
+    trigger_event: "call.transcribed" as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "search", scope: "transcript", of: "{{trigger.call_id}}" },
+        { id: "s2", kind: "ask",
+          instruction: "برای هر گوینده یک بند کوتاه بنویس: او دربارهٔ چه چیزی حرف زد و چه موضعی داشت. اگر نام گوینده معلوم نیست، همان برچسب رونوشت را بیاور و حدس نزن." },
+        { id: "s3", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
+  record_quotes: {
+    handle: "wf-starter-record-quotes",
+    name: "جمله‌های کلیدی",
+    description: "چند جملهٔ مهم این ضبط، دقیقاً همان‌طور که گفته شد.",
+    trigger_event: "call.transcribed" as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "search", scope: "transcript", of: "{{trigger.call_id}}" },
+        { id: "s2", kind: "ask",
+          instruction: "حداکثر پنج جملهٔ کلیدی را عیناً نقل کن و برای هرکدام بنویس چه کسی آن را گفت و چرا مهم است. جمله را بازنویسی نکن." },
+        { id: "s3", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
+  record_next: {
+    handle: "wf-starter-record-next",
+    name: "قدم بعدی پس از این ضبط",
+    description: "پس از این گفت‌وگو چه چیزی باید انجام شود و به دست چه کسی.",
+    trigger_event: "call.summarized" as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "search", scope: "transcript", of: "{{trigger.call_id}}" },
+        { id: "s2", kind: "ask",
+          instruction: "بنویس پس از این گفت‌وگو چه کارهایی باید انجام شود، هرکدام با نام صاحب کار اگر در گفت‌وگو معلوم شده. کاری را که کسی نگفته اضافه نکن." },
+        { id: "s3", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
+  record_timeline: {
+    handle: "wf-starter-record-timeline",
+    name: "خط زمانی گفت‌وگو",
+    description: "این ضبط از کجا شروع شد و به کجا رسید — به ترتیب.",
+    trigger_event: "call.transcribed" as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "search", scope: "transcript", of: "{{trigger.call_id}}" },
+        { id: "s2", kind: "ask",
+          instruction: "مسیر گفت‌وگو را به ترتیب بنویس: از چه موضوعی شروع شد، کجا چرخید و به کجا ختم شد. ترتیب را از خود رونوشت بگیر." },
+        { id: "s3", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
+  commit_by_person: {
+    handle: "wf-starter-commit-by-person",
+    name: "قول‌ها به تفکیک افراد",
+    description: "از جلسه‌های اخیر، هر شخص چه چیزهایی را بر عهده گرفته.",
+    trigger_event: null as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "search", scope: "calls", limit: 5 },
+        { id: "s2", kind: "ask",
+          instruction: "از این جلسه‌ها قول‌ها را به تفکیک شخص گروه‌بندی کن: زیر نام هر نفر، چیزهایی که بر عهده گرفته. هر مورد را به جلسه‌ای که در آن گفته شده نسبت بده." },
+        { id: "s3", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
+  commit_overdue: {
+    handle: "wf-starter-commit-overdue",
+    name: "قول‌های از موعد گذشته",
+    description: "قول‌هایی که زمانشان گفته شده بود و آن زمان گذشته است.",
+    trigger_event: null as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "search", scope: "calls", limit: 5 },
+        { id: "s2", kind: "ask",
+          instruction: "فقط قول‌هایی را بیاور که در گفت‌وگو زمانی برایشان گفته شده و آن زمان گذشته است. اگر زمانی گفته نشده، آن مورد را در این فهرست نیاور." },
+        { id: "s3", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
+  commit_unowned: {
+    handle: "wf-starter-commit-unowned",
+    name: "کارهای بی‌صاحب",
+    description: "چیزهایی که قرار شد انجام شود ولی کسی آن را بر عهده نگرفت.",
+    trigger_event: null as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "search", scope: "calls", limit: 5 },
+        { id: "s2", kind: "ask",
+          instruction: "کارهایی را فهرست کن که در گفت‌وگو لازم دانسته شدند ولی هیچ‌کس آن‌ها را بر عهده نگرفت. برای هرکدام بنویس کجا مطرح شد." },
+        { id: "s3", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
+  commit_recent: {
+    handle: "wf-starter-commit-recent",
+    name: "قول‌های تازه",
+    description: "قول‌هایی که در جلسه‌های اخیر داده شده‌اند.",
+    trigger_event: null as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "search", scope: "calls", limit: 3 },
+        { id: "s2", kind: "ask",
+          instruction: "قول‌های داده‌شده در این جلسه‌ها را به ترتیب تازگی فهرست کن: چه کسی، چه چیزی، در کدام جلسه." },
+        { id: "s3", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
+  commit_followup: {
+    handle: "wf-starter-commit-followup",
+    name: "یادآوری قول‌ها",
+    description: "برای هر قول باز، یک خط یادآوری که خودتان بفرستید.",
+    trigger_event: null as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "search", scope: "calls", limit: 5 },
+        { id: "s2", kind: "ask",
+          instruction: "برای هر قولی که هنوز باز است یک خط کوتاه و مؤدبانه بنویس که بشود همان‌طور برای طرف فرستاد. چیزی را که کسی نگفته یادآوری نکن." },
+        { id: "s3", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
+  commit_history: {
+    handle: "wf-starter-commit-history",
+    name: "سابقهٔ یک موضوع",
+    description: "یک موضوع در جلسه‌های پیاپی چه مسیری را طی کرده.",
+    trigger_event: null as string | null,
+    max_autonomy: "assist" as "watch" | "assist" | "act",
+    graph: {
+      entry: "s1",
+      steps: [
+        { id: "s1", kind: "search", scope: "calls", limit: 8 },
+        { id: "s2", kind: "ask",
+          instruction: "دنبال کن که موضوع‌های تکرارشونده در این جلسه‌ها چه مسیری داشته‌اند: کجا مطرح شد، چه قولی داده شد و آیا در جلسهٔ بعد به آن برگشتند." },
+        { id: "s3", kind: "notify", card: "workflow_result" },
+      ],
+    },
+  },
   followups: {
     handle: "wf-starter-followups",
     name: "\u067e\u06cc\u06af\u06cc\u0631\u06cc \u062c\u0644\u0633\u0647\u200c\u0647\u0627",
@@ -904,7 +1146,19 @@ export type StarterKey = keyof typeof STARTER_WORKFLOWS;
  * real, and the 21 assignments partitioning the registry — an unassigned
  * starter is a shelf item no door leads to.
  */
-export const AGENT_STARTERS: Readonly<Record<"meetings" | "mail" | "prep" | "sales" | "interview" | "manager", readonly StarterKey[]>> = {
+export const AGENT_STARTERS: Readonly<Record<"meetings" | "mail" | "prep" | "sales" | "interview" | "manager" | "recorder" | "commitments", readonly StarterKey[]>> = {
+  /* the 2026-08-29 wave: the recording itself as a subject. Seeded as
+     system agents in db/0139. `recorder` is about the take that just
+     happened; `commitments` reads ACROSS takes, which is why its starters
+     search calls rather than one transcript. */
+  recorder: [
+    "record_recap", "record_decisions", "record_open", "record_speakers",
+    "record_quotes", "record_next", "record_timeline",
+  ],
+  commitments: [
+    "record_commitments", "commit_by_person", "commit_overdue",
+    "commit_unowned", "commit_recent", "commit_followup", "commit_history",
+  ],
   meetings: [
     "autotag", "followups", "meeting_title", "decisions_digest",
     "action_items", "open_questions", "topic_history",
