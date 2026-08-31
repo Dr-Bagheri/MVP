@@ -205,23 +205,30 @@ export function Hub() {
   }, []);
 
   /*
-   * OPENING A FLAGGED AGENT STARTS A TAKE (db/0143, user directive).
+   * A FLAGGED AGENT ARMS A TAKE; THE FIRST PROMPT STARTS IT.
    *
-   * Once per agent per visit: `startedFor` remembers which handle it fired
-   * for, so a re-render does not start a second recording and switching
-   * agents and back does not either. The engine refuses a second take
-   * anyway, which is the belt to this brace.
+   * Selecting an agent used to start the recording on the spot, and that was
+   * wrong in the way a person notices immediately (user report): picking an
+   * agent is reading a card, not beginning a conversation. Someone opening
+   * the agent to see what it does — or clicking through three of them to
+   * choose — had a live microphone for each one.
+   *
+   * So the effect only ARMS: it remembers which handle a take is owed for.
+   * `send` fires it, once, when a question is actually asked. `startedFor`
+   * then remembers which handle it fired for, so switching away and back does
+   * not start a second take; the engine refuses one anyway, which is the belt
+   * to this brace.
    */
+  const armedAgent = useRef<string | null>(null);
   const startedFor = useRef<string | null>(null);
   useEffect(() => {
-    if (!agentHandle || !recordOnAgent.includes(agentHandle)) return;
+    if (!agentHandle || !recordOnAgent.includes(agentHandle)) {
+      armedAgent.current = null;
+      return;
+    }
     if (startedFor.current === agentHandle) return;
-    startedFor.current = agentHandle;
-    void startRecording({
-      micId: "", language: locale === "en" ? "en" : "fa", source: "mic",
-      title: "", locale, resume: null, boost: false, noiseSuppression: true,
-    });
-  }, [agentHandle, recordOnAgent, locale]);
+    armedAgent.current = agentHandle;
+  }, [agentHandle, recordOnAgent]);
   const connectorProviderParam = params.get("connectorProvider");
   const sourceId = params.get("sourceId");
   /** the launcher's "this is a run, not a visit" (see the auto-run effect) */
@@ -757,6 +764,22 @@ export function Hub() {
   async function send(text?: string) {
     const typed = (text ?? input).trim();
     if (typed === "" || streaming) return;
+
+    /*
+     * The armed take starts HERE — after the guard, so an empty box or a
+     * press during a stream starts nothing, and only ever on a real
+     * question. See the arming effect for why selecting the agent is not
+     * enough.
+     */
+    if (armedAgent.current !== null && armedAgent.current === agentHandle) {
+      startedFor.current = armedAgent.current;
+      armedAgent.current = null;
+      void startRecording({
+        micId: "", language: locale === "en" ? "en" : "fa", source: "mic",
+        title: "", locale, resume: null, boost: false, noiseSuppression: true,
+      });
+    }
+
     /* sending re-pins: the person just acted at the composer, and a thread
        that does not show the question they sent reads as having eaten it */
     pinnedRef.current = true;
