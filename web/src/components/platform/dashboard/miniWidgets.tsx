@@ -8,11 +8,11 @@ import { Link } from "@/i18n/routing";
 import { KebabMenu, SelectMenu } from "@/components/rowActions";
 import { StatusDot } from "@/components/DataTable";
 import {
-  Icon, IconCalendar, IconCheck, IconChevronRight, IconGlobe, IconMic, IconPause, IconPlay,
-  IconPlus, IconPulse, IconSettings,
+  Icon, IconCalendar, IconCheck, IconChevronRight, IconGavel, IconGlobe, IconMic, IconPause,
+  IconPlay, IconPulse, IconSettings,
 } from "@/components/icons";
 import { EchoMark } from "@/components/platform/icons";
-import { dayKeyOf, digits, formatTime, monthGrid, weekRangeLabel, weekStrip } from "@/lib/format";
+import { dayKeyOf, digits, formatDate, formatTime, hourInResolvedZone, monthGrid, weekRangeLabel, weekStrip } from "@/lib/format";
 import { useCalendarPreference, useTimezonePreference } from "@/lib/usePreferences";
 import { useAgentCopy } from "@/components/platform/agentAppearance";
 import {
@@ -585,38 +585,21 @@ export function CalendarWidget() {
 }
 
 /**
- * 6 — THE STAT STRIP (the reference adoption, 2026-08-31): four figure
- * cards — today's meetings, open tasks, records, connections. Each is a
- * tinted icon square, a big number, and a label; each is also the DOOR to
- * its surface.
- *
- * Every count obeys dash-never-zero: a read that has not answered (or
- * cannot) renders «—», because a fabricated 0 is a claim about the
- * organization and a dash is a claim about the read. The four reads are
- * independent — one refused count must not blank the other three.
+ * 6 — THE STAT STRIP, the reference's four figures (big-milestone round):
+ * upcoming meetings / meetings this month / task completion rate / tasks
+ * recorded. Two reads (meetings, task board), four cards, and every count
+ * obeys dash-never-zero: a read that has not answered (or cannot) renders
+ * «—» — a fabricated 0 is a claim about the organization, a dash is a
+ * claim about the read. The two reads fail INDEPENDENTLY.
  */
-function useCount(read: () => Promise<number>): number | null | "unreadable" {
-  const [state, setState] = useState<number | null | "unreadable">(null);
-  useEffect(() => {
-    let alive = true;
-    void read()
-      .then((n) => { if (alive) setState(n); })
-      .catch(() => { if (alive) setState("unreadable"); });
-    return () => { alive = false; };
-    // the reader is defined at the call site and stable for this tile's life
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  return state;
-}
-
-function StatCard({ href, icon, tint, value, label, locale }: {
+function StatCard({ href, icon, tint, value, label, locale, percent = false }: {
   href: string;
   icon: ReactNode;
-  /** the icon square's tint classes — bg + text, from the theme's own set */
   tint: string;
   value: number | null | "unreadable";
   label: string;
   locale: string;
+  percent?: boolean;
 }) {
   return (
     <Link
@@ -628,7 +611,12 @@ function StatCard({ href, icon, tint, value, label, locale }: {
       </span>
       <span className="min-w-0">
         <span className="block text-xl font-bold leading-6 text-fg tabular-nums">
-          {typeof value === "number" ? digits(value, locale) : "—"}
+          {typeof value === "number"
+            ? percent
+              /* the percent SIGN follows the language: «٪۵۰» in fa, "50%" in en */
+              ? locale === "fa" ? `٪${digits(value, locale)}` : `${value}%`
+              : digits(value, locale)
+            : "—"}
         </span>
         <span className="block truncate text-xs text-fg-muted">{label}</span>
       </span>
@@ -639,91 +627,172 @@ function StatCard({ href, icon, tint, value, label, locale }: {
 export function StatsWidget() {
   const t = useTranslations("dashboard");
   const locale = useLocale();
-  const meetings = useCount(async () => {
-    const items = await api.connectorItems("google", "calendar");
-    const today = dayKeyOf(new Date());
-    return items.filter((i) => i.occurred_at !== null && dayKeyOf(i.occurred_at) === today).length;
-  });
-  const tasks = useCount(async () => {
-    const board = await api.taskBoard();
-    return board.tasks.filter((task) => !task.done && !task.archived).length;
-  });
-  const records = useCount(async () => (await api.listCalls()).length);
-  const connections = useCount(async () => {
-    const rows = await api.connectors();
-    return rows.filter((c) => c.status === "connected").length;
-  });
+  const [meetings, setMeetings] = useState<MeetingRecord[] | null | "unreadable">(null);
+  const [tasks, setTasks] = useState<{ done: number; total: number } | null | "unreadable">(null);
+
+  useEffect(() => {
+    let alive = true;
+    void api.meetings()
+      .then((rows) => { if (alive) setMeetings(rows); })
+      .catch(() => { if (alive) setMeetings("unreadable"); });
+    void api.taskBoard()
+      .then((b) => {
+        if (!alive) return;
+        const live = b.tasks.filter((task) => !task.archived);
+        setTasks({ done: live.filter((task) => task.done).length, total: live.length });
+      })
+      .catch(() => { if (alive) setTasks("unreadable"); });
+    return () => { alive = false; };
+  }, []);
+
+  const now = Date.now();
+  const upcoming = Array.isArray(meetings)
+    ? meetings.filter((m) => new Date(m.scheduled_at).getTime() >= now && m.call_id === null).length
+    : meetings === null ? null : "unreadable" as const;
+  const thisMonth = Array.isArray(meetings)
+    ? meetings.filter((m) => {
+        const d = new Date(m.scheduled_at);
+        const t0 = new Date();
+        return d.getFullYear() === t0.getFullYear() && d.getMonth() === t0.getMonth();
+      }).length
+    : meetings === null ? null : "unreadable" as const;
+  const taskRate = tasks === null ? null
+    : tasks === "unreadable" ? "unreadable" as const
+      : tasks.total === 0 ? 0 : Math.round((tasks.done / tasks.total) * 100);
+  const taskTotal = tasks === null ? null : tasks === "unreadable" ? "unreadable" as const : tasks.total;
 
   return (
     <div className="grid h-full grid-cols-2 content-center gap-2.5 md:grid-cols-4">
-      <StatCard href="/echo" icon={<IconCalendar width={18} height={18} />}
-        tint="bg-accent-soft text-accent" value={meetings} label={t("statMeetingsToday")} locale={locale} />
+      <StatCard href="/meetings" icon={<IconCalendar width={18} height={18} />}
+        tint="bg-surface-2 text-fg-muted" value={upcoming} label={t("statUpcoming")} locale={locale} />
+      <StatCard href="/meetings" icon={<IconCalendar width={18} height={18} />}
+        tint="bg-info/10 text-info" value={thisMonth} label={t("statMonth")} locale={locale} />
       <StatCard href="/tasks" icon={<IconCheck width={18} height={18} />}
-        tint="bg-info/10 text-info" value={tasks} label={t("statOpenTasks")} locale={locale} />
-      <StatCard href="/echo" icon={<IconMic width={18} height={18} />}
-        tint="bg-warning/10 text-warning" value={records} label={t("statRecords")} locale={locale} />
-      <StatCard href="/integrations" icon={<IconGlobe width={18} height={18} />}
-        tint="bg-success/10 text-success" value={connections} label={t("statConnections")} locale={locale} />
+        tint="bg-success/10 text-success" value={taskRate} label={t("statTaskRate")} locale={locale} percent />
+      <StatCard href="/tasks" icon={<IconGavel width={18} height={18} />}
+        tint="bg-warning/10 text-warning" value={taskTotal} label={t("statTasksTotal")} locale={locale} />
     </div>
   );
 }
 
 /**
- * 7 — UPCOMING: what is ahead, nearest first — time and title per row, the
- * reference's upcoming-meetings card. The connection's absence offers the
- * way to connect, exactly as the month calendar does; it never apologises.
+ * 7 — جلسات پیش‌رو: the PRODUCT's own upcoming meetings, nearest first,
+ * with the door to the full list. The empty state is the reference's own
+ * copy; a failed read never wears it.
  */
 export function UpcomingWidget({ size }: { size: TileSize }) {
   const t = useTranslations("dashboard");
   const locale = useLocale();
-  const rows = useMini<ConnectorItem>(() => api.connectorItems("google", "calendar"));
+  const [meetings, setMeetings] = useState<MeetingRecord[] | null | "failed">(null);
 
-  if (rows === null) return <Waiting />;
-  if (rows === "forbidden") return <Refused />;
-  if (rows === "absent") {
-    /* not an emptiness and not a fault: the way to connect, offered */
-    return (
-      <p className="text-sm leading-7">
-        <Link href="/integrations" className="text-accent hover:underline">
-          {t("miniCalendarConnectLink")}
-        </Link>
-      </p>
-    );
-  }
-  if (rows === "failed") return <Unreadable />;
+  useEffect(() => {
+    let alive = true;
+    void api.meetings()
+      .then((rows) => { if (alive) setMeetings(rows); })
+      .catch(() => { if (alive) setMeetings("failed"); });
+    return () => { alive = false; };
+  }, []);
+
+  if (meetings === null) return <Waiting />;
+  if (meetings === "failed") return <Unreadable />;
 
   const now = Date.now();
-  const ahead = rows
-    .filter((item) => item.occurred_at !== null && new Date(item.occurred_at).getTime() >= now)
-    .sort((a, b) => new Date(a.occurred_at!).getTime() - new Date(b.occurred_at!).getTime())
+  const ahead = meetings
+    .filter((m) => new Date(m.scheduled_at).getTime() >= now && m.call_id === null)
     .slice(0, rowsFor(size));
-  if (ahead.length === 0) return <Empty>{t("noUpcoming")}</Empty>;
 
   return (
-    <Rows>
-      {ahead.map((item) => (
-        <li key={item.id} className="flex items-baseline gap-2.5 py-1.5 first:pt-0">
-          <span className="badge-num shrink-0 rounded-md bg-accent-soft px-1.5 py-0.5 text-[11px] font-medium text-accent">
-            {formatTime(item.occurred_at!, locale)}
-          </span>
-          <span className="min-w-0 flex-1 truncate text-sm text-fg" title={item.title}>
-            {item.title}
-          </span>
-        </li>
-      ))}
-    </Rows>
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="mb-1.5 text-start">
+        <Link href="/meetings" className="text-xs text-accent hover:underline">{t("upcomingAll")}</Link>
+      </div>
+      {ahead.length === 0 ? (
+        <div className="grid min-h-0 flex-1 place-items-center text-center">
+          <div>
+            <span className="mx-auto mb-1.5 grid h-9 w-9 place-items-center rounded-xl bg-surface-2 text-fg-muted" aria-hidden>
+              <IconCalendar width={16} height={16} />
+            </span>
+            <p className="text-sm text-fg-muted">{t("noUpcomingMeetings")}</p>
+          </div>
+        </div>
+      ) : (
+        <ul className="min-h-0 flex-1 divide-y divide-border/60 overflow-y-auto">
+          {ahead.map((m) => (
+            <li key={m.id}>
+              <Link href={`/meetings/${m.id}`} className="flex items-baseline gap-2.5 py-1.5 hover:text-accent">
+                <span className="badge-num shrink-0 rounded-md bg-accent-soft px-1.5 py-0.5 text-[11px] font-medium text-accent">
+                  {formatTime(m.scheduled_at, locale)}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-sm text-fg" title={m.title}>{m.title}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
 /**
- * 8 — THE WEEK, rebuilt to the reference's week panel (2026-09-01 round):
- * a header with the week's range and prev/next arrows, seven pill day
- * cells with the FULL short weekday names, and the week's own MEETINGS
- * (0145 — the product's data, not the connector's) listed under the strip.
- * Today wears the accent; the rest day is tinted apart. An empty week is a
- * NAMED state with the door to scheduling, exactly as the reference draws
- * it.
+ * 7b — آخرین جلسات: newest first, each with its stage chip (بازبینی once a
+ * record exists — the reference's own chip), each a door to its page.
  */
+export function LatestMeetingsWidget({ size }: { size: TileSize }) {
+  const t = useTranslations("dashboard");
+  const locale = useLocale();
+  const [meetings, setMeetings] = useState<MeetingRecord[] | null | "failed">(null);
+
+  useEffect(() => {
+    let alive = true;
+    void api.meetings()
+      .then((rows) => { if (alive) setMeetings(rows); })
+      .catch(() => { if (alive) setMeetings("failed"); });
+    return () => { alive = false; };
+  }, []);
+
+  if (meetings === null) return <Waiting />;
+  if (meetings === "failed") return <Unreadable />;
+  if (meetings.length === 0) return <Empty>{t("noMeetingsYet")}</Empty>;
+
+  const latest = [...meetings]
+    .sort((a, b) => b.scheduled_at.localeCompare(a.scheduled_at))
+    .slice(0, rowsFor(size));
+
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="mb-1.5 text-start">
+        <Link href="/meetings" className="text-xs text-accent hover:underline">{t("upcomingAll")}</Link>
+      </div>
+      <ul className="min-h-0 flex-1 divide-y divide-border/60 overflow-y-auto">
+        {latest.map((m) => (
+          <li key={m.id}>
+            <Link href={`/meetings/${m.id}`} className="flex items-center gap-2 py-1.5 hover:text-accent">
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm text-fg" title={m.title}>{m.title}</span>
+                <span className="block text-[11px] text-fg-subtle">{formatDate(m.scheduled_at, locale)}</span>
+              </span>
+              {m.call_id !== null ? (
+                <span className="shrink-0 rounded-md bg-accent-soft px-1.5 py-0.5 text-[10px] font-medium text-accent">
+                  {t("latestReviewChip")}
+                </span>
+              ) : null}
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * 8 — THE WEEK as the reference's HOUR GRID: seven full-height day columns
+ * (weekend tinted, today green with «امروز»), hour rows down the side, and
+ * each meeting a chip at its hour in its day — a started meeting shows
+ * here the moment it exists. Range + prev/next in the header.
+ */
+const GRID_START_HOUR = 8;
+const GRID_END_HOUR = 20;
+
 export function WeekWidget() {
   const t = useTranslations("dashboard");
   const locale = useLocale();
@@ -746,14 +815,23 @@ export function WeekWidget() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [locale, offset, calendar, timezone],
   );
-  const keys = new Set(cells.map((c) => c.key));
-  const weekMeetings = Array.isArray(meetings)
-    ? meetings.filter((m) => keys.has(dayKeyOf(m.scheduled_at)))
-    : [];
+  const byDay = new Map<number, MeetingRecord[]>();
+  if (Array.isArray(meetings)) {
+    for (const m of meetings) {
+      const key = dayKeyOf(m.scheduled_at);
+      if (!cells.some((c) => c.key === key)) continue;
+      const bucket = byDay.get(key);
+      if (bucket) bucket.push(m);
+      else byDay.set(key, [m]);
+    }
+  }
+  const weekCount = [...byDay.values()].reduce((sum, list) => sum + list.length, 0);
+  const hours: number[] = [];
+  for (let h = GRID_START_HOUR; h <= GRID_END_HOUR; h += 1) hours.push(h);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {/* ── header: the range, the arrows, the count ─────────────────── */}
+      {/* ── header ───────────────────────────────────────────────────── */}
       <div className="mb-2 flex items-center justify-between gap-2">
         <div className="flex items-baseline gap-2 text-sm">
           <span className="font-semibold text-fg">
@@ -764,102 +842,98 @@ export function WeekWidget() {
           ) : null}
           <span className="text-xs text-fg-subtle">
             {meetings === null
-              ? null /* still asking — "no meetings" is a claim not yet earned */
+              ? null
               : meetings === "failed"
                 ? t("readFailed")
-                : weekMeetings.length === 0
+                : weekCount === 0
                   ? t("weekNoMeetingsShort")
-                  : t("weekMeetingCount", { n: digits(weekMeetings.length, locale) })}
+                  : t("weekMeetingCount", { n: digits(weekCount, locale) })}
           </span>
         </div>
         <span className="flex items-center gap-1">
-          <button
-            type="button"
-            aria-label={t("weekPrev")}
-            onClick={() => setOffset((v) => v - 1)}
-            className="tap grid h-7 w-7 place-items-center rounded-lg border border-border text-fg-muted hover:text-fg"
-          >
-            {/* BACK points against the reading direction: left in LTR,
-                right in RTL — the base chevron points right, so LTR is the
-                rotated case */}
+          <button type="button" aria-label={t("weekPrev")} onClick={() => setOffset((v) => v - 1)}
+            className="tap grid h-7 w-7 place-items-center rounded-lg border border-border text-fg-muted hover:text-fg">
+            {/* BACK points against the reading direction */}
             <IconChevronRight width={12} height={12} className="rotate-180 rtl:rotate-0" />
           </button>
-          <button
-            type="button"
-            aria-label={t("weekNext")}
-            onClick={() => setOffset((v) => v + 1)}
-            className="tap grid h-7 w-7 place-items-center rounded-lg border border-border text-fg-muted hover:text-fg"
-          >
-            {/* FORWARD points with the reading direction */}
+          <button type="button" aria-label={t("weekNext")} onClick={() => setOffset((v) => v + 1)}
+            className="tap grid h-7 w-7 place-items-center rounded-lg border border-border text-fg-muted hover:text-fg">
             <IconChevronRight width={12} height={12} className="rtl:rotate-180" />
           </button>
         </span>
       </div>
 
-      {/* ── the strip: seven pills, full short names ─────────────────── */}
-      <ul className="grid grid-cols-7 gap-1.5">
-        {cells.map((cell) => (
-          <li
-            key={cell.key}
-            className={`flex flex-col items-center gap-0.5 rounded-xl border px-1 py-1.5 ${
-              cell.today
-                ? "border-accent/40 bg-accent-soft"
-                : cell.weekend
-                  ? "border-transparent bg-danger/5"
-                  : "border-transparent bg-surface-2/70"
-            }`}
-          >
-            <span className={`max-w-full truncate text-[10px] leading-4 ${cell.today ? "text-accent" : "text-fg-muted"}`}>
-              {cell.weekday}
-            </span>
-            <span
-              className={`grid h-6 w-6 place-items-center rounded-full text-xs tabular-nums ${
-                cell.today
-                  ? "bg-accent font-bold text-on-accent"
-                  : cell.weekend ? "text-danger" : "text-fg"
-              }`}
-            >
-              {cell.label}
-            </span>
-          </li>
-        ))}
-      </ul>
+      {meetings === "failed" ? (
+        <p className="mb-1 text-xs text-fg-subtle">{t("readFailed")}</p>
+      ) : null}
 
-      {/* ── the week's meetings, or the named empty state ────────────── */}
-      <div className="scroll-quiet mt-2 min-h-0 flex-1 overflow-y-auto">
-        {meetings === null ? null : meetings === "failed" ? (
-          <p className="p-2 text-sm text-fg-subtle">{t("readFailed")}</p>
-        ) : weekMeetings.length === 0 ? (
-          <div className="grid h-full min-h-24 place-items-center text-center">
-            <div>
-              <span className="mx-auto mb-1.5 grid h-9 w-9 place-items-center rounded-xl bg-surface-2 text-fg-muted" aria-hidden>
-                <IconCalendar width={16} height={16} />
+      {/* ── the grid: [hour rail | seven day columns] ─────────────────── */}
+      <div className="grid min-h-0 flex-1 grid-cols-[auto_1fr] gap-1.5">
+        {/* day headers + columns share one grid so the tints run full height */}
+        <div className="flex flex-col pe-1 text-[10px] leading-none text-fg-subtle">
+          {/* the SAME header spacer the day columns carry, so label k and
+              line k compute their offsets inside identical boxes */}
+          <div className="mb-1 h-10" aria-hidden />
+          <div className="relative min-h-0 flex-1">
+            {hours.map((h, i) => (
+              <span key={h} className="badge-num absolute -translate-y-1/2 whitespace-nowrap"
+                style={{ top: `${(i / (hours.length - 1)) * 100}%` }}>
+                {digits(String(h).padStart(2, "0"), locale)}:{digits("00", locale)}
               </span>
-              <p className="text-sm text-fg-muted">{t("weekNoMeetings")}</p>
-              <Link
-                href="/meetings"
-                className="mt-2 inline-flex h-8 items-center gap-1.5 rounded-lg border border-border px-3 text-xs font-medium text-fg hover:border-border-strong"
-              >
-                <IconPlus width={12} height={12} />
-                {t("weekNewMeeting")}
-              </Link>
-            </div>
-          </div>
-        ) : (
-          <ul className="divide-y divide-border/60">
-            {weekMeetings.map((m) => (
-              <li key={m.id}>
-                <Link href={`/meetings/${m.id}`} className="flex items-baseline gap-2.5 py-1.5 hover:text-accent">
-                  <span className="badge-num shrink-0 rounded-md bg-accent-soft px-1.5 py-0.5 text-[11px] font-medium text-accent">
-                    {formatTime(m.scheduled_at, locale)}
-                  </span>
-                  <span className="min-w-0 flex-1 truncate text-sm text-fg" title={m.title}>{m.title}</span>
-                  <span className="shrink-0 text-[10px] text-fg-subtle">{cells.find((c) => c.key === dayKeyOf(m.scheduled_at))?.weekday}</span>
-                </Link>
-              </li>
             ))}
-          </ul>
-        )}
+          </div>
+        </div>
+        <div className="grid min-h-0 grid-cols-7 gap-1.5">
+          {cells.map((cell) => {
+            const dayMeetings = (byDay.get(cell.key) ?? [])
+              .sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at));
+            return (
+              <div key={cell.key} className="flex min-h-0 flex-col">
+                <div className={`mb-1 h-10 rounded-lg px-1 py-1 text-center ${
+                  cell.today ? "bg-accent text-on-accent" : cell.weekend ? "bg-danger/10 text-danger" : "bg-surface-2/70 text-fg-muted"
+                }`}>
+                  <span className="block truncate text-[10px] leading-3">
+                    {cell.weekday}{cell.today ? ` · ${t("weekToday")}` : ""}
+                  </span>
+                  <span className="badge-num block text-xs font-bold leading-4">{cell.label}</span>
+                </div>
+                <div className={`relative min-h-0 flex-1 overflow-hidden rounded-lg ${
+                  cell.today ? "bg-accent-soft/60" : cell.weekend ? "bg-danger/5" : "bg-surface-2/40"
+                }`}>
+                  {/* hour lines */}
+                  {hours.map((h, i) => (
+                    <span key={h} aria-hidden className="absolute inset-x-0 border-t border-border/40"
+                      style={{ top: `${(i / (hours.length - 1)) * 100}%` }} />
+                  ))}
+                  {dayMeetings.map((m) => {
+                    /* the RESOLVED zone, not the browser's — the chip's row
+                       must agree with the day bucketing and the printed
+                       time, which both honor the timezone preference */
+                    const hour = hourInResolvedZone(m.scheduled_at);
+                    const clamped = Math.min(Math.max(hour, GRID_START_HOUR), GRID_END_HOUR - 0.75);
+                    const top = ((clamped - GRID_START_HOUR) / (GRID_END_HOUR - GRID_START_HOUR)) * 100;
+                    /* same denominator as the lines and the rail — one
+                       geometry, three renderings */
+                    return (
+                      <Link
+                        key={m.id}
+                        href={`/meetings/${m.id}`}
+                        title={m.title}
+                        className="absolute inset-x-0.5 z-10 rounded-md bg-surface px-1 py-0.5 shadow-card transition-colors hover:bg-accent-soft"
+                        style={{ top: `${top}%` }}
+                      >
+                        <span className="block truncate text-[10px] font-medium leading-3.5 text-fg">{m.title}</span>
+                        <span className="badge-num block text-[9px] leading-3 text-fg-subtle">
+                          {formatTime(m.scheduled_at, locale)}
+                        </span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

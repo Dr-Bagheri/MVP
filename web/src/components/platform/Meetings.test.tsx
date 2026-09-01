@@ -17,6 +17,9 @@ import type { MeetingRecord } from "@/api/types";
  *     time — and lands on the new meeting's page.
  *  4. The empty list is a NAMED state.
  */
+vi.mock("next/navigation", () => ({
+  useSearchParams: () => new URLSearchParams(),
+}));
 vi.mock("@/i18n/routing", () => ({
   useRouter: () => ({ push: pushSpy, replace: vi.fn() }),
   Link: ({ href, children }: { href: unknown; children: React.ReactNode }) => (
@@ -32,6 +35,7 @@ function meeting(over: Partial<MeetingRecord>): MeetingRecord {
     duration_minutes: 60, mode: "online", topic: null, location: null,
     description: "", invitees: [], agenda: [], call_id: null, call_title: null,
     archived: false, created_by: "u-1", created_at: "2026-08-31T08:00:00.000Z",
+    minutes_approved_at: null, minutes_closed_at: null, minutes_signatures: [],
     ...over,
   };
 }
@@ -94,12 +98,18 @@ describe("Meetings", () => {
     await waitFor(() => expect(screen.getByText("هنوز جلسه‌ای نیست. اولین جلسه را برنامه‌ریزی کن.")).toBeInTheDocument());
 
     await userEvent.click(screen.getByRole("button", { name: /جلسه جدید/ }));
-    await userEvent.type(screen.getByPlaceholderText("عنوان جلسه…"), "جلسهٔ فروش");
+    await userEvent.type(screen.getByPlaceholderText("عنوان جلسه را بنویس"), "جلسهٔ فروش");
     await userEvent.click(screen.getByRole("radio", { name: "حضوری" }));
     const dialog = screen.getByRole("dialog");
-    const date = within(dialog).getByLabelText("تاریخ") as HTMLInputElement;
+    // date and time arrive PRE-FILLED with the click moment (the directive's
+    // own sentence); the test only retargets the date
+    const date = within(dialog).getByLabelText("تاریخ *") as HTMLInputElement;
+    expect(date.value).not.toBe("");
+    const time = within(dialog).getByLabelText("ساعت *") as HTMLInputElement;
+    expect(time.value).not.toBe("");
+    date.value = "";
     await userEvent.type(date, "2099-05-01");
-    await userEvent.click(screen.getByRole("button", { name: "ساختن جلسه" }));
+    await userEvent.click(screen.getByRole("button", { name: /ساختن جلسه/ }));
 
     await waitFor(() => expect(created).toHaveLength(1));
     const body = created[0]!;

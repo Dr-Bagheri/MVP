@@ -4,21 +4,19 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Call, MeetingRecord } from "@/api/types";
 
 /**
- * The meeting page's contract facts:
+ * The meeting page's contract facts (the big-milestone shape):
  *
  *  1. THE LADDER MAPPING is the load-bearing one: the processing view's
- *     four steps are the call-status ladder wearing the reference's labels.
- *     At status "linking" the first two steps read done, diarization reads
- *     in-progress, extraction reads pending — asserted PER STEP, because a
- *     card that renders all four steps identically satisfies any bare
- *     presence check. (Verified red by breaking ladderIndex to a constant:
- *     the per-step assertions failed, presence assertions would not have.)
- *  2. "ready" shows the finished card with the record's door — and no
- *     step list (the states are exclusive).
- *  3. "failed" is named as a failure, never rendered as progress.
- *  4. A meeting with NO record shows the named state, and its start button
- *     switches to the hold stage (the embedded recorder appears).
- *  5. A meeting with a record OPENS on the post stage (stage derivation).
+ *     four steps are the call-status ladder wearing the reference's labels
+ *     — asserted PER STEP. (Verified red by breaking ladderIndex to a
+ *     constant: the per-step assertions failed.)
+ *  2. A READY record shows the review panels (transcript + extraction),
+ *     not the processing card — the states are exclusive.
+ *  3. "failed" is named a failure, never progress.
+ *  4. A due-but-unrecorded meeting opens on برگزاری with the whiteboard,
+ *     and its post stage names the absence; a recorded one opens on post.
+ *  5. Starting hands the ENGINE the meeting's mapping (online → system
+ *     source, the meeting's own title) — the engine is the only recorder.
  */
 vi.mock("@/i18n/routing", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
@@ -26,13 +24,24 @@ vi.mock("@/i18n/routing", () => ({
     <a href={typeof href === "string" ? href : "#"}>{children}</a>
   ),
 }));
-
-/* the recorder is ITS OWN suite's subject — here it only needs to exist */
-vi.mock("@/components/echo/Recorder", () => ({
-  Recorder: () => <div data-testid="recorder-stub" />,
-}));
 vi.mock("@/components/platform/CrumbTitle", () => ({
   useCrumbTitle: () => undefined,
+}));
+/* the canvas is its own subject — here it only needs to exist */
+vi.mock("./meeting/Whiteboard", () => ({
+  Whiteboard: () => <div data-testid="whiteboard-stub" />,
+}));
+
+const startSpy = vi.fn(async (_opts: unknown) => undefined);
+/* useSyncExternalStore REQUIRES a stable snapshot reference — a getter that
+   builds a fresh object every call re-renders forever (the real engine's
+   snapshot is a module-level constant between changes for the same reason) */
+const ENGINE_SNAPSHOT = { phase: "idle", callId: null, recordedMs: 0 };
+vi.mock("@/lib/recordingEngine", () => ({
+  startRecording: (opts: unknown) => startSpy(opts),
+  finish: vi.fn(async () => undefined),
+  recorderSnapshot: () => ENGINE_SNAPSHOT,
+  subscribeRecorder: () => () => undefined,
 }));
 
 function meeting(over: Partial<MeetingRecord>): MeetingRecord {
@@ -41,6 +50,7 @@ function meeting(over: Partial<MeetingRecord>): MeetingRecord {
     duration_minutes: 60, mode: "online", topic: null, location: null,
     description: "", invitees: [], agenda: [], call_id: null, call_title: null,
     archived: false, created_by: "u-1", created_at: "2026-08-31T08:00:00.000Z",
+    minutes_approved_at: null, minutes_closed_at: null, minutes_signatures: [],
     ...over,
   };
 }
@@ -65,9 +75,13 @@ vi.mock("@/api/client", () => ({
     meetingDetail: async () => MEETING,
     updateMeeting: async (_id: string, body: Record<string, unknown>) => ({ ...MEETING, ...body }),
     getCall: async () => CALL,
+    me: async () => ({ id: "u-me", display_name: "سینا", display_name_en: null }),
     taskBoard: async () => ({ columns: [], topics: [], tasks: [] }),
     callNotes: async () => [],
     getSummaries: async () => [],
+    getTranscript: async () => [],
+    getSpeakers: async () => [],
+    getCallAudio: async () => null,
     createTask: vi.fn(), addCallNote: vi.fn(), deleteCallNote: vi.fn(),
   },
 }));
@@ -77,6 +91,7 @@ import { MeetingPage } from "./MeetingPage";
 beforeEach(() => {
   MEETING = meeting({});
   CALL = null;
+  startSpy.mockClear();
 });
 
 /** one processing step's row, found by its label */
@@ -91,8 +106,6 @@ describe("MeetingPage", () => {
     render(<MeetingPage id="m-1" />);
     await waitFor(() => expect(screen.getByText("در حال پردازش جلسه")).toBeInTheDocument());
 
-    // linking = upload done, transcription done, diarization ACTIVE,
-    // extraction pending — each row's own state, not the card's existence
     expect(stepRow("آپلود فایل صوتی").textContent).toContain("انجام شد");
     expect(stepRow("رونویسی گفتار به متن").textContent).toContain("انجام شد");
     expect(stepRow("تفکیک و تشخیص گویندگان").textContent).toContain("در حال انجام…");
@@ -100,13 +113,15 @@ describe("MeetingPage", () => {
     expect(stepRow("استخراج هوشمند").textContent).not.toContain("در حال انجام…");
   });
 
-  it("a ready record shows the finished card, not the step list", async () => {
+  it("a ready record shows the review panels, not the processing card", async () => {
     MEETING = meeting({ call_id: "c-1" });
     CALL = call({ status: "ready" });
     render(<MeetingPage id="m-1" />);
-    await waitFor(() => expect(screen.getByText("رکورد آماده است")).toBeInTheDocument());
+    // empty artifacts render their NAMED absences inside the review panels —
+    // the panels are up, the processing card is gone
+    await waitFor(() => expect(screen.getByText("هنوز رونوشتی نیست.")).toBeInTheDocument());
     expect(screen.queryByText("در حال پردازش جلسه")).toBeNull();
-    expect(screen.getByRole("button", { name: "باز کردن رکورد" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "تسک‌ها" })).toBeInTheDocument();
   });
 
   it("a failed record is named a failure, never progress", async () => {
@@ -115,28 +130,35 @@ describe("MeetingPage", () => {
     render(<MeetingPage id="m-1" />);
     await waitFor(() => expect(screen.getByText("پردازش این رکورد ناموفق بود.")).toBeInTheDocument());
     expect(screen.queryByText("در حال پردازش جلسه")).toBeNull();
-    expect(screen.queryByText("رکورد آماده است")).toBeNull();
+    expect(screen.queryByText("هنوز رونوشتی نیست.")).toBeNull();
   });
 
-  it("no record: the named state, and start switches to the hold stage", async () => {
+  it("a due, unrecorded meeting opens on برگزاری with the whiteboard; its post stage names the absence", async () => {
     MEETING = meeting({ call_id: null, scheduled_at: "2020-01-01T09:00:00.000Z" });
     render(<MeetingPage id="m-1" />);
-    // a due-but-unrecorded meeting opens on HOLD (the recorder)
-    await waitFor(() => expect(screen.getByTestId("recorder-stub")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId("whiteboard-stub")).toBeInTheDocument());
 
-    // walk to the post stage by hand: the absence is named, with the door back
     await userEvent.click(screen.getByRole("button", { name: /پس از جلسه/ }));
     expect(screen.getByText("هنوز رکوردی از این جلسه نیست.")).toBeInTheDocument();
+  });
+
+  it("starting hands the ENGINE the meeting's mapping — online becomes the system source", async () => {
+    MEETING = meeting({ call_id: null, mode: "online", title: "جلسهٔ آنلاین" });
+    render(<MeetingPage id="m-1" />);
+    await waitFor(() => expect(screen.getByTestId("whiteboard-stub")).toBeInTheDocument());
+
     await userEvent.click(screen.getByRole("button", { name: /شروع جلسه/ }));
-    expect(screen.getByTestId("recorder-stub")).toBeInTheDocument();
+    await waitFor(() => expect(startSpy).toHaveBeenCalledTimes(1));
+    const opts = startSpy.mock.calls[0]![0] as unknown as Record<string, unknown>;
+    expect(opts.source).toBe("system");
+    expect(opts.title).toBe("جلسهٔ آنلاین");
   });
 
   it("a recorded meeting opens on the post stage", async () => {
     MEETING = meeting({ call_id: "c-1" });
     CALL = call({ status: "ready" });
     render(<MeetingPage id="m-1" />);
-    await waitFor(() => expect(screen.getByText("رکورد آماده است")).toBeInTheDocument());
-    // the recorder is not on screen — post is the opening stage
-    expect(screen.queryByTestId("recorder-stub")).toBeNull();
+    await waitFor(() => expect(screen.getByText("هنوز رونوشتی نیست.")).toBeInTheDocument());
+    expect(screen.queryByTestId("whiteboard-stub")).toBeNull();
   });
 });

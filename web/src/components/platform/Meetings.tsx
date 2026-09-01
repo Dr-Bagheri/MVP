@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/routing";
 import { api } from "@/api/client";
@@ -48,6 +49,15 @@ export function Meetings() {
     void api.meetings().then(setRows).catch(() => setRows("failed"));
   }, []);
   useEffect(load, [load]);
+
+  /* ?new=1 — the dashboard's «شروع ضبط جلسه» and the rail's CTA land here
+     with the dialog already open, its time defaulted to the click moment.
+     useSearchParams (the house pattern) rather than a mount-only read:
+     the rail's link must work while ALREADY standing on /meetings. */
+  const params = useSearchParams();
+  useEffect(() => {
+    if (params.get("new") === "1") setCreating(true);
+  }, [params]);
 
   const refusal = () => setError(t("writeFailed"));
 
@@ -104,6 +114,9 @@ export function Meetings() {
 
       {creating ? (
         <NewMeetingDialog
+          topics={Array.isArray(rows)
+            ? [...new Set(rows.map((m) => m.topic).filter((x): x is string => x !== null))]
+            : []}
           onClose={() => setCreating(false)}
           onCreated={(m) => { setCreating(false); router.push(`/meetings/${m.id}`); }}
           onRefused={refusal}
@@ -305,35 +318,46 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 const INPUT = "h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-fg outline-none placeholder:text-fg-subtle focus:border-accent";
 
-function NewMeetingDialog({ onClose, onCreated, onRefused }: {
-  onClose: () => void; onCreated: (m: MeetingRecord) => void; onRefused: () => void;
+/**
+ * The reference's create dialog, exactly: title, an optional description,
+ * date and time DEFAULTING TO THE CLICK MOMENT (user directive: "the date
+ * and time ... should be the date and time of the clicked button"), a topic
+ * folder, and the three mode tiles. The agenda and the invitees are NOT
+ * here — the subtitle says so, and the meeting's own page owns them.
+ */
+function NewMeetingDialog({ topics, onClose, onCreated, onRefused }: {
+  topics: string[];
+  onClose: () => void;
+  onCreated: (m: MeetingRecord) => void;
+  onRefused: () => void;
 }) {
   const t = useTranslations("meetings");
   const [title, setTitle] = useState("");
-  const [date, setDate] = useState("");
-  const [time, setTime] = useState("09:00");
-  const [duration, setDuration] = useState("");
-  const [mode, setMode] = useState<MeetingMode>("online");
-  const [topic, setTopic] = useState("");
-  const [location, setLocation] = useState("");
   const [description, setDescription] = useState("");
-  const [invitees, setInvitees] = useState<string[]>([]);
-  const [agenda, setAgenda] = useState<MeetingAgendaItem[]>([]);
+  /* the click moment, captured once at open */
+  const [date, setDate] = useState(() => {
+    const d = new Date();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${d.getFullYear()}-${mm}-${dd}`;
+  });
+  const [time, setTime] = useState(() => {
+    const d = new Date();
+    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  });
+  const [topic, setTopic] = useState("");
+  const [mode, setMode] = useState<MeetingMode>("online");
   const [busy, setBusy] = useState(false);
 
   const submit = () => {
-    if (title.trim() === "" || date === "" || busy) return;
+    if (title.trim() === "" || date === "" || time === "" || busy) return;
     setBusy(true);
     void api.createMeeting({
       title: title.trim(),
-      scheduled_at: new Date(`${date}T${time || "09:00"}`).toISOString(),
+      scheduled_at: new Date(`${date}T${time}`).toISOString(),
       mode,
-      duration_minutes: duration.trim() === "" ? null : Number(duration),
       topic: topic.trim() === "" ? undefined : topic.trim(),
-      location: location.trim() === "" ? undefined : location.trim(),
       description: description.trim() === "" ? undefined : description,
-      invitees,
-      agenda,
     })
       .then(onCreated)
       .catch(() => { setBusy(false); onRefused(); });
@@ -341,59 +365,66 @@ function NewMeetingDialog({ onClose, onCreated, onRefused }: {
 
   return (
     <Overlay onClose={onClose} label={t("newMeeting")} wide>
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-base font-bold text-fg">{t("newMeeting")}</h2>
-        <button type="button" aria-label={t("close")} onClick={onClose} className="text-fg-subtle hover:text-fg">
+      <div className="mb-1 flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-base font-bold text-fg">{t("newMeeting")}</h2>
+          <p className="mt-0.5 text-xs text-fg-muted">{t("newMeetingSubtitle")}</p>
+        </div>
+        <button type="button" aria-label={t("close")} onClick={onClose}
+          className="tap grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-border text-fg-subtle hover:text-fg">
           <IconClose width={14} height={14} />
         </button>
       </div>
-      <div className="scroll-quiet min-h-0 flex-1 space-y-3 overflow-y-auto pe-1">
-        <Field label={t("fieldTitle")}>
+      <div className="scroll-quiet min-h-0 flex-1 space-y-3 overflow-y-auto pe-1 pt-2">
+        <Field label={t("fieldTitleRequired")}>
           <input value={title} onChange={(e) => setTitle(e.target.value)} className={INPUT}
             placeholder={t("titlePlaceholder")} />
         </Field>
-        <ModePicker value={mode} onChange={setMode} />
-        <div className="grid grid-cols-3 gap-2">
-          <Field label={t("fieldDate")}>
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={INPUT} />
-          </Field>
-          <Field label={t("fieldTime")}>
-            <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className={INPUT} />
-          </Field>
-          <Field label={t("fieldDuration")}>
-            <input value={duration} onChange={(e) => setDuration(asciiDigits(e.target.value).replace(/[^0-9]/g, ""))}
-              inputMode="numeric" placeholder={t("durationPlaceholder")} className={INPUT} />
-          </Field>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <Field label={t("fieldTopic")}>
-            <input value={topic} onChange={(e) => setTopic(e.target.value)} className={INPUT} />
-          </Field>
-          {mode === "in_person" ? (
-            <Field label={t("fieldLocation")}>
-              <input value={location} onChange={(e) => setLocation(e.target.value)} className={INPUT} />
-            </Field>
-          ) : null}
-        </div>
-        <Field label={t("fieldInvitees")}>
-          <InviteeInput value={invitees} onChange={setInvitees} />
-        </Field>
-        <Field label={t("fieldAgenda")}>
-          <AgendaEditor value={agenda} onChange={setAgenda} />
-        </Field>
-        <Field label={t("fieldDescription")}>
+        <Field label={t("fieldDescriptionOptional")}>
           <textarea value={description} onChange={(e) => setDescription(e.target.value)}
-            rows={3}
+            rows={3} placeholder={t("descriptionPlaceholder")}
             className="w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-fg outline-none placeholder:text-fg-subtle focus:border-accent" />
         </Field>
+        <div className="grid grid-cols-2 gap-2">
+          <Field label={t("fieldDateRequired")}>
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={INPUT} />
+          </Field>
+          <Field label={t("fieldTimeRequired")}>
+            <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className={INPUT} />
+          </Field>
+        </div>
+        <Field label={t("fieldTopicFolder")}>
+          <select
+            value={topic}
+            onChange={(e) => {
+              if (e.target.value === "__new__") {
+                const name = window.prompt(t("newTopicPrompt"));
+                setTopic(name === null ? "" : name.trim().slice(0, 120));
+                return;
+              }
+              setTopic(e.target.value);
+            }}
+            className={INPUT}
+          >
+            <option value="">{t("noTopic")}</option>
+            {topics.map((name) => <option key={name} value={name}>{name}</option>)}
+            {topic !== "" && !topics.includes(topic) ? <option value={topic}>{topic}</option> : null}
+            <option value="__new__">{t("newTopicOption")}</option>
+          </select>
+        </Field>
+        <div>
+          <span className="mb-1 block text-xs font-medium text-fg-muted">{t("fieldMode")}</span>
+          <ModePicker value={mode} onChange={setMode} />
+        </div>
       </div>
-      <div className="mt-3 flex justify-end gap-2">
+      <div className="mt-3 flex items-center justify-between">
         <button type="button" onClick={onClose}
-          className="tap h-10 rounded-xl bg-surface-2 px-4 text-sm font-medium text-fg hover:bg-border">
+          className="tap h-10 rounded-xl border border-border bg-surface px-4 text-sm font-medium text-fg hover:bg-border">
           {t("cancel")}
         </button>
-        <button type="button" onClick={submit} disabled={title.trim() === "" || date === "" || busy}
-          className="tap h-10 rounded-xl bg-accent px-4 text-sm font-semibold text-on-accent disabled:opacity-50">
+        <button type="button" onClick={submit} disabled={title.trim() === "" || date === "" || time === "" || busy}
+          className="tap flex h-10 items-center gap-2 rounded-xl bg-accent px-4 text-sm font-semibold text-on-accent shadow-accent disabled:opacity-50">
+          <IconPlus width={14} height={14} />
           {t("createMeeting")}
         </button>
       </div>

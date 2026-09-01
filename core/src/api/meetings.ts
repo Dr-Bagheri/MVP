@@ -32,6 +32,14 @@ export interface MeetingAgendaItem {
   minutes: number | null;
 }
 
+export interface MeetingSignature {
+  name: string;
+  /** the signer's app_user id — the DEDUPE key (a display name changes with
+      locale and rename; an id does not) */
+  user_id: string | null;
+  at: string;
+}
+
 export interface MeetingRecord {
   id: string;
   title: string;
@@ -50,12 +58,17 @@ export interface MeetingRecord {
   archived: boolean;
   created_by: string;
   created_at: string;
+  /* 0146 — the minutes' lifecycle: draft -> approved -> signed -> closed */
+  minutes_approved_at: string | null;
+  minutes_closed_at: string | null;
+  minutes_signatures: MeetingSignature[];
 }
 
 const MEETING_ROWS = `
   select m.id, m.title, m.scheduled_at, m.duration_minutes, m.mode, m.topic,
          m.location, m.description, m.invitees, m.agenda, m.call_id,
-         c.title as call_title, m.archived_at, m.created_by, m.created_at
+         c.title as call_title, m.archived_at, m.created_by, m.created_at,
+         m.minutes_approved_at, m.minutes_closed_at, m.minutes_signatures
     from echo.meeting m
     left join echo.call c on c.id = m.call_id`;
 
@@ -83,6 +96,17 @@ function toMeeting(row: Record<string, unknown>): MeetingRecord {
     archived: row.archived_at !== null && row.archived_at !== undefined,
     created_by: String(row.created_by),
     created_at: iso(row.created_at),
+    minutes_approved_at: row.minutes_approved_at === null || row.minutes_approved_at === undefined
+      ? null : iso(row.minutes_approved_at),
+    minutes_closed_at: row.minutes_closed_at === null || row.minutes_closed_at === undefined
+      ? null : iso(row.minutes_closed_at),
+    minutes_signatures: (Array.isArray(row.minutes_signatures) ? row.minutes_signatures : [])
+      .map((sig) => ({
+        name: String((sig as Record<string, unknown>).name ?? ""),
+        user_id: ((sig as Record<string, unknown>).user_id as string | null | undefined) ?? null,
+        at: String((sig as Record<string, unknown>).at ?? ""),
+      }))
+      .filter((sig) => sig.name !== ""),
   };
 }
 
@@ -243,6 +267,45 @@ export function createMeetingsRepo(db: Db) {
           push("duration_minutes", d);
           break;
         }
+        /* 0146 — the minutes' lifecycle. Each patch is an EVENT, not a
+           field write: approve stamps once (idempotent), sign APPENDS a
+           {name, now} pair, close stamps once and requires the approval —
+           an unapproved document cannot be the record of record. */
+        case "minutes_approved": {
+          if (value !== true) {
+            throw new ValidationError("approval is an event, not a toggle", { code: "minutes_patch_invalid" });
+          }
+          sets.push("minutes_approved_at = coalesce(minutes_approved_at, now())");
+          break;
+        }
+        case "minutes_sign": {
+          const name = typeof value === "string" ? value.trim().slice(0, 120) : "";
+          if (name === "") {
+            throw new ValidationError("a signature needs a name", { code: "minutes_patch_invalid" });
+          }
+          /* the signer's IDENTITY rides with the name, and the append is
+             idempotent per actor: a display name changes with the locale,
+             so name-equality would let one person sign twice */
+          args.push(name);
+          sets.push(
+            `minutes_signatures = case
+               when exists (
+                 select 1 from jsonb_array_elements(minutes_signatures) sig
+                  where sig->>'user_id' = echo.actor_id()::text
+               ) then minutes_signatures
+               else minutes_signatures || jsonb_build_array(
+                 jsonb_build_object('name', $${args.length}::text, 'user_id', echo.actor_id(), 'at', now()))
+             end`,
+          );
+          break;
+        }
+        case "minutes_closed": {
+          if (value !== true) {
+            throw new ValidationError("closing is an event, not a toggle", { code: "minutes_patch_invalid" });
+          }
+          sets.push("minutes_closed_at = coalesce(minutes_closed_at, now())");
+          break;
+        }
         case "call_id": {
           /* the recorder links the record it created; null unlinks. The
              composite FK is the wall — a call outside the org refuses. */
@@ -263,7 +326,31 @@ export function createMeetingsRepo(db: Db) {
       throw new ValidationError("nothing to change", { code: "meeting_patch_empty" });
     }
     sets.push("updated_at = now()");
+    const requireApproved = "minutes_closed" in patch;
+    /* a CLOSED meeting is the record of record: everything but archiving is
+       refused — an editable closed document is a signature on shifting
+       paper. The check runs in-transaction, where the write happens. */
+    const CLOSED_ALLOWED = new Set(["archived"]);
+    const touchesContent = Object.keys(patch).some((key) => !CLOSED_ALLOWED.has(key));
     return db.withIdentity(identity, async (tx: SqlTx) => {
+      if (touchesContent) {
+        const closedState = await tx.unsafe<Record<string, unknown>>(
+          `select minutes_closed_at from echo.meeting where id = $1`, [id],
+        );
+        if (!closedState[0]) throw new NotFoundError();
+        if (closedState[0].minutes_closed_at !== null) {
+          throw new ValidationError("a closed meeting is the record of record", { code: "meeting_closed" });
+        }
+      }
+      if (requireApproved) {
+        const state = await tx.unsafe<Record<string, unknown>>(
+          `select minutes_approved_at from echo.meeting where id = $1`, [id],
+        );
+        if (!state[0]) throw new NotFoundError();
+        if (state[0].minutes_approved_at === null) {
+          throw new ValidationError("an unapproved document cannot be closed", { code: "minutes_not_approved" });
+        }
+      }
       args.push(id);
       const rows = await tx.unsafe<Record<string, unknown>>(
         `update echo.meeting set ${sets.join(", ")} where id = $${args.length} returning id`,

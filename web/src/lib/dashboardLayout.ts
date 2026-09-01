@@ -40,7 +40,7 @@ export {
  */
 /* ORDER IS THE LADDER: rowsFor must be non-decreasing along this list
    (asserted) — band sits beside wide because it shares wide's height */
-export const TILE_SIZES = ["small", "wide", "band", "column", "large", "tall", "hero"] as const;
+export const TILE_SIZES = ["small", "wide", "band", "column", "large", "panel", "tall", "hero"] as const;
 export type TileSize = (typeof TILE_SIZES)[number];
 
 export const COLUMNS = 12;
@@ -58,6 +58,13 @@ export const SIZE_SPAN: Record<TileSize, { w: number; h: number }> = {
    * and at hero height it would carry a third of the card as dead air.
    */
   band: { w: 12, h: 2 },
+  /*
+   * PANEL is the week grid's tier (the big-milestone round): the reference's
+   * dashboard gives the week an hour grid about two-thirds wide and half a
+   * screen tall — day columns with hour rows need real height, and a 6-wide
+   * tile squeezes seven day columns into unreadability.
+   */
+  panel: { w: 9, h: 5 },
   /*
    * TALL is the calendar's tier: a month is five or six rows of squares, and
    * squares only stay square if the tile has the height to hold them. It is
@@ -91,7 +98,7 @@ export function sizeFromSpan(w: number, h: number): TileSize {
  * row.
  */
 export function rowsFor(size: TileSize): number {
-  return { small: 3, wide: 3, band: 3, column: 5, large: 6, tall: 9, hero: 12 }[size];
+  return { small: 3, wide: 3, band: 3, column: 5, large: 6, panel: 9, tall: 9, hero: 12 }[size];
 }
 
 export type Density = "comfortable" | "compact";
@@ -137,7 +144,14 @@ export interface DashboardLayout {
  * simply starts from the reference and any rearrangement from here is
  * theirs again.
  */
-const KEY = "neurai-dashboard-layout-v4";
+/*
+ * v5: the reference's dashboard, exactly (user directive, 2026-09-01:
+ * "remove record, integrations, and record section from the dashboard,
+ * make it exactly like theirs") — same reasoning as v4: the stored old
+ * composition must yield to the arrangement that was asked for. Every old
+ * key still exists in the catalogue, so nothing is dropped.
+ */
+const KEY = "neurai-dashboard-layout-v5";
 
 /** the tier a widget takes when added, clamped to what it supports */
 export function defaultSizeFor(key: WidgetKey): TileSize {

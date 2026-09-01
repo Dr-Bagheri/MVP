@@ -83,8 +83,8 @@ export interface WidgetSpec {
  */
 export const WIDGET_SPECS = [
   {
-    /* the stat strip: four figure cards — today's meetings, open tasks,
-       records, connections. The reference's opening row. */
+    /* the stat strip: the reference's four figures — upcoming meetings,
+       meetings this month, task completion rate, tasks recorded */
     key: "stats",
     labelKey: "stats",
     icon: <IconPulse />,
@@ -95,18 +95,18 @@ export const WIDGET_SPECS = [
     defaultAt: { x: 0, y: 0 },
   },
   {
-    /* the week with its meetings — the reference's main panel */
+    /* the week as the reference's HOUR GRID — the dashboard's main panel */
     key: "week",
     labelKey: "week",
     icon: <IconCalendar />,
     group: "overview",
-    sizes: ["large", "hero"],
-    defaultSize: "large",
+    sizes: ["panel", "large", "hero"],
+    defaultSize: "panel",
     defaultOrder: 2,
     defaultAt: { x: 0, y: 2 },
   },
   {
-    /* what is coming up, as a list — time and title, nearest first */
+    /* جلسات پیش‌رو — the product's own upcoming meetings */
     key: "upcoming",
     labelKey: "upcoming",
     icon: <IconClock />,
@@ -114,8 +114,25 @@ export const WIDGET_SPECS = [
     sizes: ["column", "large"],
     defaultSize: "column",
     defaultOrder: 3,
-    defaultAt: { x: 6, y: 2 },
+    defaultAt: { x: 9, y: 2 },
   },
+  {
+    /* آخرین جلسات — newest first, with the review chip */
+    key: "latest",
+    labelKey: "latest",
+    icon: <IconRows />,
+    group: "overview",
+    sizes: ["column", "large"],
+    defaultSize: "column",
+    defaultOrder: 4,
+    defaultAt: { x: 9, y: 5 },
+  },
+  /*
+   * OFF the default board (user directive, 2026-09-01): the record
+   * transport, integrations, the records list, agents and the month
+   * calendar stay in the catalogue — one "add" away — but the board a
+   * person lands on is the reference's, exactly.
+   */
   {
     key: "records",
     labelKey: "records",
@@ -123,47 +140,32 @@ export const WIDGET_SPECS = [
     group: "work",
     sizes: ["column", "large", "wide", "hero"],
     defaultSize: "column",
-    defaultOrder: 4,
-    defaultAt: { x: 9, y: 2 },
   },
   {
     key: "record",
     labelKey: "record",
     icon: <IconMic />,
     group: "work",
-    /* below the reading row: the transport sits where the hand goes after
-       the eye has had the week */
     sizes: ["wide", "large"],
     defaultSize: "wide",
-    defaultOrder: 5,
-    defaultAt: { x: 0, y: 5 },
   },
   {
     key: "agents",
     labelKey: "agents",
     icon: <IconAgent />,
     group: "ai",
-    /* four named agents, always the same four: there is no longer list for a
-       bigger tier to reveal */
     sizes: ["small", "column"],
     defaultSize: "small",
-    defaultOrder: 6,
-    defaultAt: { x: 6, y: 5 },
   },
   {
     key: "integrations",
     labelKey: "integrations",
     icon: <IconPlug />,
     group: "overview",
-    /* the four connections as cards, two by two */
     sizes: ["small", "column", "large", "hero"],
     defaultSize: "small",
-    defaultOrder: 7,
-    defaultAt: { x: 9, y: 5 },
   },
   {
-    /* the month grid — off the default board now the week strip carries the
-       dashboard's calendar job; one "add" away, not gone */
     key: "calendar",
     labelKey: "calendar",
     icon: <IconCalendar />,

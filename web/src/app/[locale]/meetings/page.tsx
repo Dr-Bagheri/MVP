@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { PlatformShell } from "@/components/platform/PlatformShell";
 import { PageContainer } from "@/components/scaffold";
 import { Meetings } from "@/components/platform/Meetings";
@@ -7,7 +8,9 @@ export default function MeetingsPage() {
   return (
     <PlatformShell>
       <PageContainer>
-        <Meetings />
+        <Suspense fallback={null}>
+          <Meetings />
+        </Suspense>
       </PageContainer>
     </PlatformShell>
   );

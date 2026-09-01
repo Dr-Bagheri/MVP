@@ -294,6 +294,14 @@ const DAY_MS = 86_400_000;
  * the viewer's own zone. It is a KEY, not a time: two instants get the same
  * number exactly when a person would call them the same day.
  */
+/** the hour-of-day (fractional) in the RESOLVED timezone — the week
+    grid's vertical axis, which must agree with `dayKeyOf`'s bucketing and
+    `formatTime`'s printed label (the browser's own zone may be neither) */
+export function hourInResolvedZone(iso: string): number {
+  const { hh, mm } = partsIn(new Date(iso), resolvedTimezone());
+  return hh + mm / 60;
+}
+
 export function dayKeyOf(iso: string | Date): number {
   const { y, m, d } = partsIn(typeof iso === "string" ? new Date(iso) : iso, resolvedTimezone());
   return Date.UTC(y, m - 1, d);

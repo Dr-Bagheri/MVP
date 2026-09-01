@@ -119,11 +119,11 @@ export function IconRail() {
 
       {/* ── the one big thing to do ──────────────────────────────────── */}
       <Link
-        href="/echo"
+        href="/meetings?new=1"
         className="tap flex h-11 items-center justify-center gap-2 rounded-xl bg-primary text-sm font-semibold text-on-primary shadow-accent transition-opacity hover:opacity-90"
       >
         <IconPlus width={16} height={16} />
-        {t("newRecord")}
+        {t("newMeeting")}
       </Link>
 
       {/* ── the destinations ─────────────────────────────────────────── */}

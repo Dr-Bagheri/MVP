@@ -10,9 +10,15 @@ import {
   type DashboardLayout, type TilePlacement, type TileSize, type WidgetKey,
 } from "@/lib/dashboardLayout";
 import { WidgetBoard } from "./dashboard/WidgetBoard";
+import { useRouter } from "@/i18n/routing";
+import { api } from "@/api/client";
+import { digits, formatDate, personName } from "@/lib/format";
+import { IconMic } from "@/components/icons";
+import { useLocale } from "next-intl";
+import type { Me } from "@/api/types";
 import {
-  AgentsWidget, CalendarWidget, IntegrationsWidget, RecordsMiniWidget, StartRecordWidget,
-  StatsWidget, UpcomingWidget, WeekWidget,
+  AgentsWidget, CalendarWidget, IntegrationsWidget, LatestMeetingsWidget, RecordsMiniWidget,
+  StartRecordWidget, StatsWidget, UpcomingWidget, WeekWidget,
 } from "./dashboard/miniWidgets";
 
 /**
@@ -41,6 +47,65 @@ import {
  * · **Drag OR menu.** WCAG 2.2 wants a single-pointer path to anything a
  *   drag can do, so every move is also a menu item.
  */
+/**
+ * The reference's greeting head (2026-09-01, "make it exactly like
+ * theirs"): time-of-day salute with the person's name, the date with the
+ * upcoming count in the same breath, and «شروع ضبط جلسه» — which opens the
+ * new-meeting dialog with the CLICK MOMENT already in its time fields.
+ */
+function GreetingHead() {
+  const t = useTranslations("dashboard");
+  const locale = useLocale();
+  const router = useRouter();
+  const [me, setMe] = useState<Me | null>(null);
+  const [upcoming, setUpcoming] = useState<number | null>(null);
+
+  useEffect(() => {
+    void api.me().then(setMe).catch(() => setMe(null));
+    void api.meetings()
+      .then((rows) => {
+        const now = Date.now();
+        setUpcoming(rows.filter((m) => new Date(m.scheduled_at).getTime() >= now && m.call_id === null).length);
+      })
+      .catch(() => setUpcoming(null));
+  }, []);
+
+  const hour = new Date().getHours();
+  const salute = hour < 5 ? t("greetNight")
+    : hour < 12 ? t("greetMorning")
+      : hour < 16 ? t("greetNoon")
+        : hour < 20 ? t("greetEvening")
+          : t("greetNight");
+  const name = me === null ? "" : personName(me, locale);
+
+  return (
+    <div className="flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <h1 className="text-xl font-bold text-fg">
+          {name === "" ? salute : t("greetWithName", { salute, name })} 👋
+        </h1>
+        <p className="mt-0.5 text-xs text-fg-muted">
+          {formatDate(new Date().toISOString(), locale)}
+          {" — "}
+          {upcoming === null
+            ? t("greetUpcomingUnknown")
+            : upcoming === 0
+              ? t("greetNoUpcoming")
+              : t("greetUpcoming", { n: digits(upcoming, locale) })}
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={() => router.push("/meetings?new=1")}
+        className="tap flex h-10 items-center gap-2 rounded-xl border border-border bg-surface px-4 text-sm font-medium text-fg shadow-card hover:border-border-strong"
+      >
+        <IconMic width={16} height={16} />
+        {t("startRecordMeeting")}
+      </button>
+    </div>
+  );
+}
+
 export function Dashboard() {
   const t = useTranslations("dashboard");
   const [layout, setLayout] = useState<DashboardLayout>(() => defaultLayout());
@@ -167,6 +232,7 @@ export function Dashboard() {
       case "stats": return <StatsWidget />;
       case "week": return <WeekWidget />;
       case "upcoming": return <UpcomingWidget size={size} />;
+      case "latest": return <LatestMeetingsWidget size={size} />;
       case "records": return <RecordsMiniWidget size={size} />;
       case "calendar": return <CalendarWidget />;
       case "agents": return <AgentsWidget />;
@@ -181,6 +247,7 @@ export function Dashboard() {
 
   return (
     <div className="space-y-5">
+      <GreetingHead />
       {/* ── the head: who, and the board's own controls ──────────────── */}
       {/*
         The ECHO LAUNCHER is gone (user directive, 2026-08-29: "remove the
