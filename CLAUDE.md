@@ -2914,3 +2914,36 @@ sessions) for the cross-session narrative.
   the hour rail shares the columns' exact geometry (one denominator,
   three renderings). Deployed whole: 0146 on prod, core on Hetzner,
   web on Vercel — 767 web + 1188 core green, the wall holds.
+
+- 2026-09-01 (WALKED THEIR PRODUCT — the round that ends the guessing):
+  user: "still you can not do it ... use the site that i gave you in
+  browser, go create a new meeting and observe everything it has how
+  many steps how many pop up windows, where is what". So I opened
+  panel.arameet.ir in their Chrome, walked every screen, opened every
+  popover and menu, created a meeting, walked its three stages, and
+  deleted the test row. **The lesson is the method: a screenshot shows
+  a state; the product shows the STATES** — the assignee popover's
+  member search, the deadline picker's presets + Jalali grid, the
+  column header's rename-in-place/tone/delete affordances, the ⋮ menus,
+  the «تاریخچه ۲» tab, and the empty state that reads «صوت جلسه ضبط
+  شد، ولی گفتاری تشخیص داده نشد» — none of which any screenshot
+  carried. What that walk changed: 0147 (labels as ORG ENTITIES with a
+  closed tone set — a text[] cannot express a rename that reaches every
+  card, and two rows would disagree about a colour; an append-only
+  task_event log, because "who moved this and when" is exactly what the
+  current row has forgotten; eight column tones), the new-task dialog
+  field for field, the detail modal with its live meta rail, the
+  calendar with ماه/هفته/روز + امروز + range + «بدون مهلت» drawer, the
+  list grouped by deadline bucket, the meetings list with its two
+  filter axes, the live stage's layout (mine was MIRRORED), and the
+  meeting-scoped assistant chat (our own assistant with the record
+  attached — not a link out). Two honest declines recorded rather than
+  faked: their video room and presentation modes (we run no
+  conferencing, and the recorder stops the shared surface's video track
+  the moment it has the audio — a chip for either could only ever show
+  an absence), and their per-row DELETE (0145 keeps a meeting
+  undeletable by every app role, so ours archives). Attachments remain
+  the one observed feature not built — it needs its own storage
+  vertical, and a dropzone that does nothing is the thing this repo
+  refuses to ship. The confirm guard earned its keep again: retiring a
+  label strips it from every card, so it asks first.
