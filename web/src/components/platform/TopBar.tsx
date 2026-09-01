@@ -3,7 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocale } from "next-intl";
 import { usePathname, useRouter } from "@/i18n/routing";
+import { useTranslations } from "next-intl";
 import type { User } from "@/api/types";
+import { IconMoon, IconSearch, IconSun } from "@/components/icons";
+import { storeTheme } from "@/lib/theme";
+import { useTheme } from "@/lib/useTheme";
 import { AvatarMenu } from "./AvatarMenu";
 import { formatDate } from "@/lib/format";
 import { useTimezonePreference } from "@/lib/usePreferences";
@@ -58,6 +62,8 @@ function Clock() {
 
 export function TopBar({ me, isPlatformRoot = false }: { me: User | null; isPlatformRoot?: boolean }) {
   const locale = useLocale();
+  const tPlatform = useTranslations("platform");
+  const theme = useTheme();
   const router = useRouter();
   const pathname = usePathname();
   const anchorCleanupRef = useRef<() => void>(() => undefined);
@@ -116,8 +122,45 @@ export function TopBar({ me, isPlatformRoot = false }: { me: User | null; isPlat
           />
           <Clock />
 
-          {/* Search LEFT the top bar (user directive, 2026-08-18) — it lives
-              in the left rail with the other destinations now. */}
+          {/*
+            GLOBAL SEARCH IS BACK IN THE BAR (user directive, 2026-08-31,
+            the reference adoption): the reference keeps one search box in
+            its toolbar, and it reads as the product's front door. Submit
+            goes to the search surface with the query — the box is a door,
+            not a second implementation of search.
+          */}
+          <form
+            role="search"
+            className="hidden min-w-0 items-center gap-2 rounded-xl border border-border bg-surface px-3 lg:flex"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const q = new FormData(e.currentTarget).get("q");
+              if (typeof q === "string" && q.trim() !== "") {
+                router.push({ pathname: "/echo/search", query: { q: q.trim() } });
+              }
+            }}
+          >
+            <IconSearch width={14} height={14} className="shrink-0 text-fg-subtle" />
+            <input
+              name="q"
+              className="h-9 w-44 min-w-0 bg-transparent text-xs text-fg outline-none placeholder:text-fg-subtle"
+              placeholder={tPlatform("searchEverything")}
+              aria-label={tPlatform("searchEverything")}
+            />
+          </form>
+
+          {/* the theme, one press away (the reference keeps it in the bar) —
+              the SAME store Settings·General writes, never a second state */}
+          <button
+            type="button"
+            onClick={() => storeTheme(theme === "dark" ? "light" : "dark")}
+            title={tPlatform("themeToggle")}
+            aria-label={tPlatform("themeToggle")}
+            className="tap hidden h-9 w-9 shrink-0 place-items-center rounded-xl border border-border bg-surface text-fg-muted transition-colors hover:text-fg md:grid"
+          >
+            {theme === "dark" ? <IconSun width={16} height={16} /> : <IconMoon width={16} height={16} />}
+          </button>
+
           <div className="hidden overflow-hidden rounded-lg border border-border md:flex">
             {(["fa", "en"] as const).map((l) => (
               <button

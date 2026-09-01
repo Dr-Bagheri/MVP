@@ -4,10 +4,13 @@ import { TopBar } from "./TopBar";
 import { getPresenceAnchorSnapshot } from "./presenceAnchor";
 import { getRecorderAnchorSnapshot } from "./recorderAnchor";
 
-vi.mock("next-intl", () => ({ useLocale: () => "en" }));
+vi.mock("next-intl", () => ({
+  useLocale: () => "en",
+  useTranslations: () => (k: string) => k,
+}));
 vi.mock("@/i18n/routing", () => ({
   usePathname: () => "/echo",
-  useRouter: () => ({ replace: vi.fn() }),
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
 }));
 vi.mock("@/lib/usePreferences", () => ({ useTimezonePreference: () => "auto" }));
 vi.mock("@/lib/format", () => ({ formatDate: () => "22 Aug 2026" }));

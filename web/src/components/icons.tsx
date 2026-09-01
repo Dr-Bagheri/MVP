@@ -106,6 +106,13 @@ export const IconPencil = (p: SVGProps<SVGSVGElement>) => (
  * into the board. The map-marker teardrop was the other candidate and is the
  * wrong idea entirely — that one says "a place", this one says "held down".
  */
+/** the theme pair: a sun for the light choice, a crescent for the dark */
+export const IconSun = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><circle cx="12" cy="12" r="4.2" /><path d="M12 2.5v2.4M12 19.1v2.4M2.5 12h2.4M19.1 12h2.4M5 5l1.7 1.7M17.3 17.3 19 19M19 5l-1.7 1.7M6.7 17.3 5 19" /></svg>
+);
+export const IconMoon = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z" /></svg>
+);
 export const IconPin = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><path d="M9 3.5h6l-.8 5.2 3.1 2.6a1 1 0 0 1-.6 1.7H7.3a1 1 0 0 1-.6-1.7l3.1-2.6L9 3.5Z" /><path d="M12 13v7.5" /></svg>
 );
@@ -386,6 +393,8 @@ export const ICONS = {
   "pencil": IconPencil,
   "people3": IconPeople3,
   "pin": IconPin,
+  "sun": IconSun,
+  "moon": IconMoon,
   "play": IconPlay,
   "plug": IconPlug,
   "plus": IconPlus,

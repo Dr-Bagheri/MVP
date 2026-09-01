@@ -960,7 +960,14 @@
     "speak": "Read aloud",
     "thinking": "Thinking…",
     "record": "Record",
-    "startRecording": "Start recording a call"
+    "startRecording": "Start recording a call",
+    "newRecord": "New record",
+    "workspace": "Workspace",
+    "roleOwner": "Owner",
+    "roleAdmin": "Admin",
+    "roleMember": "Member",
+    "searchEverything": "Search records, conversations, tasks…",
+    "themeToggle": "Switch theme"
   },
   "platformRoot": {
     "menu": "Platform control",

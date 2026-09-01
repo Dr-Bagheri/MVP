@@ -960,7 +960,14 @@
     "speak": "خواندن با صدا",
     "thinking": "در حال فکر کردن…",
     "record": "ضبط",
-    "startRecording": "شروع ضبط یک تماس"
+    "startRecording": "شروع ضبط یک تماس",
+    "newRecord": "رکورد جدید",
+    "workspace": "فضای کاری",
+    "roleOwner": "مالک",
+    "roleAdmin": "مدیر",
+    "roleMember": "عضو",
+    "searchEverything": "جستجو در رکوردها، گفتگوها، تسک‌ها…",
+    "themeToggle": "تغییر پوسته"
   },
   "platformRoot": {
     "menu": "کنترل پلتفرم",
