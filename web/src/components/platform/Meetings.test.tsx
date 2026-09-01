@@ -27,6 +27,7 @@ vi.mock("@/i18n/routing", () => ({
 }));
 
 const pushSpy = vi.fn();
+const updateSpy = vi.fn();
 
 function meeting(over: Partial<MeetingRecord>): MeetingRecord {
   return {
@@ -47,7 +48,11 @@ vi.mock("@/api/client", () => ({
   BffError: class BffError extends Error {},
   api: {
     meetings: async (opts?: { archived?: boolean }) => (opts?.archived === true ? [] : LIST),
-    updateMeeting: vi.fn(),
+    updateMeeting: (id: string, body: Record<string, unknown>) => {
+      updateSpy(id, body);
+      return Promise.resolve(meeting({ id, ...body }));
+    },
+    deleteMeeting: vi.fn(async () => undefined),
     createMeeting: async (input: Record<string, unknown>) => {
       created.push(input);
       return meeting({ id: "m-new" });
@@ -61,6 +66,7 @@ beforeEach(() => {
   LIST = [];
   created.length = 0;
   pushSpy.mockClear();
+  updateSpy.mockClear();
 });
 
 describe("Meetings", () => {
@@ -124,6 +130,40 @@ describe("Meetings", () => {
     expect(String(body.scheduled_at)).toMatch(/Z$/);
     // and the flow walks onto the created meeting's page
     await waitFor(() => expect(pushSpy).toHaveBeenCalledWith("/meetings/m-new"));
+  });
+
+  /* THE ROW MENU's topic mover, walked out of the reference product: the
+     current topic carries the check, «بدون موضوع» is one of the choices
+     rather than the absence of one, and picking the topic a meeting is
+     ALREADY in writes nothing — a no-op patch would put an untrue line in
+     the audit trail and move a row that never moved. */
+  it("the row menu moves a meeting between topics, and writes nothing for the one it is in", async () => {
+    LIST = [
+      meeting({ id: "m-a", title: "جلسهٔ الف", topic: "محصول" }),
+      meeting({ id: "m-b", title: "جلسهٔ ب", topic: "فروش" }),
+    ];
+    render(<Meetings />);
+    await waitFor(() => expect(screen.getByText("جلسهٔ الف")).toBeInTheDocument());
+
+    await userEvent.click(screen.getAllByRole("button", { name: "گزینه‌ها" })[0]!);
+    const menu = screen.getByText("انتقال به موضوع").parentElement!;
+    // every topic in the list, plus «بدون موضوع» as a real choice
+    expect(within(menu).getByText("بدون موضوع")).toBeInTheDocument();
+    expect(within(menu).getByText("فروش")).toBeInTheDocument();
+
+    // its OWN topic is the checked one, and choosing it writes nothing
+    await userEvent.click(within(menu).getByText("محصول"));
+    expect(updateSpy).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getAllByRole("button", { name: "گزینه‌ها" })[0]!);
+    await userEvent.click(within(screen.getByText("انتقال به موضوع").parentElement!).getByText("فروش"));
+    expect(updateSpy).toHaveBeenCalledWith("m-a", { topic: "فروش" });
+
+    // and «بدون موضوع» clears it — null, never the empty string
+    updateSpy.mockClear();
+    await userEvent.click(screen.getAllByRole("button", { name: "گزینه‌ها" })[0]!);
+    await userEvent.click(within(screen.getByText("انتقال به موضوع").parentElement!).getByText("بدون موضوع"));
+    expect(updateSpy).toHaveBeenCalledWith("m-a", { topic: null });
   });
 
   it("an empty list names its state", async () => {

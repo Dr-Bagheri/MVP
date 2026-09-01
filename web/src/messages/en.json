@@ -2857,12 +2857,12 @@
     "copyRoom": "Copy the link",
     "roomRecordNote": "Join from this device and share the tab with its sound, so the meeting is recorded here too.",
     "roomFailed": "The room could not be made — check the Google connection on Integrations.",
-    "roomOnStage": "The video room is made on the live stage.",
     "loadPdf": "Load a PDF",
     "noSlides": "No presentation loaded — pick a PDF to show it here.",
     "slidesLocalNote": "Shown on this device",
     "pdfUnsupported": "This browser cannot display the PDF inline.",
     "deleteMeetingTitle": "Delete “{title}”?",
-    "deleteMeetingBody": "The meeting and its plan go for good. The recording it produced, if any, stays — it is a separate record with its own history."
+    "deleteMeetingBody": "The meeting and its plan go for good. The recording it produced, if any, stays — it is a separate record with its own history.",
+    "moveToTopic": "Move to topic"
   }
 }

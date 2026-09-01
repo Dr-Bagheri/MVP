@@ -8,8 +8,8 @@ import { api } from "@/api/client";
 import type { MeetingAgendaItem, MeetingMode, MeetingRecord } from "@/api/types";
 import { Overlay } from "./Overlay";
 import {
-  IconArchive, IconCalendar, IconChevronRight, IconClose, IconDots, IconFolder,
-  IconMic, IconPlus, IconTrash, IconUpload, IconVideo,
+  IconArchive, IconCalendar, IconCheck, IconChevronRight, IconClose, IconDots,
+  IconFolder, IconMic, IconPlus, IconTrash, IconUpload, IconVideo,
 } from "@/components/icons";
 import { ConfirmDialog } from "@/components/rowActions";
 import { asciiDigits, dayKeyOf, digits, formatDate, formatTime, monthGridAt } from "@/lib/format";
@@ -233,7 +233,33 @@ export function Meetings() {
               </div>
 
               {menu === m.id ? (
-                <div className="absolute end-2 top-14 z-40 flex w-48 flex-col rounded-xl border border-border bg-surface p-1 shadow-island">
+                <div className="absolute end-2 top-14 z-40 flex w-52 flex-col rounded-xl border border-border bg-surface p-1 shadow-island">
+                  {/* MOVE TO TOPIC heads the menu, as it does in the product
+                      this was walked from: the current topic carries a check,
+                      so the menu says where the meeting IS as well as where it
+                      can go — «بدون موضوع» is one of the choices, not the
+                      absence of one */}
+                  <p className="px-2.5 pb-1 pt-1.5 text-[10px] font-medium text-fg-subtle">{t("moveToTopic")}</p>
+                  {[null, ...topics].map((name) => (
+                    <button
+                      key={name ?? "__none"}
+                      type="button"
+                      onClick={() => {
+                        setMenu(null);
+                        if ((m.topic ?? null) === name) return;
+                        void api.updateMeeting(m.id, { topic: name }).then(load).catch(refusal);
+                      }}
+                      className={`tap flex h-9 items-center gap-2 rounded-lg px-2.5 text-start text-xs hover:bg-surface-2 ${
+                        (m.topic ?? null) === name ? "font-semibold text-accent" : "text-fg"
+                      }`}
+                    >
+                      <span className="w-3 shrink-0" aria-hidden>
+                        {(m.topic ?? null) === name ? <IconCheck width={12} height={12} /> : null}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate">{name ?? t("noTopic")}</span>
+                    </button>
+                  ))}
+                  <span className="my-1 h-px bg-border" aria-hidden />
                   <button
                     type="button"
                     onClick={() => {

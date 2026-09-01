@@ -33,6 +33,7 @@ vi.mock("./meeting/Whiteboard", () => ({
 }));
 
 const startSpy = vi.fn(async (_opts: unknown) => undefined);
+const roomSpy = vi.fn(async (_id: string) => meeting({ video_url: "https://meet.google.com/abc-defg-hij", video_provider: "google_meet" }));
 /* useSyncExternalStore REQUIRES a stable snapshot reference — a getter that
    builds a fresh object every call re-renders forever (the real engine's
    snapshot is a module-level constant between changes for the same reason) */
@@ -83,6 +84,7 @@ vi.mock("@/api/client", () => ({
     getTranscript: async () => [],
     getSpeakers: async () => [],
     getCallAudio: async () => null,
+    createMeetingRoom: (id: string) => roomSpy(id),
     createTask: vi.fn(), addCallNote: vi.fn(), deleteCallNote: vi.fn(),
   },
 }));
@@ -93,6 +95,7 @@ beforeEach(() => {
   MEETING = meeting({});
   CALL = null;
   startSpy.mockClear();
+  roomSpy.mockClear();
 });
 
 /** one processing step's row, found by its label */
@@ -170,6 +173,37 @@ describe("MeetingPage", () => {
     const opts = startSpy.mock.calls[0]![0] as unknown as Record<string, unknown>;
     expect(opts.source).toBe("system");
     expect(opts.title).toBe("جلسهٔ آنلاین");
+  });
+
+  /* THE ROOM is made where the link is looked for. It writes an event to
+     someone's calendar, so nothing mints it in the background: the button
+     is the whole mechanism, and the page adopts the meeting the server
+     RETURNS rather than guessing what it now holds. */
+  it("the plan mints the video room on a press, and adopts the server's answer", async () => {
+    MEETING = meeting({ call_id: null, mode: "online" });
+    render(<MeetingPage id="m-1" />);
+    await waitFor(() => expect(screen.getByText("مشخصات")).toBeInTheDocument());
+    // nothing has been minted just by looking at the page
+    expect(roomSpy).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole("button", { name: /ساخت اتاق ویدیویی/ }));
+    await waitFor(() => expect(roomSpy).toHaveBeenCalledWith("m-1"));
+    // the returned link is on screen, and the mint offer is gone
+    await waitFor(() =>
+      expect(screen.getByText("https://meet.google.com/abc-defg-hij")).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: /ساخت اتاق ویدیویی/ })).toBeNull();
+  });
+
+  it("a refused mint is named, and leaves the offer standing", async () => {
+    MEETING = meeting({ call_id: null, mode: "online" });
+    roomSpy.mockImplementationOnce(async () => { throw new Error("no connector"); });
+    render(<MeetingPage id="m-1" />);
+    await waitFor(() => expect(screen.getByText("مشخصات")).toBeInTheDocument());
+
+    await userEvent.click(screen.getByRole("button", { name: /ساخت اتاق ویدیویی/ }));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/اتصال گوگل/));
+    // the button is still there to press again — a failure is not a dead end
+    expect(screen.getByRole("button", { name: /ساخت اتاق ویدیویی/ })).toBeInTheDocument();
   });
 
   it("a recorded meeting opens on the post stage", async () => {

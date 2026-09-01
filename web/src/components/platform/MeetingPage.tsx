@@ -47,6 +47,9 @@ import { digits, formatClock, formatDate, formatDuration, formatTime, personName
  */
 
 type Stage = "pre" | "hold" | "post";
+
+/** the meeting's two columns — see the note at PreStage's return */
+const MEETING_COLUMNS = "lg:grid-cols-[1.5fr_1fr]";
 type PostTab = "review" | "tasks" | "files" | "assistant" | "notes" | "minutes";
 
 export function MeetingPage({ id }: { id: string }) {
@@ -341,7 +344,7 @@ export function MeetingPage({ id }: { id: string }) {
       ) : null}
 
       {active === "pre" ? (
-        <PreStage meeting={meeting} onPatch={patch} locale={locale} />
+        <PreStage meeting={meeting} onPatch={patch} locale={locale} onChanged={(m) => setMeeting(m)} />
       ) : null}
       {active === "hold" ? (
         <HoldStage
@@ -370,17 +373,24 @@ export function MeetingPage({ id }: { id: string }) {
 }
 
 /* ═══ پیش از جلسه — the reference's plan cards ═══════════════════════════ */
-function PreStage({ meeting, onPatch, locale }: {
+function PreStage({ meeting, onPatch, locale, onChanged }: {
   meeting: MeetingRecord;
   onPatch: (body: Record<string, unknown>) => void;
   locale: string;
+  onChanged: (m: MeetingRecord) => void;
 }) {
   const t = useTranslations("meetings");
   const [editing, setEditing] = useState(false);
+  const [minting, setMinting] = useState(false);
+  const [roomError, setRoomError] = useState<string | null>(null);
   const totalMinutes = meeting.agenda.reduce((sum, item) => sum + (item.minutes ?? 0), 0);
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+    /* ONE column rhythm across the whole meeting — the plan and the stage
+       share `MEETING_COLUMNS`, so the rail does not change width under the
+       person as they walk from step 1 to step 2. The ratio is the reference
+       product's own, measured on its pre page: 604.8 / 403.2 = 3:2. */
+    <div className={`grid gap-4 ${MEETING_COLUMNS}`}>
       <div className="space-y-4">
         {/* مشخصات جلسه */}
         <section className="tile p-4" aria-label={t("detailsTitle")}>
@@ -460,9 +470,31 @@ function PreStage({ meeting, onPatch, locale }: {
                 </button>
               </div>
             ) : (
-              <p className="mt-2.5 rounded-xl border border-dashed border-border px-3 py-2 text-center text-[11px] text-fg-subtle">
-                {t("roomOnStage")}
-              </p>
+              /* the room is made HERE, where the link is looked for — the
+                 stage offers the same button, and neither makes one behind
+                 the person's back: this writes an event to their calendar */
+              <div className="mt-2.5 space-y-2">
+                <button
+                  type="button"
+                  disabled={minting}
+                  onClick={() => {
+                    setMinting(true);
+                    setRoomError(null);
+                    void api.createMeetingRoom(meeting.id)
+                      .then((m) => { setMinting(false); onChanged(m); })
+                      .catch(() => { setMinting(false); setRoomError(t("roomFailed")); });
+                  }}
+                  className="tap flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-accent text-xs font-semibold text-on-accent disabled:opacity-60"
+                >
+                  <IconPlus width={12} height={12} />
+                  {minting ? t("roomMinting") : t("createRoom")}
+                </button>
+                {roomError !== null ? (
+                  <p role="alert" className="text-[11px] leading-5 text-danger">{roomError}</p>
+                ) : (
+                  <p className="text-[11px] leading-5 text-fg-subtle">{t("roomNote")}</p>
+                )}
+              </div>
             )
           ) : null}
         </section>
@@ -605,7 +637,7 @@ function HoldStage({ meeting, me, locale, recordingLive, recordedMs, onChanged }
   };
 
   return (
-    <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[1fr_280px]">
+    <div className={`grid min-h-0 flex-1 gap-4 ${MEETING_COLUMNS}`}>
       {/* the stage — the reference puts the media on the START side */}
       <MeetingStage
         meeting={meeting}
