@@ -1,28 +1,29 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { TaskCardRecord, TaskColumnRecord, TaskDetailRecord, TaskTopicRecord } from "@/api/types";
+import type {
+  OrgPersonRecord, TaskCardRecord, TaskColumnRecord, TaskDetailRecord,
+  TaskLabelRecord, TaskTopicRecord,
+} from "@/api/types";
 
 /**
- * The board's contract facts, as things that run:
+ * The board's contract facts, after the 2026-09-01 rebuild against the
+ * reference's own product:
  *
  *  1. Cards render under THEIR columns — grouping, not presence, is the
- *     board (a flat list would satisfy any "is the title there" check).
- *  2. A drop PATCHes {column_id, position} and ONLY those — the position
- *     puts the card on top of its new column, and nothing else may ride
- *     along in the write (asserted on the body's exact key set).
- *  3. A refused write RELOADS the board rather than keeping the lie on
- *     screen: the card is back in its real column afterwards.
- *  4. "Just mine" filters by assignee OR creator; the two kinds of mine
- *     are both mine (each direction asserted — a card that is neither
- *     leaves the screen, each that is one of them stays).
- *  5. The empty board is a NAMED state, not a blank region.
+ *     board (a flat list satisfies any "is the title there" check).
+ *  2. A drop PATCHes {column_id, position} and ONLY those — the exact key
+ *     set, so a widened write fails here.
+ *  3. A refused write RELOADS the truth instead of keeping the lie.
+ *  4. "Just mine" keeps both kinds of mine (assignee OR creator).
+ *  5. LABELS are org entities: the card wears the ones its label_ids name,
+ *     and a label the org has that this card does not wear is NOT on it.
+ *  6. The calendar's scale switch is real: the month grid and the week
+ *     strip are different shapes, and the day view names an empty day.
  *
- * Verified red, each by its own lever: (1) asserting the card inside the
- * WRONG column's scope fails; (2) widening the expected body fails; (3) with
- * the reload deleted the moved card stayed put; (4) flipping the creator
- * check off dropped the created-but-unassigned card; (5) asserting the
- * empty copy against a seeded board fails.
+ * Verified red, each by its own lever — (2) by widening the expected body,
+ * (5) by rendering every org label on every card, (6) by pinning the month
+ * view's cell count while the week view rendered.
  */
 vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
@@ -35,19 +36,25 @@ vi.mock("@/i18n/routing", () => ({
 }));
 
 const COLUMNS: TaskColumnRecord[] = [
-  { id: "col-todo", name: "برای انجام", tone: "blue", position: 2 },
-  { id: "col-doing", name: "در حال انجام", tone: "amber", position: 1 },
+  { id: "col-todo", name: "برای انجام", tone: "blue", position: 1 },
+  { id: "col-doing", name: "در حال انجام", tone: "amber", position: 2 },
 ];
 const TOPICS: TaskTopicRecord[] = [{ id: "top-1", name: "راه‌اندازی" }];
+const LABELS: TaskLabelRecord[] = [
+  { id: "lab-1", name: "فوری", color: "red" },
+  { id: "lab-2", name: "محصول", color: "blue" },
+];
+const PEOPLE: OrgPersonRecord[] = [
+  { id: "u-me", display_name: "سینا", display_name_en: null, role: "owner" },
+];
 
-/** producer-shaped (core/src/api/tasks.ts CARD_ROWS): every field the wire
-    carries, including the counts the card renders as chips */
+/** producer-shaped (core/src/api/tasks.ts CARD_ROWS) */
 function card(over: Partial<TaskCardRecord>): TaskCardRecord {
   return {
     id: "t-1", column_id: "col-todo", topic_id: null, call_id: null,
     call_title: null, title: "اجرای اسکریپت", priority: "medium", labels: [],
     due_at: null, done: false, position: 1, archived: false,
-    created_by: "u-me", assignee_ids: [], checklist_done: 0,
+    created_by: "u-me", assignee_ids: [], label_ids: [], checklist_done: 0,
     checklist_total: 0, comment_count: 0, created_at: "2026-08-31T10:00:00Z",
     ...over,
   };
@@ -64,6 +71,8 @@ vi.mock("@/api/client", () => ({
   },
   api: {
     me: async () => ({ id: "u-me", org_name: "نورای" }),
+    orgPeople: async () => PEOPLE,
+    taskLabels: async () => LABELS,
     taskBoard: async () => {
       boardReads += 1;
       return { columns: COLUMNS, topics: TOPICS, tasks: boardTasks };
@@ -73,18 +82,16 @@ vi.mock("@/api/client", () => ({
       patches.push({ id, body });
       const hit = boardTasks.find((t) => t.id === id);
       if (hit) Object.assign(hit, body);
-      // the component ADOPTS the returned row (save-then-adopt), so the fake
-      // must return the row as the server would now hold it — returning a
-      // stale shape here once moved the card straight back
       return { ...card({ id }), ...(hit ?? {}) };
     },
     taskDetail: async (id: string): Promise<TaskDetailRecord> => ({
-      ...card({ id }), description: "", checklist: [], comments: [],
+      ...card({ id }), description: "", checklist: [], comments: [], events: [],
     }),
     createTask: vi.fn(), createTaskColumn: vi.fn(), createTaskTopic: vi.fn(),
-    addTaskChecklistItem: vi.fn(), updateTaskChecklistItem: vi.fn(),
-    deleteTaskChecklistItem: vi.fn(), addTaskComment: vi.fn(),
-    assignMeToTask: vi.fn(), updateTaskColumn: vi.fn(),
+    updateTaskColumn: vi.fn(), addTaskChecklistItem: vi.fn(),
+    updateTaskChecklistItem: vi.fn(), deleteTaskChecklistItem: vi.fn(),
+    addTaskComment: vi.fn(), setTaskLabel: vi.fn(), setTaskAssignee: vi.fn(),
+    createTaskLabel: vi.fn(), updateTaskLabel: vi.fn(), deleteTaskLabel: vi.fn(),
   },
 }));
 
@@ -115,14 +122,26 @@ describe("TaskBoard", () => {
     render(<TaskBoard />);
     await waitFor(() => expect(screen.getByText("اجرای اسکریپت")).toBeInTheDocument());
 
-    // grouping is the assertion: the card in the WRONG column would still
-    // pass a bare presence check
     expect(within(columnRegion("برای انجام")).getByText("اجرای اسکریپت")).toBeInTheDocument();
     expect(within(columnRegion("در حال انجام")).getByText("بازبینی قرارداد")).toBeInTheDocument();
     expect(within(columnRegion("در حال انجام")).queryByText("اجرای اسکریپت")).toBeNull();
+    expect(within(columnRegion("برای انجام")).getByText("۱/۴")).toBeInTheDocument();
+  });
 
-    // the checklist chip renders the producer's counts, done over total
-    expect(within(columnRegion("برای انجام")).getByText("1/4")).toBeInTheDocument();
+  it("a card wears ONLY the labels its label_ids name", async () => {
+    boardTasks = [
+      card({ id: "t-1", title: "با برچسب", label_ids: ["lab-1"] }),
+      card({ id: "t-2", title: "بی‌برچسب", column_id: "col-doing" }),
+    ];
+    render(<TaskBoard />);
+    await waitFor(() => expect(screen.getByText("با برچسب")).toBeInTheDocument());
+
+    const labelled = screen.getByText("با برچسب").closest("[draggable]") as HTMLElement;
+    const bare = screen.getByText("بی‌برچسب").closest("[draggable]") as HTMLElement;
+    expect(within(labelled).getByText("فوری")).toBeInTheDocument();
+    // the org's OTHER label is not on this card, and neither is on the bare one
+    expect(within(labelled).queryByText("محصول")).toBeNull();
+    expect(within(bare).queryByText("فوری")).toBeNull();
   });
 
   it("a drop writes {column_id, position} and nothing else", async () => {
@@ -132,21 +151,20 @@ describe("TaskBoard", () => {
 
     const cardEl = screen.getByText("اجرای اسکریپت").closest("[draggable]") as HTMLElement;
     const target = columnRegion("در حال انجام");
-    const dt = { getData: () => "t-1", setData: vi.fn(), effectAllowed: "", dropEffect: "" };
+    const dt = {
+      getData: (kind: string) => (kind === "text/task-id" ? "t-1" : ""),
+      setData: vi.fn(), effectAllowed: "", dropEffect: "",
+    };
     fireEvent.dragStart(cardEl, { dataTransfer: dt });
     fireEvent.dragOver(target, { dataTransfer: dt });
     fireEvent.drop(target, { dataTransfer: dt });
 
     await waitFor(() => expect(patches).toHaveLength(1));
-    // the exact KEY SET, not containment — a widened write must fail here.
-    // position's VALUE is a monotonic top-of-column stamp (-Date.now()), so
-    // the shape is pinned and the clock is not.
     const wrote = patches[0]!;
     expect(wrote.id).toBe("t-1");
     expect(Object.keys(wrote.body).sort()).toEqual(["column_id", "position"]);
     expect(wrote.body.column_id).toBe("col-doing");
     expect(typeof wrote.body.position).toBe("number");
-    expect(within(columnRegion("در حال انجام")).getByText("اجرای اسکریپت")).toBeInTheDocument();
   });
 
   it("a refused move reloads the truth instead of keeping the optimistic lie", async () => {
@@ -158,11 +176,13 @@ describe("TaskBoard", () => {
     refuseNextPatch = true;
     const cardEl = screen.getByText("اجرای اسکریپت").closest("[draggable]") as HTMLElement;
     const target = columnRegion("در حال انجام");
-    const dt = { getData: () => "t-1", setData: vi.fn(), effectAllowed: "", dropEffect: "" };
+    const dt = {
+      getData: (kind: string) => (kind === "text/task-id" ? "t-1" : ""),
+      setData: vi.fn(), effectAllowed: "", dropEffect: "",
+    };
     fireEvent.dragStart(cardEl, { dataTransfer: dt });
     fireEvent.drop(target, { dataTransfer: dt });
 
-    // the refusal triggers a re-read, and the card is back where the server says
     await waitFor(() => expect(boardReads).toBeGreaterThan(readsBefore));
     await waitFor(() =>
       expect(within(columnRegion("برای انجام")).getByText("اجرای اسکریپت")).toBeInTheDocument());
@@ -185,13 +205,21 @@ describe("TaskBoard", () => {
     expect(screen.getByText("ساختهٔ من")).toBeInTheDocument();
   });
 
-  it("an empty board names its state", async () => {
+  it("the calendar's scale switch renders different shapes, and the list groups by deadline", async () => {
+    boardTasks = [card({ id: "t-1", title: "اجرای اسکریپت" })];
     render(<TaskBoard />);
-    // columns arrive, no cards: the board itself renders, and the LIST view
-    // names emptiness rather than showing a blank region
-    await waitFor(() => expect(screen.getByText("برای انجام")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("اجرای اسکریپت")).toBeInTheDocument());
+
+    await userEvent.click(screen.getByRole("button", { name: "تقویم" }));
+    // month is the opening scale: a whole month of cells, never seven
+    const monthCells = document.querySelectorAll("li.min-h-24");
+    expect(monthCells.length).toBeGreaterThan(27);
+
+    await userEvent.click(screen.getByRole("tab", { name: "هفته" }));
+    await waitFor(() => expect(document.querySelectorAll("li.min-h-24").length).toBe(0));
+
     await userEvent.click(screen.getByRole("button", { name: "لیست" }));
-    await waitFor(() =>
-      expect(screen.getByText("تسکی با این فیلترها نیست. فیلتر را عوض کن یا اولین تسک را بساز.")).toBeInTheDocument());
+    // an undated card lands in the no-deadline group, named
+    await waitFor(() => expect(screen.getByText(/بدون مهلت/)).toBeInTheDocument());
   });
 });

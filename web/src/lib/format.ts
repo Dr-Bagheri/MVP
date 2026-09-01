@@ -321,6 +321,8 @@ function activeParts(key: number, locale: string): { y: number; m: number; d: nu
 export interface MonthCell {
   /** the day key this square stands for — matches `dayKeyOf` on an event */
   key: number;
+  /** the rest day: Friday under Jalali, Sat+Sun under Gregorian */
+  weekend: boolean;
   /** the day number, in the reader's digits */
   label: string;
   /** a day of the month being shown, rather than the padding either side */
@@ -352,6 +354,27 @@ const GREGORIAN_WEEKDAYS_FULL = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"
  * the Gregorian one — a Persian calendar whose first column is Sunday is
  * wrong in the way that makes every date in it land one column off.
  */
+/**
+ * The month `now` falls in, shifted by `offsetMonths` — the month grid the
+ * calendar view and the date picker both navigate. Weekend is carried per
+ * cell (Friday under Jalali, Sat+Sun under Gregorian), because a grid that
+ * cannot say which day is the rest day cannot tint one.
+ */
+export function monthGridAt(now: Date, locale: string, offsetMonths: number): MonthGrid {
+  if (offsetMonths === 0) return monthGrid(now, locale);
+  /* walk month by month through the ACTIVE calendar: adding 30 days is how
+     a Jalali month of 31 gets skipped */
+  let cursor = now;
+  const step = offsetMonths > 0 ? 1 : -1;
+  for (let i = 0; i < Math.abs(offsetMonths); i += 1) {
+    const grid = monthGrid(cursor, locale);
+    const inMonth = grid.cells.filter((c) => c.inMonth);
+    const edge = step > 0 ? inMonth[inMonth.length - 1]! : inMonth[0]!;
+    cursor = new Date(edge.key + step * DAY_MS);
+  }
+  return monthGrid(cursor, locale);
+}
+
 export function monthGrid(now: Date, locale: string): MonthGrid {
   const jalali = resolvedCalendar(locale) !== "gregorian";
   const todayKey = dayKeyOf(now);
@@ -374,8 +397,10 @@ export function monthGrid(now: Date, locale: string): MonthGrid {
     /* stop at the end of the week the month ends in — a grid that stopped on
        the last day would leave a ragged final row */
     if (!inMonth && i > lead && cells.length % 7 === 0) break;
+    const utcDay = new Date(key).getUTCDay();
     cells.push({
       key,
+      weekend: jalali ? utcDay === 5 : utcDay === 0 || utcDay === 6,
       label: digits(parts.d, locale),
       inMonth,
       today: key === todayKey,

@@ -9,6 +9,7 @@
 // notes at their former sites.)
 import type {
   MeetingAgendaItem, MeetingMode, MeetingRecord,
+  OrgPersonRecord, TaskColumnTone, TaskLabelColor, TaskLabelRecord,
   TaskCardRecord, TaskColumnRecord, TaskTopicRecord, TaskDetailRecord,
   TaskChecklistItemRecord, TaskCommentRecord, TaskPriority,
   AuthoredWorkflow,
@@ -1403,11 +1404,46 @@ export const api = {
       method: "POST", body: JSON.stringify({ name }), headers: { "content-type": "application/json" },
     });
   },
-  async updateTaskColumn(id: string, patch: { name?: string; archived?: boolean }): Promise<void> {
+  async updateTaskColumn(
+    id: string,
+    patch: { name?: string; archived?: boolean; tone?: TaskColumnTone; position?: number },
+  ): Promise<void> {
     await bff<undefined>(`/api/tasks/columns/${encodeURIComponent(id)}`, {
       method: "PATCH", body: JSON.stringify(patch), headers: { "content-type": "application/json" },
     });
   },
+  /* 0147 — labels, the roster, and a card's wearing of a label */
+  async taskLabels(): Promise<TaskLabelRecord[]> {
+    return bff("/api/tasks/labels");
+  },
+  async createTaskLabel(name: string, color: TaskLabelColor): Promise<TaskLabelRecord> {
+    return bff("/api/tasks/labels", {
+      method: "POST", body: JSON.stringify({ name, color }),
+      headers: { "content-type": "application/json" },
+    });
+  },
+  async updateTaskLabel(id: string, patch: { name?: string; color?: TaskLabelColor }): Promise<void> {
+    await bff<null>(`/api/tasks/labels/${encodeURIComponent(id)}`, {
+      method: "PATCH", body: JSON.stringify(patch),
+      headers: { "content-type": "application/json" },
+    });
+  },
+  async deleteTaskLabel(id: string): Promise<void> {
+    await bff<null>(`/api/tasks/labels/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
+  async setTaskLabel(taskId: string, labelId: string, on: boolean): Promise<void> {
+    await bff<null>(`/api/tasks/${encodeURIComponent(taskId)}/labels/${encodeURIComponent(labelId)}`,
+      { method: on ? "PUT" : "DELETE" });
+  },
+  async setTaskAssignee(taskId: string, userId: string, on: boolean): Promise<void> {
+    await bff<null>(`/api/tasks/${encodeURIComponent(taskId)}/assignees/${encodeURIComponent(userId)}`,
+      { method: on ? "PUT" : "DELETE" });
+  },
+  /** the org's people for pickers — names and role, never emails */
+  async orgPeople(): Promise<OrgPersonRecord[]> {
+    return bff("/api/org/people");
+  },
+
   async createTaskTopic(name: string): Promise<TaskTopicRecord> {
     return bff("/api/tasks/topics", {
       method: "POST", body: JSON.stringify({ name }), headers: { "content-type": "application/json" },

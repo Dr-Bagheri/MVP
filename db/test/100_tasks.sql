@@ -154,3 +154,71 @@ select set_config('echo.actor_id', '04000000-0000-4000-8000-000000000004', true)
 select t.ok(
   (select count(*) from echo.task) = 0,
   '0144: a pending member sees no board — active status is part of the wall');
+
+-- ─── 0147: labels, their links, and the append-only history ─────────────
+select set_config('echo.actor_id', '02000000-0000-4000-8000-000000000002', true);
+
+insert into echo.task_label (id, org_id, name, color, created_by)
+values ('a0000000-0000-4000-8000-0000000000b1',
+        '0a000000-0000-4000-8000-00000000000a', 'فوری', 'red',
+        '02000000-0000-4000-8000-000000000002');
+select t.ok(
+  (select color from echo.task_label where id = 'a0000000-0000-4000-8000-0000000000b1') = 'red',
+  '0147: a member creates a label with a tone from the closed set');
+
+select t.denied(
+  $$update echo.task_label set color = '#ff0000'
+     where id = 'a0000000-0000-4000-8000-0000000000b1'$$,
+  '0147: a free colour is refused — the chips stay on the theme''s palette');
+
+insert into echo.task_label_link (task_id, label_id, org_id)
+values ('a0000000-0000-4000-8000-000000000e01',
+        'a0000000-0000-4000-8000-0000000000b1',
+        '0a000000-0000-4000-8000-00000000000a');
+delete from echo.task_label_link
+ where task_id = 'a0000000-0000-4000-8000-000000000e01'
+   and label_id = 'a0000000-0000-4000-8000-0000000000b1';
+select t.ok(
+  not exists (select 1 from echo.task_label_link
+               where task_id = 'a0000000-0000-4000-8000-000000000e01'),
+  '0147: taking a label off a card removes the row — membership, not a flag');
+
+insert into echo.task_event (task_id, org_id, actor_id, kind, detail)
+values ('a0000000-0000-4000-8000-000000000e01',
+        '0a000000-0000-4000-8000-00000000000a',
+        '02000000-0000-4000-8000-000000000002', 'done', '{}'::jsonb);
+select t.ok(
+  (select count(*) from echo.task_event
+    where task_id = 'a0000000-0000-4000-8000-000000000e01') = 1,
+  '0147: the history takes an entry');
+
+select t.denied(
+  $$insert into echo.task_event (task_id, org_id, actor_id, kind)
+    values ('a0000000-0000-4000-8000-000000000e01',
+            '0a000000-0000-4000-8000-00000000000a',
+            '01000000-0000-4000-8000-000000000001', 'done')$$,
+  '0147: a history entry cannot be written in someone else''s name');
+
+select t.denied(
+  $$update echo.task_event set kind = 'undone'
+     where task_id = 'a0000000-0000-4000-8000-000000000e01'$$,
+  '0147: history cannot be edited — an edited history is not a history');
+select t.denied(
+  $$delete from echo.task_event
+     where task_id = 'a0000000-0000-4000-8000-000000000e01'$$,
+  '0147: history cannot be deleted');
+
+select t.denied(
+  $$insert into echo.task_event (task_id, org_id, actor_id, kind)
+    values ('a0000000-0000-4000-8000-000000000e01',
+            '0a000000-0000-4000-8000-00000000000a',
+            '02000000-0000-4000-8000-000000000002', 'exploded')$$,
+  '0147: an unknown history kind is refused — the reader renders a sentence per kind');
+
+-- the wall: another org sees none of it
+select set_config('echo.actor_id', '05000000-0000-4000-8000-000000000005', true);
+select t.ok(
+  (select count(*) from echo.task_label) = 0
+  and (select count(*) from echo.task_event) = 0
+  and (select count(*) from echo.task_label_link) = 0,
+  '0147: another org sees no labels, links or history of org A');

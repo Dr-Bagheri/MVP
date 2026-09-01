@@ -23,8 +23,48 @@ import type { Identity } from "../agent/types.ts";
 export const TASK_PRIORITIES = ["low", "medium", "high", "critical"] as const;
 export type TaskPriority = (typeof TASK_PRIORITIES)[number];
 
-export const TASK_COLUMN_TONES = ["grey", "blue", "amber", "green"] as const;
+/* 0147: the tone set widened when the reference's «تغییر رنگ ستون» and its
+   coloured label chips came across — still CLOSED, because a free colour is
+   how a board stops matching the theme */
+export const TASK_COLUMN_TONES = [
+  "grey", "blue", "green", "amber", "red", "purple", "teal", "pink",
+] as const;
 export type TaskColumnTone = (typeof TASK_COLUMN_TONES)[number];
+
+/** labels wear the same closed set as columns */
+export const TASK_LABEL_COLORS = TASK_COLUMN_TONES;
+export type TaskLabelColor = TaskColumnTone;
+
+export interface TaskLabelRecord {
+  id: string;
+  name: string;
+  color: TaskLabelColor;
+}
+
+/** the history's closed vocabulary — the reader renders a sentence per kind */
+export const TASK_EVENT_KINDS = [
+  "created", "done", "undone", "moved", "renamed", "priority",
+  "due_set", "due_cleared", "assigned", "unassigned",
+  "label_added", "label_removed", "archived", "restored",
+] as const;
+export type TaskEventKind = (typeof TASK_EVENT_KINDS)[number];
+
+export interface TaskEventRecord {
+  id: string;
+  kind: TaskEventKind;
+  actor_id: string;
+  /** codes and NAMES only — never a description's contents */
+  detail: Record<string, string>;
+  created_at: string;
+}
+
+/** the roster an assignee picker needs: names, never emails or statuses */
+export interface OrgPersonRecord {
+  id: string;
+  display_name: string;
+  display_name_en: string | null;
+  role: string;
+}
 
 export interface TaskColumnRecord {
   id: string;
@@ -55,6 +95,7 @@ export interface TaskCardRecord {
   archived: boolean;
   created_by: string;
   assignee_ids: string[];
+  label_ids: string[];
   checklist_done: number;
   checklist_total: number;
   comment_count: number;
@@ -79,6 +120,7 @@ export interface TaskDetailRecord extends TaskCardRecord {
   description: string;
   checklist: TaskChecklistItemRecord[];
   comments: TaskCommentRecord[];
+  events: TaskEventRecord[];
 }
 
 /** the reference's four, seeded lazily in board order */
@@ -96,7 +138,8 @@ const CARD_ROWS = `
          coalesce(ch.total, 0) as checklist_total,
          coalesce(ch.done, 0) as checklist_done,
          coalesce(cm.n, 0) as comment_count,
-         coalesce(asg.ids, '{}') as assignee_ids
+         coalesce(asg.ids, '{}') as assignee_ids,
+         coalesce(lbl.ids, '{}') as label_ids
     from echo.task t
     left join echo.call c on c.id = t.call_id
     left join lateral (
@@ -109,7 +152,11 @@ const CARD_ROWS = `
     left join lateral (
       select array_agg(a.user_id) as ids
         from echo.task_assignee a where a.task_id = t.id
-    ) asg on true`;
+    ) asg on true
+    left join lateral (
+      select array_agg(l.label_id) as ids
+        from echo.task_label_link l where l.task_id = t.id
+    ) lbl on true`;
 
 function toCard(row: Record<string, unknown>): TaskCardRecord {
   return {
@@ -127,6 +174,7 @@ function toCard(row: Record<string, unknown>): TaskCardRecord {
     archived: row.archived_at !== null && row.archived_at !== undefined,
     created_by: String(row.created_by),
     assignee_ids: (row.assignee_ids as string[]) ?? [],
+    label_ids: (row.label_ids as string[]) ?? [],
     checklist_done: Number(row.checklist_done),
     checklist_total: Number(row.checklist_total),
     comment_count: Number(row.comment_count),
@@ -216,8 +264,21 @@ export function createTasksRepo(db: Db) {
         `select id, body, created_by, created_at from echo.task_comment
           where task_id = $1 order by created_at`, [id],
       );
+      const eventRows = await tx.unsafe<Record<string, unknown>>(
+        `select id, kind, actor_id, detail, created_at
+           from echo.task_event where task_id = $1
+          order by created_at desc limit 200`,
+        [id],
+      );
       return {
         ...toCard(rows[0]),
+        events: eventRows.map((r) => ({
+          id: String(r.id),
+          kind: r.kind as TaskEventKind,
+          actor_id: String(r.actor_id),
+          detail: (r.detail as Record<string, string>) ?? {},
+          created_at: iso(r.created_at),
+        })),
         description: String(body[0]?.description ?? ""),
         checklist: checklist.map((i) => ({
           id: String(i.id), label: String(i.label),
@@ -273,6 +334,7 @@ export function createTasksRepo(db: Db) {
         ],
       );
       if (!rows[0]) throw new NotFoundError();
+      await note(tx, String(rows[0].id), "created");
       return String(rows[0].id);
     });
     return detail(identity, id);
@@ -330,10 +392,55 @@ export function createTasksRepo(db: Db) {
     }
     sets.push("updated_at = now()");
     await db.withIdentity(identity, async (tx: SqlTx) => {
+      /* the BEFORE state, read inside the same transaction: a history entry
+         that says "moved" must know which column it left, and the update
+         has already forgotten by the time it returns */
+      const before = await tx.unsafe<Record<string, unknown>>(
+        `select t.title, t.priority, t.done_at, t.archived_at, t.due_at,
+                c.name as column_name
+           from echo.task t
+           left join echo.task_column c on c.id = t.column_id
+          where t.id = $1`,
+        [id],
+      );
+      if (!before[0]) throw new NotFoundError();
       const rows = await tx.unsafe<Record<string, unknown>>(
         `update echo.task set ${sets.join(", ")} where id = $1 returning id`, args,
       );
       if (!rows[0]) throw new NotFoundError();
+
+      const was = before[0];
+      if ("done" in patch && (patch.done === true) !== (was.done_at !== null)) {
+        await note(tx, id, patch.done === true ? "done" : "undone");
+      }
+      if ("archived" in patch && (patch.archived === true) !== (was.archived_at !== null)) {
+        await note(tx, id, patch.archived === true ? "archived" : "restored");
+      }
+      if ("column_id" in patch) {
+        const to = await tx.unsafe<Record<string, unknown>>(
+          `select name from echo.task_column where id = $1`, [patch.column_id],
+        );
+        if (to[0] && String(to[0].name) !== String(was.column_name ?? "")) {
+          await note(tx, id, "moved", {
+            from: String(was.column_name ?? ""), to: String(to[0].name),
+          });
+        }
+      }
+      if ("title" in patch && typeof patch.title === "string"
+          && patch.title.trim() !== String(was.title)) {
+        await note(tx, id, "renamed", { from: String(was.title) });
+      }
+      if ("priority" in patch && String(patch.priority) !== String(was.priority)) {
+        await note(tx, id, "priority", {
+          from: String(was.priority), to: String(patch.priority),
+        });
+      }
+      if ("due_at" in patch) {
+        const now = parseDue(patch.due_at);
+        const then = was.due_at === null || was.due_at === undefined ? null : "set";
+        if (now === null && then !== null) await note(tx, id, "due_cleared");
+        else if (now !== null) await note(tx, id, "due_set", { at: now });
+      }
     });
     return detail(identity, id);
   }
@@ -411,7 +518,7 @@ export function createTasksRepo(db: Db) {
     });
   }
 
-  async function setAssigned(identity: Identity, taskId: string, userId: string, on: boolean): Promise<void> {
+  async function setAssignedWithNote(identity: Identity, taskId: string, userId: string, on: boolean): Promise<void> {
     await db.withIdentity(identity, async (tx: SqlTx) => {
       if (on) {
         await tx.unsafe(
@@ -426,6 +533,13 @@ export function createTasksRepo(db: Db) {
           [taskId, userId],
         );
       }
+      /* the NAME, not the id: a history row a person reads should say who,
+         and an id is not a who. Names only — never an email. */
+      const who = await tx.unsafe<Record<string, unknown>>(
+        `select display_name from echo.app_user where id = $1`, [userId],
+      );
+      await note(tx, taskId, on ? "assigned" : "unassigned",
+        { person: String(who[0]?.display_name ?? "") });
     });
   }
 
@@ -451,7 +565,10 @@ export function createTasksRepo(db: Db) {
     });
   }
 
-  async function updateColumn(identity: Identity, id: string, patch: { name?: unknown; archived?: unknown }): Promise<void> {
+  async function updateColumn(
+    identity: Identity, id: string,
+    patch: { name?: unknown; archived?: unknown; tone?: unknown; position?: unknown },
+  ): Promise<void> {
     const sets: string[] = [];
     const args: unknown[] = [id];
     if ("name" in patch) {
@@ -461,6 +578,22 @@ export function createTasksRepo(db: Db) {
       }
       args.push(text);
       sets.push(`name = $${args.length}`);
+    }
+    if ("tone" in patch) {
+      if (typeof patch.tone !== "string"
+          || !(TASK_COLUMN_TONES as readonly string[]).includes(patch.tone)) {
+        throw new ValidationError("unknown column tone", { code: "task_column_tone_unknown" });
+      }
+      args.push(patch.tone);
+      sets.push(`tone = $${args.length}`);
+    }
+    if ("position" in patch) {
+      const position = Number(patch.position);
+      if (!Number.isFinite(position)) {
+        throw new ValidationError("unreadable position", { code: "task_position_invalid" });
+      }
+      args.push(position);
+      sets.push(`position = $${args.length}`);
     }
     if ("archived" in patch) {
       /* archiving a column strands its cards behind an invisible wall — so
@@ -499,9 +632,169 @@ export function createTasksRepo(db: Db) {
     });
   }
 
+
+  /**
+   * ONE writer for the history (0147). It takes the TX, never a Db: an entry
+   * written in its own transaction can record a move that failed or miss one
+   * that succeeded — a history that disagrees with the board while looking
+   * authoritative. Detail carries codes and NAMES only.
+   */
+  async function note(
+    tx: SqlTx, taskId: string, kind: TaskEventKind, detail: Record<string, string> = {},
+  ): Promise<void> {
+    await tx.unsafe(
+      `insert into echo.task_event (task_id, org_id, actor_id, kind, detail)
+       select $1, t.org_id, echo.actor_id(), $2, $3::text::jsonb
+         from echo.task t where t.id = $1`,
+      [taskId, kind, JSON.stringify(detail)],
+    );
+  }
+
+  /** the org roster for the assignee picker — names and role, nothing else */
+  async function people(identity: Identity): Promise<OrgPersonRecord[]> {
+    return db.withIdentity(identity, async (tx: SqlTx) => {
+      const rows = await tx.unsafe<Record<string, unknown>>(
+        `select id, display_name, display_name_en, role
+           from echo.app_user
+          where org_id = echo.actor_org_id() and status = 'active'
+          order by display_name`,
+      );
+      return rows.map((r) => ({
+        id: String(r.id),
+        display_name: String(r.display_name ?? ""),
+        display_name_en: (r.display_name_en as string | null) ?? null,
+        role: String(r.role ?? "member"),
+      }));
+    });
+  }
+
+  async function labels(identity: Identity): Promise<TaskLabelRecord[]> {
+    return db.withIdentity(identity, async (tx: SqlTx) => {
+      const rows = await tx.unsafe<Record<string, unknown>>(
+        `select id, name, color from echo.task_label order by created_at`,
+      );
+      return rows.map((r) => ({
+        id: String(r.id), name: String(r.name), color: r.color as TaskLabelColor,
+      }));
+    });
+  }
+
+  function parseColor(value: unknown): TaskLabelColor {
+    if (typeof value === "string" && (TASK_LABEL_COLORS as readonly string[]).includes(value)) {
+      return value as TaskLabelColor;
+    }
+    throw new ValidationError("unknown label colour", { code: "task_label_color_unknown" });
+  }
+
+  async function createLabel(identity: Identity, name: unknown, color: unknown): Promise<TaskLabelRecord> {
+    const text = typeof name === "string" ? name.trim() : "";
+    if (text === "" || text.length > 40) {
+      throw new ValidationError("a label needs a name", { code: "task_label_invalid" });
+    }
+    const tone = color === undefined ? "grey" : parseColor(color);
+    return db.withIdentity(identity, async (tx: SqlTx) => {
+      const rows = await tx.unsafe<Record<string, unknown>>(
+        `insert into echo.task_label (org_id, name, color, created_by)
+         values (echo.actor_org_id(), $1, $2, echo.actor_id())
+         returning id, name, color`,
+        [text, tone],
+      );
+      if (!rows[0]) throw new NotFoundError();
+      return {
+        id: String(rows[0].id), name: String(rows[0].name),
+        color: rows[0].color as TaskLabelColor,
+      };
+    });
+  }
+
+  async function updateLabel(
+    identity: Identity, id: string, patch: { name?: unknown; color?: unknown },
+  ): Promise<void> {
+    const sets: string[] = [];
+    const args: unknown[] = [id];
+    if ("name" in patch) {
+      const text = typeof patch.name === "string" ? patch.name.trim() : "";
+      if (text === "" || text.length > 40) {
+        throw new ValidationError("a label needs a name", { code: "task_label_invalid" });
+      }
+      args.push(text);
+      sets.push(`name = $${args.length}`);
+    }
+    if ("color" in patch) {
+      args.push(parseColor(patch.color));
+      sets.push(`color = $${args.length}`);
+    }
+    if (sets.length === 0) {
+      throw new ValidationError("nothing to change", { code: "task_patch_empty" });
+    }
+    await db.withIdentity(identity, async (tx: SqlTx) => {
+      const rows = await tx.unsafe<Record<string, unknown>>(
+        `update echo.task_label set ${sets.join(", ")} where id = $1 returning id`, args,
+      );
+      if (!rows[0]) throw new NotFoundError();
+    });
+  }
+
+  /** retiring a label takes it off every card it was on, in one transaction */
+  async function deleteLabel(identity: Identity, id: string): Promise<void> {
+    await db.withIdentity(identity, async (tx: SqlTx) => {
+      await tx.unsafe(`delete from echo.task_label_link where label_id = $1`, [id]);
+      const rows = await tx.unsafe<Record<string, unknown>>(
+        `delete from echo.task_label where id = $1 returning id`, [id],
+      );
+      if (!rows[0]) throw new NotFoundError();
+    });
+  }
+
+  /** a card wears a label, or stops wearing it — with its history entry */
+  async function setLabel(
+    identity: Identity, taskId: string, labelId: string, on: boolean,
+  ): Promise<void> {
+    await db.withIdentity(identity, async (tx: SqlTx) => {
+      const label = await tx.unsafe<Record<string, unknown>>(
+        `select name from echo.task_label where id = $1`, [labelId],
+      );
+      if (!label[0]) throw new NotFoundError();
+      if (on) {
+        await tx.unsafe(
+          `insert into echo.task_label_link (task_id, label_id, org_id)
+           select t.id, $2, t.org_id from echo.task t where t.id = $1
+           on conflict do nothing`,
+          [taskId, labelId],
+        );
+      } else {
+        await tx.unsafe(
+          `delete from echo.task_label_link where task_id = $1 and label_id = $2`,
+          [taskId, labelId],
+        );
+      }
+      await note(tx, taskId, on ? "label_added" : "label_removed",
+        { label: String(label[0].name) });
+    });
+  }
+
+  async function events(identity: Identity, taskId: string): Promise<TaskEventRecord[]> {
+    return db.withIdentity(identity, async (tx: SqlTx) => {
+      const rows = await tx.unsafe<Record<string, unknown>>(
+        `select id, kind, actor_id, detail, created_at
+           from echo.task_event where task_id = $1
+          order by created_at desc limit 200`,
+        [taskId],
+      );
+      return rows.map((r) => ({
+        id: String(r.id),
+        kind: r.kind as TaskEventKind,
+        actor_id: String(r.actor_id),
+        detail: (r.detail as Record<string, string>) ?? {},
+        created_at: iso(r.created_at),
+      }));
+    });
+  }
+
   return {
     board, detail, create, update,
     addChecklistItem, updateChecklistItem, deleteChecklistItem,
-    addComment, setAssigned, createColumn, updateColumn, createTopic,
+    addComment, setAssigned: setAssignedWithNote, createColumn, updateColumn, createTopic,
+    people, labels, createLabel, updateLabel, deleteLabel, setLabel, events,
   };
 }

@@ -53,6 +53,7 @@ export type { WorkflowCard } from "./workflows.ts";
 export type {
   TaskCardRecord, TaskColumnRecord, TaskTopicRecord, TaskDetailRecord,
   TaskChecklistItemRecord, TaskCommentRecord, TaskPriority, TaskColumnTone,
+  TaskLabelRecord, TaskLabelColor, TaskEventRecord, TaskEventKind, OrgPersonRecord,
 } from "./tasks.ts";
 export type { MeetingRecord, MeetingAgendaItem, MeetingMode, MeetingSignature } from "./meetings.ts";
 export type { ConnectorStatus, ConnectorItem, ConnectorProvider, ConnectorSourceKind } from "./connectors.ts";

@@ -2390,6 +2390,90 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     return reply.code(204).send();
   });
 
+  /* 0147 — the board's remaining surfaces, walked in the reference before
+     they were written: labels as org entities, the card's history, and the
+     roster an assignee picker needs. */
+  app.get("/v1/tasks/labels", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    return reply.send(await tasks.labels(identity));
+  });
+
+  app.post("/v1/tasks/labels", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const body = (request.body ?? {}) as { name?: unknown; color?: unknown };
+    return reply.code(201).send(await tasks.createLabel(identity, body.name, body.color));
+  });
+
+  app.patch("/v1/tasks/labels/:id", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { name?: unknown; color?: unknown };
+    await tasks.updateLabel(identity, id, body);
+    return reply.code(204).send();
+  });
+
+  app.delete("/v1/tasks/labels/:id", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    await tasks.deleteLabel(identity, id);
+    return reply.code(204).send();
+  });
+
+  app.put("/v1/tasks/:id/labels/:labelId", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id, labelId } = request.params as { id: string; labelId: string };
+    await tasks.setLabel(identity, id, labelId, true);
+    return reply.code(204).send();
+  });
+
+  app.delete("/v1/tasks/:id/labels/:labelId", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id, labelId } = request.params as { id: string; labelId: string };
+    await tasks.setLabel(identity, id, labelId, false);
+    return reply.code(204).send();
+  });
+
+  app.get("/v1/tasks/:id/events", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    return reply.send(await tasks.events(identity, id));
+  });
+
+  app.put("/v1/tasks/:id/assignees/:userId", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id, userId } = request.params as { id: string; userId: string };
+    await tasks.setAssigned(identity, id, userId, true);
+    return reply.code(204).send();
+  });
+
+  app.delete("/v1/tasks/:id/assignees/:userId", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id, userId } = request.params as { id: string; userId: string };
+    await tasks.setAssigned(identity, id, userId, false);
+    return reply.code(204).send();
+  });
+
+  /**
+   * The org's people, for pickers: names and role, never emails or statuses
+   * (that is the admin members surface's business). The wall already lets an
+   * active member read their org's rows — 0013's app_user_read — so this is
+   * an api surface over an existing permission, not a widening.
+   */
+  app.get("/v1/org/people", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    return reply.send(await tasks.people(identity));
+  });
+
   app.post("/v1/tasks/topics", async (request, reply) => {
     const identity = await auth.requireActive(request);
     refuseApiKey(identity);
