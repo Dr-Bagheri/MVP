@@ -63,55 +63,55 @@ export const TINT = 0.12;
  * ever reverts.
  */
 export const DARK = {
-  /* LIGHTER-GROUND revision (user directive, 2026-08-26: "make the dark
-     theme of the whole platform a little lighter, like ChatGPT, and remove
-     all purple"). True black went with it: a black ground makes every
-     surface above it a step of grey nobody can tell apart, and the
-     reference sits its content on a near-charcoal instead. The violet went
-     too — the accent is now a BLUE, which is the one hue that reads as
-     "interactive" without competing with success/warning/danger. */
-  bg: "#171717",            // the ground
-  surface: "#212121",       // panels and cards sit ABOVE it
-  surface2: "#2C2C2C",      // raised: inputs, chips, hovered rows
-  border: "#3A3A3A",        // hairline, decorative
-  borderStrong: "#8A8A8A",  // control boundaries — clears 3:1
-  fg: "#ECECEC",
-  fgMuted: "#B4B4B4",
-  fgSubtle: "#8F8F8F",     // group labels — recedes toward the surface
-  accent: "#7EB6FF",        // the one hue left
-  onAccent: "#000000",      // DARK on a bright accent: white fails here
-  /* the primary CTA stays the NEUTRAL pair — a near-white pill, the
-     reference's own send button; the accent is never a button fill */
-  primary: "#FAFAFA",
-  onPrimary: "#171717",
-  /* ink on the danger FILL: dark's danger is a light rose, so black ink —
-     the on-accent role-flip pattern */
+  /* ARAMEET ADOPTION (user directive, 2026-08-31: "i want our to get this
+     theme so get all of it and correct ours"). The palette is the reference
+     product's own dark tokens, read off its stylesheet in the running app —
+     a deep blue-grey ground with a GREEN primary. Where a reference value
+     failed this file's floors it was nudged to the nearest passing shade of
+     the same family, and the nudge is commented at the value. The blue
+     palette this replaces is in git history. */
+  bg: "#0F1113",            // the ground
+  surface: "#16191C",       // panels and cards sit ABOVE it
+  surface2: "#272C32",      // raised: inputs, chips, hovered rows
+  border: "#2B2E31",        // hairline (reference: white at 9% over surface)
+  borderStrong: "#727982",  // control boundaries — clears 3:1
+  fg: "#F2F4F6",
+  fgMuted: "#C5CAD1",
+  fgSubtle: "#8D949D",     // group labels — recedes toward the surface
+  accent: "#0FA85D",        // the reference's green, its one brand hue
+  onAccent: "#0B1408",      // the reference's own ink-on-green
+  /* the primary CTA is the GREEN in this palette — the reference fills its
+     one big button with the brand hue, and the neutral-pill rule retires
+     with the palette that needed it */
+  primary: "#0FA85D",
+  onPrimary: "#0B1408",
   onDanger: "#000000",
-  success: "#4ADE80", warning: "#FBBF24", danger: "#FB7185", info: "#7DD3FC",
-  /* the RECORD button's own red (user report, 2026-08-26: "too intense in
-     both modes"). Its own token, not a softened --danger: the danger tone
-     marks destructive choices and has to stay loud. */
+  success: "#34D399", warning: "#FBBF24", danger: "#FB7185", info: "#5B9BE8",
+  /* the RECORD red keeps its own token and its softened value — the
+     reference records with a red dot too, and ours already passes */
   record: "#DB6060",
 };
 
 export const LIGHT = {
-  bg: "#F5F5F5",            // neutral near-white ground, cards pure white
+  /* the reference's light theme is its PRIMARY look: warm cream ground,
+     white cards, the green as ink and fill */
+  bg: "#F6F5F1",            // warm cream ground, cards pure white
   surface: "#FFFFFF",
-  surface2: "#EDEDED",
-  border: "#E2E2E2",
-  borderStrong: "#767676",
-  fg: "#171717",
-  fgMuted: "#595959",
-  fgSubtle: "#6E6E6E",     // group labels — recedes toward the surface
-  /* the light theme's ink form of the same blue: the dark accent is a
-     bright surface colour and fails on white, so this is the derived ink.
-     One hue, two roles — the flip the whole palette is built on. */
-  accent: "#1A66C9",
+  surface2: "#EDEAE3",      // raised: inputs, chips, hovered rows
+  border: "#E1E0DB",        // hairline (reference: ink at 10% over cream)
+  borderStrong: "#8F8B80",  // nudged from the reference's #9C988D: 3.4:1
+  fg: "#1C1A16",
+  fgMuted: "#47443D",
+  fgSubtle: "#716D62",     // group labels — recedes toward the surface
+  accent: "#01743F",        // the reference's #018146, nudged one step: its own 12% chip sat at 4.22
   onAccent: "#FFFFFF",
-  primary: "#171717",       // the neutral CTA, mirrored to the light theme
+  primary: "#01743F",
   onPrimary: "#FFFFFF",
-  onDanger: "#FFFFFF",      // light's danger is a deep red — white ink
-  success: "#166534", warning: "#92400E", danger: "#BE123C", info: "#075985",
+  onDanger: "#FFFFFF",
+  /* status hues nudged darker than the reference (#0F9D6B / #CC8400 /
+     #E23B54 measured 3.5, 3.1 and 4.2 against the floors) — same families,
+     first passing shade */
+  success: "#0B7A52", warning: "#8F5D08", danger: "#C9264A", info: "#1B4A8F",
   record: "#C54A4A",
 };
 

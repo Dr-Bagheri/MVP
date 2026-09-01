@@ -34,9 +34,11 @@ describe("theme store", () => {
   });
 
   it("paints the platform default when nothing is stored", () => {
-    // the bug: a first-time visitor was painted light, then flipped to dark
+    // the bug: a first-time visitor was painted in the wrong theme, then flipped to dark
     expect(runBootScript()).toBe(DEFAULT_THEME);
-    expect(DEFAULT_THEME).toBe("dark");
+    /* LIGHT since the Arameet adoption (2026-08-31) — the reference's
+       primary look is its light theme, and the default follows it */
+    expect(DEFAULT_THEME).toBe("light");
   });
 
   it("paints what the toggle stored — for BOTH values", () => {

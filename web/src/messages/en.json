@@ -1883,7 +1883,7 @@
     "language": "Interface language",
     "languageHint": "Changes for you only, not for the rest of the organization.",
     "theme": "Theme",
-    "themeHint": "Dark is the default.",
+    "themeHint": "Light is the default.",
     "themeDark": "Dark",
     "themeLight": "Light",
     "orgTitle": "Organization",

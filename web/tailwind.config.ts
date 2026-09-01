@@ -111,8 +111,10 @@ const config: Config = {
         control: rem(SCAFFOLD.controlHeight),
       },
       boxShadow: {
-        // soft depth: two-layer, never heavy
-        card: "0 1px 2px rgb(2 6 23 / 0.04), 0 4px 12px rgb(2 6 23 / 0.06)",
+        /* the reference's depth scale, theme-aware via the CSS tokens */
+        card: "var(--shadow-card)",
+        island: "var(--shadow-island)",
+        accent: "var(--shadow-accent)",
         pop: "0 2px 6px rgb(2 6 23 / 0.08), 0 12px 32px rgb(2 6 23 / 0.12)",
       },
       fontFamily: {

@@ -18,11 +18,12 @@
  * is why the script is generated here rather than written out as a string
  * beside the components that have to agree with it.
  *
- * Dark is the default because the platform is dark-first (M22): dark is the
- * designed primary and light is derived from it, the reverse of the Echo
- * system. Echo's own screens now render on the platform palette, so they share
- * this store — one document cannot hold two opinions about its own theme.
- * Changing the product default is changing `DEFAULT_THEME`, here, once.
+ * LIGHT is the default (user directive, 2026-08-31, with the Arameet
+ * adoption): the reference's primary look is its light theme — warm cream,
+ * white cards, green ink — and the dark palette is its counterpart. This
+ * reverses M22's dark-first ruling together with the palette that carried
+ * it. One store, one document, one opinion about its own theme;
+ * changing the product default is changing `DEFAULT_THEME`, here, once.
  */
 
 /*
@@ -36,7 +37,7 @@
 export type Theme = "light" | "dark";
 
 export const THEME_STORAGE_KEY = "neurai-theme";
-export const DEFAULT_THEME: Theme = "dark";
+export const DEFAULT_THEME: Theme = "light";
 
 /** Read the stored preference, falling back to the platform default. */
 export function readStoredTheme(): Theme {

@@ -37,10 +37,13 @@ export const SCAFFOLD = {
 
   /** Shape. Radii are GLOBAL theme values (one scale, no per-page radii). */
   radius: {
-    control: 6, // rounded-md — inputs, buttons, small chips
-    panel: 8, // rounded-lg (and DEFAULT) — panels, cards, menu pills
-    tile: 12, // rounded-xl — rail tiles, larger surfaces
-    modal: 16, // rounded-2xl
+    /* ARAMEET ADOPTION (2026-08-31): the reference's shapes, measured off
+       its running app — buttons and inputs ~11px, cards 20px. One scale,
+       still no per-page radii; the whole product rounds together. */
+    control: 11, // rounded-md — inputs, buttons, small chips
+    panel: 14, // rounded-lg (and DEFAULT) — panels, menu pills
+    tile: 18, // rounded-xl — rail tiles, larger surfaces
+    modal: 20, // rounded-2xl — cards and dialogs (the reference's 20px)
   },
 
   /**
