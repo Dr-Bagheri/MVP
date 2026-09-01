@@ -1468,6 +1468,14 @@ export const api = {
   async meetingDetail(id: string): Promise<MeetingRecord> {
     return bff(`/api/meetings/${encodeURIComponent(id)}`);
   },
+  /** 0148: mint the meeting's video room through the org's Google grant */
+  async createMeetingRoom(id: string): Promise<MeetingRecord> {
+    return bff(`/api/meetings/${encodeURIComponent(id)}/room`, { method: "POST" });
+  },
+  /** 0148: delete the PLAN — the record it produced is a different row */
+  async deleteMeeting(id: string): Promise<void> {
+    await bff<null>(`/api/meetings/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
   async updateMeeting(id: string, patch: Record<string, unknown>): Promise<MeetingRecord> {
     return bff(`/api/meetings/${encodeURIComponent(id)}`, {
       method: "PATCH", body: JSON.stringify(patch), headers: { "content-type": "application/json" },

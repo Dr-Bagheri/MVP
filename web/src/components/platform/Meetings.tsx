@@ -272,18 +272,18 @@ export function Meetings() {
 
       {condemned !== null ? (
         <ConfirmDialog
-          title={t("archiveMeetingTitle", { title: condemned.title })}
-          body={t("archiveMeetingBody")}
-          confirmLabel={t("archiveMeeting")}
+          title={t("deleteMeetingTitle", { title: condemned.title })}
+          body={t("deleteMeetingBody")}
+          confirmLabel={t("deleteMeeting")}
           cancelLabel={t("cancel")}
           onCancel={() => setCondemned(null)}
           onConfirm={() => {
             const target = condemned;
             setCondemned(null);
-            /* the row is ARCHIVED, never deleted: 0145 keeps the record
-               undeletable by every app role, and a menu that promised a
-               delete would be promising what the wall refuses */
-            void api.updateMeeting(target.id, { archived: true }).then(load).catch(refusal);
+            /* 0148 argued this onto the closed DELETE list: a meeting is a
+               PLAN, and the record it produced is a different row this
+               cannot reach — the schema asserts that, not this file */
+            void api.deleteMeeting(target.id).then(load).catch(refusal);
           }}
         />
       ) : null}

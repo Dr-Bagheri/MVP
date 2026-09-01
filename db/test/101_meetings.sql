@@ -40,15 +40,38 @@ select t.denied(
             '01000000-0000-4000-8000-000000000001')$$,
   '0145: created_by cannot be supplied as someone else');
 
-select t.denied(
-  $$delete from echo.meeting
-     where id = 'b0000000-0000-4000-8000-000000000101'$$,
-  '0145: a meeting row cannot be deleted — archived_at is the only way off the list');
+/* 0148 REVERSED 0145's no-delete rule with an argument: a meeting is a
+   PLAN, not a record. The load-bearing half is what the delete cannot
+   reach — the call it produced is a separate row with its own ladder. */
+insert into echo.call (id, org_id, owner_id, title, status, source, scope, language)
+values ('c0000000-0000-4000-8000-0000000000c1',
+        '0a000000-0000-4000-8000-00000000000a',
+        '02000000-0000-4000-8000-000000000002',
+        'رکورد جلسه', 'ready', 'web', 'private', 'fa');
+update echo.meeting set call_id = 'c0000000-0000-4000-8000-0000000000c1'
+ where id = 'b0000000-0000-4000-8000-000000000101';
+
+delete from echo.meeting where id = 'b0000000-0000-4000-8000-000000000101';
+select t.ok(
+  not exists (select 1 from echo.meeting
+               where id = 'b0000000-0000-4000-8000-000000000101'),
+  '0148: a member deletes a meeting — the plan is theirs to drop');
+select t.ok(
+  exists (select 1 from echo.call
+           where id = 'c0000000-0000-4000-8000-0000000000c1'),
+  '0148: deleting the PLAN leaves the RECORD standing — nothing cascades from a meeting');
+
+-- a fresh row for the checks below (the one above is gone by design)
+insert into echo.meeting (id, org_id, title, scheduled_at, mode, created_by)
+values ('b0000000-0000-4000-8000-000000000102',
+        '0a000000-0000-4000-8000-00000000000a',
+        'جلسهٔ دوم', '2099-03-01T09:00:00Z', 'online',
+        '02000000-0000-4000-8000-000000000002');
 
 -- the mode vocabulary is a constraint, not a convention
 select t.denied(
   $$update echo.meeting set mode = 'telepathy'
-     where id = 'b0000000-0000-4000-8000-000000000101'$$,
+     where id = 'b0000000-0000-4000-8000-000000000102'$$,
   '0145: a holding mode outside the closed set is refused by the table itself');
 
 -- ─── erin, in ANOTHER ORG ────────────────────────────────────────────────

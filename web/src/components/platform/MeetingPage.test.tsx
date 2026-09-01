@@ -13,8 +13,8 @@ import type { Call, MeetingRecord } from "@/api/types";
  *  2. A READY record shows the review panels (transcript + extraction),
  *     not the processing card — the states are exclusive.
  *  3. "failed" is named a failure, never progress.
- *  4. A due-but-unrecorded meeting opens on برگزاری with the whiteboard,
- *     and its post stage names the absence; a recorded one opens on post.
+ *  4. An unrecorded meeting opens on its PLAN however overdue it is, and
+ *     its post stage names the absence; a recorded one opens on post.
  *  5. Starting hands the ENGINE the meeting's mapping (online → system
  *     source, the meeting's own title) — the engine is the only recorder.
  */
@@ -50,6 +50,7 @@ function meeting(over: Partial<MeetingRecord>): MeetingRecord {
     duration_minutes: 60, mode: "online", topic: null, location: null,
     description: "", invitees: [], agenda: [], call_id: null, call_title: null,
     archived: false, created_by: "u-1", created_at: "2026-08-31T08:00:00.000Z",
+    video_url: null, video_provider: null,
     minutes_approved_at: null, minutes_closed_at: null, minutes_signatures: [],
     ...over,
   };
@@ -134,10 +135,26 @@ describe("MeetingPage", () => {
     expect(screen.queryByText("صوت جلسه ضبط شد، ولی گفتاری تشخیص داده نشد")).toBeNull();
   });
 
-  it("a due, unrecorded meeting opens on برگزاری with the whiteboard; its post stage names the absence", async () => {
+  /* THE LANDING RULE (0148): an unrecorded meeting opens on its PLAN,
+     however long ago it was scheduled. The old rule compared the scheduled
+     time to now, so a meeting created FOR NOW was already a second in the
+     past by the time this page loaded and dropped the person straight onto
+     the live stage — the whiteboard below is what that looked like, and it
+     is why this test asserts an absence. */
+  it("an unrecorded meeting opens on its PLAN — never the live stage, however overdue", async () => {
     MEETING = meeting({ call_id: null, scheduled_at: "2020-01-01T09:00:00.000Z" });
     render(<MeetingPage id="m-1" />);
-    await waitFor(() => expect(screen.getByTestId("whiteboard-stub")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("مشخصات")).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: /پیش از جلسه/ })).toHaveAttribute("aria-current", "step");
+    expect(screen.queryByTestId("whiteboard-stub")).toBeNull();
+
+    /* and the stage is one click away — an ONLINE meeting opens it on the
+       video room, and the canvas is a chip on the same header */
+    await userEvent.click(screen.getByRole("button", { name: /حین جلسه/ }));
+    expect(screen.getByRole("button", { name: /ساخت اتاق ویدیویی/ })).toBeInTheDocument();
+    expect(screen.queryByTestId("whiteboard-stub")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "وایت‌برد" }));
+    expect(screen.getByTestId("whiteboard-stub")).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: /پس از جلسه/ }));
     expect(screen.getByText("هنوز رکوردی از این جلسه نیست.")).toBeInTheDocument();
@@ -146,7 +163,7 @@ describe("MeetingPage", () => {
   it("starting hands the ENGINE the meeting's mapping — online becomes the system source", async () => {
     MEETING = meeting({ call_id: null, mode: "online", title: "جلسهٔ آنلاین" });
     render(<MeetingPage id="m-1" />);
-    await waitFor(() => expect(screen.getByTestId("whiteboard-stub")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("مشخصات")).toBeInTheDocument());
 
     await userEvent.click(screen.getByRole("button", { name: /شروع جلسه/ }));
     await waitFor(() => expect(startSpy).toHaveBeenCalledTimes(1));

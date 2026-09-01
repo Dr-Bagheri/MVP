@@ -765,6 +765,58 @@ export function createConnectorsRepo(db: Db, options: ConnectorOAuthOptions = {}
       }).slice(0, 20);
     },
 
+    /**
+     * Mint a REAL video room for a meeting (0148): a calendar event with a
+     * conference request, which Google answers with a Meet link.
+     *
+     * It goes on the person's own calendar under their own grant — the same
+     * scope the connector already holds, so this asks for nothing new — and
+     * the event is the room's home: cancel it there and the room goes with
+     * it, which is what a person expects of a link their calendar made.
+     */
+    async createMeetRoom(
+      identity: Identity,
+      input: { title: string; startsAt: string; minutes: number },
+    ): Promise<{ url: string; event_id: string }> {
+      const bearer = await access(identity, "google");
+      const start = new Date(input.startsAt);
+      if (Number.isNaN(start.getTime())) {
+        throw new ValidationError("unreadable meeting time", { code: "meeting_time_invalid" });
+      }
+      const end = new Date(start.getTime() + Math.max(15, input.minutes) * 60_000);
+      /* the request id only has to be unique per insert; the event's own
+         start plus its title is enough and needs no clock of its own */
+      const requestId = `neurai-${start.getTime().toString(36)}-${input.title.length}`;
+      const data = await providerFetch(
+        `https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1`,
+        {
+          method: "POST",
+          headers: { authorization: `Bearer ${bearer}`, "content-type": "application/json" },
+          body: JSON.stringify({
+            summary: input.title,
+            start: { dateTime: start.toISOString() },
+            end: { dateTime: end.toISOString() },
+            conferenceData: {
+              createRequest: {
+                requestId,
+                conferenceSolutionKey: { type: "hangoutsMeet" },
+              },
+            },
+          }),
+        },
+      );
+      const url = text((data as Record<string, unknown>).hangoutLink);
+      const eventId = text((data as Record<string, unknown>).id);
+      if (url === "") {
+        /* Google accepted the event and gave no room — a workspace policy
+           can forbid Meet. Say THAT, rather than reporting a success with
+           no link in it. */
+        throw new ValidationError("the calendar made no room for this meeting",
+          { code: "meet_room_refused" });
+      }
+      return { url, event_id: eventId };
+    },
+
     async calendarEvents(identity: Identity, provider: ConnectorProvider): Promise<ConnectorItem[]> {
       const bearer = await access(identity, provider);
       if (provider === "google") {

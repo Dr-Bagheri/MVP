@@ -2507,6 +2507,33 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     return reply.send(await meetings.detail(identity, id));
   });
 
+  app.delete("/v1/meetings/:id", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    await meetings.remove(identity, id);
+    return reply.code(204).send();
+  });
+
+  /**
+   * Mint the meeting's video room (0148) through the org's own Google
+   * connector, and store the link on the row. One route, because the two
+   * halves must not drift: a room minted and not stored is a room nobody
+   * can find again.
+   */
+  app.post("/v1/meetings/:id/room", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    const meeting = await meetings.detail(identity, id);
+    const room = await connectors.createMeetRoom(identity, {
+      title: meeting.title,
+      startsAt: meeting.scheduled_at,
+      minutes: meeting.duration_minutes ?? 45,
+    });
+    return reply.send(await meetings.update(identity, id, { video_url: room.url }));
+  });
+
   app.patch("/v1/meetings/:id", async (request, reply) => {
     const identity = await auth.requireActive(request);
     refuseApiKey(identity);

@@ -58,6 +58,9 @@ export interface MeetingRecord {
   archived: boolean;
   created_by: string;
   created_at: string;
+  /** 0148: the meeting's video room — null is a normal state */
+  video_url: string | null;
+  video_provider: "google_meet" | "custom" | null;
   /* 0146 — the minutes' lifecycle: draft -> approved -> signed -> closed */
   minutes_approved_at: string | null;
   minutes_closed_at: string | null;
@@ -68,7 +71,8 @@ const MEETING_ROWS = `
   select m.id, m.title, m.scheduled_at, m.duration_minutes, m.mode, m.topic,
          m.location, m.description, m.invitees, m.agenda, m.call_id,
          c.title as call_title, m.archived_at, m.created_by, m.created_at,
-         m.minutes_approved_at, m.minutes_closed_at, m.minutes_signatures
+         m.minutes_approved_at, m.minutes_closed_at, m.minutes_signatures,
+         m.video_url, m.video_provider
     from echo.meeting m
     left join echo.call c on c.id = m.call_id`;
 
@@ -96,6 +100,8 @@ function toMeeting(row: Record<string, unknown>): MeetingRecord {
     archived: row.archived_at !== null && row.archived_at !== undefined,
     created_by: String(row.created_by),
     created_at: iso(row.created_at),
+    video_url: (row.video_url as string | null) ?? null,
+    video_provider: (row.video_provider as "google_meet" | "custom" | null) ?? null,
     minutes_approved_at: row.minutes_approved_at === null || row.minutes_approved_at === undefined
       ? null : iso(row.minutes_approved_at),
     minutes_closed_at: row.minutes_closed_at === null || row.minutes_closed_at === undefined
@@ -306,6 +312,18 @@ export function createMeetingsRepo(db: Db) {
           sets.push("minutes_closed_at = coalesce(minutes_closed_at, now())");
           break;
         }
+        case "video_url": {
+          const url = typeof value === "string" ? value.trim() : "";
+          if (url === "") { push("video_url", null); push("video_provider", null); break; }
+          if (!/^https:\/\//i.test(url) || url.length > 2000) {
+            /* http would put the room on the wire in clear text, and a
+               non-URL in a join button is a button that goes nowhere */
+            throw new ValidationError("a room link must be https", { code: "meeting_video_invalid" });
+          }
+          push("video_url", url);
+          push("video_provider", /(^|\.)meet\.google\.com\//i.test(url) ? "google_meet" : "custom");
+          break;
+        }
         case "call_id": {
           /* the recorder links the record it created; null unlinks. The
              composite FK is the wall — a call outside the org refuses. */
@@ -364,5 +382,19 @@ export function createMeetingsRepo(db: Db) {
     });
   }
 
-  return { list, detail, create, update };
+  /**
+   * Delete the PLAN (0148). The record it produced is a different row with
+   * its own ladder and its own purge window: this cannot reach it, which
+   * the schema asserts rather than this file promising it.
+   */
+  async function remove(identity: Identity, id: string): Promise<void> {
+    await db.withIdentity(identity, async (tx: SqlTx) => {
+      const rows = await tx.unsafe<Record<string, unknown>>(
+        `delete from echo.meeting where id = $1 returning id`, [id],
+      );
+      if (!rows[0]) throw new NotFoundError();
+    });
+  }
+
+  return { list, detail, create, update, remove };
 }

@@ -250,6 +250,7 @@ function meetingRow(over: Partial<import("@/api/types").MeetingRecord>): import(
     duration_minutes: null, mode: "online", topic: null, location: null,
     description: "", invitees: [], agenda: [], call_id: null, call_title: null,
     archived: false, created_by: "u-1", created_at: "2026-08-31T08:00:00.000Z",
+    video_url: null, video_provider: null,
     minutes_approved_at: null, minutes_closed_at: null, minutes_signatures: [],
     ...over,
   };
@@ -334,11 +335,21 @@ describe("آخرین جلسات", () => {
 });
 
 describe("the week hour grid", () => {
+  /* THE CLOCK IS PINNED, and that is the point. The first version of this
+     test built its fixture with `new Date(); setHours(10, 30)` — machine-
+     LOCAL time — while the widget buckets by the resolved TIMEZONE
+     PREFERENCE. The two agree for most of the day and disagree either side
+     of midnight, so the test passed for weeks and then failed at 00:24 with
+     nothing changed but the hour. Two clocks in one test is the fixture
+     problem wearing a date: pin one instant and derive the fixture from it.
+     Midday UTC, so both instants land on the same local day in every zone
+     a person could plausibly be in. A SUNDAY, so that the three day names
+     asserted below are never the one carrying the «امروز» suffix. */
   it("renders seven FULL day names and places a meeting in ITS day column", async () => {
-    const today = new Date();
-    today.setHours(10, 30, 0, 0);
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date("2026-05-17T12:00:00.000Z"));
     MEETINGS = async () => [
-      meetingRow({ id: "m-1", title: "جلسهٔ این هفته", scheduled_at: today.toISOString() }),
+      meetingRow({ id: "m-1", title: "جلسهٔ این هفته", scheduled_at: "2026-05-17T12:30:00.000Z" }),
       meetingRow({ id: "m-2", title: "جلسهٔ سال دیگر", scheduled_at: "2099-01-01T09:00:00.000Z" }),
     ];
     await act(async () => { render(<WeekWidget />); });
@@ -356,6 +367,7 @@ describe("the week hour grid", () => {
     // and it sits INSIDE the today column (the accent-tinted body)
     const chip = screen.getByText("جلسهٔ این هفته").closest("a")!;
     expect(chip.parentElement!.className).toContain("bg-accent-soft");
+    vi.useRealTimers();
   });
 
   it("loading claims nothing; failure is named, not rendered as an empty week", async () => {

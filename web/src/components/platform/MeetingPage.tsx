@@ -8,13 +8,13 @@ import type { Call, CallNote, Me, MeetingAgendaItem, MeetingRecord } from "@/api
 import { useCrumbTitle } from "@/components/platform/CrumbTitle";
 import { ConfirmDialog } from "@/components/rowActions";
 import { AgendaEditor, InviteeInput, MODE_ICON } from "./Meetings";
-import { Whiteboard } from "./meeting/Whiteboard";
+import { MeetingStage } from "./meeting/Stage";
 import { AudioBar, ExtractionPanel, ProcessingCard, TranscriptPanel } from "./meeting/Review";
 import { MinutesTab } from "./meeting/Minutes";
 import { MeetingTasksBoard } from "./meeting/MiniTasks";
 import { MeetingAssistant } from "./meeting/MeetingAssistant";
 import {
-  IconCheck, IconMic, IconPencil, IconPlus, IconTrash,
+  IconCheck, IconCopy, IconMic, IconPlus, IconTrash,
 } from "@/components/icons";
 import {
   finish, recorderSnapshot, startRecording, subscribeRecorder,
@@ -80,9 +80,12 @@ export function MeetingPage({ id }: { id: string }) {
     void api.meetingDetail(id)
       .then((m) => {
         setMeeting(m);
-        setStage((cur) => cur ?? (
-          m.call_id !== null ? "post"
-            : new Date(m.scheduled_at).getTime() > Date.now() ? "pre" : "hold"));
+        /* an unrecorded meeting ALWAYS opens on its plan — the
+           reference lands on /pre after creation, and a meeting created
+           for "now" is already a second in the past by the time this page
+           loads, which used to drop the person straight into the live
+           stage they had not asked for */
+        setStage((cur) => cur ?? (m.call_id !== null ? "post" : "pre"));
       })
       .catch((e: unknown) => {
         const status = (e as { status?: number }).status;
@@ -341,7 +344,14 @@ export function MeetingPage({ id }: { id: string }) {
         <PreStage meeting={meeting} onPatch={patch} locale={locale} />
       ) : null}
       {active === "hold" ? (
-        <HoldStage meeting={meeting} me={me} locale={locale} recordingLive={recordingLive} />
+        <HoldStage
+          meeting={meeting}
+          me={me}
+          locale={locale}
+          recordingLive={recordingLive}
+          recordedMs={engine.recordedMs}
+          onChanged={(m) => setMeeting(m)}
+        />
       ) : null}
       {active === "post" ? (
         <PostStage
@@ -434,6 +444,27 @@ function PreStage({ meeting, onPatch, locale }: {
             <h2 className="text-sm font-semibold text-fg">{t("fieldMode")} — {t(`mode_${meeting.mode}`)}</h2>
           </header>
           <p className="text-xs leading-5 text-fg-muted">{t(`modeExplain_${meeting.mode}`)}</p>
+          {meeting.mode === "online" ? (
+            meeting.video_url !== null ? (
+              <div className="mt-2.5 space-y-2">
+                <p className="truncate rounded-xl border border-border bg-surface-2/60 px-3 py-2 text-[11px] text-fg-muted" dir="ltr">
+                  {meeting.video_url}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void navigator.clipboard?.writeText(meeting.video_url ?? "").catch(() => undefined)}
+                  className="tap flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-border bg-surface text-xs font-medium text-fg hover:bg-border"
+                >
+                  <IconCopy width={12} height={12} />
+                  {t("copyRoom")}
+                </button>
+              </div>
+            ) : (
+              <p className="mt-2.5 rounded-xl border border-dashed border-border px-3 py-2 text-center text-[11px] text-fg-subtle">
+                {t("roomOnStage")}
+              </p>
+            )
+          ) : null}
         </section>
 
         {/* دعوت‌شدگان */}
@@ -537,11 +568,13 @@ function EditMeetingDialog({ meeting, onPatch, onClose }: {
 
 /* ═══ برگزاری — the live room: engine in the background, whiteboard in
        front ═══════════════════════════════════════════════════════════════ */
-function HoldStage({ meeting, me, locale, recordingLive }: {
+function HoldStage({ meeting, me, locale, recordingLive, recordedMs, onChanged }: {
   meeting: MeetingRecord;
   me: Me | null;
   locale: string;
   recordingLive: boolean;
+  recordedMs: number;
+  onChanged: (m: MeetingRecord) => void;
 }) {
   const t = useTranslations("meetings");
   const [noteDraft, setNoteDraft] = useState("");
@@ -574,7 +607,12 @@ function HoldStage({ meeting, me, locale, recordingLive }: {
   return (
     <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[1fr_280px]">
       {/* the stage — the reference puts the media on the START side */}
-      <MeetingStage meeting={meeting} recordingLive={recordingLive} />
+      <MeetingStage
+        meeting={meeting}
+        recordingLive={recordingLive}
+        recordedMs={recordedMs}
+        onChanged={onChanged}
+      />
 
       <div className="space-y-3">
         {flash !== null ? (
@@ -670,44 +708,6 @@ function HoldStage({ meeting, me, locale, recordingLive }: {
         </section>
       </div>
 
-    </div>
-  );
-}
-
-/**
- * The live stage's media area, to the reference's shape: a header carrying
- * the recording STATUS on one side, and the surface itself below.
- *
- * Their header also switches between a video room, the whiteboard and a
- * presentation. Two of those three this product does not run — there is no
- * conferencing here, and the recorder deliberately STOPS the shared
- * surface's video track the moment it has the audio it came for
- * (recordingEngine.ts) — so a mode chip for either would be a control that
- * can only ever show an absence. The whiteboard is the stage; the status
- * chip is the truth about the take.
- */
-function MeetingStage({ meeting, recordingLive }: {
-  meeting: MeetingRecord;
-  recordingLive: boolean;
-}) {
-  const t = useTranslations("meetings");
-  return (
-    <div className="flex min-h-0 flex-col gap-2">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="flex items-center gap-1.5 rounded-xl border border-border bg-surface px-3 py-1.5 text-xs font-medium text-fg">
-          <IconPencil width={12} height={12} />
-          {t("modeBoard")}
-        </span>
-        <span className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-medium ${
-          recordingLive ? "bg-danger/10 text-danger" : "bg-surface-2 text-fg-muted"
-        }`}>
-          <span className={`h-1.5 w-1.5 rounded-full ${recordingLive ? "animate-pulse bg-danger" : "bg-fg-subtle"}`} aria-hidden />
-          {recordingLive
-            ? t("statusRecording", { mode: t(`mode_${meeting.mode}`) })
-            : t("statusReady")}
-        </span>
-      </div>
-      <Whiteboard meetingId={meeting.id} />
     </div>
   );
 }

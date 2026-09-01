@@ -37,6 +37,9 @@ select t.ok(
 --     on every card is worse than gone.
 --   · task_label_link (0147): the same membership shape as task_assignee —
 --     taking a label off a card must remove the row.
+--   · meeting (0148): a meeting is a PLAN, not a record — the call it
+--     produced is a separate row with its own ladder, and this delete
+--     cannot reach it (asserted in 0148: nothing cascades from meeting).
 --
 -- Task ROWS themselves stay undeletable by every app role: archived_at is
 -- the only way off the board.
@@ -44,7 +47,7 @@ select t.ok(
   (select coalesce(array_agg(distinct table_name::text order by table_name::text), '{}')
      from information_schema.role_table_grants
     where grantee = 'echo_app' and privilege_type = 'DELETE' and table_schema = 'echo')
-   = array['call_note', 'task_assignee', 'task_checklist_item', 'task_label', 'task_label_link'],
+   = array['call_note', 'meeting', 'task_assignee', 'task_checklist_item', 'task_label', 'task_label_link'],
   'core/''s own role deletes exactly the argued list: a note author''s own note (0079), a task''s checklist lines and its assignee rows (0144), a label and a card''s wearing of one (0147) — every other product row is echo_purge''s alone');
 -- Scoped to the application roles: the schema owner also appears as a grantee
 -- of everything on a managed platform, and a superuser was never inside this
@@ -56,8 +59,8 @@ select t.ok(
       and grantee::text like 'echo\_%'
       and grantee::text <> 'echo_purge'
       and not (grantee::text = 'echo_app'
-               and table_name in ('call_note', 'task_assignee', 'task_checklist_item',
-                                  'task_label', 'task_label_link'))
+               and table_name in ('call_note', 'meeting', 'task_assignee',
+                                  'task_checklist_item', 'task_label', 'task_label_link'))
   ),
   'echo_purge is the only application role that deletes product rows — the 0079 note exception is the closed list''s single entry');
 
@@ -71,7 +74,7 @@ select t.denied(
       (select coalesce(array_agg(distinct table_name::text order by table_name::text), '{}')
          from information_schema.role_table_grants
         where grantee = 'echo_app' and privilege_type = 'DELETE' and table_schema = 'echo')
-       = array['call_note', 'task_assignee', 'task_checklist_item', 'task_label', 'task_label_link'], 'control')$$,
+       = array['call_note', 'meeting', 'task_assignee', 'task_checklist_item', 'task_label', 'task_label_link'], 'control')$$,
   'a staged stray DELETE grant turns the closed list red — the instrument can fail for its own reason');
 revoke delete on echo.skill from echo_app;
 

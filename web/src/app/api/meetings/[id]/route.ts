@@ -21,3 +21,13 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     return errorResponse(error);
   }
 }
+
+export async function DELETE(_request: Request, ctx: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await ctx.params;
+    await coreFetch(`/v1/meetings/${encodeURIComponent(id)}`, { method: "DELETE" });
+    return new Response(null, { status: 204 });
+  } catch (error) {
+    return errorResponse(error);
+  }
+}
