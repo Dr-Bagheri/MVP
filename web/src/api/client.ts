@@ -8,6 +8,7 @@
 // swapped to the wire or deleted by the 2026-08-20 tenancy audit — see the
 // notes at their former sites.)
 import type {
+  MeetingAgendaItem, MeetingMode, MeetingRecord,
   TaskCardRecord, TaskColumnRecord, TaskTopicRecord, TaskDetailRecord,
   TaskChecklistItemRecord, TaskCommentRecord, TaskPriority,
   AuthoredWorkflow,
@@ -1410,6 +1411,30 @@ export const api = {
   async createTaskTopic(name: string): Promise<TaskTopicRecord> {
     return bff("/api/tasks/topics", {
       method: "POST", body: JSON.stringify({ name }), headers: { "content-type": "application/json" },
+    });
+  },
+
+  /** 0145 — meetings: list (upcoming+past in one read), create, detail,
+      patch. The recorder links its call by patching call_id. */
+  async meetings(opts?: { archived?: boolean }): Promise<MeetingRecord[]> {
+    const suffix = opts?.archived ? "?archived=1" : "";
+    return bff(`/api/meetings${suffix}`);
+  },
+  async createMeeting(input: {
+    title: string; scheduled_at: string; mode: MeetingMode;
+    duration_minutes?: number | null; topic?: string; location?: string;
+    description?: string; invitees?: string[]; agenda?: MeetingAgendaItem[];
+  }): Promise<MeetingRecord> {
+    return bff("/api/meetings", {
+      method: "POST", body: JSON.stringify(input), headers: { "content-type": "application/json" },
+    });
+  },
+  async meetingDetail(id: string): Promise<MeetingRecord> {
+    return bff(`/api/meetings/${encodeURIComponent(id)}`);
+  },
+  async updateMeeting(id: string, patch: Record<string, unknown>): Promise<MeetingRecord> {
+    return bff(`/api/meetings/${encodeURIComponent(id)}`, {
+      method: "PATCH", body: JSON.stringify(patch), headers: { "content-type": "application/json" },
     });
   },
 

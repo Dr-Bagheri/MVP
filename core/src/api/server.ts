@@ -44,6 +44,7 @@ import { agentWorkflows, createAssistantAgent, listAssistantAgents, resolveAssis
 import { createConnectorsRepo, type ConnectorOAuthOptions, type ConnectorProvider } from "./connectors.ts";
 import { createMailDraftsRepo } from "./mail-drafts.ts";
 import { createTasksRepo } from "./tasks.ts";
+import { createMeetingsRepo } from "./meetings.ts";
 import { createTts } from "./tts.ts";
 import { createLiveStt } from "./live-stt.ts";
 import { createCapabilitiesRepo, CAPABILITIES, type CapabilitiesRepo } from "./capabilities.ts";
@@ -167,6 +168,7 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
   const connectors = createConnectorsRepo(options.db, options.connectorOAuth);
   const mailDrafts = createMailDraftsRepo(options.db, connectors);
   const tasks = createTasksRepo(options.db);
+  const meetings = createMeetingsRepo(options.db);
   // One resolver for the assistant's `/slug` and the pipeline's summarizer.
   // A caller may still inject its own, but the default is the shared one —
   // if the summarizer resolved skills differently, an org that customised the
@@ -2393,6 +2395,40 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     refuseApiKey(identity);
     const body = (request.body ?? {}) as { name?: unknown };
     return reply.code(201).send(await tasks.createTopic(identity, body.name));
+  });
+
+  /**
+   * 0145 — meetings. The task board's posture exactly: a person's surface,
+   * gateway keys refused, every read and write as the caller under 0145's
+   * policies. The recorder links its call by PATCHing call_id.
+   */
+  app.get("/v1/meetings", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const query = (request.query ?? {}) as { archived?: unknown };
+    return reply.send(await meetings.list(identity, { archived: query.archived === "1" }));
+  });
+
+  app.post("/v1/meetings", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    return reply.code(201).send(await meetings.create(identity, body));
+  });
+
+  app.get("/v1/meetings/:id", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    return reply.send(await meetings.detail(identity, id));
+  });
+
+  app.patch("/v1/meetings/:id", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    return reply.send(await meetings.update(identity, id, body));
   });
 
   /**

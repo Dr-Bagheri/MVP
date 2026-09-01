@@ -273,7 +273,7 @@ const FIXTURE_TABLES = [
   'agent_message', 'agent_session', 'summary', 'agent_run',
   'connector_secret', 'connector_connection', 'assistant_agent',
   'task_comment', 'task_assignee', 'task_checklist_item', 'task',
-  'task_column', 'task_topic',
+  'task_column', 'task_topic', 'meeting',
   'transcript_segment', 'call_speaker', 'call_part', 'person', 'call',
   'proposal_decision', 'api_key', 'admin_action', 'skill',
   'app_user', 'org',

@@ -62,6 +62,8 @@ export const NAV_PRIMARY: readonly NavItem[] = [
   /* 0144 — the task board (the reference adoption). Rail only: M22's
      four-item bar ceiling has no free slot, and tasks are a desk surface. */
   { href: "/tasks", key: "tasks", inBar: false },
+  /* 0145 — meetings (the reference adoption). Rail only, same reasoning. */
+  { href: "/meetings", key: "meetings", inBar: false },
   { href: "/echo", key: "echo", inBar: true },
   { href: "/management", key: "management", inBar: true },
 ];

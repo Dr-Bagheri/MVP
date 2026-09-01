@@ -209,9 +209,19 @@ const TasksIcon = (p: SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
+/** MEETINGS (0145): a calendar page with a marked slot. */
+const MeetingsIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden {...p}>
+    <rect x="3.5" y="5" width="17" height="15.5" rx="2.5" />
+    <path d="M3.5 9.5h17M8 3v3.5M16 3v3.5" />
+    <path d="M8 14.5h4" />
+  </svg>
+);
+
 export const NAV_ICON: Record<string, (p: SVGProps<SVGSVGElement>) => ReactElement> = {
   dashboard: BoardIcon,
   tasks: TasksIcon,
+  meetings: MeetingsIcon,
   assistant: AssistantIcon,
   hub: HomeIcon,
   history: HistoryIcon,

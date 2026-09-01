@@ -25,8 +25,9 @@ export type { AgentCardKind };
 
 /** Core-owned M30 wires: these names are aliases, not browser-side copies. */
 export type { AgentCard, ConnectorItem, ConnectorProvider, ConnectorSourceKind, ConnectorStatus, WorkflowCard };
-/* 0144 — the task board, inherited from the producer (never mirrored) */
+/* 0144 tasks + 0145 meetings, inherited from the producer (never mirrored) */
 export type {
+  MeetingRecord, MeetingAgendaItem, MeetingMode,
   TaskCardRecord, TaskColumnRecord, TaskTopicRecord, TaskDetailRecord,
   TaskChecklistItemRecord, TaskCommentRecord, TaskPriority, TaskColumnTone,
 } from "@echo/core/wire";

@@ -275,6 +275,48 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
       .catch(() => setResumeTarget("gone"));
   }, []);
 
+  /**
+   * 0145 — a MEETING handed to the recorder (`/echo?meeting=<id>`): the
+   * meeting's title becomes the take's, and its holding mode picks the
+   * source — online is the section we did not have, and it means the
+   * system-audio source (both sides of the online meeting in one take).
+   * Same one-shot location.search read as `resume` above, and for the same
+   * production-build reason.
+   */
+  const [meetingTarget, setMeetingTarget] = useState<{ id: string; linked: boolean } | null>(null);
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("meeting");
+    if (!id) return;
+    void api
+      .meetingDetail(id)
+      .then((meeting) => {
+        setMeetingTarget({ id: meeting.id, linked: meeting.call_id !== null });
+        setTitle((prev) => (prev.trim() === "" ? meeting.title : prev));
+        if (meeting.mode === "online") setSource("system");
+        else if (meeting.mode === "in_person") setSource("mic");
+      })
+      .catch(() => setMeetingTarget(null));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot adoption
+  }, []);
+
+  /**
+   * The link back: the first call this recorder creates becomes the
+   * meeting's record. Written as soon as the call EXISTS rather than at
+   * finish — a tab that dies mid-take still leaves the meeting pointing at
+   * the partial record, which is the honest state. Once linked, never
+   * re-written: a second take on the same page is its own call.
+   */
+  useEffect(() => {
+    if (meetingTarget === null || meetingTarget.linked || !s.callId) return;
+    const target = meetingTarget;
+    setMeetingTarget({ ...target, linked: true });
+    void api.updateMeeting(target.id, { call_id: s.callId }).catch(() => {
+      /* the refusal leaves the meeting unlinked — visible on its own screen,
+         and re-linkable from there once that surface offers it; swallowing
+         here keeps a link failure from interrupting a live recording */
+    });
+  }, [meetingTarget, s.callId]);
+
   // the preview element follows the chosen output device (setSinkId is the
   // one place a speaker choice has meaning in a recorder)
   useEffect(() => {

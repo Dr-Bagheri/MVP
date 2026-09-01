@@ -54,6 +54,7 @@ export type {
   TaskCardRecord, TaskColumnRecord, TaskTopicRecord, TaskDetailRecord,
   TaskChecklistItemRecord, TaskCommentRecord, TaskPriority, TaskColumnTone,
 } from "./tasks.ts";
+export type { MeetingRecord, MeetingAgendaItem, MeetingMode } from "./meetings.ts";
 export type { ConnectorStatus, ConnectorItem, ConnectorProvider, ConnectorSourceKind } from "./connectors.ts";
 export type {
   PlatformAuditEntry, PlatformOrganization, PlatformOverview, PlatformPage, PlatformUser,
