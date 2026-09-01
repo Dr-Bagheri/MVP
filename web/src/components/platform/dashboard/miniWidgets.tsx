@@ -8,10 +8,10 @@ import { Link } from "@/i18n/routing";
 import { KebabMenu, SelectMenu } from "@/components/rowActions";
 import { StatusDot } from "@/components/DataTable";
 import {
-  Icon, IconCheck, IconGlobe, IconMic, IconPause, IconPlay, IconPulse, IconSettings,
+  Icon, IconCalendar, IconCheck, IconGlobe, IconMic, IconPause, IconPlay, IconPulse, IconSettings,
 } from "@/components/icons";
 import { EchoMark } from "@/components/platform/icons";
-import { dayKeyOf, monthGrid } from "@/lib/format";
+import { dayKeyOf, digits, formatTime, monthGrid, weekStrip } from "@/lib/format";
 import { useCalendarPreference, useTimezonePreference } from "@/lib/usePreferences";
 import { useAgentCopy } from "@/components/platform/agentAppearance";
 import {
@@ -579,6 +579,224 @@ export function CalendarWidget() {
           </ul>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * 6 — THE STAT STRIP (the reference adoption, 2026-08-31): four figure
+ * cards — today's meetings, open tasks, records, connections. Each is a
+ * tinted icon square, a big number, and a label; each is also the DOOR to
+ * its surface.
+ *
+ * Every count obeys dash-never-zero: a read that has not answered (or
+ * cannot) renders «—», because a fabricated 0 is a claim about the
+ * organization and a dash is a claim about the read. The four reads are
+ * independent — one refused count must not blank the other three.
+ */
+function useCount(read: () => Promise<number>): number | null | "unreadable" {
+  const [state, setState] = useState<number | null | "unreadable">(null);
+  useEffect(() => {
+    let alive = true;
+    void read()
+      .then((n) => { if (alive) setState(n); })
+      .catch(() => { if (alive) setState("unreadable"); });
+    return () => { alive = false; };
+    // the reader is defined at the call site and stable for this tile's life
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return state;
+}
+
+function StatCard({ href, icon, tint, value, label, locale }: {
+  href: string;
+  icon: ReactNode;
+  /** the icon square's tint classes — bg + text, from the theme's own set */
+  tint: string;
+  value: number | null | "unreadable";
+  label: string;
+  locale: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="flex min-w-0 items-center gap-3 rounded-2xl border border-border bg-surface px-3.5 py-3 transition-colors hover:border-border-strong"
+    >
+      <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${tint}`} aria-hidden>
+        {icon}
+      </span>
+      <span className="min-w-0">
+        <span className="block text-xl font-bold leading-6 text-fg tabular-nums">
+          {typeof value === "number" ? digits(value, locale) : "—"}
+        </span>
+        <span className="block truncate text-xs text-fg-muted">{label}</span>
+      </span>
+    </Link>
+  );
+}
+
+export function StatsWidget() {
+  const t = useTranslations("dashboard");
+  const locale = useLocale();
+  const meetings = useCount(async () => {
+    const items = await api.connectorItems("google", "calendar");
+    const today = dayKeyOf(new Date());
+    return items.filter((i) => i.occurred_at !== null && dayKeyOf(i.occurred_at) === today).length;
+  });
+  const tasks = useCount(async () => {
+    const board = await api.taskBoard();
+    return board.tasks.filter((task) => !task.done && !task.archived).length;
+  });
+  const records = useCount(async () => (await api.listCalls()).length);
+  const connections = useCount(async () => {
+    const rows = await api.connectors();
+    return rows.filter((c) => c.status === "connected").length;
+  });
+
+  return (
+    <div className="grid h-full grid-cols-2 content-center gap-2.5 md:grid-cols-4">
+      <StatCard href="/echo" icon={<IconCalendar width={18} height={18} />}
+        tint="bg-accent-soft text-accent" value={meetings} label={t("statMeetingsToday")} locale={locale} />
+      <StatCard href="/tasks" icon={<IconCheck width={18} height={18} />}
+        tint="bg-info/10 text-info" value={tasks} label={t("statOpenTasks")} locale={locale} />
+      <StatCard href="/echo" icon={<IconMic width={18} height={18} />}
+        tint="bg-warning/10 text-warning" value={records} label={t("statRecords")} locale={locale} />
+      <StatCard href="/integrations" icon={<IconGlobe width={18} height={18} />}
+        tint="bg-success/10 text-success" value={connections} label={t("statConnections")} locale={locale} />
+    </div>
+  );
+}
+
+/**
+ * 7 — UPCOMING: what is ahead, nearest first — time and title per row, the
+ * reference's upcoming-meetings card. The connection's absence offers the
+ * way to connect, exactly as the month calendar does; it never apologises.
+ */
+export function UpcomingWidget({ size }: { size: TileSize }) {
+  const t = useTranslations("dashboard");
+  const locale = useLocale();
+  const rows = useMini<ConnectorItem>(() => api.connectorItems("google", "calendar"));
+
+  if (rows === null) return <Waiting />;
+  if (rows === "forbidden") return <Refused />;
+  if (rows === "absent") {
+    /* not an emptiness and not a fault: the way to connect, offered */
+    return (
+      <p className="text-sm leading-7">
+        <Link href="/integrations" className="text-accent hover:underline">
+          {t("miniCalendarConnectLink")}
+        </Link>
+      </p>
+    );
+  }
+  if (rows === "failed") return <Unreadable />;
+
+  const now = Date.now();
+  const ahead = rows
+    .filter((item) => item.occurred_at !== null && new Date(item.occurred_at).getTime() >= now)
+    .sort((a, b) => new Date(a.occurred_at!).getTime() - new Date(b.occurred_at!).getTime())
+    .slice(0, rowsFor(size));
+  if (ahead.length === 0) return <Empty>{t("noUpcoming")}</Empty>;
+
+  return (
+    <Rows>
+      {ahead.map((item) => (
+        <li key={item.id} className="flex items-baseline gap-2.5 py-1.5 first:pt-0">
+          <span className="badge-num shrink-0 rounded-md bg-accent-soft px-1.5 py-0.5 text-[11px] font-medium text-accent">
+            {formatTime(item.occurred_at!, locale)}
+          </span>
+          <span className="min-w-0 flex-1 truncate text-sm text-fg" title={item.title}>
+            {item.title}
+          </span>
+        </li>
+      ))}
+    </Rows>
+  );
+}
+
+/**
+ * 8 — THE WEEK: seven day columns with the week's meetings placed on their
+ * days — the reference's main panel. Today wears the accent; the rest day
+ * is tinted apart. A day with nothing shows nothing: an empty weekday is
+ * an ordinary fact, not a state needing copy.
+ */
+export function WeekWidget() {
+  const t = useTranslations("dashboard");
+  const locale = useLocale();
+  const rows = useMini<ConnectorItem>(() => api.connectorItems("google", "calendar"));
+  const calendar = useCalendarPreference();
+  const timezone = useTimezonePreference();
+  const cells = useMemo(
+    () => weekStrip(new Date(), locale),
+    // derived from both preferences THROUGH `format`, which reads them itself
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [locale, calendar, timezone],
+  );
+
+  /** day key → that day's events, by hour */
+  const byDay = new Map<number, ConnectorItem[]>();
+  if (Array.isArray(rows)) {
+    for (const item of rows) {
+      if (item.occurred_at === null) continue;
+      const key = dayKeyOf(item.occurred_at);
+      const bucket = byDay.get(key);
+      if (bucket) bucket.push(item);
+      else byDay.set(key, [item]);
+    }
+    for (const bucket of byDay.values()) {
+      bucket.sort((a, b) => new Date(a.occurred_at!).getTime() - new Date(b.occurred_at!).getTime());
+    }
+  }
+
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      {rows === "absent" ? (
+        <div className="mb-1.5 text-end">
+          <Link href="/integrations" className="text-xs text-accent hover:underline">
+            {t("miniCalendarConnectLink")}
+          </Link>
+        </div>
+      ) : rows === "failed" || rows === "forbidden" ? (
+        <div className="mb-1.5 text-end text-xs text-fg-subtle">{t("readFailed")}</div>
+      ) : null}
+      <ul className="grid min-h-0 flex-1 grid-cols-7 gap-1.5">
+        {cells.map((cell) => {
+          const events = byDay.get(cell.key) ?? [];
+          return (
+            <li
+              key={cell.key}
+              className={`flex min-h-0 flex-col rounded-xl border p-1.5 ${
+                cell.today
+                  ? "border-accent bg-accent-soft"
+                  : cell.weekend
+                    ? "border-border bg-danger/5"
+                    : "border-border bg-surface-2/60"
+              }`}
+            >
+              <div className={`mb-1 text-center ${cell.today ? "text-accent" : "text-fg-subtle"}`}>
+                <span className="block text-[10px] leading-3">{cell.weekday}</span>
+                <span className={`block text-sm leading-5 tabular-nums ${cell.today ? "font-bold" : "font-medium text-fg"}`}>
+                  {cell.label}
+                </span>
+              </div>
+              <div className="scroll-quiet min-h-0 flex-1 space-y-1 overflow-y-auto">
+                {events.map((event) => (
+                  <div
+                    key={event.id}
+                    title={`${event.occurred_at === null ? "" : formatTime(event.occurred_at, locale)} ${event.title}`.trim()}
+                    className="rounded-md bg-accent-soft px-1 py-0.5"
+                  >
+                    <span className="block truncate text-[10px] font-medium leading-4 text-accent">
+                      {event.occurred_at === null ? "" : formatTime(event.occurred_at, locale)}
+                    </span>
+                    <span className="block truncate text-[10px] leading-4 text-fg">{event.title}</span>
+                  </div>
+                ))}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }

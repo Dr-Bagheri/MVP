@@ -38,7 +38,9 @@ export {
  * columns rather than six so a `small` tile is a genuine quarter and the
  * engine can pack without half-column rounding.
  */
-export const TILE_SIZES = ["small", "wide", "column", "large", "tall", "hero"] as const;
+/* ORDER IS THE LADDER: rowsFor must be non-decreasing along this list
+   (asserted) — band sits beside wide because it shares wide's height */
+export const TILE_SIZES = ["small", "wide", "band", "column", "large", "tall", "hero"] as const;
 export type TileSize = (typeof TILE_SIZES)[number];
 
 export const COLUMNS = 12;
@@ -50,6 +52,12 @@ export const SIZE_SPAN: Record<TileSize, { w: number; h: number }> = {
   /* a quarter-width card with room for a real list or a 2x2 grid of cards */
   column: { w: 3, h: 3 },
   large: { w: 6, h: 3 },
+  /*
+   * BAND is the stat strip's tier (the reference adoption): full width and
+   * shallow — a row of four figure cards is wide reading, not tall reading,
+   * and at hero height it would carry a third of the card as dead air.
+   */
+  band: { w: 12, h: 2 },
   /*
    * TALL is the calendar's tier: a month is five or six rows of squares, and
    * squares only stay square if the tile has the height to hold them. It is
@@ -83,7 +91,7 @@ export function sizeFromSpan(w: number, h: number): TileSize {
  * row.
  */
 export function rowsFor(size: TileSize): number {
-  return { small: 3, wide: 3, column: 5, large: 6, tall: 9, hero: 12 }[size];
+  return { small: 3, wide: 3, band: 3, column: 5, large: 6, tall: 9, hero: 12 }[size];
 }
 
 export type Density = "comfortable" | "compact";
@@ -121,8 +129,15 @@ export interface DashboardLayout {
  * blank for exactly the people who had used it most. A new key means their
  * old arrangement is simply not this board's arrangement, and they get the
  * default one.
+ *
+ * v4: the reference arrangement (2026-08-31). Same reasoning pointed the
+ * other way — a stored v3 board would keep showing the OLD composition to
+ * exactly the person who asked for the new one, and the new default is the
+ * change. The old keys all still exist, so nothing is dropped; the board
+ * simply starts from the reference and any rearrangement from here is
+ * theirs again.
  */
-const KEY = "neurai-dashboard-layout-v3";
+const KEY = "neurai-dashboard-layout-v4";
 
 /** the tier a widget takes when added, clamped to what it supports */
 export function defaultSizeFor(key: WidgetKey): TileSize {

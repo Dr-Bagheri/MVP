@@ -12,6 +12,7 @@ import {
 import { WidgetBoard } from "./dashboard/WidgetBoard";
 import {
   AgentsWidget, CalendarWidget, IntegrationsWidget, RecordsMiniWidget, StartRecordWidget,
+  StatsWidget, UpcomingWidget, WeekWidget,
 } from "./dashboard/miniWidgets";
 
 /**
@@ -163,6 +164,9 @@ export function Dashboard() {
    */
   function renderBody(key: WidgetKey, size: TileSize): ReactNode {
     switch (key) {
+      case "stats": return <StatsWidget />;
+      case "week": return <WeekWidget />;
+      case "upcoming": return <UpcomingWidget size={size} />;
       case "records": return <RecordsMiniWidget size={size} />;
       case "calendar": return <CalendarWidget />;
       case "agents": return <AgentsWidget />;

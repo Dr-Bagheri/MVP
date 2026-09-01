@@ -28,6 +28,7 @@ import type { Call, ConnectorItem, ConnectorStatus } from "@/api/types";
 let CALLS: () => Promise<Call[]>;
 let CALENDAR: () => Promise<ConnectorItem[]>;
 let CONNECTORS: () => Promise<ConnectorStatus[]>;
+let TASKS: () => Promise<{ columns: never[]; topics: never[]; tasks: never[] }>;
 
 /* the shape is the PRODUCER's `CallSummary`, inherited through `Call` — a
    field this fixture invented would compile here and be undefined on the
@@ -70,10 +71,11 @@ vi.mock("@/api/client", async () => ({
     listCalls: () => CALLS(),
     connectorItems: () => CALENDAR(),
     connectors: () => CONNECTORS(),
+    taskBoard: () => TASKS(),
   },
 }));
 
-const { CalendarWidget, IntegrationsWidget, RecordsMiniWidget } = await import("./miniWidgets");
+const { CalendarWidget, IntegrationsWidget, RecordsMiniWidget, StatsWidget, UpcomingWidget, WeekWidget } = await import("./miniWidgets");
 
 /** a promise nobody resolves — the "not answered yet" state, held open */
 const pending = <T,>() => new Promise<T>(() => {});
@@ -84,6 +86,7 @@ beforeEach(() => {
   CALLS = async () => [call("c-1", "جلسه ۱")];
   CALENDAR = async () => [];
   CONNECTORS = async () => [];
+  TASKS = async () => ({ columns: [], topics: [], tasks: [] });
 });
 
 describe("a list tile's kinds of nothing", () => {
@@ -234,5 +237,88 @@ describe("the connections tile", () => {
        positive half on its own */
     expect(screen.getAllByText("فعال")).toHaveLength(4);
     expect(screen.queryByText("وصل نشده")).toBeNull();
+  });
+});
+
+describe("the stat strip (reference adoption)", () => {
+  it("renders each count from its own read, and a failed one dashes ALONE", async () => {
+    /*
+     * The four reads are independent — the whole point of per-card fetches.
+     * Tasks refuses here while the rest answer, so the open-tasks card must
+     * dash and the records card must still carry its number. A widget that
+     * blanked the strip on one refusal would report an outage about three
+     * lists it read fine.
+     */
+    CALLS = async () => [call("c-1", "جلسه ۱"), call("c-2", "جلسه ۲")];
+    TASKS = async () => { throw new BffError(403, "forbidden"); };
+    CALENDAR = async () => [];
+    CONNECTORS = async () => [];
+    await act(async () => { render(<StatsWidget />); });
+
+    // records: a real ۲ (locale digits — the strip counts in the reader's own)
+    expect(screen.getByText("۲")).toBeTruthy();
+    // tasks: the dash, not a fabricated ۰
+    const taskCard = screen.getByText("تسک‌های باز").closest("a")!;
+    expect(taskCard.textContent).toContain("—");
+    expect(taskCard.textContent).not.toContain("۰");
+    // and the doors go where they claim
+    expect(taskCard.getAttribute("href")).toBe("/tasks");
+  });
+
+  it("counts only TODAY's meetings, not the whole feed", async () => {
+    const today = new Date().toISOString();
+    CALENDAR = async () => [
+      { id: "e-1", title: "امروز", subtitle: "", occurred_at: today },
+      { id: "e-2", title: "ماه بعد", subtitle: "", occurred_at: "2099-01-01T09:00:00.000Z" },
+    ];
+    TASKS = async () => ({ columns: [], topics: [], tasks: [] });
+    await act(async () => { render(<StatsWidget />); });
+
+    const meetingsCard = screen.getByText("جلسات امروز").closest("a")!;
+    expect(meetingsCard.textContent).toContain("۱");
+    expect(meetingsCard.textContent).not.toContain("۲");
+  });
+});
+
+describe("the upcoming tile", () => {
+  it("lists what is AHEAD, nearest first, and drops the past", async () => {
+    CALENDAR = async () => [
+      { id: "e-p", title: "گذشته", subtitle: "", occurred_at: "2020-01-01T09:00:00.000Z" },
+      { id: "e-2", title: "دورتر", subtitle: "", occurred_at: "2099-06-01T09:00:00.000Z" },
+      { id: "e-1", title: "نزدیک‌تر", subtitle: "", occurred_at: "2099-01-01T09:00:00.000Z" },
+    ];
+    await act(async () => { render(<UpcomingWidget size="column" />); });
+
+    expect(screen.queryByText("گذشته")).toBeNull();
+    const titles = screen.getAllByTitle(/./).map((el) => el.getAttribute("title"));
+    expect(titles.indexOf("نزدیک‌تر")).toBeLessThan(titles.indexOf("دورتر"));
+  });
+
+  it("an unconnected calendar OFFERS the connection instead of apologising", async () => {
+    CALENDAR = async () => { throw new BffError(404, "absent"); };
+    await act(async () => { render(<UpcomingWidget size="column" />); });
+
+    const link = screen.getByText("وصل کردن حساب");
+    expect(link.closest("a")!.getAttribute("href")).toBe("/integrations");
+    expect(screen.queryByText(/فعلاً نمی‌توان/)).toBeNull();
+  });
+});
+
+describe("the week strip", () => {
+  it("renders seven days with exactly one today, and places an event on ITS day", async () => {
+    const today = new Date();
+    CALENDAR = async () => [
+      { id: "e-1", title: "جلسهٔ امروز", subtitle: "", occurred_at: today.toISOString() },
+    ];
+    let view: ReturnType<typeof render>;
+    await act(async () => { view = render(<WeekWidget />); });
+
+    const days = view!.container.querySelectorAll("li");
+    expect(days.length).toBe(7);
+    // one — and only one — cell wears today's accent
+    const todayCells = view!.container.querySelectorAll("li.border-accent");
+    expect(todayCells.length).toBe(1);
+    // the event sits INSIDE today's cell, not merely somewhere on the strip
+    expect(todayCells[0]!.textContent).toContain("جلسهٔ امروز");
   });
 });

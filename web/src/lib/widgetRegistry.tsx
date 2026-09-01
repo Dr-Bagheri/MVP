@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { IconAgent, IconCalendar, IconMic, IconPlug, IconRows } from "@/components/icons";
+import { IconAgent, IconCalendar, IconClock, IconMic, IconPlug, IconPulse, IconRows } from "@/components/icons";
 import type { TileSize } from "@/lib/dashboardLayout";
 
 /**
@@ -71,45 +71,72 @@ export interface WidgetSpec {
  * The catalogue. ORDER HERE is the add-menu's order within each group; the
  * board's own order is the layout's, which a person rearranges.
  *
- * All of them are on the default board: the point of the board is that the
- * platform's functions are visible at once, and a default that hid half of
- * them would make the other half look like the whole product.
+ * ── the default board is the REFERENCE's arrangement (2026-08-31) ────────
+ * User directive: "also the dashbord , i want our dashboard to be like it
+ * as well". Their dashboard reads: a stat strip across the top, the week
+ * with its meetings as the main panel, upcoming meetings and the latest
+ * records beside it, and the working controls below. So the default board
+ * composes exactly that; the month calendar and the rest of the catalogue
+ * stay one "add" away rather than crowding the first screen. (This revises
+ * the earlier all-on-by-default rule — a default that shows everything is
+ * a default that arranges nothing.)
  */
 export const WIDGET_SPECS = [
   {
-    key: "integrations",
-    labelKey: "integrations",
-    icon: <IconPlug />,
+    /* the stat strip: four figure cards — today's meetings, open tasks,
+       records, connections. The reference's opening row. */
+    key: "stats",
+    labelKey: "stats",
+    icon: <IconPulse />,
     group: "overview",
-    /* the four connections as cards, two by two */
-    sizes: ["column", "large", "hero"],
-    defaultSize: "column",
+    sizes: ["band", "wide"],
+    defaultSize: "band",
     defaultOrder: 1,
     defaultAt: { x: 0, y: 0 },
+  },
+  {
+    /* the week with its meetings — the reference's main panel */
+    key: "week",
+    labelKey: "week",
+    icon: <IconCalendar />,
+    group: "overview",
+    sizes: ["large", "hero"],
+    defaultSize: "large",
+    defaultOrder: 2,
+    defaultAt: { x: 0, y: 2 },
+  },
+  {
+    /* what is coming up, as a list — time and title, nearest first */
+    key: "upcoming",
+    labelKey: "upcoming",
+    icon: <IconClock />,
+    group: "overview",
+    sizes: ["column", "large"],
+    defaultSize: "column",
+    defaultOrder: 3,
+    defaultAt: { x: 6, y: 2 },
+  },
+  {
+    key: "records",
+    labelKey: "records",
+    icon: <IconRows />,
+    group: "work",
+    sizes: ["column", "large", "wide", "hero"],
+    defaultSize: "column",
+    defaultOrder: 4,
+    defaultAt: { x: 9, y: 2 },
   },
   {
     key: "record",
     labelKey: "record",
     icon: <IconMic />,
     group: "work",
-    /* IN THE MIDDLE (user directive): the transport sits between the things
-       you read, which is where you reach for it */
+    /* below the reading row: the transport sits where the hand goes after
+       the eye has had the week */
     sizes: ["wide", "large"],
     defaultSize: "wide",
-    defaultOrder: 2,
-    defaultAt: { x: 3, y: 0 },
-  },
-  {
-    key: "calendar",
-    labelKey: "calendar",
-    icon: <IconCalendar />,
-    group: "overview",
-    /* full height down the side: a month is five or six rows of squares, and
-       at any shorter tier the squares stop being squares */
-    sizes: ["tall", "column"],
-    defaultSize: "tall",
-    defaultOrder: 3,
-    defaultAt: { x: 9, y: 0 },
+    defaultOrder: 5,
+    defaultAt: { x: 0, y: 5 },
   },
   {
     key: "agents",
@@ -120,18 +147,29 @@ export const WIDGET_SPECS = [
        bigger tier to reveal */
     sizes: ["small", "column"],
     defaultSize: "small",
-    defaultOrder: 4,
-    defaultAt: { x: 0, y: 3 },
+    defaultOrder: 6,
+    defaultAt: { x: 6, y: 5 },
   },
   {
-    key: "records",
-    labelKey: "records",
-    icon: <IconRows />,
-    group: "work",
-    sizes: ["large", "wide", "hero"],
-    defaultSize: "large",
-    defaultOrder: 5,
-    defaultAt: { x: 3, y: 2 },
+    key: "integrations",
+    labelKey: "integrations",
+    icon: <IconPlug />,
+    group: "overview",
+    /* the four connections as cards, two by two */
+    sizes: ["small", "column", "large", "hero"],
+    defaultSize: "small",
+    defaultOrder: 7,
+    defaultAt: { x: 9, y: 5 },
+  },
+  {
+    /* the month grid — off the default board now the week strip carries the
+       dashboard's calendar job; one "add" away, not gone */
+    key: "calendar",
+    labelKey: "calendar",
+    icon: <IconCalendar />,
+    group: "overview",
+    sizes: ["tall", "column"],
+    defaultSize: "tall",
   },
 ] as const satisfies readonly WidgetSpec[];
 

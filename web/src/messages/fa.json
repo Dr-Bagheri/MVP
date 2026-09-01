@@ -134,7 +134,10 @@
       "workflows": "گردش‌کارها",
       "agents": "دستیارها",
       "integrations": "اتصال‌ها",
-      "record": "رکورد تازه"
+      "record": "رکورد تازه",
+      "stats": "نمای کلی",
+      "week": "این هفته",
+      "upcoming": "پیش رو"
     },
     "noRecords": "هنوز رکوردی نیست. از اکو جلسه‌ای آغاز کنید تا اینجا پر شود.",
     "group": {
@@ -154,7 +157,12 @@
     "editBoard": "ویرایش",
     "saveBoard": "ذخیره",
     "pin": "سنجاق کردن",
-    "unpin": "برداشتن سنجاق"
+    "unpin": "برداشتن سنجاق",
+    "statMeetingsToday": "جلسات امروز",
+    "statOpenTasks": "تسک‌های باز",
+    "statRecords": "رکوردها",
+    "statConnections": "اتصال‌ها",
+    "noUpcoming": "برنامه‌ای پیش رو نیست."
   },
   "conversations": {
     "title": "تاریخچه",

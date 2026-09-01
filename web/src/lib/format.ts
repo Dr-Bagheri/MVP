@@ -369,3 +369,44 @@ export function monthGrid(now: Date, locale: string): MonthGrid {
     cells,
   };
 }
+
+export interface WeekCell {
+  /** the day key — matches `dayKeyOf` on an event */
+  key: number;
+  /** short weekday name («ش» / "S") */
+  weekday: string;
+  /** day-of-month, in the reader's digits */
+  label: string;
+  today: boolean;
+  /** the rest day, tinted apart on the strip: Friday under the Jalali
+      calendar, Saturday+Sunday under the Gregorian one */
+  weekend: boolean;
+}
+
+/**
+ * The week `now` falls in, as seven day cells — the dashboard's week strip
+ * (0144-era reference adoption). Same week-start law as `monthGrid`:
+ * Saturday-first under Jalali, Sunday-first under Gregorian — and derived
+ * by the same walk, so the two can never disagree about which column a
+ * date lands in.
+ */
+export function weekStrip(now: Date, locale: string): WeekCell[] {
+  const jalali = resolvedCalendar(locale) !== "gregorian";
+  const todayKey = dayKeyOf(now);
+  const weekdayOfToday = new Date(todayKey).getUTCDay();          // 0 = Sunday
+  const lead = jalali ? (weekdayOfToday + 1) % 7 : weekdayOfToday; // Saturday-first
+  const names = jalali ? JALALI_WEEKDAYS : GREGORIAN_WEEKDAYS;
+  const cells: WeekCell[] = [];
+  for (let i = 0; i < 7; i += 1) {
+    const key = todayKey + (i - lead) * DAY_MS;
+    const utcDay = new Date(key).getUTCDay();
+    cells.push({
+      key,
+      weekday: names[i]!,
+      label: digits(activeParts(key, locale).d, locale),
+      today: key === todayKey,
+      weekend: jalali ? utcDay === 5 : utcDay === 0 || utcDay === 6,
+    });
+  }
+  return cells;
+}

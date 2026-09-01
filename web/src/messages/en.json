@@ -134,7 +134,10 @@
       "workflows": "Workflows",
       "agents": "Agents",
       "integrations": "Integrations",
-      "record": "New record"
+      "record": "New record",
+      "stats": "Overview",
+      "week": "This week",
+      "upcoming": "Upcoming"
     },
     "noRecords": "No records yet. Start a meeting from Echo and this fills in.",
     "group": {
@@ -154,7 +157,12 @@
     "editBoard": "Edit",
     "saveBoard": "Save",
     "pin": "Pin in place",
-    "unpin": "Unpin"
+    "unpin": "Unpin",
+    "statMeetingsToday": "Meetings today",
+    "statOpenTasks": "Open tasks",
+    "statRecords": "Records",
+    "statConnections": "Connections",
+    "noUpcoming": "Nothing scheduled ahead."
   },
   "conversations": {
     "title": "History",
