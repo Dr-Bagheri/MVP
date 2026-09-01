@@ -2814,3 +2814,34 @@ sessions) for the cross-session narrative.
   guard living one layer down in a repo is correct design, and an
   instrument that calls the right shape wrong pushes code toward the
   wrong shape.**
+
+- 2026-09-01 (the reference adoption ships whole — and the purge had
+  never learned nineteen tables): tasks (0144) and meetings (0145) live
+  end to end — schema walked through the matrix, core routes 401-wired
+  on the server, web behind the auth wall on production; the dashboard
+  recomposed to the reference (stat strip / week panel / upcoming /
+  latest, layout store v4 so the stored old board yields to the
+  arrangement that was asked for); an online meeting starts the
+  recorder on the SYSTEM source and the recorder links call_id the
+  moment the call exists ("a dying tab still leaves the meeting
+  pointing at its partial record"). THE FINDING, rule 13½ at function
+  scope: **platform_purge_org enumerates its deletes, and nothing ever
+  made a new org-scoped table report for enumeration** — thirteen
+  tables (the whole M41 workflow family, mail_draft, meeting_prep,
+  role_capability, agent_workflow, and 0144's own six, added the day
+  before by the same hands that then found them) carried NO ACTION FKs
+  to echo.org, so the purge RAISED for any org that had used those
+  features — 0132's exact sentence ("a purge that raises is a purge
+  that does not run") proven again one wave later, in the function
+  0132 itself regenerated. Fixed in 0145 (children first; the
+  workflow↔version cycle broken by nulling the pointer) with the
+  instrument that ends the class: coverage DERIVED from the catalogue
+  (every org_id table deleted or excepted WITH a reason;
+  deletion_record's cascade asserted so the exception cannot silently
+  stop being true) as migration self-check + standing db test with a
+  negative control. Its true positive was the finding itself — the
+  probe that found the gap IS the check, promoted. Also kept: a drop
+  on the task board writes {column_id, position} and the test pins the
+  EXACT KEY SET (it caught the position stamp riding the drop on first
+  run); the meetings grouping clause (a held meeting is past however
+  early it was held) verified red by deleting it.
