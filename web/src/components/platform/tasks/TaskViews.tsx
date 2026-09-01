@@ -220,7 +220,8 @@ export function TaskRow({ task, labels, column, onOpen, onToggleDone }: {
       tabIndex={0}
       onClick={() => onOpen(task.id)}
       onKeyDown={(e) => { if (e.key === "Enter") onOpen(task.id); }}
-      className="tile flex cursor-pointer items-center gap-3 p-3.5 transition-colors hover:border-border-strong"
+      /* flex-row: `.tile` is a column by default — see Meetings.tsx */
+      className="tile flex flex-row cursor-pointer items-center gap-3 p-3.5 text-start transition-colors hover:border-border-strong"
     >
       <button
         type="button"
