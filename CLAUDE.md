@@ -2845,3 +2845,36 @@ sessions) for the cross-session narrative.
   EXACT KEY SET (it caught the position stamp riding the drop on first
   run); the meetings grouping clause (a held meeting is past however
   early it was held) verified red by deleting it.
+
+- 2026-09-01 (later — the meeting page, the board resized, and a
+  20-agent review that earned its spend): the reference round's second
+  half. /meetings/[id] is a PAGE now — stage stepper (پیش از جلسه /
+  برگزاری with the recorder embedded / پس از جلسه with the six
+  reference tabs), and the processing card is the CALL-STATUS LADDER
+  wearing the reference's labels (recording→processing→linking→
+  summarizing→ready = upload/transcribe/diarize/extract) — the screen
+  cannot disagree with the pipeline because the status IS the steps.
+  Tasks took the reference's measurements + a تقویم view; the week
+  panel took full day names, nav, and the product's own meetings; the
+  loud focus ring left the text boxes (checkbox/radio KEEP theirs —
+  the reviewer caught the bare `input:` selector). THE REVIEW: four
+  lenses, each finding adversarially verified — 16 raw, 15 confirmed,
+  1 refuted (a defect I had already fixed mid-review; the refuter
+  read the newer tree — reviewers race the author, cross-check
+  timestamps before acting on their reds). The worst confirmed: **the
+  meeting-link effect claimed whatever callId the module-level engine
+  still held from an UNRELATED take** — the engine survives navigation
+  by design, finish() keeps callId, so "there is a callId" was never
+  evidence this meeting produced it; fixed with a baseline-at-adoption
+  guard EXTRACTED to meetingLink.ts and pinned by its matrix (the
+  hard-to-test-against-the-DOM rule applied at write time, not after a
+  false red). Sibling: the meetingDetail catch fell back to
+  adopt(prop) with no call_id — a failed READ disarmed the
+  never-re-link guard; a failed read now prefills and links nothing.
+  And the fix pass itself minted one: `t("recordGone")` in the WRONG
+  NAMESPACE renders the raw key — a key that exists elsewhere in the
+  catalogue satisfies every existence-grep; only same-namespace
+  existence counts. Kept small: digits with the language at every
+  count (five raw .length renders), Persian keyboard digits NORMALIZED
+  not stripped, drafts survive refused writes, hover:bg-surface-3 was
+  five inert hover states on an unregistered token.
