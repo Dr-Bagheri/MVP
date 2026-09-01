@@ -50,6 +50,10 @@ export type { MemberRecord, MeRecord } from "./members.ts";
 export type { ErrorBody, RefusalKind, UnauthenticatedKind } from "./errors.ts";
 export type { AgentCard } from "../agent/agent-store.ts";
 export type { WorkflowCard } from "./workflows.ts";
+export type {
+  TaskCardRecord, TaskColumnRecord, TaskTopicRecord, TaskDetailRecord,
+  TaskChecklistItemRecord, TaskCommentRecord, TaskPriority, TaskColumnTone,
+} from "./tasks.ts";
 export type { ConnectorStatus, ConnectorItem, ConnectorProvider, ConnectorSourceKind } from "./connectors.ts";
 export type {
   PlatformAuditEntry, PlatformOrganization, PlatformOverview, PlatformPage, PlatformUser,

@@ -199,8 +199,19 @@ export const AssistantIcon = (p: SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
+/** The TASK BOARD's tile (0144): a checklist — lines with their marks. */
+const TasksIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden {...p}>
+    <path d="m3.5 6 1.2 1.2L7 4.9" />
+    <path d="m3.5 12 1.2 1.2L7 10.9" />
+    <path d="m3.5 18 1.2 1.2L7 16.9" />
+    <path d="M10.5 6.2H20.5M10.5 12.2H20.5M10.5 18.2H20.5" />
+  </svg>
+);
+
 export const NAV_ICON: Record<string, (p: SVGProps<SVGSVGElement>) => ReactElement> = {
   dashboard: BoardIcon,
+  tasks: TasksIcon,
   assistant: AssistantIcon,
   hub: HomeIcon,
   history: HistoryIcon,

@@ -24,13 +24,23 @@ select t.ok(
 -- actor, and consumed by core (calls.ts deleteNote). Every other product
 -- row still deletes only through echo_purge. The list is EXACT, so a stray
 -- DELETE grant anywhere else in echo turns this red — it caught 0101's
--- unconsumed role_capability grant, revoked in 0109.
+-- unconsumed role_capability grant, revoked in 0109, and it caught 0144's
+-- two additions on landing day, which is how they came to be argued here:
+--
+--   · task_checklist_item (0144): removing a checklist line is EDITING the
+--     task, and a removed-flag is a second spelling of absence every count
+--     must remember to exclude — the call_note class, one table over.
+--   · task_assignee (0144): a membership row; unassigning must remove it
+--     or "who is on this" accretes everyone who ever touched the card.
+--
+-- Task ROWS themselves stay undeletable by every app role: archived_at is
+-- the only way off the board.
 select t.ok(
   (select coalesce(array_agg(distinct table_name::text order by table_name::text), '{}')
      from information_schema.role_table_grants
     where grantee = 'echo_app' and privilege_type = 'DELETE' and table_schema = 'echo')
-   = array['call_note'],
-  'core/''s own role deletes nothing but a note author''s own note (0079) — every other product row is echo_purge''s alone');
+   = array['call_note', 'task_assignee', 'task_checklist_item'],
+  'core/''s own role deletes exactly the argued list: a note author''s own note (0079), a task''s checklist lines and its assignee rows (0144) — every other product row is echo_purge''s alone');
 -- Scoped to the application roles: the schema owner also appears as a grantee
 -- of everything on a managed platform, and a superuser was never inside this
 -- wall to begin with — core/ simply never connects as one.
@@ -40,7 +50,8 @@ select t.ok(
     where table_schema = 'echo' and privilege_type = 'DELETE'
       and grantee::text like 'echo\_%'
       and grantee::text <> 'echo_purge'
-      and not (grantee::text = 'echo_app' and table_name = 'call_note')
+      and not (grantee::text = 'echo_app'
+               and table_name in ('call_note', 'task_assignee', 'task_checklist_item'))
   ),
   'echo_purge is the only application role that deletes product rows — the 0079 note exception is the closed list''s single entry');
 
@@ -54,7 +65,7 @@ select t.denied(
       (select coalesce(array_agg(distinct table_name::text order by table_name::text), '{}')
          from information_schema.role_table_grants
         where grantee = 'echo_app' and privilege_type = 'DELETE' and table_schema = 'echo')
-       = array['call_note'], 'control')$$,
+       = array['call_note', 'task_assignee', 'task_checklist_item'], 'control')$$,
   'a staged stray DELETE grant turns the closed list red — the instrument can fail for its own reason');
 revoke delete on echo.skill from echo_app;
 

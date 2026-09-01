@@ -43,6 +43,7 @@ import { createNamedSkillResolver, listResolvedSkills } from "../agent/skill-sto
 import { agentWorkflows, createAssistantAgent, listAssistantAgents, resolveAssistantAgent, setAgentWorkflows, updateAssistantAgent } from "../agent/agent-store.ts";
 import { createConnectorsRepo, type ConnectorOAuthOptions, type ConnectorProvider } from "./connectors.ts";
 import { createMailDraftsRepo } from "./mail-drafts.ts";
+import { createTasksRepo } from "./tasks.ts";
 import { createTts } from "./tts.ts";
 import { createLiveStt } from "./live-stt.ts";
 import { createCapabilitiesRepo, CAPABILITIES, type CapabilitiesRepo } from "./capabilities.ts";
@@ -165,6 +166,7 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
   }).catch(() => undefined);
   const connectors = createConnectorsRepo(options.db, options.connectorOAuth);
   const mailDrafts = createMailDraftsRepo(options.db, connectors);
+  const tasks = createTasksRepo(options.db);
   // One resolver for the assistant's `/slug` and the pipeline's summarizer.
   // A caller may still inject its own, but the default is the shared one —
   // if the summarizer resolved skills differently, an org that customised the
@@ -2285,6 +2287,112 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     refuseApiKey(identity);
     const { id } = request.params as { id: string };
     return reply.send(await mailDrafts.discard(identity, id));
+  });
+
+  /**
+   * 0144 — the task board. A PERSON's surface end to end: every route
+   * refuses gateway keys (the workflow surface's W23 posture — a machine
+   * integration has no hands on the org's work plan), and every read and
+   * write runs as the caller under 0144's policies.
+   */
+  app.get("/v1/tasks/board", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const query = (request.query ?? {}) as { archived?: unknown };
+    return reply.send(await tasks.board(identity, { archived: query.archived === "1" }));
+  });
+
+  app.post("/v1/tasks", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    return reply.code(201).send(await tasks.create(identity, body as never));
+  });
+
+  app.get("/v1/tasks/:id", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    return reply.send(await tasks.detail(identity, id));
+  });
+
+  app.patch("/v1/tasks/:id", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    return reply.send(await tasks.update(identity, id, (request.body ?? {}) as Record<string, unknown>));
+  });
+
+  app.post("/v1/tasks/:id/checklist", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { label?: unknown };
+    return reply.code(201).send(await tasks.addChecklistItem(identity, id, body.label));
+  });
+
+  app.patch("/v1/tasks/checklist/:itemId", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { itemId } = request.params as { itemId: string };
+    await tasks.updateChecklistItem(identity, itemId, (request.body ?? {}) as never);
+    return reply.code(204).send();
+  });
+
+  app.delete("/v1/tasks/checklist/:itemId", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { itemId } = request.params as { itemId: string };
+    await tasks.deleteChecklistItem(identity, itemId);
+    return reply.code(204).send();
+  });
+
+  app.post("/v1/tasks/:id/comments", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { body?: unknown };
+    return reply.code(201).send(await tasks.addComment(identity, id, body.body));
+  });
+
+  /* assignment: SELF only on this wire — the member directory is an admin
+     surface, so the picker a member can honestly be offered is themselves */
+  app.post("/v1/tasks/:id/assign-me", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    await tasks.setAssigned(identity, id, identity.userId, true);
+    return reply.code(204).send();
+  });
+
+  app.delete("/v1/tasks/:id/assign-me", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    await tasks.setAssigned(identity, id, identity.userId, false);
+    return reply.code(204).send();
+  });
+
+  app.post("/v1/tasks/columns", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const body = (request.body ?? {}) as { name?: unknown };
+    return reply.code(201).send(await tasks.createColumn(identity, body.name));
+  });
+
+  app.patch("/v1/tasks/columns/:id", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    await tasks.updateColumn(identity, id, (request.body ?? {}) as never);
+    return reply.code(204).send();
+  });
+
+  app.post("/v1/tasks/topics", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const body = (request.body ?? {}) as { name?: unknown };
+    return reply.code(201).send(await tasks.createTopic(identity, body.name));
   });
 
   /**

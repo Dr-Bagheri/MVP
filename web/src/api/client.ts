@@ -8,6 +8,8 @@
 // swapped to the wire or deleted by the 2026-08-20 tenancy audit — see the
 // notes at their former sites.)
 import type {
+  TaskCardRecord, TaskColumnRecord, TaskTopicRecord, TaskDetailRecord,
+  TaskChecklistItemRecord, TaskCommentRecord, TaskPriority,
   AuthoredWorkflow,
   MailDraft,
   MailSourceMessage,
@@ -1344,6 +1346,73 @@ export const api = {
       });
     return workflows;
   },
+  // ---- the task board (0144) ---------------------------------------------
+  async taskBoard(opts?: { archived?: boolean }): Promise<{
+    columns: TaskColumnRecord[]; topics: TaskTopicRecord[]; tasks: TaskCardRecord[];
+  }> {
+    const suffix = opts?.archived ? "?archived=1" : "";
+    return bff(`/api/tasks/board${suffix}`);
+  },
+  async createTask(input: {
+    title: string; column_id?: string; topic_id?: string; call_id?: string;
+    description?: string; priority?: TaskPriority; due_at?: string | null;
+  }): Promise<TaskDetailRecord> {
+    return bff("/api/tasks", {
+      method: "POST", body: JSON.stringify(input), headers: { "content-type": "application/json" },
+    });
+  },
+  async taskDetail(id: string): Promise<TaskDetailRecord> {
+    return bff(`/api/tasks/${encodeURIComponent(id)}`);
+  },
+  async updateTask(id: string, patch: Partial<{
+    title: string; description: string; priority: TaskPriority; due_at: string | null;
+    column_id: string; topic_id: string | null; position: number; labels: string[];
+    done: boolean; archived: boolean;
+  }>): Promise<TaskDetailRecord> {
+    return bff(`/api/tasks/${encodeURIComponent(id)}`, {
+      method: "PATCH", body: JSON.stringify(patch), headers: { "content-type": "application/json" },
+    });
+  },
+  async addTaskChecklistItem(taskId: string, label: string): Promise<TaskChecklistItemRecord> {
+    return bff(`/api/tasks/${encodeURIComponent(taskId)}/checklist`, {
+      method: "POST", body: JSON.stringify({ label }), headers: { "content-type": "application/json" },
+    });
+  },
+  async updateTaskChecklistItem(itemId: string, patch: { label?: string; done?: boolean }): Promise<void> {
+    await bff<undefined>(`/api/tasks/checklist/${encodeURIComponent(itemId)}`, {
+      method: "PATCH", body: JSON.stringify(patch), headers: { "content-type": "application/json" },
+    });
+  },
+  /** removing a line IS editing the task — the one argued delete (0144) */
+  async deleteTaskChecklistItem(itemId: string): Promise<void> {
+    await bff<undefined>(`/api/tasks/checklist/${encodeURIComponent(itemId)}`, { method: "DELETE" });
+  },
+  async addTaskComment(taskId: string, body: string): Promise<TaskCommentRecord> {
+    return bff(`/api/tasks/${encodeURIComponent(taskId)}/comments`, {
+      method: "POST", body: JSON.stringify({ body }), headers: { "content-type": "application/json" },
+    });
+  },
+  async assignMeToTask(taskId: string, on: boolean): Promise<void> {
+    await bff<undefined>(`/api/tasks/${encodeURIComponent(taskId)}/assign-me`, {
+      method: on ? "POST" : "DELETE",
+    });
+  },
+  async createTaskColumn(name: string): Promise<TaskColumnRecord> {
+    return bff("/api/tasks/columns", {
+      method: "POST", body: JSON.stringify({ name }), headers: { "content-type": "application/json" },
+    });
+  },
+  async updateTaskColumn(id: string, patch: { name?: string; archived?: boolean }): Promise<void> {
+    await bff<undefined>(`/api/tasks/columns/${encodeURIComponent(id)}`, {
+      method: "PATCH", body: JSON.stringify(patch), headers: { "content-type": "application/json" },
+    });
+  },
+  async createTaskTopic(name: string): Promise<TaskTopicRecord> {
+    return bff("/api/tasks/topics", {
+      method: "POST", body: JSON.stringify({ name }), headers: { "content-type": "application/json" },
+    });
+  },
+
   async workflows(): Promise<WorkflowCard[]> {
     const { workflows } = await bff<{ workflows: WorkflowCard[] }>("/api/workflows");
     return workflows;
