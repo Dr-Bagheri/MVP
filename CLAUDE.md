@@ -2878,3 +2878,39 @@ sessions) for the cross-session narrative.
   count (five raw .length renders), Persian keyboard digits NORMALIZED
   not stripped, drafts survive refused writes, hover:bg-surface-3 was
   five inert hover states on an unregistered token.
+
+- 2026-09-01 (THE BIG MILESTONE — the meeting flow goes native, Echo
+  becomes the invisible engine): user consented to the length and got
+  the whole reference, page by page. 0146 gives the MINUTES a
+  lifecycle (approve→sign→close as EVENT patches; closed = the record
+  of record, refused server-side); the meeting page runs the
+  RECORDING ENGINE directly (no recorder screen — timer, whiteboard,
+  quick actions; پایان و پردازش), the post tabs sit on real artifacts
+  (transcript with seek-on-click, extraction sliced from the
+  summary's OWN headings with the team template now shaping them,
+  the minutes document with Word/PDF), and the dashboard is theirs
+  exactly (greeting + click-moment quick start, four stat cards, the
+  week as an HOUR GRID, board store v5, record/integrations/records
+  off the default board). THE REVIEW EARNED ITS SPEND AGAIN: 22
+  agents, 18 confirmed, 0 refuted — headline class: **"resolution is
+  not success" at the engine seam** — startRecording/finish RESOLVE
+  on refusal (denied mic, cancelled share, dirty settle) with the
+  verdict in the snapshot, and a page that treats the resolved
+  promise as success toasts «ضبط آغاز شد ✓» over a recording that
+  never began; read the STATE after the call, not the promise. Its
+  sibling: the one-take guard resolves too, so starting over an
+  unrelated live take HIJACKED it (shown as this meeting's timer,
+  finished by its end button, LINKED as its record) — busy-guard
+  before, baseline-comparison after, the meetingLink lesson now
+  enforced at both ends. Plus: raw-HTML document.write in the minutes
+  export was stored XSS (esc() everything — model text included);
+  signatures dedupe by USER ID because a display name changes with
+  the locale; the upload-mode button was a mic recording wearing an
+  upload label (now a real file picker through uploadAudioFile); the
+  week chip's hour now uses the RESOLVED zone (browser-zone hours
+  disagree with dayKeyOf's bucketing and formatTime's label — one
+  fact, three clocks); signed audio URLs re-sign once on media error;
+  same-value seeks need an object per click (Object.is bailout); and
+  the hour rail shares the columns' exact geometry (one denominator,
+  three renderings). Deployed whole: 0146 on prod, core on Hetzner,
+  web on Vercel — 767 web + 1188 core green, the wall holds.
