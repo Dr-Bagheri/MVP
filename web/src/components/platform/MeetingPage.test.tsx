@@ -117,9 +117,10 @@ describe("MeetingPage", () => {
     MEETING = meeting({ call_id: "c-1" });
     CALL = call({ status: "ready" });
     render(<MeetingPage id="m-1" />);
-    // empty artifacts render their NAMED absences inside the review panels —
-    // the panels are up, the processing card is gone
-    await waitFor(() => expect(screen.getByText("هنوز رونوشتی نیست.")).toBeInTheDocument());
+    /* an empty transcript on a READY call is "recorded but silent", not
+       "no transcript yet" — the reference names that state and so do we */
+    await waitFor(() =>
+      expect(screen.getByText("صوت جلسه ضبط شد، ولی گفتاری تشخیص داده نشد")).toBeInTheDocument());
     expect(screen.queryByText("در حال پردازش جلسه")).toBeNull();
     expect(screen.getByRole("tab", { name: "تسک‌ها" })).toBeInTheDocument();
   });
@@ -130,7 +131,7 @@ describe("MeetingPage", () => {
     render(<MeetingPage id="m-1" />);
     await waitFor(() => expect(screen.getByText("پردازش این رکورد ناموفق بود.")).toBeInTheDocument());
     expect(screen.queryByText("در حال پردازش جلسه")).toBeNull();
-    expect(screen.queryByText("هنوز رونوشتی نیست.")).toBeNull();
+    expect(screen.queryByText("صوت جلسه ضبط شد، ولی گفتاری تشخیص داده نشد")).toBeNull();
   });
 
   it("a due, unrecorded meeting opens on برگزاری with the whiteboard; its post stage names the absence", async () => {
@@ -158,7 +159,8 @@ describe("MeetingPage", () => {
     MEETING = meeting({ call_id: "c-1" });
     CALL = call({ status: "ready" });
     render(<MeetingPage id="m-1" />);
-    await waitFor(() => expect(screen.getByText("هنوز رونوشتی نیست.")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText("صوت جلسه ضبط شد، ولی گفتاری تشخیص داده نشد")).toBeInTheDocument());
     expect(screen.queryByTestId("whiteboard-stub")).toBeNull();
   });
 });

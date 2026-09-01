@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { Call, Speaker, SummaryVersion, TranscriptSegment } from "@/api/types";
 import { parseSummary, type SummaryBlock } from "@/components/echo/SummaryBody";
-import { IconCheck, IconMic, IconPlay, IconPause } from "@/components/icons";
+import { IconCheck, IconMic, IconMicOff, IconPlay, IconPause } from "@/components/icons";
 import { digits, formatClock } from "@/lib/format";
 
 /**
@@ -246,7 +246,21 @@ export function TranscriptPanel({ callId, onSeek, locale }: {
 
   if (segments === null) return <p className="p-4 text-sm text-fg-muted">…</p>;
   if (segments === "failed") return <p className="p-4 text-sm text-fg-muted">{t("readFailed")}</p>;
-  if (segments.length === 0) return <p className="p-4 text-sm text-fg-muted">{t("noTranscript")}</p>;
+  /* RECORDED BUT SILENT is its own state, not an empty transcript: the
+     pipeline finished, the audio is there, and no speech was found —
+     saying "no transcript yet" would send someone waiting for one that is
+     never coming (the reference names this state, and so do we) */
+  if (segments.length === 0) {
+    return (
+      <div className="tile grid place-items-center p-8 text-center">
+        <span className="grid h-14 w-14 place-items-center rounded-2xl bg-accent-soft text-accent" aria-hidden>
+          <IconMicOff width={24} height={24} />
+        </span>
+        <h3 className="mt-3 text-sm font-bold text-fg">{t("noSpeechTitle")}</h3>
+        <p className="mt-1 max-w-md text-xs leading-6 text-fg-muted">{t("noSpeechBody")}</p>
+      </div>
+    );
+  }
 
   const toneOf = new Map<string, string>();
   for (const sp of speakers) {

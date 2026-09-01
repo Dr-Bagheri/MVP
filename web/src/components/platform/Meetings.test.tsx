@@ -4,17 +4,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { MeetingRecord } from "@/api/types";
 
 /**
- * The meetings LIST's contract facts (the detail moved to its own page —
- * MeetingPage.test.tsx owns that):
+ * The meetings LIST's contract facts, after the 2026-09-01 rebuild against
+ * the reference's own product (the detail lives on its own page):
  *
- *  1. GROUPING is derived, not decorative: still-ahead-and-unrecorded rows
- *     sit under «پیش رو», everything else under «گذشته» — asserted inside
- *     each group's scope, because a flat list satisfies bare presence.
- *     (Verified red by deleting the record-decides clause: the held-early
- *     meeting jumped groups.)
+ *  1. The stage FILTER is derived, not decorative: «پیش‌رو» keeps only
+ *     ahead-and-unrecorded rows — a meeting held early is not upcoming,
+ *     and a past one never is. (Verified red by dropping the record
+ *     clause: the held-early meeting reappeared under پیش‌رو.)
  *  2. A row is a DOOR: clicking navigates to the meeting's page.
- *  3. The CREATE writes the wire's shape — mode from the picker, an ISO
- *     time — and lands on the new meeting's page.
+ *  3. The CREATE writes the wire's shape — the picked mode, an ISO time —
+ *     and lands on the new meeting's page.
  *  4. The empty list is a NAMED state.
  */
 vi.mock("next/navigation", () => ({
@@ -46,7 +45,8 @@ const created: Record<string, unknown>[] = [];
 vi.mock("@/api/client", () => ({
   BffError: class BffError extends Error {},
   api: {
-    meetings: async () => LIST,
+    meetings: async (opts?: { archived?: boolean }) => (opts?.archived === true ? [] : LIST),
+    updateMeeting: vi.fn(),
     createMeeting: async (input: Record<string, unknown>) => {
       created.push(input);
       return meeting({ id: "m-new" });
@@ -62,27 +62,30 @@ beforeEach(() => {
   pushSpy.mockClear();
 });
 
-function group(label: string): HTMLElement {
-  const heading = screen.getByRole("heading", { name: label });
-  return heading.closest("section")!;
-}
-
 describe("Meetings", () => {
-  it("groups by the derived stage: ahead-and-unrecorded is upcoming, the rest is past", async () => {
+  it("the پیش‌رو filter keeps only ahead-and-unrecorded rows", async () => {
     LIST = [
       meeting({ id: "m-a", title: "جلسهٔ آینده", scheduled_at: "2099-01-01T09:00:00.000Z" }),
       meeting({ id: "m-b", title: "جلسهٔ گذشته", scheduled_at: "2020-01-01T09:00:00.000Z" }),
       /* still ahead by the clock but RECORDED — the record decides, not the
-         date: a held meeting is past however early it was held */
+         date: a held meeting is not upcoming however early it was held */
       meeting({ id: "m-c", title: "جلسهٔ برگزارشده", scheduled_at: "2099-06-01T09:00:00.000Z", call_id: "c-1", call_title: "رکورد" }),
     ];
     render(<Meetings />);
     await waitFor(() => expect(screen.getByText("جلسهٔ آینده")).toBeInTheDocument());
+    // «همه» shows all three
+    expect(screen.getByText("جلسهٔ گذشته")).toBeInTheDocument();
+    expect(screen.getByText("جلسهٔ برگزارشده")).toBeInTheDocument();
 
-    expect(within(group("پیش رو")).getByText("جلسهٔ آینده")).toBeInTheDocument();
-    expect(within(group("گذشته")).getByText("جلسهٔ گذشته")).toBeInTheDocument();
-    expect(within(group("گذشته")).getByText("جلسهٔ برگزارشده")).toBeInTheDocument();
-    expect(within(group("پیش رو")).queryByText("جلسهٔ برگزارشده")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "پیش‌رو" }));
+    await waitFor(() => expect(screen.queryByText("جلسهٔ گذشته")).toBeNull());
+    expect(screen.getByText("جلسهٔ آینده")).toBeInTheDocument();
+    expect(screen.queryByText("جلسهٔ برگزارشده")).toBeNull();
+
+    // and «انجام‌شده» is its mirror: only the recorded one
+    await userEvent.click(screen.getByRole("button", { name: "انجام‌شده" }));
+    await waitFor(() => expect(screen.getByText("جلسهٔ برگزارشده")).toBeInTheDocument());
+    expect(screen.queryByText("جلسهٔ آینده")).toBeNull();
   });
 
   it("a row opens the meeting's own page", async () => {

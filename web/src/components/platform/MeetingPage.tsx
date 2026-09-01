@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { Link, useRouter } from "@/i18n/routing";
+import { useRouter } from "@/i18n/routing";
 import { api } from "@/api/client";
 import type { Call, CallNote, Me, MeetingAgendaItem, MeetingRecord } from "@/api/types";
 import { useCrumbTitle } from "@/components/platform/CrumbTitle";
@@ -12,8 +12,9 @@ import { Whiteboard } from "./meeting/Whiteboard";
 import { AudioBar, ExtractionPanel, ProcessingCard, TranscriptPanel } from "./meeting/Review";
 import { MinutesTab } from "./meeting/Minutes";
 import { MeetingTasksBoard } from "./meeting/MiniTasks";
+import { MeetingAssistant } from "./meeting/MeetingAssistant";
 import {
-  IconCheck, IconMic, IconPlus, IconTrash,
+  IconCheck, IconMic, IconPencil, IconPlus, IconTrash,
 } from "@/components/icons";
 import {
   finish, recorderSnapshot, startRecording, subscribeRecorder,
@@ -571,7 +572,10 @@ function HoldStage({ meeting, me, locale, recordingLive }: {
   };
 
   return (
-    <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[280px_1fr]">
+    <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[1fr_280px]">
+      {/* the stage — the reference puts the media on the START side */}
+      <MeetingStage meeting={meeting} recordingLive={recordingLive} />
+
       <div className="space-y-3">
         {flash !== null ? (
           <p className="rounded-xl bg-accent-soft px-3 py-1.5 text-center text-xs font-medium text-accent">{flash}</p>
@@ -666,7 +670,43 @@ function HoldStage({ meeting, me, locale, recordingLive }: {
         </section>
       </div>
 
-      {/* the canvas */}
+    </div>
+  );
+}
+
+/**
+ * The live stage's media area, to the reference's shape: a header carrying
+ * the recording STATUS on one side, and the surface itself below.
+ *
+ * Their header also switches between a video room, the whiteboard and a
+ * presentation. Two of those three this product does not run — there is no
+ * conferencing here, and the recorder deliberately STOPS the shared
+ * surface's video track the moment it has the audio it came for
+ * (recordingEngine.ts) — so a mode chip for either would be a control that
+ * can only ever show an absence. The whiteboard is the stage; the status
+ * chip is the truth about the take.
+ */
+function MeetingStage({ meeting, recordingLive }: {
+  meeting: MeetingRecord;
+  recordingLive: boolean;
+}) {
+  const t = useTranslations("meetings");
+  return (
+    <div className="flex min-h-0 flex-col gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="flex items-center gap-1.5 rounded-xl border border-border bg-surface px-3 py-1.5 text-xs font-medium text-fg">
+          <IconPencil width={12} height={12} />
+          {t("modeBoard")}
+        </span>
+        <span className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-medium ${
+          recordingLive ? "bg-danger/10 text-danger" : "bg-surface-2 text-fg-muted"
+        }`}>
+          <span className={`h-1.5 w-1.5 rounded-full ${recordingLive ? "animate-pulse bg-danger" : "bg-fg-subtle"}`} aria-hidden />
+          {recordingLive
+            ? t("statusRecording", { mode: t(`mode_${meeting.mode}`) })
+            : t("statusReady")}
+        </span>
+      </div>
       <Whiteboard meetingId={meeting.id} />
     </div>
   );
@@ -760,7 +800,9 @@ function PostStage({ meeting, call, me, locale, onGoHold, onStart, onChanged, on
           callTitle={typeof call === "object" && call !== null ? call.title : meeting.title} />
       ) : null}
       {tab === "files" ? <FilesTab call={call} locale={locale} /> : null}
-      {tab === "assistant" ? <AssistantTab /> : null}
+      {tab === "assistant" ? (
+        <MeetingAssistant callId={meeting.call_id} title={meeting.title} />
+      ) : null}
       {tab === "notes" ? <NotesTab callId={meeting.call_id} locale={locale} /> : null}
       {tab === "minutes" ? (
         <MinutesTab meeting={meeting} myName={me !== null ? personName(me, locale) : ""}
@@ -797,20 +839,6 @@ function FilesTab({ call, locale }: { call: Call | null | "gone"; locale: string
         </li>
       ))}
     </ul>
-  );
-}
-
-/* ── دستیار: the door to the assistant, with this meeting in hand ─────── */
-function AssistantTab() {
-  const t = useTranslations("meetings");
-  return (
-    <div className="tile mx-auto w-full max-w-xl p-6 text-center">
-      <p className="text-sm leading-6 text-fg-muted">{t("assistantHint")}</p>
-      <Link href="/assistant"
-        className="tap mx-auto mt-4 inline-flex h-10 items-center justify-center rounded-xl bg-accent px-5 text-sm font-semibold text-on-accent shadow-accent hover:opacity-90">
-        {t("openAssistant")}
-      </Link>
-    </div>
   );
 }
 
