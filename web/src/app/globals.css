@@ -198,6 +198,23 @@
     --tw-ring-offset-color: rgb(var(--bg));
   }
 
+  /*
+   * Text controls are EXEMPT from the ring (user directive, 2026-09-01:
+   * "remove this selective highlight around the text boxs all over the
+   * platform"). Chrome marks a text input :focus-visible even on a mouse
+   * click, so the accent halo appeared around every box anyone typed in —
+   * the reference's inputs mark focus with the border alone, and ours
+   * already carry `focus:border-accent` for exactly that. Buttons and
+   * links KEEP the ring: it only shows for keyboard focus there, and
+   * removing it would trade a visual nit for a WCAG failure.
+   */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus-visible,
+  textarea:focus-visible,
+  select:focus-visible,
+  [contenteditable="true"]:focus-visible {
+    @apply ring-0 ring-offset-0;
+  }
+
   /* Latin fragments inside Persian text keep their own direction. */
   .ltr {
     direction: ltr;

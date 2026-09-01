@@ -57,6 +57,7 @@ export const TRAIL: Readonly<Record<string, TrailEntry>> = {
   "/assistant": { label: "platform.assistant", parent: "/" },
   "/tasks": { label: "platform.tasks", parent: "/" },
   "/meetings": { label: "platform.meetings", parent: "/" },
+  "/meetings/[id]": { entity: true, parent: "/meetings" },
 
   /* the connected accounts a workflow runs on, beside the workflows */
   "/integrations": { label: "platform.integrations", parent: "/workflows" },

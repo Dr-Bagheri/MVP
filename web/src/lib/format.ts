@@ -4,6 +4,17 @@ import { resolvedCalendar, resolvedTimezone } from "./preferences";
 
 const FA_DIGITS = "۰۱۲۳۴۵۶۷۸۹";
 
+/**
+ * Normalize Persian (U+06F0–９) and Arabic-Indic (U+0660–９) digits to ASCII —
+ * the INPUT side of the digits story: a numeric field that strips what the
+ * standard Persian keyboard types is a field Persian users cannot type in.
+ */
+export function asciiDigits(input: string): string {
+  return input
+    .replace(/[۰-۹]/g, (d) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(d)))
+    .replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)));
+}
+
 export function faDigits(input: string | number): string {
   return String(input).replace(/[0-9]/g, (d) => FA_DIGITS[Number(d)]!);
 }
@@ -320,6 +331,11 @@ export interface MonthGrid {
 
 const JALALI_WEEKDAYS = ["ش", "ی", "د", "س", "چ", "پ", "ج"];
 const GREGORIAN_WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"];
+/* the week strip wants the FULL short names (user directive, 2026-09-01:
+   "use the full small name for days of the week") — the month grid keeps
+   its single letters, where seven columns share a phone's width */
+const JALALI_WEEKDAYS_FULL = ["شنبه", "یکشنبه", "دوشنبه", "سه‌شنبه", "چهارشنبه", "پنجشنبه", "جمعه"];
+const GREGORIAN_WEEKDAYS_FULL = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 /**
  * The month `now` falls in, as whole weeks of squares.
@@ -390,15 +406,15 @@ export interface WeekCell {
  * by the same walk, so the two can never disagree about which column a
  * date lands in.
  */
-export function weekStrip(now: Date, locale: string): WeekCell[] {
+export function weekStrip(now: Date, locale: string, offsetWeeks = 0): WeekCell[] {
   const jalali = resolvedCalendar(locale) !== "gregorian";
   const todayKey = dayKeyOf(now);
   const weekdayOfToday = new Date(todayKey).getUTCDay();          // 0 = Sunday
   const lead = jalali ? (weekdayOfToday + 1) % 7 : weekdayOfToday; // Saturday-first
-  const names = jalali ? JALALI_WEEKDAYS : GREGORIAN_WEEKDAYS;
+  const names = jalali ? JALALI_WEEKDAYS_FULL : GREGORIAN_WEEKDAYS_FULL;
   const cells: WeekCell[] = [];
   for (let i = 0; i < 7; i += 1) {
-    const key = todayKey + (i - lead) * DAY_MS;
+    const key = todayKey + (i - lead + offsetWeeks * 7) * DAY_MS;
     const utcDay = new Date(key).getUTCDay();
     cells.push({
       key,
@@ -409,4 +425,32 @@ export function weekStrip(now: Date, locale: string): WeekCell[] {
     });
   }
   return cells;
+}
+
+/**
+ * «۷ تا ۱۳ شهریور ۱۴۰۵» / "Sep 7 – 13, 2026" — the strip's own range, from
+ * its first and last cells; crossing a month boundary names both months.
+ */
+export function weekRangeLabel(cells: WeekCell[], locale: string): string {
+  const first = cells[0];
+  const last = cells[cells.length - 1];
+  if (!first || !last) return "";
+  const jalali = resolvedCalendar(locale) !== "gregorian";
+  const a = activeParts(first.key, locale);
+  const b = activeParts(last.key, locale);
+  const monthName = (m: number, y: number) => jalali
+    ? JALALI_MONTHS[m - 1]!
+    : dateFormatter("en-GB", { month: "short", timeZone: "UTC" })
+        .format(new Date(Date.UTC(y, m - 1, 1)));
+  /* digits follow the LANGUAGE even when the calendar is Gregorian (the
+     avatar-menu axes ruling): a fa reader on the Gregorian calendar reads
+     Persian digits around a Latin month name */
+  if (a.m === b.m && a.y === b.y) {
+    return jalali
+      ? `${digits(a.d, locale)} تا ${digits(b.d, locale)} ${monthName(a.m, a.y)} ${digits(a.y, locale)}`
+      : `${monthName(a.m, a.y)} ${digits(a.d, locale)} – ${digits(b.d, locale)}, ${digits(a.y, locale)}`;
+  }
+  return jalali
+    ? `${digits(a.d, locale)} ${monthName(a.m, a.y)} تا ${digits(b.d, locale)} ${monthName(b.m, b.y)} ${digits(b.y, locale)}`
+    : `${monthName(a.m, a.y)} ${digits(a.d, locale)} – ${monthName(b.m, b.y)} ${digits(b.d, locale)}, ${digits(b.y, locale)}`;
 }

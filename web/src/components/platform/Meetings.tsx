@@ -9,7 +9,7 @@ import { Overlay } from "./Overlay";
 import {
   IconCalendar, IconClose, IconMic, IconPlus, IconTrash, IconUpload, IconVideo,
 } from "@/components/icons";
-import { digits, formatDate, formatTime } from "@/lib/format";
+import { asciiDigits, digits, formatDate, formatTime } from "@/lib/format";
 
 /**
  * MEETINGS (0145, the reference adoption) — "add a part name meeting and
@@ -30,7 +30,7 @@ import { digits, formatDate, formatTime } from "@/lib/format";
  *     call_id back, which is what moves the meeting to its post stage.
  */
 
-const MODE_ICON: Record<MeetingMode, ReturnType<typeof IconMic>> = {
+export const MODE_ICON: Record<MeetingMode, ReturnType<typeof IconMic>> = {
   upload: <IconUpload width={14} height={14} />,
   in_person: <IconMic width={14} height={14} />,
   online: <IconVideo width={14} height={14} />,
@@ -40,8 +40,8 @@ export function Meetings() {
   const t = useTranslations("meetings");
   const locale = useLocale();
   const [rows, setRows] = useState<MeetingRecord[] | null | "failed">(null);
+  const router = useRouter();
   const [creating, setCreating] = useState(false);
-  const [open, setOpen] = useState<MeetingRecord | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(() => {
@@ -96,24 +96,16 @@ export function Meetings() {
       ) : (
         <>
           <MeetingGroup label={t("groupUpcoming")} rows={upcoming} emptyLabel={t("noUpcoming")}
-            locale={locale} onOpen={setOpen} />
+            locale={locale} onOpen={(m) => router.push(`/meetings/${m.id}`)} />
           <MeetingGroup label={t("groupPast")} rows={past} emptyLabel={null}
-            locale={locale} onOpen={setOpen} />
+            locale={locale} onOpen={(m) => router.push(`/meetings/${m.id}`)} />
         </>
       )}
 
       {creating ? (
         <NewMeetingDialog
           onClose={() => setCreating(false)}
-          onCreated={() => { setCreating(false); load(); }}
-          onRefused={refusal}
-        />
-      ) : null}
-      {open !== null ? (
-        <MeetingDialog
-          meeting={open}
-          onClose={() => setOpen(null)}
-          onChanged={(m) => { setOpen(m); load(); }}
+          onCreated={(m) => { setCreating(false); router.push(`/meetings/${m.id}`); }}
           onRefused={refusal}
         />
       ) : null}
@@ -201,7 +193,7 @@ function ModePicker({ value, onChange }: { value: MeetingMode; onChange: (m: Mee
 }
 
 /** invitee chips: names or addresses as typed, Enter adds, × removes */
-function InviteeInput({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
+export function InviteeInput({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
   const t = useTranslations("meetings");
   const [draft, setDraft] = useState("");
   const add = () => {
@@ -211,7 +203,7 @@ function InviteeInput({ value, onChange }: { value: string[]; onChange: (v: stri
     setDraft("");
   };
   return (
-    <div className="rounded-xl border border-border bg-surface p-2">
+    <div className="rounded-xl border border-border bg-surface p-2 transition-colors focus-within:border-accent">
       {value.length > 0 ? (
         <div className="mb-1.5 flex flex-wrap gap-1.5">
           {value.map((name) => (
@@ -242,10 +234,11 @@ function InviteeInput({ value, onChange }: { value: string[]; onChange: (v: stri
 }
 
 /** agenda rows: title + planned minutes, add and remove */
-function AgendaEditor({ value, onChange }: {
+export function AgendaEditor({ value, onChange }: {
   value: MeetingAgendaItem[]; onChange: (v: MeetingAgendaItem[]) => void;
 }) {
   const t = useTranslations("meetings");
+  const locale = useLocale();
   const [title, setTitle] = useState("");
   const [minutes, setMinutes] = useState("");
   const add = () => {
@@ -262,7 +255,7 @@ function AgendaEditor({ value, onChange }: {
         <div key={`${item.title}-${i}`} className="flex items-center gap-2 rounded-lg bg-surface-2 px-2.5 py-1.5">
           <span className="min-w-0 flex-1 truncate text-sm text-fg">{item.title}</span>
           {item.minutes !== null ? (
-            <span className="badge-num shrink-0 text-xs text-fg-muted">{t("agendaMinutes", { n: item.minutes })}</span>
+            <span className="badge-num shrink-0 text-xs text-fg-muted">{t("agendaMinutes", { n: digits(item.minutes, locale) })}</span>
           ) : null}
           <button
             type="button"
@@ -284,7 +277,7 @@ function AgendaEditor({ value, onChange }: {
         />
         <input
           value={minutes}
-          onChange={(e) => setMinutes(e.target.value.replace(/[^0-9]/g, ""))}
+          onChange={(e) => setMinutes(asciiDigits(e.target.value).replace(/[^0-9]/g, ""))}
           inputMode="numeric"
           placeholder={t("agendaMinutesPlaceholder")}
           className="h-9 w-20 rounded-lg border border-border bg-surface px-2.5 text-sm text-fg outline-none placeholder:text-fg-subtle focus:border-accent"
@@ -292,7 +285,7 @@ function AgendaEditor({ value, onChange }: {
         <button
           type="button"
           onClick={add}
-          className="tap h-9 rounded-lg bg-surface-2 px-3 text-xs font-medium text-fg hover:bg-surface-3"
+          className="tap h-9 rounded-lg bg-surface-2 px-3 text-xs font-medium text-fg hover:bg-border"
         >
           {t("add")}
         </button>
@@ -313,7 +306,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 const INPUT = "h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-fg outline-none placeholder:text-fg-subtle focus:border-accent";
 
 function NewMeetingDialog({ onClose, onCreated, onRefused }: {
-  onClose: () => void; onCreated: () => void; onRefused: () => void;
+  onClose: () => void; onCreated: (m: MeetingRecord) => void; onRefused: () => void;
 }) {
   const t = useTranslations("meetings");
   const [title, setTitle] = useState("");
@@ -368,8 +361,8 @@ function NewMeetingDialog({ onClose, onCreated, onRefused }: {
             <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className={INPUT} />
           </Field>
           <Field label={t("fieldDuration")}>
-            <input value={duration} onChange={(e) => setDuration(e.target.value.replace(/[^0-9]/g, ""))}
-              inputMode="numeric" placeholder="۶۰" className={INPUT} />
+            <input value={duration} onChange={(e) => setDuration(asciiDigits(e.target.value).replace(/[^0-9]/g, ""))}
+              inputMode="numeric" placeholder={t("durationPlaceholder")} className={INPUT} />
           </Field>
         </div>
         <div className="grid grid-cols-2 gap-2">
@@ -396,151 +389,12 @@ function NewMeetingDialog({ onClose, onCreated, onRefused }: {
       </div>
       <div className="mt-3 flex justify-end gap-2">
         <button type="button" onClick={onClose}
-          className="tap h-10 rounded-xl bg-surface-2 px-4 text-sm font-medium text-fg hover:bg-surface-3">
+          className="tap h-10 rounded-xl bg-surface-2 px-4 text-sm font-medium text-fg hover:bg-border">
           {t("cancel")}
         </button>
         <button type="button" onClick={submit} disabled={title.trim() === "" || date === "" || busy}
           className="tap h-10 rounded-xl bg-accent px-4 text-sm font-semibold text-on-accent disabled:opacity-50">
           {t("createMeeting")}
-        </button>
-      </div>
-    </Overlay>
-  );
-}
-
-/**
- * The meeting's own screen: the reference's three stages as a stepper —
- * pre (the plan), hold (شروع جلسه), post (the record). The stage is derived
- * from two facts the row carries: is it still ahead, and has it a record.
- */
-function MeetingDialog({ meeting, onClose, onChanged, onRefused }: {
-  meeting: MeetingRecord;
-  onClose: () => void;
-  onChanged: (m: MeetingRecord) => void;
-  onRefused: () => void;
-}) {
-  const t = useTranslations("meetings");
-  const locale = useLocale();
-  const router = useRouter();
-
-  const stage: "pre" | "hold" | "post" =
-    meeting.call_id !== null ? "post"
-      : new Date(meeting.scheduled_at).getTime() > Date.now() ? "pre" : "hold";
-
-  const start = () => {
-    /* the recorder reads ?meeting= and maps the mode to its source —
-       online → system audio, in-person → microphone. The link back
-       (call_id) is the recorder's to write. Upload mode lands on the same
-       screen, where the upload control lives on the section menu; an
-       uploaded call does not auto-link in v1, and the button says
-       "upload" rather than pretending otherwise. */
-    router.push(`/echo?meeting=${meeting.id}`);
-  };
-
-  const patch = (body: Record<string, unknown>) => {
-    void api.updateMeeting(meeting.id, body).then(onChanged).catch(onRefused);
-  };
-
-  return (
-    <Overlay onClose={onClose} label={meeting.title} wide>
-      <div className="mb-3 flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="truncate text-base font-bold text-fg">{meeting.title}</h2>
-          <p className="mt-0.5 text-xs text-fg-muted">
-            {formatDate(meeting.scheduled_at, locale)}
-            {" · "}
-            <span className="badge-num">{formatTime(meeting.scheduled_at, locale)}</span>
-            {meeting.duration_minutes !== null
-              ? ` · ${t("durationShort", { n: digits(meeting.duration_minutes, locale) })}` : ""}
-            {" · "}
-            {t(`mode_${meeting.mode}`)}
-          </p>
-        </div>
-        <button type="button" aria-label={t("close")} onClick={onClose} className="shrink-0 text-fg-subtle hover:text-fg">
-          <IconClose width={14} height={14} />
-        </button>
-      </div>
-
-      {/* ── the stepper ─────────────────────────────────────────────── */}
-      <ol className="mb-4 flex items-center gap-1.5 text-xs" aria-label={t("stages")}>
-        {(["pre", "hold", "post"] as const).map((s, i) => {
-          const reached = ["pre", "hold", "post"].indexOf(stage) >= i;
-          return (
-            <li key={s} className="flex flex-1 items-center gap-1.5">
-              <span aria-current={stage === s ? "step" : undefined}
-                className={`flex h-6 flex-1 items-center justify-center rounded-lg font-medium ${
-                  stage === s
-                    ? "bg-accent text-on-accent"
-                    : reached ? "bg-accent-soft text-accent" : "bg-surface-2 text-fg-subtle"
-                }`}>
-                {t(`stage_${s}`)}
-              </span>
-            </li>
-          );
-        })}
-      </ol>
-
-      <div className="scroll-quiet min-h-0 flex-1 space-y-4 overflow-y-auto pe-1">
-        {stage !== "post" ? (
-          <button type="button" onClick={start}
-            className="tap flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-accent text-sm font-semibold text-on-accent shadow-accent hover:opacity-90">
-            {MODE_ICON[meeting.mode]}
-            {meeting.mode === "upload" ? t("startUpload") : t("startMeeting")}
-          </button>
-        ) : (
-          <button type="button"
-            onClick={() => router.push(`/calls/${meeting.call_id}`)}
-            className="tap flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-accent-soft text-sm font-semibold text-accent hover:opacity-90">
-            {t("openRecord")}
-            {meeting.call_title !== null && meeting.call_title.trim() !== "" ? ` — ${meeting.call_title}` : ""}
-          </button>
-        )}
-
-        {meeting.agenda.length > 0 ? (
-          <section aria-label={t("fieldAgenda")}>
-            <h3 className="mb-1.5 text-xs font-semibold text-fg-muted">{t("fieldAgenda")}</h3>
-            <ol className="space-y-1">
-              {meeting.agenda.map((item, i) => (
-                <li key={i} className="flex items-center gap-2 rounded-lg bg-surface-2 px-2.5 py-1.5 text-sm text-fg">
-                  <span className="badge-num w-5 shrink-0 text-center text-xs text-fg-subtle">{digits(i + 1, locale)}</span>
-                  <span className="min-w-0 flex-1 truncate">{item.title}</span>
-                  {item.minutes !== null ? (
-                    <span className="badge-num shrink-0 text-xs text-fg-muted">{t("agendaMinutes", { n: item.minutes })}</span>
-                  ) : null}
-                </li>
-              ))}
-            </ol>
-          </section>
-        ) : null}
-
-        {meeting.invitees.length > 0 ? (
-          <section aria-label={t("fieldInvitees")}>
-            <h3 className="mb-1.5 text-xs font-semibold text-fg-muted">{t("fieldInvitees")}</h3>
-            <div className="flex flex-wrap gap-1.5">
-              {meeting.invitees.map((name) => (
-                <span key={name} className="rounded-lg bg-surface-2 px-2 py-1 text-xs text-fg">{name}</span>
-              ))}
-            </div>
-          </section>
-        ) : null}
-
-        {meeting.description.trim() !== "" ? (
-          <section aria-label={t("fieldDescription")}>
-            <h3 className="mb-1.5 text-xs font-semibold text-fg-muted">{t("fieldDescription")}</h3>
-            <p className="whitespace-pre-wrap text-sm leading-6 text-fg">{meeting.description}</p>
-          </section>
-        ) : null}
-      </div>
-
-      <div className="mt-3 flex items-center justify-between">
-        <button type="button"
-          onClick={() => patch({ archived: !meeting.archived })}
-          className="tap h-9 rounded-lg px-3 text-xs text-fg-subtle hover:text-danger">
-          {meeting.archived ? t("unarchive") : t("archiveMeeting")}
-        </button>
-        <button type="button" onClick={onClose}
-          className="tap h-9 rounded-lg bg-surface-2 px-4 text-xs font-medium text-fg hover:bg-surface-3">
-          {t("close")}
         </button>
       </div>
     </Overlay>

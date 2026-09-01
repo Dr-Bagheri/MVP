@@ -24,6 +24,7 @@ import { Card, Chip } from "@/components/ui";
 import { Link } from "@/i18n/routing";
 import { digits, formatClock, modelLabel } from "@/lib/format";
 import { resumePoint } from "./uploadRules";
+import { shouldLinkMeeting } from "./meetingLink";
 import { shouldStick } from "@/lib/threadFollow";
 import { AgendaPanel, RecorderNotes } from "./RecorderNotes";
 import { ConfirmDialog, KebabMenu, SelectMenu, type KebabItem } from "@/components/rowActions";
@@ -83,7 +84,12 @@ interface DeviceOption {
   label: string;
 }
 
-export function Recorder({ onFinished }: { onFinished?: () => void }) {
+export function Recorder({ onFinished, meeting: meetingProp }: {
+  onFinished?: () => void;
+  /** 0145: a meeting page embedding the recorder hands the meeting DOWN as
+      a prop; the `?meeting=` URL adoption below stays for /echo links */
+  meeting?: { id: string; mode: "upload" | "in_person" | "online"; title: string };
+}) {
   const t = useTranslations("capture");
   const locale = useLocale();
 
@@ -284,17 +290,44 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
    * production-build reason.
    */
   const [meetingTarget, setMeetingTarget] = useState<{ id: string; linked: boolean } | null>(null);
+  /**
+   * The engine's callId AT ADOPTION TIME. The engine is module-level and
+   * survives navigation with its last take's id still in hand — so "there
+   * is a callId" is NOT evidence this meeting produced it. Only a take
+   * that STARTS after adoption (callId changes from this baseline) may be
+   * linked; without the baseline, opening a due meeting right after an
+   * unrelated take silently claimed that take as the meeting's record.
+   */
+  const meetingBaselineCallId = useRef<string | null>(null);
   useEffect(() => {
+    const adopt = (m: { id: string; mode: string; title: string; call_id?: string | null }) => {
+      meetingBaselineCallId.current = recorderSnapshot().callId ?? null;
+      setMeetingTarget({ id: m.id, linked: (m.call_id ?? null) !== null });
+      setTitle((prev) => (prev.trim() === "" ? m.title : prev));
+      if (m.mode === "online") setSource("system");
+      else if (m.mode === "in_person") setSource("mic");
+    };
+    const prefillOnly = (m: { title: string; mode: string }) => {
+      /* the read failed: we cannot know whether a record is already linked,
+         so linking stays DISARMED — prefill is a convenience, a wrong link
+         is a corrupted record */
+      setTitle((prev) => (prev.trim() === "" ? m.title : prev));
+      if (m.mode === "online") setSource("system");
+      else if (m.mode === "in_person") setSource("mic");
+    };
+    if (meetingProp !== undefined) {
+      /* embedded on the meeting's own page: the prop IS the meeting; still
+         ask the server for call_id so a second visit never re-links */
+      void api.meetingDetail(meetingProp.id)
+        .then(adopt)
+        .catch(() => prefillOnly(meetingProp));
+      return;
+    }
     const id = new URLSearchParams(window.location.search).get("meeting");
     if (!id) return;
     void api
       .meetingDetail(id)
-      .then((meeting) => {
-        setMeetingTarget({ id: meeting.id, linked: meeting.call_id !== null });
-        setTitle((prev) => (prev.trim() === "" ? meeting.title : prev));
-        if (meeting.mode === "online") setSource("system");
-        else if (meeting.mode === "in_person") setSource("mic");
-      })
+      .then(adopt)
       .catch(() => setMeetingTarget(null));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot adoption
   }, []);
@@ -307,8 +340,11 @@ export function Recorder({ onFinished }: { onFinished?: () => void }) {
    * re-written: a second take on the same page is its own call.
    */
   useEffect(() => {
-    if (meetingTarget === null || meetingTarget.linked || !s.callId) return;
-    const target = meetingTarget;
+    /* the decision lives in meetingLink.ts, where its matrix is pinned —
+       including the baseline case: the engine's leftover callId from an
+       earlier, unrelated take must never be claimed */
+    if (!shouldLinkMeeting(meetingTarget, s.callId ?? null, meetingBaselineCallId.current)) return;
+    const target = meetingTarget!;
     setMeetingTarget({ ...target, linked: true });
     void api.updateMeeting(target.id, { call_id: s.callId }).catch(() => {
       /* the refusal leaves the meeting unlinked — visible on its own screen,

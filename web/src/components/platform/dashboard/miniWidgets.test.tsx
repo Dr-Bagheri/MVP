@@ -29,6 +29,7 @@ let CALLS: () => Promise<Call[]>;
 let CALENDAR: () => Promise<ConnectorItem[]>;
 let CONNECTORS: () => Promise<ConnectorStatus[]>;
 let TASKS: () => Promise<{ columns: never[]; topics: never[]; tasks: never[] }>;
+let MEETINGS: () => Promise<import("@/api/types").MeetingRecord[]>;
 
 /* the shape is the PRODUCER's `CallSummary`, inherited through `Call` — a
    field this fixture invented would compile here and be undefined on the
@@ -72,6 +73,7 @@ vi.mock("@/api/client", async () => ({
     connectorItems: () => CALENDAR(),
     connectors: () => CONNECTORS(),
     taskBoard: () => TASKS(),
+    meetings: () => MEETINGS(),
   },
 }));
 
@@ -87,6 +89,7 @@ beforeEach(() => {
   CALENDAR = async () => [];
   CONNECTORS = async () => [];
   TASKS = async () => ({ columns: [], topics: [], tasks: [] });
+  MEETINGS = async () => [];
 });
 
 describe("a list tile's kinds of nothing", () => {
@@ -272,6 +275,7 @@ describe("the stat strip (reference adoption)", () => {
       { id: "e-2", title: "ماه بعد", subtitle: "", occurred_at: "2099-01-01T09:00:00.000Z" },
     ];
     TASKS = async () => ({ columns: [], topics: [], tasks: [] });
+  MEETINGS = async () => [];
     await act(async () => { render(<StatsWidget />); });
 
     const meetingsCard = screen.getByText("جلسات امروز").closest("a")!;
@@ -305,20 +309,39 @@ describe("the upcoming tile", () => {
 });
 
 describe("the week strip", () => {
-  it("renders seven days with exactly one today, and places an event on ITS day", async () => {
+  it("renders seven FULL day names with exactly one today, and lists only THIS week's meetings", async () => {
     const today = new Date();
-    CALENDAR = async () => [
-      { id: "e-1", title: "جلسهٔ امروز", subtitle: "", occurred_at: today.toISOString() },
+    MEETINGS = async () => [
+      { id: "m-1", title: "جلسهٔ این هفته", scheduled_at: today.toISOString(),
+        duration_minutes: null, mode: "online", topic: null, location: null,
+        description: "", invitees: [], agenda: [], call_id: null, call_title: null,
+        archived: false, created_by: "u-1", created_at: today.toISOString() },
+      { id: "m-2", title: "جلسهٔ سال دیگر", scheduled_at: "2099-01-01T09:00:00.000Z",
+        duration_minutes: null, mode: "online", topic: null, location: null,
+        description: "", invitees: [], agenda: [], call_id: null, call_title: null,
+        archived: false, created_by: "u-1", created_at: today.toISOString() },
     ];
     let view: ReturnType<typeof render>;
     await act(async () => { view = render(<WeekWidget />); });
 
-    const days = view!.container.querySelectorAll("li");
-    expect(days.length).toBe(7);
+    // the strip: seven pills wearing the FULL short names, not single letters
+    const strip = view!.container.querySelectorAll("ul")[0]!;
+    expect(strip.querySelectorAll("li").length).toBe(7);
+    expect(strip.textContent).toContain("شنبه");
+    expect(strip.textContent).toContain("جمعه");
     // one — and only one — cell wears today's accent
-    const todayCells = view!.container.querySelectorAll("li.border-accent");
-    expect(todayCells.length).toBe(1);
-    // the event sits INSIDE today's cell, not merely somewhere on the strip
-    expect(todayCells[0]!.textContent).toContain("جلسهٔ امروز");
+    expect(strip.querySelectorAll("li.border-accent\\/40").length).toBe(1);
+
+    // the meeting list below carries THIS week's meeting and drops the far one
+    expect(screen.getByText("جلسهٔ این هفته")).toBeTruthy();
+    expect(screen.queryByText("جلسهٔ سال دیگر")).toBeNull();
+  });
+
+  it("an empty week is a NAMED state with the door to scheduling", async () => {
+    MEETINGS = async () => [];
+    await act(async () => { render(<WeekWidget />); });
+    expect(screen.getByText("این هفته جلسه‌ای نداری.")).toBeTruthy();
+    const door = screen.getByText("جلسه جدید").closest("a")!;
+    expect(door.getAttribute("href")).toBe("/meetings");
   });
 });

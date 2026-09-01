@@ -10,7 +10,7 @@ import { ConfirmDialog } from "@/components/rowActions";
 import {
   IconCheck, IconClose, IconPencil, IconPlus, IconTrash,
 } from "@/components/icons";
-import { formatRelativeDate } from "@/lib/format";
+import { dayKeyOf, digits, formatRelativeDate, monthGrid } from "@/lib/format";
 import type {
   Me, TaskCardRecord, TaskColumnRecord, TaskDetailRecord, TaskPriority, TaskTopicRecord,
 } from "@/api/types";
@@ -50,7 +50,7 @@ const COLUMN_DOT: Record<string, string> = {
   green: "bg-success",
 };
 
-type View = "kanban" | "list" | "archive";
+type View = "kanban" | "list" | "calendar" | "archive";
 type PriorityFilter = TaskPriority | "all";
 
 interface Board {
@@ -79,7 +79,7 @@ function Card({ task, onOpen, onToggleDone }: {
     <div
       draggable
       onDragStart={(e) => e.dataTransfer.setData("text/task-id", task.id)}
-      className="cursor-pointer rounded-xl border border-border bg-surface p-2.5 shadow-card transition-colors hover:border-border-strong"
+      className="cursor-pointer rounded-xl border border-border bg-surface p-3 shadow-card transition-colors hover:border-border-strong"
       onClick={onOpen}
       role="button"
       tabIndex={0}
@@ -99,7 +99,7 @@ function Card({ task, onOpen, onToggleDone }: {
         </span>
       </div>
       {task.call_id !== null ? (
-        <span className="mt-2 block truncate rounded-md bg-surface-2 px-1.5 py-1 text-[11px] text-fg-muted">
+        <span className="mt-2 block truncate rounded-md bg-accent-soft px-1.5 py-1 text-[11px] text-accent">
           {t("fromRecord")}: {task.call_title ?? t("recordGone")}
         </span>
       ) : null}
@@ -119,6 +119,7 @@ function Card({ task, onOpen, onToggleDone }: {
 
 export function TaskBoard() {
   const t = useTranslations("tasks");
+  const locale = useLocale();
   const router = useRouter();
   const params = useSearchParams();
 
@@ -209,7 +210,7 @@ export function TaskBoard() {
       aria-pressed={view === v}
       onClick={() => setView(v)}
       className={`tap h-9 rounded-xl px-3.5 text-xs font-medium transition-colors ${
-        view === v ? "bg-fg text-bg" : "bg-surface text-fg-muted hover:text-fg"
+        view === v ? "bg-fg text-bg" : "text-fg-muted hover:text-fg"
       }`}
     >
       {label}
@@ -223,7 +224,7 @@ export function TaskBoard() {
       aria-pressed={priority === p}
       onClick={() => setPriority(p)}
       className={`tap h-9 rounded-xl px-3 text-xs transition-colors ${
-        priority === p ? "bg-primary font-semibold text-on-primary" : "bg-surface text-fg-muted hover:text-fg"
+        priority === p ? "bg-fg font-semibold text-bg" : "text-fg-muted hover:text-fg"
       }`}
     >
       {label}
@@ -244,7 +245,46 @@ export function TaskBoard() {
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
       {/* ── the two control rows, the reference's own ─────────────────── */}
+      {/* the reference's row: view + priority groups and the two filter
+          chips read from the START side; the new-task button holds the END —
+          the earlier version had the button at the start, which in RTL put
+          it exactly where the reference puts its view switcher */}
       <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-0.5 rounded-2xl border border-border bg-surface p-1">
+            {viewChip("kanban", t("viewKanban"))}
+            {viewChip("list", t("viewList"))}
+            {viewChip("calendar", t("viewCalendar"))}
+            {viewChip("archive", t("viewArchive"))}
+          </div>
+          <div className="flex items-center gap-0.5 rounded-2xl border border-border bg-surface p-1">
+            {priorityChip("all", t("all"))}
+            {priorityChip("critical", t("priority_critical"))}
+            {priorityChip("high", t("priority_high"))}
+            {priorityChip("medium", t("priority_medium"))}
+            {priorityChip("low", t("priority_low"))}
+          </div>
+          <button
+            type="button"
+            aria-pressed={mineOnly}
+            onClick={() => setMineOnly((v) => !v)}
+            className={`tap h-10 rounded-2xl border px-3.5 text-xs transition-colors ${
+              mineOnly ? "border-accent bg-accent-soft font-semibold text-accent" : "border-border bg-surface text-fg-muted hover:text-fg"
+            }`}
+          >
+            {t("justMine")}
+          </button>
+          <button
+            type="button"
+            aria-pressed={dueToday}
+            onClick={() => setDueToday((v) => !v)}
+            className={`tap h-10 rounded-2xl border px-3.5 text-xs transition-colors ${
+              dueToday ? "border-accent bg-accent-soft font-semibold text-accent" : "border-border bg-surface text-fg-muted hover:text-fg"
+            }`}
+          >
+            {t("dueToday")}
+          </button>
+        </div>
         <button
           type="button"
           onClick={() => setCreating(true)}
@@ -253,56 +293,23 @@ export function TaskBoard() {
           <IconPlus width={14} height={14} />
           {t("newTask")}
         </button>
-
-        <div className="flex flex-wrap items-center gap-1.5 rounded-2xl border border-border bg-surface-2 p-1">
-          <button
-            type="button"
-            aria-pressed={dueToday}
-            onClick={() => setDueToday((v) => !v)}
-            className={`tap h-9 rounded-xl px-3 text-xs transition-colors ${
-              dueToday ? "bg-primary font-semibold text-on-primary" : "bg-surface text-fg-muted hover:text-fg"
-            }`}
-          >
-            {t("dueToday")}
-          </button>
-          <button
-            type="button"
-            aria-pressed={mineOnly}
-            onClick={() => setMineOnly((v) => !v)}
-            className={`tap h-9 rounded-xl px-3 text-xs transition-colors ${
-              mineOnly ? "bg-primary font-semibold text-on-primary" : "bg-surface text-fg-muted hover:text-fg"
-            }`}
-          >
-            {t("justMine")}
-          </button>
-          <span className="mx-1 h-5 w-px bg-border" aria-hidden />
-          {priorityChip("low", t("priority_low"))}
-          {priorityChip("medium", t("priority_medium"))}
-          {priorityChip("high", t("priority_high"))}
-          {priorityChip("critical", t("priority_critical"))}
-          {priorityChip("all", t("all"))}
-          <span className="mx-1 h-5 w-px bg-border" aria-hidden />
-          {viewChip("archive", t("viewArchive"))}
-          {viewChip("list", t("viewList"))}
-          {viewChip("kanban", t("viewKanban"))}
-        </div>
       </div>
 
-      {/* topic chips */}
-      <div className="flex flex-wrap items-center justify-end gap-1.5">
+      {/* topic chips — the reference's order: "all" leads from the start
+          side, topics follow, the add button closes the row */}
+      <div className="flex flex-wrap items-center gap-1.5">
         <button
           type="button"
-          onClick={() => {
-            const name = window.prompt(t("newTopicPrompt"));
-            if (name && name.trim() !== "") {
-              void api.createTaskTopic(name.trim()).then(load).catch(refusal);
-            }
-          }}
-          className="tap grid h-8 w-8 place-items-center rounded-lg border border-border text-fg-muted hover:text-fg"
-          aria-label={t("newTopic")}
-          title={t("newTopic")}
+          aria-pressed={topic === "all"}
+          onClick={() => setTopic("all")}
+          className={`tap flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs ${
+            topic === "all"
+              ? "border-accent bg-accent-soft font-semibold text-accent"
+              : "border-border text-fg-muted hover:text-fg"
+          }`}
         >
-          <IconPlus width={14} height={14} />
+          {t("allTasks")}
+          <span className="badge-num rounded-md bg-surface-2 px-1 text-[10px]">{digits(board.tasks.length, locale)}</span>
         </button>
         {board.topics.map((tp) => (
           <button
@@ -318,22 +325,23 @@ export function TaskBoard() {
           >
             {tp.name}
             <span className="badge-num rounded-md bg-surface-2 px-1 text-[10px]">
-              {board.tasks.filter((x) => x.topic_id === tp.id).length}
+              {digits(board.tasks.filter((x) => x.topic_id === tp.id).length, locale)}
             </span>
           </button>
         ))}
         <button
           type="button"
-          aria-pressed={topic === "all"}
-          onClick={() => setTopic("all")}
-          className={`tap flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs ${
-            topic === "all"
-              ? "border-accent bg-accent-soft font-semibold text-accent"
-              : "border-border text-fg-muted hover:text-fg"
-          }`}
+          onClick={() => {
+            const name = window.prompt(t("newTopicPrompt"));
+            if (name && name.trim() !== "") {
+              void api.createTaskTopic(name.trim()).then(load).catch(refusal);
+            }
+          }}
+          className="tap grid h-8 w-8 place-items-center rounded-lg border border-border text-fg-muted hover:text-fg"
+          aria-label={t("newTopic")}
+          title={t("newTopic")}
         >
-          {t("allTasks")}
-          <span className="badge-num rounded-md bg-surface-2 px-1 text-[10px]">{board.tasks.length}</span>
+          <IconPlus width={14} height={14} />
         </button>
       </div>
 
@@ -352,7 +360,7 @@ export function TaskBoard() {
               data-column={col.id}
               onDragOver={(e) => e.preventDefault()}
               onDrop={(e) => drop(col.id, e)}
-              className="flex w-64 shrink-0 flex-col rounded-2xl border border-border bg-surface-2/60 p-2"
+              className="flex w-[300px] shrink-0 flex-col rounded-2xl border border-border bg-surface p-2.5 shadow-card"
               aria-label={col.name}
             >
               <header className="flex items-center justify-between gap-2 px-1 py-1.5">
@@ -361,8 +369,8 @@ export function TaskBoard() {
                   {col.name}
                 </span>
                 <span className="flex items-center gap-1">
-                  <span className="badge-num rounded-md bg-surface px-1.5 text-[11px] text-fg-subtle">
-                    {columnCards(col.id).length}
+                  <span className="badge-num rounded-md bg-surface-2 px-1.5 text-[11px] text-fg-subtle">
+                    {digits(columnCards(col.id).length, locale)}
                   </span>
                   <button
                     type="button"
@@ -410,6 +418,13 @@ export function TaskBoard() {
           columns={board.columns}
           onOpen={(id) => { void api.taskDetail(id).then(setOpenTask).catch(refusal); }}
           onToggleDone={(id, done) => void patchTask(id, { done })}
+        />
+      ) : null}
+
+      {view === "calendar" ? (
+        <TaskCalendar
+          tasks={visible}
+          onOpen={(id) => { void api.taskDetail(id).then(setOpenTask).catch(refusal); }}
         />
       ) : null}
 
@@ -469,6 +484,83 @@ export function TaskBoard() {
           }}
         />
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * The reference's fourth view (تقویم): the month with each task pinned to
+ * its DEADLINE day. Tasks without a deadline are not placeable and are
+ * counted out loud below the grid rather than silently dropped — a
+ * calendar that hides half the board reads as a smaller board.
+ */
+function TaskCalendar({ tasks, onOpen }: {
+  tasks: TaskCardRecord[];
+  onOpen: (id: string) => void;
+}) {
+  const t = useTranslations("tasks");
+  const locale = useLocale();
+  const grid = useMemo(() => monthGrid(new Date(), locale), [locale]);
+
+  const byDay = new Map<number, TaskCardRecord[]>();
+  let undated = 0;
+  for (const task of tasks) {
+    if (task.due_at === null) { undated += 1; continue; }
+    const key = dayKeyOf(task.due_at);
+    const bucket = byDay.get(key);
+    if (bucket) bucket.push(task);
+    else byDay.set(key, [task]);
+  }
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="mb-2 flex items-baseline justify-between">
+        <span className="text-sm font-semibold text-fg">{grid.title}</span>
+        {undated > 0 ? (
+          <span className="text-xs text-fg-subtle">{t("calendarUndated", { n: digits(undated, locale) })}</span>
+        ) : null}
+      </div>
+      <ul className="grid grid-cols-7 gap-1.5">
+        {grid.weekdays.map((day, i) => (
+          <li key={i} className="text-center text-[10px] leading-4 text-fg-subtle">{day}</li>
+        ))}
+      </ul>
+      <ul className="scroll-quiet mt-1 grid min-h-0 flex-1 grid-cols-7 gap-1.5 overflow-y-auto">
+        {grid.cells.map((cell) => {
+          const dayTasks = byDay.get(cell.key) ?? [];
+          return (
+            <li
+              key={cell.key}
+              className={`flex min-h-20 flex-col rounded-xl border p-1.5 ${
+                cell.today
+                  ? "border-accent/40 bg-accent-soft"
+                  : cell.inMonth
+                    ? "border-border bg-surface"
+                    : "border-transparent bg-surface-2/40"
+              }`}
+            >
+              <span className={`mb-1 text-xs tabular-nums ${cell.today ? "font-bold text-accent" : cell.inMonth ? "text-fg" : "text-fg-subtle"}`}>
+                {cell.label}
+              </span>
+              <div className="min-h-0 flex-1 space-y-1">
+                {dayTasks.map((task) => (
+                  <button
+                    key={task.id}
+                    type="button"
+                    onClick={() => onOpen(task.id)}
+                    title={task.title}
+                    className={`block w-full truncate rounded-md px-1.5 py-0.5 text-start text-[10px] leading-4 ${
+                      task.done ? "bg-surface-2 text-fg-subtle line-through" : "bg-accent-soft text-accent"
+                    }`}
+                  >
+                    {task.title}
+                  </button>
+                ))}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
@@ -593,7 +685,7 @@ function TaskList({ tasks, columns, archived = false, onOpen, onToggleDone }: {
       {dated.length > 0 ? (
         <div>
           <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-subtle">
-            {t("withDeadline")} ({dated.length})
+            {t("withDeadline")} ({digits(dated.length, locale)})
           </h3>
           <ul className="space-y-2">{dated.map(row)}</ul>
         </div>
@@ -601,7 +693,7 @@ function TaskList({ tasks, columns, archived = false, onOpen, onToggleDone }: {
       {undated.length > 0 ? (
         <div>
           <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-subtle">
-            {t("noDeadline")} ({undated.length})
+            {t("noDeadline")} ({digits(undated.length, locale)})
           </h3>
           <ul className="space-y-2">{undated.map(row)}</ul>
         </div>

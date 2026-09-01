@@ -4,15 +4,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { MeetingRecord } from "@/api/types";
 
 /**
- * The meetings screen's contract facts:
+ * The meetings LIST's contract facts (the detail moved to its own page —
+ * MeetingPage.test.tsx owns that):
  *
  *  1. GROUPING is derived, not decorative: still-ahead-and-unrecorded rows
  *     sit under «پیش رو», everything else under «گذشته» — asserted inside
  *     each group's scope, because a flat list satisfies bare presence.
- *  2. The STAGE is derived from the same two facts: a linked meeting opens
- *     its record; an unlinked future one offers شروع جلسه.
+ *     (Verified red by deleting the record-decides clause: the held-early
+ *     meeting jumped groups.)
+ *  2. A row is a DOOR: clicking navigates to the meeting's page.
  *  3. The CREATE writes the wire's shape — mode from the picker, an ISO
- *     scheduled_at — asserted on the body createMeeting receives.
+ *     time — and lands on the new meeting's page.
  *  4. The empty list is a NAMED state.
  */
 vi.mock("@/i18n/routing", () => ({
@@ -45,8 +47,6 @@ vi.mock("@/api/client", () => ({
       created.push(input);
       return meeting({ id: "m-new" });
     },
-    meetingDetail: async (id: string) => meeting({ id }),
-    updateMeeting: vi.fn(),
   },
 }));
 
@@ -81,31 +81,15 @@ describe("Meetings", () => {
     expect(within(group("پیش رو")).queryByText("جلسهٔ برگزارشده")).toBeNull();
   });
 
-  it("a linked meeting opens its record; an unlinked future one starts the recorder", async () => {
+  it("a row opens the meeting's own page", async () => {
     LIST = [meeting({ id: "m-a", title: "جلسهٔ آینده" })];
     render(<Meetings />);
     await waitFor(() => expect(screen.getByText("جلسهٔ آینده")).toBeInTheDocument());
     await userEvent.click(screen.getByText("جلسهٔ آینده"));
-
-    // pre stage: the start button, wired to the recorder with the meeting id
-    const startBtn = await screen.findByRole("button", { name: /شروع جلسه/ });
-    await userEvent.click(startBtn);
-    expect(pushSpy).toHaveBeenCalledWith("/echo?meeting=m-a");
-    await userEvent.keyboard("{Escape}");
-
-    LIST = [meeting({ id: "m-c", title: "جلسهٔ برگزارشده", call_id: "c-1", call_title: "رکورد جلسه" })];
-    render(<Meetings />);
-    await waitFor(() => expect(screen.getByText("جلسهٔ برگزارشده")).toBeInTheDocument());
-    await userEvent.click(screen.getByText("جلسهٔ برگزارشده"));
-
-    const openBtn = await screen.findByRole("button", { name: /باز کردن رکورد/ });
-    await userEvent.click(openBtn);
-    expect(pushSpy).toHaveBeenCalledWith("/calls/c-1");
-    // and no start button on a held meeting — the stage is exclusive
-    expect(screen.queryByRole("button", { name: /شروع جلسه/ })).toBeNull();
+    expect(pushSpy).toHaveBeenCalledWith("/meetings/m-a");
   });
 
-  it("creating writes the wire's shape: the picked mode and an ISO time", async () => {
+  it("creating writes the wire's shape and lands on the new page", async () => {
     render(<Meetings />);
     await waitFor(() => expect(screen.getByText("هنوز جلسه‌ای نیست. اولین جلسه را برنامه‌ریزی کن.")).toBeInTheDocument());
 
@@ -124,6 +108,8 @@ describe("Meetings", () => {
     // an ISO instant, parseable back — never a local "YYYY-MM-DDTHH:mm"
     expect(Number.isNaN(new Date(String(body.scheduled_at)).getTime())).toBe(false);
     expect(String(body.scheduled_at)).toMatch(/Z$/);
+    // and the flow walks onto the created meeting's page
+    await waitFor(() => expect(pushSpy).toHaveBeenCalledWith("/meetings/m-new"));
   });
 
   it("an empty list names its state", async () => {

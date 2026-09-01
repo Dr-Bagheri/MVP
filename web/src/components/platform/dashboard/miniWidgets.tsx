@@ -8,10 +8,11 @@ import { Link } from "@/i18n/routing";
 import { KebabMenu, SelectMenu } from "@/components/rowActions";
 import { StatusDot } from "@/components/DataTable";
 import {
-  Icon, IconCalendar, IconCheck, IconGlobe, IconMic, IconPause, IconPlay, IconPulse, IconSettings,
+  Icon, IconCalendar, IconCheck, IconChevronRight, IconGlobe, IconMic, IconPause, IconPlay,
+  IconPlus, IconPulse, IconSettings,
 } from "@/components/icons";
 import { EchoMark } from "@/components/platform/icons";
-import { dayKeyOf, digits, formatTime, monthGrid, weekStrip } from "@/lib/format";
+import { dayKeyOf, digits, formatTime, monthGrid, weekRangeLabel, weekStrip } from "@/lib/format";
 import { useCalendarPreference, useTimezonePreference } from "@/lib/usePreferences";
 import { useAgentCopy } from "@/components/platform/agentAppearance";
 import {
@@ -22,7 +23,7 @@ import {
 } from "@/lib/recordingEngine";
 import { rowsFor, type TileSize } from "@/lib/dashboardLayout";
 import type {
-  AgentCard, Call, ConnectorItem, ConnectorStatus,
+  AgentCard, Call, ConnectorItem, ConnectorStatus, MeetingRecord,
 } from "@/api/types";
 
 /**
@@ -715,88 +716,151 @@ export function UpcomingWidget({ size }: { size: TileSize }) {
 }
 
 /**
- * 8 — THE WEEK: seven day columns with the week's meetings placed on their
- * days — the reference's main panel. Today wears the accent; the rest day
- * is tinted apart. A day with nothing shows nothing: an empty weekday is
- * an ordinary fact, not a state needing copy.
+ * 8 — THE WEEK, rebuilt to the reference's week panel (2026-09-01 round):
+ * a header with the week's range and prev/next arrows, seven pill day
+ * cells with the FULL short weekday names, and the week's own MEETINGS
+ * (0145 — the product's data, not the connector's) listed under the strip.
+ * Today wears the accent; the rest day is tinted apart. An empty week is a
+ * NAMED state with the door to scheduling, exactly as the reference draws
+ * it.
  */
 export function WeekWidget() {
   const t = useTranslations("dashboard");
   const locale = useLocale();
-  const rows = useMini<ConnectorItem>(() => api.connectorItems("google", "calendar"));
+  const [meetings, setMeetings] = useState<MeetingRecord[] | null | "failed">(null);
+  const [offset, setOffset] = useState(0);
   const calendar = useCalendarPreference();
   const timezone = useTimezonePreference();
+
+  useEffect(() => {
+    let alive = true;
+    void api.meetings()
+      .then((rows) => { if (alive) setMeetings(rows); })
+      .catch(() => { if (alive) setMeetings("failed"); });
+    return () => { alive = false; };
+  }, []);
+
   const cells = useMemo(
-    () => weekStrip(new Date(), locale),
+    () => weekStrip(new Date(), locale, offset),
     // derived from both preferences THROUGH `format`, which reads them itself
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [locale, calendar, timezone],
+    [locale, offset, calendar, timezone],
   );
-
-  /** day key → that day's events, by hour */
-  const byDay = new Map<number, ConnectorItem[]>();
-  if (Array.isArray(rows)) {
-    for (const item of rows) {
-      if (item.occurred_at === null) continue;
-      const key = dayKeyOf(item.occurred_at);
-      const bucket = byDay.get(key);
-      if (bucket) bucket.push(item);
-      else byDay.set(key, [item]);
-    }
-    for (const bucket of byDay.values()) {
-      bucket.sort((a, b) => new Date(a.occurred_at!).getTime() - new Date(b.occurred_at!).getTime());
-    }
-  }
+  const keys = new Set(cells.map((c) => c.key));
+  const weekMeetings = Array.isArray(meetings)
+    ? meetings.filter((m) => keys.has(dayKeyOf(m.scheduled_at)))
+    : [];
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {rows === "absent" ? (
-        <div className="mb-1.5 text-end">
-          <Link href="/integrations" className="text-xs text-accent hover:underline">
-            {t("miniCalendarConnectLink")}
-          </Link>
+      {/* ── header: the range, the arrows, the count ─────────────────── */}
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="flex items-baseline gap-2 text-sm">
+          <span className="font-semibold text-fg">
+            {offset === 0 ? t("weekCurrent") : weekRangeLabel(cells, locale)}
+          </span>
+          {offset === 0 ? (
+            <span className="badge-num text-xs text-fg-muted">{weekRangeLabel(cells, locale)}</span>
+          ) : null}
+          <span className="text-xs text-fg-subtle">
+            {meetings === null
+              ? null /* still asking — "no meetings" is a claim not yet earned */
+              : meetings === "failed"
+                ? t("readFailed")
+                : weekMeetings.length === 0
+                  ? t("weekNoMeetingsShort")
+                  : t("weekMeetingCount", { n: digits(weekMeetings.length, locale) })}
+          </span>
         </div>
-      ) : rows === "failed" || rows === "forbidden" ? (
-        <div className="mb-1.5 text-end text-xs text-fg-subtle">{t("readFailed")}</div>
-      ) : null}
-      <ul className="grid min-h-0 flex-1 grid-cols-7 gap-1.5">
-        {cells.map((cell) => {
-          const events = byDay.get(cell.key) ?? [];
-          return (
-            <li
-              key={cell.key}
-              className={`flex min-h-0 flex-col rounded-xl border p-1.5 ${
+        <span className="flex items-center gap-1">
+          <button
+            type="button"
+            aria-label={t("weekPrev")}
+            onClick={() => setOffset((v) => v - 1)}
+            className="tap grid h-7 w-7 place-items-center rounded-lg border border-border text-fg-muted hover:text-fg"
+          >
+            {/* BACK points against the reading direction: left in LTR,
+                right in RTL — the base chevron points right, so LTR is the
+                rotated case */}
+            <IconChevronRight width={12} height={12} className="rotate-180 rtl:rotate-0" />
+          </button>
+          <button
+            type="button"
+            aria-label={t("weekNext")}
+            onClick={() => setOffset((v) => v + 1)}
+            className="tap grid h-7 w-7 place-items-center rounded-lg border border-border text-fg-muted hover:text-fg"
+          >
+            {/* FORWARD points with the reading direction */}
+            <IconChevronRight width={12} height={12} className="rtl:rotate-180" />
+          </button>
+        </span>
+      </div>
+
+      {/* ── the strip: seven pills, full short names ─────────────────── */}
+      <ul className="grid grid-cols-7 gap-1.5">
+        {cells.map((cell) => (
+          <li
+            key={cell.key}
+            className={`flex flex-col items-center gap-0.5 rounded-xl border px-1 py-1.5 ${
+              cell.today
+                ? "border-accent/40 bg-accent-soft"
+                : cell.weekend
+                  ? "border-transparent bg-danger/5"
+                  : "border-transparent bg-surface-2/70"
+            }`}
+          >
+            <span className={`max-w-full truncate text-[10px] leading-4 ${cell.today ? "text-accent" : "text-fg-muted"}`}>
+              {cell.weekday}
+            </span>
+            <span
+              className={`grid h-6 w-6 place-items-center rounded-full text-xs tabular-nums ${
                 cell.today
-                  ? "border-accent bg-accent-soft"
-                  : cell.weekend
-                    ? "border-border bg-danger/5"
-                    : "border-border bg-surface-2/60"
+                  ? "bg-accent font-bold text-on-accent"
+                  : cell.weekend ? "text-danger" : "text-fg"
               }`}
             >
-              <div className={`mb-1 text-center ${cell.today ? "text-accent" : "text-fg-subtle"}`}>
-                <span className="block text-[10px] leading-3">{cell.weekday}</span>
-                <span className={`block text-sm leading-5 tabular-nums ${cell.today ? "font-bold" : "font-medium text-fg"}`}>
-                  {cell.label}
-                </span>
-              </div>
-              <div className="scroll-quiet min-h-0 flex-1 space-y-1 overflow-y-auto">
-                {events.map((event) => (
-                  <div
-                    key={event.id}
-                    title={`${event.occurred_at === null ? "" : formatTime(event.occurred_at, locale)} ${event.title}`.trim()}
-                    className="rounded-md bg-accent-soft px-1 py-0.5"
-                  >
-                    <span className="block truncate text-[10px] font-medium leading-4 text-accent">
-                      {event.occurred_at === null ? "" : formatTime(event.occurred_at, locale)}
-                    </span>
-                    <span className="block truncate text-[10px] leading-4 text-fg">{event.title}</span>
-                  </div>
-                ))}
-              </div>
-            </li>
-          );
-        })}
+              {cell.label}
+            </span>
+          </li>
+        ))}
       </ul>
+
+      {/* ── the week's meetings, or the named empty state ────────────── */}
+      <div className="scroll-quiet mt-2 min-h-0 flex-1 overflow-y-auto">
+        {meetings === null ? null : meetings === "failed" ? (
+          <p className="p-2 text-sm text-fg-subtle">{t("readFailed")}</p>
+        ) : weekMeetings.length === 0 ? (
+          <div className="grid h-full min-h-24 place-items-center text-center">
+            <div>
+              <span className="mx-auto mb-1.5 grid h-9 w-9 place-items-center rounded-xl bg-surface-2 text-fg-muted" aria-hidden>
+                <IconCalendar width={16} height={16} />
+              </span>
+              <p className="text-sm text-fg-muted">{t("weekNoMeetings")}</p>
+              <Link
+                href="/meetings"
+                className="mt-2 inline-flex h-8 items-center gap-1.5 rounded-lg border border-border px-3 text-xs font-medium text-fg hover:border-border-strong"
+              >
+                <IconPlus width={12} height={12} />
+                {t("weekNewMeeting")}
+              </Link>
+            </div>
+          </div>
+        ) : (
+          <ul className="divide-y divide-border/60">
+            {weekMeetings.map((m) => (
+              <li key={m.id}>
+                <Link href={`/meetings/${m.id}`} className="flex items-baseline gap-2.5 py-1.5 hover:text-accent">
+                  <span className="badge-num shrink-0 rounded-md bg-accent-soft px-1.5 py-0.5 text-[11px] font-medium text-accent">
+                    {formatTime(m.scheduled_at, locale)}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-sm text-fg" title={m.title}>{m.title}</span>
+                  <span className="shrink-0 text-[10px] text-fg-subtle">{cells.find((c) => c.key === dayKeyOf(m.scheduled_at))?.weekday}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }

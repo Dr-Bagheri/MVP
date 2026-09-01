@@ -59,6 +59,8 @@ vi.mock("@/api/client", () => ({
     listCalls: async () => [],
     connectors: async () => [],
     connectorItems: async () => [],
+    meetings: async () => [],
+    taskBoard: async () => ({ columns: [], topics: [], tasks: [] }),
     agents: async () => [],
     workflows: async () => [],
   },
