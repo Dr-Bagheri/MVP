@@ -81,10 +81,14 @@ function GreetingHead() {
   return (
     <div className="flex flex-wrap items-end justify-between gap-3">
       <div>
-        <h1 className="text-xl font-bold text-fg">
+        {/* THE one large thing on this screen. The reference's dashboard has
+            no page title and a 27px greeting: it is the only place in the
+            product where a heading is allowed to be big, because it is the
+            only place whose job is to greet rather than to label. */}
+        <h1 className="text-3xl font-extrabold text-fg">
           {name === "" ? salute : t("greetWithName", { salute, name })} 👋
         </h1>
-        <p className="mt-0.5 text-xs text-fg-muted">
+        <p className="mt-1 text-xs text-fg-subtle">
           {formatDate(new Date().toISOString(), locale)}
           {" — "}
           {upcoming === null

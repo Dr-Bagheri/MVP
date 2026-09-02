@@ -624,7 +624,7 @@ export function SpeakersDirectory() {
       ) : null}
 
       <Card className="!p-0">
-        {people === null ? null : people.length === 0 && !adding ? (
+        {people !== null && people.length === 0 && !adding ? (
           <div className="p-4">
             <EmptyState text={t("empty")} />
           </div>
@@ -727,6 +727,7 @@ export function SpeakersDirectory() {
           </div>
         ) : (
           <DataTable<Person>
+            loading={people === null}
             rows={shown}
             rowKey={(person) => person.id}
             /* only somebody who may MANAGE the directory can select a row:

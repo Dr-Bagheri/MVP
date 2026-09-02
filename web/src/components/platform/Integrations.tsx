@@ -281,7 +281,7 @@ export function Integrations() {
           <PageHeader title={tp("integrations")} subtitle={t("subtitle")} />
 
           <Section title={t("connectedTitle")} description={t("connectedHint")}>
-            {connectors === null ? null : allRows.length === 0 ? (
+            {connectors !== null && allRows.length === 0 ? (
               <EmptyState text={t("noneConnected")} />
             ) : (
               <>
@@ -327,6 +327,7 @@ export function Integrations() {
                 {/* "nothing matched" is not "nothing connected", and the two
                     empty states say so in different sentences */}
                 <DataTable
+                  loading={connectors === null}
                   rows={rows}
                   columns={columns}
                   rowKey={(row) => row.slug}

@@ -11,7 +11,7 @@ import { Link } from "@/i18n/routing";
 import { PlatformShell } from "./PlatformShell";
 import { WorkflowBuilder } from "./WorkflowBuilder";
 import { WorkflowTile } from "./WorkflowTile";
-import { PageContainer, PageHeader } from "@/components/scaffold";
+import { PageContainer, PageHeader, SkeletonCards } from "@/components/scaffold";
 import { EmptyState } from "@/components/ui";
 
 /**
@@ -151,7 +151,9 @@ export function Workflows() {
               </button>
             ) : undefined}
           />
-          {workflows === null ? null : workflows.length === 0 ? (
+          {workflows === null ? (
+            <SkeletonCards count={2} height="h-56" />
+          ) : workflows.length === 0 ? (
             <EmptyState text={t("empty")} />
           ) : (
             <div className="grid gap-5 lg:grid-cols-2">

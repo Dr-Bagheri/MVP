@@ -7,7 +7,7 @@ import { useRefreshEpoch } from "@/lib/refreshBus";
 import type { AgentCard, User } from "@/api/types";
 import { Link } from "@/i18n/routing";
 import { PlatformShell } from "./PlatformShell";
-import { PageContainer, PageHeader, Section } from "@/components/scaffold";
+import { PageContainer, PageHeader, Section, SkeletonCards } from "@/components/scaffold";
 import { Card } from "@/components/ui";
 import { Icon, IconPencil } from "@/components/icons";
 import { AgentEditor } from "./AgentEditor";
@@ -87,7 +87,9 @@ export function Agents() {
                 }
               />
               <Section title={t("myAgents")}>
-                {agents === null ? null : agents.length === 0 ? (
+                {agents === null ? (
+                  <SkeletonCards count={4} className="grid gap-x-8 gap-y-5 lg:grid-cols-2" height="h-36" />
+                ) : agents.length === 0 ? (
                   <Card><p className="text-sm text-fg-muted">{t("empty")}</p></Card>
                 ) : (
                   <div className="grid gap-x-8 gap-y-5 lg:grid-cols-2">

@@ -162,17 +162,22 @@ export default function SearchPage() {
         </form>
       </Card>
 
-      {hits === null ? null : hits.length === 0 ? (
+      {hits !== null && hits.length === 0 ? (
         <Card>
           <EmptyState text={t("empty")} />
         </Card>
       ) : (
         <>
-          <p className="mb-2 text-sm text-fg-muted">
-            {t("results", { count: digits(hits.length, locale) })}
-          </p>
+          {/* the count waits for the answer; a "0 results" line above a table
+              that is still loading is a claim nobody has checked */}
+          {hits !== null ? (
+            <p className="mb-2 text-sm text-fg-muted">
+              {t("results", { count: digits(hits.length, locale) })}
+            </p>
+          ) : null}
           <div className="rounded-lg border border-border bg-surface">
             <DataTable
+              loading={hits === null}
               rows={rows}
               rowKey={(hit) => hit.rowId}
               columns={columns}

@@ -1,5 +1,6 @@
 "use client";
 
+import { SkeletonLines } from "@/components/scaffold";
 import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import { useLocale, useTranslations } from "next-intl";
 
@@ -113,8 +114,18 @@ function Empty({ children }: { children: string }) {
   return <p className="text-sm leading-7 ink-muted">{children}</p>;
 }
 
+/**
+ * Every tile's loading state. It was an ellipsis — one small grey «…» in the
+ * middle of an otherwise empty card, which reads as "this tile is broken"
+ * rather than "this tile is coming", and told the reader nothing about the
+ * shape about to arrive.
+ *
+ * Skeleton lines instead, sized like the rows they stand in for, so the tile
+ * is the same height before and after and the board does not resettle when
+ * eight of them answer at eight different moments.
+ */
 function Waiting() {
-  return <p className="text-sm ink-muted">…</p>;
+  return <SkeletonLines lines={3} className="p-1" />;
 }
 
 /** every tile's list: one scroller, hairlines between rows */

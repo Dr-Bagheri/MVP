@@ -59,3 +59,38 @@ export function SkeletonLines({ lines = 3, className = "" }: { lines?: number; c
     </div>
   );
 }
+
+/**
+ * A grid of placeholder CARDS — the loading state for a surface whose content
+ * is tiles rather than rows (agents, workflows, integrations).
+ *
+ * Same rule as the table's skeleton rows and for the same reason: the grid
+ * itself is structure, so it renders with the page, and only the cards inside
+ * it wait. A grid that appears whole after the network makes everything below
+ * it jump, and a grid that renders nothing while loading is indistinguishable
+ * from a grid with nothing in it.
+ */
+export function SkeletonCards({
+  count = 4,
+  className = "grid gap-5 lg:grid-cols-2",
+  height = "h-40",
+}: {
+  count?: number;
+  className?: string;
+  /** match the real card — reserved space that is the wrong size still moves
+      the layout, which is the thing this exists to prevent */
+  height?: string;
+}) {
+  return (
+    <div className={className} aria-hidden>
+      {Array.from({ length: count }, (_, i) => (
+        <div key={i} className={`rounded-2xl border border-border bg-surface p-7 ${height}`}>
+          <Skeleton className="h-11 w-11 rounded-xl" />
+          <Skeleton className="mt-6 h-4 w-40" />
+          <Skeleton className="mt-2.5 h-3 w-full" />
+          <Skeleton className="mt-2 h-3 w-2/3" />
+        </div>
+      ))}
+    </div>
+  );
+}

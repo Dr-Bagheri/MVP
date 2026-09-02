@@ -8,7 +8,7 @@ import { Pagination, usePaged } from "@/components/Pagination";
 import { AssistantMenu } from "@/components/platform/AssistantMenu";
 import { PlatformShell } from "@/components/platform/PlatformShell";
 import { ConfirmDialog } from "@/components/rowActions";
-import { MenuLayout, PageContainer, PageHeader } from "@/components/scaffold";
+import { MenuLayout, PageContainer, PageHeader, Skeleton } from "@/components/scaffold";
 import { useRouter } from "@/i18n/routing";
 import { notify } from "@/lib/notify";
 import { useRefreshEpoch } from "@/lib/refreshBus";
@@ -87,6 +87,17 @@ export default function ConversationsPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
+                    {/* the frame is structure and renders with the page; only
+                        the rows wait (the platform's loading rule) */}
+                    {sessions === null
+                      ? Array.from({ length: 5 }, (_, i) => (
+                          <tr key={`skeleton-${i}`}>
+                            <td className="px-4 py-3"><Skeleton className="h-4 w-48" /></td>
+                            <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
+                            <td className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
+                          </tr>
+                        ))
+                      : null}
                     {visible.map((s) => (
                       <tr
                         key={s.id}
