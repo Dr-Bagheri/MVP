@@ -1453,6 +1453,23 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     return reply.send({ changed });
   });
 
+  /**
+   * Place a pending arrival into an organisation (user directive, 2026-09-02:
+   * "the pending must land in the platform control, then there it will assign
+   * the org and get accepted or rejected").
+   */
+  app.post("/v1/platform/users/:id/place", async (request, reply) => {
+    const identity = await auth.requirePlatformRoot(request);
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { org_id?: unknown; role?: unknown; reason?: unknown };
+    if (typeof body.reason !== "string") throw new ValidationError("reason is required");
+    if (typeof body.org_id !== "string") throw new ValidationError("org_id is required");
+    if (typeof body.role !== "string") throw new ValidationError("role is required");
+    return reply.send({
+      placed: await platform.placeUser(identity, id, body.org_id, body.role, body.reason),
+    });
+  });
+
   /** Soft delete: a 7-day recovery window, then purge (M32 extension, 0069). */
   app.delete("/v1/platform/organizations/:id", async (request, reply) => {
     const identity = await auth.requirePlatformRoot(request);

@@ -83,6 +83,9 @@ import { ConfirmDialog } from "@/components/rowActions";
 
 export default function PlatformControlPage() {
   const t = useTranslations("platformRoot");
+  /* the role words are the ADMIN surface's — one vocabulary for one thing,
+     wherever it is read */
+  const tAdmin = useTranslations("admin");
   const locale = useLocale();
 
   const [access, setAccess] = useState<AccessState>("checking");
@@ -284,6 +287,16 @@ export default function PlatformControlPage() {
     () => (orgTrash ? orgs : orgs.filter((o) => orgFilter === "all" || o.status === orgFilter)),
     [orgs, orgFilter, orgTrash],
   );
+  /* the arrivals waiting to be placed — always shown, whatever the filter
+     chips say, because a queue that hides behind a filter is a queue nobody
+     empties */
+  const pendingArrivals = useMemo(
+    () => users.filter((u) => u.status === "pending" && u.deleted_at === null),
+    [users],
+  );
+  /** the organisation and role chosen for each arrival, before confirming */
+  const [placement, setPlacement] = useState<Record<string, { org: string; role: string }>>({});
+
   const shownUsers = useMemo(
     () =>
       userTrash
@@ -642,6 +655,103 @@ export default function PlatformControlPage() {
         {/* USERS */}
         {tab === "users" ? (
           <section className="mt-4">
+            {/*
+              PENDING ARRIVALS (user directive, 2026-09-02: "the pending must
+              land in the platform control, then there it will assign the org
+              and get accepted or rejected").
+              This queue used to live in Management·Users, where an org admin
+              approved their own arrivals. That is right for someone an admin
+              INVITED and already expects; it is wrong for the case that
+              actually produces these rows — a stranger signs up, lands in an
+              organisation of their own naming, and the only person who can
+              decide where they truly belong is the vendor.
+              Placement is ONE act: organisation, role and activation
+              together (0156). Two steps would leave a member ACTIVE in the
+              org they invented if the second never happened.
+            */}
+            {!userTrash && pendingArrivals.length > 0 ? (
+              <div className="mb-3 overflow-hidden rounded-2xl border border-warning/30 bg-surface">
+                <p className="border-b border-border px-4 py-2.5 text-xs font-semibold text-warning">
+                  {t("pendingArrivals")}
+                </p>
+                <div className="divide-y divide-border">
+                  {pendingArrivals.map((u) => (
+                    <div key={u.id} className="flex flex-wrap items-center gap-2 px-4 py-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-fg">{u.display_name}</p>
+                        <p className="truncate text-xs text-fg-subtle"><span className="ltr">{u.email}</span></p>
+                      </div>
+                      <select
+                        aria-label={t("placeOrg")}
+                        className="input h-[34px] min-h-[34px] w-48"
+                        value={placement[u.id]?.org ?? ""}
+                        onChange={(e) => setPlacement((prev) => ({
+                          ...prev,
+                          [u.id]: { org: e.target.value, role: prev[u.id]?.role ?? "member" },
+                        }))}
+                      >
+                        <option value="">{t("placeOrgChoose")}</option>
+                        {orgs.filter((o) => o.deleted_at === null).map((o) => (
+                          <option key={o.id} value={o.id}>{o.name}</option>
+                        ))}
+                      </select>
+                      <select
+                        aria-label={t("placeRole")}
+                        className="input h-[34px] min-h-[34px] w-32"
+                        value={placement[u.id]?.role ?? "member"}
+                        onChange={(e) => setPlacement((prev) => ({
+                          ...prev,
+                          [u.id]: { org: prev[u.id]?.org ?? "", role: e.target.value },
+                        }))}
+                      >
+                        <option value="member">{tAdmin("roleMember")}</option>
+                        <option value="admin">{tAdmin("roleAdmin")}</option>
+                        <option value="owner">{tAdmin("roleOwner")}</option>
+                      </select>
+                      <button
+                        type="button"
+                        className="btn btn-sm bg-accent text-on-accent"
+                        /* the button is off until an organisation is chosen —
+                           the whole point of the queue is that nobody is
+                           placed without that decision being made */
+                        disabled={!placement[u.id]?.org || working === `place-${u.id}`}
+                        onClick={() => setPending({
+                          key: `place-${u.id}`,
+                          title: t("placeConfirm", { name: u.display_name }),
+                          effect: t("placeEffect"),
+                          target: u.email,
+                          run: async (reason) => {
+                            const chosen = placement[u.id]!;
+                            await api.placePlatformUser(u.id, chosen.org, chosen.role, reason);
+                            await refresh();
+                          },
+                        })}
+                      >
+                        {t("place")}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-sm border border-border text-fg-muted hover:text-danger"
+                        disabled={working === `reject-${u.id}`}
+                        onClick={() => setPending({
+                          key: `reject-${u.id}`,
+                          title: t("rejectConfirm", { name: u.display_name }),
+                          effect: t("rejectEffect"),
+                          target: u.email,
+                          danger: true,
+                          run: async (reason) => {
+                            await api.softDeletePlatformUser(u.id, reason);
+                            await refresh();
+                          },
+                        })}
+                      >
+                        {t("reject")}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             <Toolbar
               search={userSearch}
               onSearch={setUserSearch}

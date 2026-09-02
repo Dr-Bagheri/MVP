@@ -495,6 +495,41 @@ export function createPlatformRepo(db: Db) {
       return rows[0]?.changed === true;
     },
 
+    /**
+     * PLACE a pending arrival: choose their organisation and role, and
+     * activate them, as ONE act (0156).
+     *
+     * Deliberately not two calls. Two would make a state that is reachable
+     * and wrong — a member sitting ACTIVE in the organisation they invented
+     * for themselves at sign-up, because the second call failed or the
+     * operator's tab closed between them. The whole point of the pending
+     * state is that nobody is inside an organisation until somebody decides
+     * which one, and one statement cannot half-decide.
+     *
+     * The door refuses any status but `pending`, so this cannot become a
+     * transfer: an active member's calls, tasks and history hang off their
+     * org and none of it travels.
+     */
+    async placeUser(
+      identity: Identity,
+      userId: string,
+      orgId: string,
+      roleName: string,
+      actionReason: string,
+    ): Promise<boolean> {
+      const target = uuid(userId, "user id");
+      const org = uuid(orgId, "organization id");
+      const validReason = reason(actionReason);
+      if (!(MEMBER_ROLES as readonly string[]).includes(roleName)) {
+        throw new ValidationError(`role must be one of: ${MEMBER_ROLES.join(", ")}`);
+      }
+      const rows = await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe<{ placed: boolean }>(
+        "select echo.platform_assign_user_org($1, $2, $3, $4::echo.member_role, $5) as placed",
+        [identity.userId, target, org, roleName, validReason],
+      ));
+      return rows[0]?.placed === true;
+    },
+
     async softDeleteOrganization(identity: Identity, orgId: string, actionReason: string): Promise<boolean> {
       const org = uuid(orgId, "organization id");
       const validReason = reason(actionReason);

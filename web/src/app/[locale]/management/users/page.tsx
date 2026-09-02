@@ -72,8 +72,6 @@ export default function UsersPage() {
    */
 
   const [busy, setBusy] = useState(false);
-  /** 0085: rejecting a pending member is a deletion — reason required */
-  const [rejecting, setRejecting] = useState<null | { id: string; reason: string }>(null);
   /** 2026-08-24: the members-table delete confirms in a POPUP; the ledger
       receives the fixed consent line instead of a typed reason */
   const [confirmDeleteMember, setConfirmDeleteMember] = useState<User | null>(null);
@@ -155,7 +153,6 @@ export default function UsersPage() {
     const rank = (r: User["role"]): number => (r === "owner" ? 3 : r === "admin" ? 2 : 1);
     return rank(me.role) > rank(u.role);
   };
-  const pending = rows.filter((m) => m.status === "pending");
   const listed = rows.filter((m) => m.status !== "pending");
 
   /** The rows bulk actions may touch: never the owner, never yourself. */
@@ -290,61 +287,19 @@ export default function UsersPage() {
       <div>
         <PageHeader title={t("section.users")} subtitle={t("desc.users")} />
 
-        {pending.length > 0 ? (
-          <Card className="mb-4">
-            <h2 className="h-section mb-3">{tAdmin("pending")}</h2>
-            <ul className="divide-y divide-border">
-              {pending.map((u) => (
-                <li key={u.id} className="flex flex-wrap items-center gap-3 py-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium text-fg">{personName(u, locale)}</p>
-                    {/* `username` is null until chosen, and a PENDING member is
-                        the likeliest person never to have chosen one — so the
-                        line is dropped rather than rendered as a bare "@". */}
-                    {u.username ? <p className="text-xs text-fg-muted"><span className="ltr">@{u.username}</span></p> : null}
-                  </div>
-                  <span className="text-xs text-fg-muted">{formatDate(u.created_at, locale)}</span>
-                  <button
-                    className="btn-primary h-9 min-h-0 px-3 text-xs"
-                    disabled={busy}
-                    onClick={async () => {
-                      setBusy(true);
-                      try {
-                        /* acceptance has its OWN endpoint — core's PATCH
-                           refuses pending members, so spelling this as a
-                           status write would 404 against the real wire */
-                        await api.acceptMember(u.id);
-                        await load();
-                      } finally {
-                        setBusy(false);
-                      }
-                    }}
-                  >
-                    {tAdmin("accept")}
-                  </button>
-                  {/* reject = the owner-only true delete: a pending member
-                      cannot be PATCHed, and hiding the button beats letting
-                      an admin collect a 403 they can do nothing about */}
-                  {me?.role === "owner" ? (
-                    <button
-                      className="btn-secondary h-9 min-h-0 px-3 text-xs"
-                      disabled={busy}
-                      /* the press ASKS, in the platform's one dialog (see the
-                         foot of this file, and confirm.guard.test.ts). This
-                         used to grow a reason box inside the row: the same
-                         question, in an affordance nothing else on the
-                         platform wears, on the one control that permanently
-                         empties a person. */
-                      onClick={() => setRejecting({ id: u.id, reason: "" })}
-                    >
-                      {tAdmin("reject")}
-                    </button>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-          </Card>
-        ) : null}
+        {/*
+          THE PENDING QUEUE MOVED TO THE PLATFORM CONSOLE (user directive,
+          2026-09-02). It sat here, where an org admin approved their own
+          arrivals — right for someone they invited and already expect, wrong
+          for the case that actually produces these rows: a stranger signs up,
+          lands in an organisation of their own naming, and the only person
+          who can decide where they belong is the vendor. The console can
+          place them; an admin never could, because org_id is immutable to
+          the application role by design.
+          The rows are still VISIBLE here — a pending member appears in the
+          table below with their status — so an admin can see who is waiting.
+          What left is the decision, not the information.
+        */}
 
         {/* INVITATIONS moved to their own menu item (user directive,
             2026-08-26): /management/invitations, under People. Sending an
@@ -577,41 +532,6 @@ export default function UsersPage() {
           that way, and a dialog naming somebody differently from the line it
           was opened from is a dialog about somebody else.
         */}
-        {rejecting !== null ? (() => {
-          const target = pending.find((u) => u.id === rejecting.id);
-          if (!target) return null;
-          return (
-            <ConfirmDialog
-              title={t("deleteMemberConfirmTitle", { name: personName(target, locale) })}
-              body={
-                <div className="space-y-3">
-                  <p className="text-sm leading-6 text-fg-muted">{t("deleteMemberConfirmBody")}</p>
-                  <label className="block text-xs text-fg-muted" htmlFor="reject-reason">
-                    {t("deleteReasonHint")}
-                  </label>
-                  <input
-                    id="reject-reason"
-                    className="input h-9 min-h-0 w-full py-0 text-sm"
-                    autoFocus
-                    placeholder={t("deleteReasonHint")}
-                    value={rejecting.reason}
-                    onChange={(e) => setRejecting({ id: rejecting.id, reason: e.target.value })}
-                  />
-                </div>
-              }
-              confirmLabel={tAdmin("reject")}
-              cancelLabel={tCommon("cancel")}
-              busy={busy}
-              confirmDisabled={rejecting.reason.trim().length < 3}
-              onCancel={() => setRejecting(null)}
-              onConfirm={() => {
-                const reason = rejecting.reason.trim();
-                setRejecting(null);
-                void deleteMemberFor(target, reason);
-              }}
-            />
-          );
-        })() : null}
 
         {confirmDeleteMember !== null ? (
           <ConfirmDialog

@@ -359,13 +359,28 @@ describe("FormPanel anatomy", () => {
 });
 
 describe("Page anatomy", () => {
-  it("PageHeader: h1 title, subtitle under it, actions when given", () => {
+  it("PageHeader: the ACTIONS, and nothing else", () => {
+    /*
+     * The title, the subtitle and the hairline are gone (user directive,
+     * 2026-09-02). They were about 90px at the top of every screen restating
+     * a name the top bar's breadcrumb already showed. Asserted as an ABSENCE
+     * as well as a presence, because the version that still renders them
+     * looks perfectly fine — it is only wrong next to the reference and next
+     * to every other page.
+     */
     render(
       <PageHeader title="تنظیمات سازمان" subtitle="پیکربندی عمومی" actions={<button>عمل</button>} />,
     );
-    expect(screen.getByRole("heading", { level: 1, name: "تنظیمات سازمان" })).toBeTruthy();
-    expect(screen.getByText("پیکربندی عمومی")).toBeTruthy();
     expect(screen.getByRole("button", { name: "عمل" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
+    expect(screen.queryByText("پیکربندی عمومی")).toBeNull();
+  });
+
+  it("PageHeader: renders NOTHING when a page has no actions", () => {
+    /* an empty flex row still occupies its margin, which is a gap above
+       every page that happens not to have a button */
+    const { container } = render(<PageHeader title="بدون عمل" />);
+    expect(container.firstChild).toBeNull();
   });
 
   it("Section: h2 title + description; content renders", () => {

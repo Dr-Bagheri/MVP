@@ -648,6 +648,16 @@ export const api = {
       method: "PATCH", body: JSON.stringify({ ...patch, reason }), headers: { "content-type": "application/json" },
     });
   },
+  /**
+   * Place a pending arrival: their organisation, their role, and activation,
+   * in one call — because two would leave a member ACTIVE in the org they
+   * named at sign-up if the second one never happened.
+   */
+  async placePlatformUser(id: string, org_id: string, role: string, reason: string) {
+    return bff<{ placed: boolean }>(`/api/platform/users/${id}/place`, {
+      method: "POST", body: JSON.stringify({ org_id, role, reason }), headers: { "content-type": "application/json" },
+    });
+  },
   /** M32 soft-delete: organisation (7-day recovery window). */
   async softDeletePlatformOrganization(id: string, reason: string) {
     return bff<{ changed: boolean }>(`/api/platform/organizations/${id}`, {

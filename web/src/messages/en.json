@@ -852,7 +852,8 @@
     "adminOnlyNote": "Managing members, models and organization settings is an admin action. If you need a change, ask your organization's admin.",
     "deletedItems": "Deleted items",
     "purgeIn": "Purges in {days} days",
-    "restore": "Restore"
+    "restore": "Restore",
+    "roleOwner": "Owner"
   },
   "connectors": {
     "title": "Connectors",
@@ -1119,7 +1120,17 @@
     "openSignups": "Receive new members",
     "closeSignups": "Stop receiving members",
     "effectOpenSignups": "Anyone who signs up without an invitation joins THIS organization, pending acceptance. Any other organization currently receiving members stops.",
-    "effectCloseSignups": "New sign-ups without an invitation are refused platform-wide until another organization is marked."
+    "effectCloseSignups": "New sign-ups without an invitation are refused platform-wide until another organization is marked.",
+    "pendingArrivals": "Waiting to be placed",
+    "place": "Place",
+    "placeOrg": "Organisation",
+    "placeOrgChoose": "Choose an organisation",
+    "placeRole": "Role",
+    "placeConfirm": "Place {name} in this organisation?",
+    "placeEffect": "They become active and move to the chosen organisation.",
+    "reject": "Reject",
+    "rejectConfirm": "Reject {name}'s request?",
+    "rejectEffect": "They are deleted, recoverable for seven days."
   },
   "workflows": {
     "title": "Workflows",

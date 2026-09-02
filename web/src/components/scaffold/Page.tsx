@@ -81,29 +81,36 @@ export function PageContainer({
  * (one mechanism, the breadcrumb ruling).
  */
 export function PageHeader({
-  title,
-  subtitle,
   actions,
 }: {
-  title: string;
+  /** accepted, not rendered — see the note below */
+  title?: string;
   subtitle?: string;
   actions?: ReactNode;
 }) {
+  /*
+   * NO TITLE, NO SUBTITLE, NO RULE (user directive, 2026-09-02: "remove
+   * titles headers and the old frontend architecture that we had").
+   *
+   * What stood here was a 24px page title, a muted subtitle and a hairline —
+   * the whole block roughly 90px of every screen, above content the person
+   * came for, restating a name the breadcrumb in the top bar was already
+   * showing. The reference has none of it: a page says its name in the bar
+   * and spends its height on the work.
+   *
+   * The component stays, and its ACTIONS stay, because the actions are the
+   * only part that was ever load-bearing — and keeping the component means
+   * eighteen pages changed shape without eighteen edits, each of which could
+   * have dropped a button.
+   *
+   * `title` and `subtitle` are still accepted and deliberately unused: they
+   * are what every caller passes, and a required-prop change here would be a
+   * mechanical sweep with nothing to show for it. The rendered artifact is
+   * what the directive is about.
+   */
+  if (!actions) return null;
   return (
-    /*
-     * ONE header structure for every sub page (user directive, 2026-08-18):
-     * 24px title, muted subtitle 4px under it, and a full-width hairline
-     * closing the block. The divider is part of the HEADER, not something
-     * pages draw when they remember to — which is how half the platform had
-     * one and half did not, and every surface read as out of place.
-     */
-    <header className="mb-6 flex items-start justify-between gap-4 border-b border-border pb-5">
-      <div>
-        <h1 className="text-2xl font-bold text-fg">{title}</h1>
-        {subtitle ? <p className="mt-1 text-sm text-fg-muted">{subtitle}</p> : null}
-      </div>
-      {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
-    </header>
+    <div className="mb-3 flex flex-wrap items-center justify-end gap-2">{actions}</div>
   );
 }
 

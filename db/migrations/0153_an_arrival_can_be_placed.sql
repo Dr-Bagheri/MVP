@@ -1,0 +1,11 @@
+-- 0153 — the audit vocabulary learns 'user_placed'
+--
+-- Its own migration, and not because the change is large. `alter type … add
+-- value` and the first USE of that value cannot share a transaction, and this
+-- runner gives each file exactly one — so a single migration adding the value
+-- and then calling a function that writes it fails with "unsafe use of new
+-- value", every time, on a body that reads perfectly.
+--
+-- The operation itself is 0154. This file is the half that has to commit
+-- first.
+alter type echo.platform_audit_action add value if not exists 'user_placed';
