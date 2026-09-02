@@ -14,7 +14,7 @@ import {
   IconFolder, IconMic, IconPencil, IconPlus, IconTrash, IconUpload, IconVideo,
 } from "@/components/icons";
 import { ConfirmDialog, KebabMenu } from "@/components/rowActions";
-import { dayKeyOf, digits, formatDate, formatTime, monthGridAt, nowFields } from "@/lib/format";
+import { dayKeyOf, digits, formatDate, formatTime, monthGridAt, nowFields, instantFromFields } from "@/lib/format";
 
 /**
  * MEETINGS (0145, the reference adoption) — "add a part name meeting and
@@ -787,7 +787,10 @@ function NewMeetingDialog({ topics, onClose, onCreated, onRefused }: {
     setBusy(true);
     void api.createMeeting({
       title: title.trim(),
-      scheduled_at: new Date(`${date}T${time}`).toISOString(),
+      /* the fields are wall clock in the PLATFORM's zone, so they are read
+         back in it — `new Date("...T...")` reads the browser's, which stored
+         an instant off by the offset for anyone outside their own zone */
+      scheduled_at: instantFromFields(date, time).toISOString(),
       mode,
       topic_id: topic === "" ? undefined : topic,
       description: description.trim() === "" ? undefined : description,

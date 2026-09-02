@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { nowFields } from "./format";
+import { instantFromFields, nowFields } from "./format";
+import { __setPreferencesForTest } from "./preferences";
 
 /**
  * A NEW MEETING OPENS AT THE CURRENT TIME (user directive, 2026-09-02).
@@ -41,5 +42,38 @@ describe("nowFields", () => {
 
   it("pads a single-digit month, day, hour and minute", () => {
     expect(nowFields(new Date(2026, 0, 2, 3, 4))).toEqual({ date: "2026-01-02", time: "03:04" });
+  });
+});
+
+describe("the platform's clock, not the browser's", () => {
+  it("reads the stored zone — the bug a developer in that zone cannot see", () => {
+    /*
+     * User report, 2026-09-02: "the time still not the same as the platform
+     * time when go for new meeting". Every other time on the platform renders
+     * in `resolvedTimezone()`; this one read the browser's, so on a machine
+     * outside the stored zone the form opened at a time the rest of the
+     * screen said it was not.
+     *
+     * The fixture is the whole point: a zone DELIBERATELY different from the
+     * machine running the test. A test written in the developer's own zone
+     * passes against the bug, which is how it shipped.
+     */
+    __setPreferencesForTest({ timezone: "Asia/Tokyo" });
+    const at = new Date("2026-05-07T22:09:00.000Z"); // 07:09 next day in Tokyo
+    expect(nowFields(at)).toEqual({ date: "2026-05-08", time: "07:09" });
+    __setPreferencesForTest({ timezone: "UTC" });
+    expect(nowFields(at)).toEqual({ date: "2026-05-07", time: "22:09" });
+  });
+
+  it("round-trips through the zone it wrote — the half that stores the instant", () => {
+    /*
+     * Fixing only the display would have been worse than leaving it: a form
+     * showing the right time and saving the wrong one is a meeting that
+     * happens at an hour nobody chose.
+     */
+    __setPreferencesForTest({ timezone: "Asia/Tokyo" });
+    const at = new Date("2026-05-07T22:09:00.000Z");
+    const { date, time } = nowFields(at);
+    expect(instantFromFields(date, time).toISOString()).toBe(at.toISOString());
   });
 });

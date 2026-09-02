@@ -10,9 +10,9 @@ import {
 import { WidgetBoard } from "./dashboard/WidgetBoard";
 import { Link } from "@/i18n/routing";
 import { api } from "@/api/client";
-import { formatDate, personName, formatTime } from "@/lib/format";
+import { personName } from "@/lib/format";
 import { useLocale } from "next-intl";
-import type { Me, MeetingRecord } from "@/api/types";
+import type { Me } from "@/api/types";
 import {
   AgentsWidget, CalendarWidget, IntegrationsWidget, LatestMeetingsWidget, RecordsMiniWidget,
   StartRecordWidget, StatsWidget, UpcomingWidget, WeekWidget,
@@ -52,31 +52,10 @@ import {
  */
 function GreetingHead() {
   const t = useTranslations("dashboard");
-  /* the «ساعت …» clause is the meetings surface's sentence — one
-     vocabulary for one thing, wherever it is read */
-  const tMeetings = useTranslations("meetings");
   const locale = useLocale();
   const [me, setMe] = useState<Me | null>(null);
-  /* THE next meeting itself, not how many there are (user directive,
-     2026-09-02: "remove the date under the username, just add the upcoming
-     meeting with its name and date and time of it"). A count answers a
-     question nobody asked at a greeting; the next thing on the calendar is
-     the thing a person opening a dashboard is looking for. */
-  const [next, setNext] = useState<MeetingRecord | null | "none">(null);
-
   useEffect(() => {
     void api.me().then(setMe).catch(() => setMe(null));
-    void api.meetings()
-      .then((rows) => {
-        const now = Date.now();
-        const ahead = rows
-          .filter((m) => new Date(m.scheduled_at).getTime() >= now && m.call_id === null)
-          .sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at));
-        setNext(ahead[0] ?? "none");
-      })
-      /* null stays "we do not know" — distinct from "none", which is an
-         answer. A failed read must not render as an empty calendar. */
-      .catch(() => setNext(null));
   }, []);
 
   const hour = new Date().getHours();
@@ -101,23 +80,11 @@ function GreetingHead() {
         <h1 className="text-3xl font-extrabold text-fg">
           {name === "" ? salute : t("greetWithName", { salute, name })} 👋
         </h1>
-        {/* the NEXT meeting — its name, its day, its time. Today's date said
-            nothing a clock does not, and it said it above the one line on the
-            screen that had somewhere to be. */}
-        <p className="mt-1 text-xs text-fg-subtle">
-          {next === null
-            ? t("greetUpcomingUnknown")
-            : next === "none"
-              ? t("greetNoUpcoming")
-              : (
-                <Link href={`/meetings/${next.id}`} className="hover:text-accent">
-                  <span className="font-medium text-fg-muted">{next.title}</span>
-                  {" · "}
-                  {formatDate(next.scheduled_at, locale)}
-                  {tMeetings("dateAtTime", { time: formatTime(next.scheduled_at, locale) })}
-                </Link>
-              )}
-        </p>
+        {/* JUST THE GREETING (user directive, 2026-09-02: "remove the line
+            under the username"). The next meeting was added here a round ago
+            and asked to go a round later — and it reads better gone: the
+            board already carries «پیش رو» as a panel, so the line was the
+            same fact stated twice, once where nothing could be done with it. */}
       </div>
     </div>
   );

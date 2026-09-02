@@ -23,7 +23,7 @@ import {
   finish, recorderSnapshot, startRecording, subscribeRecorder,
 } from "@/lib/recordingEngine";
 import { uploadAudioFile } from "@/lib/uploadFile";
-import { digits, formatClock, formatDate, formatDuration, formatTime, personName } from "@/lib/format";
+import { digits, formatClock, formatDate, formatDuration, formatTime, personName, instantFromFields } from "@/lib/format";
 
 /**
  * THE MEETING'S OWN PAGE — the big-milestone round (user directive,
@@ -808,7 +808,8 @@ function EditMeetingDialog({ meeting, onPatch, onClose }: {
   const save = () => {
     onPatch({
       title: title.trim(),
-      scheduled_at: new Date(`${date}T${time}`).toISOString(),
+      /* the same zone the fields were written in — see nowFields */
+      scheduled_at: instantFromFields(date, time).toISOString(),
       topic: topic.trim() === "" ? null : topic.trim(),
       description,
     });

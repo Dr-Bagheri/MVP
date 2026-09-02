@@ -225,11 +225,47 @@ export function formatDate(iso: string, locale: string): string {
  * `new Date(\`${date}T${time}\`)`, which parses local. All three agree.
  */
 export function nowFields(at: Date = new Date()): { date: string; time: string } {
+  /*
+   * THE PLATFORM'S CLOCK, not the browser's (user report, 2026-09-02: "the
+   * time still not the same as the platform time when go for new meeting").
+   *
+   * Every other time on this platform — the top bar's clock, a meeting's
+   * hour, the week grid's rows — is rendered in `resolvedTimezone()`, which
+   * is the person's stored preference and only falls back to the browser's.
+   * This one read `at.getHours()`, which is always the browser's. On a
+   * machine outside the stored zone the two disagreed by the offset, so the
+   * form opened at a time the rest of the screen said it was not.
+   *
+   * The bug was invisible on a laptop already in that zone, which is most of
+   * why it survived a test: the fixture and the developer shared an offset.
+   */
   const two = (n: number) => String(n).padStart(2, "0");
-  return {
-    date: `${at.getFullYear()}-${two(at.getMonth() + 1)}-${two(at.getDate())}`,
-    time: `${two(at.getHours())}:${two(at.getMinutes())}`,
-  };
+  const { y, m, d, hh, mm } = partsIn(at, resolvedTimezone());
+  return { date: `${y}-${two(m)}-${two(d)}`, time: `${two(hh)}:${two(mm)}` };
+}
+
+/**
+ * The instant a date field and a time field describe — read as wall clock in
+ * the platform's zone, which is the zone they were written in.
+ *
+ * The other half of the fix above, and the half that would have made the
+ * first one worse on its own: fields produced in Tehran and parsed with
+ * `new Date(\`${date}T${time}\`)` — which reads LOCAL — would have stored an
+ * instant off by the offset. A form that displays the right time and saves
+ * the wrong one is worse than one that displays the wrong time.
+ *
+ * Two steps, because there is no direct API: read the naive wall clock as if
+ * it were UTC, ask what that instant looks like in the zone, and shift by the
+ * difference. DST is handled by construction — the shift is computed from the
+ * actual offset at that instant, not from a table.
+ */
+export function instantFromFields(date: string, time: string): Date {
+  const naive = new Date(`${date}T${time}:00Z`);
+  if (Number.isNaN(naive.getTime())) return naive;
+  const seen = partsIn(naive, resolvedTimezone());
+  const wanted = naive.getTime();
+  const got = Date.UTC(seen.y, seen.m - 1, seen.d, seen.hh, seen.mm);
+  return new Date(wanted + (wanted - got));
 }
 
 /**
