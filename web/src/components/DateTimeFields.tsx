@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { IconCalendar, IconChevronRight, IconClock } from "@/components/icons";
-import { Popover } from "@/components/Popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { asciiDigits, digits, formatDate, monthGridAt } from "@/lib/format";
 
 /**
@@ -36,7 +36,6 @@ export function DateField({ value, onChange, id }: {
   const locale = useLocale();
   const [open, setOpen] = useState(false);
   const [offset, setOffset] = useState(0);
-  const shell = useRef<HTMLButtonElement | null>(null);
   const grid = useMemo(() => monthGridAt(new Date(), locale, offset), [locale, offset]);
 
   const pick = (iso: string) => {
@@ -64,14 +63,12 @@ export function DateField({ value, onChange, id }: {
   );
 
   return (
-    <div>
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
       <button
-        ref={shell}
         type="button"
         id={id}
-        onClick={() => setOpen((v) => !v)}
         aria-haspopup="dialog"
-        aria-expanded={open}
         className="input flex h-10 w-full items-center justify-between gap-2 text-start"
       >
         <span className="truncate text-fg">
@@ -80,8 +77,9 @@ export function DateField({ value, onChange, id }: {
         <IconCalendar width={14} height={14} className="shrink-0 text-fg-subtle" aria-hidden />
       </button>
 
-      <Popover open={open} anchor={shell} onClose={() => setOpen(false)} minWidth={false}>
-        <div className="w-72 p-1">
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-auto rounded-xl border-border bg-surface p-2 shadow-island">
+        <div className="w-72">
           <div className="mb-2 flex flex-wrap gap-1.5">
             {preset(t("dateToday"), 0)}
             {preset(t("dateTomorrow"), 1)}
@@ -126,8 +124,8 @@ export function DateField({ value, onChange, id }: {
             })}
           </div>
         </div>
-      </Popover>
-    </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -143,7 +141,6 @@ export function TimeField({ value, onChange, id }: {
   const t = useTranslations("meetings");
   const locale = useLocale();
   const [open, setOpen] = useState(false);
-  const shell = useRef<HTMLButtonElement | null>(null);
 
   const [hh, mm] = value.split(":");
   const hour = Number(hh ?? "0");
@@ -174,14 +171,12 @@ export function TimeField({ value, onChange, id }: {
   );
 
   return (
-    <div>
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
       <button
-        ref={shell}
         type="button"
         id={id}
-        onClick={() => setOpen((v) => !v)}
         aria-haspopup="dialog"
-        aria-expanded={open}
         className="input flex h-10 w-full items-center justify-between gap-2 text-start"
       >
         {/* the CLOCK reads in the page's digits; the value underneath stays
@@ -192,13 +187,14 @@ export function TimeField({ value, onChange, id }: {
         <IconClock width={14} height={14} className="shrink-0 text-fg-subtle" aria-hidden />
       </button>
 
-      <Popover open={open} anchor={shell} onClose={() => setOpen(false)} minWidth={false}>
-        <div className="flex w-44 gap-1 p-1">
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-auto rounded-xl border-border bg-surface p-2 shadow-island">
+        <div className="flex w-40 gap-1">
           {column(t("hourLabel"), HOURS, hour, (h) => set(h, minute))}
           <span className="w-px bg-border" aria-hidden />
           {column(t("minuteLabel"), MINUTES, minute, (m) => set(hour, m))}
         </div>
-      </Popover>
-    </div>
+      </PopoverContent>
+    </Popover>
   );
 }

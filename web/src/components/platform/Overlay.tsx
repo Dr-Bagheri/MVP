@@ -1,26 +1,24 @@
 "use client";
 
-import { useEffect, type ReactNode } from "react";
+import type { ReactNode } from "react";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 
 /**
- * The platform's modal shell (extracted from TaskBoard when Meetings needed
- * the same one — the second copy is the one nobody makes): a click on the
- * scrim or Escape closes; the panel stops the click.
+ * The platform's modal shell — now a thin cap over shadcn's Dialog.
+ *
+ * The API is UNCHANGED on purpose. Twenty-odd screens call this, and the swap
+ * is worth nothing if it also asks each of them to change: a refactor that
+ * touches every caller is a refactor whose regressions are everywhere. What
+ * changes is underneath, and it is what a hand-rolled modal never had —
+ * a focus trap, focus returned to whatever opened it, `aria-modal` and the
+ * inert background wired by Radix, the scroll lock, and Escape handled by the
+ * same code that handles the scrim.
+ *
+ * `md` came down a step earlier (2026-09-02): the new-meeting form is a title,
+ * a description and two short fields, and at 576px they stretched across a
+ * line far longer than anything they hold.
  */
-/**
- * `md` exists because the two sizes were not enough: a single column of
- * stacked fields in a 768px panel leaves every input stretched across a line
- * far longer than its content, which is what "the size of the pop up boxes
- * are not right" was pointing at. A form gets `md`; a two-pane surface gets
- * `lg`; a short confirmation keeps `sm`.
- */
-const WIDTH = {
-  /* `md` came down a step (user directive, 2026-09-02: "make this pop up
-     window a little less width"). The new-meeting form is a title, a
-     description and two short fields; at 576px they were stretched across a
-     line far longer than anything they hold. */
-  sm: "max-w-md", md: "max-w-lg", lg: "max-w-3xl",
-} as const;
+const WIDTH = { sm: "max-w-md", md: "max-w-lg", lg: "max-w-3xl" } as const;
 
 export function Overlay({ children, onClose, label, wide = false, size }: {
   children: ReactNode;
@@ -30,28 +28,18 @@ export function Overlay({ children, onClose, label, wide = false, size }: {
   wide?: boolean;
   size?: keyof typeof WIDTH;
 }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-bg/60 p-4"
-      onClick={onClose}
-      role="presentation"
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
+    <Dialog open onOpenChange={(next) => { if (!next) onClose(); }}>
+      <DialogContent
         aria-label={label}
-        onClick={(e) => e.stopPropagation()}
-        className={`flex max-h-[88vh] w-full flex-col overflow-hidden rounded-2xl border border-border bg-surface p-4 shadow-island ${
-          WIDTH[size ?? (wide ? "lg" : "sm")]
-        }`}
+        /* the shadcn content ships a close button of its own; ours are drawn
+           by the callers, in their own header, so it is hidden rather than
+           doubled — two X buttons in one corner is the two-spellings defect
+           at its smallest */
+        className={`${WIDTH[size ?? (wide ? "lg" : "sm")]} max-h-[88vh] gap-0 overflow-hidden rounded-2xl border-border bg-surface p-4 shadow-island [&>button:last-child]:hidden`}
       >
-        {children}
-      </div>
-    </div>
+        <div className="flex max-h-[calc(88vh-2rem)] min-h-0 flex-col">{children}</div>
+      </DialogContent>
+    </Dialog>
   );
 }

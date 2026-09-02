@@ -119,9 +119,23 @@ describe("the floating-panel rule", () => {
   });
 
   it("has something to check — the primitive is actually used", () => {
+    /*
+     * The primitive is RADIX's now, imported from `@/components/ui/popover`.
+     * What it replaced was a hand-rolled portal that had to learn placement,
+     * clipping, flipping and — the one that settled the argument — working
+     * INSIDE A MODAL, where Radix marks everything outside the dialog
+     * `pointer-events: none` and a body-portalled panel renders perfectly
+     * and cannot be clicked.
+     *
+     * Counting the IMPORT rather than the `<Popover` tag on purpose: the tag
+     * is the same either way, so a count of tags could not tell the two
+     * implementations apart, and would have gone on passing after the
+     * hand-rolled one came back.
+     */
     let users = 0;
     for (const file of sources(SRC)) {
-      if (/<Popover\b/.test(codeOnly(readFileSync(file, "utf8")))) users += 1;
+      const code = codeOnly(readFileSync(file, "utf8"));
+      if (code.includes('from "@/components/ui/popover"')) users += 1;
     }
     expect(users).toBeGreaterThan(1);
   });

@@ -90,6 +90,41 @@
     --brand-mark-image: url("/brand/neurai-mark.png");
   }
 
+  /*
+   * ── THE SHADCN BRIDGE ──────────────────────────────────────────────────
+   *
+   * shadcn/ui components read a fixed set of variable names. This ALIASES
+   * each one onto a token we already own, so an installed component arrives
+   * wearing our theme instead of a default palette to be chased out of it.
+   *
+   * Aliases and not copies, deliberately: there is one place the accent is
+   * decided and this is not it. The day `--accent` changes, every shadcn
+   * button changes with it and nobody has to remember a second list.
+   *
+   * ONLY THE NAMES WE DID NOT ALREADY HAVE. `--primary`, `--secondary` and
+   * `--muted` are ours already and mean something specific here (`--secondary`
+   * is a BLUE, not a subdued surface) — the first draft of this block
+   * redefined all three, which would have repainted every existing use of
+   * them to fix a library that had not been installed yet.
+   */
+  :root {
+    --background: var(--bg);
+    --foreground: var(--fg);
+    --card: var(--surface);
+    --card-foreground: var(--fg);
+    --popover: var(--surface);
+    --popover-foreground: var(--fg);
+    --primary-foreground: var(--on-primary);
+    --secondary-foreground: var(--fg);
+    --muted-foreground: var(--fg-muted);
+    --accent-foreground: var(--on-accent);
+    --destructive: var(--danger);
+    --destructive-foreground: var(--on-accent);
+    --input: var(--border-strong);
+    --ring: var(--accent);
+  }
+
+
   [data-theme="light"] {
     /* LIGHT — the reference's PRIMARY look: warm cream ground, white
        cards, the green as ink and fill. Now the product default. */

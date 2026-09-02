@@ -47,34 +47,72 @@
  * exceptions as entries with written reasons. Verified red on a staged
  * violation before it was trusted.
  */
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  forwardRef,
+  useEffect,
+  useRef,
+  useState,
+  type ComponentPropsWithoutRef,
+  type MouseEvent as ReactMouseEvent,
+  type ReactNode,
+} from "react";
 import { createPortal } from "react-dom";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { IconChevronRight, IconClose, IconDots } from "@/components/icons";
 
-export function IconAction({
-  label,
-  onClick,
-  children,
-  danger = false,
-  disabled = false,
-  className = "",
-}: {
-  label: string;
-  onClick: () => void;
-  children: ReactNode;
-  danger?: boolean;
-  disabled?: boolean;
-  className?: string;
-}) {
+/**
+ * FORWARDS ITS REF AND ITS REST PROPS, which is what lets it stand in as a
+ * Radix trigger under `asChild`. A component that quietly drops the props it
+ * is handed renders perfectly and does nothing — Radix passes the open/close
+ * handler, the aria wiring and the ref THROUGH the child, so a child that
+ * keeps only its own is a button that looks like a menu trigger and never
+ * opens a menu.
+ */
+export const IconAction = forwardRef<
+  HTMLButtonElement,
+  {
+    label: string;
+    /* takes the event so an INJECTED handler (Radix's, under `asChild`)
+       still receives what it expects; a caller's plain `() => void` simply
+       ignores the argument */
+    onClick?: (e: ReactMouseEvent<HTMLButtonElement>) => void;
+    children: ReactNode;
+    danger?: boolean;
+    disabled?: boolean;
+    className?: string;
+  } & Omit<ComponentPropsWithoutRef<"button">, "onClick" | "children" | "className">
+>(function IconAction(
+  { label, onClick, children, danger = false, disabled = false, className = "", ...rest },
+  ref,
+) {
   return (
     <button
+      ref={ref}
       type="button"
       aria-label={label}
       title={label}
       disabled={disabled}
+      {...rest}
       onClick={(e) => {
+        /* the row underneath is usually clickable too, and pressing the
+           action on it must not also open the row */
         e.stopPropagation();
-        onClick();
+        onClick?.(e);
       }}
       className={`tap inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
         danger
@@ -85,7 +123,7 @@ export function IconAction({
       {children}
     </button>
   );
-}
+});
 
 export interface KebabItem {
   key: string;
@@ -126,9 +164,7 @@ export interface KebabItem {
   sub?: KebabItem[];
 }
 
-const MENU_W = 176; // matches min-w-44
 const ITEM_H = 34;  // one row's height — the no-scroll placement math
-const RULE_H = 9;   // the separator above the danger group
 
 /**
  * THE DANGER GROUP (user directive, 2026-08-26: "the red one stays together
@@ -150,75 +186,26 @@ function orderItems(items: KebabItem[]): { safe: KebabItem[]; danger: KebabItem[
   };
 }
 
-/** the rendered height of a menu, for the no-scroll placement math */
-function menuHeight(items: KebabItem[]): number {
-  const { danger } = orderItems(items);
-  return items.length * ITEM_H + 10 + (danger.length > 0 && danger.length < items.length ? RULE_H : 0);
-}
-
 /** the two groups, with the theme's rule between them */
-function MenuBody({
-  items, expanded, setExpanded, close,
-}: {
-  items: KebabItem[];
-  expanded: string | null;
-  setExpanded: (key: string | null, anchor?: DOMRect) => void;
-  close: () => void;
-}) {
+function MenuBody({ items }: { items: KebabItem[] }) {
   const { safe, danger } = orderItems(items);
   return (
     <>
-      {safe.map((item) => (
-        <MenuEntry
-          key={item.key} item={item} expanded={expanded}
-          setExpanded={setExpanded} close={close}
-        />
-      ))}
+      {safe.map((item) => <MenuEntry key={item.key} item={item} />)}
       {danger.length > 0 && safe.length > 0 ? (
-        <hr className="my-1 border-border" />
+        <DropdownMenuSeparator className="my-1 bg-border" />
       ) : null}
-      {danger.map((item) => (
-        <MenuEntry
-          key={item.key} item={item} expanded={expanded}
-          setExpanded={setExpanded} close={close}
-        />
-      ))}
+      {danger.map((item) => <MenuEntry key={item.key} item={item} />)}
     </>
   );
 }
 
-function MenuEntry({
-  item, expanded, setExpanded, close,
-}: {
-  item: KebabItem;
-  expanded: string | null;
-  setExpanded: (key: string | null, anchor?: DOMRect) => void;
-  close: () => void;
-}) {
-  const isOpen = expanded === item.key;
+/* the two THEME rules, kept exactly where they were: an icon gutter that is
+   always spent, and a label that truncates rather than widening the menu.
+   Shared by the item and the sub-trigger so the two can never drift apart. */
+function EntryFace({ item }: { item: KebabItem }) {
   return (
-    <button
-      type="button"
-      role="menuitem"
-      aria-haspopup={item.sub ? "menu" : undefined}
-      aria-expanded={item.sub ? isOpen : undefined}
-      disabled={item.disabled}
-      onClick={(e) => {
-        if (item.sub) {
-          return setExpanded(
-            isOpen ? null : item.key,
-            (e.currentTarget as HTMLElement).getBoundingClientRect(),
-          );
-        }
-        item.onSelect?.();
-        if (!item.keepOpen) close();
-      }}
-      className={`flex w-full items-center gap-2.5 py-2 pe-3 ps-3 text-start text-xs transition-colors ${
-        item.danger
-          ? "text-danger hover:bg-danger/10"
-          : "text-fg-muted hover:bg-surface-2 hover:text-fg"
-      } ${isOpen ? "bg-surface-2 text-fg" : ""} disabled:pointer-events-none disabled:opacity-40`}
-    >
+    <>
       {/* the icon GUTTER is always spent, even by an item that declined one
           (a value row, `icon: null`) — otherwise its label sits four pixels
           left of every other and the column looks broken */}
@@ -226,14 +213,57 @@ function MenuEntry({
         {item.icon}
       </span>
       <span className="min-w-0 flex-1 truncate">{item.label}</span>
-      {item.sub ? (
-        /* an ICON, not an arrow character: the text arrow did not share
-           the set's stroke or box, and could not mirror for RTL */
-        <span aria-hidden className="inline-flex rtl:-scale-x-100">
-          <IconChevronRight width={12} height={12} />
-        </span>
-      ) : null}
-    </button>
+    </>
+  );
+}
+
+const ENTRY_CLASS =
+  "flex w-full cursor-default items-center gap-2.5 rounded-none py-2 pe-3 ps-3 text-start text-xs transition-colors";
+
+function toneClass(item: KebabItem): string {
+  return item.danger
+    ? "text-danger focus:bg-danger/10 focus:text-danger data-[state=open]:bg-danger/10"
+    : "text-fg-muted focus:bg-surface-2 focus:text-fg data-[state=open]:bg-surface-2 data-[state=open]:text-fg";
+}
+
+function MenuEntry({ item }: { item: KebabItem }) {
+  if (item.sub) {
+    return (
+      <DropdownMenuSub>
+        <DropdownMenuSubTrigger className={`${ENTRY_CLASS} ${toneClass(item)}`}>
+          <EntryFace item={item} />
+          {/* an ICON, not an arrow character: the text arrow did not share
+              the set's stroke or box, and could not mirror for RTL. The
+              shadcn sub-trigger ships its own chevron via a child selector;
+              ours is the only one, and it flips. */}
+          <span aria-hidden className="inline-flex rtl:-scale-x-100">
+            <IconChevronRight width={12} height={12} />
+          </span>
+        </DropdownMenuSubTrigger>
+        <DropdownMenuSubContent
+          className="min-w-[13.5rem] rounded-lg border-border bg-surface p-0 py-1 shadow-xl"
+          sideOffset={-12}
+        >
+          <MenuBody items={item.sub} />
+        </DropdownMenuSubContent>
+      </DropdownMenuSub>
+    );
+  }
+  return (
+    <DropdownMenuItem
+      disabled={item.disabled}
+      className={`${ENTRY_CLASS} ${toneClass(item)}`}
+      onSelect={(e) => {
+        /* `keepOpen` is a row that ANSWERS without ending the errand (a
+           playback speed, a density). Radix closes on select by default, so
+           the flag has to say so explicitly — the old menu expressed the
+           same thing by simply not calling close(). */
+        if (item.keepOpen) e.preventDefault();
+        item.onSelect?.();
+      }}
+    >
+      <EntryFace item={item} />
+    </DropdownMenuItem>
   );
 }
 
@@ -252,164 +282,62 @@ export function KebabMenu({
       row wants. Overrides the default sizing entirely. */
   triggerClassName?: string;
 }) {
-  const [expanded, setExpandedKey] = useState<string | null>(null);
-  /** where the open flyout sits — computed from its parent item's rect */
-  const [flyoutAt, setFlyoutAt] = useState<{ top: number; left: number } | null>(null);
-  /** null = closed; otherwise the VIEWPORT position the portal renders at.
-      The menu portals to <body> (user report, 2026-08-24: opening it inside
-      a table's overflow container clipped the menu and scrolled the table —
-      "the menu should be always on top"). position:fixed + a portal escapes
-      every ancestor overflow; any scroll or resize simply closes it. */
-  const [at, setAt] = useState<{ top: number; left: number } | null>(null);
-  const rootRef = useRef<HTMLSpanElement | null>(null);
-  const menuRef = useRef<HTMLDivElement | null>(null);
-  const flyoutRef = useRef<HTMLDivElement | null>(null);
-
-  /**
-   * NO-SCROLL PLACEMENT (user directive, 2026-08-25): the menu always opens
-   * COMPLETELY — below the trigger when it fits, flipped above it when it
-   * doesn't, and it never grows a scrollbar of its own. When a menu wants
-   * more rows than a viewport holds, the caller groups them into `sub`
-   * flyouts — that is the theme's answer, not scrolling.
+  /*
+   * ON RADIX'S DropdownMenu. What that replaced was ~180 hand-written lines
+   * that had learned, one user report at a time, to portal past a table's
+   * overflow, to flip when the viewport ran out, to place a flyout outward
+   * in the reading direction, and to close on outside-press / Escape /
+   * scroll / resize. Every one of those is a Radix default, and the two the
+   * hand-rolled version never got to — a focus trap and arrow-key
+   * navigation — arrive with them.
+   *
+   * The rules that are OURS stay ours: `orderItems` still sorts the red
+   * rows to the bottom and `EntryFace` still spends the icon gutter, both
+   * asserted in rowActions.menu.test.tsx.
+   *
+   * NO-SCROLL PLACEMENT (user directive, 2026-08-25) survives by omission:
+   * a menu here sets no max-height, so Radix flips and shifts it to fit
+   * rather than growing a scrollbar. When a menu wants more rows than a
+   * viewport holds, the caller groups them into `sub` flyouts — that is
+   * the theme's answer, not scrolling.
    */
-  function toggle() {
-    if (at) return closeAll();
-    setExpandedKey(null);
-    setFlyoutAt(null);
-    const rect = rootRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const rtl = document.documentElement.dir === "rtl";
-    const left = rtl ? rect.left : rect.right - MENU_W;
-    const height = menuHeight(items);
-    const below = rect.bottom + 4;
-    const top = below + height <= window.innerHeight - 8
-      ? below
-      : Math.max(8, rect.top - 4 - height);
-    setAt({
-      top,
-      left: Math.max(8, Math.min(left, window.innerWidth - MENU_W - 8)),
-    });
-  }
-
-  function closeAll() {
-    setAt(null);
-    setExpandedKey(null);
-    setFlyoutAt(null);
-  }
-
-  /**
-   * The flyout steps OUT of the parent menu — outward in the reading
-   * direction, overlapping the parent's edge by ~12px (the Supabase-style
-   * reference the user pointed at) — and flips to the other side when the
-   * viewport ends. Its top clamps so it, too, opens completely.
-   */
-  function setExpanded(key: string | null, anchor?: DOMRect) {
-    setExpandedKey(key);
-    if (!key || !anchor || !at) return setFlyoutAt(null);
-    const item = items.find((i) => i.key === key);
-    const height = (item?.sub?.length ?? 0) * ITEM_H + 10;
-    const rtl = document.documentElement.dir === "rtl";
-    const outward = rtl ? at.left - MENU_W + 12 : at.left + MENU_W - 12;
-    const fits = outward >= 8 && outward + MENU_W <= window.innerWidth - 8;
-    const flipped = rtl ? at.left + MENU_W - 12 : at.left - MENU_W + 12;
-    setFlyoutAt({
-      top: Math.max(8, Math.min(anchor.top - 5, window.innerHeight - height - 8)),
-      left: fits ? outward : Math.max(8, Math.min(flipped, window.innerWidth - MENU_W - 8)),
-    });
-  }
-
-  useEffect(() => {
-    if (!at) return;
-    const close = () => closeAll();
-    const onDown = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (
-        !rootRef.current?.contains(target)
-        && !menuRef.current?.contains(target)
-        && !flyoutRef.current?.contains(target)
-      ) close();
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close();
-    };
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    window.addEventListener("scroll", close, true);
-    window.addEventListener("resize", close);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-      window.removeEventListener("scroll", close, true);
-      window.removeEventListener("resize", close);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- closeAll is stable in spirit
-  }, [at]);
-
-  const openSub = expanded ? items.find((i) => i.key === expanded)?.sub : undefined;
-
   return (
-    <span ref={rootRef} className="relative inline-flex" onClick={(e) => e.stopPropagation()}>
-      {triggerClassName ? (
-        /* a caller-shaped trigger renders its OWN button rather than
-           overriding IconAction's (user report, 2026-08-26: the recorder's
-           gear stayed a rounded square among circles). Two utilities from
-           the same group — rounded-md and rounded-full — do not resolve by
-           the order they are written in a className; the stylesheet's own
-           order decides, which is a coin toss. Owning the element is the
-           fix that cannot lose that toss. */
-        <button
-          type="button"
-          aria-label={label}
-          title={label}
-          onClick={(e) => { e.stopPropagation(); toggle(); }}
-          className={`tap grid place-items-center transition-colors ${triggerClassName}`}
-        >
-          {trigger ?? <IconDots />}
-        </button>
-      ) : (
-        <IconAction label={label} onClick={toggle} className={trigger ? "w-auto px-1.5" : ""}>
-          {trigger ?? <IconDots />}
-        </IconAction>
-      )}
-      {at
-        ? createPortal(
-            <div
-              ref={menuRef}
-              role="menu"
-              style={{ position: "fixed", top: at.top, left: at.left, minWidth: MENU_W }}
-              className="z-50 rounded-lg border border-border bg-surface py-1 shadow-xl"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <MenuBody
-                items={items}
-                expanded={expanded}
-                setExpanded={setExpanded}
-                close={closeAll}
-              />
-            </div>,
-            document.body,
-          )
-        : null}
-      {at && openSub && flyoutAt
-        ? createPortal(
-            <div
-              ref={flyoutRef}
-              role="menu"
-              style={{ position: "fixed", top: flyoutAt.top, left: flyoutAt.left, minWidth: MENU_W }}
-              className="z-[51] rounded-lg border border-border bg-surface py-1 shadow-xl"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <MenuBody
-                items={openSub}
-                expanded={null}
-                setExpanded={() => undefined}
-                close={closeAll}
-              />
-            </div>,
-            document.body,
-          )
-        : null}
-    </span>
+    <DropdownMenu modal={false}>
+      <DropdownMenuTrigger asChild>
+        {triggerClassName ? (
+          /* a caller-shaped trigger renders its OWN button rather than
+             overriding IconAction's (user report, 2026-08-26: the recorder's
+             gear stayed a rounded square among circles). Two utilities from
+             the same group — rounded-md and rounded-full — do not resolve by
+             the order they are written in a className; the stylesheet's own
+             order decides, which is a coin toss. Owning the element is the
+             fix that cannot lose that toss. */
+          <button
+            type="button"
+            aria-label={label}
+            title={label}
+            onClick={(e) => e.stopPropagation()}
+            className={`tap grid place-items-center transition-colors ${triggerClassName}`}
+          >
+            {trigger ?? <IconDots />}
+          </button>
+        ) : (
+          <IconAction label={label} className={trigger ? "w-auto px-1.5" : ""}>
+            {trigger ?? <IconDots />}
+          </IconAction>
+        )}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="end"
+        sideOffset={4}
+        /* the row underneath must not also receive the press that chose a
+           menu item — a table row is usually clickable itself */
+        onClick={(e) => e.stopPropagation()}
+        className="min-w-[13.5rem] rounded-lg border-border bg-surface p-0 py-1 shadow-xl"
+      >
+        <MenuBody items={items} />
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -430,55 +358,37 @@ export function ContextMenu({
   items: KebabItem[];
   onClose: () => void;
 }) {
-  const panelRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    const onDown = (e: MouseEvent) => {
-      if (!panelRef.current?.contains(e.target as Node)) onClose();
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    window.addEventListener("scroll", onClose, true);
-    window.addEventListener("resize", onClose);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-      window.removeEventListener("scroll", onClose, true);
-      window.removeEventListener("resize", onClose);
-    };
-  }, [onClose]);
-
-  const height = menuHeight(items);
-  const rtl = typeof document !== "undefined" && document.documentElement.dir === "rtl";
-  const left = rtl ? at.x - MENU_W : at.x;
-  const top = at.y + height <= window.innerHeight - 8
-    ? at.y
-    : Math.max(8, at.y - height);
-
-  return createPortal(
-    <div
-      ref={panelRef}
-      role="menu"
-      style={{
-        position: "fixed",
-        top,
-        left: Math.max(8, Math.min(left, window.innerWidth - MENU_W - 8)),
-        minWidth: MENU_W,
+  /*
+   * THE SAME MENU as the kebab, opened at a POINT instead of at a button.
+   * The anchor is a zero-size element parked at the pointer: Radix places,
+   * flips and clamps against it exactly as it does against a trigger, so a
+   * right-click near the bottom of the screen opens upward without this file
+   * measuring anything. It also means the two menus cannot drift — one
+   * `MenuBody`, one set of theme rules, two ways in.
+   */
+  return (
+    <DropdownMenu
+      open
+      modal={false}
+      onOpenChange={(next) => {
+        if (!next) onClose();
       }}
-      className="z-50 rounded-lg border border-border bg-surface py-1 shadow-xl"
-      onClick={(e) => e.stopPropagation()}
     >
-      <MenuBody
-        items={items}
-        expanded={null}
-        setExpanded={() => undefined}
-        close={onClose}
-      />
-    </div>,
-    document.body,
+      <DropdownMenuTrigger asChild>
+        <span
+          aria-hidden
+          style={{ position: "fixed", top: at.y, left: at.x, width: 0, height: 0 }}
+        />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="start"
+        sideOffset={0}
+        onClick={(e) => e.stopPropagation()}
+        className="min-w-[13.5rem] rounded-lg border-border bg-surface p-0 py-1 shadow-xl"
+      >
+        <MenuBody items={items} />
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -850,44 +760,53 @@ export function ConfirmDialog({
    * "save it, or delete it?", and both are answers, not dismissals.
    *
    * Deliberately its own slot rather than repurposing cancel: cancel also
-   * fires on Escape and on a backdrop click, so an action parked there
-   * would run every time someone dismissed the dialog.
+   * fires on Escape, so an action parked there would run every time
+   * someone dismissed the dialog.
    */
   alt?: { label: string; onSelect: () => void; danger?: boolean };
   /**
    * Drops the cancel BUTTON (user directive, 2026-08-26: the recorder's
    * stop dialog was three fat buttons wide and stopped looking like the
    * theme's two-button box). Dismissal does not go away with it: Escape
-   * and the backdrop still call `onCancel`, and a corner ✕ appears so the
-   * way out stays visible — a destructive dialog with no visible exit is
-   * how a mis-press becomes a decision.
+   * still calls `onCancel`, and a corner ✕ appears so the way out stays
+   * VISIBLE — a destructive dialog whose only exit is a key nobody is told
+   * about is how a mis-press becomes a decision.
    */
   hideCancel?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onCancel();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onCancel]);
-
+  /*
+   * ON RADIX'S AlertDialog, not a hand-rolled overlay. The three things it
+   * brings are the three a hand-rolled one gets wrong one at a time: focus is
+   * TRAPPED inside the box (ours let Tab walk out onto the page behind it),
+   * the rest of the document goes `inert` for a screen reader, and the
+   * Escape/restore-focus dance is the platform's rather than ours.
+   *
+   * ONE BEHAVIOUR CHANGED, named rather than smuggled in under a swap: a
+   * press on the backdrop no longer cancels. Radix removes that from an
+   * ALERT dialog on purpose — this box asks a question whose wrong answer is
+   * usually destructive, and a stray click landing next to it should not
+   * count as an answer. Every way out survives: the cancel button, the ✕ that
+   * `hideCancel` puts in the corner, and Escape.
+   */
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-bg/60 p-4"
-      onClick={onCancel}
+    <AlertDialog
+      open
+      onOpenChange={(next) => {
+        if (!next) onCancel();
+      }}
     >
-      <div
-        role="alertdialog"
-        aria-modal="true"
+      <AlertDialogContent
         aria-label={title}
-        className={`w-full ${wide ? "max-w-lg" : "max-w-sm"} rounded-2xl border border-border bg-surface p-5 shadow-2xl`}
-        onClick={(e) => e.stopPropagation()}
+        /* Radix warns when a description is missing; a dialog whose body is a
+           FORM has no describing sentence, and pointing the attribute at one
+           that does not exist is worse than declaring there is none */
+        aria-describedby={undefined}
+        className={`w-full ${wide ? "max-w-lg" : "max-w-sm"} gap-0 rounded-2xl border-border bg-surface p-5 shadow-2xl`}
       >
         <div className="flex items-start gap-3">
-          <h2 className="flex-1 text-base font-semibold text-fg">{title}</h2>
+          <AlertDialogTitle className="flex-1 text-base font-semibold text-fg">{title}</AlertDialogTitle>
           {hideCancel ? (
             <button
               type="button"
@@ -902,7 +821,7 @@ export function ConfirmDialog({
         </div>
         {body ? (
           typeof body === "string"
-            ? <p className="mt-2 text-sm leading-6 text-fg-muted">{body}</p>
+            ? <AlertDialogDescription className="mt-2 text-sm leading-6 text-fg-muted">{body}</AlertDialogDescription>
             : <div className="mt-3">{body}</div>
         ) : null}
         <div className="mt-5 flex items-center justify-end gap-2">
@@ -930,7 +849,7 @@ export function ConfirmDialog({
             {confirmLabel}
           </button>
         </div>
-      </div>
-    </div>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

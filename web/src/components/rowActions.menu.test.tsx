@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { act, render, screen, fireEvent } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { KebabMenu, SelectMenu, type KebabItem } from "./rowActions";
 
 vi.mock("next-intl", () => ({
@@ -7,6 +8,12 @@ vi.mock("next-intl", () => ({
   useLocale: () => "fa",
 }));
 
+/*
+ * DRIVEN WITH `userEvent`, not `fireEvent.click`. The menu opens on
+ * POINTERDOWN — a real press always sends one, and fireEvent.click sends
+ * only the click, so the menu never opened and every assertion below failed
+ * for a reason that had nothing to do with the product.
+ */
 /**
  * The two theme rules the 2026-08-26 directive put on every kebab in the
  * product: an icon on every row, and the red ones together at the bottom.
@@ -18,26 +25,26 @@ vi.mock("next-intl", () => ({
 
 const dot = <svg data-testid="glyph" />;
 
-function open(items: KebabItem[]) {
+async function open(items: KebabItem[]) {
   render(<KebabMenu label="menu" items={items} />);
-  fireEvent.click(screen.getByRole("button", { name: "menu" }));
+  await userEvent.click(screen.getByRole("button", { name: "menu" }));
   return screen.getAllByRole("menuitem");
 }
 
 describe("every kebab item has an icon gutter", () => {
-  it("renders the glyph an item supplies", () => {
-    open([{ key: "a", label: "Edit", icon: dot }]);
+  it("renders the glyph an item supplies", async () => {
+    await open([{ key: "a", label: "Edit", icon: dot }]);
     expect(screen.getByTestId("glyph")).toBeInTheDocument();
   });
 
-  it("still spends the gutter for a row that declined one", () => {
+  it("still spends the gutter for a row that declined one", async () => {
     /**
      * `icon: null` is the deliberate escape hatch for a VALUE row (a size,
      * a playback speed). It must still occupy the column: a label that
      * starts four pixels left of every other label reads as a rendering
      * fault, which is the thing the directive is actually about.
      */
-    const [item] = open([{ key: "a", label: "1.5×", icon: null }]);
+    const [item] = await open([{ key: "a", label: "1.5×", icon: null }]);
     const gutter = item!.firstElementChild;
     expect(gutter).not.toBeNull();
     expect(gutter!.className).toContain("w-4");
@@ -46,8 +53,8 @@ describe("every kebab item has an icon gutter", () => {
 });
 
 describe("the danger group", () => {
-  it("sorts red items to the END, whatever order the caller listed them", () => {
-    const items = open([
+  it("sorts red items to the END, whatever order the caller listed them", async () => {
+    const items = await open([
       { key: "del", label: "Delete", icon: dot, danger: true },
       { key: "edit", label: "Edit", icon: dot },
       { key: "voice", label: "Remove voice", icon: dot, danger: true },
@@ -60,10 +67,10 @@ describe("the danger group", () => {
     ]);
   });
 
-  it("keeps the caller's order INSIDE each group", () => {
+  it("keeps the caller's order INSIDE each group", async () => {
     // the sort is by danger only — it must not also reorder the safe rows,
     // which would silently rearrange every menu in the product
-    const items = open([
+    const items = await open([
       { key: "b", label: "B", icon: dot },
       { key: "a", label: "A", icon: dot },
       { key: "z", label: "Z", icon: dot, danger: true },
@@ -72,19 +79,24 @@ describe("the danger group", () => {
     expect(items.map((el) => el.textContent)).toEqual(["B", "A", "Z", "Y"]);
   });
 
-  it("rules a line above the red group", () => {
-    open([
+  it("rules a line above the red group", async () => {
+    await open([
       { key: "edit", label: "Edit", icon: dot },
       { key: "del", label: "Delete", icon: dot, danger: true },
     ]);
-    expect(document.querySelectorAll("[role='menu'] hr")).toHaveLength(1);
+    /* by ROLE, not by tag: the rule is "a line separates the red group",
+       and `role="separator"` is the half a screen reader gets. An assertion
+       on `hr` was really an assertion about which element we happened to
+       reach for, and it went red on a swap that changed nothing a user
+       could see. */
+    expect(document.querySelectorAll("[role='menu'] [role='separator']")).toHaveLength(1);
   });
 
-  it("draws NO line when there is nothing to separate", () => {
+  it("draws NO line when there is nothing to separate", async () => {
     // an all-red menu, and an all-safe menu, both get a bare list — a rule
     // above the first row is a line under the menu's own top edge
-    open([{ key: "del", label: "Delete", icon: dot, danger: true }]);
-    expect(document.querySelectorAll("[role='menu'] hr")).toHaveLength(0);
+    await open([{ key: "del", label: "Delete", icon: dot, danger: true }]);
+    expect(document.querySelectorAll("[role='menu'] [role='separator']")).toHaveLength(0);
   });
 });
 
@@ -115,7 +127,7 @@ function renderTile() {
 }
 
 describe("the SelectMenu tile face", () => {
-  it("keeps the value OUT of the button — glyph only, caption below", () => {
+  it("keeps the value OUT of the button — glyph only, caption below", async () => {
     renderTile();
     const btn = screen.getByRole("button", { name: /Microphone/ });
     expect(btn.textContent).not.toContain("Default mic");
@@ -123,7 +135,7 @@ describe("the SelectMenu tile face", () => {
     expect(screen.getByTitle("Default mic").textContent).toBe("Default mic");
   });
 
-  it("names the open panel with its heading and checks only the chosen row", () => {
+  it("names the open panel with its heading and checks only the chosen row", async () => {
     renderTile();
     fireEvent.click(screen.getByRole("button", { name: /Microphone/ }));
     // the tile shows no field name, so the panel must say what is picked
@@ -135,7 +147,7 @@ describe("the SelectMenu tile face", () => {
     expect(screen.getByRole("option", { name: "USB mic" }).textContent).not.toContain("✓");
   });
 
-  it("the INPUT face still carries its value inside the trigger", () => {
+  it("the INPUT face still carries its value inside the trigger", async () => {
     render(
       <SelectMenu
         ariaLabel="Language"
@@ -164,7 +176,7 @@ describe("the SelectMenu tile face", () => {
  * language, template and model choice, so it gets one.
  */
 describe("the sub-menu flyout", () => {
-  it("a sub row opens its flyout instead of acting", () => {
+  it("a sub row opens its flyout instead of acting", async () => {
     const onParent = vi.fn();
     const onChild = vi.fn();
     render(
@@ -179,16 +191,16 @@ describe("the sub-menu flyout", () => {
         }]}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "menu" }));
+    await userEvent.click(screen.getByRole("button", { name: "menu" }));
     // the child is not rendered until its parent row is pressed
     expect(screen.queryByRole("menuitem", { name: "Persian" })).toBeNull();
-    fireEvent.click(screen.getByRole("menuitem", { name: /Language/ }));
+    await userEvent.click(screen.getByRole("menuitem", { name: /Language/ }));
     expect(screen.getByRole("menuitem", { name: "Persian" })).toBeTruthy();
     // pressing a row that OWNS a flyout must not also fire its own action
     expect(onParent).not.toHaveBeenCalled();
   });
 
-  it("choosing inside the flyout acts and closes everything", () => {
+  it("choosing inside the flyout acts and closes everything", async () => {
     const onChild = vi.fn();
     render(
       <KebabMenu
@@ -201,16 +213,16 @@ describe("the sub-menu flyout", () => {
         }]}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "menu" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: /Language/ }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "Persian" }));
+    await userEvent.click(screen.getByRole("button", { name: "menu" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: /Language/ }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Persian" }));
     expect(onChild).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole("menu")).toBeNull();
   });
 });
 
 describe("the tile face opens on hover", () => {
-  it("opens on enter, closes after the pointer has passed", () => {
+  it("opens on enter, closes after the pointer has passed", async () => {
     vi.useFakeTimers();
     try {
       renderTile();
@@ -225,7 +237,7 @@ describe("the tile face opens on hover", () => {
     }
   });
 
-  it("survives the trip from button to panel", () => {
+  it("survives the trip from button to panel", async () => {
     vi.useFakeTimers();
     try {
       renderTile();
@@ -241,7 +253,7 @@ describe("the tile face opens on hover", () => {
     }
   });
 
-  it("the INPUT face never hover-opens", () => {
+  it("the INPUT face never hover-opens", async () => {
     render(
       <SelectMenu
         ariaLabel="Language"

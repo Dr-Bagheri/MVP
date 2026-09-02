@@ -1,5 +1,6 @@
 import { Suspense } from "react";
-import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { MailDraft, StarterWorkflow, WorkflowCard } from "@/api/types";
 import fa from "@/messages/fa.json";
@@ -416,7 +417,7 @@ describe("the workflow detail page", () => {
     }];
     GRAPH = { steps: [{ id: "s1", kind: "search" }] };
     await open("my-manual");
-    fireEvent.click(screen.getByRole("button", { name: "کارهای این گردش‌کار" }));
+    await userEvent.click(screen.getByRole("button", { name: "کارهای این گردش‌کار" }));
     let items = within(screen.getByRole("menu")).getAllByRole("menuitem");
     expect(items.map((item) => item.textContent))
       .toEqual(["اجرای اکنون", "خاموش کردن", "حذف این گردش‌کار"]);
@@ -424,7 +425,7 @@ describe("the workflow detail page", () => {
     cleanup();
     AUTHORED = [{ ...AUTHORED[0]!, trigger_event: "mail.received" }];
     await open("my-manual");
-    fireEvent.click(screen.getByRole("button", { name: "کارهای این گردش‌کار" }));
+    await userEvent.click(screen.getByRole("button", { name: "کارهای این گردش‌کار" }));
     items = within(screen.getByRole("menu")).getAllByRole("menuitem");
     expect(items.map((item) => item.textContent))
       .toEqual(["خاموش کردن", "حذف این گردش‌کار"]);
@@ -434,7 +435,7 @@ describe("the workflow detail page", () => {
     ME = { ...BASE_ME, auto_draft_replies: true };
     await open("draft-email-replies");
 
-    fireEvent.click(screen.getByRole("button", { name: "کارهای این گردش‌کار" }));
+    await userEvent.click(screen.getByRole("button", { name: "کارهای این گردش‌کار" }));
     const items = within(screen.getByRole("menu")).getAllByRole("menuitem");
     expect(items.map((item) => item.textContent)).toEqual(["خاموش کردن"]);
   });

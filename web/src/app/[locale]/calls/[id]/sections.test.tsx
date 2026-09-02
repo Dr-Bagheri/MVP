@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import type { Call, CallNote, SummaryVersion } from "@/api/types";
 
@@ -207,7 +208,7 @@ describe("the section kebabs", () => {
     await open();
     await openSection("کارها و تصمیم‌ها");
 
-    fireEvent.click(screen.getByRole("button", { name: "گزینه‌های کارها و تصمیم‌ها" }));
+    await userEvent.click(screen.getByRole("button", { name: "گزینه‌های کارها و تصمیم‌ها" }));
     const items = within(screen.getByRole("menu")).getAllByRole("menuitem");
     expect(items.map((item) => item.textContent)).toEqual([
       "کپی کارها و تصمیم‌ها",
@@ -216,7 +217,7 @@ describe("the section kebabs", () => {
     ]);
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("menuitem", { name: "رفتن به خلاصه" }));
+      await userEvent.click(screen.getByRole("menuitem", { name: "رفتن به خلاصه" }));
     });
     // the item is a door, not a label: the actions composer is gone…
     expect(screen.queryByRole("textbox", { name: "افزودن اقدام" })).toBeNull();
@@ -228,20 +229,20 @@ describe("the section kebabs", () => {
     await open();
     await openSection("یادداشت‌ها و پیوست‌ها");
 
-    fireEvent.click(screen.getByRole("button", { name: "گزینه‌های یادداشت‌ها" }));
+    await userEvent.click(screen.getByRole("button", { name: "گزینه‌های یادداشت‌ها" }));
     const items = within(screen.getByRole("menu")).getAllByRole("menuitem");
     expect(items.map((item) => item.textContent)).toEqual([
       "افزودن یادداشت",
       "کپی یادداشت‌ها",
     ]);
 
-    fireEvent.click(within(screen.getByRole("menu")).getByRole("menuitem", { name: "افزودن یادداشت" }));
+    await userEvent.click(within(screen.getByRole("menu")).getByRole("menuitem", { name: "افزودن یادداشت" }));
     expect(document.activeElement).toBe(screen.getByRole("textbox", { name: "افزودن یادداشت" }));
   });
 
   it("keeps the record-wide menu on the page header, unchanged — the whole list", async () => {
     await open();
-    fireEvent.click(screen.getByRole("button", { name: "عملیات بیشتر" }));
+    await userEvent.click(screen.getByRole("button", { name: "عملیات بیشتر" }));
     const items = within(screen.getByRole("menu")).getAllByRole("menuitem");
     expect(items.map((item) => item.textContent)).toEqual([
       "دربارهٔ این رکورد بپرس",
@@ -343,7 +344,7 @@ describe("the regenerate offer lives in the summary's kebab", () => {
 
   it("opens the whole template list as a submenu, and a pick regenerates exactly as the card did", async () => {
     await open();
-    fireEvent.click(screen.getByRole("button", { name: "گزینه‌های خلاصه" }));
+    await userEvent.click(screen.getByRole("button", { name: "گزینه‌های خلاصه" }));
 
     const parents = within(screen.getByRole("menu")).getAllByRole("menuitem");
     expect(parents.map((item) => item.textContent)).toEqual(["بازتولید خلاصه"]);
@@ -365,7 +366,7 @@ describe("the regenerate offer lives in the summary's kebab", () => {
     ]);
 
     await act(async () => {
-      fireEvent.click(within(menus[1]!).getByRole("menuitem", { name: "جلسهٔ تیمی" }));
+      await userEvent.click(within(menus[1]!).getByRole("menuitem", { name: "جلسهٔ تیمی" }));
     });
     /* the card's own call, argument for argument (page.tsx: regenerate({
        template: k, label: k })) — a menu that regenerated with no template
@@ -377,9 +378,9 @@ describe("the regenerate offer lives in the summary's kebab", () => {
 
   it("«الگوی تازه» opens the composer instead of regenerating anything", async () => {
     await open();
-    fireEvent.click(screen.getByRole("button", { name: "گزینه‌های خلاصه" }));
-    fireEvent.click(within(screen.getByRole("menu")).getByRole("menuitem", { name: "بازتولید خلاصه" }));
-    fireEvent.click(
+    await userEvent.click(screen.getByRole("button", { name: "گزینه‌های خلاصه" }));
+    await userEvent.click(within(screen.getByRole("menu")).getByRole("menuitem", { name: "بازتولید خلاصه" }));
+    await userEvent.click(
       within(screen.getAllByRole("menu")[1]!).getByRole("menuitem", { name: "الگوی تازه" }),
     );
 
@@ -468,7 +469,7 @@ describe("the summary's warnings", () => {
     expect(summaryBody.textContent).not.toContain("بودجه دو برابر شد");
 
     // …and behind the icon beside the ⋯
-    fireEvent.click(screen.getByRole("button", { name: "هشدارهای خلاصه" }));
+    await userEvent.click(screen.getByRole("button", { name: "هشدارهای خلاصه" }));
     const panel = screen.getByRole("dialog", { name: "هشدارهای خلاصه" });
     expect(panel.textContent).toContain("بودجه دو برابر شد");
     expect(panel.textContent).toContain("در رونوشت پشتوانه‌ای ندارد");

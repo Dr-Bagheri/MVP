@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import localFont from "next/font/local";
 import { NextIntlClientProvider } from "next-intl";
+import { DirectionProvider } from "@radix-ui/react-direction";
 import { getMessages, setRequestLocale } from "next-intl/server";
 import { notFound } from "next/navigation";
 import { routing, dirFor } from "@/i18n/routing";
@@ -70,6 +71,17 @@ export default async function LocaleLayout({
       <body className={`${vazirmatn.variable} font-sans`}>
         <NextIntlClientProvider messages={messages}>
           {/*
+            EVERY RADIX PANEL LEARNS THE DIRECTION HERE. Radix reads `dir`
+            from this context and defaults to "ltr" when nothing provides it
+            — it does NOT look at <html dir>. Without this, a submenu flies
+            out to the RIGHT of its parent in a Persian menu, `align="end"`
+            aligns to the wrong edge, and ArrowLeft/ArrowRight step the wrong
+            way through a menu. All of it renders, none of it errors, and the
+            whole platform is subtly mirrored — the direction of failure this
+            repo keeps meeting: correct-looking and silently wrong.
+          */}
+          <DirectionProvider dir={dirFor(locale)}>
+          {/*
             The breadcrumb's entity title lives here, ABOVE every page, because
             a page sets its own title and then renders the shell — so a provider
             inside the shell is the page's child and can never receive the
@@ -90,6 +102,7 @@ export default async function LocaleLayout({
           {/* the guided tours (2026-08-26) — mounted here so a lesson
               survives the navigations its own steps ask for */}
           <TourOverlay />
+          </DirectionProvider>
         </NextIntlClientProvider>
       </body>
     </html>

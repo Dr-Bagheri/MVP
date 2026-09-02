@@ -1,4 +1,5 @@
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConnectorItem, ConnectorStatus } from "@/api/types";
 
@@ -119,8 +120,8 @@ describe("the integration detail page", () => {
   it("disconnects through ConfirmDialog, never on the menu press itself", async () => {
     await act(async () => { render(<IntegrationDetail slug="gmail" />); });
 
-    fireEvent.click(await screen.findByRole("button", { name: "تنظیمات این اتصال" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "قطع اتصال" }));
+    await userEvent.click(await screen.findByRole("button", { name: "تنظیمات این اتصال" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: "قطع اتصال" }));
 
     const dialog = await screen.findByRole("alertdialog");
     // the two consequences a person cannot see from the button
