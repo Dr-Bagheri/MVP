@@ -41,7 +41,6 @@ import { describe, expect, it } from "vitest";
 const SRC = join(process.cwd(), "src");
 
 const REMAINING: Record<string, number> = {
-  "app/[locale]/conversations/page.tsx": 1,
   "app/[locale]/management/connectors/page.tsx": 1,
   "app/[locale]/management/server/page.tsx": 1,
   "app/[locale]/management/users/page.tsx": 1,

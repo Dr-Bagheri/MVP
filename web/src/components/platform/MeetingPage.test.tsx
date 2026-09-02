@@ -209,7 +209,12 @@ describe("MeetingPage", () => {
     await userEvent.click(screen.getByRole("button", { name: /حین جلسه/ }));
     await waitFor(() => expect(startSpy).toHaveBeenCalledTimes(1));
     const opts = startSpy.mock.calls[0]![0] as unknown as Record<string, unknown>;
-    expect(opts.source).toBe("system");
+    /* "room", not "system" (0162). The online lane used to record by asking
+       the person to SHARE A TAB and taking the audio off it; it mixes the
+       video room's own participant tracks now, so there is no picker, no
+       sharing banner, and the recording has whoever is actually in the
+       meeting rather than whatever the chosen tab was playing. */
+    expect(opts.source).toBe("room");
     expect(opts.title).toBe("جلسهٔ آنلاین");
 
     /* ONCE. Walking back to the plan and in again must not open a second

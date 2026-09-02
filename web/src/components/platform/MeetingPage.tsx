@@ -25,6 +25,7 @@ import {
 } from "@/lib/recordingEngine";
 import { uploadAudioFile } from "@/lib/uploadFile";
 import { digits, formatClock, formatDate, formatDuration, formatTime, personName, instantFromFields } from "@/lib/format";
+import { onRoomAudio } from "@/lib/roomAudio";
 
 /**
  * THE MEETING'S OWN PAGE — the big-milestone round (user directive,
@@ -173,6 +174,14 @@ export function MeetingPage({ id }: { id: string }) {
    * never ask for a microphone), and an engine already running somebody
    * else's take.
    */
+  /* how many REMOTE voices the recording mix carries (0162). UNCONDITIONAL
+     and up here with the others: this component returns early for a meeting
+     that has not loaded, and a hook below that return changes the hook order
+     between renders — which is what happened the first time this was
+     written, three lines under the comment saying so. */
+  const [voices, setVoices] = useState(0);
+  useEffect(() => onRoomAudio((tracks) => setVoices(tracks.length)), []);
+
   const beginTake = useCallback(() => {
     if (typeof meeting !== "object" || meeting === null) return;
     if (meeting.mode === "upload" || meeting.call_id !== null) return;
@@ -192,7 +201,23 @@ export function MeetingPage({ id }: { id: string }) {
     void startRecording({
       micId: "",
       language: locale === "en" ? "en" : "mixed",
-      source: meeting.mode === "online" ? "system" : "mic",
+      /*
+       * NO MORE SHARE PICKER (user directive, 2026-09-02: "why we still using
+       * the fake call for captureing the online voices … get the voice from
+       * online in web room from everyone without faking").
+       *
+       * An online meeting on OUR room records the room: every participant's
+       * audio is already a live track in this page, so the recorder mixes
+       * those with this microphone. What the person loses is the sharing
+       * banner, the tab picker and a permission the feature never wanted;
+       * what the recording gains is the actual cast — whoever is in the
+       * meeting, including people who join after the button is pressed —
+       * rather than whatever a chosen tab happens to be playing.
+       *
+       * "system" survives for a call in software we do not host; it is not
+       * reachable from this button.
+       */
+      source: meeting.mode === "online" ? "room" : "mic",
       title: meeting.title,
       locale,
       resume: null,
@@ -381,6 +406,22 @@ export function MeetingPage({ id }: { id: string }) {
             <span className="badge-num flex items-center gap-1.5 rounded-xl bg-danger/10 px-3 py-1.5 text-xs font-bold text-danger" dir="ltr">
               <span className="h-2 w-2 animate-pulse rounded-full bg-danger" aria-hidden />
               {formatClock(Math.floor(engine.recordedMs / 1000), locale)}
+            </span>
+          ) : null}
+          {/*
+            WHOSE VOICES ARE IN THIS TAKE (0162). Recording an online meeting
+            now mixes the room's own tracks, and that makes a new kind of
+            nothing possible: no remote audio means "nobody else has joined"
+            OR "the room never connected here", and the two look identical —
+            a person would get a recording of themselves and no reason to
+            suspect it. So the count is on screen while the light is red,
+            and it says "this device only" rather than showing a zero.
+          */}
+          {recordingLive && meeting.mode === "online" ? (
+            <span className={`rounded-xl px-2.5 py-1.5 text-[11px] font-medium ${
+              voices === 0 ? "bg-warning/10 text-warning" : "bg-surface-2 text-fg-muted"
+            }`}>
+              {voices === 0 ? t("mixDeviceOnly") : t("mixVoices", { n: digits(voices + 1, locale) })}
             </span>
           ) : null}
           {recordingLive ? (

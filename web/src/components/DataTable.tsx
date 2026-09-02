@@ -161,9 +161,13 @@ export function DataTable<T>({
   return (
     <>
       <div className={`overflow-x-auto ${className}`}>
-        <table className="w-full min-w-max">
+        {/* the platform's ONE table shape (globals.css `.table-cards`):
+            separated card rows in the meetings list's own clothes, so every
+            table in the product changed by editing one class rather than
+            fifteen screens (user directive, 2026-09-02) */}
+        <table className="table-cards w-full min-w-max">
           <thead>
-            <tr className="border-b border-border">
+            <tr>
               {selecting ? (
                 <th className="w-10 px-3 py-3">
                   {selectable.length > 0 ? (
@@ -209,7 +213,7 @@ export function DataTable<T>({
                 fetch and render with the page; only the cells wait. */}
             {loading
               ? Array.from({ length: loadingRows }, (_, i) => (
-                  <tr key={`skeleton-${i}`} className="border-b border-border last:border-0">
+                  <tr key={`skeleton-${i}`}>
                     {selecting ? <td className="px-3 py-3" /> : null}
                     {columns.map((_column, c) => (
                       <td key={c} className="px-3 py-3">
@@ -228,9 +232,10 @@ export function DataTable<T>({
               return (
                 <Fragment key={key}>
                   <tr
-                    className={`group border-b border-border last:border-0 ${
-                      onRowClick ? "row-link" : "transition-colors hover:bg-surface-2"
-                    } ${rowClassName?.(row) ?? ""}`}
+                    /* the row's own border and hover are the theme's now —
+                       a card row highlights its EDGE, and the tinted band
+                       that used to signal hover reads as a selection */
+                    className={`group ${onRowClick ? "row-link" : ""} ${rowClassName?.(row) ?? ""}`}
                     onClick={onRowClick ? () => onRowClick(row) : undefined}
                     onContextMenu={
                       menuItems
@@ -264,7 +269,7 @@ export function DataTable<T>({
                     {columns.map((column) => (
                       <td
                         key={column.key}
-                        className={`px-4 py-3 ${column.className ?? ""}`}
+                        className={`px-4 py-3.5 ${column.className ?? ""}`}
                         onClick={
                           column.stopClick ? (e) => e.stopPropagation() : undefined
                         }
@@ -274,7 +279,7 @@ export function DataTable<T>({
                     ))}
                   </tr>
                   {rowDetail?.(row) !== undefined && rowDetail(row) !== null ? (
-                    <tr className="border-b border-border bg-surface-2/50 last:border-0">
+                    <tr className="bg-surface-2/50">
                       <td colSpan={span} className="px-4 py-3">
                         {rowDetail(row)}
                       </td>

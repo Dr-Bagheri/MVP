@@ -35,8 +35,29 @@ export default function AssistantPage() {
           {/* the toolbar is on TOP now, like every other surface (user
               directive, 2026-09-02) — and it is two links, because the
               recents that used to live in that pane are a page of their own */}
-          <AssistantMenu activeSlug="new" />
-          <Hub />
+          {/*
+            THE PAGE DOES NOT SCROLL; THE CONVERSATION DOES (user directive,
+            2026-09-02: "i still need to scroll down for the ai assistant
+            page — the scroll must be for the conversation not the page").
+
+            The Hub already asked for `h-full overflow-hidden`, and that was
+            the whole problem: it and the toolbar were SIBLINGS inside the
+            shell's scrolling <main>, so "full height" meant the full height
+            of main — and the toolbar's own height was then added on top of
+            it. The page overflowed by exactly the height of the menu, which
+            is why it looked like a small scroll that would not go away.
+
+            A flex column fixes it at the altitude the promise is made: the
+            toolbar takes what it needs, the Hub takes the rest, and `min-h-0`
+            is what allows the rest to be SMALLER than its content so its own
+            scroller carries the thread.
+          */}
+          <div className="flex h-full min-h-0 flex-col">
+            <AssistantMenu activeSlug="new" />
+            <div className="min-h-0 flex-1">
+              <Hub />
+            </div>
+          </div>
         </AssistantConversationProvider>
       </Suspense>
     </PlatformShell>

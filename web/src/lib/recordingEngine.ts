@@ -34,6 +34,7 @@ import { PartUploader, type UploaderProgress } from "@/lib/callUpload";
 import { bufferChunk, clearPart, clearTake, markPart } from "@/lib/takeBuffer";
 import { SAFETY_PART_BYTES } from "@/components/echo/uploadRules";
 import { recorderControls } from "@/components/echo/recorderControls";
+import { onRoomAudio, roomAudioTracks } from "./roomAudio";
 
 export type RecorderPhase =
   | "idle" | "starting" | "recording" | "paused" | "finishing" | "done" | "failed";
@@ -73,7 +74,19 @@ export interface RecorderSnapshot {
 export interface StartOptions {
   micId: string;
   language: "fa" | "en" | "mixed";
-  source: "mic" | "system";
+  /**
+   * WHERE THE SOUND COMES FROM.
+   *
+   *   mic    — this device only (an in-person meeting: one laptop, one room).
+   *   room   — this device PLUS every remote participant's audio, taken
+   *            straight off the video room's own subscribed tracks. No
+   *            picker, no sharing banner, no second permission (0162).
+   *   system — this device plus a SHARED TAB's audio, via getDisplayMedia.
+   *            Kept for a call happening in software we do not host (Meet,
+   *            Zoom, a phone on speaker into a browser tab); it is the only
+   *            thing that can reach audio we are not routing ourselves.
+   */
+  source: "mic" | "room" | "system";
   title: string;
   locale: string;
   resume: { callId: string; title: string | null; nextIdx: number; offsetMs: number } | null;
@@ -134,6 +147,9 @@ let stream: MediaStream | null = null;
 let recorder: MediaRecorder | null = null;
 let uploader: PartUploader | null = null;
 let audioCtx: AudioContext | null = null;
+/** live while a "room" take is mixing — late joiners reach the mix through
+    it, and it must be released with the take or the next one double-mixes */
+let unsubscribeRoom: (() => void) | null = null;
 let meterRaf = 0;
 let timer: ReturnType<typeof setInterval> | null = null;
 let lastTick = 0;
@@ -578,7 +594,47 @@ export async function startRecording(opts: StartOptions): Promise<void> {
   micLost = false;
   mixDest = null;
   micStream.getAudioTracks().forEach(watchMicTrack);
-  if (opts.source === "system") {
+  if (opts.source === "room") {
+    /*
+     * THE ROOM ITSELF (0162). Every remote participant's audio is already a
+     * live track in this page — that is how you can hear them — so the mix is
+     * mic + those, and nothing is asked of the person at all.
+     *
+     * Late joiners are handled by SUBSCRIBING rather than sampling: someone
+     * who arrives ten minutes in gets connected to the same destination, so
+     * the recording has everyone who was ever in the room rather than
+     * everyone who happened to be there when the button was pressed.
+     *
+     * The tracks are deliberately NOT stopped on teardown and are not added
+     * to `rawTracks`: they belong to the room, and stopping them would mute
+     * the participants for the person who pressed record.
+     */
+    const ctx = new AudioContext();
+    audioCtx = ctx;
+    const dest = ctx.createMediaStreamDestination();
+    mixDest = dest;
+    const micNode = ctx.createMediaStreamSource(micStream);
+    if (opts.boost) {
+      const gain = ctx.createGain();
+      gain.gain.value = BOOST_GAIN;
+      micNode.connect(gain).connect(dest);
+    } else {
+      micNode.connect(dest);
+    }
+    const connected = new Set<MediaStreamTrack>();
+    const connect = (tracks: MediaStreamTrack[]) => {
+      for (const track of tracks) {
+        if (connected.has(track) || track.readyState !== "live") continue;
+        connected.add(track);
+        /* remote audio is NOT boosted: it arrives at the sender's own level,
+           the same reasoning the shared-tab branch uses below */
+        ctx.createMediaStreamSource(new MediaStream([track])).connect(dest);
+      }
+    };
+    connect(roomAudioTracks());
+    unsubscribeRoom = onRoomAudio(connect);
+    stream = dest.stream;
+  } else if (opts.source === "system") {
     /*
      * Tab/system audio: both sides of an online meeting in one take. The
      * browser requires a video track in the share picker; we stop it
@@ -765,6 +821,10 @@ export async function finish(): Promise<void> {
   rawTracks.forEach((track) => track.stop());
   rawTracks = [];
   stream = null;
+  /* the room's own tracks are NOT stopped — they are the participants'
+     audio, and stopping them would mute the meeting for whoever recorded */
+  unsubscribeRoom?.();
+  unsubscribeRoom = null;
   void audioCtx?.close();
   audioCtx = null;
   mixDest = null;

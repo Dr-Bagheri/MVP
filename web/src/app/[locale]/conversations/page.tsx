@@ -8,7 +8,8 @@ import { Pagination, usePaged } from "@/components/Pagination";
 import { AssistantMenu } from "@/components/platform/AssistantMenu";
 import { PlatformShell } from "@/components/platform/PlatformShell";
 import { ConfirmDialog } from "@/components/rowActions";
-import { PageContainer, PageHeader, Skeleton } from "@/components/scaffold";
+import { DataTable } from "@/components/DataTable";
+import { PageContainer, PageHeader } from "@/components/scaffold";
 import { useRouter } from "@/i18n/routing";
 import { notify } from "@/lib/notify";
 import { useRefreshEpoch } from "@/lib/refreshBus";
@@ -32,7 +33,6 @@ export default function ConversationsPage() {
   const locale = useLocale();
   /** `null` = not fetched; `[]` = genuinely none. */
   const [sessions, setSessions] = useState<AssistantSession[] | null>(null);
-  const [search, setSearch] = useState("");
   /** the row awaiting the platform's are-you-sure (see the dialog below) */
   const [confirmDelete, setConfirmDelete] = useState<AssistantSession | null>(null);
   /* a removal's failure is still never swallowed — it goes to the
@@ -44,17 +44,11 @@ export default function ConversationsPage() {
     void api.agentSessions().then(setSessions);
   }, [sessionsEpoch]);
 
-  const shown = (sessions ?? []).filter(
-    (s) => search.trim() === "" || (s.title ?? "").includes(search.trim()),
-  );
-  /* numbered over the FULL list, not the filtered one — a search must not
-     renumber what it merely hides */
   const numbers = untitledNumbers(sessions ?? []);
-  /* this table is markup rather than DataTable, so the house rule arrives by
-     import: ten rows, then numbers. `shown` is the FILTERED list, which is
-     what makes the pager's clamp load-bearing here — typing in the search box
-     shortens the set under whatever page the person is standing on. */
-  const { page, setPage, pageCount, visible } = usePaged(shown);
+  /* ten rows, then numbers — the house rule, arriving by import. The list is
+     no longer filtered (the search went in the 2026-09-02 round), so the
+     pager reads the whole set. */
+  const { page, setPage, pageCount, visible } = usePaged(sessions ?? []);
 
   return (
     <PlatformShell>
@@ -62,96 +56,78 @@ export default function ConversationsPage() {
           so wrapping it in MenuLayout would put a row where a pane used to be
           and give the page a column it no longer has */}
       <AssistantMenu activeSlug="history" />
-      <PageContainer className="!pt-0">
+      {/*
+        THE PLATFORM'S TABLE, not a second one (user directive, 2026-09-02:
+        "make this page and table look like the meeting table with same
+        features … i dont need it to look like a simple table … do this also
+        for all the other pages with table in the whole platform").
+
+        This page hand-wrote its own <table> — head, skeleton rows, dividers,
+        an empty state — which is why it looked like a plain grid while the
+        meetings list looked like the product. `DataTable` wears the theme's
+        `.table-cards` shape now, so adopting it is what makes this page match
+        every other table AND what stops there being two table implementations
+        to keep in step.
+
+        The SEARCH went with it (same directive). It filtered a list that is
+        already paginated ten at a time and short for every real user, and it
+        sat in the one place on the page where the eye lands first — the top
+        bar's own search already covers conversations.
+      */}
+      <PageContainer className="!pt-3">
           <PageHeader title={t("title")} subtitle={t("hint")} />
-          <div className="mb-4 max-w-xs">
-            <input
-              className="input h-9 min-h-0 text-xs focus-visible:ring-0 focus-visible:ring-offset-0"
-              placeholder={t("searchPlaceholder")}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-          <div className="rounded-lg border border-border bg-surface">
-            {sessions === null ? null : shown.length === 0 ? (
-              <p className="p-4 text-sm text-fg-muted">{t("empty")}</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[28rem] border-collapse text-sm">
-                  <thead>
-                    <tr className="border-b border-border">
-                      <th className="table-head px-4 py-3 text-start">{t("colTitle")}</th>
-                      <th className="table-head px-4 py-3 text-start">{t("colDate")}</th>
-                      <th className="table-head px-4 py-3 text-start">{t("colMessages")}</th>
-                      {/* no visible ACTIONS title (2026-08-25, all tables) */}
-                      <th className="table-head px-4 py-3 text-start">
-                        <span className="sr-only">{t("colActions")}</span>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {/* the frame is structure and renders with the page; only
-                        the rows wait (the platform's loading rule) */}
-                    {sessions === null
-                      ? Array.from({ length: 5 }, (_, i) => (
-                          <tr key={`skeleton-${i}`}>
-                            <td className="px-4 py-3"><Skeleton className="h-4 w-48" /></td>
-                            <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
-                            <td className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
-                          </tr>
-                        ))
-                      : null}
-                    {visible.map((s) => (
-                      <tr
-                        key={s.id}
-                        className="row-link"
-                        /*
-                          The ASSISTANT PAGE, not the orb (user directive,
-                          2026-08-27: "when you go history, the main ai
-                          assistant should be open not the orb"). The dock
-                          stands down on this surface now, so handing the
-                          conversation to it would be a row that clicks into
-                          nothing — the two halves of that directive are one
-                          change, and this is the other half.
-                        */
-                        onClick={() => router.push({
-                          pathname: "/assistant", query: { c: s.id },
-                        })}
-                      >
-                        <td className="px-4 py-2.5 font-medium text-fg">
-                          {s.title ?? t("newChat", { n: digits(numbers.get(s.id) ?? 1, locale) })}
-                        </td>
-                        <td className="px-4 py-2.5 text-fg-muted">
-                          {formatDate(s.last_message_at ?? s.created_at, locale)}
-                        </td>
-                        <td className="px-4 py-2.5 text-fg-muted">
-                          {digits(s.message_count, locale)}
-                        </td>
-                        <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
-                          <button
-                            type="button"
-                            className="text-xs text-danger/80 underline-offset-2 hover:text-danger hover:underline"
-                            /* the press ASKS; the write lives in the dialog
-                               below (the platform's destructive-action rule —
-                               see confirm.guard.test.ts). Removal is archive
-                               under the hood: nothing in the product may
-                               DELETE a conversation row (the audit survives),
-                               but an archived one never returns to any list,
-                               which is why this is a delete to the person
-                               pressing it and gets asked about like one. */
-                            onClick={() => setConfirmDelete(s)}
-                          >
-                            {t("delete")}
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-            <Pagination page={page} pageCount={pageCount} onPage={setPage} className="pb-3" />
-          </div>
+          <DataTable
+            rows={visible}
+            rowKey={(s) => s.id}
+            loading={sessions === null}
+            empty={t("empty")}
+            /* the ASSISTANT PAGE, not the orb (2026-08-27): the dock stands
+               down on this surface, so handing the conversation to it would
+               be a row that clicks into nothing */
+            onRowClick={(s) => router.push({ pathname: "/assistant", query: { c: s.id } })}
+            columns={[
+              {
+                key: "title",
+                header: t("colTitle"),
+                className: "font-medium text-fg",
+                cell: (s) => s.title ?? t("newChat", { n: digits(numbers.get(s.id) ?? 1, locale) }),
+              },
+              {
+                key: "date",
+                header: t("colDate"),
+                className: "text-fg-muted",
+                cell: (s) => formatDate(s.last_message_at ?? s.created_at, locale),
+              },
+              {
+                key: "messages",
+                header: t("colMessages"),
+                className: "text-fg-muted",
+                cell: (s) => digits(s.message_count, locale),
+              },
+              {
+                key: "actions",
+                header: t("colActions"),
+                headClassName: "sr-only",
+                stopClick: true,
+                cell: (s) => (
+                  <button
+                    type="button"
+                    className="text-xs text-danger/80 underline-offset-2 hover:text-danger hover:underline"
+                    /* the press ASKS; the write lives in the dialog below (the
+                       platform's destructive-action rule). Removal is archive
+                       under the hood: nothing in the product may DELETE a
+                       conversation row (the audit survives), but an archived
+                       one never returns to any list, which is why this is a
+                       delete to the person pressing it. */
+                    onClick={() => setConfirmDelete(s)}
+                  >
+                    {t("delete")}
+                  </button>
+                ),
+              },
+            ]}
+          />
+          <Pagination page={page} pageCount={pageCount} onPage={setPage} />
         </PageContainer>
 
       {/* The platform's one destructive-action dialog. The title names the

@@ -1015,7 +1015,27 @@ export function Hub() {
       {idle ? (
         /* min-h-0 so this half can shrink inside the fixed page, and its own
            scroller carries the overflow rather than the document */
-        <div className="scroll-quiet fade-scroll flex min-h-0 flex-1 flex-col justify-end overflow-y-auto">
+        /* justify-START, not end (user directive, 2026-09-02: "put the
+           suggestions up as well, under the first welcoming message from the
+           AI itself"). The suggestions used to hug the composer at the foot,
+           where they read as a toolbar attached to the input; under an
+           opening line from the assistant they read as things you might say
+           back, which is what they are. */
+        <div className="scroll-quiet fade-scroll flex min-h-0 flex-1 flex-col justify-start overflow-y-auto">
+          {/*
+            THE ASSISTANT SPEAKS FIRST — and this is a GREETING, not a
+            message: it is never persisted, never given a role, and never
+            joins the thread. The rule the platform already carries about
+            failure annotations applies here for the same reason — a
+            synthetic line that can be mistaken for something the assistant
+            actually said is a lie on a delay, so this one lives only on the
+            empty screen and disappears the moment a real turn exists.
+          */}
+          {!selectedAgent && !workflowSlug ? (
+            <p className="message-arrives mx-auto mt-2 w-full max-w-content text-sm leading-7 text-fg">
+              {t("hubWelcome")}
+            </p>
+          ) : null}
           {/* THE WATERMARK IS GONE (user directive, 2026-09-02: "also remove
                 the background"). A brand mark behind the one screen whose
                 job is a blank prompt is decoration competing with an empty
@@ -1042,7 +1062,7 @@ export function Hub() {
             which is the rule these rows have carried since they existed.
           */}
           {!selectedAgent && !workflowSlug && suggestions.length > 0 ? (
-            <div className="mx-auto mt-4 flex w-full max-w-content flex-wrap justify-center gap-2">
+            <div className="mx-auto mt-3 flex w-full max-w-content flex-wrap justify-start gap-2">
               {suggestions.map((q) => (
                 <button
                   key={q}

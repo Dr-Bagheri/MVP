@@ -73,18 +73,25 @@ export function AssistantMenu({
           <IconPlus width={12} height={12} />
           {t("newConversation")}
         </button>
-        <Link
-          href="/conversations"
-          aria-current={activeSlug === "history" ? "page" : undefined}
-          className={`btn btn-sm gap-1.5 font-medium ${
-            activeSlug === "history"
-              ? "bg-accent text-on-accent"
-              : "text-fg-muted hover:bg-surface-2 hover:text-fg"
-          }`}
-        >
-          <IconHistory width={12} height={12} />
-          {tConversations("title")}
-        </Link>
+        {/*
+          THE HISTORY BUTTON IS NOT DRAWN ON THE HISTORY PAGE (user directive,
+          2026-09-02: "remove the search under the new conversation and also
+          the history button itself").
+
+          It was the ACTIVE item of a two-item toolbar, which means it was a
+          control whose only job was to navigate to the page you were already
+          standing on — and it read as a filter you might turn off. Elsewhere
+          it is the door to this page and stays.
+        */}
+        {activeSlug === "history" ? null : (
+          <Link
+            href="/conversations"
+            className="btn btn-sm gap-1.5 font-medium text-fg-muted hover:bg-surface-2 hover:text-fg"
+          >
+            <IconHistory width={12} height={12} />
+            {tConversations("title")}
+          </Link>
+        )}
       </nav>
     </PageContainer>
   );

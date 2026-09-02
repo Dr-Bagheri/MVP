@@ -810,6 +810,57 @@
   text-align: start;
 }
 
+/* --- ONE TABLE SHAPE, for every table in the platform ------------------
+   User directive, 2026-09-02: "make this page and table look like the
+   meeting table with same features — i dont need it to look like a simple
+   table, make the row like the meeting page table … do this also for all the
+   other pages with table in the whole platform, change all tables and add it
+   to the theme for future use also."
+
+   The meetings list was never a <table>: it was a list of `.tile .tile-row`
+   cards, and it looked better than every real table in the product. Rather
+   than rewrite fifteen surfaces into card lists — which would mean fifteen
+   copies of one decision, and the second copy is the one nobody keeps in
+   step — the shape moves HERE and `DataTable` wears it. Every table in the
+   platform changed by editing one class, which is the same reason the page
+   rhythm and the control heights live in the theme rather than in screens.
+
+   Mechanically: `border-separate` with vertical spacing turns rows into
+   separated bands, and the border+radius is painted on the CELLS because a
+   <tr> cannot carry either. The properties are LOGICAL (`border-inline-start`,
+   `border-start-start-radius`) so the first cell rounds on the reading-start
+   side in both directions — the physical spellings look right in English and
+   put the rounded corners on the wrong end of every Persian row. */
+.table-cards {
+  border-collapse: separate;
+  border-spacing: 0 var(--table-row-gap, 8px);
+}
+.table-cards > tbody > tr > td {
+  background: rgb(var(--surface));
+  border-block: 1px solid rgb(var(--border));
+  transition: border-color 120ms ease;
+}
+.table-cards > tbody > tr > td:first-child {
+  border-inline-start: 1px solid rgb(var(--border));
+  border-start-start-radius: 16px;
+  border-end-start-radius: 16px;
+}
+.table-cards > tbody > tr > td:last-child {
+  border-inline-end: 1px solid rgb(var(--border));
+  border-start-end-radius: 16px;
+  border-end-end-radius: 16px;
+}
+/* the hover a meeting row has: the whole card's edge, not a tinted band */
+.table-cards > tbody > tr:hover > td {
+  border-color: rgb(var(--border-strong));
+}
+/* the head sits above the cards with no rule under it — the gap between the
+   header and the first card already separates them, and a hairline as well
+   reads as the top border of a card that is not there */
+.table-cards > thead > tr {
+  border: 0;
+}
+
 /* --- the icon set's two states ---------------------------------------
    `<Icon>` renders every glyph in this box, and `off` strikes it through
    in the danger tone. ONE overlay rather than 57 hand-drawn disabled

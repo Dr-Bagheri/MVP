@@ -998,7 +998,8 @@
     "themeToggle": "Switch theme",
     "tasks": "Tasks",
     "meetings": "Meetings",
-    "newMeeting": "New meeting"
+    "newMeeting": "New meeting",
+    "hubWelcome": "Hello — I'm the NeurAI assistant. Ask me about your meetings, tasks and conversations, or try one of these:"
   },
   "platformRoot": {
     "menu": "Platform control",
@@ -2984,6 +2985,8 @@
     "itemRemove": "Remove",
     "itemByAssistant": "AI",
     "itemWriteFailed": "Not saved. Try again.",
-    "itemRemoveTitle": "Remove this item?"
+    "itemRemoveTitle": "Remove this item?",
+    "mixDeviceOnly": "This device only",
+    "mixVoices": "{n} voices recording"
   }
 }

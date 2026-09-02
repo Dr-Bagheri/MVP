@@ -10,6 +10,7 @@ import {
   RoomAudioRenderer,
   useTracks,
 } from "@livekit/components-react";
+import { clearRoomAudio, publishRoomAudio } from "@/lib/roomAudio";
 import { Track } from "livekit-client";
 import "@livekit/components-styles";
 import { api, BffError } from "@/api/client";
@@ -56,6 +57,40 @@ function Stage() {
       <ParticipantTile />
     </GridLayout>
   );
+}
+
+/**
+ * THE TAP. Publishes every remote participant's audio track so the recorder
+ * can mix the room directly, instead of asking the person to share a tab and
+ * stealing the audio off it (see lib/roomAudio.ts).
+ *
+ * It renders nothing. It lives INSIDE `LiveKitRoom` because that is where the
+ * room context is, and it uses the same `useTracks` the grid does — one
+ * subscription mechanism, so a track the room considers subscribed is exactly
+ * the set that reaches the recording.
+ *
+ * `onlySubscribed: true` here, unlike the grid: the grid keeps a placeholder
+ * for somebody whose camera is off because they are still in the meeting, but
+ * a placeholder has no audio to record, and mixing an unsubscribed track
+ * would add silence and a participant who is not really on the recording.
+ */
+function AudioTap() {
+  const tracks = useTracks([{ source: Track.Source.Microphone, withPlaceholder: false }],
+    { onlySubscribed: true });
+  useEffect(() => {
+    publishRoomAudio(
+      tracks
+        /* OURS IS NOT THEIRS: the recorder already captures this device's
+           microphone. Mixing our own published track back in would record
+           the local speaker twice, slightly out of phase — which sounds
+           exactly like a bad room and is actually a bug. */
+        .filter((ref) => !ref.participant.isLocal)
+        .map((ref) => ref.publication?.track?.mediaStreamTrack)
+        .filter((t): t is MediaStreamTrack => t !== undefined),
+    );
+  }, [tracks]);
+  useEffect(() => () => { clearRoomAudio(); }, []);
+  return null;
 }
 
 export function MeetingRoom({ meetingId }: { meetingId: string }) {
@@ -116,6 +151,7 @@ export function MeetingRoom({ meetingId }: { meetingId: string }) {
         className="flex min-h-0 flex-1 flex-col"
       >
         <Stage />
+        <AudioTap />
         <RoomAudioRenderer />
         <ControlBar variation="minimal" />
       </LiveKitRoom>

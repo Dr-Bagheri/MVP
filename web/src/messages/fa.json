@@ -998,7 +998,8 @@
     "themeToggle": "تغییر پوسته",
     "tasks": "تسک‌ها",
     "meetings": "جلسات",
-    "newMeeting": "جلسه جدید"
+    "newMeeting": "جلسه جدید",
+    "hubWelcome": "سلام! من دستیار نورای‌ام. درباره جلسه‌ها، تسک‌ها و گفت‌وگوهایتان بپرسید، یا یکی از این‌ها را امتحان کنید:"
   },
   "platformRoot": {
     "menu": "کنترل پلتفرم",
@@ -2984,6 +2985,8 @@
     "itemRemove": "حذف",
     "itemByAssistant": "هوش مصنوعی",
     "itemWriteFailed": "ذخیره نشد. دوباره تلاش کنید.",
-    "itemRemoveTitle": "حذف این مورد؟"
+    "itemRemoveTitle": "حذف این مورد؟",
+    "mixDeviceOnly": "فقط صدای این دستگاه",
+    "mixVoices": "{n} صدا در ضبط"
   }
 }

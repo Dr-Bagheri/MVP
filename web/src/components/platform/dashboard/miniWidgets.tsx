@@ -615,18 +615,29 @@ function StatCard({ href, icon, tint, value, label, locale, percent = false }: {
   return (
     <Link
       href={href}
-      /* min-h-0 so a squeezed tile shrinks the CARD rather than overflowing
-         it — the card is what has slack, the figure inside it does not */
-      /* py-2.5 and a 9-unit mark: the strip is ONE grid row now, and a
-         card that overflows its row is the gap this change removes,
-         reappearing as a clipped figure */
-      className="flex min-h-0 min-w-0 items-center gap-3 overflow-hidden rounded-2xl border border-border bg-surface px-3.5 py-2.5 transition-colors hover:border-border-strong"
+      /*
+       * A FIXED HEIGHT, and that is the whole fix (user directive,
+       * 2026-09-02: "why this one still in the scroll mode — make them a
+       * little less height so it fits the box and comes out of the scroll
+       * mode; if it is getting too much edited just remove it and write it
+       * from scratch").
+       *
+       * The previous versions let the card STRETCH to its grid row and then
+       * argued with the container about overflow. That is the wrong way
+       * round: a stretched card is as tall as whatever the board gives it,
+       * so on a short tile its own contents no longer fit and something —
+       * the card, the strip, or the tile — has to scroll. Pinning the card
+       * at 56px makes the card the fixed thing and the slack the board's,
+       * which is the only arrangement where "it fits" is true by
+       * construction rather than by a measurement someone has to redo.
+       */
+      className="flex h-14 min-w-0 items-center gap-2.5 overflow-hidden rounded-2xl border border-border bg-surface px-3 transition-colors hover:border-border-strong"
     >
-      <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${tint}`} aria-hidden>
+      <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${tint}`} aria-hidden>
         {icon}
       </span>
       <span className="min-w-0">
-        <span className="block text-xl font-bold leading-6 text-fg tabular-nums">
+        <span className="block text-lg font-bold leading-tight text-fg tabular-nums">
           {typeof value === "number"
             ? percent
               /* the percent SIGN follows the language: «٪۵۰» in fa, "50%" in en */
@@ -634,7 +645,7 @@ function StatCard({ href, icon, tint, value, label, locale, percent = false }: {
               : digits(value, locale)
             : "—"}
         </span>
-        <span className="block truncate text-xs text-fg-muted">{label}</span>
+        <span className="block truncate text-[11px] leading-tight text-fg-muted">{label}</span>
       </span>
     </Link>
   );
@@ -679,30 +690,24 @@ export function StatsWidget() {
 
   return (
     /*
-     * THE STRIP FITS ITS TILE AND NEVER SCROLLS (user directive, 2026-09-02:
-     * "the smallest size should fit the size of the items in it, so it shows
-     * all of it" — at the small size it was scrolling instead).
+     * `content-start` and NOT `h-full`: the cards keep their own 56px and the
+     * strip simply starts at the top of whatever room the board gives it.
+     * The previous version stretched the row to the tile and made the card's
+     * height a function of the board, which is how a card came to be taller
+     * than the box it lives in.
      *
-     * `auto-fit` rather than `md:grid-cols-4`: the `md:` breakpoint asks the
-     * VIEWPORT how wide it is, and the answer is about the window rather than
-     * about this tile — so a half-width tile on a wide monitor still tried
-     * for four columns and pushed its own contents out of view. auto-fit asks
-     * the container, which is the thing that actually got smaller: four
-     * across when there is room, two by two when there is not, and all four
-     * cards visible either way.
-     *
-     * `overflow-hidden` is the belt: a stat strip that scrolls is hiding the
-     * figure it exists to show, and a figure you have to scroll to is a
-     * figure you will not read.
+     * `auto-fit` still asks the CONTAINER how wide it is rather than the
+     * viewport — a half-width tile on a wide monitor is narrow, and a `md:`
+     * breakpoint cannot know that.
      */
-    <div className="grid h-full min-h-0 grid-cols-[repeat(auto-fit,minmax(7.5rem,1fr))] gap-2.5 overflow-hidden">
-      <StatCard href="/meetings" icon={<IconCalendar width={18} height={18} />}
+    <div className="grid content-start gap-2.5 overflow-hidden grid-cols-[repeat(auto-fit,minmax(7.5rem,1fr))]">
+      <StatCard href="/meetings" icon={<IconCalendar width={16} height={16} />}
         tint="bg-surface-2 text-fg-muted" value={upcoming} label={t("statUpcoming")} locale={locale} />
-      <StatCard href="/meetings" icon={<IconCalendar width={18} height={18} />}
+      <StatCard href="/meetings" icon={<IconCalendar width={16} height={16} />}
         tint="bg-info/10 text-info" value={thisMonth} label={t("statMonth")} locale={locale} />
-      <StatCard href="/tasks" icon={<IconCheck width={18} height={18} />}
+      <StatCard href="/tasks" icon={<IconCheck width={16} height={16} />}
         tint="bg-success/10 text-success" value={taskRate} label={t("statTaskRate")} locale={locale} percent />
-      <StatCard href="/tasks" icon={<IconGavel width={18} height={18} />}
+      <StatCard href="/tasks" icon={<IconGavel width={16} height={16} />}
         tint="bg-warning/10 text-warning" value={taskTotal} label={t("statTasksTotal")} locale={locale} />
     </div>
   );

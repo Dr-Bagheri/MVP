@@ -34,6 +34,13 @@ const REMAINING: Record<string, number> = {
   "app/[locale]/(auth)/suspended/page.tsx": 1,
   "components/RichTextEditor.tsx": 1,
   "components/echo/SpeakersDirectory.tsx": 1,
+  /* the dashboard's stat CARD, not a control: a fixed 56px is the whole
+     point of it (a card that stretched to its grid row is what put the strip
+     into scroll mode), and it happens to carry the four signals this check
+     reads as button geometry. Listed rather than pattern-matched away —
+     telling a card from a button by its class list is the false-positive
+     factory. */
+  "components/platform/dashboard/miniWidgets.tsx": 1,
   "components/platform/Hub.tsx": 1,
   "components/platform/Integrations.tsx": 1,
   "components/platform/Meetings.tsx": 1,
