@@ -1219,8 +1219,21 @@ export function PresenceDock() {
       {/* every platform notice pops FROM THE BELL's corner (user directive,
           2026-08-22 — superseding pop-from-the-orb: the orb moved to the
           bar's centre and the bell is where notifications live) */}
+      {/*
+          z-40, NOT z-50 (user report, 2026-09-02: "the orb is coming on top of
+          the pop up window on the side").
+
+          The modal layer is z-50 — that is what `components/ui/dialog.tsx`
+          uses for every dialog and side panel in the platform. This layer was
+          also z-50, and a tie is decided by DOM order between two portals,
+          which is a coin toss that lands differently depending on which
+          opened last. The dock is chrome and a dialog is the thing you are
+          answering, so the ladder is now stated rather than raced: everything
+          the dock draws sits at 40 or below, and the modal layer owns 50.
+          `stacking.guard.test.ts` keeps it that way.
+      */}
       {toasts.length > 0 ? (
-        <div className="pointer-events-none fixed end-4 top-16 z-50 flex w-[min(88vw,20rem)] flex-col items-end gap-1.5 md:end-6">
+        <div className="pointer-events-none fixed end-4 top-16 z-40 flex w-[min(88vw,20rem)] flex-col items-end gap-1.5 md:end-6">
           {toasts.map((notice) => (
             <p
               key={notice.id}

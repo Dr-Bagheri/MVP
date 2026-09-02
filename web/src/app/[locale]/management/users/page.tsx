@@ -5,19 +5,15 @@ import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import { notify } from "@/lib/notify";
 import { useRefreshEpoch } from "@/lib/refreshBus";
-import type {
-  Role,
-  User,
-  UserStatus,
-} from "@/api/types";
+import type { Role, User } from "@/api/types";
 import { ManagementPane } from "@/components/platform/ManagementPane";
 import { PageHeader } from "@/components/scaffold";
 import { MemberDetail } from "@/components/platform/MemberDetail";
-import { Card, Chip, EmptyState } from "@/components/ui";
-import { ConfirmDialog, SelectMenu } from "@/components/rowActions";
-import { DataTable, StatusDot } from "@/components/DataTable";
+import { Card, EmptyState } from "@/components/ui";
+import { ConfirmDialog } from "@/components/rowActions";
+import { DataTable } from "@/components/DataTable";
 import { IconKey, IconPencil, IconToggleOff, IconToggleOn, IconTrash } from "@/components/icons";
-import { digits, formatDate, personName } from "@/lib/format";
+import { digits, personName } from "@/lib/format";
 import { SetMemberPassword } from "@/components/platform/SetMemberPassword";
 
 /**
@@ -123,16 +119,13 @@ export default function UsersPage() {
 
 
 
-  const lastSeenServed = rows.some((m) => m.last_seen_at !== undefined);
   /*
-   * Presence is served only to an admin or owner (db/0135), and a member's
-   * rows carry `signed_in: null` rather than the field being absent — so the
-   * question here is "did anyone ANSWER", not "is the key present".
-   * `typeof === "boolean"` is what separates an answer from a refusal to
-   * answer; `!== undefined` would be true for a member too and would render
-   * a column of "signed out" for an org that is mostly online.
+   * The `lastSeenServed` / `presenceServed` flags went with the columns they
+   * gated (2026-09-02). They were the honest answer to "did the server answer
+   * this question at all" for a member versus an admin — the distinction is
+   * still real, and it now lives in the detail panel, which is the only place
+   * those facts are shown.
    */
-  const presenceServed = rows.some((m) => typeof m.signed_in === "boolean");
 
   /** the member whose password is being set, if any */
   const [passwordFor, setPasswordFor] = useState<User | null>(null);
@@ -257,11 +250,6 @@ export default function UsersPage() {
     );
     setSelected(new Set());
   }
-
-  const statusTone = (s: UserStatus) =>
-    s === "active" ? "success" : s === "pending" ? "warning" : "neutral";
-  const statusLabel = (s: UserStatus) =>
-    tAdmin(s === "active" ? "statusActive" : s === "pending" ? "statusPending" : "statusDisabled");
 
   /*
    * `me === null` renders nothing rather than the gate: "not loaded yet" and
@@ -391,125 +379,59 @@ export default function UsersPage() {
               ]}
               columns={[
                 {
-                  key: "name",
-                  header: t("colName"),
                   /*
-                   * The HANDLE moved in here under the name, and its own
-                   * column went (user directive, 2026-08-29: the table must
-                   * fit without scrolling sideways).
+                   * ONE COLUMN (user directive, 2026-09-02: "a simple name
+                   * and its role small under it … remove Email, Status,
+                   * Online, Role, Added, Last action title and data from the
+                   * table … with kebab menu at the end and if clicked the
+                   * side window with details in it").
                    *
-                   * It is the column that could most afford to go: nearly
-                   * every cell in it read "—", so it was spending the widest
-                   * thing a table has — horizontal room — on a placeholder.
-                   * Under the name it costs nothing when absent, because the
-                   * row is already as tall as a name.
+                   * Six columns became a mark, a name and one line under it.
+                   * The facts did not go anywhere — every one of them is in
+                   * the detail panel a row opens, which is where a person
+                   * goes when they want them. What the table is FOR is
+                   * finding somebody, and six columns of metadata is six
+                   * things to read past while doing that.
+                   *
+                   * The role sits under the name rather than beside it for
+                   * the same reason the handle already did: under the name it
+                   * costs no horizontal room, which is the scarce thing in a
+                   * table and the reason this one used to scroll sideways.
                    */
+                  key: "member",
+                  header: t("colName"),
+                  headClassName: "sr-only",
                   cell: (u) => (
-                    <span className="block leading-tight">
-                      <span className="block font-medium text-fg">{personName(u, locale)}</span>
-                      {u.username ? (
-                        <span className="ltr block text-[11px] text-fg-subtle">@{u.username}</span>
-                      ) : null}
+                    <span className="flex items-center gap-2.5">
+                      <span
+                        className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-accent text-xs font-bold text-on-accent"
+                        aria-hidden
+                      >
+                        {personName(u, locale).slice(0, 1).toUpperCase()}
+                      </span>
+                      <span className="block min-w-0 leading-tight">
+                        <span className="block truncate font-medium text-fg">
+                          {personName(u, locale)}
+                        </span>
+                        <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-fg-muted">
+                          {tAdmin(`role_${u.role}` as "role_member")}
+                          {/* status only when it is NOT the ordinary one: a
+                              row that says "active" about everybody is a
+                              column of one repeated word, which is what the
+                              status column was */}
+                          {u.status !== "active" ? (
+                            <>
+                              <span aria-hidden>·</span>
+                              <span className={u.status === "pending" ? "text-warning" : "text-danger"}>
+                                {tAdmin(`status_${u.status}` as "status_active")}
+                              </span>
+                            </>
+                          ) : null}
+                        </span>
+                      </span>
                     </span>
                   ),
                 },
-                {
-                  key: "email",
-                  header: t("colEmail"),
-                  className: "text-xs text-fg-muted",
-                  cell: (u) => <span className="ltr">{u.email}</span>,
-                },
-                {
-                  key: "status",
-                  header: t("colStatus"),
-                  /* ACTIVE is the ordinary good state and now says so the
-                     way READY does — a quiet dot, no chip fill. The
-                     ON/OFF switch retired to the row menu with every
-                     other action (user directive, 2026-08-26). */
-                  cell: (u) =>
-                    u.status === "active" ? (
-                      <StatusDot label={statusLabel(u.status)} />
-                    ) : (
-                      <Chip tone={statusTone(u.status)}>{statusLabel(u.status)}</Chip>
-                    ),
-                },
-                ...(presenceServed
-                  ? [{
-                      key: "online",
-                      header: t("colOnline"),
-                      headClassName: "whitespace-nowrap",
-                      /*
-                       * Beside STATUS, because the two answer the same kind
-                       * of question about a person and a reader compares them
-                       * (user directive). And on the SAME `StatusDot` the
-                       * status cell uses — the first version hand-rolled its
-                       * own `h-2 w-2` dot beside a component whose dot is
-                       * `h-1.5`, and the mismatch was visible enough that the
-                       * user asked for it to be fixed. One component is the
-                       * only version of "the same size" that stays true.
-                       *
-                       * Offline is `muted`, not absent: a person who is not
-                       * here is a fact, and a blank cell reads as missing
-                       * data.
-                       */
-                      cell: (u: User) => (
-                        <StatusDot
-                          label={u.signed_in === true ? t("onlineYes") : t("onlineNo")}
-                          tone={u.signed_in === true ? "success" : "muted"}
-                        />
-                      ),
-                    }]
-                  : []),
-                {
-                  key: "role",
-                  header: t("colRole"),
-                  stopClick: true,
-                  cell: (u) =>
-                    u.role === "owner" ? (
-                      <Chip tone="accent">{t("roleOwner")}</Chip>
-                    ) : (
-                      <SelectMenu
-                        className="h-9 min-h-0 w-32 py-0 text-xs"
-                        ariaLabel={t("colRole")}
-                        value={u.role}
-                        disabled={busy}
-                        onChange={(next) => void setRoleFor(u.id, next as Role)}
-                        options={ASSIGNABLE_ROLES.map((r) => ({
-                          value: r,
-                          label: tAdmin(r === "admin" ? "roleAdmin" : "roleMember"),
-                        }))}
-                      />
-                    ),
-                },
-                {
-                  key: "added",
-                  header: t("colAdded"),
-                  className: "text-xs text-fg-muted",
-                  cell: (u) => formatDate(u.created_at, locale),
-                },
-                ...(lastSeenServed
-                  ? [{
-                      key: "lastSeen",
-                      header: t("colLastAction"),
-                      headClassName: "whitespace-nowrap",
-                      className: "text-xs",
-                      cell: (u: User) =>
-                        u.last_seen_at ? (
-                          <span className="text-fg-muted">
-                            {formatDate(u.last_seen_at, locale)}
-                          </span>
-                        ) : (
-                          /*
-                           * `null` is "never seen", said in words. A dash
-                           * would read as data — the same mistake as an
-                           * em-dash for a null response code, where "no
-                           * answer ever came back" became
-                           * indistinguishable from "nothing to show".
-                           */
-                          <span className="text-fg-muted/70">{t("neverSeen")}</span>
-                        ),
-                    }]
-                  : []),
                 {
                   key: "actions",
                   header: t("colMemberActions"),

@@ -631,7 +631,21 @@ function StatCard({ href, icon, tint, value, label, locale, percent = false }: {
        * which is the only arrangement where "it fits" is true by
        * construction rather than by a measurement someone has to redo.
        */
-      className="flex h-14 min-w-0 items-center gap-2.5 overflow-hidden rounded-2xl border border-border bg-surface px-3 transition-colors hover:border-border-strong"
+      /*
+       * `h-full` with a MINIMUM, not a fixed height (user directive,
+       * 2026-09-02: "the size of the green area that shows the section limit
+       * is not fit with the actual area that it fills — make them fit and
+       * equal").
+       *
+       * A fixed 56px card in a 78px grid cell left 22px of the outlined area
+       * empty, so the board's drop outline described a box the strip did not
+       * fill. The previous version had the opposite fault — cards INTRINSICALLY
+       * taller than the cell, which is what put the strip into scroll mode.
+       * The min-height is what keeps the second fault from coming back: the
+       * card stretches to the cell it is given and refuses to go below the
+       * height its own contents need.
+       */
+      className="flex h-full min-h-[56px] min-w-0 items-center gap-2.5 overflow-hidden rounded-2xl border border-border bg-surface px-3 transition-colors hover:border-border-strong"
     >
       <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${tint}`} aria-hidden>
         {icon}
@@ -700,7 +714,7 @@ export function StatsWidget() {
      * viewport — a half-width tile on a wide monitor is narrow, and a `md:`
      * breakpoint cannot know that.
      */
-    <div className="grid content-start gap-2.5 overflow-hidden grid-cols-[repeat(auto-fit,minmax(7.5rem,1fr))]">
+    <div className="grid h-full gap-2.5 overflow-hidden grid-cols-[repeat(auto-fit,minmax(7.5rem,1fr))]">
       <StatCard href="/meetings" icon={<IconCalendar width={16} height={16} />}
         tint="bg-surface-2 text-fg-muted" value={upcoming} label={t("statUpcoming")} locale={locale} />
       <StatCard href="/meetings" icon={<IconCalendar width={16} height={16} />}
