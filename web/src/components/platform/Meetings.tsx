@@ -196,11 +196,11 @@ export function Meetings() {
                 tabIndex={0}
                 onClick={() => router.push(`/meetings/${m.id}`)}
                 onKeyDown={(e) => { if (e.key === "Enter") router.push(`/meetings/${m.id}`); }}
-                /* flex-ROW explicitly: `.tile` sets flex-direction: column itself, so
-                   `tile flex items-center` reads as a horizontal row in the markup
-                   and computes as a centred stack. Nothing about the source looks
-                   wrong — only the rendered artifact disagrees. */
-                className="tile flex flex-row cursor-pointer items-center gap-3 p-3.5 text-start transition-colors hover:border-border-strong"
+                /* `tile-row`, not the flex-row utility: `.tile` is unlayered and
+                   beats every Tailwind class written beside it, so the utility
+                   version of this fix read as applied and computed as a column
+                   anyway. See the class in globals.css. */
+                className="tile tile-row flex cursor-pointer items-center gap-3 p-3.5 transition-colors hover:border-border-strong"
               >
                 <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-surface-2 text-fg-muted" aria-hidden>
                   <IconCalendar width={16} height={16} />

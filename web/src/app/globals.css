@@ -643,6 +643,29 @@
   color: rgb(var(--fg));
 }
 
+/* A tile laid out as a ROW — a list line rather than a card.
+ *
+ * This is a class and not the `flex-row` utility for a reason worth
+ * keeping: `.tile` is declared outside every `@layer`, and unlayered CSS
+ * beats layered CSS whatever the order, so EVERY Tailwind utility written
+ * on a tile loses to it silently. `tile flex flex-row items-center` reads
+ * as a horizontal row in the markup, passes review, and computes as a
+ * centred column — which is how the meetings list shipped with every row
+ * stacked three-high. Adding the utility was itself a fix that read as
+ * applied and changed nothing; only the computed value said so.
+ *
+ * Being unlayered too, and later in the file, this wins on order — the
+ * same mechanism that caused the problem, pointed the right way.
+ * `height: auto` because `.tile` is a full-height card and a list line is
+ * as tall as its content; `text-align: start` because a row is usually a
+ * role="button" and the base layer centres those labels.
+ */
+.tile-row {
+  flex-direction: row;
+  height: auto;
+  text-align: start;
+}
+
 /* --- the icon set's two states ---------------------------------------
    `<Icon>` renders every glyph in this box, and `off` strikes it through
    in the danger tone. ONE overlay rather than 57 hand-drawn disabled

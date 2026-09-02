@@ -854,7 +854,7 @@ function FilesTab({ call, locale }: { call: Call | null | "gone"; locale: string
   return (
     <ul className="mx-auto w-full max-w-2xl space-y-2">
       {[...parts].sort((a, b) => a.idx - b.idx).map((part) => (
-        <li key={part.id} className="tile flex flex-row items-center gap-3 p-3 text-start">
+        <li key={part.id} className="tile tile-row flex items-center gap-3 p-3">
           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent" aria-hidden>
             <IconMic width={14} height={14} />
           </span>
@@ -918,7 +918,7 @@ function NotesTab({ callId, locale }: { callId: string; locale: string }) {
       ) : (
         <ul className="space-y-2">
           {notes.map((note) => (
-            <li key={note.id} className="tile flex flex-row items-start gap-3 p-3.5 text-start">
+            <li key={note.id} className="tile tile-row flex items-start gap-3 p-3.5">
               <span className="min-w-0 flex-1">
                 <span className="block whitespace-pre-wrap text-sm leading-6 text-fg">{note.body}</span>
                 <span className="mt-1 block text-[11px] text-fg-subtle">
