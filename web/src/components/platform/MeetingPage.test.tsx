@@ -63,6 +63,10 @@ function meeting(over: Partial<MeetingRecord>): MeetingRecord {
     duration_minutes: 60, mode: "online", topic_id: null, topic: null, location: null,
     description: "", invitees: [], agenda: [], call_id: null, call_title: null,
     archived: false, created_by: "u-1", created_at: "2026-08-31T08:00:00.000Z",
+    /* the host's resolved name: the meeting knows who ran it, so the
+       minutes can count them among the attendees and the plan card can
+       stop drawing whoever happens to be looking */
+    host_name: "سینا", host_name_en: null,
     video_url: null, video_provider: null,
     minutes_approved_at: null, minutes_closed_at: null, minutes_signatures: [],
     ...over,

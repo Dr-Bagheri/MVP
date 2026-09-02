@@ -482,7 +482,7 @@ export function MeetingPage({ id }: { id: string }) {
       ) : null}
 
       {active === "pre" ? (
-        <PreStage meeting={meeting} onPatch={patch} locale={locale} me={me} />
+        <PreStage meeting={meeting} onPatch={patch} locale={locale} />
       ) : null}
       {active === "hold" ? (
         <HoldStage
@@ -508,16 +508,18 @@ export function MeetingPage({ id }: { id: string }) {
 }
 
 /* ═══ پیش از جلسه — the reference's plan cards ═══════════════════════════ */
-function PreStage({ meeting, onPatch, locale, me }: {
+function PreStage({ meeting, onPatch, locale }: {
   meeting: MeetingRecord;
   onPatch: (body: Record<string, unknown>) => void;
   locale: string;
-  /** the host, listed among the invitees — null while identity is loading */
-  me: Me | null;
 }) {
   const t = useTranslations("meetings");
   const tCommon = useTranslations("common");
   const [editing, setEditing] = useState(false);
+  const hostName = personName(
+    { display_name: meeting.host_name ?? "", display_name_en: meeting.host_name_en },
+    locale,
+  );
   /** minting the guest capability is a network act — the button says so */
   const [guestBusy, setGuestBusy] = useState(false);
   /** the meeting's documents — null while the read is in flight */
@@ -775,11 +777,15 @@ function PreStage({ meeting, onPatch, locale, me }: {
               what the reference's card is doing. */}
           <ul className="mb-2 space-y-1.5">
             <li className="flex items-center gap-2 rounded-xl border border-border bg-surface-2/50 px-2.5 py-2 text-sm text-fg">
+              {/* THE MEETING'S HOST, from the wire — not the signed-in viewer
+                  (user report, 2026-09-02). `me` here meant a colleague
+                  opening somebody else's meeting saw their OWN name in the
+                  host row, which is a confident lie about who ran it. */}
               <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-accent text-[11px] font-bold text-on-accent" aria-hidden>
-                {(me !== null ? personName(me, locale) : "—").slice(0, 1)}
+                {hostName.slice(0, 1)}
               </span>
               <span className="min-w-0 flex-1 truncate font-medium">
-                {me !== null ? personName(me, locale) : t("unknownPerson")}
+                {meeting.host_name === null ? t("unknownPerson") : hostName}
               </span>
               <span className="shrink-0 rounded-full border border-border bg-surface px-2 py-0.5 text-[10px] text-fg-subtle">
                 {t("memberHost")}

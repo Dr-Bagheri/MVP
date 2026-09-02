@@ -49,7 +49,7 @@ export function TwoPane({
   navLabel,
   groups,
   activeSlug,
-  width = "default",
+  width = "small",
   children,
 }: {
   navLabel: string;
@@ -59,8 +59,22 @@ export function TwoPane({
   heading?: string;
   groups: readonly PaneGroup[];
   activeSlug: string;
-  /** Data-dense sections (tables) may ask for the wide content column. */
-  width?: "default" | "wide" | "full";
+  /**
+   * SMALL BY DEFAULT (user directive, 2026-09-02: "redesign the management
+   * pages and settings pages, with small page as a template … both for them
+   * and their sub pages").
+   *
+   * Management and Settings are reading-and-editing surfaces — a form, a
+   * list of people, a set of switches — and they were laid out at the LIST
+   * width, so every field stretched the full 1240 and a label sat a screen
+   * away from the control it named. `small` is the meeting-plan column,
+   * which is the page the directive names as the template.
+   *
+   * The wide column stays available for a section that is genuinely a dense
+   * table (Audit Logs asks for it), and the TOOLBAR keeps its own default
+   * column regardless — see below.
+   */
+  width?: "small" | "default" | "wide" | "full";
   children: ReactNode;
 }) {
   const pathname = usePathname();

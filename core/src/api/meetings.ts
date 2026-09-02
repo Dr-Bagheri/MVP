@@ -86,6 +86,10 @@ export interface MeetingRecord {
   call_title: string | null;
   archived: boolean;
   created_by: string;
+  /** the host's display names, resolved from `created_by` — null only when
+      the author has been tombstoned, which is a real state and not an error */
+  host_name: string | null;
+  host_name_en: string | null;
   created_at: string;
   /** 0148: the meeting's video room — null is a normal state */
   video_url: string | null;
@@ -101,13 +105,25 @@ const MEETING_ROWS = `
          m.topic_id, mt.name as topic,
          m.location, m.description, m.invitees, m.agenda, m.call_id,
          c.title as call_title, m.archived_at, m.created_by, m.created_at,
+         /* the HOST's names, resolved the way the topic's is. created_by is
+            an id, and every surface that wanted to say who ran the meeting was
+            resolving it separately or, worse, showing the VIEWER: the minutes
+            listed no attendees at all (the host is not among the invitees --
+            nobody invites themselves), and the plan card labelled whoever was
+            looking at it as the host. One join, one answer.
+            NB: no backticks in here. This is a template literal, and a
+            backtick in a comment ends the SQL string. */
+         hu.display_name as host_name, hu.display_name_en as host_name_en,
          m.minutes_approved_at, m.minutes_closed_at, m.minutes_signatures,
          m.video_url, m.video_provider
     from echo.meeting m
     left join echo.call c on c.id = m.call_id
     /* LEFT: a meeting with no folder is the ordinary state, and an inner
        join here would hide every one of them from the list */
-    left join echo.meeting_topic mt on mt.id = m.topic_id`;
+    left join echo.meeting_topic mt on mt.id = m.topic_id
+    /* LEFT as well: a tombstoned author leaves the meeting standing, and an
+       inner join would delete the meeting from every list along with them */
+    left join echo.app_user hu on hu.id = m.created_by`;
 
 function toMeeting(row: Record<string, unknown>): MeetingRecord {
   const rawAgenda = Array.isArray(row.agenda) ? row.agenda : [];
@@ -136,6 +152,9 @@ function toMeeting(row: Record<string, unknown>): MeetingRecord {
     call_title: (row.call_title as string | null) ?? null,
     archived: row.archived_at !== null && row.archived_at !== undefined,
     created_by: String(row.created_by),
+    host_name: row.host_name === null || row.host_name === undefined ? null : String(row.host_name),
+    host_name_en: row.host_name_en === null || row.host_name_en === undefined
+      ? null : String(row.host_name_en),
     created_at: iso(row.created_at),
     video_url: (row.video_url as string | null) ?? null,
     video_provider: (row.video_provider as "google_meet" | "custom" | null) ?? null,

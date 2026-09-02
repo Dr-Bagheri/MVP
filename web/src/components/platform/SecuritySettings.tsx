@@ -46,7 +46,7 @@ export function SecuritySettings() {
    * what stops a member's screen from showing an empty security table that
    * reads as "nobody in this company is signed in".
    */
-  const [orgSessions, setOrgSessions] = useState<OrgSessionRow[] | null>(null);
+  const [orgSessions, setOrgSessions] = useState<OrgSessionRow[] | null | "refused">(null);
   const [endingOrg, setEndingOrg] = useState<OrgSessionRow | null>(null);
 
   useEffect(() => {
@@ -65,7 +65,11 @@ export function SecuritySettings() {
      */
     void api.orgSessions()
       .then(setOrgSessions)
-      .catch(() => setOrgSessions(null));
+      /* REFUSED, not "still loading" — the two were the same value here, so a
+         member's page waited forever on an answer that had already come back
+         as no. The distinction is what lets the section fall back to this
+         person's own devices instead of rendering an empty frame. */
+      .catch(() => setOrgSessions("refused"));
   }, []);
 
 
@@ -101,7 +105,161 @@ export function SecuritySettings() {
         has: the live devices and the voice print.
       */}
 
-      {/* ── the caller's own devices ─────────────────────────────────── */}
+      {/*
+        ONE SESSIONS SECTION (user directive, 2026-09-02: "remove the second
+        section in the sessions and in first show all online sessions from
+        everywhere connected to our platform").
+
+        There were two, stacked: this person's devices, then everyone's. For
+        an admin that is the same list twice, with their own rows in both —
+        which is why it read as a duplicate rather than as two questions.
+
+        What is rendered depends on the WALL, not on a role this component
+        fetched: the org-wide read is asked for unconditionally and refused
+        for a member (db/0135), so an admin gets everybody and a member gets
+        their own devices. Neither sees an empty frame, and there is no
+        third copy of the rule here to drift from the other two.
+      */}
+      {/* ── everyone's devices, for an admin or owner (db/0135) ───────── */}
+      {orgSessions !== "refused" ? (
+      <div>
+          <h2 className="h-section">{t("orgSessionsTitle")}</h2>
+          <p className="mt-1 text-sm leading-6 text-fg-muted">{t("orgSessionsHint")}</p>
+          {Array.isArray(orgSessions) && orgSessions.length === 0 ? (
+            <p className="mt-3 text-sm text-fg-muted">{t("orgSessionsEmpty")}</p>
+          ) : (
+            <Card className="mt-3 !p-0">
+              <DataTable
+                loading={orgSessions === null}
+                rows={Array.isArray(orgSessions) ? orgSessions : []}
+                rowKey={(session) => `${session.user_id}:${session.handle}`}
+                /*
+                 * The menu appears only where the wall says it may act. An
+                 * admin sees the owner's session and gets NO end item on
+                 * that row — the affordance mirrors the wall rather than
+                 * offering a button that produces a refusal. `can_end` is
+                 * the server's answer, never re-derived here.
+                 */
+                menuItems={(session) => session.can_end ? [{
+                  key: "end",
+                  label: t("endSession"),
+                  icon: <IconClose width={14} height={14} />,
+                  danger: true,
+                  onSelect: () => setEndingOrg(session),
+                }] : []}
+                columns={[
+                  {
+                    key: "person",
+                    header: t("colPerson"),
+                    cell: (session) => (
+                      <span className="font-medium text-fg">
+                        {personName(session as unknown as User, locale)}
+                      </span>
+                    ),
+                  },
+                  {
+                    key: "device",
+                    header: t("colDevice"),
+                    cell: (session) => (
+                      <span className="flex items-center gap-2">
+                        <span className="text-fg">{agentLabel(session.user_agent)}</span>
+                        {session.handle === current ? (
+                          <Chip tone="success">{t("thisDevice")}</Chip>
+                        ) : null}
+                      </span>
+                    ),
+                  },
+                  {
+                    key: "online",
+                    header: t("colOnline"),
+                    headClassName: "whitespace-nowrap",
+                    /* the same StatusDot the members list uses, so "online"
+                       looks identical wherever it is said */
+                    cell: (session) => (
+                      <StatusDot
+                        label={session.online ? t("onlineYes") : t("onlineNo")}
+                        tone={session.online ? "success" : "muted"}
+                      />
+                    ),
+                  },
+                  {
+                    key: "ip",
+                    header: t("colIp"),
+                    cell: (session) => (
+                      <span dir="ltr" className="text-fg-muted">{session.ip ?? "—"}</span>
+                    ),
+                  },
+                  {
+                    key: "lastAction",
+                    header: t("colLastAction"),
+                    cell: (session) => session.refreshed_at ? (
+                      <span className="text-fg-muted">
+                        {`${formatDate(session.refreshed_at, locale)} ${formatTime(session.refreshed_at, locale)}`}
+                      </span>
+                    ) : (
+                      <span className="text-fg-subtle">—</span>
+                    ),
+                  },
+                ]}
+              />
+            </Card>
+          )}
+      </div>
+      ) : null}
+
+      {ending ? (
+        <ConfirmDialog
+          title={t("endConfirmTitle", { device: agentLabel(ending.user_agent) })}
+          body={t("endConfirmBody")}
+          confirmLabel={t("endConfirm")}
+          cancelLabel={t("cancel")}
+          busy={endBusy}
+          onCancel={() => setEnding(null)}
+          onConfirm={() => {
+            if (endBusy) return;
+            setEndBusy(true);
+            void api.endMySession(ending.handle)
+              .then(() => {
+                /* adopt the truth by re-reading, not by splicing: the door
+                   may have refused (a race with the sweep) and the list is
+                   the record */
+                return api.mySessions().then((answer) => {
+                  setSessions(answer.sessions);
+                  setCurrent(answer.current);
+                });
+              })
+              .then(() => { setEnding(null); notify(t("endDone")); })
+              .catch(() => notify(t("endFailed"), "warn"))
+              .finally(() => setEndBusy(false));
+          }}
+        />
+      ) : null}
+
+      {endingOrg ? (
+        <ConfirmDialog
+          title={t("endOrgConfirmTitle", {
+            person: personName(endingOrg as unknown as User, locale),
+          })}
+          body={t("endOrgConfirmBody")}
+          confirmLabel={t("endConfirm")}
+          cancelLabel={t("cancel")}
+          busy={endBusy}
+          onCancel={() => setEndingOrg(null)}
+          onConfirm={() => {
+            if (endBusy) return;
+            setEndBusy(true);
+            void api.endMemberSession(endingOrg.user_id, endingOrg.handle)
+              /* re-read rather than splice: the rank rule or a sweep may
+                 have moved under us, and the list is the record */
+              .then(() => api.orgSessions().then(setOrgSessions))
+              .then(() => { setEndingOrg(null); notify(t("endDone")); })
+              .catch(() => notify(t("endFailed"), "warn"))
+              .finally(() => setEndBusy(false));
+          }}
+        />
+      ) : null}
+
+      {orgSessions === "refused" ? (
       <div>
         <h2 className="h-section">{t("sessionsTitle")}</h2>
         <p className="mt-1 text-sm leading-6 text-fg-muted">{t("sessionsHint")}</p>
@@ -196,141 +354,6 @@ export function SecuritySettings() {
         )}
       </div>
 
-      {/* ── everyone's devices, for an admin or owner (db/0135) ───────── */}
-      <div>
-          <h2 className="h-section">{t("orgSessionsTitle")}</h2>
-          <p className="mt-1 text-sm leading-6 text-fg-muted">{t("orgSessionsHint")}</p>
-          {orgSessions !== null && orgSessions.length === 0 ? (
-            <p className="mt-3 text-sm text-fg-muted">{t("orgSessionsEmpty")}</p>
-          ) : (
-            <Card className="mt-3 !p-0">
-              <DataTable
-                loading={orgSessions === null}
-                rows={orgSessions ?? []}
-                rowKey={(session) => `${session.user_id}:${session.handle}`}
-                /*
-                 * The menu appears only where the wall says it may act. An
-                 * admin sees the owner's session and gets NO end item on
-                 * that row — the affordance mirrors the wall rather than
-                 * offering a button that produces a refusal. `can_end` is
-                 * the server's answer, never re-derived here.
-                 */
-                menuItems={(session) => session.can_end ? [{
-                  key: "end",
-                  label: t("endSession"),
-                  icon: <IconClose width={14} height={14} />,
-                  danger: true,
-                  onSelect: () => setEndingOrg(session),
-                }] : []}
-                columns={[
-                  {
-                    key: "person",
-                    header: t("colPerson"),
-                    cell: (session) => (
-                      <span className="font-medium text-fg">
-                        {personName(session as unknown as User, locale)}
-                      </span>
-                    ),
-                  },
-                  {
-                    key: "device",
-                    header: t("colDevice"),
-                    cell: (session) => (
-                      <span className="flex items-center gap-2">
-                        <span className="text-fg">{agentLabel(session.user_agent)}</span>
-                        {session.handle === current ? (
-                          <Chip tone="success">{t("thisDevice")}</Chip>
-                        ) : null}
-                      </span>
-                    ),
-                  },
-                  {
-                    key: "online",
-                    header: t("colOnline"),
-                    headClassName: "whitespace-nowrap",
-                    /* the same StatusDot the members list uses, so "online"
-                       looks identical wherever it is said */
-                    cell: (session) => (
-                      <StatusDot
-                        label={session.online ? t("onlineYes") : t("onlineNo")}
-                        tone={session.online ? "success" : "muted"}
-                      />
-                    ),
-                  },
-                  {
-                    key: "ip",
-                    header: t("colIp"),
-                    cell: (session) => (
-                      <span dir="ltr" className="text-fg-muted">{session.ip ?? "—"}</span>
-                    ),
-                  },
-                  {
-                    key: "lastAction",
-                    header: t("colLastAction"),
-                    cell: (session) => session.refreshed_at ? (
-                      <span className="text-fg-muted">
-                        {`${formatDate(session.refreshed_at, locale)} ${formatTime(session.refreshed_at, locale)}`}
-                      </span>
-                    ) : (
-                      <span className="text-fg-subtle">—</span>
-                    ),
-                  },
-                ]}
-              />
-            </Card>
-          )}
-      </div>
-
-      {ending ? (
-        <ConfirmDialog
-          title={t("endConfirmTitle", { device: agentLabel(ending.user_agent) })}
-          body={t("endConfirmBody")}
-          confirmLabel={t("endConfirm")}
-          cancelLabel={t("cancel")}
-          busy={endBusy}
-          onCancel={() => setEnding(null)}
-          onConfirm={() => {
-            if (endBusy) return;
-            setEndBusy(true);
-            void api.endMySession(ending.handle)
-              .then(() => {
-                /* adopt the truth by re-reading, not by splicing: the door
-                   may have refused (a race with the sweep) and the list is
-                   the record */
-                return api.mySessions().then((answer) => {
-                  setSessions(answer.sessions);
-                  setCurrent(answer.current);
-                });
-              })
-              .then(() => { setEnding(null); notify(t("endDone")); })
-              .catch(() => notify(t("endFailed"), "warn"))
-              .finally(() => setEndBusy(false));
-          }}
-        />
-      ) : null}
-
-      {endingOrg ? (
-        <ConfirmDialog
-          title={t("endOrgConfirmTitle", {
-            person: personName(endingOrg as unknown as User, locale),
-          })}
-          body={t("endOrgConfirmBody")}
-          confirmLabel={t("endConfirm")}
-          cancelLabel={t("cancel")}
-          busy={endBusy}
-          onCancel={() => setEndingOrg(null)}
-          onConfirm={() => {
-            if (endBusy) return;
-            setEndBusy(true);
-            void api.endMemberSession(endingOrg.user_id, endingOrg.handle)
-              /* re-read rather than splice: the rank rule or a sweep may
-                 have moved under us, and the list is the record */
-              .then(() => api.orgSessions().then(setOrgSessions))
-              .then(() => { setEndingOrg(null); notify(t("endDone")); })
-              .catch(() => notify(t("endFailed"), "warn"))
-              .finally(() => setEndBusy(false));
-          }}
-        />
       ) : null}
 
       {/*

@@ -5,7 +5,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { MeetingItem, MeetingRecord } from "@/api/types";
 import { IconCheck, IconDownload, IconPrint, IconRetry } from "@/components/icons";
-import { digits, formatDate } from "@/lib/format";
+import { digits, formatDate, personName } from "@/lib/format";
 
 /**
  * صورت‌جلسه — the reference's minutes DOCUMENT, composed from facts the
@@ -85,6 +85,29 @@ export function MinutesTab({ meeting, myName, myId, onChanged }: {
     return () => { alive = false; };
   }, [meeting.id, reloads]);
 
+  /*
+   * THE HOST IS AN ATTENDEE (user report, 2026-09-02: "the attendees still
+   * does not count me, i was present in the meeting").
+   *
+   * `invitees` is who was ASKED, and the person who created the meeting is
+   * not in it — they did not invite themselves. So a meeting somebody ran
+   * alone had an empty attendee list, and the document said "no attendees
+   * recorded" about a meeting that plainly had one.
+   *
+   * The name comes from the WIRE (`host_name`), not from the signed-in
+   * viewer. That distinction is the other half of the same bug: the plan card
+   * was drawing whoever was looking at it as the host, so a colleague opening
+   * someone else's meeting saw their own name in the host row.
+   */
+  const hostName = personName(
+    { display_name: meeting.host_name ?? "", display_name_en: meeting.host_name_en },
+    locale,
+  );
+  const attendees = [
+    ...(meeting.host_name !== null ? [hostName] : []),
+    ...meeting.invitees.filter((n) => n !== hostName),
+  ];
+
   const rows = Array.isArray(items) ? items : [];
   const decisions = useMemo(
     () => rows.filter((r) => r.kind === "decision").map((r) => r.body),
@@ -111,7 +134,7 @@ export function MinutesTab({ meeting, myName, myId, onChanged }: {
     return `<!doctype html><html dir="rtl" lang="fa"><head><meta charset="utf-8"><title>${esc(meeting.title)}</title></head><body style="font-family:Vazirmatn,Tahoma,sans-serif">
 <h1>${esc(t("minutesDocTitle", { title: meeting.title }))}</h1>
 <p>${esc(t("minutesDate"))}: ${esc(formatDate(meeting.scheduled_at, locale))}</p>
-<h2>${esc(t("minutesAttendees"))}</h2>${meeting.invitees.length === 0 ? `<p>${esc(t("minutesNoAttendees"))}</p>` : meeting.invitees.map((n) => `<p>${esc(n)}</p>`).join("")}
+<h2>${esc(t("minutesAttendees"))}</h2>${attendees.length === 0 ? `<p>${esc(t("minutesNoAttendees"))}</p>` : attendees.map((n) => `<p>${esc(n)}</p>`).join("")}
 <h2>${esc(t("ext_decisions"))}</h2>${decisions.length === 0 ? `<p>${esc(t("minutesNoDecisions"))}</p>` : decisions.map(item).join("")}
 <h2>${esc(t("ext_actions"))}</h2>${actions.length === 0 ? `<p>${esc(t("minutesNoActions"))}</p>` : actions.map(item).join("")}
 <h2>${esc(t("minutesSignatures"))}</h2>${meeting.minutes_signatures.map((sig) => `<p>${esc(sig.name)} — ${esc(formatDate(sig.at, locale))}</p>`).join("") || `<p>${esc(t("minutesAwaitingSignature"))}</p>`}
@@ -185,11 +208,11 @@ export function MinutesTab({ meeting, myName, myId, onChanged }: {
 
         <section className="mt-4">
           <h3 className="text-sm font-bold text-accent">{digits(1, locale)}. {t("minutesAttendees")}</h3>
-          {meeting.invitees.length === 0 ? (
+          {attendees.length === 0 ? (
             <p className="mt-1.5 text-sm text-fg-muted">{t("minutesNoAttendees")}</p>
           ) : (
             <div className="mt-1.5 flex flex-wrap gap-1.5">
-              {meeting.invitees.map((name) => (
+              {attendees.map((name) => (
                 <span key={name} className="rounded-lg bg-surface-2 px-2 py-1 text-xs text-fg">{name}</span>
               ))}
             </div>

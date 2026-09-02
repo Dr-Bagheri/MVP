@@ -31,7 +31,10 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
      into it */
   { slug: "notifications", group: "configuration" },
   { slug: "security", group: "configuration" },
-  { slug: "sso", group: "configuration" },
+  /* SIGN-IN METHODS LEFT THIS MENU (user directive, 2026-09-02: "remove
+     sign-in methods from the settings"). The page still resolves at its own
+     address — what a menu offers and what the router serves are different
+     questions, and only the first one was asked, exactly as with Skills. */
   /* CONNECTIONS (user directive, 2026-09-02: "put the integrations into the
      settings"). The page keeps its address — one home per feature, more
      than one door to it — and the rail entry goes, because a surface that

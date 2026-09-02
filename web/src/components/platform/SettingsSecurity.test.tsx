@@ -18,6 +18,33 @@ vi.mock("@/components/scaffold", () => ({
   ),
 }));
 
+/*
+ * The two session reads are stubbed rather than left to the real client,
+ * which in jsdom rejects for want of a fetch backend — a rejection that
+ * happens to LOOK like the refusal branch. Two different nothings arriving
+ * at the same value is the exact bug this page had; a test that relied on it
+ * would be asserting an accident.
+ */
+const mySessions = vi.fn(async () => ({ sessions: [], current: null }));
+const orgSessions = vi.fn(async () => []);
+vi.mock("@/api/client", () => ({
+  api: {
+    mySessions: (...a: unknown[]) => mySessions(...(a as [])),
+    orgSessions: (...a: unknown[]) => orgSessions(...(a as [])),
+    endMySession: vi.fn(), endMemberSession: vi.fn(),
+    /* SignInMethods renders from this file too, and a mocked module has only
+       what it is given — an api mock that covers one component's calls and
+       not its neighbour's fails the neighbour for a reason that has nothing
+       to do with it */
+    authMethods: async () => [
+      { provider: "google", enabled: true }, { provider: "github", enabled: true },
+    ],
+    setAuthMethod: vi.fn(),
+    me: async () => ({ id: "u-1", role: "owner" }),
+  },
+  BffError: class extends Error {},
+}));
+
 const { SecuritySettings } = await import("./SecuritySettings");
 const { SignInMethods } = await import("./SignInMethods");
 
@@ -36,8 +63,34 @@ describe("settings security surfaces", () => {
     expect(screen.queryByRole("link", { name: "بازکردن پروفایل" })).toBeNull();
     expect(screen.queryByRole("link", { name: "دیدن روش‌ها" })).toBeNull();
     expect(screen.queryByText("آنچه این استقرار اجرا می‌کند")).toBeNull();
-    /* the control: the page still positively renders its real subjects */
-    expect(screen.getByText("نشست‌های فعال")).toBeTruthy();
+    /*
+     * The control: the page still positively renders its real subject.
+     *
+     * It names the ORG-WIDE heading now. The two session sections were merged
+     * on 2026-09-02 ("remove the second section in the sessions and in first
+     * show all online sessions from everywhere connected to our platform"),
+     * and this assertion is what caught the change — which is the whole
+     * reason a check like this carries a positive control rather than only
+     * absences.
+     */
+    expect(screen.getByText("همهٔ اعضای سازمان")).toBeTruthy();
+  });
+
+  it("falls back to this person's own devices when the org-wide read is refused", async () => {
+    /*
+     * THE MEMBER'S PATH, and the reason the merge is not a regression for
+     * them: the org-wide list is refused below admin (db/0135), and a section
+     * that rendered nothing on a refusal would have taken away the one thing
+     * a member came here for — the ability to see and end their own devices.
+     *
+     * Before this round a refusal and "still loading" were the same value, so
+     * this branch was unreachable: the page waited forever on an answer that
+     * had already come back as no.
+     */
+    orgSessions.mockRejectedValueOnce(new Error("forbidden"));
+    render(<SecuritySettings />);
+    expect(await screen.findByText("نشست‌های فعال")).toBeTruthy();
+    expect(screen.queryByText("همهٔ اعضای سازمان")).toBeNull();
   });
 
   it("lists only the two external sign-in providers", () => {

@@ -92,7 +92,11 @@ export default function SettingsPage({
        * A dense table does not need a wider page: DataTable scrolls inside
        * its own box, which is the whole reason that wrapper exists.
        */
-      width="default"
+      /* SMALL, the meeting-plan column (user directive, 2026-09-02: "with
+       * small page as a template"). Settings is a set of switches and fields,
+       * not a list — at the list width a label sat a screen away from the
+       * control it named. */
+      width="small"
     >
       <PageHeader title={t(`section.${active.slug}`)} subtitle={t(`desc.${active.slug}`)} />
 

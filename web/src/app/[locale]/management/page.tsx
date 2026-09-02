@@ -1,8 +1,14 @@
 import { redirect } from "@/i18n/routing";
 
 /**
- * Management's home IS Users now (user directive, 2026-08-22: "make the
- * first page of the management to be the users, remove this boxes").
+ * Management's home is GENERAL (user directive, 2026-09-02: "make the general
+ * page in management the landing page of the management as well").
+ *
+ * [SUPERSEDES the 2026-08-22 ruling that made it Users. Left visible rather
+ * than rewritten, because the reason Users was chosen — the area's first page
+ * should be its people — is still a real argument, and the record of a
+ * decision changing is worth more than a file that reads as though it was
+ * always this way.]
  *
  * The card grid this page used to render was the sidebar repeated with
  * descriptions — one navigation surface too many once the two-pane menu
@@ -26,5 +32,5 @@ export default async function ManagementHome({
   params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
-  redirect({ href: "/management/users", locale });
+  redirect({ href: "/management/general", locale });
 }
