@@ -2901,6 +2901,7 @@
     "topicOptions": "Topic options",
     "renameTopic": "Rename topic",
     "removeTopic": "Remove topic",
-    "topicNamePlaceholder": "Topic name…"
+    "topicNamePlaceholder": "Topic name…",
+    "unknownPerson": "Unknown"
   }
 }

@@ -2901,6 +2901,7 @@
     "topicOptions": "گزینه‌های موضوع",
     "renameTopic": "ویرایش نام موضوع",
     "removeTopic": "حذف موضوع",
-    "topicNamePlaceholder": "نام موضوع…"
+    "topicNamePlaceholder": "نام موضوع…",
+    "unknownPerson": "نامشخص"
   }
 }

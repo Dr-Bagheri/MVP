@@ -15,7 +15,8 @@ import { MinutesTab } from "./meeting/Minutes";
 import { MeetingTasksBoard } from "./meeting/MiniTasks";
 import { MeetingAssistant } from "./meeting/MeetingAssistant";
 import {
-  IconCheck, IconCopy, IconMic, IconPlus, IconTrash,
+  IconCheck, IconCopy, IconFileText, IconMic, IconPlus, IconRows, IconTrash,
+  IconUsers,
 } from "@/components/icons";
 import {
   finish, recorderSnapshot, startRecording, subscribeRecorder,
@@ -423,7 +424,7 @@ export function MeetingPage({ id }: { id: string }) {
       ) : null}
 
       {active === "pre" ? (
-        <PreStage meeting={meeting} onPatch={patch} locale={locale} />
+        <PreStage meeting={meeting} onPatch={patch} locale={locale} me={me} />
       ) : null}
       {active === "hold" ? (
         <HoldStage
@@ -450,10 +451,12 @@ export function MeetingPage({ id }: { id: string }) {
 }
 
 /* ═══ پیش از جلسه — the reference's plan cards ═══════════════════════════ */
-function PreStage({ meeting, onPatch, locale }: {
+function PreStage({ meeting, onPatch, locale, me }: {
   meeting: MeetingRecord;
   onPatch: (body: Record<string, unknown>) => void;
   locale: string;
+  /** the host, listed among the invitees — null while identity is loading */
+  me: Me | null;
 }) {
   const t = useTranslations("meetings");
   const [editing, setEditing] = useState(false);
@@ -469,7 +472,10 @@ function PreStage({ meeting, onPatch, locale }: {
         {/* مشخصات جلسه */}
         <section className="tile p-4" aria-label={t("detailsTitle")}>
           <header className="mb-2 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-fg">{t("detailsTitle")}</h2>
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-fg">
+              <IconFileText width={14} height={14} className="text-fg-subtle" aria-hidden />
+              {t("detailsTitle")}
+            </h2>
             <button type="button" onClick={() => setEditing(true)}
               className="tap h-8 rounded-lg border border-border px-3 text-xs font-medium text-fg hover:bg-border">
               {t("edit")}
@@ -503,7 +509,10 @@ function PreStage({ meeting, onPatch, locale }: {
         {/* دستور جلسه */}
         <section className="tile p-4" aria-label={t("fieldAgenda")}>
           <header className="mb-2 flex items-baseline justify-between">
-            <h2 className="text-sm font-semibold text-fg">{t("fieldAgenda")}</h2>
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-fg">
+              <IconRows width={14} height={14} className="text-fg-subtle" aria-hidden />
+              {t("fieldAgenda")}
+            </h2>
             <span className="text-[11px] text-fg-subtle">
               {t("agendaTotal", { n: digits(totalMinutes, locale) })}
             </span>
@@ -551,14 +560,43 @@ function PreStage({ meeting, onPatch, locale }: {
           ) : null}
         </section>
 
-        {/* دعوت‌شدگان */}
+        {/* دعوت‌شدگان — the reference's own shape: the count beside the
+            title, the people LISTED rather than only typeable, and the way to
+            change them behind one control. A card that showed a text box and
+            no list answered "who is coming" with an empty rectangle. */}
         <section className="tile p-4" aria-label={t("fieldInvitees")}>
           <header className="mb-2 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-fg">{t("fieldInvitees")}</h2>
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-fg">
+              <IconUsers width={14} height={14} className="text-fg-subtle" aria-hidden />
+              {t("fieldInvitees")}
+            </h2>
             <span className="badge-num rounded-full bg-accent-soft px-2 text-[11px] text-accent">
-              {digits(meeting.invitees.length, locale)}
+              {digits(meeting.invitees.length + 1, locale)}
             </span>
           </header>
+          <ul className="mb-2 space-y-1.5">
+            {/* the HOST is a person in this meeting too, and the reference
+                lists them with the badge that says so */}
+            <li className="flex items-center gap-2 text-sm text-fg">
+              <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-accent text-[11px] font-bold text-on-accent" aria-hidden>
+                {(me !== null ? personName(me, locale) : "—").slice(0, 1)}
+              </span>
+              <span className="min-w-0 flex-1 truncate">
+                {me !== null ? personName(me, locale) : t("unknownPerson")}
+              </span>
+              <span className="shrink-0 rounded-md bg-surface-2 px-1.5 py-0.5 text-[10px] text-fg-subtle">
+                {t("memberHost")}
+              </span>
+            </li>
+            {meeting.invitees.map((name) => (
+              <li key={name} className="flex items-center gap-2 text-sm text-fg">
+                <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-surface-2 text-[11px] font-bold text-fg-muted" aria-hidden>
+                  {name.slice(0, 1)}
+                </span>
+                <span className="min-w-0 flex-1 truncate">{name}</span>
+              </li>
+            ))}
+          </ul>
           <InviteeInput
             value={meeting.invitees}
             onChange={(invitees: string[]) => onPatch({ invitees })}
