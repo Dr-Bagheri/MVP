@@ -94,7 +94,11 @@ describe("the floating-panel rule", () => {
       const code = codeOnly(readFileSync(file, "utf8"));
       for (const match of code.matchAll(/"([^"]*top-full[^"]*)"/g)) {
         const cls = match[1]!;
-        if (!/absolute/.test(cls)) continue;
+        /* membership by SPLIT, not a word-boundary regex: two attempts to
+           write that escape through a generator emitted a literal BACKSPACE
+           instead, which the encoding sweep caught both times. A rule with
+           no escape in it cannot be mis-escaped. */
+        if (!cls.split(/[ ]+/).includes("absolute")) continue;
         /*
          * A DECORATION is not a menu, and this guard's first run said it
          * was: the record player's marker strip sits under the scrubber

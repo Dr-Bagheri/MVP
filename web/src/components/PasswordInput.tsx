@@ -71,7 +71,16 @@ export function PasswordInput({
     <div className="relative">
       <input
         id={inputId}
-        className="input pe-11"
+        /*
+         * `pr-11`, not `pe-11`. The two are the same thing only when the
+         * reference direction is the same, and here it is NOT: this input is
+         * pinned `dir="ltr"` (a password is typed left to right whatever the
+         * page does), so its own logical END is the RIGHT — while the button
+         * below sits outside it, in the PAGE's direction. Written as logical
+         * properties the field reserved space on one side and the eye sat on
+         * the other, which in Persian put the eye on top of the dots.
+         */
+        className="input pr-11"
         dir="ltr"
         type={shown ? "text" : "password"}
         value={value}
@@ -89,9 +98,15 @@ export function PasswordInput({
         aria-label={shown ? t("hidePassword") : t("showPassword")}
         title={shown ? t("hidePassword") : t("showPassword")}
         onClick={() => setShown((v) => !v)}
-        /* `end-2`, not `right-2`: the box is LTR but the page may not be,
-           and the eye belongs at the trailing edge of the field either way */
-        className="absolute end-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-fg-muted hover:text-fg"
+        /*
+         * `right-2`, and PHYSICAL on purpose — the exception that proves the
+         * logical-properties rule rather than breaking it. The eye belongs at
+         * the trailing edge of THIS FIELD, and the field is pinned LTR, so
+         * its trailing edge is the right in every locale. `end-2` resolves
+         * against the page instead, which is how the eye ended up on the far
+         * side from the space reserved for it.
+         */
+        className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-fg-muted hover:text-fg"
       >
         {shown
           ? <IconHide width={18} height={18} aria-hidden />
