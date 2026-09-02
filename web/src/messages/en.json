@@ -2902,6 +2902,15 @@
     "renameTopic": "Rename topic",
     "removeTopic": "Remove topic",
     "topicNamePlaceholder": "Topic name…",
-    "unknownPerson": "Unknown"
+    "unknownPerson": "Unknown",
+    "pickDate": "Pick a date",
+    "pickTime": "Pick a time",
+    "dateToday": "Today",
+    "dateTomorrow": "Tomorrow",
+    "dateNextWeek": "Next week",
+    "prevMonth": "Previous month",
+    "nextMonth": "Next month",
+    "hourLabel": "Hour",
+    "minuteLabel": "Minute"
   }
 }

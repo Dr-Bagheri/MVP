@@ -47,6 +47,8 @@ import type { TileSize } from "@/lib/dashboardLayout";
 export type WidgetGroup = "overview" | "work" | "ai";
 
 export interface WidgetSpec {
+  /** rendered WITHOUT the board's card and header — see `stats` */
+  bare?: boolean;
   key: string;
   /** the message key under `dashboard.widget.*` */
   labelKey: string;
@@ -87,6 +89,12 @@ export const WIDGET_SPECS = [
        meetings this month, task completion rate, tasks recorded */
     key: "stats",
     labelKey: "stats",
+    /* NO CARD AROUND IT (user directive, 2026-09-02: make the dashboard look
+       exactly like the reference). This widget renders four cards of its
+       own, and a titled tile around them is a card inside a card — the
+       reference has the four figures loose in a row, which is why theirs
+       reads as a strip and ours read as a box with a box in it. */
+    bare: true,
     icon: <IconPulse />,
     group: "overview",
     sizes: ["band", "wide"],

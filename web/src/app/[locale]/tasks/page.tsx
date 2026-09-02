@@ -12,7 +12,7 @@ import { TaskBoard } from "@/components/platform/TaskBoard";
 export default function TasksPage() {
   return (
     <PlatformShell>
-      <PageContainer width="wide">
+      <PageContainer width="full">
         <Suspense fallback={null}>
           <TaskBoard />
         </Suspense>

@@ -83,7 +83,12 @@ describe("the dashboard board", () => {
      * eighth widget shipped with no renderer, which is the failure this
      * exists for.
      */
-    const cards = document.querySelectorAll("section.tile");
+    /* by the BOARD's own marker, not by the card class: a widget may render
+       bare (the stats strip brings its own four cards, and a titled tile
+       around them is a card inside a card). Counting `.tile` counted the
+       chrome rather than the widgets, and went one short the day one of them
+       stopped wearing it — while every widget was still on the board. */
+    const cards = document.querySelectorAll("section[aria-label]");
     expect(cards).toHaveLength(DEFAULT_WIDGETS.length);
 
     /*
@@ -93,8 +98,7 @@ describe("the dashboard board", () => {
      * of icon buttons and has no words in it at all.
      */
     for (const card of Array.from(cards)) {
-      const body = card.lastElementChild!;
-      expect(body.childElementCount, card.getAttribute("aria-label") ?? "").toBeGreaterThan(0);
+      expect(card.childElementCount, card.getAttribute("aria-label") ?? "").toBeGreaterThan(0);
     }
   });
 

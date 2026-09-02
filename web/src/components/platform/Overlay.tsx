@@ -14,7 +14,13 @@ import { useEffect, type ReactNode } from "react";
  * are not right" was pointing at. A form gets `md`; a two-pane surface gets
  * `lg`; a short confirmation keeps `sm`.
  */
-const WIDTH = { sm: "max-w-lg", md: "max-w-xl", lg: "max-w-3xl" } as const;
+const WIDTH = {
+  /* `md` came down a step (user directive, 2026-09-02: "make this pop up
+     window a little less width"). The new-meeting form is a title, a
+     description and two short fields; at 576px they were stretched across a
+     line far longer than anything they hold. */
+  sm: "max-w-md", md: "max-w-lg", lg: "max-w-3xl",
+} as const;
 
 export function Overlay({ children, onClose, label, wide = false, size }: {
   children: ReactNode;

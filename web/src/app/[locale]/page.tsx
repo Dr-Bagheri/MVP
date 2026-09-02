@@ -29,7 +29,7 @@ import { PageContainer } from "@/components/scaffold";
 export default function DashboardPage() {
   return (
     <PlatformShell>
-      <PageContainer width="wide">
+      <PageContainer width="default">
         <Dashboard />
       </PageContainer>
     </PlatformShell>

@@ -1,12 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useLocale, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import type { MeetingRecord } from "@/api/types";
 import { Whiteboard } from "./Whiteboard";
 import { MeetingRoom } from "./Room";
 import { IconPencil, IconResize, IconUpload, IconVideo } from "@/components/icons";
-import { formatClock } from "@/lib/format";
 
 /**
  * THE LIVE STAGE — the reference's برگزاری media area, walked in their own
@@ -24,14 +23,12 @@ import { formatClock } from "@/lib/format";
  */
 type Mode = "video" | "board" | "slides";
 
-export function MeetingStage({ meeting, recordingLive, recordedMs, displayName }: {
+export function MeetingStage({ meeting, recordingLive, displayName }: {
   meeting: MeetingRecord;
   recordingLive: boolean;
-  recordedMs: number;
   displayName: string;
 }) {
   const t = useTranslations("meetings");
-  const locale = useLocale();
   /*
    * THE VIDEO MODE BELONGS TO AN ONLINE MEETING AND NOWHERE ELSE (user
    * directive): a meeting held in the room, recorded through a microphone,
@@ -82,16 +79,19 @@ export function MeetingStage({ meeting, recordingLive, recordedMs, displayName }
         </div>
 
         <div className="flex items-center gap-2">
-          <span className={`badge-num flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-medium ${
+          {/* THE LIGHT, not a second clock (user directive: the page's own
+              top bar already carries the running time and the end button, so
+              a duplicate here was the same number in two places a hand's
+              width apart). A dot and the mode is what this box owes: it says
+              THIS surface is being recorded, which the top bar cannot. */}
+          <span className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-medium ${
             recordingLive ? "bg-danger/10 text-danger" : "bg-surface-2 text-fg-muted"
-          }`} dir="ltr">
+          }`}>
             <span className={`h-1.5 w-1.5 rounded-full ${recordingLive ? "animate-pulse bg-danger" : "bg-fg-subtle"}`} aria-hidden />
-            {recordingLive ? formatClock(Math.floor(recordedMs / 1000), locale) : t("statusReady")}
+            {recordingLive ? t(`mode_${meeting.mode}`) : t("statusReady")}
           </span>
           {recordingLive ? (
-            <span className="text-[11px] text-fg-muted">
-              {t(`mode_${meeting.mode}`)} · {t("recordedHere")}
-            </span>
+            <span className="text-[11px] text-fg-muted">{t("recordedHere")}</span>
           ) : null}
           <button
             type="button"

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { api } from "@/api/client";
+import { notify } from "@/lib/notify";
 import type { AgentCard, AgentWorkflowLink, ModelInfo } from "@/api/types";
 import { Link } from "@/i18n/routing";
 import { Icon } from "@/components/icons";
@@ -126,7 +127,6 @@ export function AgentEditor({
   const [attached, setAttached] = useState<Set<string>>(new Set());
 
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -198,7 +198,6 @@ export function AgentEditor({
     if (agent === null && !createReady) return;
     setSaving(true);
     setError(null);
-    setSaved(false);
     try {
       let card = agent;
       if (agent === null && editable) {
@@ -232,7 +231,7 @@ export function AgentEditor({
         setOriginalAttached(rows.map((row) => row.id));
       }
       if (card) {
-        setSaved(true);
+        notify(t("saved"));
         setInstructions("");
         onSaved(card);
       }
@@ -574,7 +573,7 @@ export function AgentEditor({
           </button>
         ) : null}
         <span className="flex-1" />
-        {saved ? <span className="text-sm text-success">{t("saved")}</span> : null}
+
         {(step === "workflows" ? canArrange : editable) && (agent !== null || step === "visibility") ? (
           <button
             type="button"

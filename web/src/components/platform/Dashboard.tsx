@@ -172,6 +172,38 @@ export function Dashboard() {
     if (!spec) return null;
     const label = t(`widget.${spec.labelKey}` as "widget.records");
     const compact = layout.density === "compact";
+    /* a BARE widget brings its own cards; the board gives it the grid slot
+       and nothing else. Its edit controls still have to reach it, so they
+       ride an absolutely-positioned corner rather than a header row that
+       would put the box back. */
+    if (spec.bare === true) {
+      return (
+        <section className="group/card relative" aria-label={label}>
+          {editing ? (
+            <span className="absolute end-1 top-1 z-10 flex gap-1">
+              <button
+                type="button" data-nodrag
+                aria-pressed={tile.pinned === true}
+                aria-label={tile.pinned === true ? t("unpin") : t("pin")}
+                className={`tile-remove tile-pin ${tile.pinned === true ? "is-pinned" : ""}`}
+                onClick={() => togglePin(tile.key)}
+              >
+                <IconPin width={16} height={16} />
+              </button>
+              <button
+                type="button" data-nodrag
+                aria-label={t("hide")}
+                className="tile-remove"
+                onClick={() => removeWidget(tile.key)}
+              >
+                <IconTrash width={16} height={16} />
+              </button>
+            </span>
+          ) : null}
+          {renderBody(tile.key, tile.size)}
+        </section>
+      );
+    }
     return (
       <section
         className={`tile group/card ${compact ? "p-3" : "p-4"}`}

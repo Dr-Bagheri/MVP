@@ -8,6 +8,7 @@ import { api } from "@/api/client";
 import type { MeetingAgendaItem, MeetingMode, MeetingRecord } from "@/api/types";
 import { Overlay } from "./Overlay";
 import { Select } from "@/components/Select";
+import { DateField, TimeField } from "@/components/DateTimeFields";
 import {
   IconArchive, IconCalendar, IconCheck, IconChevronRight, IconClose, IconDots,
   IconFolder, IconMic, IconPencil, IconPlus, IconTrash, IconUpload, IconVideo,
@@ -714,7 +715,7 @@ function NewMeetingDialog({ topics, onClose, onCreated, onRefused }: {
   };
 
   return (
-    <Overlay onClose={onClose} label={t("newMeeting")} wide>
+    <Overlay onClose={onClose} label={t("newMeeting")} size="md">
       <div className="mb-1 flex items-start justify-between gap-3">
         <div>
           <h2 className="text-base font-bold text-fg">{t("newMeeting")}</h2>
@@ -736,11 +737,15 @@ function NewMeetingDialog({ topics, onClose, onCreated, onRefused }: {
             className="w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-fg outline-none placeholder:text-fg-subtle focus:border-accent" />
         </Field>
         <div className="grid grid-cols-2 gap-2">
+          {/* OUR pickers, not the browser's: a native date input renders a
+              Gregorian popup with English weekday initials on a Persian-first
+              product, and no attribute changes that — the control is drawn by
+              the browser. The VALUE is unchanged; only the reading is ours. */}
           <Field label={t("fieldDateRequired")}>
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={INPUT} />
+            <DateField value={date} onChange={setDate} />
           </Field>
           <Field label={t("fieldTimeRequired")}>
-            <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className={INPUT} />
+            <TimeField value={time} onChange={setTime} />
           </Field>
         </div>
         <Field label={t("fieldTopicFolder")}>

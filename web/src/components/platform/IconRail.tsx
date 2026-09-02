@@ -145,8 +145,15 @@ export function IconRail() {
             href="/profile"
             className="-m-1 flex min-w-0 flex-1 items-center gap-2.5 rounded-xl p-1 transition-colors hover:bg-surface-2"
           >
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-accent-soft text-sm font-bold text-accent">
-              {personName(me, locale).slice(0, 1)}
+            {/* the photo where there is one; the initial is the fallback */}
+            <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full bg-accent-soft text-sm font-bold text-accent">
+              {me.avatar_url ? (
+                // eslint-disable-next-line @next/next/no-img-element -- see
+                // the profile header: an un-listed host renders nothing
+                <img src={me.avatar_url} alt="" className="h-full w-full object-cover" />
+              ) : (
+                personName(me, locale).slice(0, 1)
+              )}
             </span>
             <span className="min-w-0">
               <span className="block truncate text-sm font-semibold text-fg">

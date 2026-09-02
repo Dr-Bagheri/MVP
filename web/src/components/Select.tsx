@@ -127,7 +127,17 @@ export function Select({
             if (e.key === "Enter" || e.key === " ") { e.preventDefault(); choose(cursor); }
           }}
           ref={(node) => { node?.focus(); }}
-          className="absolute inset-x-0 top-full z-50 mt-1 max-h-60 overflow-y-auto rounded-xl border border-border bg-surface p-1 shadow-island outline-none"
+          /*
+           * `min-w-full` and NOT `inset-x-0` (user directive: "the menu of
+           * the role must be the size of the biggest word it has in it, its
+           * unreadable"). Pinned to the trigger's width, a list of long
+           * labels in a narrow control truncated every one of them to
+           * "Pro…", "En…", "De…" — a menu nobody can read is a menu nobody
+           * can choose from. It is at least as wide as the control and grows
+           * to its longest entry; `max-w` keeps a very long label from
+           * running off the panel it sits in.
+           */
+          className="absolute top-full z-50 mt-1 max-h-60 min-w-full max-w-[min(22rem,80vw)] overflow-y-auto whitespace-nowrap rounded-xl border border-border bg-surface p-1 shadow-island outline-none start-0"
         >
           {options.map((option, index) => (
             <li
@@ -144,7 +154,7 @@ export function Select({
               {option.dot !== undefined ? (
                 <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: option.dot }} aria-hidden />
               ) : null}
-              <span className="min-w-0 flex-1 truncate">{option.label}</span>
+              <span className="min-w-0 flex-1">{option.label}</span>
             </li>
           ))}
         </ul>

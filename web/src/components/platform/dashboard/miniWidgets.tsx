@@ -792,6 +792,18 @@ export function LatestMeetingsWidget({ size }: { size: TileSize }) {
  */
 const GRID_START_HOUR = 8;
 const GRID_END_HOUR = 20;
+/**
+ * A REAL HEIGHT PER HOUR, not a share of whatever height the tile happens to
+ * have (user directive: "the calendar timeline is all not right").
+ *
+ * The percentage version made every row as tall as the tile allowed, so on a
+ * band-sized card thirteen hours shared about 350px — 26px each, with the
+ * hour rules closer together than the text between them and chips overlapping
+ * their own labels. The reference gives an hour about 44px and lets the grid
+ * scroll, which is the only way a row can be legible at more than one tile
+ * size.
+ */
+const HOUR_ROW = 44;
 
 export function WeekWidget() {
   const t = useTranslations("dashboard");
@@ -868,16 +880,16 @@ export function WeekWidget() {
       ) : null}
 
       {/* ── the grid: [hour rail | seven day columns] ─────────────────── */}
-      <div className="grid min-h-0 flex-1 grid-cols-[auto_1fr] gap-1.5">
+      <div className="scroll-quiet grid min-h-0 flex-1 grid-cols-[auto_1fr] gap-1.5 overflow-y-auto">
         {/* day headers + columns share one grid so the tints run full height */}
         <div className="flex flex-col pe-1 text-[10px] leading-none text-fg-subtle">
           {/* the SAME header spacer the day columns carry, so label k and
               line k compute their offsets inside identical boxes */}
-          <div className="mb-1 h-10" aria-hidden />
-          <div className="relative min-h-0 flex-1">
+          <div className="mb-1 h-10 shrink-0" aria-hidden />
+          <div className="relative" style={{ height: hours.length * HOUR_ROW }}>
             {hours.map((h, i) => (
               <span key={h} className="badge-num absolute -translate-y-1/2 whitespace-nowrap"
-                style={{ top: `${(i / (hours.length - 1)) * 100}%` }}>
+                style={{ top: i * HOUR_ROW }}>
                 {digits(String(h).padStart(2, "0"), locale)}:{digits("00", locale)}
               </span>
             ))}
@@ -889,7 +901,7 @@ export function WeekWidget() {
               .sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at));
             return (
               <div key={cell.key} className="flex min-h-0 flex-col">
-                <div className={`mb-1 h-10 rounded-lg px-1 py-1 text-center ${
+                <div className={`mb-1 h-10 shrink-0 rounded-lg px-1 py-1 text-center ${
                   cell.today ? "bg-accent text-on-accent" : cell.weekend ? "bg-danger/10 text-danger" : "bg-surface-2/70 text-fg-muted"
                 }`}>
                   <span className="block truncate text-[10px] leading-3">
@@ -897,13 +909,16 @@ export function WeekWidget() {
                   </span>
                   <span className="badge-num block text-xs font-bold leading-4">{cell.label}</span>
                 </div>
-                <div className={`relative min-h-0 flex-1 overflow-hidden rounded-lg ${
-                  cell.today ? "bg-accent-soft/60" : cell.weekend ? "bg-danger/5" : "bg-surface-2/40"
-                }`}>
+                <div
+                  className={`relative overflow-hidden rounded-lg ${
+                    cell.today ? "bg-accent-soft/60" : cell.weekend ? "bg-danger/5" : "bg-surface-2/40"
+                  }`}
+                  style={{ height: hours.length * HOUR_ROW }}
+                >
                   {/* hour lines */}
                   {hours.map((h, i) => (
                     <span key={h} aria-hidden className="absolute inset-x-0 border-t border-border/40"
-                      style={{ top: `${(i / (hours.length - 1)) * 100}%` }} />
+                      style={{ top: i * HOUR_ROW }} />
                   ))}
                   {dayMeetings.map((m) => {
                     /* the RESOLVED zone, not the browser's — the chip's row
@@ -911,16 +926,16 @@ export function WeekWidget() {
                        time, which both honor the timezone preference */
                     const hour = hourInResolvedZone(m.scheduled_at);
                     const clamped = Math.min(Math.max(hour, GRID_START_HOUR), GRID_END_HOUR - 0.75);
-                    const top = ((clamped - GRID_START_HOUR) / (GRID_END_HOUR - GRID_START_HOUR)) * 100;
-                    /* same denominator as the lines and the rail — one
+                    /* the SAME row height as the lines and the rail — one
                        geometry, three renderings */
+                    const top = (clamped - GRID_START_HOUR) * HOUR_ROW;
                     return (
                       <Link
                         key={m.id}
                         href={`/meetings/${m.id}`}
                         title={m.title}
                         className="absolute inset-x-0.5 z-10 rounded-md bg-surface px-1 py-0.5 shadow-card transition-colors hover:bg-accent-soft"
-                        style={{ top: `${top}%` }}
+                        style={{ top }}
                       >
                         <span className="block truncate text-[10px] font-medium leading-3.5 text-fg">{m.title}</span>
                         <span className="badge-num block text-[9px] leading-3 text-fg-subtle">

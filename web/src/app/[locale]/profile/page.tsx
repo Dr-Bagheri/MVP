@@ -13,9 +13,9 @@ import { PlatformShell } from "@/components/platform/PlatformShell";
 import { FormPanel, FormRow, PageContainer, PageHeader, PanelFooter, Section } from "@/components/scaffold";
 import { digits, modelLabel, personName } from "@/lib/format";
 import { signOutThisDevice } from "@/lib/signOut";
+import { notify } from "@/lib/notify";
 import { storeTheme, type Theme } from "@/lib/theme";
 import { useTheme } from "@/lib/useTheme";
-import { Chip } from "@/components/ui";
 
 /**
  * Profile, on the M26 scaffold (user directive: "the profile section should
@@ -109,7 +109,6 @@ export default function ProfilePage() {
 
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
   const [error, setError] = useState<FormError | null>(null);
 
   function adopt(user: Me) {
@@ -207,14 +206,12 @@ export default function ProfilePage() {
     if (!me || !patch || saving) return;
     setSaving(true);
     setError(null);
-    setSaved(false);
     try {
       // The response is the SAVED row — adopting it is what makes a
       // lower-cased handle or a trimmed name appear as it actually is, rather
       // than leaving the box showing what was typed and calling it saved.
       adopt(await api.updateProfile(patch));
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
+      notify(t("saved"));
     } catch (cause) {
       setError(toFormError(cause, t));
     } finally {
@@ -243,8 +240,20 @@ export default function ProfilePage() {
             not looked yet" and "there are none" are different facts. */}
         <section className="tile tile-row mb-4 flex-wrap items-center justify-between gap-4 p-4">
           <div className="flex min-w-0 items-center gap-3">
-            <span className="grid h-14 w-14 shrink-0 place-items-center rounded-full bg-accent-soft text-lg font-bold text-accent">
-              {personName(me, locale).slice(0, 1)}
+            {/* THE PHOTO, when there is one (user directive: "the profile
+                avatar or image should set in the place of it, why its
+                empty"). The initial is the FALLBACK, not the design — a
+                header showing a letter under a card where the person just
+                uploaded their face reads as the upload not having worked. */}
+            <span className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-full bg-accent-soft text-lg font-bold text-accent">
+              {me.avatar_url ? (
+                // eslint-disable-next-line @next/next/no-img-element -- a
+                // remote avatar of unknown host; next/image would need each
+                // one allow-listed, and an un-listed host renders nothing
+                <img src={me.avatar_url} alt="" className="h-full w-full object-cover" />
+              ) : (
+                personName(me, locale).slice(0, 1)
+              )}
             </span>
             <span className="min-w-0">
               <span className="block truncate text-lg font-bold text-fg">{personName(me, locale)}</span>
@@ -344,7 +353,7 @@ export default function ProfilePage() {
                     value={JOB_TITLES.includes(jobTitle) ? jobTitle : (jobTitle === "" ? "" : "other")}
                     ariaLabel={t("jobTitle")}
                     placeholder={t("jobTitleNone")}
-                    onChange={(value) => setJobTitle(value === "other" ? jobTitle || " " : value)}
+                    onChange={setJobTitle}
                     options={[
                       { value: "", label: t("jobTitleNone") },
                       ...JOB_TITLES.map((key) => ({ value: key, label: t(`job_${key}`) })),
@@ -352,20 +361,9 @@ export default function ProfilePage() {
                     ]}
                   />
                 </FormRow>
-                {/* the free-text box appears only when the list could not say
-                    it — an "other" that cannot be typed is a dead end */}
-                {jobTitle !== "" && !JOB_TITLES.includes(jobTitle) ? (
-                  <FormRow label={t("jobTitleOwnWords")} htmlFor="profile-job-other">
-                    <input
-                      id="profile-job-other"
-                      className="input"
-                      value={jobTitle.trim()}
-                      onChange={(e) => setJobTitle(e.target.value)}
-                      maxLength={120}
-                      autoFocus
-                    />
-                  </FormRow>
-                ) : null}
+                {/* «به بیان خودت» is GONE (user directive, 2026-09-02). The
+                    list is the answer now; `other` records that the list did
+                    not have one rather than opening a second field. */}
               </>
             ) : null}
 
@@ -382,7 +380,10 @@ export default function ProfilePage() {
             ) : null}
 
             <PanelFooter>
-              {saved ? <Chip tone="success">{t("saved")}</Chip> : null}
+              {/* the outcome rides the NOTIFICATION bus (platform rule,
+                  2026-09-02): a pill beside the button is a second place to
+                  look for the same fact, and it is gone before anyone who
+                  looked away comes back. The bell keeps it. */}
               <button className="btn-primary" disabled={!dirty || saving} onClick={() => void save()}>
                 {saving ? t("saving") : t("save")}
               </button>

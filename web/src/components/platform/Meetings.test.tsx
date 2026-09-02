@@ -118,14 +118,17 @@ describe("Meetings", () => {
     await userEvent.type(screen.getByPlaceholderText("عنوان جلسه را بنویس"), "جلسهٔ فروش");
     await userEvent.click(screen.getByRole("radio", { name: "حضوری" }));
     const dialog = screen.getByRole("dialog");
-    // date and time arrive PRE-FILLED with the click moment (the directive's
-    // own sentence); the test only retargets the date
-    const date = within(dialog).getByLabelText("تاریخ *") as HTMLInputElement;
-    expect(date.value).not.toBe("");
-    const time = within(dialog).getByLabelText("ساعت *") as HTMLInputElement;
-    expect(time.value).not.toBe("");
-    date.value = "";
-    await userEvent.type(date, "2099-05-01");
+    /* Date and time arrive PRE-FILLED with the click moment (the directive's
+       own sentence). They are OUR pickers now, not native inputs — a native
+       date field renders a Gregorian popup on a Persian-first product — so
+       the check is that each shows a value rather than its placeholder, and
+       the date is re-chosen through the panel the way a person would. */
+    expect(within(dialog).queryByText("انتخاب تاریخ")).toBeNull();
+    expect(within(dialog).queryByText("انتخاب ساعت")).toBeNull();
+
+    await userEvent.click(within(dialog).getByLabelText("تاریخ *"));
+    // «فردا» — a preset, so the test does not have to know today's date
+    await userEvent.click(within(dialog).getByRole("button", { name: "فردا" }));
     await userEvent.click(screen.getByRole("button", { name: /ساختن جلسه/ }));
 
     await waitFor(() => expect(created).toHaveLength(1));

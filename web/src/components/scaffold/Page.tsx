@@ -10,9 +10,21 @@ import type { ReactNode } from "react";
  */
 
 /**
- * The centered content column. `wide` is for data-dense surfaces (member
- * tables, audit logs, call lists) — the blueprint's 1600px variant; `full`
- * exists for editor-like surfaces and is deliberately rare.
+ * The centered content column.
+ *
+ * THE RULE (user directive, 2026-09-02: "this size of the page is ideal …
+ * make sure to add it to the theme and fix the whole platform; in some cases
+ * that it need more space use the full page mode"):
+ *
+ *   default → almost everything. 1200px, which is the width the reference
+ *             product uses and the one that was called ideal. A page does
+ *             not get to decide it is special.
+ *   wide    → data-dense TABLES that genuinely read better at 1600 (members,
+ *             audit logs, call lists). Not a general-purpose "a bit roomier".
+ *   full    → surfaces whose content IS the width: a kanban board, an editor
+ *             canvas. Deliberately rare, and the answer when default is not
+ *             enough — rather than reaching for `wide` as a middle ground,
+ *             which is how three widths became three guesses.
  */
 export function PageContainer({
   width = "default",

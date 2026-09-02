@@ -60,7 +60,17 @@ export function FloatingRecorder() {
     pathname === "/echo" ? "" : pathname.startsWith("/echo/") ? (pathname.split("/")[2] ?? "") : null;
   const onRecorderScreen =
     echoSection !== null && ["", "new-meeting", "record", "upload"].includes(echoSection);
-  if (onRecorderScreen) return null;
+  /*
+   * A MEETING'S OWN PAGE renders the take as well — its top bar carries the
+   * clock and the end button, and its stage carries the light. With this
+   * pill there too, one rolling microphone was shown in three places at once
+   * (user report, 2026-09-02), and three renderings of one fact are three
+   * things to keep in step. Same reasoning as the recorder screen above: the
+   * pill exists for ANYWHERE ELSE, where nothing would otherwise say a mic
+   * is open.
+   */
+  const onMeetingPage = /^\/meetings\/[^/]+/.test(pathname);
+  if (onRecorderScreen || onMeetingPage) return null;
 
   const docked = anchor !== null;
 

@@ -2902,6 +2902,15 @@
     "renameTopic": "ویرایش نام موضوع",
     "removeTopic": "حذف موضوع",
     "topicNamePlaceholder": "نام موضوع…",
-    "unknownPerson": "نامشخص"
+    "unknownPerson": "نامشخص",
+    "pickDate": "انتخاب تاریخ",
+    "pickTime": "انتخاب ساعت",
+    "dateToday": "امروز",
+    "dateTomorrow": "فردا",
+    "dateNextWeek": "هفته بعد",
+    "prevMonth": "ماه قبل",
+    "nextMonth": "ماه بعد",
+    "hourLabel": "ساعت",
+    "minuteLabel": "دقیقه"
   }
 }

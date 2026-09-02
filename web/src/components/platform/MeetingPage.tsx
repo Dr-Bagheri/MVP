@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/routing";
 import { api } from "@/api/client";
+import { notify } from "@/lib/notify";
 import type { Call, CallNote, Me, MeetingAgendaItem, MeetingRecord } from "@/api/types";
 import { useCrumbTitle } from "@/components/platform/CrumbTitle";
 import { ConfirmDialog } from "@/components/rowActions";
@@ -432,7 +433,6 @@ export function MeetingPage({ id }: { id: string }) {
           me={me}
           locale={locale}
           recordingLive={recordingLive}
-          recordedMs={engine.recordedMs}
         />
       ) : null}
       {active === "post" ? (
@@ -690,18 +690,19 @@ function EditMeetingDialog({ meeting, onPatch, onClose }: {
 
 /* ═══ برگزاری — the live room: engine in the background, whiteboard in
        front ═══════════════════════════════════════════════════════════════ */
-function HoldStage({ meeting, me, locale, recordingLive, recordedMs }: {
+function HoldStage({ meeting, me, locale, recordingLive }: {
   meeting: MeetingRecord;
   me: Me | null;
   locale: string;
   recordingLive: boolean;
-  recordedMs: number;
 }) {
   const t = useTranslations("meetings");
   const [noteDraft, setNoteDraft] = useState("");
   const [taskDraft, setTaskDraft] = useState("");
-  const [flash, setFlash] = useState<string | null>(null);
-  const say = (msg: string) => { setFlash(msg); setTimeout(() => setFlash(null), 2500); };
+  /* every outcome goes to the NOTIFICATION bus (platform rule): a banner
+     that lives in this card is a second place to look, and it disappears
+     before someone who glanced away can read it */
+  const say = (msg: string) => notify(msg);
 
   const addNote = () => {
     const body = noteDraft.trim();
@@ -731,7 +732,6 @@ function HoldStage({ meeting, me, locale, recordingLive, recordedMs }: {
       <MeetingStage
         meeting={meeting}
         recordingLive={recordingLive}
-        recordedMs={recordedMs}
         displayName={me === null ? "" : personName(me, locale)}
       />
 
@@ -740,9 +740,6 @@ function HoldStage({ meeting, me, locale, recordingLive, recordedMs }: {
           sat mostly empty. Left to its content the column hugs its cards,
           which is how the reference's rail reads. */}
       <div className="space-y-3 self-start">
-        {flash !== null ? (
-          <p className="rounded-xl bg-accent-soft px-3 py-1.5 text-center text-xs font-medium text-accent">{flash}</p>
-        ) : null}
 
         {/* اقدام‌های سریع */}
         <section className="tile p-3.5" aria-label={t("quickActions")}>

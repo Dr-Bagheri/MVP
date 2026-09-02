@@ -10,7 +10,7 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
   const { id } = use(params);
   return (
     <PlatformShell>
-      <PageContainer width="wide">
+      <PageContainer width="default">
         <MeetingPage id={id} />
       </PageContainer>
     </PlatformShell>
