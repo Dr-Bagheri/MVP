@@ -439,7 +439,7 @@ function PreStage({ meeting, onPatch, locale, onChanged }: {
        share `MEETING_COLUMNS`, so the rail does not change width under the
        person as they walk from step 1 to step 2. The ratio is the reference
        product's own, measured on its pre page: 604.8 / 403.2 = 3:2. */
-    <div className={`grid gap-4 ${MEETING_COLUMNS}`}>
+    <div className={`grid items-start gap-4 ${MEETING_COLUMNS}`}>
       <div className="space-y-4">
         {/* مشخصات جلسه */}
         <section className="tile p-4" aria-label={t("detailsTitle")}>
