@@ -33,7 +33,6 @@ vi.mock("./meeting/Whiteboard", () => ({
 }));
 
 const startSpy = vi.fn(async (_opts: unknown) => undefined);
-const roomSpy = vi.fn(async (_id: string) => meeting({ video_url: "https://meet.google.com/abc-defg-hij", video_provider: "google_meet" }));
 /* useSyncExternalStore REQUIRES a stable snapshot reference — a getter that
    builds a fresh object every call re-renders forever (the real engine's
    snapshot is a module-level constant between changes for the same reason) */
@@ -87,19 +86,16 @@ vi.mock("@/api/client", async () => ({
     getTranscript: async () => [],
     getSpeakers: async () => [],
     getCallAudio: async () => null,
-    createMeetingRoom: (id: string) => roomSpy(id),
     createTask: vi.fn(), addCallNote: vi.fn(), deleteCallNote: vi.fn(),
   },
 }));
 
-import { BffError } from "@/api/client";
 import { MeetingPage } from "./MeetingPage";
 
 beforeEach(() => {
   MEETING = meeting({});
   CALL = null;
   startSpy.mockClear();
-  roomSpy.mockClear();
 });
 
 /** one processing step's row, found by its label */
@@ -156,9 +152,10 @@ describe("MeetingPage", () => {
     expect(screen.queryByTestId("whiteboard-stub")).toBeNull();
 
     /* and the stage is one click away — an ONLINE meeting opens it on the
-       video room, and the canvas is a chip on the same header */
+       video room, which is a frame in OUR box rather than a link out, and
+       the canvas is a chip on the same header */
     await userEvent.click(screen.getByRole("button", { name: /حین جلسه/ }));
-    expect(screen.getByRole("button", { name: /ساخت اتاق ویدیویی/ })).toBeInTheDocument();
+    expect(screen.getByTitle("ویدیو")).toBeInTheDocument();
     expect(screen.queryByTestId("whiteboard-stub")).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "وایت‌برد" }));
     expect(screen.getByTestId("whiteboard-stub")).toBeInTheDocument();
@@ -218,54 +215,25 @@ describe("MeetingPage", () => {
     expect(startSpy).not.toHaveBeenCalled();
   });
 
-  /* THE ROOM is made where the link is looked for. It writes an event to
-     someone's calendar, so nothing mints it in the background: the button
-     is the whole mechanism, and the page adopts the meeting the server
-     RETURNS rather than guessing what it now holds. */
-  it("the plan mints the video room on a press, and adopts the server's answer", async () => {
+  /* THE ROOM IS THE BOX (user directive: "i dont want it to open here").
+     There is nothing to mint and no link to press: an online meeting's room
+     is derived from its id and rendered inside the stage, so what this
+     asserts is that the frame is there and that it points at the room this
+     meeting owns — a frame pointing anywhere else is two people in two
+     rooms, which looks identical to a working call until nobody arrives. */
+  it("an online meeting's room is a frame in OUR box, addressed to THIS meeting", async () => {
     MEETING = meeting({ call_id: null, mode: "online" });
     render(<MeetingPage id="m-1" />);
     await waitFor(() => expect(screen.getByText("مشخصات")).toBeInTheDocument());
-    // nothing has been minted just by looking at the page
-    expect(roomSpy).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: /حین جلسه/ }));
 
-    await userEvent.click(screen.getByRole("button", { name: /ساخت اتاق ویدیویی/ }));
-    await waitFor(() => expect(roomSpy).toHaveBeenCalledWith("m-1"));
-    // the returned link is on screen, and the mint offer is gone
-    await waitFor(() =>
-      expect(screen.getByText("https://meet.google.com/abc-defg-hij")).toBeInTheDocument());
-    expect(screen.queryByRole("button", { name: /ساخت اتاق ویدیویی/ })).toBeNull();
-  });
-
-  it("a refused mint is named, and leaves the offer standing", async () => {
-    MEETING = meeting({ call_id: null, mode: "online" });
-    roomSpy.mockImplementationOnce(async () => { throw new Error("no connector"); });
-    render(<MeetingPage id="m-1" />);
-    await waitFor(() => expect(screen.getByText("مشخصات")).toBeInTheDocument());
-
-    await userEvent.click(screen.getByRole("button", { name: /ساخت اتاق ویدیویی/ }));
-    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/اتصال گوگل/));
-    // the button is still there to press again — a failure is not a dead end
-    expect(screen.getByRole("button", { name: /ساخت اتاق ویدیویی/ })).toBeInTheDocument();
-  });
-
-  /* WHICH refusal, on the live one that found this. The Google account was
-     connected and the room still failed, because the connection predates the
-     calendar WRITE scope — and the generic sentence sent a person to check a
-     connection that was working. A missing scope and a missing connection are
-     different nothings, and only the code can tell them apart. */
-  it("a missing SCOPE is named as itself, not as a broken connection", async () => {
-    MEETING = meeting({ call_id: null, mode: "online" });
-    roomSpy.mockImplementationOnce(async () => {
-      throw new BffError(400, "invalid", "cannot create calendar events", "meet_scope_missing");
-    });
-    render(<MeetingPage id="m-1" />);
-    await waitFor(() => expect(screen.getByText("مشخصات")).toBeInTheDocument());
-
-    await userEvent.click(screen.getByRole("button", { name: /ساخت اتاق ویدیویی/ }));
-    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/اجازهٔ نوشتن ندارد/));
-    // and NOT the sentence for a connection that is missing or broken
-    expect(screen.getByRole("alert").textContent).not.toMatch(/اتاق ساخته نشد/);
+    const frame = screen.getByTitle("ویدیو") as HTMLIFrameElement;
+    // the meeting's own id, dashes stripped — stable across reloads so that
+    // everyone opening this meeting lands in the same place
+    expect(frame.src).toContain("neurai-m1");  // the meeting id, dashes stripped
+    // and the camera/mic permissions the frame needs to be a call at all
+    expect(frame.getAttribute("allow")).toContain("camera");
+    expect(frame.getAttribute("allow")).toContain("microphone");
   });
 
   it("a recorded meeting opens on the post stage", async () => {

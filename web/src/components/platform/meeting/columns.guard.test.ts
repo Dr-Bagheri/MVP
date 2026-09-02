@@ -25,14 +25,19 @@ const SOURCE = readFileSync(
 );
 
 describe("the meeting's two columns", () => {
-  it("are declared once and used by both stages", () => {
-    const declaration = SOURCE.match(/const MEETING_COLUMNS = "([^"]+)"/);
-    expect(declaration, "MEETING_COLUMNS must be declared in MeetingPage.tsx").not.toBeNull();
-    expect(declaration![1]).toBe("lg:grid-cols-[1.5fr_1fr]");
-
-    // exactly two consumers: the plan and the stage
-    const uses = SOURCE.match(/\$\{MEETING_COLUMNS\}/g) ?? [];
-    expect(uses).toHaveLength(2);
+  it("are named constants, one per stage, each used exactly once", () => {
+    /* TWO ratios and not one: the plan's rail carries as much as its main
+       column, the stage's rail is a strip beside a canvas. What must not
+       come back is the LITERAL — a screen picking its own ratio is how the
+       rail changed width under the person between step 1 and step 2. */
+    const plan = SOURCE.match(/const PLAN_COLUMNS = "([^"]+)"/);
+    const stage = SOURCE.match(/const STAGE_COLUMNS = "([^"]+)"/);
+    expect(plan, "PLAN_COLUMNS must be declared in MeetingPage.tsx").not.toBeNull();
+    expect(stage, "STAGE_COLUMNS must be declared in MeetingPage.tsx").not.toBeNull();
+    expect(plan![1]).toBe("lg:grid-cols-[1.5fr_1fr]");
+    expect(stage![1]).toBe("lg:grid-cols-[4fr_1fr]");
+    expect(SOURCE.match(/\$\{PLAN_COLUMNS\}/g) ?? []).toHaveLength(1);
+    expect(SOURCE.match(/\$\{STAGE_COLUMNS\}/g) ?? []).toHaveLength(1);
   });
 
   it("leaves no hand-written column ratio behind to disagree with them", () => {
@@ -43,7 +48,9 @@ describe("the meeting's two columns", () => {
        the very string this searches for, so a scan of the whole file reports
        the one line that is CORRECT and fires on every green tree. It failed
        exactly that way on its first run. */
-    const corpus = SOURCE.replace(/const MEETING_COLUMNS = "[^"]+";/, "");
+    const corpus = SOURCE
+      .replace(/const PLAN_COLUMNS = "[^"]+";/, "")
+      .replace(/const STAGE_COLUMNS = "[^"]+";/, "");
     const literals = corpus.match(/"[^"]*lg:grid-cols-\[[^\]]+\][^"]*"/g) ?? [];
     expect(literals, `hand-written column ratios: ${literals.join(" | ")}`).toHaveLength(0);
   });

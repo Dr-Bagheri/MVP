@@ -193,10 +193,30 @@ insert into auth.users (id, email)
 values ('09000000-0000-4000-8000-000000000009', 'frank@example.com');
 
 set local role echo_app;
-select t.denied(
-  $$select echo.register_account(
-      '09000000-0000-4000-8000-000000000009', 'frank@example.com', 'فرانک')$$,
-  'a bare registration founds NOTHING — the everyone-arrives-as-owner door is closed (0082)');
+-- 0150: a bare registration is the ORDINARY path now — it lands somewhere
+-- rather than being refused for want of a setting. What 0082 was protecting
+-- is unchanged and is what gets asserted: it FOUNDS nothing and it does not
+-- arrive as an owner. (The refusal it used to raise was the means, not the
+-- rule; pinning the means is how a test outlives its own reason.)
+select t.ok(
+  (select count(*)::int from echo.org) = (
+    with before as (select count(*)::int as n from echo.org),
+         made as (select echo.register_account(
+           '09000000-0000-4000-8000-000000000009', 'frank@example.com', 'فرانک'))
+    select n from before, made),
+  '0150: a bare registration creates NO organization — founding is still gone');
+-- the READ drops to owner altitude on purpose: app_user is behind RLS and
+-- echo_app with no actor set sees nothing, so asking the question from here
+-- would answer "no such row" for a row that exists (rule 11's counting
+-- corollary — "I cannot see any" is not "there are none").
+reset role;
+select t.ok(
+  (select role::text || '/' || status::text from echo.app_user
+    where id = '09000000-0000-4000-8000-000000000009') = 'member/pending',
+  '0150: and it arrives as a PENDING MEMBER — the owner accepts from the console');
+delete from echo.app_user where id = '09000000-0000-4000-8000-000000000009';
+
+set local role echo_app;
 select t.denied(
   $$select echo.register_account(
       '09000000-0000-4000-8000-000000000009', 'frank@example.com', 'فرانک',

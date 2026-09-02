@@ -407,11 +407,17 @@ export function createMembersRepo(db: Db) {
            * to "check the name with your admin" when they were never asked
            * for a name sends them looking for a mistake they did not make.
            */
+          /*
+           * A bare registration cannot reach here any more (0150 falls back
+           * to the oldest active org, so the door is never shut for want of
+           * a setting) — unless the platform has no active organization at
+           * all, which is a different sentence and a different fix.
+           */
           throw (input.orgName?.trim() || input.joinOrg)
             ? new ValidationError("no such organization — check the name with your admin",
                 { code: "org_not_found" })
-            : new ValidationError("this platform is not accepting new members yet",
-                { code: "signups_closed" });
+            : new ValidationError("this platform has no organization to join yet",
+                { code: "no_organization" });
         }
         if (pg.code === "21000") {
           // 0082's ambiguity refusal: two active orgs share the name, so

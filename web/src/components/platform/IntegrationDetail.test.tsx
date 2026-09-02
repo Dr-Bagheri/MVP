@@ -12,7 +12,7 @@ import type { ConnectorItem, ConnectorStatus } from "@/api/types";
  *    mis-click — so the wire call is asserted absent until the dialog's own
  *    confirm, and present after;
  *  - Drive on a pre-Drive grant must be an offer, not an error — and the
- *    can_drive:true, can_meet: true control is what separates "the prompt appears when it
+ *    can_drive:true control is what separates "the prompt appears when it
  *    should" from "the prompt appears always".
  */
 let CONNECTORS: ConnectorStatus[] = [];
@@ -25,7 +25,7 @@ const GOOGLE: ConnectorStatus = {
   account_label: "amir@example.test",
   expires_at: "2026-12-01T00:00:00.000Z",
   can_draft: true,
-  can_drive: true, can_meet: true,
+  can_drive: true,
   polled_at: "2026-08-28T07:15:00.000Z",
   messages_seen: 65,
 };
@@ -142,7 +142,7 @@ describe("the integration detail page", () => {
    * for a listing the grant cannot serve.
    */
   it("offers reconnect on a pre-Drive grant and fetches nothing; the full grant fetches", async () => {
-    CONNECTORS = [{ ...GOOGLE, can_drive: false, can_meet: false }];
+    CONNECTORS = [{ ...GOOGLE, can_drive: false }];
     await act(async () => { render(<IntegrationDetail slug="google-drive" />); });
 
     expect(await screen.findByText("برای دسترسی به درایو دوباره وصل شوید")).toBeTruthy();

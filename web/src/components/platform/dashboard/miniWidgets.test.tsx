@@ -229,7 +229,7 @@ describe("the connections tile", () => {
       account_label: "amir@example.test",
       expires_at: null,
       can_draft: true,
-      can_drive: true, can_meet: true,
+      can_drive: true,
       polled_at: null,
       messages_seen: 0,
     }];

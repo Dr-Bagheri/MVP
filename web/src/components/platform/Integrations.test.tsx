@@ -39,7 +39,7 @@ const GOOGLE: ConnectorStatus = {
   account_label: "amir@example.test",
   expires_at: "2026-12-01T00:00:00.000Z",
   can_draft: true,
-  can_drive: true, can_meet: true,
+  can_drive: true,
   polled_at: POLLED,
   messages_seen: 65,
 };
@@ -208,7 +208,7 @@ describe("the integrations page", () => {
       account_label: null,
       expires_at: null,
       can_draft: false,
-      can_drive: false, can_meet: false,
+      can_drive: false,
       polled_at: null,
       messages_seen: 0,
     }];
@@ -232,7 +232,7 @@ describe("the integrations page", () => {
       account_label: null,
       expires_at: null,
       can_draft: false,
-      can_drive: false, can_meet: false,
+      can_drive: false,
       polled_at: null,
       messages_seen: 0,
     }];
@@ -260,7 +260,7 @@ describe("the integrations page", () => {
       account_label: null,
       expires_at: null,
       can_draft: false,
-      can_drive: false, can_meet: false,
+      can_drive: false,
       polled_at: null,
       messages_seen: 0,
     }];
@@ -284,11 +284,11 @@ describe("the integrations page", () => {
   /**
    * Drive on a grant that predates the scope: connected-and-cannot-list is
    * an OFFER to reconnect, never an error — and never a silent hole. The
-   * control (can_drive: true, can_meet: true) is what distinguishes "the prompt appears
+   * control (can_drive: true) is what distinguishes "the prompt appears
    * when it should" from "the prompt appears always".
    */
   it("offers reconnect-for-Drive on a pre-Drive grant, and not on a full one", async () => {
-    CONNECTORS = [{ ...GOOGLE, can_drive: false, can_meet: false }];
+    CONNECTORS = [{ ...GOOGLE, can_drive: false }];
     await act(async () => { render(<Integrations />); });
 
     // the offer, on the Drive tile

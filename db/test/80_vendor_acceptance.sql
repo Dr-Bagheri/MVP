@@ -18,11 +18,24 @@ insert into auth.users (id, email)
 values ('0f000000-0000-4000-8000-00000000000f', 'founder@example.com');
 
 set local role echo_app;
-select t.denied(
-  $$select echo.register_account(
-      '0f000000-0000-4000-8000-00000000000f', 'founder@example.com', 'بنیان‌گذار')$$,
-  'registering without an org name is REFUSED — nobody founds an org (and becomes '
-  'its owner) by signing up any more (0082)');
+-- 0150 lets the bare registration through; what it must NOT do is make an
+-- org or an owner, which is the whole of 0082's ruling. Asserting the
+-- refusal instead would pin the MECHANISM, which goes red the day the
+-- mechanism changes — so assert the two facts the ruling is about.
+select t.ok(
+  (select count(*)::int from echo.org) = (
+    with before as (select count(*)::int as n from echo.org),
+         made as (select echo.register_account(
+           '0f000000-0000-4000-8000-00000000000f', 'founder@example.com', 'بنیان‌گذار'))
+    select n from before, made),
+  '0150: signing up founds no organization (0082 unchanged)');
+-- owner altitude to READ: app_user is behind RLS and this role has no actor
+reset role;
+select t.ok(
+  (select role::text from echo.app_user where id = '0f000000-0000-4000-8000-00000000000f') = 'member',
+  '0150: and mints no owner — owners are made in the console');
+delete from echo.app_user where id = '0f000000-0000-4000-8000-00000000000f';
+set local role echo_app;
 
 -- Hand-seed 0f as an ACTIVE OWNER of a fresh org, at owner altitude — the
 -- exact shape platform_create_org + a console owner-promotion produce, which

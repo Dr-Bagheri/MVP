@@ -2,12 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { api, BffError } from "@/api/client";
 import type { MeetingRecord } from "@/api/types";
 import { Whiteboard } from "./Whiteboard";
-import {
-  IconCopy, IconOpen, IconPencil, IconPlus, IconResize, IconUpload, IconVideo,
-} from "@/components/icons";
+import { MeetingRoom } from "./Room";
+import { IconPencil, IconResize, IconUpload, IconVideo } from "@/components/icons";
 import { formatClock } from "@/lib/format";
 
 /**
@@ -16,12 +14,9 @@ import { formatClock } from "@/lib/format";
  * the recording state plus the fullscreen grip on the other, and the
  * surface itself below.
  *
- *   ویدیو    the meeting's video ROOM. They run their own; we mint a real
- *            Google Meet through the org's existing calendar grant and
- *            store it on the row. Meet refuses to be framed (that is
- *            Google's header, not our choice), so the room is a join card
- *            in the middle of the stage rather than an inline picture —
- *            the honest maximum, and it is a working room.
+ *   ویدیو    the meeting's video ROOM, rendered IN the box. See Room.tsx
+ *            for why it is not a Google Meet: Google refuses to be framed,
+ *            so a Meet link could only ever open a window.
  *   وایت‌برد  the canvas.
  *   ارائه     a PDF, presented. The file is read in the browser and shown
  *            here; it is not uploaded anywhere, which the footer says
@@ -29,11 +24,11 @@ import { formatClock } from "@/lib/format";
  */
 type Mode = "video" | "board" | "slides";
 
-export function MeetingStage({ meeting, recordingLive, recordedMs, onChanged }: {
+export function MeetingStage({ meeting, recordingLive, recordedMs, displayName }: {
   meeting: MeetingRecord;
   recordingLive: boolean;
   recordedMs: number;
-  onChanged: (m: MeetingRecord) => void;
+  displayName: string;
 }) {
   const t = useTranslations("meetings");
   const locale = useLocale();
@@ -47,26 +42,12 @@ export function MeetingStage({ meeting, recordingLive, recordedMs, onChanged }: 
    */
   const video = meeting.mode === "online";
   const [mode, setMode] = useState<Mode>(video ? "video" : "board");
-  const [minting, setMinting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [pdf, setPdf] = useState<{ url: string; name: string } | null>(null);
   const pdfInput = useRef<HTMLInputElement | null>(null);
   const shell = useRef<HTMLDivElement | null>(null);
 
   /* the object URL is a handle on memory: it goes when the file does */
   useEffect(() => () => { if (pdf !== null) URL.revokeObjectURL(pdf.url); }, [pdf]);
-
-  const mintRoom = () => {
-    setMinting(true);
-    setError(null);
-    void api.createMeetingRoom(meeting.id)
-      .then((m) => { setMinting(false); onChanged(m); })
-      .catch((e: unknown) => {
-        setMinting(false);
-        setError(e instanceof BffError && e.code === "meet_scope_missing"
-          ? t("roomScopeMissing") : t("roomFailed"));
-      });
-  };
 
   const modeChip = (key: Mode, label: string, icon: React.ReactNode) => (
     <button
@@ -84,10 +65,17 @@ export function MeetingStage({ meeting, recordingLive, recordedMs, onChanged }: 
   );
 
   return (
-    <div ref={shell} className="flex min-h-0 flex-col gap-2">
+    /*
+     * ONE BOX. The header and the surface share a border, so the recording
+     * light belongs to the whiteboard rather than floating above it — which
+     * is what "include the recording light in the whole box" was asking for,
+     * and how the reference reads: the thing that is being recorded and the
+     * lamp saying so are the same object.
+     */
+    <div ref={shell} className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-border bg-surface">
       {/* ── the stage header ─────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-0.5 rounded-xl border border-border bg-surface p-1">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border p-2">
+        <div className="flex items-center gap-0.5 rounded-xl bg-surface-2 p-1">
           {video ? modeChip("video", t("modeVideo"), <IconVideo width={12} height={12} />) : null}
           {modeChip("board", t("modeBoard"), <IconPencil width={12} height={12} />)}
           {modeChip("slides", t("modeSlides"), <IconUpload width={12} height={12} />)}
@@ -122,70 +110,17 @@ export function MeetingStage({ meeting, recordingLive, recordedMs, onChanged }: 
         </div>
       </div>
 
-      {error !== null ? (
-        <p role="alert" className="rounded-xl border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
-          {error}
-        </p>
-      ) : null}
-
       {/* ── the surface ──────────────────────────────────────────────── */}
-      {mode === "board" ? <Whiteboard meetingId={meeting.id} /> : null}
+      {mode === "board" ? <div className="min-h-0 flex-1"><Whiteboard meetingId={meeting.id} /></div> : null}
 
       {mode === "video" && video ? (
-        <div className="grid min-h-[420px] flex-1 place-items-center overflow-hidden rounded-2xl border border-border bg-fg/95 p-6">
-          {meeting.video_url === null ? (
-            <div className="max-w-sm text-center">
-              <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-bg/10 text-bg" aria-hidden>
-                <IconVideo width={24} height={24} />
-              </span>
-              <p className="mt-3 text-sm leading-6 text-bg/80">{t("noRoomYet")}</p>
-              <button
-                type="button"
-                onClick={mintRoom}
-                disabled={minting}
-                className="tap mx-auto mt-4 flex h-10 items-center gap-2 rounded-xl bg-accent px-4 text-sm font-semibold text-on-accent disabled:opacity-60"
-              >
-                <IconPlus width={14} height={14} />
-                {minting ? t("roomMinting") : t("createRoom")}
-              </button>
-              <p className="mt-2 text-[11px] leading-5 text-bg/50">{t("roomNote")}</p>
-            </div>
-          ) : (
-            <div className="w-full max-w-md text-center">
-              <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-accent text-on-accent" aria-hidden>
-                <IconVideo width={24} height={24} />
-              </span>
-              <p className="mt-3 text-sm font-semibold text-bg">{t("roomReady")}</p>
-              <p className="mt-1 break-all rounded-xl bg-bg/10 px-3 py-2 text-[11px] text-bg/70" dir="ltr">
-                {meeting.video_url}
-              </p>
-              <div className="mt-3 flex justify-center gap-2">
-                <a
-                  href={meeting.video_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="tap flex h-10 items-center gap-2 rounded-xl bg-accent px-4 text-sm font-semibold text-on-accent"
-                >
-                  <IconOpen width={14} height={14} />
-                  {t("joinRoom")}
-                </a>
-                <button
-                  type="button"
-                  onClick={() => void navigator.clipboard?.writeText(meeting.video_url ?? "").catch(() => undefined)}
-                  className="tap flex h-10 items-center gap-2 rounded-xl border border-bg/20 px-4 text-sm font-medium text-bg"
-                >
-                  <IconCopy width={14} height={14} />
-                  {t("copyRoom")}
-                </button>
-              </div>
-              <p className="mt-3 text-[11px] leading-5 text-bg/50">{t("roomRecordNote")}</p>
-            </div>
-          )}
-        </div>
+        /* the room lives HERE, in the box — a Google Meet link could only
+           ever open a window, because Google refuses to be framed */
+        <MeetingRoom meetingId={meeting.id} displayName={displayName} videoUrl={meeting.video_url} />
       ) : null}
 
       {mode === "slides" ? (
-        <div className="flex min-h-[420px] flex-1 flex-col overflow-hidden rounded-2xl border border-border bg-surface">
+        <div className="flex min-h-[420px] flex-1 flex-col overflow-hidden">
           <div className="flex items-center justify-between gap-2 border-b border-border p-2">
             <button
               type="button"

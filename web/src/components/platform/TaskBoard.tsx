@@ -61,7 +61,10 @@ export function TaskBoard() {
   const [topic, setTopic] = useState<string>("all");
   const [me, setMe] = useState<{ id: string } | null>(null);
 
-  const [creating, setCreating] = useState(false);
+  /* the COLUMN the new-card form was opened from — null when closed. A
+     boolean would have lost which column was pressed, which is the whole
+     reason the button moved into the column. */
+  const [creating, setCreating] = useState<string | null>(null);
   const [openTask, setOpenTask] = useState<TaskDetailRecord | null>(null);
   const [condemnedColumn, setCondemnedColumn] = useState<TaskColumnRecord | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -202,14 +205,6 @@ export function TaskBoard() {
             {t("dueTodayFilter")}
           </button>
         </div>
-        <button
-          type="button"
-          onClick={() => setCreating(true)}
-          className="tap flex h-10 items-center gap-2 rounded-xl bg-accent px-4 text-sm font-semibold text-on-accent shadow-accent hover:opacity-90"
-        >
-          <IconPlus width={14} height={14} />
-          {t("newTask")}
-        </button>
       </div>
 
       {/* ── the topic row ────────────────────────────────────────────── */}
@@ -392,29 +387,25 @@ export function TaskBoard() {
                     onToggleDone={(done) => void patchTask(task.id, { done })}
                   />
                 ))}
-                <AddCardInline
-                  columnId={col.id}
-                  {...(topic !== "all" && topic !== "none" ? { topicId: topic } : {})}
-                  onAdded={load}
-                  onRefused={refusal}
-                />
+                {/* the full form, opened FROM the column — a card is made
+                    where it is going to live, and the board no longer carries
+                    a separate «تسک جدید» that had to be told the column */}
+                <button
+                  type="button"
+                  onClick={() => setCreating(col.id)}
+                  className="tap flex h-9 w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border text-xs text-fg-muted hover:border-border-strong hover:text-fg"
+                >
+                  <IconPlus width={12} height={12} />
+                  {t("addCard")}
+                </button>
               </div>
             </section>
           ))}
 
-          <button
-            type="button"
-            onClick={() => {
-              const name = window.prompt(t("newColumnPrompt"));
-              if (name !== null && name.trim() !== "") {
-                void api.createTaskColumn(name.trim()).then(load).catch(refusal);
-              }
-            }}
-            className="tap flex h-14 w-[220px] shrink-0 items-center justify-center gap-2 rounded-2xl border border-dashed border-border text-sm text-fg-muted hover:text-fg"
-          >
-            <IconPlus width={14} height={14} />
-            {t("addColumn")}
-          </button>
+          {/* a window.prompt is the browser's dialog, not ours — and it was
+              the one place on this board that still looked like somebody
+              else's product. Same inline shape as adding a card. */}
+          <AddColumnInline onAdded={load} onRefused={refusal} />
         </div>
       ) : null}
 
@@ -458,15 +449,15 @@ export function TaskBoard() {
             )
       ) : null}
 
-      {creating ? (
+      {creating !== null ? (
         <NewTaskDialog
           columns={board.columns}
           topics={board.topics}
           labels={labels}
-          defaultColumnId={board.columns[0]?.id ?? null}
+          defaultColumnId={creating}
           defaultTopicId={topic !== "all" && topic !== "none" ? topic : null}
-          onClose={() => setCreating(false)}
-          onCreated={() => { setCreating(false); load(); }}
+          onClose={() => setCreating(null)}
+          onCreated={() => { setCreating(null); load(); }}
           onLabelsChanged={loadLabels}
         />
       ) : null}
@@ -587,20 +578,26 @@ function Card({ task, labels, onOpen, onToggleDone }: {
 }
 
 /** the reference's foot-of-column composer: type, Enter, it lands on top */
-function AddCardInline({ columnId, topicId, onAdded, onRefused }: {
-  columnId: string; topicId?: string; onAdded: () => void; onRefused: () => void;
+/**
+ * ADDING A COLUMN, written the way adding a card is (user directive).
+ *
+ * It replaced a `window.prompt`, which is the browser's dialog and not
+ * ours — the one control on this board that still looked like somebody
+ * else's product, with somebody else's typeface and somebody else's buttons.
+ * This is the same anatomy as the card adder it sits beside: a dashed
+ * invitation that becomes a field with cancel and add.
+ */
+function AddColumnInline({ onAdded, onRefused }: {
+  onAdded: () => void; onRefused: () => void;
 }) {
   const t = useTranslations("tasks");
   const [open, setOpen] = useState(false);
-  const [title, setTitle] = useState("");
+  const [name, setName] = useState("");
 
   const add = () => {
-    if (title.trim() === "") { setOpen(false); return; }
-    void api.createTask({
-      title: title.trim(), column_id: columnId,
-      ...(topicId !== undefined ? { topic_id: topicId } : {}),
-    })
-      .then(() => { setTitle(""); setOpen(false); onAdded(); })
+    if (name.trim() === "") { setOpen(false); return; }
+    void api.createTaskColumn(name.trim())
+      .then(() => { setName(""); setOpen(false); onAdded(); })
       .catch(onRefused);
   };
 
@@ -609,32 +606,32 @@ function AddCardInline({ columnId, topicId, onAdded, onRefused }: {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="tap flex h-9 w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border text-xs text-fg-muted hover:text-fg"
+        className="tap flex h-14 w-[220px] shrink-0 items-center justify-center gap-2 rounded-2xl border border-dashed border-border text-sm text-fg-muted hover:border-border-strong hover:text-fg"
       >
-        <IconPlus width={12} height={12} />
-        {t("addCard")}
+        <IconPlus width={14} height={14} />
+        {t("addColumn")}
       </button>
     );
   }
   return (
-    <div className="rounded-xl border border-accent bg-surface p-2">
+    <div className="w-[220px] shrink-0 rounded-2xl border border-accent bg-surface p-2">
       <input
         autoFocus
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
+        value={name}
+        onChange={(e) => setName(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === "Enter") add();
-          if (e.key === "Escape") { setTitle(""); setOpen(false); }
+          if (e.key === "Escape") { setName(""); setOpen(false); }
         }}
-        placeholder={t("cardTitlePlaceholder")}
+        placeholder={t("columnNamePlaceholder")}
         className="h-8 w-full bg-transparent text-sm text-fg outline-none placeholder:text-fg-subtle"
       />
       <div className="mt-1.5 flex justify-end gap-1.5">
-        <button type="button" onClick={() => { setTitle(""); setOpen(false); }}
+        <button type="button" onClick={() => { setName(""); setOpen(false); }}
           className="tap h-7 rounded-lg px-2 text-[11px] text-fg-muted hover:text-fg">
           {t("cancel")}
         </button>
-        <button type="button" onClick={add} disabled={title.trim() === ""}
+        <button type="button" onClick={add} disabled={name.trim() === ""}
           className="tap h-7 rounded-lg bg-accent px-2.5 text-[11px] font-semibold text-on-accent disabled:opacity-50">
           {t("add")}
         </button>

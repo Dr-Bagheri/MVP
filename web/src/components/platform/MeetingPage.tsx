@@ -3,12 +3,13 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/routing";
-import { api, BffError } from "@/api/client";
+import { api } from "@/api/client";
 import type { Call, CallNote, Me, MeetingAgendaItem, MeetingRecord } from "@/api/types";
 import { useCrumbTitle } from "@/components/platform/CrumbTitle";
 import { ConfirmDialog } from "@/components/rowActions";
 import { AgendaEditor, InviteeInput, MODE_ICON } from "./Meetings";
 import { MeetingStage } from "./meeting/Stage";
+import { roomIsOurs, roomUrl } from "./meeting/Room";
 import { AudioBar, ExtractionPanel, ProcessingCard, TranscriptPanel } from "./meeting/Review";
 import { MinutesTab } from "./meeting/Minutes";
 import { MeetingTasksBoard } from "./meeting/MiniTasks";
@@ -48,8 +49,22 @@ import { digits, formatClock, formatDate, formatDuration, formatTime, personName
 
 type Stage = "pre" | "hold" | "post";
 
-/** the meeting's two columns — see the note at PreStage's return */
-const MEETING_COLUMNS = "lg:grid-cols-[1.5fr_1fr]";
+/**
+ * The meeting's two columns — TWO ratios, because the two stages are not the
+ * same screen, and the reference product uses two as well.
+ *
+ * On the PLAN the rail carries as much as the main column does (the holding
+ * mode, the invitees), so they sit near each other: 604.797 / 403.203 on
+ * their own page, exactly 3:2.
+ *
+ * On the STAGE the main column is a whiteboard or a live room — the thing
+ * the meeting IS — and the rail is a strip of small controls beside it. Held
+ * at 3:2 the canvas is cramped and the rail is mostly air, which is what
+ * "a bigger box for the whiteboard or video, smaller for other" was pointing
+ * at. Measured on their stage: 1270 / 330, near enough to 4:1.
+ */
+const PLAN_COLUMNS = "lg:grid-cols-[1.5fr_1fr]";
+const STAGE_COLUMNS = "lg:grid-cols-[4fr_1fr]";
 type PostTab = "review" | "tasks" | "files" | "assistant" | "notes" | "minutes";
 
 export function MeetingPage({ id }: { id: string }) {
@@ -394,7 +409,7 @@ export function MeetingPage({ id }: { id: string }) {
       ) : null}
 
       {active === "pre" ? (
-        <PreStage meeting={meeting} onPatch={patch} locale={locale} onChanged={(m) => setMeeting(m)} />
+        <PreStage meeting={meeting} onPatch={patch} locale={locale} />
       ) : null}
       {active === "hold" ? (
         <HoldStage
@@ -403,7 +418,6 @@ export function MeetingPage({ id }: { id: string }) {
           locale={locale}
           recordingLive={recordingLive}
           recordedMs={engine.recordedMs}
-          onChanged={(m) => setMeeting(m)}
         />
       ) : null}
       {active === "post" ? (
@@ -422,16 +436,13 @@ export function MeetingPage({ id }: { id: string }) {
 }
 
 /* ═══ پیش از جلسه — the reference's plan cards ═══════════════════════════ */
-function PreStage({ meeting, onPatch, locale, onChanged }: {
+function PreStage({ meeting, onPatch, locale }: {
   meeting: MeetingRecord;
   onPatch: (body: Record<string, unknown>) => void;
   locale: string;
-  onChanged: (m: MeetingRecord) => void;
 }) {
   const t = useTranslations("meetings");
   const [editing, setEditing] = useState(false);
-  const [minting, setMinting] = useState(false);
-  const [roomError, setRoomError] = useState<string | null>(null);
   const totalMinutes = meeting.agenda.reduce((sum, item) => sum + (item.minutes ?? 0), 0);
 
   return (
@@ -439,7 +450,7 @@ function PreStage({ meeting, onPatch, locale, onChanged }: {
        share `MEETING_COLUMNS`, so the rail does not change width under the
        person as they walk from step 1 to step 2. The ratio is the reference
        product's own, measured on its pre page: 604.8 / 403.2 = 3:2. */
-    <div className={`grid items-start gap-4 ${MEETING_COLUMNS}`}>
+    <div className={`grid items-start gap-4 ${PLAN_COLUMNS}`}>
       <div className="space-y-4">
         {/* مشخصات جلسه */}
         <section className="tile p-4" aria-label={t("detailsTitle")}>
@@ -504,55 +515,25 @@ function PreStage({ meeting, onPatch, locale, onChanged }: {
           </header>
           <p className="text-xs leading-5 text-fg-muted">{t(`modeExplain_${meeting.mode}`)}</p>
           {meeting.mode === "online" ? (
-            meeting.video_url !== null ? (
-              <div className="mt-2.5 space-y-2">
-                <p className="truncate rounded-xl border border-border bg-surface-2/60 px-3 py-2 text-[11px] text-fg-muted" dir="ltr">
-                  {meeting.video_url}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => void navigator.clipboard?.writeText(meeting.video_url ?? "").catch(() => undefined)}
-                  className="tap flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-border bg-surface text-xs font-medium text-fg hover:bg-border"
-                >
-                  <IconCopy width={12} height={12} />
-                  {t("copyRoom")}
-                </button>
-              </div>
-            ) : (
-              /* the room is made HERE, where the link is looked for — the
-                 stage offers the same button, and neither makes one behind
-                 the person's back: this writes an event to their calendar */
-              <div className="mt-2.5 space-y-2">
-                <button
-                  type="button"
-                  disabled={minting}
-                  onClick={() => {
-                    setMinting(true);
-                    setRoomError(null);
-                    void api.createMeetingRoom(meeting.id)
-                      .then((m) => { setMinting(false); onChanged(m); })
-                      .catch((e: unknown) => {
-                        setMinting(false);
-                        /* WHICH refusal: a connection that predates the write
-                           scope is connected and cannot make a room, and told
-                           the generic sentence a person goes to check a
-                           connection that is working */
-                        setRoomError(e instanceof BffError && e.code === "meet_scope_missing"
-                          ? t("roomScopeMissing") : t("roomFailed"));
-                      });
-                  }}
-                  className="tap flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-accent text-xs font-semibold text-on-accent disabled:opacity-60"
-                >
-                  <IconPlus width={12} height={12} />
-                  {minting ? t("roomMinting") : t("createRoom")}
-                </button>
-                {roomError !== null ? (
-                  <p role="alert" className="text-[11px] leading-5 text-danger">{roomError}</p>
-                ) : (
-                  <p className="text-[11px] leading-5 text-fg-subtle">{t("roomNote")}</p>
-                )}
-              </div>
-            )
+            /* the room is DERIVED from the meeting, so there is nothing to
+               create and nothing that can fail — the link is true the moment
+               the meeting exists, and it is the same one the stage opens */
+            <div className="mt-2.5 space-y-2">
+              <p className="truncate rounded-xl border border-border bg-surface-2/60 px-3 py-2 text-[11px] text-fg-muted" dir="ltr">
+                {roomUrl(meeting.id)}
+              </p>
+              <button
+                type="button"
+                onClick={() => void navigator.clipboard?.writeText(roomUrl(meeting.id)).catch(() => undefined)}
+                className="tap flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-border bg-surface text-xs font-medium text-fg hover:bg-border"
+              >
+                <IconCopy width={12} height={12} />
+                {t("copyRoom")}
+              </button>
+              <p className="text-[11px] leading-5 text-fg-subtle">
+                {roomIsOurs() ? t("roomOnOurServer") : t("roomOnPublicInstance")}
+              </p>
+            </div>
           ) : null}
         </section>
 
@@ -657,13 +638,12 @@ function EditMeetingDialog({ meeting, onPatch, onClose }: {
 
 /* ═══ برگزاری — the live room: engine in the background, whiteboard in
        front ═══════════════════════════════════════════════════════════════ */
-function HoldStage({ meeting, me, locale, recordingLive, recordedMs, onChanged }: {
+function HoldStage({ meeting, me, locale, recordingLive, recordedMs }: {
   meeting: MeetingRecord;
   me: Me | null;
   locale: string;
   recordingLive: boolean;
   recordedMs: number;
-  onChanged: (m: MeetingRecord) => void;
 }) {
   const t = useTranslations("meetings");
   const [noteDraft, setNoteDraft] = useState("");
@@ -694,13 +674,13 @@ function HoldStage({ meeting, me, locale, recordingLive, recordedMs, onChanged }
   };
 
   return (
-    <div className={`grid min-h-0 flex-1 gap-4 ${MEETING_COLUMNS}`}>
+    <div className={`grid min-h-0 flex-1 gap-4 ${STAGE_COLUMNS}`}>
       {/* the stage — the reference puts the media on the START side */}
       <MeetingStage
         meeting={meeting}
         recordingLive={recordingLive}
         recordedMs={recordedMs}
-        onChanged={onChanged}
+        displayName={me === null ? "" : personName(me, locale)}
       />
 
       {/* self-start: a grid item stretches by default, and `.tile` sets
