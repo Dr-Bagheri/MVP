@@ -5,6 +5,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/routing";
 import type { User } from "@/api/types";
 import { personName } from "@/lib/format";
+import { Select } from "@/components/Select";
 import {
   saveCalendarPreference,
   saveTimezonePreference,
@@ -199,42 +200,37 @@ export function AvatarMenu({ me, isPlatformRoot = false }: { me: User | null; is
             <div className="mt-1 space-y-2">
                 <label className="block">
                   <span className="mb-1 block text-[11px] text-fg-muted">{t("calendar")}</span>
-                  <select
-                    // h-11 rather than .tap: a <select> is a replaced element
-                    // and renders no ::after, so .tap would sit there looking
-                    // satisfied while the target stayed its visual size
-                    className="input h-11 min-h-0 text-xs md:h-9"
+                  <Select
                     value={calendar}
-                    onChange={(e) => {
+                    ariaLabel={t("calendar")}
+                    onChange={(value) => {
                       setSaveFailed(false);
-                      void saveCalendarPreference(e.target.value as CalendarPreference).catch(() =>
+                      void saveCalendarPreference(value as CalendarPreference).catch(() =>
                         setSaveFailed(true),
                       );
                     }}
-                  >
-                    <option value="auto">{t("calendarAuto")}</option>
-                    <option value="jalali">{t("calendarJalali")}</option>
-                    <option value="gregorian">{t("calendarGregorian")}</option>
-                  </select>
+                    options={[
+                      { value: "auto", label: t("calendarAuto") },
+                      { value: "jalali", label: t("calendarJalali") },
+                      { value: "gregorian", label: t("calendarGregorian") },
+                    ]}
+                  />
                 </label>
 
                 <label className="block">
                   <span className="mb-1 block text-[11px] text-fg-muted">{t("timezone")}</span>
-                  <select
-                    className="input h-11 min-h-0 text-xs md:h-9"
+                  <Select
                     value={timezone}
-                    onChange={(e) => {
+                    ariaLabel={t("timezone")}
+                    onChange={(value) => {
                       setSaveFailed(false);
-                      void saveTimezonePreference(e.target.value).catch(() => setSaveFailed(true));
+                      void saveTimezonePreference(value).catch(() => setSaveFailed(true));
                     }}
-                  >
-                    <option value="auto">{t("timezoneAuto")}</option>
-                    {TIMEZONES.map((zone) => (
-                      <option key={zone} value={zone}>
-                        {zone}
-                      </option>
-                    ))}
-                  </select>
+                    options={[
+                      { value: "auto", label: t("timezoneAuto") },
+                      ...TIMEZONES.map((zone) => ({ value: zone, label: zone })),
+                    ]}
+                  />
                 </label>
 
                 {/* the control still shows the OLD value, which is true — this

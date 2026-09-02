@@ -409,7 +409,7 @@ export function NewTaskDialog({ columns, topics, labels, defaultColumnId, defaul
   };
 
   return (
-    <Overlay onClose={onClose} label={t("newTask")} wide>
+    <Overlay onClose={onClose} label={t("newTask")} size="md">
       <div className="mb-1 flex items-start justify-between gap-3">
         <div>
           <h2 className="text-base font-bold text-fg">{t("newTask")}</h2>

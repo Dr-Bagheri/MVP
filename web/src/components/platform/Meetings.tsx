@@ -7,6 +7,7 @@ import { useRouter } from "@/i18n/routing";
 import { api } from "@/api/client";
 import type { MeetingAgendaItem, MeetingMode, MeetingRecord } from "@/api/types";
 import { Overlay } from "./Overlay";
+import { Select } from "@/components/Select";
 import {
   IconArchive, IconCalendar, IconCheck, IconChevronRight, IconClose, IconDots,
   IconFolder, IconMic, IconPlus, IconTrash, IconUpload, IconVideo,
@@ -606,23 +607,27 @@ function NewMeetingDialog({ topics, onClose, onCreated, onRefused }: {
           </Field>
         </div>
         <Field label={t("fieldTopicFolder")}>
-          <select
+          <Select
             value={topic}
-            onChange={(e) => {
-              if (e.target.value === "__new__") {
+            ariaLabel={t("fieldTopicFolder")}
+            onChange={(value) => {
+              if (value === "__new__") {
                 const name = window.prompt(t("newTopicPrompt"));
                 setTopic(name === null ? "" : name.trim().slice(0, 120));
                 return;
               }
-              setTopic(e.target.value);
+              setTopic(value);
             }}
-            className={INPUT}
-          >
-            <option value="">{t("noTopic")}</option>
-            {topics.map((name) => <option key={name} value={name}>{name}</option>)}
-            {topic !== "" && !topics.includes(topic) ? <option value={topic}>{topic}</option> : null}
-            <option value="__new__">{t("newTopicOption")}</option>
-          </select>
+            options={[
+              { value: "", label: t("noTopic") },
+              ...topics.map((name) => ({ value: name, label: name })),
+              /* a topic typed a moment ago is not in `topics` yet — without
+                 this row the control would show the placeholder for a value
+                 it is actually holding */
+              ...(topic !== "" && !topics.includes(topic) ? [{ value: topic, label: topic }] : []),
+              { value: "__new__", label: t("newTopicOption") },
+            ]}
+          />
         </Field>
         <div>
           <span className="mb-1 block text-xs font-medium text-fg-muted">{t("fieldMode")}</span>

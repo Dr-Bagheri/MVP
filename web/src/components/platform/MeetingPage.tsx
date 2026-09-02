@@ -703,7 +703,11 @@ function HoldStage({ meeting, me, locale, recordingLive, recordedMs, onChanged }
         onChanged={onChanged}
       />
 
-      <div className="space-y-3">
+      {/* self-start: a grid item stretches by default, and `.tile` sets
+          height:100%, so every rail card grew to the whiteboard's height and
+          sat mostly empty. Left to its content the column hugs its cards,
+          which is how the reference's rail reads. */}
+      <div className="space-y-3 self-start">
         {flash !== null ? (
           <p className="rounded-xl bg-accent-soft px-3 py-1.5 text-center text-xs font-medium text-accent">{flash}</p>
         ) : null}
