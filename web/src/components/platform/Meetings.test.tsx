@@ -166,6 +166,28 @@ describe("Meetings", () => {
     expect(updateSpy).toHaveBeenCalledWith("m-a", { topic: null });
   });
 
+  /* THE DESTRUCTIVE ENTRY MUST NAME ITSELF. `deleteMeeting` held the ARCHIVE
+     wording in both locales — a leftover from when the row archived — so the
+     menu showed «بایگانی جلسه» twice and the red one permanently deleted.
+     The confirm dialog's own title said «حذف شود؟», which means the control
+     and its confirmation disagreed about what was about to happen, and only
+     the screen showed it. */
+  it("the row menu's two destructive entries are not the same word", async () => {
+    LIST = [meeting({ id: "m-a", title: "جلسهٔ الف" })];
+    render(<Meetings />);
+    await waitFor(() => expect(screen.getByText("جلسهٔ الف")).toBeInTheDocument());
+    await userEvent.click(screen.getByRole("button", { name: "گزینه‌ها" }));
+
+    const archive = screen.getByRole("button", { name: "بایگانی جلسه" });
+    const remove = screen.getByRole("button", { name: "حذف جلسه" });
+    expect(archive.textContent).not.toBe(remove.textContent);
+
+    // and the confirmation agrees with the button that opened it
+    await userEvent.click(remove);
+    expect(screen.getByText(/حذف شود؟/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "حذف جلسه" })).toBeInTheDocument();
+  });
+
   it("an empty list names its state", async () => {
     render(<Meetings />);
     await waitFor(() =>
