@@ -1,3 +1,4 @@
+import { randomBytes, randomUUID } from "node:crypto";
 /**
  * The /v1 surface (M1: api is one of core/'s two processes).
  *
@@ -19,7 +20,8 @@ import { iso } from "./vocabulary.ts";
 import { assertUuid } from "../db/identity.ts";
 import { createAuditRepo, type AuditRepo } from "./audit.ts";
 import {
-  egressConfig, livekitConfig, mintRoomToken, roomNameFor, startRoomEgress, stopEgress,
+  egressConfig, livekitConfig, mintGuestToken, mintRoomToken, roomNameFor,
+  startRoomEgress, stopEgress,
 } from "./livekit.ts";
 import { createOrgRepo, type OrgRepo } from "./org.ts";
 import { createSessionsRepo, type SessionsRepo } from "./sessions.ts";
@@ -2599,6 +2601,63 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
    * caller has to be able to SEE the meeting before anything is started, and
    * the room name is derived rather than supplied.
    */
+  /**
+   * THE GUEST DOOR — the platform's only unauthenticated endpoint that hands
+   * back a capability (user directive, 2026-09-02: "how should anyone from
+   * outside come to the online meeting").
+   *
+   * The «copy link» button copied the meeting PAGE, which needs an account in
+   * the organisation — so the invite link worked for exactly the people who
+   * did not need one, and an external participant, the ordinary case for a
+   * meeting, was the one case the room could not serve.
+   *
+   * The CODE is the authorisation. What it buys is deliberately tiny: the
+   * room and the meeting's title, so a join screen can say which meeting this
+   * is. Not the organisation, the agenda, the invitees or the call — the SQL
+   * function behind it returns three columns, and that shape is the security
+   * surface rather than a filter anybody here has to remember.
+   */
+  app.post("/v1/join/:code", async (request, reply) => {
+    const config = livekitConfig();
+    if (config === null) {
+      throw new ValidationError("video is not configured on this platform",
+        { code: "video_not_configured" });
+    }
+    const { code } = request.params as { code: string };
+    const body = (request.body ?? {}) as { name?: unknown };
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+    if (name === "" || name.length > 80) {
+      throw new ValidationError("a name is required", { code: "guest_name_required" });
+    }
+    const meeting = await meetings.byJoinCode(code);
+    /* an unknown code and a revoked one answer identically — a door that
+       says "this used to work" tells a stranger there is something here */
+    if (meeting === null) throw new NotFoundError();
+    return reply.send({
+      title: meeting.title,
+      ...mintGuestToken(config, roomNameFor(meeting.id), name, randomUUID()),
+    });
+  });
+
+  /** Mint or revoke a meeting's guest code. Members only; the door checks. */
+  app.put("/v1/meetings/:id/join-code", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { enabled?: unknown };
+    if (typeof body.enabled !== "boolean") {
+      throw new ValidationError("enabled is required", { code: "enabled_required" });
+    }
+    /* 24 lowercase base36 characters from a CSPRNG — the code is the whole
+       wall, so it is generated where the secret material is, never client-side
+       and never from anything sequential */
+    const code = body.enabled
+      ? Array.from(randomBytes(24), (b) => "abcdefghijklmnopqrstuvwxyz0123456789"[b % 36]).join("")
+      : null;
+    await meetings.setJoinCode(identity, id, code);
+    return reply.send({ join_code: code });
+  });
+
   app.post("/v1/meetings/:id/recording", async (request, reply) => {
     const identity = await auth.requireActive(request);
     refuseApiKey(identity);

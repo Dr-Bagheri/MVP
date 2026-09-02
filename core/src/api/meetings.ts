@@ -187,6 +187,30 @@ export function createMeetingsRepo(db: Db) {
     });
   }
 
+  /**
+   * Resolve a GUEST's join code — the one read on this surface that takes no
+   * identity, because a guest has none. The code is the authorisation.
+   *
+   * `withoutIdentity` is the honest spelling and it is why the SQL function
+   * behind it returns three columns: no RLS stands between this and the row,
+   * so the wall is the shape of what the function can return at all. Widening
+   * it would leak an organisation's plans to anybody holding a link.
+   */
+  async function byJoinCode(code: string): Promise<{ id: string; title: string; mode: string } | null> {
+    const rows = await db.withoutIdentity((tx: SqlTx) => tx.unsafe<{
+      meeting_id: string; title: string; mode: string;
+    }>("select * from echo.meeting_by_join_code($1)", [code]));
+    const row = rows[0];
+    return row === undefined ? null : { id: row.meeting_id, title: row.title, mode: row.mode };
+  }
+
+  /** Mint or revoke the guest code. Members-only; the door checks the meeting. */
+  async function setJoinCode(identity: Identity, id: string, code: string | null): Promise<void> {
+    await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe(
+      "select echo.set_meeting_join_code($1, $2)", [id, code],
+    ));
+  }
+
   async function detail(identity: Identity, id: string): Promise<MeetingRecord> {
     return db.withIdentity(identity, async (tx: SqlTx) => {
       const rows = await tx.unsafe<Record<string, unknown>>(
@@ -458,5 +482,8 @@ export function createMeetingsRepo(db: Db) {
     });
   }
 
-  return { list, detail, create, update, remove, topics, createTopic, updateTopic };
+  return {
+    list, detail, create, update, remove, topics, createTopic, updateTopic,
+    byJoinCode, setJoinCode,
+  };
 }

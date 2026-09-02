@@ -2930,6 +2930,14 @@
     "nextMonth": "Next month",
     "hourLabel": "Hour",
     "minuteLabel": "Minute",
-    "videoNotConfigured": "Video is not set up on this platform yet. An administrator adds the LiveKit keys once, and every meeting gets a room."
+    "videoNotConfigured": "Video is not set up on this platform yet. An administrator adds the LiveKit keys once, and every meeting gets a room.",
+    "joinTitle": "Join the meeting",
+    "joinHint": "Enter a name for others to see.",
+    "joinName": "Your name",
+    "joinAction": "Join",
+    "joinRefused": "This link is no longer valid.",
+    "copyGuestLink": "Copy guest link",
+    "guestLinkCopied": "Guest link copied — any earlier link no longer works.",
+    "guestLinkFailed": "The guest link could not be created."
   }
 }

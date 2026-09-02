@@ -1541,6 +1541,18 @@ export const api = {
       headers: { "content-type": "application/json" },
     });
   },
+  /**
+   * Open the meeting to GUESTS, or close it (0158). `true` mints a fresh code
+   * — which also revokes every link already handed out, because that is the
+   * only thing "revoke" can honestly mean for something somebody may have
+   * pasted into a chat.
+   */
+  async setMeetingJoinCode(id: string, enabled: boolean): Promise<{ join_code: string | null }> {
+    return bff(`/api/meetings/${encodeURIComponent(id)}/join-code`, {
+      method: "PUT", body: JSON.stringify({ enabled }),
+      headers: { "content-type": "application/json" },
+    });
+  },
   /** 0148: delete the PLAN — the record it produced is a different row */
   async deleteMeeting(id: string): Promise<void> {
     await bff<null>(`/api/meetings/${encodeURIComponent(id)}`, { method: "DELETE" });

@@ -103,11 +103,21 @@ interface CoreFetchInit extends Omit<RequestInit, "body"> {
   body?: unknown;
   /** Streaming routes (SSE) hand the response back untouched. */
   raw?: boolean;
+  /**
+   * The GUEST door, and nothing else (0158): a route whose authorisation is
+   * the code in its own path, taken by someone who has no account and never
+   * will. Every other route here demands a session, which is why this is an
+   * explicit opt-in rather than a fallback — a missing session must keep
+   * meaning 401, or an auth bug becomes an anonymous call.
+   */
+  anonymous?: boolean;
 }
 
 export async function coreFetch<T>(path: string, init: CoreFetchInit = {}): Promise<T> {
   const session = await readSession();
-  if (!session) throw new CoreError("unauthenticated", 401, "no session");
+  if (!session && init.anonymous !== true) {
+    throw new CoreError("unauthenticated", 401, "no session");
+  }
 
   /*
    * A failed fetch — core/ down, DNS, connection refused — is an UPSTREAM
@@ -125,7 +135,7 @@ export async function coreFetch<T>(path: string, init: CoreFetchInit = {}): Prom
       method: init.method ?? (init.body ? "POST" : "GET"),
       headers: {
         "content-type": "application/json",
-        authorization: `Bearer ${session.accessToken}`,
+        ...(session ? { authorization: `Bearer ${session.accessToken}` } : {}),
         ...(init.headers ?? {}),
       },
       body: init.body === undefined ? undefined : JSON.stringify(init.body),

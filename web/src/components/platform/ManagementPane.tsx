@@ -61,6 +61,9 @@ export function ManagementPane({
   children: ReactNode;
 }) {
   const t = useTranslations("management");
+  /* the label is ECHO's word for it — one vocabulary for one thing,
+     wherever it is read */
+  const tEcho = useTranslations("echo");
 
   /* menu icons (2026-08-24, sana reference) */
   const ICONS: Record<string, ReactNode> = {
@@ -86,11 +89,33 @@ export function ManagementPane({
     })),
   }));
 
+  /*
+   * SPEAKERS lives here now (user directive, 2026-09-02: "speakers from sub
+   * menu change location to the managements, added to the top menu with same
+   * function"). It sat inside Echo, and a voice print is a fact about a
+   * COLLEAGUE rather than about a recording — which is why it belongs beside
+   * the people of the organisation and not beside the takes.
+   *
+   * Cross-homed the way Skills and Models were: the page keeps its address,
+   * so nothing bookmarked breaks and there is still one home per feature.
+   */
+  const withSpeakers: PaneGroup[] = groups.map((group) =>
+    group.key === "people"
+      ? {
+          ...group,
+          items: [
+            ...group.items,
+            { slug: "speakers", href: "/echo/speakers", label: tEcho("section.speakers") },
+          ],
+        }
+      : group,
+  );
+
   return (
     <TwoPane
       navLabel={t("title")}
       heading={t("title")}
-      groups={groups}
+      groups={withSpeakers}
       activeSlug={activeSlug}
     >
       {children}

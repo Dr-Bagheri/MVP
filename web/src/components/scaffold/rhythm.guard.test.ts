@@ -138,6 +138,10 @@ const SHELL_ALLOWED: Readonly<Record<string, string>> = {
     "auth screens render before any shell exists",
   "app/[locale]/error.tsx":
     "the error boundary can mount when the shell itself failed to",
+  "app/[locale]/join/[code]/page.tsx":
+    "the guest door (0158) renders outside PlatformShell — the person here has "
+    + "no account, so every element of the shell would be a door that refuses "
+    + "them; it owns its own document the way the auth screens do",
 };
 
 describe("the shell scroll belongs to the shell", () => {

@@ -6,9 +6,8 @@ import { useRouter } from "@/i18n/routing";
 import { api } from "@/api/client";
 import type { SearchHit } from "@/api/types";
 import { DataTable, type Column } from "@/components/DataTable";
-import { EchoSectionMenu } from "@/components/echo/EchoSectionMenu";
 import { PlatformShell } from "@/components/platform/PlatformShell";
-import { MenuLayout, PageContainer, PageHeader } from "@/components/scaffold";
+import { PageContainer, PageHeader } from "@/components/scaffold";
 import { Card, Chip, EmptyState } from "@/components/ui";
 import { IconCopy, IconOpen } from "@/components/icons";
 import { digits, formatClock, formatDate } from "@/lib/format";
@@ -131,10 +130,13 @@ export default function SearchPage() {
   ];
 
   return (
-    /* search searches the RECORDS, so it wears Echo's menu (user directive,
-       2026-08-25 — reversing 2026-08-18's assistant placement) */
+    /*
+     * NO SECTION MENU. Search wore Echo's, back when Echo's menu had a search
+     * row — and that row is gone: the top bar's field is the door on every
+     * screen now, and a page that opened the menu it left would advertise a
+     * row that no longer exists (user directive, 2026-09-02).
+     */
     <PlatformShell>
-      <MenuLayout menu={<EchoSectionMenu activeSlug="search" />}>
         <PageContainer>
       <PageHeader title={t("title")} subtitle={t("scopeNote")} />
 
@@ -205,7 +207,6 @@ export default function SearchPage() {
         </>
       )}
         </PageContainer>
-      </MenuLayout>
     </PlatformShell>
   );
 }

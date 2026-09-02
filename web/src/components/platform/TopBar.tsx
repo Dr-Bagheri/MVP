@@ -149,7 +149,13 @@ export function TopBar({
               e.preventDefault();
               const q = new FormData(e.currentTarget).get("q");
               if (typeof q === "string" && q.trim() !== "") {
-                router.push({ pathname: "/echo/search", query: { q: q.trim() } });
+                /* `/search`, which is where the surface lives. It pushed
+                   `/echo/search` — an address Echo's route no longer serves
+                   as a section, so the platform's one search box led
+                   nowhere. Echo's own search row is gone (this bar is the
+                   door now), which is exactly why the door had to be
+                   pointed at the room. */
+                router.push({ pathname: "/search", query: { q: q.trim() } });
               }
             }}
           >

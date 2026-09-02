@@ -1,14 +1,12 @@
 "use client";
 
-import { useRef, useState, type ReactNode } from "react";
+import { useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import {
-  IconArchive, IconAsk, IconMic, IconPlus, IconRows, IconSearch, IconUpload,
-  IconVoice,
-} from "@/components/icons";
+  IconPlus, IconUpload,
+  } from "@/components/icons";
 import { startRecording } from "@/lib/recordingEngine";
-import { startTour } from "@/lib/tour";
-import { SectionMenu } from "@/components/scaffold";
+import { Link } from "@/i18n/routing";
 import { digits } from "@/lib/format";
 import { notify } from "@/lib/notify";
 import { uploadAudioFile } from "@/lib/uploadFile";
@@ -31,17 +29,9 @@ export function EchoSectionMenu({ activeSlug }: { activeSlug: EchoMenuSlug }) {
   const t = useTranslations("platform");
   const tEcho = useTranslations("echo");
   const tCapture = useTranslations("capture");
-  const tTour = useTranslations("tour");
   const locale = useLocale();
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [busy, setBusy] = useState(false);
-
-  const ICONS: Record<string, ReactNode> = {
-    "new-meeting": <IconMic />,
-    records: <IconRows />,
-    speakers: <IconVoice />,
-    search: <IconSearch />,
-  };
 
   /**
    * QUICK VOICE MEMO (user directive, 2026-08-26): the ＋ beside the
@@ -73,27 +63,6 @@ export function EchoSectionMenu({ activeSlug }: { activeSlug: EchoMenuSlug }) {
    * doing — dim the screen, ring one real control at a time, say what to
    * press. Text is resolved HERE so the tour store stays render-free.
    */
-  function lessonRecord(): void {
-    startTour([
-      { target: "tour-new-meeting", href: "/echo", text: tTour("rec1") },
-      { target: "rec-devices", text: tTour("rec2") },
-      { target: "rec-meeting", text: tTour("rec3") },
-      { target: "rec-start", text: tTour("rec4") },
-    ]);
-  }
-  function lessonUpload(): void {
-    startTour([
-      { target: "tour-upload", href: "/echo", text: tTour("up1") },
-      { target: "tour-records", text: tTour("up2") },
-    ]);
-  }
-  function lessonAsk(): void {
-    startTour([
-      { target: "tour-records", href: "/echo/records", text: tTour("ask1") },
-      { target: "tour-search", text: tTour("ask2") },
-      { target: "orb", text: tTour("ask3") },
-    ]);
-  }
 
   /** the picker's answer: a toast per outcome, in the person's language */
   async function takeFile(file: File): Promise<void> {
@@ -131,113 +100,60 @@ export function EchoSectionMenu({ activeSlug }: { activeSlug: EchoMenuSlug }) {
           if (file) void takeFile(file);
         }}
       />
-      <SectionMenu
-        navLabel={t("echo")}
-        heading={t("echo")}
-        /* the archive row highlights Records — it IS the records place */
-        activeSlug={activeSlug === "archive" ? "records" : activeSlug}
-        groups={[
-          {
-            /* SEARCH first, unlabelled (user directive, 2026-08-26): it is
-               the way IN to everything below it, and a heading over one row
-               that already says «جست‌وجو» is a word spent twice */
-            key: "find",
-            items: [{
-              slug: "search",
-              href: "/search",
-              label: t("search"),
-              icon: ICONS.search,
-              tourId: "tour-search",
-            }],
-          },
-          {
-            key: "capture",
-            title: tEcho("group.capture"),
-            items: [{
-              slug: "new-meeting",
-              href: "/echo",
-              label: tEcho("section.new-meeting"),
-              icon: ICONS["new-meeting"],
-              tourId: "tour-new-meeting",
-              /* two doors on one row: upload keeps the very end (it was
-                 there first — a door that moves is a door people reach for
-                 and miss); the quick memo's ＋ sits beside it and BOTH
-                 starts the take and opens this row's page */
-              trailing: [
-                {
-                  label: tEcho("uploadHere"),
-                  icon: <IconUpload width={16} height={16} />,
-                  onSelect: () => { if (!busy) fileRef.current?.click(); },
-                  tourId: "tour-upload",
-                },
-                {
-                  href: "/echo",
-                  label: tCapture("quickMemo"),
-                  icon: <IconPlus width={16} height={16} />,
-                  onSelect: quickMemo,
-                },
-              ],
-            }],
-          },
-          {
-            key: "review",
-            title: tEcho("group.review"),
-            items: [
-              {
-                slug: "records",
-                href: "/echo/records",
-                label: tEcho("section.records"),
-                icon: ICONS.records,
-                tourId: "tour-records",
-                trailing: {
-                  href: "/echo/archive",
-                  label: tEcho("section.archive"),
-                  icon: <IconArchive width={16} height={16} />,
-                },
-              },
-              {
-                slug: "speakers",
-                href: "/echo/speakers",
-                label: tEcho("section.speakers"),
-                icon: ICONS.speakers,
-              },
-            ],
-          },
-          {
-            /* the assistant TEACHES (user directive, 2026-08-26): three
-               guided walks that highlight the real controls. Rows, not a
-               chatbot prompt — a lesson should start with one press. */
-            key: "learn",
-            title: tTour("group"),
-            items: [
-              {
-                slug: "learn-record",
-                href: "/echo",
-                label: tTour("lessonRecord"),
-                icon: <IconAsk width={16} height={16} />,
-                preventNavigation: true,
-                onSelect: lessonRecord,
-              },
-              {
-                slug: "learn-upload",
-                href: "/echo",
-                label: tTour("lessonUpload"),
-                icon: <IconAsk width={16} height={16} />,
-                preventNavigation: true,
-                onSelect: lessonUpload,
-              },
-              {
-                slug: "learn-ask",
-                href: "/echo/records",
-                label: tTour("lessonAsk"),
-                icon: <IconAsk width={16} height={16} />,
-                preventNavigation: true,
-                onSelect: lessonAsk,
-              },
-            ],
-          },
-        ]}
-      />
+      {/*
+        ECHO'S TOOLBAR — two destinations, on top (user directive, 2026-09-02).
+        What left, and why each one left rather than being hidden:
+          SEARCH   the top bar already has a search field on every screen; two
+                   doors to one room is how a person wonders which is real.
+          SPEAKERS moved to Management, where the people of an organisation
+                   already live — a voice print is a fact about a colleague,
+                   not about a recording.
+          LEARN    the three guided walks were a menu group inside one app;
+                   they are not a place you navigate to.
+        Echo is being folded into the meeting surface. This is the shape it
+        keeps until then, and it is the platform's shape rather than its own.
+      */}
+      <nav aria-label={t("echo")} className="flex flex-wrap items-center gap-1">
+        {[
+          { slug: "new-meeting", href: "/echo", label: tEcho("section.new-meeting") },
+          { slug: "records", href: "/echo/records", label: tEcho("section.records") },
+          { slug: "archive", href: "/echo/archive", label: tEcho("section.archive") },
+        ].map((item) => {
+          const active = activeSlug === item.slug;
+          return (
+            <Link
+              key={item.slug}
+              href={item.href}
+              aria-current={active ? "page" : undefined}
+              className={`btn btn-sm gap-1.5 font-medium ${
+                active ? "bg-accent text-on-accent" : "text-fg-muted hover:bg-surface-2 hover:text-fg"
+              }`}
+            >
+              {item.label}
+            </Link>
+          );
+        })}
+        <span className="mx-1 h-5 w-px bg-border" aria-hidden />
+        {/* the two ways to START one, kept beside the destinations because
+            they are what this app is for */}
+        <button
+          type="button"
+          onClick={quickMemo}
+          className="btn btn-sm gap-1.5 border border-border font-medium text-fg-muted hover:text-fg"
+        >
+          <IconPlus width={12} height={12} />
+          {tCapture("quickMemo")}
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => { if (!busy) fileRef.current?.click(); }}
+          className="btn btn-sm gap-1.5 border border-border font-medium text-fg-muted hover:text-fg"
+        >
+          <IconUpload width={12} height={12} />
+          {tEcho("uploadHere")}
+        </button>
+      </nav>
     </>
   );
 }

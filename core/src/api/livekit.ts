@@ -102,6 +102,48 @@ export function mintRoomToken(
  * room it is asking about. Stable across reloads so everyone opening one
  * meeting lands in one room, and unguessable because the id is a UUID.
  */
+/**
+ * A GUEST's token — the same room, a different kind of holder.
+ *
+ * `sub` is prefixed `guest:` and carries a fresh random id, so a guest is
+ * never confusable with a member at the provider, in a recording's per-track
+ * labels, or in anything that later reads the identity back. The display name
+ * IS theirs to choose (they have no account for us to read one from), which
+ * is exactly why the prefix matters: a guest typing a colleague's name gets
+ * that name on screen and a token that says `guest:` underneath.
+ *
+ * The grant is the participant grant, minus nothing and plus nothing: join,
+ * publish, subscribe. A guest holds a capability for one room, and holds it
+ * for as long as the token lives — which is why the TTL here is short. A
+ * meeting link pasted into a chat months later resolves through the code
+ * again or not at all; it does not carry a token that still works.
+ */
+export function mintGuestToken(
+  config: LiveKitConfig,
+  room: string,
+  displayName: string,
+  guestId: string,
+): { token: string; url: string; expires_at: string } {
+  if (!/^[A-Za-z0-9._-]{1,120}$/.test(room)) {
+    throw new ValidationError("unusable room name", { code: "room_name_invalid" });
+  }
+  const now = Math.floor(Date.now() / 1000);
+  const exp = now + 60 * 60 * 4;
+  const header = base64url(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+  const payload = base64url(JSON.stringify({
+    iss: config.apiKey,
+    sub: `guest:${guestId}`,
+    name: displayName,
+    nbf: now,
+    exp,
+    video: { room, roomJoin: true, canPublish: true, canSubscribe: true, canPublishData: true },
+  }));
+  const signature = base64url(
+    createHmac("sha256", config.apiSecret).update(`${header}.${payload}`).digest(),
+  );
+  return { token: `${header}.${payload}.${signature}`, url: config.url, expires_at: new Date(exp * 1000).toISOString() };
+}
+
 export function roomNameFor(meetingId: string): string {
   return `neurai-${meetingId.replace(/-/g, "")}`;
 }

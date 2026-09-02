@@ -27,6 +27,15 @@ const PUBLIC: Record<string, string> = {
     "the sign-in page asks which buttons to draw BEFORE anyone exists (0078); " +
     "it returns only {provider, enabled} — the same fact the page shows every visitor. " +
     "The PATCH twin is admin-walled here and in SQL.",
+  "POST /v1/join/:code":
+    "THE GUEST DOOR (0158). An outside participant has no account and never " +
+    "will — the invite link previously copied the meeting PAGE, so it worked " +
+    "for exactly the people who did not need it. The CODE is the " +
+    "authorisation: a CSPRNG capability, mintable and revocable by the " +
+    "meeting's own members, that buys the room and the title and nothing " +
+    "else. The SQL function behind it RETURNS THREE COLUMNS, so the surface " +
+    "is a shape rather than a filter somebody has to remember, and an " +
+    "unknown code and a revoked one answer identically.",
   // (the 0082 oauth-gate entry lived here for a day — the allow-list was
   // superseded by join-only signup before its migration ever applied)
 };

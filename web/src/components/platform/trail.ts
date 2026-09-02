@@ -155,6 +155,13 @@ export const TRAIL: Readonly<Record<string, TrailEntry>> = {
  * rather than letting it be skipped quietly.
  */
 export const NO_TRAIL: Readonly<Record<string, string>> = {
+  /*
+   * THE GUEST DOOR (0158). Outside the shell for the same reason as the auth
+   * screens and one more: the person here has no account and never will, so
+   * every crumb would be a link into a product that would refuse them. The
+   * one screen where offering a way "up" is offering a wall.
+   */
+  "/join/[code]": "a guest holds a capability for one room and nothing else — every ancestor would refuse them",
   "/sign-in": "auth screens render outside the shell — there is no bar to hold a trail, and no 'up' from signing in",
   "/sign-up": "auth screens render outside the shell",
   "/pending": "auth screens render outside the shell",

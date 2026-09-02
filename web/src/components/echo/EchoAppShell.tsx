@@ -2,7 +2,7 @@
 
 import { type ReactNode } from "react";
 import { PlatformShell } from "@/components/platform/PlatformShell";
-import { MenuLayout } from "@/components/scaffold";
+import { PageContainer } from "@/components/scaffold";
 
 /**
  * Echo's app shell — **the seam between the platform and an app inside it.**
@@ -31,11 +31,24 @@ export function EchoAppShell({
    */
   menu?: ReactNode;
 }) {
+  /*
+   * THE MENU IS ON TOP NOW (user directive, 2026-09-02: "change it like you
+   * changed the management page by removing the sub menu on the side and put
+   * the top menu for them"). Same shape as Management and Settings, which is
+   * the point — Echo is on its way into the meeting surface, and until then
+   * it should at least not be the one app in the platform with a different
+   * anatomy.
+   */
   return (
     <PlatformShell>
       <div className="flex h-full min-h-0">
         <div className={`min-w-0 flex-1 overflow-y-auto ${menu ? "" : "p-5"}`}>
-          {menu ? <MenuLayout menu={menu}>{children}</MenuLayout> : children}
+          {menu ? (
+            <>
+              <PageContainer className="!pb-0">{menu}</PageContainer>
+              {children}
+            </>
+          ) : children}
         </div>
       </div>
     </PlatformShell>

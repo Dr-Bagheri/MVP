@@ -97,9 +97,19 @@ export default function EchoPage({
 
   return (
     <EchoAppShell
-      /* summaries stays reachable by URL but has no row of its own now —
-         the menu highlights its parent place */
-      menu={<EchoSectionMenu activeSlug={slug === "summaries" ? "records" : slug} />}
+      /*
+       * Summaries stays reachable by URL but has no row of its own — the menu
+       * highlights its parent place.
+       *
+       * SPEAKERS renders with NO Echo toolbar at all: it moved into
+       * Management (user directive, 2026-09-02), and a page that still opened
+       * the menu it left would be advertising the door it came out of. The
+       * page keeps its address so nothing bookmarked breaks; only the menu
+       * around it changed.
+       */
+      menu={slug === "speakers" ? undefined : (
+        <EchoSectionMenu activeSlug={slug === "summaries" ? "records" : slug} />
+      )}
     >
       {/* ONE width for every section (user directive, 2026-08-25: Records
           rendered wider than Summaries) — the narrow column is the rule */}

@@ -458,6 +458,8 @@ function PreStage({ meeting, onPatch, locale, me }: {
 }) {
   const t = useTranslations("meetings");
   const [editing, setEditing] = useState(false);
+  /** minting the guest capability is a network act — the button says so */
+  const [guestBusy, setGuestBusy] = useState(false);
   const totalMinutes = meeting.agenda.reduce((sum, item) => sum + (item.minutes ?? 0), 0);
 
   return (
@@ -479,21 +481,33 @@ function PreStage({ meeting, onPatch, locale, me }: {
               {t("edit")}
             </button>
           </header>
-          <dl className="space-y-1.5 text-sm">
-            <div className="flex justify-between gap-2">
-              <dt className="text-fg-muted">{t("fieldTitle")}</dt>
-              <dd className="font-medium text-fg">{meeting.title}</dd>
+          {/*
+            A LABELLED TABLE, not a row with the label at one edge and the
+            value at the other (user directive, 2026-09-02: "the headers and
+            details close to each other, not far").
+            `justify-between` pushed them apart by the full width of the card,
+            so reading a field meant crossing empty space and hoping the thing
+            on the far side belonged to the label you started from — which is
+            the failure a wide row makes worse the wider the card gets.
+            The reference pairs them: a narrow label column, the value
+            immediately beside it, and a hairline between rows so the pairing
+            is visible rather than inferred.
+          */}
+          <dl className="-mx-1 divide-y divide-border text-sm">
+            <div className="flex items-baseline gap-3 px-1 py-2">
+              <dt className="w-16 shrink-0 text-xs text-fg-subtle">{t("fieldTitle")}</dt>
+              <dd className="min-w-0 font-medium text-fg">{meeting.title}</dd>
             </div>
-            <div className="flex justify-between gap-2">
-              <dt className="text-fg-muted">{t("fieldDate")}</dt>
-              <dd className="text-fg">
+            <div className="flex items-baseline gap-3 px-1 py-2">
+              <dt className="w-16 shrink-0 text-xs text-fg-subtle">{t("fieldDate")}</dt>
+              <dd className="min-w-0 text-fg">
                 {formatDate(meeting.scheduled_at, locale)}
                 {t("dateAtTime", { time: formatTime(meeting.scheduled_at, locale) })}
               </dd>
             </div>
-            <div className="flex justify-between gap-2">
-              <dt className="text-fg-muted">{t("fieldTopic")}</dt>
-              <dd className="text-fg">{meeting.topic ?? t("noTopic")}</dd>
+            <div className="flex items-baseline gap-3 px-1 py-2">
+              <dt className="w-16 shrink-0 text-xs text-fg-subtle">{t("fieldTopic")}</dt>
+              <dd className="min-w-0 text-fg">{meeting.topic ?? t("noTopic")}</dd>
             </div>
             {meeting.description.trim() !== "" ? (
               <div className="pt-1">
@@ -545,6 +559,20 @@ function PreStage({ meeting, onPatch, locale, me }: {
              * can use.
              */
             <div className="mt-2.5 space-y-2">
+              {/*
+                TWO LINKS, because they are for two different people (user
+                directive, 2026-09-02: "how should anyone from outside come to
+                the online meeting").
+                The page's own address is for COLLEAGUES — it needs an account
+                in this organisation, and for them that is the right door
+                because it carries the agenda and the record.
+                The GUEST link needs no account at all. It is a capability
+                minted on request, so a meeting is closed to outsiders until
+                somebody decides otherwise, and pressing it again mints a new
+                one — which revokes every link already handed out, the only
+                thing "revoke" can honestly mean for something pasted into a
+                chat.
+              */}
               <button
                 type="button"
                 onClick={() => void navigator.clipboard?.writeText(window.location.href).catch(() => undefined)}
@@ -552,6 +580,26 @@ function PreStage({ meeting, onPatch, locale, me }: {
               >
                 <IconCopy width={12} height={12} />
                 {t("copyRoom")}
+              </button>
+              <button
+                type="button"
+                disabled={guestBusy}
+                onClick={() => {
+                  setGuestBusy(true);
+                  void api.setMeetingJoinCode(meeting.id, true)
+                    .then(({ join_code }) => {
+                      if (join_code === null) return;
+                      const link = `${window.location.origin}/${locale}/join/${join_code}`;
+                      void navigator.clipboard?.writeText(link).catch(() => undefined);
+                      notify(t("guestLinkCopied"));
+                    })
+                    .catch(() => notify(t("guestLinkFailed"), "warn"))
+                    .finally(() => setGuestBusy(false));
+                }}
+                className="btn w-full border border-border bg-surface font-medium text-fg hover:bg-border"
+              >
+                <IconCopy width={12} height={12} />
+                {t("copyGuestLink")}
               </button>
               <p className="text-[11px] leading-5 text-fg-subtle">{t("roomOnOurServer")}</p>
             </div>
