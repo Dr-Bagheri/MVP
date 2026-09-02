@@ -217,23 +217,23 @@ describe("MeetingPage", () => {
 
   /* THE ROOM IS THE BOX (user directive: "i dont want it to open here").
      There is nothing to mint and no link to press: an online meeting's room
-     is derived from its id and rendered inside the stage, so what this
-     asserts is that the frame is there and that it points at the room this
-     meeting owns — a frame pointing anywhere else is two people in two
-     rooms, which looks identical to a working call until nobody arrives. */
-  it("an online meeting's room is a frame in OUR box, addressed to THIS meeting", async () => {
+     is derived from its id and driven by Jitsi's external API inside the
+     stage.
+     jsdom cannot load that script, so what renders here is the FALLBACK —
+     and that is worth asserting for its own sake: when the embed cannot
+     load, the box must say so and still hand over the room's real address.
+     A silent empty rectangle is the failure this branch exists to prevent.
+     The address itself is pinned in Room.test.ts, where it is a pure
+     function and can be checked without a browser at all. */
+  it("names a room it cannot embed, and still gives its address", async () => {
     MEETING = meeting({ call_id: null, mode: "online" });
     render(<MeetingPage id="m-1" />);
     await waitFor(() => expect(screen.getByText("مشخصات")).toBeInTheDocument());
     await userEvent.click(screen.getByRole("button", { name: /حین جلسه/ }));
 
-    const frame = screen.getByTitle("ویدیو") as HTMLIFrameElement;
-    // the meeting's own id, dashes stripped — stable across reloads so that
-    // everyone opening this meeting lands in the same place
-    expect(frame.src).toContain("neurai-m1");  // the meeting id, dashes stripped
-    // and the camera/mic permissions the frame needs to be a call at all
-    expect(frame.getAttribute("allow")).toContain("camera");
-    expect(frame.getAttribute("allow")).toContain("microphone");
+    const out = await screen.findByRole("link", { name: /باز کردن در پنجره/ });
+    // the meeting's own id, dashes stripped — not some other meeting's room
+    expect(out.getAttribute("href")).toContain("neurai-m1");
   });
 
   it("a recorded meeting opens on the post stage", async () => {

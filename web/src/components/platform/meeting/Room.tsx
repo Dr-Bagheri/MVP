@@ -8,28 +8,29 @@ import { IconCopy, IconOpen } from "@/components/icons";
  * THE VIDEO ROOM, INSIDE OUR OWN BOX.
  *
  * Why this is not Google Meet in an iframe: it cannot be. Google serves
- * meet.google.com with a frame-ancestors policy that names only its own
- * origins, so a browser refuses to render it inside anybody else's page —
- * that is a decision at Google's end and no amount of markup gets past it.
- * A Meet room can only ever be a link that opens a window, which is exactly
- * what the user was looking at when they said they did not want it there.
+ * meet.google.com with a frame-ancestors policy naming only its own origins,
+ * so a browser refuses to render it inside anybody else's page. A Meet room
+ * can only ever be a link that opens a window.
  *
- * What CAN live inside the box is a room we serve ourselves. This embeds
- * Jitsi Meet, which is built to be embedded — the same shape the reference
- * product uses — and which runs equally well on somebody else's instance or
- * on ours:
+ * Why it is not a raw iframe either — the first attempt was, and that is what
+ * the user was looking at when they said it was not good enough. A plain
+ * frame gets Jitsi's PRE-JOIN screen: a name box and a join button, inside a
+ * page the person already walked into. The `#config.…` hash meant to turn
+ * that off is advisory, and the public instance ignores it.
  *
- *   NEXT_PUBLIC_MEET_DOMAIN unset  → meet.jit.si, the public instance. It
- *     works today with no infrastructure, and it is a THIRD PARTY: the media
- *     goes through servers we do not run, which is a different promise from
- *     the one this product makes about everything else. That is why the
- *     footer says so on screen rather than only here.
- *   NEXT_PUBLIC_MEET_DOMAIN set    → our own Jitsi, and the sentence in the
- *     footer changes with it, because the claim it makes stops being true
- *     the moment the media stops leaving the building.
+ * `external_api.js` is the supported embed, and `configOverwrite` is not
+ * advisory: the room opens straight into video with the person's own name on
+ * it. It also lets us choose the toolbar, and it emits events — leaving is a
+ * STATE we can render, rather than a dead frame showing somebody else's
+ * "you have left the meeting" page with no way back.
  *
- * The room NAME is derived from the meeting id and never guessed: two
- * meetings must not collide, and a name a stranger can guess is a door.
+ *   NEXT_PUBLIC_MEET_DOMAIN unset → meet.jit.si, the public instance. Works
+ *     with no infrastructure, and it is a THIRD PARTY: media crosses servers
+ *     we do not run, which is a different promise from the one this product
+ *     makes about everything else. The footer says so on screen.
+ *   NEXT_PUBLIC_MEET_DOMAIN set   → our own, and the footer's sentence
+ *     changes with it, because the claim stops being true the moment the
+ *     media stops leaving the building.
  */
 const PUBLIC_INSTANCE = "meet.jit.si";
 
@@ -44,9 +45,9 @@ export function roomIsOurs(): boolean {
 }
 
 /**
- * `neurai-<meeting id>` — long, opaque, and stable across reloads so that
- * everyone who opens this meeting lands in the same room. The id is already
- * a UUID, which is the part a stranger cannot guess.
+ * `neurai-<meeting id>` — long, opaque, and stable across reloads so everyone
+ * who opens this meeting lands in the same room. The id is already a UUID,
+ * which is the part a stranger cannot guess.
  */
 export function roomName(meetingId: string): string {
   return `neurai-${meetingId.replace(/-/g, "")}`;
@@ -56,53 +57,151 @@ export function roomUrl(meetingId: string): string {
   return `https://${domain()}/${roomName(meetingId)}`;
 }
 
+/** the script is fetched ONCE per document, however many rooms mount */
+let apiScript: Promise<void> | null = null;
+function loadExternalApi(host: string): Promise<void> {
+  if (apiScript !== null) return apiScript;
+  apiScript = new Promise<void>((resolve, reject) => {
+    if (typeof document === "undefined") { reject(new Error("no document")); return; }
+    const script = document.createElement("script");
+    script.src = `https://${host}/external_api.js`;
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("external_api.js did not load"));
+    document.head.appendChild(script);
+  });
+  return apiScript;
+}
+
+interface JitsiApi {
+  dispose: () => void;
+  addListener: (event: string, handler: () => void) => void;
+}
+type JitsiCtor = new (host: string, options: Record<string, unknown>) => JitsiApi;
+
 export function MeetingRoom({ meetingId, displayName, videoUrl }: {
   meetingId: string;
   displayName: string;
   /**
-   * An override, when somebody has pointed this meeting at a specific room —
-   * a second instance, a self-hosted one on another host. `null` is the
-   * normal state and means "the room this meeting owns", derived below.
+   * An override, when somebody has pointed this meeting at a specific room.
+   * `null` is the normal state and means "the room this meeting owns".
    *
-   * It is EMBEDDED like any other, not opened: the whole point of this
-   * component is that the call happens inside the page.
+   * A custom URL is embedded as a plain frame rather than driven by the API:
+   * it may be any provider, and the API only exists for Jitsi.
    */
   videoUrl: string | null;
 }) {
   const t = useTranslations("meetings");
   const locale = useLocale();
   const [copied, setCopied] = useState(false);
-  const frame = useRef<HTMLIFrameElement | null>(null);
-  const url = videoUrl !== null && videoUrl.trim() !== "" ? videoUrl.trim() : roomUrl(meetingId);
+  const [failed, setFailed] = useState(false);
+  const [left, setLeft] = useState(false);
+  const box = useRef<HTMLDivElement | null>(null);
+  const custom = videoUrl !== null && videoUrl.trim() !== "" ? videoUrl.trim() : null;
+  const url = custom ?? roomUrl(meetingId);
 
   /* the copy flash clears itself; the timer is cleaned up so a fast unmount
-     does not set state on a gone component */
+     does not set state on a component that is gone */
   useEffect(() => {
     if (!copied) return;
     const timer = setTimeout(() => setCopied(false), 2000);
     return () => clearTimeout(timer);
   }, [copied]);
 
-  /*
-   * The hash carries the display name and turns OFF the pre-join screen:
-   * inside our own page the person has already said they are joining by
-   * walking into the stage, and a second "are you ready" is a wall in the
-   * middle of a room they are looking at.
-   */
-  const src = `${url}#userInfo.displayName=${encodeURIComponent(displayName)}`
-    + `&config.prejoinPageEnabled=false&config.startWithVideoMuted=false`
-    + `&interfaceConfig.DEFAULT_BACKGROUND=%22%23111111%22`
-    + `&config.defaultLanguage=%22${locale === "en" ? "en" : "fa"}%22`;
+  useEffect(() => {
+    if (custom !== null || left) return;
+    let api: JitsiApi | null = null;
+    let alive = true;
+    const host = domain();
+    void loadExternalApi(host)
+      .then(() => {
+        const Ctor = (window as unknown as { JitsiMeetExternalAPI?: JitsiCtor }).JitsiMeetExternalAPI;
+        if (!alive) return;
+        if (Ctor === undefined || box.current === null) { setFailed(true); return; }
+        box.current.innerHTML = "";
+        api = new Ctor(host, {
+          roomName: roomName(meetingId),
+          parentNode: box.current,
+          width: "100%",
+          height: "100%",
+          userInfo: { displayName },
+          configOverwrite: {
+            /* the whole reason this is the API and not a frame: a name box
+               and a join button, inside a room the person already walked
+               into, is a wall in the middle of what they came to see */
+            prejoinPageEnabled: false,
+            prejoinConfig: { enabled: false },
+            startWithVideoMuted: false,
+            startWithAudioMuted: false,
+            disableDeepLinking: true,
+            disableThirdPartyRequests: true,
+            defaultLanguage: locale === "en" ? "en" : "fa",
+          },
+          interfaceConfigOverwrite: {
+            MOBILE_APP_PROMO: false,
+            SHOW_JITSI_WATERMARK: false,
+            SHOW_BRAND_WATERMARK: false,
+            SHOW_POWERED_BY: false,
+            DISABLE_JOIN_LEAVE_NOTIFICATIONS: true,
+            TOOLBAR_BUTTONS: [
+              "microphone", "camera", "desktop", "chat", "raisehand",
+              "participants-pane", "tileview", "settings", "hangup",
+            ],
+          },
+        });
+        api.addListener("videoConferenceLeft", () => { if (alive) setLeft(true); });
+        api.addListener("readyToClose", () => { if (alive) setLeft(true); });
+      })
+      .catch(() => { if (alive) setFailed(true); });
+    return () => {
+      alive = false;
+      api?.dispose();
+    };
+  }, [meetingId, displayName, locale, custom, left]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-fg/95">
-      <iframe
-        ref={frame}
-        src={src}
-        title={t("modeVideo")}
-        allow="camera; microphone; fullscreen; display-capture; autoplay; clipboard-write"
-        className="min-h-[420px] w-full flex-1 border-0"
-      />
+      {custom !== null ? (
+        <iframe
+          src={custom}
+          title={t("modeVideo")}
+          allow="camera; microphone; fullscreen; display-capture; autoplay; clipboard-write"
+          className="min-h-[420px] w-full flex-1 border-0"
+        />
+      ) : failed ? (
+        <div className="grid min-h-[420px] flex-1 place-items-center p-6 text-center">
+          <div>
+            <p className="text-sm text-bg/80">{t("roomLoadFailed")}</p>
+            <a
+              href={url}
+              target="_blank"
+              rel="noreferrer"
+              className="tap mt-3 inline-flex h-10 items-center gap-2 rounded-xl bg-accent px-4 text-sm font-semibold text-on-accent"
+            >
+              <IconOpen width={14} height={14} />
+              {t("openRoomOutside")}
+            </a>
+          </div>
+        </div>
+      ) : left ? (
+        /* leaving is a STATE. Without it the box keeps showing Jitsi's own
+           "you have left" page, which has no way back into OUR room. */
+        <div className="grid min-h-[420px] flex-1 place-items-center p-6 text-center">
+          <div>
+            <p className="text-sm text-bg/80">{t("roomLeft")}</p>
+            <button
+              type="button"
+              onClick={() => setLeft(false)}
+              className="tap mt-3 inline-flex h-10 items-center gap-2 rounded-xl bg-accent px-4 text-sm font-semibold text-on-accent"
+            >
+              {t("roomRejoin")}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div ref={box} title={t("modeVideo")} className="min-h-[420px] w-full flex-1" />
+      )}
+
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/40 bg-surface px-3 py-2">
         <p className="min-w-0 truncate text-[11px] text-fg-subtle">
           {roomIsOurs() ? t("roomOnOurServer") : t("roomOnPublicInstance")}
