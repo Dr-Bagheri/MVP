@@ -3005,3 +3005,82 @@ sessions) for the cross-session narrative.
   placed (`pr-11` + `right-2`) because the input is pinned `dir="ltr"`
   while the button resolves `end-*` against the PAGE — the logical forms
   are forbidden by a test, since they look correct in English.
+
+- 2026-09-02 (THE UNIFICATION ROUND — the reference measured, not eyeballed;
+  809 web tests): user directive, "the look of the platform is like 10
+  different developers made it … open panel.arameet.ir and use it as
+  template." So it was MEASURED — computed styles, signed in, at 1745px —
+  and the numbers with their conditions live at the head of
+  scaffold/constants.ts. **The headline finding, and the answer to "ours is
+  too big": THEY HAVE NO LARGE PAGE HEADING.** A page's name is 15.5px in
+  the top bar and the biggest thing on a list screen is a 14px card title;
+  ours opened at 24 and forced everything under it wider. Moved at the
+  tokens, where one edit reaches every screen: menu 256→248, top bar 48→62,
+  column 1200→1240, page padding 48/40/64→26/28/40, radii 14→12 / 18→16,
+  every type role down. Two needed a SHAPE change: the page and section
+  titles rode `text-2xl`/`text-xl`, so **the two most structural sizes in
+  the product were the only ones the blueprint did not own** — and
+  scaffold.test.tsx PINNED that reliance; they are derived roles now and the
+  test asserts the ORDERING (page > section > body), which is the invariant
+  it was really about. **The leverage: 1095 size classes, 94% of them
+  `text-sm`/`text-xs`** — relabelling headings file by file would have moved
+  71 and left a thousand, "which is exactly how a product comes to look like
+  ten people built it, because the exceptions get fixed and the default
+  never does"; Tailwind's own steps are re-pointed at the measured scale.
+  `.btn` was a PILL (`rounded-full`) — one class, and most of why our
+  screens did not look like the reference at identical colours and copy.
+  Inputs got the reference's own ground (`--field`, registered in the theme
+  AND given its three contrast floors in verify-pairs: typed text,
+  placeholder, control edge). **The last one was the UNIT, not the scale:**
+  our root font-size scaled with the viewport (an earlier directive) at
+  ~14px on a 1280 laptop while the reference is a fixed 16 — so at the width
+  people actually work at we rendered the same design an eighth smaller than
+  the thing we were copying, and no amount of adjusting the type scale could
+  have found it. Baseline moved so 16px lands at 1440; measured after,
+  button 38 / input 40 / radius 11, the reference's numbers exactly. Accent
+  deliberately NOT taken: #018146 was already measured and nudged to #01743F
+  because its own 12% chip sat at 4.22 — a recorded decision, not a drift.
+  **Then the finding that only came from verifying the DEPLOYED screen:**
+  the buttons still looked wrong, and measuring them said why — 47 controls
+  had hand-rolled their geometry in ELEVEN shapes against 109 using `.btn`,
+  because **`.btn` offered exactly one size, so every screen wanting a
+  compact control had to invent one.** `.btn-sm`/`.btn-icon` added (measured),
+  30 sites converted, the rest a WORKLIST in control.guard.test.ts that
+  fails in BOTH directions — too many is a regression, too few is a stale
+  entry, because "an allow-list nobody has to shrink is a backlog nobody can
+  see". Its four required signals (height AND corner AND flex AND
+  items-center) are the mirror-trap defence: `h-8` alone is spacing,
+  `rounded-lg` alone is a card.
+  Same round: sub-menu off Workflows/IntegrationDetail, Integrations into
+  Settings + off the rail, Skills out of the Settings menu (rail learns both
+  from SETTINGS_SECTIONS, never a second list). **Seeded English on a
+  Persian screen** — the two flagship workflow cards rendered the wire
+  straight since the feature existed, while every other list on the page went
+  through the catalogue; locale files were CLEAN (full parity, no English in
+  fa, no hardcoded JSX prose), so the whole gap was wire data, **a silent
+  class by construction: the resolver falls back to the stored string ON
+  PURPOSE, so a missing catalogue entry shows English and nothing goes red.**
+  seededCopy.guard.test.ts closes it, both locales, verified red on both
+  shapes (missing entry, and the worse half-entry where the title localizes
+  and the sentence under it does not). **The notify guard had been enforcing
+  NAMES, not the rule** — `startedToast` (a pill mid-page on a 4s timer)
+  walked past a regex anchored at the identifier's start and a USER found it;
+  it matches the MECHANISM now (state cleared to false by a timer), with one
+  named exclusion (clipboard acks: nothing was written, the ack is on the
+  button pressed). **The loading rule became a component**: `me: User | null`
+  made "still loading" and "there is nobody" the same value, so the bell
+  could only appear after the network — three states now, plus
+  Skeleton/SkeletonLines and `loading` on DataTable, which keeps the header,
+  borders and column widths (structure is known before the network) and puts
+  skeleton cells where rows will be. Two consequences are the point: the
+  layout stops moving when data lands, and **"loading" stops being
+  indistinguishable from "empty"**.
+  Probe lesson, twice in one session: **a Vercel deploy check that is not
+  cache-busted measures the CDN, not the deployment** — 25 polls said "not
+  deployed" about a build that had shipped (`X-Vercel-Cache: HIT`), and one
+  `Cache-Control: no-cache` request returned a different CSS hash
+  immediately. Earlier the same day the opposite: a marker chosen from the
+  PREVIOUS commit reported "deployed" on the first attempt. Pick a marker
+  that exists only in the commit under test, bust the cache, and assert the
+  probe had a subject (an empty `css=` variable made twenty zeros mean
+  nothing).
