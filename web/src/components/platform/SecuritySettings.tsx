@@ -105,7 +105,7 @@ export function SecuritySettings() {
       <div>
         <h2 className="h-section">{t("sessionsTitle")}</h2>
         <p className="mt-1 text-sm leading-6 text-fg-muted">{t("sessionsHint")}</p>
-        {sessions === null ? null : sessions.length === 0 ? (
+        {sessions !== null && sessions.length === 0 ? (
           <p className="mt-3 text-sm text-fg-muted">{t("sessionsEmpty")}</p>
         ) : (
           /* the records table's own dress: the table lives in a Card (M42)
@@ -113,7 +113,8 @@ export function SecuritySettings() {
              user rightly asked whether this was the same table */
           <Card className="mt-3 !p-0">
             <DataTable
-              rows={sessions}
+              loading={sessions === null}
+              rows={sessions ?? []}
               rowKey={(session) => session.handle}
               /* the records table's own gesture: every action in the
                  right-click menu. Ending THIS device is deliberately not
@@ -196,16 +197,16 @@ export function SecuritySettings() {
       </div>
 
       {/* ── everyone's devices, for an admin or owner (db/0135) ───────── */}
-      {orgSessions === null ? null : (
-        <div>
+      <div>
           <h2 className="h-section">{t("orgSessionsTitle")}</h2>
           <p className="mt-1 text-sm leading-6 text-fg-muted">{t("orgSessionsHint")}</p>
-          {orgSessions.length === 0 ? (
+          {orgSessions !== null && orgSessions.length === 0 ? (
             <p className="mt-3 text-sm text-fg-muted">{t("orgSessionsEmpty")}</p>
           ) : (
             <Card className="mt-3 !p-0">
               <DataTable
-                rows={orgSessions}
+                loading={orgSessions === null}
+                rows={orgSessions ?? []}
                 rowKey={(session) => `${session.user_id}:${session.handle}`}
                 /*
                  * The menu appears only where the wall says it may act. An
@@ -278,8 +279,7 @@ export function SecuritySettings() {
               />
             </Card>
           )}
-        </div>
-      )}
+      </div>
 
       {ending ? (
         <ConfirmDialog

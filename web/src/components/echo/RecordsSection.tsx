@@ -304,7 +304,11 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
         </div>
       ) : null}
 
-      {calls === null ? null : live.length === 0 ? (
+      {/* the empty state answers "there are no records"; while the read is in
+          flight that is not ours to say, so the table renders its own frame
+          with skeleton rows instead of the section being absent (user
+          directive: the section is there, the information loads inside it) */}
+      {calls !== null && live.length === 0 ? (
         <Card>
           <EmptyState
             text={t(view === "archive" ? "emptyArchive" : "empty")}
@@ -333,6 +337,7 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
             and every action lives in the right-click menu.
           */}
           <DataTable
+            loading={calls === null}
             rows={shown}
             rowKey={(call) => call.id}
             selected={selected}

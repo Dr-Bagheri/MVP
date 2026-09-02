@@ -62,7 +62,15 @@ function Clock() {
 /* `isPlatformRoot` stays in the signature and is unused HERE: the platform
    console's own guard reads it, and every caller passes it. Dropping the prop
    would make those callers wrong about a fact that is still true. */
-export function TopBar({ me, isPlatformRoot: _isPlatformRoot = false }: { me: User | null; isPlatformRoot?: boolean }) {
+export function TopBar({
+  me,
+  isPlatformRoot: _isPlatformRoot = false,
+}: {
+  /** `undefined` while the identity read is in flight; `null` once it has
+      answered that there is nobody. The two are different questions. */
+  me: User | null | undefined;
+  isPlatformRoot?: boolean;
+}) {
   const locale = useLocale();
   const tPlatform = useTranslations("platform");
   const theme = useTheme();
@@ -185,8 +193,14 @@ export function TopBar({ me, isPlatformRoot: _isPlatformRoot = false }: { me: Us
           </div>
 
           {/* the notification menu — icon only, at the bar's end, beside the
-              calendar/clock (user directive, 2026-08-21) */}
-          {me !== null ? <NotificationBell /> : null}
+              calendar/clock (user directive, 2026-08-21).
+              PRESENT WHILE LOADING: the bar is chrome, and chrome that
+              assembles itself piece by piece in front of the reader is worse
+              than chrome that arrives complete and fills in. The bell renders
+              as soon as the page does; what waits for the network is what is
+              INSIDE it. It disappears only for a resolved `null` — an answer,
+              not a delay. */}
+          {me === null ? null : <NotificationBell />}
         </div>
       </div>
 

@@ -51,14 +51,22 @@ describe("platform nav", () => {
  */
 describe("activeNavHref", () => {
   it("folds the cross-homed Settings surfaces into /settings", () => {
-    expect(activeNavHref("/management/skills")).toBe("/settings");
     expect(activeNavHref("/management/models")).toBe("/settings");
+    /* Integrations is cross-homed the OTHER way round (user directive,
+       2026-09-02): a top-level page that now lives in Settings' menu and no
+       longer has a rail tile of its own. Standing on it must light Settings,
+       or the person is on a page the rail says they are not on. */
+    expect(activeNavHref("/integrations")).toBe("/settings");
   });
 
   it("controls: a real Management page and a real Settings page are untouched", () => {
     expect(activeNavHref("/management/users")).toBe("/management");
     expect(activeNavHref("/management")).toBe("/management");
     expect(activeNavHref("/settings/security")).toBe("/settings");
+    /* Skills LEFT the Settings menu in the same round, so it stops being
+       Settings' territory and goes back to lighting Management — the half of
+       the change that is invisible unless it is asserted. */
+    expect(activeNavHref("/management/skills")).toBe("/management");
   });
 
   it("prefix discipline holds: /management/modelsomething is NOT Settings", () => {

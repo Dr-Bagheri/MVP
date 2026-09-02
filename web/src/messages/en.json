@@ -1437,6 +1437,16 @@
         "description": "How a recurring topic has moved across meetings — raised, promised, returned to."
       }
     },
+    "card": {
+      "prepare-meetings": {
+        "name": "Prepare me for meetings",
+        "description": "Turn one selected calendar event into a concise, evidence-based meeting brief."
+      },
+      "draft-email-replies": {
+        "name": "Draft email replies",
+        "description": "Turn one selected email into a thoughtful reply draft for the user to review."
+      }
+    },
     "process": {
       "draft-email-replies": {
         "trigger": {

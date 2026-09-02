@@ -81,7 +81,6 @@ export function MeetingPage({ id }: { id: string }) {
   const [stage, setStage] = useState<Stage | null>(null);
   const [me, setMe] = useState<Me | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [startedToast, setStartedToast] = useState(false);
   /** true once THIS page started a take for THIS meeting — necessary but
       NOT sufficient for linking: the engine may refuse our start while an
       unrelated take runs, so the link also requires the callId to have
@@ -218,8 +217,13 @@ export function MeetingPage({ id }: { id: string }) {
         );
         return;
       }
-      setStartedToast(true);
-      setTimeout(() => setStartedToast(false), 4000);
+      /* THROUGH THE BUS, like every other outcome (user directive: "another
+         notification in the middle of the page — put it where it belongs").
+         What stood here was a pill floating in the column between the
+         controls and the stage: it moved the layout while it was up, it
+         cleared itself after four seconds, and the bell never learned that
+         a recording had started. */
+      notify(t("recordingStarted"));
     }).catch(() => {
       startedHere.current = false;
       setError(t("startFailed"));
@@ -410,11 +414,6 @@ export function MeetingPage({ id }: { id: string }) {
       {uploading ? (
         <p className="mx-auto rounded-xl border border-border bg-surface px-4 py-1.5 text-xs font-medium text-fg shadow-card">
           {t("uploading")}
-        </p>
-      ) : null}
-      {startedToast ? (
-        <p className="mx-auto rounded-xl border border-border bg-surface px-4 py-1.5 text-xs font-medium text-fg shadow-card">
-          {t("recordingStarted")}
         </p>
       ) : null}
       {error !== null ? (

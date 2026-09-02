@@ -35,7 +35,17 @@ import { TopBar } from "./TopBar";
  * a visual placement change from repeating the 40px/opaque-overlay failure.
  */
 export function PlatformShell({ children }: { children: ReactNode }) {
-  const [me, setMe] = useState<Me | null>(null);
+  /*
+   * THREE STATES, not two (user directive, 2026-09-02: "even if it's loading
+   * the icon must be there and the information in it must be loading").
+   *
+   * `undefined` = the identity read has not answered yet. `null` = it
+   * answered, and there is nobody. A single `null` made those the same value,
+   * so everything downstream of it — the bell above all — could only appear
+   * AFTER the network, which is why the bar assembled itself in front of the
+   * user with a hole where the bell goes.
+   */
+  const [me, setMe] = useState<Me | null | undefined>(undefined);
   const [platformRoot, setPlatformRoot] = useState(false);
   const calendar = useCalendarPreference();
   const timezone = useTimezonePreference();

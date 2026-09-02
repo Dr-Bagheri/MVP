@@ -43,14 +43,40 @@ function sources(dir: string, out: string[] = []): string[] {
 }
 
 /** `const [saved, setSaved] = useState` and its family */
-const AD_HOC_STATE = /const \[(saved|flash|toast|justSaved|showSaved)\b/;
+const AD_HOC_STATE = /const \[\w*(?:saved|flash|toast|justSaved|showSaved)\b/i;
+
+/**
+ * The name list alone was not enough. It anchored at the START of the
+ * identifier, so `startedToast` — a pill in the middle of the meeting page on
+ * a four-second timer, exactly the thing this file exists to forbid — walked
+ * past it while the guard reported clean, and a USER found it instead.
+ *
+ * A guard enforcing a rule by the names people happen to choose is enforcing
+ * something else. This second pattern is the MECHANISM: state cleared to
+ * false by a timer is a self-clearing confirmation whatever it is called.
+ */
+const SELF_CLEARING = /setTimeout\(\s*\(\)\s*=>\s*set\w+\(false\)/;
+
+/**
+ * ONE NAMED EXCLUSION, with its reason — never a loosened pattern, because a
+ * looser rule stops catching the thing it was written for.
+ *
+ * `copied` is a clipboard acknowledgement, and the directive is about a save,
+ * a delete or a change. Three things make it a different animal: nothing was
+ * written, so there is no outcome for the bell to keep; the acknowledgement
+ * happens ON the button that was pressed rather than floating in the column,
+ * so it moves no layout; and a notification per copy would bury the entries
+ * that matter under the ones that do not.
+ */
+const CLIPBOARD_ACK = /setCopied\(false\)/;
 
 describe("a save, a delete or a change", () => {
   it("is announced through the bus, never as a component's own pill", () => {
     const offenders: string[] = [];
     for (const file of sources(SRC)) {
       const code = codeOnly(readFileSync(file, "utf8"));
-      if (AD_HOC_STATE.test(code)) {
+      const selfClearing = SELF_CLEARING.test(code) && !CLIPBOARD_ACK.test(code);
+      if (AD_HOC_STATE.test(code) || selfClearing) {
         offenders.push(relative(SRC, file).split("\\").join("/"));
       }
     }

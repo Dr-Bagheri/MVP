@@ -76,7 +76,11 @@ export const NAV_PRIMARY: readonly NavItem[] = [
    * find them. The rail names surfaces; that is what these are.
    */
   { href: "/workflows", key: "workflows", inBar: false },
-  { href: "/integrations", key: "integrations", inBar: false },
+  /* INTEGRATIONS LEFT THE RAIL (user directive, 2026-09-02: "put the
+     integrations into the settings"). It is a Settings section now — the
+     page keeps its address, and `SETTINGS_SECTIONS` is what makes the
+     Settings tile light up while you stand on it, so the rail learns the
+     move from the registry rather than from a second hand-kept list. */
   { href: "/agents", key: "agents", inBar: false },
   { href: "/echo", key: "echo", inBar: true },
   { href: "/management", key: "management", inBar: true },

@@ -20,7 +20,7 @@ export interface SettingsSection {
   /** an absolute href when the surface lives outside /settings */
   href?: string;
   /** the label comes from another namespace when the page is not ours */
-  labelFrom?: "management";
+  labelFrom?: "management" | "platform";
 }
 
 export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
@@ -32,8 +32,16 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   { slug: "notifications", group: "configuration" },
   { slug: "security", group: "configuration" },
   { slug: "sso", group: "configuration" },
-  /* the assistant's own configuration — the pages keep their addresses */
-  { slug: "skills", group: "assistant", href: "/management/skills", labelFrom: "management" },
+  /* CONNECTIONS (user directive, 2026-09-02: "put the integrations into the
+     settings"). The page keeps its address — one home per feature, more
+     than one door to it — and the rail entry goes, because a surface that
+     lives in a menu does not also need a tile beside the apps. */
+  { slug: "integrations", group: "connections", href: "/integrations", labelFrom: "platform" },
+  /* the assistant's own configuration — the pages keep their addresses.
+     SKILLS LEFT THIS MENU (user directive, same round). Its page still
+     resolves at /management/skills, exactly as every other row this menu
+     has dropped: what a menu offers and what the router serves are
+     different questions, and only the first one was asked. */
   { slug: "models", group: "assistant", href: "/management/models", labelFrom: "management" },
   { slug: "audit-logs", group: "compliance" },
 ];

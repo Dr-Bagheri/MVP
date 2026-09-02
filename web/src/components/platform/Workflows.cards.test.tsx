@@ -1,6 +1,7 @@
 import { act, cleanup, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { StarterWorkflow, WorkflowCard } from "@/api/types";
+import fa from "../../messages/fa.json";
 /* the PRODUCER's registry, imported in Node exactly as workflowName.test.ts
    does — the library fixture below is derived from it rather than
    hand-written, so a starter added in core is in this suite's world the
@@ -36,12 +37,14 @@ const CARDS: WorkflowCard[] = [
     id: "22222222-2222-4222-8222-222222222222",
     slug: "prepare-meetings",
     name: "Prepare me for meetings",
-    description: "Gather context on the people and the agenda before a meeting starts.",
+    description: "Turn one selected calendar event into a concise, evidence-based meeting brief.",
     source_kind: "calendar_event",
     icon: "calendar",
     color: "violet",
   },
 ];
+
+let CARD_ROWS: WorkflowCard[] = CARDS;
 
 vi.mock("@/components/platform/PlatformShell", () => ({
   PlatformShell: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -102,7 +105,7 @@ const STARTERS: StarterWorkflow[] = Object.entries(STARTER_WORKFLOWS).map(
 
 vi.mock("@/api/client", () => ({
   api: {
-    workflows: async () => CARDS,
+    workflows: async () => CARD_ROWS,
     me: async () => ({ role }),
     authoredWorkflows: async () => AUTHORED,
     workflowStarters: async () => STARTERS,
@@ -116,6 +119,9 @@ beforeEach(() => {
   cleanup();
   role = "member";
   AUTHORED = BASE_AUTHORED;
+  /* the rows the wire serves, reset per test — the localization control
+     needs to hand back a RENAMED row, which a const array cannot do */
+  CARD_ROWS = CARDS;
 });
 
 describe("the workflows list", () => {
@@ -133,11 +139,34 @@ describe("the workflows list", () => {
 
     /* the description lives INSIDE the link — the assertion the previous
        title-only-link shape fails, and the only one that distinguishes a card
-       that is a button from a card with a button in it */
+       that is a button from a card with a button in it.
+       And it is the LOCALIZED description: db/0065 seeds these two rows in
+       English, and rendering the wire string straight is how the flagship of
+       a Persian-first product introduced itself in English on its own page
+       (user report with the screenshot). Both halves come from fa.json rather
+       than being typed here, so the test cannot disagree with the catalogue. */
     for (const [index, card] of CARDS.entries()) {
-      expect(links[index]!.textContent).toContain(card.name);
-      expect(links[index]!.textContent).toContain(card.description);
+      const copy = (fa.workflows.card as Record<string, { name: string; description: string }>)[card.slug]!;
+      expect(links[index]!.textContent).toContain(copy.name);
+      expect(links[index]!.textContent).toContain(copy.description);
     }
+  });
+
+  it("CONTROL: a template the org RENAMED keeps its own words", async () => {
+    /*
+     * The half that makes the localization safe rather than merely present.
+     * The catalogue replaces a string only while it is still word for word
+     * what we shipped — so an organization that renamed its template sees its
+     * own name in every locale. Without this, "localize the shipped copy"
+     * quietly becomes "overwrite whatever is stored", and somebody's rename
+     * disappears the next time they switch language.
+     */
+    CARD_ROWS = [{ ...CARDS[0]!, name: "پاسخ‌های تیم فروش" }];
+    await act(async () => { render(<Workflows />); });
+    expect(screen.getAllByRole("link")[0]!.textContent).toContain("پاسخ‌های تیم فروش");
+    expect(screen.getAllByRole("link")[0]!.textContent).not.toContain(
+      (fa.workflows.card as Record<string, { name: string }>)["draft-email-replies"]!.name,
+    );
   });
 
   it("offers no way to start a run from the list", async () => {

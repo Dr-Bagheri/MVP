@@ -273,6 +273,32 @@ export const SEEDED_STARTERS: Readonly<
   },
 };
 
+/**
+ * THE TWO SHIPPED TEMPLATES, exactly as db/0065 seeds them.
+ *
+ * They arrive from the wire in English because that is the language the
+ * migration wrote them in, and until now the cards rendered that string
+ * straight — so the flagship of a Persian-first product introduced itself in
+ * English on its own page (user report, 2026-09-02, with the screenshot).
+ *
+ * Same discipline as the starters below: the catalogue only replaces a string
+ * that is still WORD FOR WORD what we shipped. An organization that renamed
+ * its template keeps its name in every locale, because that name is a person's
+ * words and ours are not.
+ */
+export const SEEDED_TEMPLATES: Readonly<
+  Record<string, { name: string; description: string }>
+> = {
+  "prepare-meetings": {
+    name: "Prepare me for meetings",
+    description: "Turn one selected calendar event into a concise, evidence-based meeting brief.",
+  },
+  "draft-email-replies": {
+    name: "Draft email replies",
+    description: "Turn one selected email into a thoughtful reply draft for the user to review.",
+  },
+};
+
 /** what a caller has to hand us — every workflow list row carries these */
 export interface WorkflowCopySubject {
   handle: string;
@@ -312,6 +338,42 @@ export function useWorkflowCopy(): (workflow: WorkflowCopySubject) => WorkflowCo
       return stored;
     }
 
+    return {
+      name:
+        stored.name.trim() === seeded.name && typeof entry?.name === "string"
+          ? entry.name
+          : stored.name,
+      description:
+        stored.description.trim() === seeded.description && typeof entry?.description === "string"
+          ? entry.description
+          : stored.description,
+    };
+  };
+}
+
+/**
+ * The template card resolver — the `useWorkflowCopy` rule keyed on SLUG,
+ * which is the identity a `workflow_template` row carries (a starter carries
+ * a handle; they are different tables and the two must not be conflated).
+ */
+export function useWorkflowTemplateCopy(): (
+  template: { slug: string; name: string; description?: string | null },
+) => WorkflowCopy {
+  const t = useTranslations("workflows");
+  return (template) => {
+    const stored: WorkflowCopy = {
+      name: template.name,
+      description: template.description ?? "",
+    };
+    const seeded = SEEDED_TEMPLATES[template.slug];
+    if (seeded === undefined) return stored;
+
+    let entry: Partial<WorkflowCopy> | undefined;
+    try {
+      entry = t.raw(`card.${template.slug}`) as Partial<WorkflowCopy> | undefined;
+    } catch {
+      return stored;
+    }
     return {
       name:
         stored.name.trim() === seeded.name && typeof entry?.name === "string"

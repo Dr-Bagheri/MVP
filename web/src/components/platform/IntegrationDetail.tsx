@@ -5,10 +5,9 @@ import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { ConnectorItem, ConnectorStatus, Me } from "@/api/types";
 import { useRouter } from "@/i18n/routing";
-import { AssistantMenu } from "./AssistantMenu";
 import { PlatformShell } from "./PlatformShell";
 import { useCrumbTitle } from "./CrumbTitle";
-import { MenuLayout, PageContainer } from "@/components/scaffold";
+import { PageContainer } from "@/components/scaffold";
 import { DataTable, StatusDot, type Column } from "@/components/DataTable";
 import { Card, EmptyState } from "@/components/ui";
 import { ConfirmDialog, KebabMenu } from "@/components/rowActions";
@@ -168,7 +167,7 @@ export function IntegrationDetail({ slug }: { slug: string }) {
 
   return (
     <PlatformShell>
-      <MenuLayout menu={<AssistantMenu activeSlug="integrations" />}>
+      <>
         <PageContainer>
           {entry === undefined ? (
             <Card><p className="text-sm text-fg-muted">{t("detailMissing")}</p></Card>
@@ -353,7 +352,7 @@ export function IntegrationDetail({ slug }: { slug: string }) {
             </>
           )}
         </PageContainer>
-      </MenuLayout>
+      </>
 
       {/*
         Destructive actions confirm — the platform's rule, one dialog,

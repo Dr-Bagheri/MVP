@@ -5,14 +5,13 @@ import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import { useRefreshEpoch } from "@/lib/refreshBus";
-import { useWorkflowCopy } from "@/lib/workflowName";
+import { useWorkflowCopy, useWorkflowTemplateCopy } from "@/lib/workflowName";
 import type { AuthoredWorkflow, StarterWorkflow, User, WorkflowCard } from "@/api/types";
 import { Link } from "@/i18n/routing";
-import { AssistantMenu } from "./AssistantMenu";
 import { PlatformShell } from "./PlatformShell";
 import { WorkflowBuilder } from "./WorkflowBuilder";
 import { WorkflowTile } from "./WorkflowTile";
-import { MenuLayout, PageContainer, PageHeader } from "@/components/scaffold";
+import { PageContainer, PageHeader } from "@/components/scaffold";
 import { EmptyState } from "@/components/ui";
 
 /**
@@ -94,6 +93,7 @@ export function Workflows() {
   }, [params, isAdmin]);
 
   const workflowCopy = useWorkflowCopy();
+  const templateCopy = useWorkflowTemplateCopy();
   const workflowsEpoch = useRefreshEpoch("workflows");
   useEffect(() => {
     void api.workflows().then(setWorkflows).catch(() => setWorkflows([]));
@@ -136,7 +136,7 @@ export function Workflows() {
 
   return (
     <PlatformShell>
-      <MenuLayout menu={<AssistantMenu activeSlug="workflows" />}>
+      <>
         <PageContainer>
           <PageHeader
             title={t("title")}
@@ -173,11 +173,15 @@ export function Workflows() {
                   className="group flex min-h-56 flex-col rounded-2xl border border-border bg-surface p-7 transition-colors hover:border-border-strong hover:bg-surface-2"
                 >
                   <WorkflowTile icon={workflow.icon} color={workflow.color} />
+                  {/* THROUGH THE CATALOGUE, like every other list on this
+                      page. These two rendered the wire's English straight,
+                      so the product's flagship workflows introduced
+                      themselves in English on a Persian screen. */}
                   <h2 className="mt-7 text-xl font-semibold text-fg group-hover:text-accent">
-                    {workflow.name}
+                    {templateCopy(workflow).name}
                   </h2>
                   <p className="mt-2 max-w-md text-sm leading-6 text-fg-muted">
-                    {workflow.description}
+                    {templateCopy(workflow).description}
                   </p>
                 </Link>
               ))}
@@ -259,7 +263,7 @@ export function Workflows() {
           ) : null}
 
         </PageContainer>
-      </MenuLayout>
+      </>
 
       {editing !== undefined ? (
         <WorkflowBuilder

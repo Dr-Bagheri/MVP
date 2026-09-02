@@ -2,6 +2,11 @@
 
 import { Fragment, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
+/* the MODULE, not the barrel: a partial `vi.mock` of `@/components/scaffold`
+   anywhere in the suite would otherwise leave this import undefined, and the
+   table would crash inside somebody else's test for a reason that has
+   nothing to do with their subject */
+import { Skeleton } from "@/components/scaffold/Skeleton";
 import { ContextMenu, type KebabItem } from "@/components/rowActions";
 import { PAGE_SIZE, Pagination, usePaged } from "@/components/Pagination";
 
@@ -72,6 +77,20 @@ export interface DataTableProps<T> {
   rowClassName?: (row: T) => string;
   /** what stands in for the table when there are no rows at all */
   empty?: ReactNode;
+  /**
+   * The data has not arrived yet. The table renders its OWN frame — the
+   * header row, the borders, the column widths — with skeleton cells where
+   * the rows will be, so the section occupies its space from the first paint
+   * and nothing moves when the answer lands.
+   *
+   * It is a separate prop from `rows: []` on purpose: an empty table and a
+   * loading table are different statements, and rendering the empty state
+   * while a fetch is in flight tells the reader there is nothing when nobody
+   * has looked yet.
+   */
+  loading?: boolean;
+  /** how many skeleton rows to reserve — match the usual page, not the max */
+  loadingRows?: number;
   /** an extra row rendered at the TOP of the body — the inline add form */
   leadRow?: ReactNode;
   /** rendered under a row when it is expanded (the enrollment panel) */
@@ -96,6 +115,8 @@ export function DataTable<T>({
   selectLabel,
   rowClassName,
   empty,
+  loading = false,
+  loadingRows = 5,
   leadRow,
   rowDetail,
   pageSize = PAGE_SIZE,
@@ -131,7 +152,9 @@ export function DataTable<T>({
     onSelect!(next);
   }
 
-  if (rows.length === 0 && leadRow === undefined && empty !== undefined) {
+  /* the empty state answers "there is nothing"; while `loading` it is not
+     yet ours to say, so the frame below renders with skeleton rows instead */
+  if (!loading && rows.length === 0 && leadRow === undefined && empty !== undefined) {
     return <>{empty}</>;
   }
 
@@ -180,6 +203,26 @@ export function DataTable<T>({
           </thead>
           <tbody className="group/table">
             {leadRow}
+            {/* SKELETON ROWS, inside the real table (user directive: "just the
+                information should load in it"). The header, the borders and
+                the column widths are structure — they are known before the
+                fetch and render with the page; only the cells wait. */}
+            {loading
+              ? Array.from({ length: loadingRows }, (_, i) => (
+                  <tr key={`skeleton-${i}`} className="border-b border-border last:border-0">
+                    {selecting ? <td className="px-3 py-3" /> : null}
+                    {columns.map((_column, c) => (
+                      <td key={c} className="px-3 py-3">
+                        {/* the FIRST cell wide, the rest narrower — a row of
+                            equal bars reads as a rendering fault rather than
+                            as a table about to arrive */}
+                        <Skeleton className={`h-4 ${c === 0 ? "w-40" : "w-24"}`} />
+                      </td>
+                    ))}
+                    {menuItems ? <td className="px-3 py-3" /> : null}
+                  </tr>
+                ))
+              : null}
             {visible.map((row) => {
               const key = rowKey(row);
               return (

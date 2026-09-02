@@ -59,6 +59,7 @@ export {
 export function useSettingsGroups(): PaneGroup[] {
   const t = useTranslations("settings");
   const tManagement = useTranslations("management");
+  const tPlatform = useTranslations("platform");
   return GROUP_ORDER.map((group) => ({
     key: group,
     /* the two borrowed groups borrow their TITLES too — one word for one
@@ -71,7 +72,11 @@ export function useSettingsGroups(): PaneGroup[] {
       href: section.href ?? `/settings/${section.slug}`,
       label: section.labelFrom === "management"
         ? tManagement(`section.${section.slug}`)
-        : t(`section.${section.slug}`),
+        /* a surface that belongs to the platform keeps the platform's word
+           for itself — the rail and this menu must not name one room twice */
+        : section.labelFrom === "platform"
+          ? tPlatform(section.slug)
+          : t(`section.${section.slug}`),
     })),
   })).filter((group) => group.items.length > 0);
 }
