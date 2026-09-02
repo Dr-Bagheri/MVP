@@ -2947,3 +2947,61 @@ sessions) for the cross-session narrative.
   vertical, and a dropzone that does nothing is the thing this repo
   refuses to ship. The confirm guard earned its keep again: retiring a
   label strips it from every card, so it asks first.
+
+- 2026-09-02 (THE FRONT END STOPS BEING HAND-ROLLED — shadcn/ui adopted,
+  126 files / 800 web tests green): the answer to "can we install a
+  package so we don't do everything from zero". **shadcn/ui, chosen
+  because it is NOT a dependency** — the CLI copies source into
+  `web/src/components/ui/`, so nothing owns our buttons and a component
+  that must behave differently is a file we edit, which matters more here
+  than elsewhere in a codebase whose comments explain why each control
+  does what it does. Overlay, ConfirmDialog, Select, DateField, TimeField,
+  KebabMenu and ContextMenu now sit on Radix; `components/Popover.tsx` —
+  the hand-rolled portal each had grown a private copy of — is DELETED.
+  ~180 lines vanished from KebabMenu alone that had learned, one user
+  report at a time, to portal past a table's overflow, to flip at the
+  viewport edge, to step a flyout outward in the reading direction, and to
+  close on outside-press/Escape/scroll/resize — every one a Radix default,
+  plus the two it never reached (focus trap, arrow-key nav). ContextMenu
+  is now the SAME menu anchored to a zero-size element at the pointer, so
+  the right-click and the ⋯ cannot drift. Our rules stayed ours and stayed
+  asserted: red rows sort to the bottom, the icon gutter is always spent.
+  The argument settled itself mid-swap — **Radix marks everything outside
+  an open dialog `pointer-events: none`, so the hand-portalled Select
+  panel rendered perfectly inside a modal and could not be clicked**, the
+  seventh instance of the bug the primitive existed to end.
+  Three findings no suite could have raised. (1) **`accent` was registered
+  FLAT, so shadcn's `focus:text-accent-foreground` named a colour Tailwind
+  had never heard of and emitted NO CSS** — a focused menu row got the
+  dark-green ground and kept the page's near-black ink; identical to the
+  `text-on-accent` this repo already shipped once, arriving through a
+  library instead of by hand. Now `ui/bridge.guard.test.ts`: every
+  `*-foreground` class the ui/ components use must resolve in the theme,
+  verified red by flattening `primary`. **A component library multiplies
+  this class, because its classes were written by someone assuming a
+  different config.** (2) **Radix reads direction from a React CONTEXT and
+  defaults to LTR — it never looks at `<html dir>`.** Persian-first
+  stopped at the component library: submenus flying out of the wrong edge,
+  `align="end"` on the wrong side, arrows stepping the wrong way, nothing
+  throwing. `DirectionProvider` now wraps the tree in `[locale]/layout.tsx`,
+  guarded WITH the control that makes the test mean something (no provider
+  really does give "ltr"). (3) my own: the edit retiring the floating-panel
+  guard's stale assertion **never landed — `str.replace` says nothing when
+  it matches nothing, and I printed a success line anyway**, twice in one
+  day. The guard counted `<Popover` TAGS, which both implementations write
+  identically, so it could not tell them apart and would have gone on
+  passing if the hand-rolled one came back; it counts the IMPORT now.
+  Its first verify-red was an import error — **"a red that names a
+  different defect is not a verify-red"** — redone with a change that
+  still compiles, failing on `expected 1 to be greater than 1`.
+  Test-driver note for every future Radix swap: **a Radix trigger opens on
+  POINTERDOWN, which `fireEvent.click` does not send** — sixteen tests were
+  failing for a reason that had nothing to do with the product; menu tests
+  use `userEvent` now. Also: 0152 fixed the platform console's 500 (a
+  definer door's `RETURNS TABLE` is a CONTRACT — widening the SELECT inside
+  it without widening the signature is a 42703 that only a platform root
+  can reach, which is why no test saw it; DROP-then-CREATE, and the drop
+  takes the grant with it), and the sign-in password eye is physically
+  placed (`pr-11` + `right-2`) because the input is pinned `dir="ltr"`
+  while the button resolves `end-*` against the PAGE — the logical forms
+  are forbidden by a test, since they look correct in English.
