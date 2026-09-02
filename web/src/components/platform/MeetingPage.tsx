@@ -367,12 +367,12 @@ export function MeetingPage({ id }: { id: string }) {
           ) : null}
           {recordingLive ? (
             <button type="button" onClick={end}
-              className="tap flex h-10 items-center gap-2 rounded-xl bg-accent px-4 text-sm font-semibold text-on-accent shadow-accent hover:opacity-90">
+              className="btn bg-accent font-semibold text-on-accent shadow-accent hover:opacity-90">
               {t("endAndProcess")}
             </button>
           ) : engineFailed ? (
             <button type="button" onClick={end}
-              className="tap flex h-10 items-center gap-2 rounded-xl bg-danger px-4 text-sm font-semibold text-on-accent hover:opacity-90">
+              className="btn bg-danger font-semibold text-on-accent hover:opacity-90">
               {t("retryFinish")}
             </button>
           ) : !held && meeting.mode === "upload" ? (
@@ -384,7 +384,7 @@ export function MeetingPage({ id }: { id: string }) {
                is already running would be the screen disagreeing with
                itself. */
             <button type="button" onClick={() => uploadInput.current?.click()}
-              className="tap flex h-10 items-center gap-2 rounded-xl bg-accent px-4 text-sm font-semibold text-on-accent shadow-accent hover:opacity-90">
+              className="btn bg-accent font-semibold text-on-accent shadow-accent hover:opacity-90">
               {MODE_ICON.upload}
               {t("startUpload")}
             </button>
@@ -392,7 +392,7 @@ export function MeetingPage({ id }: { id: string }) {
             /* the way IN, named for what it does — the plan's own step
                forward, which is where the recording begins */
             <button type="button" onClick={() => setStage("hold")}
-              className="tap flex h-10 items-center gap-2 rounded-xl bg-accent px-4 text-sm font-semibold text-on-accent shadow-accent hover:opacity-90">
+              className="btn bg-accent font-semibold text-on-accent shadow-accent hover:opacity-90">
               {MODE_ICON[meeting.mode]}
               {t("enterStage")}
             </button>
@@ -548,7 +548,7 @@ function PreStage({ meeting, onPatch, locale, me }: {
               <button
                 type="button"
                 onClick={() => void navigator.clipboard?.writeText(window.location.href).catch(() => undefined)}
-                className="tap flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-border bg-surface text-xs font-medium text-fg hover:bg-border"
+                className="btn w-full border border-border bg-surface font-medium text-fg hover:bg-border"
               >
                 <IconCopy width={12} height={12} />
                 {t("copyRoom")}
@@ -855,7 +855,7 @@ function PostStage({ meeting, call, me, locale, onGoHold, onChanged, onBackToMee
         {/* the way BACK to the stage — walking in is what starts a take, so
             this hands over to the stage rather than starting anything here */}
         <button type="button" onClick={onGoHold}
-          className="tap mt-3 flex h-10 items-center gap-2 rounded-xl bg-accent px-4 text-sm font-semibold text-on-accent">
+          className="btn mt-3 bg-accent font-semibold text-on-accent">
           {MODE_ICON[meeting.mode]}
           {meeting.mode === "upload" ? t("startUpload") : t("enterStage")}
         </button>

@@ -343,7 +343,7 @@ function MessageToolbar({
       {message.created === "pdf" ? (
         <button
           type="button"
-          className="tap me-1 flex h-7 items-center gap-1 rounded-md bg-accent-soft px-2 text-xs font-semibold text-accent"
+          className="btn btn-sm me-1 bg-accent-soft font-semibold text-accent"
           onClick={() => deliverPdf(message.content, t("createPdf"))}
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="M7 10l5 5 5-5" /><path d="M12 15V3" /></svg>
@@ -353,7 +353,7 @@ function MessageToolbar({
       {message.created === "doc" ? (
         <button
           type="button"
-          className="tap me-1 flex h-7 items-center gap-1 rounded-md bg-accent-soft px-2 text-xs font-semibold text-accent"
+          className="btn btn-sm me-1 bg-accent-soft font-semibold text-accent"
           onClick={() => deliverDoc(message.content, t("createDoc"))}
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="M7 10l5 5 5-5" /><path d="M12 15V3" /></svg>

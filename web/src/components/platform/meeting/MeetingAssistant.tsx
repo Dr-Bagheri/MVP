@@ -80,7 +80,7 @@ export function MeetingAssistant({ callId, title }: { callId: string; title: str
           <button
             type="button"
             onClick={() => { setTurns([]); sessionId.current = undefined; }}
-            className="tap flex h-9 items-center gap-1.5 rounded-xl border border-border px-3 text-xs font-medium text-fg hover:bg-border"
+            className="btn btn-sm border border-border font-medium text-fg hover:bg-border"
           >
             <IconRetry width={12} height={12} />
             {t("assistantNewChat")}
@@ -118,7 +118,7 @@ export function MeetingAssistant({ callId, title }: { callId: string; title: str
                 <button
                   type="button"
                   onClick={() => void navigator.clipboard?.writeText(turn.text).catch(() => undefined)}
-                  className="tap mt-1 flex h-7 items-center gap-1 rounded-lg px-2 text-[11px] text-fg-subtle hover:text-fg"
+                  className="btn btn-sm mt-1 text-[11px] text-fg-subtle hover:text-fg"
                 >
                   <IconCopy width={12} height={12} />
                   {t("copy")}

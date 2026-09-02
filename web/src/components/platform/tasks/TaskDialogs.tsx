@@ -103,7 +103,7 @@ export function LabelRow({ labels, selected, onToggle, onChanged }: {
       <button
         type="button"
         onClick={() => setCreating(true)}
-        className="tap flex h-8 items-center gap-1.5 rounded-lg border border-dashed border-border px-2.5 text-xs text-fg-muted hover:text-fg"
+        className="btn btn-sm border border-dashed border-border text-fg-muted hover:text-fg"
       >
         <IconPlus width={12} height={12} />
         {t("newLabel")}
@@ -184,7 +184,7 @@ function LabelEditor({ label, onClose, onSaved }: {
           <button
             type="button"
             onClick={() => setCondemned(true)}
-            className="tap flex h-10 items-center gap-1.5 rounded-xl px-3 text-xs font-medium text-danger hover:bg-danger/10"
+            className="btn font-medium text-danger hover:bg-danger/10"
           >
             <IconTrash width={12} height={12} />
             {t("deleteLabel")}
@@ -261,7 +261,7 @@ export function AssigneePicker({ selected, onToggle }: {
           type="button"
           onClick={() => onToggle(person.id)}
           title={t("removeAssignee", { name: personName(person, locale) })}
-          className="tap flex h-8 items-center gap-1.5 rounded-lg bg-accent-soft px-2 text-xs font-medium text-accent"
+          className="btn btn-sm bg-accent-soft font-medium text-accent"
         >
           <span className="grid h-5 w-5 place-items-center rounded-full bg-accent text-[10px] font-bold text-on-accent" aria-hidden>
             {personName(person, locale).slice(0, 1)}
@@ -345,7 +345,7 @@ export function DueField({ value, onPick }: {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex h-10 w-full items-center justify-between rounded-xl border border-border bg-surface px-3 text-sm text-fg hover:border-border-strong"
+        className="btn w-full justify-between border border-border bg-surface text-fg hover:border-border-strong"
       >
         <span className={value === null ? "text-fg-subtle" : ""}>
           {value === null ? t("pickDue") : formatDate(value, locale)}
@@ -530,7 +530,7 @@ export function NewTaskDialog({ columns, topics, labels, defaultColumnId, defaul
           {t("cancel")}
         </button>
         <button type="button" onClick={submit} disabled={title.trim() === "" || busy || columnId === ""}
-          className="tap flex h-10 items-center gap-2 rounded-xl bg-accent px-4 text-sm font-semibold text-on-accent shadow-accent disabled:opacity-50">
+          className="btn bg-accent font-semibold text-on-accent shadow-accent disabled:opacity-50">
           <IconPlus width={14} height={14} />
           {t("createTask")}
         </button>

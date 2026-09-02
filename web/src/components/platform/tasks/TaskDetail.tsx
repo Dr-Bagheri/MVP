@@ -101,7 +101,7 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
                 <span className="absolute top-10 z-50 flex w-48 flex-col rounded-xl border border-border bg-surface p-1 shadow-island">
                   <button type="button"
                     onClick={() => { setMenu(false); setConfirmArchive(true); }}
-                    className="tap flex h-9 items-center gap-2 rounded-lg px-2.5 text-start text-xs text-danger hover:bg-danger/10">
+                    className="btn btn-sm text-start text-danger hover:bg-danger/10">
                     <IconTrash width={12} height={12} />
                     {task.archived ? t("unarchive") : t("archiveTask")}
                   </button>
@@ -109,7 +109,7 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
               ) : null}
             </span>
             <button type="button" onClick={() => setEditing((v) => !v)}
-              className="tap flex h-9 items-center gap-1.5 rounded-xl border border-border px-3 text-xs font-medium text-fg hover:bg-border">
+              className="btn btn-sm border border-border font-medium text-fg hover:bg-border">
               <IconPencil width={12} height={12} />
               {editing ? t("done") : t("edit")}
             </button>
@@ -118,7 +118,7 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
           <div className="flex items-center gap-1.5">
             {task.call_id !== null ? (
               <Link href={`/meetings?call=${task.call_id}`}
-                className="tap flex h-9 items-center gap-1.5 rounded-xl bg-accent-soft px-3 text-xs font-medium text-accent">
+                className="btn btn-sm bg-accent-soft font-medium text-accent">
                 <IconVideo width={12} height={12} />
                 <span className="max-w-[280px] truncate">{task.call_title ?? t("recordGone")}</span>
               </Link>

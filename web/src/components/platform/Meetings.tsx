@@ -67,13 +67,13 @@ function TopicNameBox({ initial, onCancel, onSubmit }: {
           if (e.key === "Escape") onCancel();
         }}
         placeholder={t("topicNamePlaceholder")}
-        className="h-8 w-40 rounded-lg border border-accent bg-surface px-2.5 text-xs text-fg outline-none"
+        className="input h-[34px] min-h-[34px] w-40 border-accent"
       />
       <button
         type="button"
         disabled={name.trim() === ""}
         onClick={() => onSubmit(name.trim())}
-        className="tap grid h-8 w-8 place-items-center rounded-lg bg-accent text-on-accent disabled:opacity-50"
+        className="btn btn-icon bg-accent text-on-accent"
         aria-label={t("save")}
       >
         <IconCheck width={12} height={12} />
@@ -81,7 +81,7 @@ function TopicNameBox({ initial, onCancel, onSubmit }: {
       <button
         type="button"
         onClick={onCancel}
-        className="tap grid h-8 w-8 place-items-center rounded-lg border border-border text-fg-muted hover:text-fg"
+        className="btn btn-icon border border-border text-fg-muted hover:text-fg"
         aria-label={t("cancel")}
       >
         <IconClose width={12} height={12} />
@@ -155,7 +155,7 @@ export function Meetings() {
       type="button"
       aria-pressed={active}
       onClick={onClick}
-      className={`tap flex h-9 items-center gap-1.5 rounded-xl px-3.5 text-xs font-medium transition-colors ${
+      className={`btn btn-sm gap-1.5 font-medium ${
         active ? "bg-accent text-on-accent" : "text-fg-muted hover:bg-surface-2 hover:text-fg"
       }`}
     >
@@ -179,7 +179,7 @@ export function Meetings() {
         <button
           type="button"
           onClick={() => setCreating(true)}
-          className="tap flex h-10 items-center gap-2 rounded-xl bg-accent px-4 text-sm font-semibold text-on-accent shadow-accent transition-opacity hover:opacity-90"
+          className="btn bg-accent text-on-accent shadow-accent hover:opacity-90"
         >
           <IconPlus width={14} height={14} />
           {t("newMeeting")}
@@ -192,7 +192,7 @@ export function Meetings() {
           type="button"
           aria-pressed={topic === "all"}
           onClick={() => setTopic("all")}
-          className={`tap flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs ${
+          className={`btn btn-sm gap-1.5 border font-medium ${
             topic === "all" ? "border-accent bg-accent-soft font-semibold text-accent" : "border-border text-fg-muted hover:text-fg"
           }`}
         >
@@ -213,7 +213,7 @@ export function Meetings() {
               aria-pressed={topic === row.id}
               onClick={() => setTopic((cur) => (cur === row.id ? "all" : row.id))}
               onContextMenu={(e) => { e.preventDefault(); setTopicMenu(row.id); }}
-              className={`tap flex h-8 items-center gap-1.5 rounded-lg border ps-2.5 pe-1.5 text-xs ${
+              className={`btn btn-sm gap-1.5 border pe-1.5 font-medium ${
                 topic === row.id ? "border-accent bg-accent-soft font-semibold text-accent" : "border-border text-fg-muted hover:text-fg"
               }`}
             >
@@ -238,7 +238,7 @@ export function Meetings() {
                 <button
                   type="button"
                   onClick={() => { setTopicMenu(null); setRenamingTopic({ id: row.id, name: row.name }); }}
-                  className="tap flex h-9 items-center gap-2 rounded-lg px-2.5 text-start text-xs text-fg hover:bg-surface-2"
+                  className="btn btn-sm w-full justify-start gap-2 font-medium text-fg hover:bg-surface-2"
                 >
                   <IconPencil width={12} height={12} />
                   {t("renameTopic")}
@@ -254,7 +254,7 @@ export function Meetings() {
                       .then(() => { setTopic((cur) => (cur === row.id ? "all" : cur)); loadTopics(); load(); })
                       .catch(refusal);
                   }}
-                  className="tap flex h-9 items-center gap-2 rounded-lg px-2.5 text-start text-xs text-danger hover:bg-danger/10"
+                  className="btn btn-sm w-full justify-start gap-2 font-medium text-danger hover:bg-danger/10"
                 >
                   <IconTrash width={12} height={12} />
                   {t("removeTopic")}
@@ -267,7 +267,7 @@ export function Meetings() {
           type="button"
           aria-pressed={topic === "none"}
           onClick={() => setTopic((cur) => (cur === "none" ? "all" : "none"))}
-          className={`tap flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs ${
+          className={`btn btn-sm gap-1.5 border font-medium ${
             topic === "none" ? "border-accent bg-accent-soft font-semibold text-accent" : "border-border text-fg-muted hover:text-fg"
           }`}
         >
@@ -299,7 +299,7 @@ export function Meetings() {
             aria-label={t("addTopic")}
             title={t("addTopic")}
             onClick={() => setAddingTopic(true)}
-            className="tap grid h-8 w-8 place-items-center rounded-lg border border-dashed border-border text-fg-muted hover:border-border-strong hover:text-fg"
+            className="btn btn-icon border border-dashed border-border text-fg-muted hover:border-border-strong hover:text-fg"
           >
             <IconPlus width={12} height={12} />
           </button>
@@ -410,7 +410,7 @@ export function Meetings() {
                       void api.updateMeeting(m.id, { archived: !m.archived })
                         .then(load).catch(refusal);
                     }}
-                    className="tap flex h-9 items-center gap-2 rounded-lg px-2.5 text-start text-xs text-fg hover:bg-surface-2"
+                    className="btn btn-sm w-full justify-start gap-2 font-medium text-fg hover:bg-surface-2"
                   >
                     <IconArchive width={12} height={12} />
                     {m.archived ? t("unarchive") : t("archiveMeeting")}
@@ -418,7 +418,7 @@ export function Meetings() {
                   <button
                     type="button"
                     onClick={() => { setMenu(null); setCondemned(m); }}
-                    className="tap flex h-9 items-center gap-2 rounded-lg px-2.5 text-start text-xs text-danger hover:bg-danger/10"
+                    className="btn btn-sm w-full justify-start gap-2 font-medium text-danger hover:bg-danger/10"
                   >
                     <IconTrash width={12} height={12} />
                     {t("deleteMeeting")}
@@ -485,12 +485,12 @@ function MeetingCalendar({ meetings, locale, onOpen }: {
             {t("today")}
           </button>
           <button type="button" aria-label={t("prev")} onClick={() => setOffset((v) => v - 1)}
-            className="tap grid h-8 w-8 place-items-center rounded-lg border border-border text-fg-muted hover:text-fg">
+            className="btn btn-icon border border-border text-fg-muted hover:text-fg">
             <IconChevronRight width={12} height={12} className="rotate-180 rtl:rotate-0" />
           </button>
           <span className="px-1 text-sm font-semibold text-fg">{grid.title}</span>
           <button type="button" aria-label={t("next")} onClick={() => setOffset((v) => v + 1)}
-            className="tap grid h-8 w-8 place-items-center rounded-lg border border-border text-fg-muted hover:text-fg">
+            className="btn btn-icon border border-border text-fg-muted hover:text-fg">
             <IconChevronRight width={12} height={12} className="rtl:rotate-180" />
           </button>
         </div>

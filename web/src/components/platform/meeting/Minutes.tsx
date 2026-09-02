@@ -236,20 +236,20 @@ export function MinutesTab({ meeting, myName, myId, onChanged }: {
           <>
             {!approved ? (
               <button type="button" onClick={() => patch({ minutes_approved: true })}
-                className="tap flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-accent text-sm font-semibold text-on-accent shadow-accent hover:opacity-90">
+                className="btn w-full bg-accent font-semibold text-on-accent shadow-accent hover:opacity-90">
                 <IconCheck width={14} height={14} />
                 {t("minutesApprove")}
               </button>
             ) : null}
             <button type="button" disabled={alreadySigned || myName === ""}
               onClick={() => patch({ minutes_sign: myName })}
-              className="tap flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-accent text-sm font-semibold text-on-accent shadow-accent hover:opacity-90 disabled:opacity-50">
+              className="btn w-full bg-accent font-semibold text-on-accent shadow-accent hover:opacity-90 disabled:opacity-50">
               {alreadySigned ? t("minutesSigned") : t("minutesSignMine")}
             </button>
             <button type="button" disabled={!approved}
               onClick={() => patch({ minutes_closed: true })}
               title={approved ? undefined : t("minutesCloseNeedsApproval")}
-              className="tap flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-accent text-sm font-semibold text-accent hover:bg-accent-soft disabled:opacity-50">
+              className="btn w-full border border-accent font-semibold text-accent hover:bg-accent-soft disabled:opacity-50">
               {t("minutesFinalize")}
             </button>
           </>
@@ -257,12 +257,12 @@ export function MinutesTab({ meeting, myName, myId, onChanged }: {
 
         <div className="grid grid-cols-2 gap-2">
           <button type="button" onClick={downloadWord}
-            className="tap flex h-10 items-center justify-center gap-1.5 rounded-xl border border-border bg-surface text-xs font-medium text-fg hover:bg-border">
+            className="btn border border-border bg-surface font-medium text-fg hover:bg-border">
             <IconDownload width={12} height={12} />
             Word
           </button>
           <button type="button" onClick={printPdf}
-            className="tap flex h-10 items-center justify-center gap-1.5 rounded-xl border border-border bg-surface text-xs font-medium text-fg hover:bg-border">
+            className="btn border border-border bg-surface font-medium text-fg hover:bg-border">
             <IconPrint width={12} height={12} />
             PDF
           </button>

@@ -429,6 +429,28 @@
   }
 
   /*
+   * THE SIZES, because their absence is what produced the mess.
+   *
+   * A survey of this codebase on 2026-09-02 found 47 controls that had
+   * hand-rolled their own geometry and ELEVEN different shapes among them —
+   * h-10 rounded-xl, h-8 rounded-lg, h-9 rounded-xl, h-11 rounded-xl, h-7
+   * rounded-md … Nobody was being careless. `.btn` offered exactly one size,
+   * so every screen that needed a smaller control had no choice but to
+   * invent one, and eleven inventions is what "the platform looks like ten
+   * different developers made it" is made of.
+   *
+   * Measured off the reference: the compact control is h34 / 8px / 12.5
+   * semibold (its segmented tabs and toolbar buttons), and the square icon
+   * button is 28 on a side with the same 8px corner.
+   */
+  .btn-sm {
+    @apply h-[34px] min-h-[34px] rounded-[8px] px-[13px] text-[0.78125rem];
+  }
+  .btn-icon {
+    @apply h-7 min-h-[1.75rem] w-7 rounded-[8px] px-0;
+  }
+
+  /*
    * Inputs are replaced-adjacent: `.tap` renders no ::after on them, so their
    * VISUAL height IS their hit area. 44 below md (the ruling), 36 from md up
    * (M26). Buttons get to stay 36 everywhere because .tap covers them; inputs

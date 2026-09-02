@@ -97,7 +97,7 @@ function GreetingHead() {
       <button
         type="button"
         onClick={() => router.push("/meetings?new=1")}
-        className="tap flex h-10 items-center gap-2 rounded-xl border border-border bg-surface px-4 text-sm font-medium text-fg shadow-card hover:border-border-strong"
+        className="btn border border-border bg-surface font-medium text-fg shadow-card hover:border-border-strong"
       >
         <IconMic width={16} height={16} />
         {t("startRecordMeeting")}
@@ -353,7 +353,7 @@ export function Dashboard() {
               />
               <button
                 type="button"
-                className="tap inline-flex h-8 items-center gap-1.5 rounded-lg bg-accent px-3 text-xs font-semibold text-on-accent hover:opacity-90"
+                className="btn btn-sm bg-accent font-semibold text-on-accent hover:opacity-90"
                 onClick={() => {
                   /* the layout is already stored on every change — Save
                      LOCKS it, which is the promise the button makes */
@@ -368,7 +368,7 @@ export function Dashboard() {
           ) : (
             <button
               type="button"
-              className="tap inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-surface px-3 text-xs text-fg-muted hover:text-fg"
+              className="btn btn-sm border border-border bg-surface text-fg-muted hover:text-fg"
               onClick={() => setEditing(true)}
             >
               <IconPencil width={14} height={14} />
