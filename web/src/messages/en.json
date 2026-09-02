@@ -179,7 +179,8 @@
     "greetUpcoming": "you have {n} meetings ahead.",
     "greetNoUpcoming": "no meetings ahead.",
     "greetUpcomingUnknown": "an overview of meetings, tasks and minutes.",
-    "startRecordMeeting": "Start recording a meeting"
+    "startRecordMeeting": "Start recording a meeting",
+    "integrationsAll": "All connections ←"
   },
   "conversations": {
     "title": "History",

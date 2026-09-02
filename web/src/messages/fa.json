@@ -179,7 +179,8 @@
     "greetUpcoming": "{n} جلسه پیش‌رو داری.",
     "greetNoUpcoming": "جلسه پیش‌رویی نداری.",
     "greetUpcomingUnknown": "نمای کلی جلسات، تسک‌ها و مصوبات.",
-    "startRecordMeeting": "شروع ضبط جلسه"
+    "startRecordMeeting": "شروع ضبط جلسه",
+    "integrationsAll": "همهٔ اتصال‌ها ←"
   },
   "conversations": {
     "title": "تاریخچه",

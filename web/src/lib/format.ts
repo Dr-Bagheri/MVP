@@ -210,6 +210,29 @@ export function formatDate(iso: string, locale: string): string {
 }
 
 /**
+ * "Now", as the two strings a date field and a time field take.
+ *
+ * A named function rather than two `useState` initializers, because the rule
+ * ("a new meeting opens at the current time" — user directive, 2026-09-02) is
+ * the kind that fails silently: an initializer runs once per MOUNT, so the day
+ * somebody keeps a dialog alive and merely hides it, the captured "now" starts
+ * ageing and the field shows the time the page was opened. Nothing about that
+ * looks wrong — the clock is simply behind — and a rule that can only be
+ * checked by opening a dialog and reading a clock is a rule nothing checks.
+ *
+ * LOCAL, not UTC: these strings go into `<input type=date|time>`, which speak
+ * the wall clock in front of the person, and are read back with
+ * `new Date(\`${date}T${time}\`)`, which parses local. All three agree.
+ */
+export function nowFields(at: Date = new Date()): { date: string; time: string } {
+  const two = (n: number) => String(n).padStart(2, "0");
+  return {
+    date: `${at.getFullYear()}-${two(at.getMonth() + 1)}-${two(at.getDate())}`,
+    time: `${two(at.getHours())}:${two(at.getMinutes())}`,
+  };
+}
+
+/**
  * The DAY and the MONTH on their own — a calendar row's date block, where the
  * day number leads and the month names it.
  *

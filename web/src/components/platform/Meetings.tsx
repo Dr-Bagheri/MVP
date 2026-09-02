@@ -14,7 +14,7 @@ import {
   IconFolder, IconMic, IconPencil, IconPlus, IconTrash, IconUpload, IconVideo,
 } from "@/components/icons";
 import { ConfirmDialog, KebabMenu } from "@/components/rowActions";
-import { asciiDigits, dayKeyOf, digits, formatDate, formatTime, monthGridAt } from "@/lib/format";
+import { asciiDigits, dayKeyOf, digits, formatDate, formatTime, monthGridAt, nowFields } from "@/lib/format";
 
 /**
  * MEETINGS (0145, the reference adoption) — "add a part name meeting and
@@ -429,7 +429,27 @@ export function Meetings() {
         <NewMeetingDialog
           topics={topicRows}
           onClose={() => setCreating(false)}
-          onCreated={(m) => { setCreating(false); router.push(`/meetings/${m.id}`); }}
+          /*
+           * A FUTURE meeting is a PLAN — it goes on the list and stays there
+           * (user directive, 2026-09-02: "if it sets for future, just add it
+           * in table for meeting and don't show the before page even").
+           *
+           * Opening the meeting's own screen straight after scheduling one
+           * assumes the next thing wanted is to prepare it, and the common
+           * case is the opposite: somebody is writing down three meetings and
+           * being thrown into the first one's agenda each time is friction
+           * for a task nobody started.
+           *
+           * A meeting scheduled for NOW is the other intent — that person is
+           * about to hold it — so that one still opens.
+           */
+          onCreated={(m) => {
+            setCreating(false);
+            load();
+            if (new Date(m.scheduled_at).getTime() <= Date.now() + 60_000) {
+              router.push(`/meetings/${m.id}`);
+            }
+          }}
           onRefused={refusal}
         />
       ) : null}
@@ -680,17 +700,11 @@ function NewMeetingDialog({ topics, onClose, onCreated, onRefused }: {
   const t = useTranslations("meetings");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  /* the click moment, captured once at open */
-  const [date, setDate] = useState(() => {
-    const d = new Date();
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const dd = String(d.getDate()).padStart(2, "0");
-    return `${d.getFullYear()}-${mm}-${dd}`;
-  });
-  const [time, setTime] = useState(() => {
-    const d = new Date();
-    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-  });
+  /* the click moment, captured when this dialog MOUNTS — and it mounts on
+     every open, because the caller renders it conditionally. `nowFields`
+     carries the rule and its test; these two lines only decide WHEN to ask. */
+  const [date, setDate] = useState(() => nowFields().date);
+  const [time, setTime] = useState(() => nowFields().time);
   const [topic, setTopic] = useState("");
   const [mode, setMode] = useState<MeetingMode>("online");
   const [busy, setBusy] = useState(false);

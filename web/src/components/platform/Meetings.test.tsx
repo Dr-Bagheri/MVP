@@ -61,7 +61,10 @@ vi.mock("@/api/client", () => ({
     deleteMeeting: vi.fn(async () => undefined),
     createMeeting: async (input: Record<string, unknown>) => {
       created.push(input);
-      return meeting({ id: "m-new" });
+      /* the created row carries back the time it was given — the caller
+         decides what to do next from THAT, so a fixture with a fixed date
+         would decide the branch for it */
+      return meeting({ id: "m-new", scheduled_at: String(input.scheduled_at) });
     },
   },
 }));
@@ -141,7 +144,31 @@ describe("Meetings", () => {
     // an ISO instant, parseable back — never a local "YYYY-MM-DDTHH:mm"
     expect(Number.isNaN(new Date(String(body.scheduled_at)).getTime())).toBe(false);
     expect(String(body.scheduled_at)).toMatch(/Z$/);
-    // and the flow walks onto the created meeting's page
+    /*
+     * A FUTURE meeting STAYS on the list (user directive, 2026-09-02: "if it
+     * sets for future, just add it in table for meeting and don't show the
+     * before page even"). This one was moved to «فردا», so it is a plan —
+     * and being thrown into its agenda is friction for a task nobody started.
+     */
+    expect(pushSpy).not.toHaveBeenCalled();
+  });
+
+  it("a meeting scheduled for NOW opens — the other intent", async () => {
+    /*
+     * The control that makes the assertion above mean something. Without it,
+     * "does not navigate" would pass for an implementation that never
+     * navigates at all, and the person about to hold a meeting would be left
+     * looking at a list.
+     *
+     * The only difference from the test above is that the date is NOT moved
+     * forward — the dialog opens at the current time, so leaving it alone is
+     * "now".
+     */
+    render(<Meetings />);
+    await waitFor(() => expect(screen.getByText("هنوز جلسه‌ای نیست. اولین جلسه را برنامه‌ریزی کن.")).toBeInTheDocument());
+    await userEvent.click(screen.getByRole("button", { name: /جلسه جدید/ }));
+    await userEvent.type(screen.getByPlaceholderText("عنوان جلسه را بنویس"), "همین حالا");
+    await userEvent.click(screen.getByRole("button", { name: /ساختن جلسه/ }));
     await waitFor(() => expect(pushSpy).toHaveBeenCalledWith("/meetings/m-new"));
   });
 

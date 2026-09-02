@@ -316,21 +316,44 @@ describe("جلسات پیش‌رو (the product's own upcoming)", () => {
 });
 
 describe("آخرین جلسات", () => {
-  it("lists newest first with the review chip on recorded rows", async () => {
+  it("shows THE last meeting that already happened — one row, and never a future one", async () => {
+    /*
+     * The panel listed the newest meetings by date, so on a board that also
+     * shows «جلسات پیش‌رو» the same FUTURE meeting appeared in both — a card
+     * headed "latest" showing something that had not occurred (user
+     * directive, 2026-09-02).
+     *
+     * Three rows on purpose: one future (must not appear), one past without a
+     * record, one past WITH a record. The last is the newest of the two that
+     * happened, so it is the one row expected — and the future one being
+     * absent is what distinguishes this from "sort by date and take one".
+     */
     MEETINGS = async () => [
+      meetingRow({ id: "m-future", title: "آینده", scheduled_at: "2099-01-01T09:00:00.000Z" }),
       meetingRow({ id: "m-old", title: "قدیمی", scheduled_at: "2026-01-01T09:00:00.000Z" }),
       meetingRow({ id: "m-new", title: "تازه", scheduled_at: "2026-06-01T09:00:00.000Z", call_id: "c-1" }),
     ];
     let view: ReturnType<typeof render>;
-    await act(async () => { view = render(<LatestMeetingsWidget size="column" />); });
-    const titles = [...view!.container.querySelectorAll("li a span span:first-child")].map((el) => el.textContent);
-    expect(titles.indexOf("تازه")).toBeLessThan(titles.indexOf("قدیمی"));
-    // the chip sits on the RECORDED row only
+    await act(async () => { view = render(<LatestMeetingsWidget />); });
     const rows = [...view!.container.querySelectorAll("li")];
-    const recorded = rows.find((r) => r.textContent!.includes("تازه"))!;
-    const bare = rows.find((r) => r.textContent!.includes("قدیمی"))!;
-    expect(recorded.textContent).toContain("بازبینی");
-    expect(bare.textContent).not.toContain("بازبینی");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.textContent).toContain("تازه");
+    expect(view!.container.textContent).not.toContain("آینده");
+    /* the recorded row wears the review chip */
+    expect(rows[0]!.textContent).toContain("بازبینی");
+  });
+
+  it("a meeting whose time has passed counts even with no recording", async () => {
+    /* the half that is easy to leave out: requiring a `call_id` would hide a
+       meeting somebody simply did not record, and "it happened" is a fact
+       about the clock as much as about the pipeline */
+    MEETINGS = async () => [
+      meetingRow({ id: "m-old", title: "بی‌ضبط", scheduled_at: "2026-01-01T09:00:00.000Z" }),
+    ];
+    let view: ReturnType<typeof render>;
+    await act(async () => { view = render(<LatestMeetingsWidget />); });
+    expect([...view!.container.querySelectorAll("li")]).toHaveLength(1);
+    expect(view!.container.textContent).toContain("بی‌ضبط");
   });
 });
 

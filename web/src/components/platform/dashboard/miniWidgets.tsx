@@ -13,7 +13,7 @@ import {
   IconPlay, IconPulse, IconSettings,
 } from "@/components/icons";
 import { EchoMark } from "@/components/platform/icons";
-import { dayKeyOf, digits, formatDate, formatDayMonth, formatTime, hourInResolvedZone, monthGrid, weekRangeLabel, weekStrip } from "@/lib/format";
+import { dayKeyOf, digits, formatDayMonth, formatTime, hourInResolvedZone, monthGrid, weekRangeLabel, weekStrip } from "@/lib/format";
 import { useCalendarPreference, useTimezonePreference } from "@/lib/usePreferences";
 import { useAgentCopy } from "@/components/platform/agentAppearance";
 import {
@@ -736,9 +736,6 @@ export function UpcomingWidget({ size }: { size: TileSize }) {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="mb-1.5 text-start">
-        <Link href="/meetings" className="text-xs text-accent hover:underline">{t("upcomingAll")}</Link>
-      </div>
       {ahead.length === 0 ? (
         <div className="grid min-h-0 flex-1 place-items-center text-center">
           <div>
@@ -799,8 +796,12 @@ export function UpcomingWidget({ size }: { size: TileSize }) {
  * 7b — آخرین جلسات: newest first, each with its stage chip (بازبینی once a
  * record exists — the reference's own chip), each a door to its page.
  */
-export function LatestMeetingsWidget({ size }: { size: TileSize }) {
+/* no `size`: the panel shows THE last meeting, so a bigger tile shows the
+   same one row with more air rather than a longer list */
+export function LatestMeetingsWidget() {
   const t = useTranslations("dashboard");
+  /* the MODE and the STAGE are the meetings surface's words */
+  const tMeetings = useTranslations("meetings");
   const locale = useLocale();
   const [meetings, setMeetings] = useState<MeetingRecord[] | null | "failed">(null);
 
@@ -816,28 +817,55 @@ export function LatestMeetingsWidget({ size }: { size: TileSize }) {
   if (meetings === "failed") return <Unreadable />;
   if (meetings.length === 0) return <Empty>{t("noMeetingsYet")}</Empty>;
 
+  /*
+   * THE LAST MEETING — one, and one that has actually HAPPENED (user
+   * directive, 2026-09-02: "last meeting must be for the one that already
+   * done, and just put one last item in it").
+   *
+   * It listed the newest meetings by date, which on a board that also shows
+   * «جلسات پیش‌رو» meant the same future meeting appeared in both panels — the
+   * card headed "latest" was showing something that had not occurred. A
+   * meeting has happened when it produced a record (`call_id`) or when its
+   * time has passed; either is enough, and requiring both would hide a
+   * meeting somebody simply did not record.
+   */
+  const now = Date.now();
   const latest = [...meetings]
+    .filter((m) => m.call_id !== null || new Date(m.scheduled_at).getTime() < now)
     .sort((a, b) => b.scheduled_at.localeCompare(a.scheduled_at))
-    .slice(0, rowsFor(size));
+    .slice(0, 1);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="mb-1.5 text-start">
-        <Link href="/meetings" className="text-xs text-accent hover:underline">{t("upcomingAll")}</Link>
-      </div>
       <ul className="min-h-0 flex-1 divide-y divide-border/60 overflow-y-auto">
+        {/* THE UPCOMING ROW'S SHAPE, exactly (user directive: "with date and
+            status as the upcoming meetings") — the two panels sit one above
+            the other, and two spellings of one row is the first thing an eye
+            notices when they do */}
         {latest.map((m) => (
           <li key={m.id}>
-            <Link href={`/meetings/${m.id}`} className="flex items-center gap-2 py-1.5 hover:text-accent">
+            <Link href={`/meetings/${m.id}`} className="flex items-center gap-2.5 py-1.5 hover:text-accent">
+              <span className="grid shrink-0 place-items-center rounded-lg bg-surface-2 px-1.5 py-1 text-center">
+                <span className="badge-num block text-sm font-bold leading-4 text-fg">
+                  {formatDayMonth(m.scheduled_at, locale).day}
+                </span>
+                <span className="block text-[9px] leading-3 text-fg-subtle">
+                  {formatDayMonth(m.scheduled_at, locale).month}
+                </span>
+              </span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm text-fg" title={m.title}>{m.title}</span>
-                <span className="block text-[11px] text-fg-subtle">{formatDate(m.scheduled_at, locale)}</span>
-              </span>
-              {m.call_id !== null ? (
-                <span className="shrink-0 rounded-md bg-accent-soft px-1.5 py-0.5 text-[10px] font-medium text-accent">
-                  {t("latestReviewChip")}
+                <span className="mt-0.5 flex items-center gap-1.5 text-[10px] text-fg-subtle">
+                  <span className="badge-num">{formatTime(m.scheduled_at, locale)}</span>
+                  <span aria-hidden>·</span>
+                  <span>{tMeetings(`mode_${m.mode}`)}</span>
                 </span>
-              ) : null}
+              </span>
+              <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                m.call_id !== null ? "bg-accent-soft text-accent" : "bg-surface-2 text-fg-subtle"
+              }`}>
+                {m.call_id !== null ? t("latestReviewChip") : tMeetings("stage_post")}
+              </span>
             </Link>
           </li>
         ))}

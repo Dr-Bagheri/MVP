@@ -10,7 +10,7 @@ import {
   type DashboardLayout, type TilePlacement, type TileSize, type WidgetKey,
 } from "@/lib/dashboardLayout";
 import { WidgetBoard } from "./dashboard/WidgetBoard";
-import { useRouter } from "@/i18n/routing";
+import { useRouter, Link } from "@/i18n/routing";
 import { api } from "@/api/client";
 import { digits, formatDate, personName } from "@/lib/format";
 import { IconMic } from "@/components/icons";
@@ -213,11 +213,26 @@ export function Dashboard() {
         className={`tile group/card ${compact ? "p-3" : "p-4"}`}
         aria-label={label}
       >
-        <header className="mb-2.5 flex items-center gap-3">
+        {/*
+          THE THEME'S PANEL HEADER (user directive, 2026-09-02): title and
+          action on ONE row, with the hairline under them. The action used to
+          be a link the widget drew on the line below its own title, which
+          spent a whole row of a small card and put the first list item where
+          the eye expected the second thing in the panel.
+        */}
+        <header className="mb-2.5 flex items-center gap-3 border-b border-border pb-2">
           <span className="tile-chip">{spec.icon}</span>
-          <h2 className="min-w-0 flex-1 select-none truncate text-[0.95rem] font-semibold">
+          <h2 className="min-w-0 flex-1 select-none truncate text-base font-semibold">
             {label}
           </h2>
+          {spec.action !== undefined && !editing ? (
+            <Link
+              href={spec.action.href}
+              className="shrink-0 whitespace-nowrap text-xs text-accent hover:underline"
+            >
+              {t(spec.action.labelKey as "upcomingAll")}
+            </Link>
+          ) : null}
           {/*
             The card's controls appear ONLY while the board is being edited:
             a pin and a remove. Outside edit mode there is nothing here at
@@ -268,7 +283,7 @@ export function Dashboard() {
       case "stats": return <StatsWidget />;
       case "week": return <WeekWidget />;
       case "upcoming": return <UpcomingWidget size={size} />;
-      case "latest": return <LatestMeetingsWidget size={size} />;
+      case "latest": return <LatestMeetingsWidget />;
       case "records": return <RecordsMiniWidget size={size} />;
       case "calendar": return <CalendarWidget />;
       case "agents": return <AgentsWidget />;
