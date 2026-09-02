@@ -18,6 +18,7 @@ import { actorAutonomy, hasAutonomyColumn, hasSignalTables } from "../db/capabil
 import { iso } from "./vocabulary.ts";
 import { assertUuid } from "../db/identity.ts";
 import { createAuditRepo, type AuditRepo } from "./audit.ts";
+import { livekitConfig, mintRoomToken, roomNameFor } from "./livekit.ts";
 import { createOrgRepo, type OrgRepo } from "./org.ts";
 import { createSessionsRepo, type SessionsRepo } from "./sessions.ts";
 import { availableTools, createSkillAuthoring, type SkillAuthoring } from "./skills.ts";
@@ -2540,6 +2541,30 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       ...(typeof body.archived === "boolean" ? { archived: body.archived } : {}),
     });
     return reply.code(204).send();
+  });
+
+  /**
+   * The video room's token (LiveKit). The caller proves they can OPEN this
+   * meeting by fetching it — `meetings.detail` refuses a meeting they cannot
+   * see — and only then is a token minted for that meeting's room. Neither
+   * the room nor the identity comes from the request body: those are the two
+   * facts a participant must not choose.
+   */
+  app.post("/v1/meetings/:id/token", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const config = livekitConfig();
+    if (config === null) {
+      throw new ValidationError("video is not configured on this platform",
+        { code: "video_not_configured" });
+    }
+    const { id } = request.params as { id: string };
+    const meeting = await meetings.detail(identity, id);
+    const me = await members.me(identity);
+    return reply.send(mintRoomToken(
+      config, identity, roomNameFor(meeting.id),
+      me.display_name.trim() || me.email,
+    ));
   });
 
   app.delete("/v1/meetings/:id", async (request, reply) => {

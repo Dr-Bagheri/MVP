@@ -29,6 +29,12 @@ $names = [ordered]@{
   SUPABASE_URL         = "echo_platform_supabase_url"
   SUPABASE_SERVICE_KEY = "echo_platform_supabase_secret_key"
   SONIOX_API_KEY       = "soniox_key"
+  # the video room (LiveKit). The URL is not a secret and the key is not much
+  # of one, but they travel together with the secret that signs tokens - one
+  # place, one deploy, no half-configured video.
+  LIVEKIT_URL          = "echo_platform_livekit_url"
+  LIVEKIT_API_KEY      = "echo_platform_livekit_api_key"
+  LIVEKIT_API_SECRET   = "echo_platform_livekit_api_secret"
 }
 
 # OPTIONAL: a project on asymmetric signing keys (ES256, the Frankfurt

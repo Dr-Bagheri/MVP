@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { IconCalendar, IconChevronRight, IconClock } from "@/components/icons";
+import { Popover } from "@/components/Popover";
 import { asciiDigits, digits, formatDate, monthGridAt } from "@/lib/format";
 
 /**
@@ -25,19 +26,6 @@ import { asciiDigits, digits, formatDate, monthGridAt } from "@/lib/format";
  * wire, where every consumer would meet it again.
  */
 
-function useOutsideClose(open: boolean, onClose: () => void) {
-  const shell = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      if (shell.current && !shell.current.contains(e.target as Node)) onClose();
-    };
-    document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
-  }, [open, onClose]);
-  return shell;
-}
-
 /** `YYYY-MM-DD` in and out — the panel is only how it is read and chosen */
 export function DateField({ value, onChange, id }: {
   value: string;
@@ -48,7 +36,7 @@ export function DateField({ value, onChange, id }: {
   const locale = useLocale();
   const [open, setOpen] = useState(false);
   const [offset, setOffset] = useState(0);
-  const shell = useOutsideClose(open, () => setOpen(false));
+  const shell = useRef<HTMLButtonElement | null>(null);
   const grid = useMemo(() => monthGridAt(new Date(), locale, offset), [locale, offset]);
 
   const pick = (iso: string) => {
@@ -76,8 +64,9 @@ export function DateField({ value, onChange, id }: {
   );
 
   return (
-    <div ref={shell} className="relative">
+    <div>
       <button
+        ref={shell}
         type="button"
         id={id}
         onClick={() => setOpen((v) => !v)}
@@ -91,8 +80,8 @@ export function DateField({ value, onChange, id }: {
         <IconCalendar width={14} height={14} className="shrink-0 text-fg-subtle" aria-hidden />
       </button>
 
-      {open ? (
-        <div className="absolute start-0 top-full z-50 mt-1 w-72 rounded-xl border border-border bg-surface p-2 shadow-island">
+      <Popover open={open} anchor={shell} onClose={() => setOpen(false)} minWidth={false}>
+        <div className="w-72 p-1">
           <div className="mb-2 flex flex-wrap gap-1.5">
             {preset(t("dateToday"), 0)}
             {preset(t("dateTomorrow"), 1)}
@@ -137,7 +126,7 @@ export function DateField({ value, onChange, id }: {
             })}
           </div>
         </div>
-      ) : null}
+      </Popover>
     </div>
   );
 }
@@ -154,7 +143,7 @@ export function TimeField({ value, onChange, id }: {
   const t = useTranslations("meetings");
   const locale = useLocale();
   const [open, setOpen] = useState(false);
-  const shell = useOutsideClose(open, () => setOpen(false));
+  const shell = useRef<HTMLButtonElement | null>(null);
 
   const [hh, mm] = value.split(":");
   const hour = Number(hh ?? "0");
@@ -185,8 +174,9 @@ export function TimeField({ value, onChange, id }: {
   );
 
   return (
-    <div ref={shell} className="relative">
+    <div>
       <button
+        ref={shell}
         type="button"
         id={id}
         onClick={() => setOpen((v) => !v)}
@@ -202,13 +192,13 @@ export function TimeField({ value, onChange, id }: {
         <IconClock width={14} height={14} className="shrink-0 text-fg-subtle" aria-hidden />
       </button>
 
-      {open ? (
-        <div className="absolute start-0 top-full z-50 mt-1 flex w-44 gap-1 rounded-xl border border-border bg-surface p-2 shadow-island">
+      <Popover open={open} anchor={shell} onClose={() => setOpen(false)} minWidth={false}>
+        <div className="flex w-44 gap-1 p-1">
           {column(t("hourLabel"), HOURS, hour, (h) => set(h, minute))}
           <span className="w-px bg-border" aria-hidden />
           {column(t("minuteLabel"), MINUTES, minute, (m) => set(hour, m))}
         </div>
-      ) : null}
+      </Popover>
     </div>
   );
 }

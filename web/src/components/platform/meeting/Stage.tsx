@@ -23,10 +23,9 @@ import { IconPencil, IconResize, IconUpload, IconVideo } from "@/components/icon
  */
 type Mode = "video" | "board" | "slides";
 
-export function MeetingStage({ meeting, recordingLive, displayName }: {
+export function MeetingStage({ meeting, recordingLive }: {
   meeting: MeetingRecord;
   recordingLive: boolean;
-  displayName: string;
 }) {
   const t = useTranslations("meetings");
   /*
@@ -116,7 +115,7 @@ export function MeetingStage({ meeting, recordingLive, displayName }: {
       {mode === "video" && video ? (
         /* the room lives HERE, in the box — a Google Meet link could only
            ever open a window, because Google refuses to be framed */
-        <MeetingRoom meetingId={meeting.id} displayName={displayName} videoUrl={meeting.video_url} />
+        <MeetingRoom meetingId={meeting.id} />
       ) : null}
 
       {mode === "slides" ? (

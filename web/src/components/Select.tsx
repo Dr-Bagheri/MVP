@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
+import { Popover } from "@/components/Popover";
 import { IconChevronRight } from "@/components/icons";
 
 /**
@@ -52,19 +53,10 @@ export function Select({
 }) {
   const [open, setOpen] = useState(false);
   const [cursor, setCursor] = useState(0);
-  const shell = useRef<HTMLDivElement | null>(null);
+  const shell = useRef<HTMLButtonElement | null>(null);
   const listId = useId();
 
   const selected = options.find((o) => o.value === value) ?? null;
-
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      if (shell.current && !shell.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
-  }, [open]);
 
   /* the cursor starts on the CURRENT value, so the first arrow press moves
      from where the person is rather than from the top of the list */
@@ -82,8 +74,9 @@ export function Select({
   };
 
   return (
-    <div ref={shell} className={`relative ${className}`}>
+    <div className={className}>
       <button
+        ref={shell}
         type="button"
         id={id}
         disabled={disabled}
@@ -114,7 +107,7 @@ export function Select({
         />
       </button>
 
-      {open ? (
+      <Popover open={open} anchor={shell} onClose={() => setOpen(false)}>
         <ul
           id={listId}
           role="listbox"
@@ -128,16 +121,12 @@ export function Select({
           }}
           ref={(node) => { node?.focus(); }}
           /*
-           * `min-w-full` and NOT `inset-x-0` (user directive: "the menu of
-           * the role must be the size of the biggest word it has in it, its
-           * unreadable"). Pinned to the trigger's width, a list of long
-           * labels in a narrow control truncated every one of them to
-           * "Pro…", "En…", "De…" — a menu nobody can read is a menu nobody
-           * can choose from. It is at least as wide as the control and grows
-           * to its longest entry; `max-w` keeps a very long label from
-           * running off the panel it sits in.
+           * The panel's own chrome lives in Popover; this only decides how
+           * TALL the list may get and that it never truncates a label — a
+           * menu pinned to a narrow control once read "Pro…", "En…", "De…",
+           * and a menu nobody can read is a menu nobody can choose from.
            */
-          className="absolute top-full z-50 mt-1 max-h-60 min-w-full max-w-[min(22rem,80vw)] overflow-y-auto whitespace-nowrap rounded-xl border border-border bg-surface p-1 shadow-island outline-none start-0"
+          className="max-h-60 max-w-[min(22rem,80vw)] overflow-y-auto whitespace-nowrap outline-none"
         >
           {options.map((option, index) => (
             <li
@@ -158,7 +147,7 @@ export function Select({
             </li>
           ))}
         </ul>
-      ) : null}
+      </Popover>
     </div>
   );
 }

@@ -31,8 +31,21 @@ vi.mock("@/components/platform/CrumbTitle", () => ({
 vi.mock("./meeting/Whiteboard", () => ({
   Whiteboard: () => <div data-testid="whiteboard-stub" />,
 }));
+/* so is the video room: LiveKit opens a real WebSocket the moment it renders,
+   and jsdom has no WebRTC — an unmocked room throws mid-render, which takes
+   the whole page down and reports as "the stepper is missing" */
+vi.mock("@livekit/components-react", () => ({
+  LiveKitRoom: ({ children }: { children: React.ReactNode }) =>
+    <div data-testid="livekit-room">{children}</div>,
+  GridLayout: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  ParticipantTile: () => <div />,
+  ControlBar: () => <div />,
+  RoomAudioRenderer: () => null,
+  useTracks: () => [],
+}));
 
 const startSpy = vi.fn(async (_opts: unknown) => undefined);
+const tokenSpy = vi.fn((_id: string) => undefined);
 /* useSyncExternalStore REQUIRES a stable snapshot reference — a getter that
    builds a fresh object every call re-renders forever (the real engine's
    snapshot is a module-level constant between changes for the same reason) */
@@ -86,6 +99,12 @@ vi.mock("@/api/client", async () => ({
     getTranscript: async () => [],
     getSpeakers: async () => [],
     getCallAudio: async () => null,
+    /* the video room asks for a TOKEN now — the server mints it, so a test
+       that let this reject would be testing the failure branch by accident */
+    meetingRoomToken: async (id: string) => tokenSpy(id) ?? ({
+      token: "t", url: "wss://example.livekit.cloud",
+      expires_at: new Date(Date.now() + 3600_000).toISOString(),
+    }),
     createTask: vi.fn(), addCallNote: vi.fn(), deleteCallNote: vi.fn(),
   },
 }));
@@ -96,6 +115,7 @@ beforeEach(() => {
   MEETING = meeting({});
   CALL = null;
   startSpy.mockClear();
+  tokenSpy.mockClear();
 });
 
 /** one processing step's row, found by its label */
@@ -155,7 +175,7 @@ describe("MeetingPage", () => {
        video room, which is a frame in OUR box rather than a link out, and
        the canvas is a chip on the same header */
     await userEvent.click(screen.getByRole("button", { name: /حین جلسه/ }));
-    expect(screen.getByTitle("ویدیو")).toBeInTheDocument();
+    expect(await screen.findByTestId("livekit-room")).toBeInTheDocument();
     expect(screen.queryByTestId("whiteboard-stub")).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "وایت‌برد" }));
     expect(screen.getByTestId("whiteboard-stub")).toBeInTheDocument();
@@ -225,15 +245,18 @@ describe("MeetingPage", () => {
      A silent empty rectangle is the failure this branch exists to prevent.
      The address itself is pinned in Room.test.ts, where it is a pure
      function and can be checked without a browser at all. */
-  it("names a room it cannot embed, and still gives its address", async () => {
+  it("an online meeting's stage asks for a room token, and says so when there is none", async () => {
+    /* the room is OUR components now, not a frame — jsdom cannot run a
+       WebRTC connection, so what is assertable here is the hand-off: the
+       stage asks the server for a token for THIS meeting. Where the token
+       goes afterwards is livekit-token.test.ts's subject, on the side that
+       mints it. */
     MEETING = meeting({ call_id: null, mode: "online" });
     render(<MeetingPage id="m-1" />);
     await waitFor(() => expect(screen.getByText("مشخصات")).toBeInTheDocument());
     await userEvent.click(screen.getByRole("button", { name: /حین جلسه/ }));
 
-    const out = await screen.findByRole("link", { name: /باز کردن در پنجره/ });
-    // the meeting's own id, dashes stripped — not some other meeting's room
-    expect(out.getAttribute("href")).toContain("neurai-m1");
+    await waitFor(() => expect(tokenSpy).toHaveBeenCalledWith("m-1"));
   });
 
   it("a recorded meeting opens on the post stage", async () => {

@@ -10,7 +10,6 @@ import { useCrumbTitle } from "@/components/platform/CrumbTitle";
 import { ConfirmDialog } from "@/components/rowActions";
 import { AgendaEditor, InviteeInput, MODE_ICON } from "./Meetings";
 import { MeetingStage } from "./meeting/Stage";
-import { roomIsOurs, roomUrl } from "./meeting/Room";
 import { AudioBar, ExtractionPanel, ProcessingCard, TranscriptPanel } from "./meeting/Review";
 import { MinutesTab } from "./meeting/Minutes";
 import { MeetingTasksBoard } from "./meeting/MiniTasks";
@@ -538,24 +537,24 @@ function PreStage({ meeting, onPatch, locale, me }: {
           </header>
           <p className="text-xs leading-5 text-fg-muted">{t(`modeExplain_${meeting.mode}`)}</p>
           {meeting.mode === "online" ? (
-            /* the room is DERIVED from the meeting, so there is nothing to
-               create and nothing that can fail — the link is true the moment
-               the meeting exists, and it is the same one the stage opens */
+            /*
+             * THE LINK IS THIS PAGE. Under LiveKit the room is not an address
+             * on somebody else's host — it is a name inside our project that
+             * only a server-minted token opens, so what an invitee needs is
+             * the meeting's own page, where the token is issued to them.
+             * Handing out a room name would be handing out something nobody
+             * can use.
+             */
             <div className="mt-2.5 space-y-2">
-              <p className="truncate rounded-xl border border-border bg-surface-2/60 px-3 py-2 text-[11px] text-fg-muted" dir="ltr">
-                {roomUrl(meeting.id)}
-              </p>
               <button
                 type="button"
-                onClick={() => void navigator.clipboard?.writeText(roomUrl(meeting.id)).catch(() => undefined)}
+                onClick={() => void navigator.clipboard?.writeText(window.location.href).catch(() => undefined)}
                 className="tap flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-border bg-surface text-xs font-medium text-fg hover:bg-border"
               >
                 <IconCopy width={12} height={12} />
                 {t("copyRoom")}
               </button>
-              <p className="text-[11px] leading-5 text-fg-subtle">
-                {roomIsOurs() ? t("roomOnOurServer") : t("roomOnPublicInstance")}
-              </p>
+              <p className="text-[11px] leading-5 text-fg-subtle">{t("roomOnOurServer")}</p>
             </div>
           ) : null}
         </section>
@@ -732,7 +731,6 @@ function HoldStage({ meeting, me, locale, recordingLive }: {
       <MeetingStage
         meeting={meeting}
         recordingLive={recordingLive}
-        displayName={me === null ? "" : personName(me, locale)}
       />
 
       {/* self-start: a grid item stretches by default, and `.tile` sets

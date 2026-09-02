@@ -1511,6 +1511,10 @@ export const api = {
       headers: { "content-type": "application/json" },
     });
   },
+  /** the video room's join token — minted server-side, never in the browser */
+  async meetingRoomToken(id: string): Promise<{ token: string; url: string; expires_at: string }> {
+    return bff(`/api/meetings/${encodeURIComponent(id)}/token`, { method: "POST" });
+  },
   /** 0148: delete the PLAN — the record it produced is a different row */
   async deleteMeeting(id: string): Promise<void> {
     await bff<null>(`/api/meetings/${encodeURIComponent(id)}`, { method: "DELETE" });

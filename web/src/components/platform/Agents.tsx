@@ -6,9 +6,8 @@ import { api } from "@/api/client";
 import { useRefreshEpoch } from "@/lib/refreshBus";
 import type { AgentCard, User } from "@/api/types";
 import { Link } from "@/i18n/routing";
-import { AssistantMenu } from "./AssistantMenu";
 import { PlatformShell } from "./PlatformShell";
-import { MenuLayout, PageContainer, PageHeader, Section } from "@/components/scaffold";
+import { PageContainer, PageHeader, Section } from "@/components/scaffold";
 import { Card } from "@/components/ui";
 import { Icon, IconPencil } from "@/components/icons";
 import { AgentEditor } from "./AgentEditor";
@@ -53,7 +52,11 @@ export function Agents() {
 
   return (
     <PlatformShell>
-      <MenuLayout menu={<AssistantMenu activeSlug="agents" />}>
+      {/* NO SECTION MENU (user directive, 2026-09-02). These three left the
+          assistant's sub-menu for the main rail, and a page that still opens
+          that menu beside itself is the door it was moved out of, shown
+          twice — the rail says where you are, and this pane said it again in
+          another vocabulary. */}
         <PageContainer>
           {editing !== undefined ? (
             <AgentEditor
@@ -141,7 +144,6 @@ export function Agents() {
             </>
           )}
         </PageContainer>
-      </MenuLayout>
     </PlatformShell>
   );
 }

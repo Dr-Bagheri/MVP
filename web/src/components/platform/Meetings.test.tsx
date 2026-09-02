@@ -127,8 +127,11 @@ describe("Meetings", () => {
     expect(within(dialog).queryByText("انتخاب ساعت")).toBeNull();
 
     await userEvent.click(within(dialog).getByLabelText("تاریخ *"));
-    // «فردا» — a preset, so the test does not have to know today's date
-    await userEvent.click(within(dialog).getByRole("button", { name: "فردا" }));
+    /* the panel is PORTALLED to the body — that is the point of it, so it
+       cannot be clipped by the dialog or change its height — so it is found
+       on the screen rather than inside the dialog. «فردا» is a preset, so
+       the test does not have to know today's date. */
+    await userEvent.click(screen.getByRole("button", { name: "فردا" }));
     await userEvent.click(screen.getByRole("button", { name: /ساختن جلسه/ }));
 
     await waitFor(() => expect(created).toHaveLength(1));

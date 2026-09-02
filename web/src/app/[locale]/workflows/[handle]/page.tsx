@@ -8,10 +8,9 @@ import type {
 } from "@/api/types";
 import { Link, useRouter } from "@/i18n/routing";
 import { PlatformShell } from "@/components/platform/PlatformShell";
-import { AssistantMenu } from "@/components/platform/AssistantMenu";
 import { useCrumbTitle } from "@/components/platform/CrumbTitle";
 import { WorkflowTile } from "@/components/platform/WorkflowTile";
-import { MenuLayout, PageContainer } from "@/components/scaffold";
+import { PageContainer } from "@/components/scaffold";
 import { Card } from "@/components/ui";
 import { Pagination, usePaged } from "@/components/Pagination";
 import { ConfirmDialog, KebabMenu, type KebabItem } from "@/components/rowActions";
@@ -780,7 +779,8 @@ export default function WorkflowDetailPage({
 
   return (
     <PlatformShell>
-      <MenuLayout menu={<AssistantMenu activeSlug="workflows" />}>
+      {/* no section menu — Workflows is a rail destination now, and its
+          sub-menu was the same door shown twice (2026-09-02) */}
         <PageContainer>
           {subject === null ? (
             <Card><p className="text-sm text-fg-muted">{t("detailMissing")}</p></Card>
@@ -1069,7 +1069,6 @@ export default function WorkflowDetailPage({
             </>
           )}
         </PageContainer>
-      </MenuLayout>
 
       {/*
         Destructive actions confirm — the platform's rule, one dialog

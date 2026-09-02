@@ -5,9 +5,8 @@ import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { ConnectorProvider, ConnectorStatus, Me } from "@/api/types";
 import { useRouter } from "@/i18n/routing";
-import { AssistantMenu } from "./AssistantMenu";
 import { PlatformShell } from "./PlatformShell";
-import { MenuLayout, PageContainer, PageHeader, Section } from "@/components/scaffold";
+import { PageContainer, PageHeader, Section } from "@/components/scaffold";
 import { DataTable, StatusDot, type Column } from "@/components/DataTable";
 import { EmptyState } from "@/components/ui";
 import { ConfirmDialog } from "@/components/rowActions";
@@ -273,7 +272,11 @@ export function Integrations() {
 
   return (
     <PlatformShell>
-      <MenuLayout menu={<AssistantMenu activeSlug="integrations" />}>
+      {/* NO SECTION MENU (user directive, 2026-09-02). These three left the
+          assistant's sub-menu for the main rail, and a page that still opens
+          that menu beside itself is the door it was moved out of, shown
+          twice — the rail says where you are, and this pane said it again in
+          another vocabulary. */}
         <PageContainer>
           <PageHeader title={tp("integrations")} subtitle={t("subtitle")} />
 
@@ -437,7 +440,6 @@ export function Integrations() {
             {error ? <p role="status" className="mt-4 text-sm text-danger">{error}</p> : null}
           </Section>
         </PageContainer>
-      </MenuLayout>
 
       {/*
         THE CONNECT BRIEFING (user directive: "when you click the one without
