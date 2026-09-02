@@ -1700,7 +1700,8 @@
     "sys_commitments_name": "Commitments assistant",
     "sys_commitments_desc": "Pulls out who took on what, and by when, with the words from the conversation as evidence.",
     "recordOnUse": "Start a recording when I use this agent",
-    "overviewTools": "Tools"
+    "overviewTools": "Tools",
+    "talk": "Talk"
   },
   "management": {
     "title": "Management",
