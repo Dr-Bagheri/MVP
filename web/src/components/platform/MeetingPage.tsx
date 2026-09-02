@@ -1103,7 +1103,17 @@ function PostStage({ meeting, call, me, locale, onGoHold, onChanged, onBackToMee
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       {/* the audio bar rides above the tabs once the record is ready */}
-      {ready ? <AudioBar callId={meeting.call_id} seekTo={seekReq} locale={locale} /> : null}
+      {ready ? (
+        <AudioBar
+          callId={meeting.call_id}
+          seekTo={seekReq}
+          locale={locale}
+          /* the total comes from the WIRE (call.duration_ms, recomputed by
+             the worker as max(offset+duration) — never a client sum, which
+             under-reports across a gap) */
+          durationMs={typeof call === "object" && call !== null ? call.duration_ms : null}
+        />
+      ) : null}
 
       <div role="tablist" aria-label={t("stage_post")} className="flex flex-wrap items-center gap-1 border-b border-border">
         {tabs.map((entry) => (

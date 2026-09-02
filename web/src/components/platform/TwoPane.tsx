@@ -92,7 +92,22 @@ export function TwoPane({
         So the nav is its own container at the default width and only the
         CONTENT widens. The capability stays; the menu stops travelling.
       */}
-      <PageContainer>
+      {/*
+        ONE COLUMN FOR THE TOOLBAR AND ITS CONTENT (user directive, 2026-09-02:
+        "make it look like the small page exactly, with sub menu on top close
+        to it and starting at the border of the tables like in the before
+        meeting page").
+
+        The toolbar used to sit in its OWN container at the default width
+        while the content sat in the section's — so on a small section the
+        buttons started 100px outside the column the cards started in, and
+        the two read as unrelated. That split existed for one reason: Audit
+        Logs asked for the wide column, and a toolbar that widened with it
+        moved between sibling sections. Every section is small now, so the
+        reason is gone; the meeting page — the template — puts its stepper and
+        its cards in one column with one gap, and so does this.
+      */}
+      <PageContainer width={width} className="!pb-0">
         <nav aria-label={navLabel} className="flex flex-wrap items-center gap-1">
             {groups.map((group, index) => (
               <Fragment key={group.key}>
@@ -123,14 +138,14 @@ export function TwoPane({
             ))}
         </nav>
       </PageContainer>
-      {/* pt-3, not the page's own top padding: the toolbar and the content it
-          filters are ONE block, and the meetings page (the shape every other
-          surface is being brought to) puts about twelve pixels between them.
+      {/* pt-4, not the page's own top padding: the toolbar and the content it
+          filters are ONE block, and the meeting page (the template) puts its
+          stepper and its cards in one column with `gap-4` — sixteen pixels.
           A full page gap here made the menu look like a separate screen
           floating above the table (user directive, 2026-09-02: "make the gap
           between the table and the sub menu of the top closer, like the
           meeting page, for all other pages"). */}
-      <PageContainer width={width} className="!pt-3">
+      <PageContainer width={width} className="!pt-4">
         <div className="flex min-h-0 flex-1 flex-col">{children}</div>
       </PageContainer>
     </PlatformShell>

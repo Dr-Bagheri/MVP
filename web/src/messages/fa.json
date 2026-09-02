@@ -2997,6 +2997,7 @@
     "itemAddLabel_question": "افزودن سؤال",
     "itemAddLabel_risk": "افزودن ریسک",
     "itemAddLabel_entity": "افزودن موجودیت",
-    "convertRemainingToTasks": "تبدیل همه باقی‌مانده‌ها به تسک"
+    "convertRemainingToTasks": "تبدیل همه باقی‌مانده‌ها به تسک",
+    "audioSpeed": "سرعت پخش"
   }
 }

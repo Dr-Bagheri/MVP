@@ -356,7 +356,11 @@ export default function UsersPage() {
                   cell: (u) => (
                     <span className="flex items-center gap-2.5">
                       <span
-                        className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-accent text-xs font-bold text-on-accent"
+                        /* accent-soft with a ring, not a solid accent disc: a
+                           list of eight bright green circles is eight accents
+                           on one screen, and the accent stops meaning anything
+                           (Lovable's reading of the same tokens, ported) */
+                        className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-accent-soft text-xs font-semibold text-fg ring-1 ring-border-strong"
                         aria-hidden
                       >
                         {personName(u, locale).slice(0, 1).toUpperCase()}

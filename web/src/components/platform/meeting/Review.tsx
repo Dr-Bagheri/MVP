@@ -88,18 +88,68 @@ export function ProcessingCard({ call, title, locale }: {
 }
 
 /* ── the AUDIO bar: one continuous player over the call's parts ────────── */
-export function AudioBar({ callId, seekTo, locale }: {
+const SPEEDS = [1, 1.25, 1.5, 2] as const;
+/** how many bars the waveform draws — the reference's strip is ~140 wide */
+const PEAK_COUNT = 140;
+
+/**
+ * Decode one part and reduce it to PEAK_COUNT amplitudes in [0,1].
+ *
+ * Client-side on purpose, for now: it needs no server work and no ffmpeg on
+ * the box, and a meeting's first part is what people scrub. The honest cost
+ * is memory — a 30-minute part decodes to ~300MB of PCM — so only the FIRST
+ * part is decoded and the rest of the strip is drawn flat. Peaks computed by
+ * the worker at transcode time (one small array per part, stored beside the
+ * timings) are the right next step; this is the version that ships today and
+ * says so.
+ */
+async function peaksOf(url: string): Promise<Float32Array | null> {
+  try {
+    const buf = await fetch(url).then((r) => (r.ok ? r.arrayBuffer() : null));
+    if (buf === null) return null;
+    const ctx = new AudioContext();
+    const audio = await ctx.decodeAudioData(buf);
+    void ctx.close();
+    const data = audio.getChannelData(0);
+    const per = Math.max(1, Math.floor(data.length / PEAK_COUNT));
+    const out = new Float32Array(PEAK_COUNT);
+    let max = 0;
+    for (let i = 0; i < PEAK_COUNT; i += 1) {
+      let peak = 0;
+      const from = i * per;
+      for (let j = from; j < from + per && j < data.length; j += 8) {
+        const v = Math.abs(data[j] ?? 0);
+        if (v > peak) peak = v;
+      }
+      out[i] = peak;
+      if (peak > max) max = peak;
+    }
+    /* normalise so a quiet room still draws a readable strip */
+    if (max > 0) for (let i = 0; i < PEAK_COUNT; i += 1) out[i] = (out[i] ?? 0) / max;
+    return out;
+  } catch {
+    return null;
+  }
+}
+
+export function AudioBar({ callId, seekTo, locale, durationMs = null }: {
   callId: string;
   /** an external seek request (a transcript row's timestamp) — a FRESH
       object per click, so repeating a timestamp still seeks */
   seekTo: { ms: number } | null;
   locale: string;
+  /** the call's total, from the wire — null renders as "—", never as 0:00,
+      because "we do not know how long" is not "it is empty" */
+  durationMs?: number | null;
 }) {
   const t = useTranslations("meetings");
   const [parts, setParts] = useState<{ idx: number; offset_ms: number; url: string }[] | null | "absent">(null);
   const [playing, setPlaying] = useState(false);
   const [posMs, setPosMs] = useState(0);
+  const [speed, setSpeed] = useState<(typeof SPEEDS)[number]>(1);
+  const [peaks, setPeaks] = useState<Float32Array | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const activePart = useRef(0);
 
   const resigning = useRef(false);
@@ -110,6 +160,56 @@ export function AudioBar({ callId, seekTo, locale }: {
       .catch(() => { if (alive) setParts("absent"); });
     return () => { alive = false; };
   }, [callId]);
+
+  /* the waveform, once the first part's URL is known */
+  useEffect(() => {
+    if (!Array.isArray(parts) || parts[0] === undefined) return;
+    let alive = true;
+    void peaksOf(parts[0].url).then((p) => { if (alive) setPeaks(p); });
+    return () => { alive = false; };
+  }, [parts]);
+
+  /* the speed follows the element — and re-applies after a part switch or a
+     re-sign, because a fresh `src` resets playbackRate to 1 */
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (audio !== null) audio.playbackRate = speed;
+  }, [speed, parts]);
+
+  const total = durationMs !== null && durationMs > 0 ? durationMs : null;
+
+  /* draw: played bars in the accent, the rest muted; the canvas is redrawn
+     on every position tick, which at 140 bars is nothing */
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (canvas === null) return;
+    const ctx = canvas.getContext("2d");
+    if (ctx === null) return;
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    if (w === 0 || h === 0) return;
+    canvas.width = Math.floor(w * dpr);
+    canvas.height = Math.floor(h * dpr);
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, w, h);
+    const styles = getComputedStyle(canvas);
+    const accent = `rgb(${styles.getPropertyValue("--accent").trim()})`;
+    const muted = `rgb(${styles.getPropertyValue("--fg-subtle").trim()} / 0.45)`;
+    const played = total === null ? 0 : Math.min(1, posMs / total);
+    const gap = 1.5;
+    const bar = Math.max(1, (w - gap * (PEAK_COUNT - 1)) / PEAK_COUNT);
+    /* the layout is DIRECTION-AGNOSTIC on purpose: audio time runs one way in
+       every language, so the strip is drawn start→end and the whole bar
+       wears dir="ltr" below */
+    for (let i = 0; i < PEAK_COUNT; i += 1) {
+      const amp = peaks === null ? 0.18 : Math.max(0.08, peaks[i] ?? 0);
+      const bh = Math.max(2, amp * (h - 4));
+      const x = i * (bar + gap);
+      ctx.fillStyle = i / PEAK_COUNT <= played ? accent : muted;
+      ctx.fillRect(x, (h - bh) / 2, bar, bh);
+    }
+  }, [peaks, posMs, total]);
 
   /** the signed URLs live ~an hour; a media error on a long-open page gets
       ONE fresh signing per incident, resuming where it died */
@@ -147,6 +247,7 @@ export function AudioBar({ callId, seekTo, locale }: {
       audio.src = part.url;
     }
     audio.currentTime = Math.max(0, (ms - part.offset_ms) / 1000);
+    setPosMs(ms);
     void audio.play().then(() => setPlaying(true)).catch(() => undefined);
   };
 
@@ -169,8 +270,22 @@ export function AudioBar({ callId, seekTo, locale }: {
     void audio.play().then(() => setPlaying(true)).catch(() => undefined);
   };
 
+  const nextSpeed = () => {
+    const at = SPEEDS.indexOf(speed);
+    setSpeed(SPEEDS[(at + 1) % SPEEDS.length]!);
+  };
+
+  /*
+   * THE REFERENCE'S BAR, in one row (user directive, 2026-09-02: "add the
+   * sound bar to the after meeting page in the same row plus the speed
+   * button like image"): play · label · waveform · elapsed/total · speed.
+   * Clicking the strip seeks — the waveform is a control, not an ornament.
+   */
   return (
-    <div className="flex items-center gap-3 rounded-2xl border border-border bg-surface px-3 py-2 shadow-card">
+    <div
+      className="flex items-center gap-3 rounded-2xl border border-border bg-surface px-3 py-2 shadow-card"
+      dir="ltr"
+    >
       <button
         type="button"
         aria-label={playing ? t("audioPause") : t("audioPlay")}
@@ -179,10 +294,40 @@ export function AudioBar({ callId, seekTo, locale }: {
       >
         {playing ? <IconPause width={14} height={14} /> : <IconPlay width={14} height={14} />}
       </button>
-      <span className="text-xs font-medium text-fg">{t("audioLabel")}</span>
-      <span className="badge-num ms-auto text-xs text-fg-muted" dir="ltr">
+      <span className="shrink-0 text-xs font-medium text-fg">{t("audioLabel")}</span>
+      <canvas
+        ref={canvasRef}
+        role="slider"
+        aria-label={t("audioLabel")}
+        aria-valuemin={0}
+        aria-valuemax={total ?? 0}
+        aria-valuenow={Math.floor(posMs)}
+        tabIndex={0}
+        className="h-8 min-w-0 flex-1 cursor-pointer"
+        onClick={(e) => {
+          if (total === null) return;
+          const rect = e.currentTarget.getBoundingClientRect();
+          seek(Math.max(0, Math.min(total, ((e.clientX - rect.left) / rect.width) * total)));
+        }}
+        onKeyDown={(e) => {
+          if (total === null) return;
+          if (e.key === "ArrowRight") seek(Math.min(total, posMs + 5000));
+          if (e.key === "ArrowLeft") seek(Math.max(0, posMs - 5000));
+        }}
+      />
+      <span className="badge-num shrink-0 text-xs text-fg-muted">
         {formatClock(Math.floor(posMs / 1000), locale)}
+        <span className="mx-1 text-fg-subtle">/</span>
+        {total === null ? "—" : formatClock(Math.floor(total / 1000), locale)}
       </span>
+      <button
+        type="button"
+        onClick={nextSpeed}
+        aria-label={t("audioSpeed")}
+        className="btn btn-sm badge-num shrink-0 border border-border font-semibold text-fg"
+      >
+        ×{digits(speed, locale)}
+      </button>
       <audio
         ref={audioRef}
         onError={resign}
@@ -198,6 +343,7 @@ export function AudioBar({ callId, seekTo, locale }: {
           if (part && audio) {
             activePart.current = next;
             audio.src = part.url;
+            audio.playbackRate = speed;
             void audio.play().catch(() => setPlaying(false));
           } else {
             setPlaying(false);

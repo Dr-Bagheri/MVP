@@ -13,8 +13,11 @@ import { Children, cloneElement, isValidElement, type ReactNode } from "react";
  */
 
 export function FormPanel({ children }: { children: ReactNode }) {
+  /* rounded-2xl: the reference's card radius (20px), the same one every
+     tile and dialog wears — a form panel at 12px beside cards at 20px was
+     the one square-ish box on a page of round ones */
   return (
-    <div className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-surface">
+    <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-surface">
       {children}
     </div>
   );
@@ -59,8 +62,22 @@ export function FormRow({
   }
 
   return (
-    <div className="grid gap-3 px-5 py-4 md:px-8 md:py-6 lg:grid-cols-12 lg:gap-6">
-      <div className="lg:col-span-5">
+    /*
+     * LABEL AND CONTROL CLOSE TOGETHER (user directive, 2026-09-02, on the
+     * org form: labels sat at one edge of a 1240px row and their fields at
+     * the other — "a failure that gets worse the wider the card gets").
+     *
+     * The 5/7 twelve-column grid was the cause: it divides whatever width
+     * the row has, so on a wide row the label column and the control column
+     * each became a small object floating in a large box. The reference's
+     * rule, which Lovable reproduced from the measurements: the label column
+     * is a FIXED 160px and the control is CAPPED at 380px, with 24px between
+     * them. Neither depends on the row's width, so a label sits beside its
+     * control on every screen and reading a field means crossing 24px, not
+     * a monitor. Below md the two still stack.
+     */
+    <div className="flex flex-col gap-2 px-5 py-4 md:flex-row md:items-start md:gap-6">
+      <div className="shrink-0 md:w-[160px] md:pt-2">
         {htmlFor ? (
           <label htmlFor={htmlFor} className="block text-sm text-fg">
             {label}
@@ -74,7 +91,7 @@ export function FormRow({
           </span>
         ) : null}
       </div>
-      <div className="flex min-w-0 items-center gap-2 lg:col-span-7">{control}</div>
+      <div className="flex w-full min-w-0 items-center gap-2 md:max-w-[380px]">{control}</div>
     </div>
   );
 }

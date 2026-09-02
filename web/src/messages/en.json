@@ -2997,6 +2997,7 @@
     "itemAddLabel_question": "Add a question",
     "itemAddLabel_risk": "Add a risk",
     "itemAddLabel_entity": "Add an entity",
-    "convertRemainingToTasks": "Turn all remaining into tasks"
+    "convertRemainingToTasks": "Turn all remaining into tasks",
+    "audioSpeed": "Playback speed"
   }
 }
