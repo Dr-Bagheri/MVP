@@ -587,7 +587,12 @@ function PreStage({ meeting, onPatch, locale, me }: {
             </span>
             <h2 className="text-sm font-semibold text-fg">{t("fieldMode")} — {t(`mode_${meeting.mode}`)}</h2>
           </header>
-          <p className="text-xs leading-5 text-fg-muted">{t(`modeExplain_${meeting.mode}`)}</p>
+          {/* THE EXPLANATION IS GONE (user directive, 2026-09-02: "remove the
+              lines … and just put the link for guests here"). It described the
+              mechanism — system audio, which tab to share, whose server the
+              room runs on — to somebody who has already chosen the mode and
+              wants the link. A card that explains itself before it does
+              anything is a card read once and skipped forever. */}
           {meeting.mode === "online" ? (
             /*
              * THE LINK IS THIS PAGE. Under LiveKit the room is not an address
@@ -629,7 +634,7 @@ function PreStage({ meeting, onPatch, locale, me }: {
                 <IconCopy width={12} height={12} />
                 {t("copyGuestLink")}
               </button>
-              <p className="text-[11px] leading-5 text-fg-subtle">{t("roomOnOurServer")}</p>
+
             </div>
           ) : null}
         </section>
@@ -648,23 +653,26 @@ function PreStage({ meeting, onPatch, locale, me }: {
               {digits(meeting.invitees.length + 1, locale)}
             </span>
           </header>
+          {/* EACH PERSON IN THEIR OWN BOX (user directive, 2026-09-02: "for
+              invite make as same as the 3rd image, with name and the host —
+              e.g. go to one box"). A bare list of names reads as text; a
+              bordered row reads as a person who is in this meeting, which is
+              what the reference's card is doing. */}
           <ul className="mb-2 space-y-1.5">
-            {/* the HOST is a person in this meeting too, and the reference
-                lists them with the badge that says so */}
-            <li className="flex items-center gap-2 text-sm text-fg">
-              <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-accent text-[11px] font-bold text-on-accent" aria-hidden>
+            <li className="flex items-center gap-2 rounded-xl border border-border bg-surface-2/50 px-2.5 py-2 text-sm text-fg">
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-accent text-[11px] font-bold text-on-accent" aria-hidden>
                 {(me !== null ? personName(me, locale) : "—").slice(0, 1)}
               </span>
-              <span className="min-w-0 flex-1 truncate">
+              <span className="min-w-0 flex-1 truncate font-medium">
                 {me !== null ? personName(me, locale) : t("unknownPerson")}
               </span>
-              <span className="shrink-0 rounded-md bg-surface-2 px-1.5 py-0.5 text-[10px] text-fg-subtle">
+              <span className="shrink-0 rounded-full border border-border bg-surface px-2 py-0.5 text-[10px] text-fg-subtle">
                 {t("memberHost")}
               </span>
             </li>
             {meeting.invitees.map((name) => (
-              <li key={name} className="flex items-center gap-2 text-sm text-fg">
-                <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-surface-2 text-[11px] font-bold text-fg-muted" aria-hidden>
+              <li key={name} className="flex items-center gap-2 rounded-xl border border-border bg-surface-2/50 px-2.5 py-2 text-sm text-fg">
+                <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-surface-2 text-[11px] font-bold text-fg-muted" aria-hidden>
                   {name.slice(0, 1)}
                 </span>
                 <span className="min-w-0 flex-1 truncate">{name}</span>
@@ -676,10 +684,13 @@ function PreStage({ meeting, onPatch, locale, me }: {
               gone: it could only take a typed name, so a person's own
               colleagues — the list the platform already has — were the one
               group it could not offer. */}
+          {/* DASHED, like the reference's «مدیریت دعوت‌شدگان» — a dashed edge
+              says "somewhere to add", which is a different promise from a
+              solid button that performs something */}
           <button
             type="button"
             onClick={() => setInviting(true)}
-            className="btn w-full border border-border bg-surface font-medium text-fg hover:bg-border"
+            className="btn w-full justify-center border border-dashed border-border font-medium text-fg-muted hover:border-border-strong hover:text-fg"
           >
             <IconUsers width={12} height={12} />
             {t("inviteOpen")}

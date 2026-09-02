@@ -119,7 +119,7 @@ export const WIDGET_SPECS = [
     sizes: ["panel", "large", "hero"],
     defaultSize: "panel",
     defaultOrder: 2,
-    defaultAt: { x: 0, y: 2 },
+    defaultAt: { x: 0, y: 1 },
   },
   {
     /* جلسات پیش‌رو — the product's own upcoming meetings */
@@ -131,7 +131,7 @@ export const WIDGET_SPECS = [
     sizes: ["column", "large"],
     defaultSize: "column",
     defaultOrder: 3,
-    defaultAt: { x: 9, y: 2 },
+    defaultAt: { x: 9, y: 1 },
   },
   {
     /* آخرین جلسات — newest first, with the review chip */
@@ -143,7 +143,7 @@ export const WIDGET_SPECS = [
     sizes: ["column", "large"],
     defaultSize: "column",
     defaultOrder: 4,
-    defaultAt: { x: 9, y: 5 },
+    defaultAt: { x: 9, y: 4 },
   },
   /*
    * OFF the default board (user directive, 2026-09-01): the record

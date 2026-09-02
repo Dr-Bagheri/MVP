@@ -2687,7 +2687,11 @@
     "deleteLabelBody": "از روی همهٔ کارت‌هایی که این برچسب را دارند برداشته می‌شود. کارت‌ها می‌مانند؛ برچسب برای همیشه می‌رود.",
     "columnNamePlaceholder": "نام ستون…",
     "renameTopic": "ویرایش نام موضوع",
-    "removeTopic": "حذف موضوع"
+    "removeTopic": "حذف موضوع",
+    "column_backlog": "بک‌لاگ",
+    "column_todo": "برای انجام",
+    "column_doing": "در حال انجام",
+    "column_done": "انجام‌شده"
   },
   "meetings": {
     "title": "جلسات",

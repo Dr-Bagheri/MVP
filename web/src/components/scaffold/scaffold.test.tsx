@@ -105,6 +105,23 @@ describe("the Tailwind theme derives from the scaffold constants", () => {
     expect(box.className).not.toMatch(/max-h-/);
   });
 
+  it("the three page sizes are ordered, and each is a real theme entry", () => {
+    /*
+     * The RULE, not the numbers (user directive, 2026-09-02: "three sets of
+     * page size — small, normal, big … set it into the theme rule for the
+     * whole platform"). What must hold is the ordering and the fact that each
+     * one resolves: a `max-w-content-small` that is not registered emits
+     * nothing, and a page asking for the small column silently gets the full
+     * viewport — the `text-on-accent` failure, one layer up.
+     */
+    expect(SCAFFOLD.contentMaxWidthSmall).toBeLessThan(SCAFFOLD.contentMaxWidth);
+    expect(SCAFFOLD.contentMaxWidth).toBeLessThan(SCAFFOLD.contentMaxWidthWide);
+    const maxWidth = theme.maxWidth as Record<string, string>;
+    expect(maxWidth["content-small"]).toBe(`${SCAFFOLD.contentMaxWidthSmall / 16}rem`);
+    expect(maxWidth.content).toBe(`${SCAFFOLD.contentMaxWidth / 16}rem`);
+    expect(maxWidth["content-wide"]).toBe(`${SCAFFOLD.contentMaxWidthWide / 16}rem`);
+  });
+
   it("keeps the menu heading and the page title on one line", () => {
     /*
      * The pair is a RELATIONSHIP, not two numbers: the menu heading sits

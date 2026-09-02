@@ -32,7 +32,20 @@ export function PageContainer({
   className = "",
   children,
 }: {
-  width?: "default" | "wide" | "full";
+  /**
+   * THE PLATFORM'S THREE PAGE SIZES (user directive, 2026-09-02).
+   *
+   *   small   a reading-and-editing surface — a meeting's plan, a profile
+   *   normal  a list surface — meetings, settings, management (the default)
+   *   big     a workspace — the task board, where the content IS the width
+   *           and a bound would cut off a column
+   *
+   * `default`, `wide` and `full` are the older spellings, kept as aliases so
+   * a rename does not become a sweep of every call site: `default` = normal,
+   * `full` = big, and `wide` is the one middle bound (1600) that no page
+   * currently asks for.
+   */
+  width?: "small" | "normal" | "big" | "default" | "wide" | "full";
   /** for the rare caller that has to trim the rhythm — a surface split into
       two containers must not pay the top padding twice */
   className?: string;
@@ -55,7 +68,13 @@ export function PageContainer({
   children: ReactNode;
 }) {
   const max =
-    width === "default" ? "max-w-content" : width === "wide" ? "max-w-content-wide" : "max-w-none";
+    width === "small"
+      ? "max-w-content-small"
+      : width === "wide"
+        ? "max-w-content-wide"
+        : width === "big" || width === "full"
+          ? "max-w-none"
+          : "max-w-content";
   /*
    * THE PAGE'S RHYTHM, from the theme (user directives: 2026-08-26 "add a
    * margin from the top, just a little, for all pages, and add this to the

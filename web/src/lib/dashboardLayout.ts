@@ -57,7 +57,14 @@ export const SIZE_SPAN: Record<TileSize, { w: number; h: number }> = {
    * shallow — a row of four figure cards is wide reading, not tall reading,
    * and at hero height it would carry a third of the card as dead air.
    */
-  band: { w: 12, h: 2 },
+  /*
+   * ONE ROW (user directive, 2026-09-02: "the problem with the task item is
+   * the row is one size but the place it fills is more — make them the
+   * same"). At two rows the strip reserved about 160px for cards that need
+   * about 70, and the leftover read as a missing widget between the figures
+   * and the week grid rather than as spare room inside one.
+   */
+  band: { w: 12, h: 1 },
   /*
    * PANEL is the week grid's tier (the big-milestone round): the reference's
    * dashboard gives the week an hour grid about two-thirds wide and half a

@@ -10,7 +10,12 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
   const { id } = use(params);
   return (
     <PlatformShell>
-      <PageContainer width="default">
+      {/* the SMALL column (user directive, 2026-09-02: "make this page a
+          version of smaller page, not like the regular size one"). It is a
+          plan being read and edited — two columns of cards — and at the list
+          width the two halves drift so far apart that the eye has to cross a
+          monitor between a meeting's details and who is coming to it. */}
+      <PageContainer width="small">
         <MeetingPage id={id} />
       </PageContainer>
     </PlatformShell>

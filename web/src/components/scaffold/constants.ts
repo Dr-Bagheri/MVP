@@ -52,6 +52,24 @@ export const SCAFFOLD = {
   /** Top bar: breadcrumb + identity. */
   topBarHeight: 62,
   /** Content column, centered; wide variant for data-dense tables. */
+  /*
+   * THE THREE PAGE SIZES (user directive, 2026-09-02: "now we have three sets
+   * of page size — small, normal, big … set it into the theme rule for the
+   * whole platform so we can use it later as well, any time I said it").
+   *
+   *   SMALL   a reading-and-editing surface: a meeting's plan, a profile, a
+   *           form. Two columns of cards at most, and the page has a margin
+   *           on both sides so the eye is not asked to cross a monitor.
+   *   NORMAL  a list surface: the meetings table, settings, management.
+   *   BIG     a workspace: the task board, where the content IS the width and
+   *           cutting it short cuts off a column.
+   *
+   * `default`/`wide` are kept as aliases rather than swept, because the words
+   * a caller writes should be the words the directive used — and a sweep of
+   * every call site to rename two strings is a large diff with nothing to
+   * show for it.
+   */
+  contentMaxWidthSmall: 1040,
   contentMaxWidth: 1240,
   contentMaxWidthWide: 1600,
   /** Inputs and buttons share it (desktop; below md the 44px hit-area rules). */

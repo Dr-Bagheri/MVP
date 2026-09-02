@@ -17,6 +17,7 @@ import { TaskDetail } from "./tasks/TaskDetail";
 import { TaskCalendar, TaskListView } from "./tasks/TaskViews";
 import {
   IconCheck, IconClock, IconDots, IconFolder, IconPlus, IconTrash, IconUser, IconVideo, IconClose, IconPencil } from "@/components/icons";
+import { useSeededName } from "@/lib/seededNames";
 import { digits } from "@/lib/format";
 
 /**
@@ -40,6 +41,9 @@ type PriorityFilter = TaskPriority | "all";
 
 export function TaskBoard() {
   const t = useTranslations("tasks");
+  /* the four SEEDED column names localize until somebody renames one — the
+     board writes them into the database in Persian on first visit */
+  const seededName = useSeededName();
   const locale = useLocale();
   const router = useRouter();
   const params = useSearchParams();
@@ -393,7 +397,7 @@ export function TaskBoard() {
                  the scroller's height; `min-h-[70vh]` keeps it a column
                  rather than a strip when the board itself is short. */
               className="flex w-[300px] shrink-0 flex-col self-stretch rounded-2xl border border-border bg-surface p-2.5 shadow-card min-h-[70vh]"
-              aria-label={col.name}
+              aria-label={seededName(col.name)}
             >
               <header className="flex items-center justify-between gap-1 px-1 py-1">
                 <span className="flex min-w-0 items-center gap-2">
@@ -445,7 +449,7 @@ export function TaskBoard() {
                       onClick={() => setRenaming(col.id)}
                       className="truncate text-sm font-semibold text-fg"
                     >
-                      {col.name}
+                      {seededName(col.name)}
                     </button>
                   )}
                 </span>
@@ -455,8 +459,8 @@ export function TaskBoard() {
                   </span>
                   <button
                     type="button"
-                    aria-label={t("archiveColumn", { name: col.name })}
-                    title={t("archiveColumn", { name: col.name })}
+                    aria-label={t("archiveColumn", { name: seededName(col.name) })}
+                    title={t("archiveColumn", { name: seededName(col.name) })}
                     onClick={() => setCondemnedColumn(col)}
                     className="tap grid h-7 w-7 place-items-center rounded-md text-fg-subtle hover:text-danger"
                   >

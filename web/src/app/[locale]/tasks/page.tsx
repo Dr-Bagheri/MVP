@@ -12,7 +12,8 @@ import { TaskBoard } from "@/components/platform/TaskBoard";
 export default function TasksPage() {
   return (
     <PlatformShell>
-      <PageContainer width="full">
+      {/* BIG — the board IS the width; a bound cuts off a column */}
+      <PageContainer width="big">
         <Suspense fallback={null}>
           <TaskBoard />
         </Suspense>

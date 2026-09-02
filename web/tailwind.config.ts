@@ -186,6 +186,7 @@ const config: Config = {
         rail: rem(SCAFFOLD.railWidth),
       },
       maxWidth: {
+        "content-small": rem(SCAFFOLD.contentMaxWidthSmall),
         content: rem(SCAFFOLD.contentMaxWidth),
         "content-wide": rem(SCAFFOLD.contentMaxWidthWide),
       },

@@ -2687,7 +2687,11 @@
     "deleteLabelBody": "It comes off every card that wears it. The cards stay; the label is gone for good.",
     "columnNamePlaceholder": "Column name…",
     "renameTopic": "Rename topic",
-    "removeTopic": "Remove topic"
+    "removeTopic": "Remove topic",
+    "column_backlog": "Backlog",
+    "column_todo": "To do",
+    "column_doing": "In progress",
+    "column_done": "Done"
   },
   "meetings": {
     "title": "Meetings",

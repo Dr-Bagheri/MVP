@@ -617,9 +617,12 @@ function StatCard({ href, icon, tint, value, label, locale, percent = false }: {
       href={href}
       /* min-h-0 so a squeezed tile shrinks the CARD rather than overflowing
          it — the card is what has slack, the figure inside it does not */
-      className="flex min-h-0 min-w-0 items-center gap-3 overflow-hidden rounded-2xl border border-border bg-surface px-3.5 py-3 transition-colors hover:border-border-strong"
+      /* py-2.5 and a 9-unit mark: the strip is ONE grid row now, and a
+         card that overflows its row is the gap this change removes,
+         reappearing as a clipped figure */
+      className="flex min-h-0 min-w-0 items-center gap-3 overflow-hidden rounded-2xl border border-border bg-surface px-3.5 py-2.5 transition-colors hover:border-border-strong"
     >
-      <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${tint}`} aria-hidden>
+      <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${tint}`} aria-hidden>
         {icon}
       </span>
       <span className="min-w-0">
