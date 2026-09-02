@@ -2509,6 +2509,18 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     return reply.code(201).send(await tasks.createTopic(identity, body.name));
   });
 
+  app.patch("/v1/tasks/topics/:id", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { name?: unknown; archived?: unknown };
+    await tasks.updateTopic(identity, id, {
+      ...(typeof body.name === "string" ? { name: body.name } : {}),
+      ...(typeof body.archived === "boolean" ? { archived: body.archived } : {}),
+    });
+    return reply.code(204).send();
+  });
+
   /**
    * 0145 — meetings. The task board's posture exactly: a person's surface,
    * gateway keys refused, every read and write as the caller under 0145's

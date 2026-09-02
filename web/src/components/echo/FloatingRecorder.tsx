@@ -76,10 +76,19 @@ export function FloatingRecorder() {
 
   const pill = (
     <div
+      /*
+       * NOTHING IN THIS PILL WRAPS. It is a fixed-height strip in the top bar,
+       * and «پایان و پردازش» is long enough to break onto a second line inside
+       * a 36px box — which does not make the pill taller, it makes its
+       * contents overflow it (user report, 2026-09-02, with the screenshot).
+       * `whitespace-nowrap` on the row and `shrink-0` on every control is the
+       * fix; the TITLE is the one thing allowed to give way, because a
+       * truncated title still says which take this is.
+       */
       className={
         docked
-          ? "flex h-9 min-w-0 items-center gap-1 rounded-lg border border-border bg-surface pe-1 ps-2.5"
-          : "fixed bottom-4 start-4 z-40 flex items-center gap-2 rounded-full border border-border bg-surface py-1.5 pe-2 ps-3 shadow-xl"
+          ? "flex h-9 min-w-0 items-center gap-1 whitespace-nowrap rounded-lg border border-border bg-surface pe-1 ps-2.5"
+          : "fixed bottom-4 start-4 z-40 flex items-center gap-2 whitespace-nowrap rounded-full border border-border bg-surface py-1.5 pe-2 ps-3 shadow-xl"
       }
     >
       <button
@@ -102,18 +111,18 @@ export function FloatingRecorder() {
         >
           {s.title || t("untitledCall")}
         </span>
-        <span className="ltr text-xs tabular-nums text-fg-muted">
+        <span className="ltr shrink-0 text-xs tabular-nums text-fg-muted">
           {formatClock(Math.floor(s.recordedMs / 1000), locale)}
         </span>
       </button>
       {s.phase === "finishing" ? (
-        <span className="px-2 text-xs text-fg-muted">{t("finishing")}</span>
+        <span className="shrink-0 px-2 text-xs text-fg-muted">{t("finishing")}</span>
       ) : (
         <>
           {s.phase === "recording" ? (
             <button
               type="button"
-              className="tap h-7 rounded-full px-2.5 text-xs text-fg-muted hover:bg-surface-2 hover:text-fg"
+              className="btn btn-sm shrink-0 font-medium text-fg-muted hover:bg-surface-2 hover:text-fg"
               onClick={pause}
             >
               {t("pause")}
@@ -121,7 +130,7 @@ export function FloatingRecorder() {
           ) : (
             <button
               type="button"
-              className="tap h-7 rounded-full px-2.5 text-xs text-fg-muted hover:bg-surface-2 hover:text-fg"
+              className="btn btn-sm shrink-0 font-medium text-fg-muted hover:bg-surface-2 hover:text-fg"
               onClick={resume}
             >
               {t("resume")}
@@ -129,10 +138,13 @@ export function FloatingRecorder() {
           )}
           <button
             type="button"
-            className="tap h-7 rounded-full bg-accent px-2.5 text-xs font-semibold text-on-accent"
+            className="btn btn-sm shrink-0 bg-accent text-on-accent"
             onClick={() => void finish()}
+            /* the full sentence stays reachable as the tooltip — the docked
+               strip has room for a verb, not for a description of the job */
+            title={t("finish")}
           >
-            {t("finish")}
+            {docked ? t("finishShort") : t("finish")}
           </button>
         </>
       )}

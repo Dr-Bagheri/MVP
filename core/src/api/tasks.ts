@@ -632,6 +632,35 @@ export function createTasksRepo(db: Db) {
     });
   }
 
+  /**
+   * Rename or retire a topic — the meetings twin, field for field (user
+   * directive, 2026-09-02: "the added sub menu should have edit and delete
+   * option, fix it both in tasks and meetings").
+   *
+   * ARCHIVED, never deleted: the cards in a topic are re-pointed to
+   * no-folder by the schema, and a folder that vanished would take the
+   * answer to "where did that go" with it.
+   */
+  async function updateTopic(
+    identity: Identity, id: string, patch: { name?: string; archived?: boolean },
+  ): Promise<void> {
+    await db.withIdentity(identity, async (tx: SqlTx) => {
+      if (typeof patch.name === "string") {
+        const clean = patch.name.trim().slice(0, 80);
+        if (clean === "") {
+          throw new ValidationError("a topic needs a name", { code: "task_topic_invalid" });
+        }
+        await tx.unsafe("update echo.task_topic set name = $2 where id = $1", [id, clean]);
+      }
+      if (typeof patch.archived === "boolean") {
+        await tx.unsafe(
+          "update echo.task_topic set archived_at = $2 where id = $1",
+          [id, patch.archived ? new Date().toISOString() : null],
+        );
+      }
+    });
+  }
+
 
   /**
    * ONE writer for the history (0147). It takes the TX, never a Db: an entry
@@ -794,7 +823,7 @@ export function createTasksRepo(db: Db) {
   return {
     board, detail, create, update,
     addChecklistItem, updateChecklistItem, deleteChecklistItem,
-    addComment, setAssigned: setAssignedWithNote, createColumn, updateColumn, createTopic,
+    addComment, setAssigned: setAssignedWithNote, createColumn, updateColumn, createTopic, updateTopic,
     people, labels, createLabel, updateLabel, deleteLabel, setLabel, events,
   };
 }

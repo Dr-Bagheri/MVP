@@ -13,7 +13,7 @@ import {
   IconArchive, IconCalendar, IconCheck, IconChevronRight, IconClose, IconDots,
   IconFolder, IconMic, IconPencil, IconPlus, IconTrash, IconUpload, IconVideo,
 } from "@/components/icons";
-import { ConfirmDialog } from "@/components/rowActions";
+import { ConfirmDialog, KebabMenu } from "@/components/rowActions";
 import { asciiDigits, dayKeyOf, digits, formatDate, formatTime, monthGridAt } from "@/lib/format";
 
 /**
@@ -133,7 +133,6 @@ export function Meetings() {
     void api.meetingTopics().then(setTopicRows).catch(() => setTopicRows([]));
   }, []);
   useEffect(loadTopics, [loadTopics]);
-  const [topicMenu, setTopicMenu] = useState<string | null>(null);
   const [renamingTopic, setRenamingTopic] = useState<{ id: string; name: string } | null>(null);
   const [addingTopic, setAddingTopic] = useState(false);
 
@@ -207,13 +206,21 @@ export function Meetings() {
             of a filter and the absence of a folder — there is nothing there
             to rename, and offering it would be a menu over a fiction. */}
         {topicRows.map((row) => (
-          <span key={row.id} className="relative">
+          /*
+           * The chip and its menu are SIBLINGS, not a span pretending to be a
+           * button inside a button — which is what stood here, with the ⋯
+           * wearing `role="button"` because real nesting is invalid HTML.
+           * And the menu is the platform's KebabMenu: what it replaced was a
+           * hand-positioned `absolute end-0 top-9` panel that the
+           * floating-panel rule exists to forbid and only missed because it
+           * spelled its offset `top-9` instead of `top-full`.
+           */
+          <span key={row.id} className="inline-flex items-center gap-0.5">
             <button
               type="button"
               aria-pressed={topic === row.id}
               onClick={() => setTopic((cur) => (cur === row.id ? "all" : row.id))}
-              onContextMenu={(e) => { e.preventDefault(); setTopicMenu(row.id); }}
-              className={`btn btn-sm gap-1.5 border pe-1.5 font-medium ${
+              className={`btn btn-sm gap-1.5 border font-medium ${
                 topic === row.id ? "border-accent bg-accent-soft font-semibold text-accent" : "border-border text-fg-muted hover:text-fg"
               }`}
             >
@@ -222,45 +229,33 @@ export function Meetings() {
               <span className="badge-num rounded-md bg-surface-2 px-1 text-[10px]">
                 {digits(Array.isArray(rows) ? rows.filter((m) => m.topic_id === row.id).length : 0, locale)}
               </span>
-              <span
-                role="button"
-                tabIndex={0}
-                aria-label={t("topicOptions")}
-                onClick={(e) => { e.stopPropagation(); setTopicMenu((cur) => (cur === row.id ? null : row.id)); }}
-                onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); setTopicMenu(row.id); } }}
-                className="grid h-5 w-5 place-items-center rounded text-fg-subtle hover:text-fg"
-              >
-                <IconDots width={12} height={12} />
-              </span>
             </button>
-            {topicMenu === row.id ? (
-              <span className="absolute end-0 top-9 z-40 flex w-44 flex-col rounded-xl border border-border bg-surface p-1 shadow-island">
-                <button
-                  type="button"
-                  onClick={() => { setTopicMenu(null); setRenamingTopic({ id: row.id, name: row.name }); }}
-                  className="btn btn-sm w-full justify-start gap-2 font-medium text-fg hover:bg-surface-2"
-                >
-                  <IconPencil width={12} height={12} />
-                  {t("renameTopic")}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTopicMenu(null);
-                    /* ARCHIVED, not deleted: the meetings in it are re-pointed
-                       to no-folder by the schema, and a folder that vanished
-                       would take the answer to "where did that go" with it */
+            <KebabMenu
+              label={t("topicOptions")}
+              triggerClassName="h-7 w-7 rounded-md text-fg-subtle hover:bg-surface-2 hover:text-fg"
+              items={[
+                {
+                  key: "rename",
+                  label: t("renameTopic"),
+                  icon: <IconPencil width={14} height={14} />,
+                  onSelect: () => setRenamingTopic({ id: row.id, name: row.name }),
+                },
+                {
+                  key: "remove",
+                  label: t("removeTopic"),
+                  icon: <IconTrash width={14} height={14} />,
+                  danger: true,
+                  /* ARCHIVED, not deleted: the meetings in it are re-pointed
+                     to no-folder by the schema, and a folder that vanished
+                     would take the answer to "where did that go" with it */
+                  onSelect: () => {
                     void api.updateMeetingTopic(row.id, { archived: true })
                       .then(() => { setTopic((cur) => (cur === row.id ? "all" : cur)); loadTopics(); load(); })
                       .catch(refusal);
-                  }}
-                  className="btn btn-sm w-full justify-start gap-2 font-medium text-danger hover:bg-danger/10"
-                >
-                  <IconTrash width={12} height={12} />
-                  {t("removeTopic")}
-                </button>
-              </span>
-            ) : null}
+                  },
+                },
+              ]}
+            />
           </span>
         ))}
         <button

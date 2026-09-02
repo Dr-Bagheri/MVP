@@ -9,14 +9,14 @@ import type {
   OrgPersonRecord, TaskCardRecord, TaskColumnRecord, TaskDetailRecord,
   TaskLabelRecord, TaskPriority, TaskTopicRecord,
 } from "@/api/types";
-import { ConfirmDialog } from "@/components/rowActions";
+import { ConfirmDialog, KebabMenu } from "@/components/rowActions";
 import {
   LABEL_COLORS, NewTaskDialog, PRIORITY_CHIP, PRIORITY_ORDER, TONE_CHIP, TONE_DOT,
 } from "./tasks/TaskDialogs";
 import { TaskDetail } from "./tasks/TaskDetail";
 import { TaskCalendar, TaskListView } from "./tasks/TaskViews";
 import {
-  IconCheck, IconClock, IconDots, IconFolder, IconPlus, IconTrash, IconUser, IconVideo, IconClose } from "@/components/icons";
+  IconCheck, IconClock, IconDots, IconFolder, IconPlus, IconTrash, IconUser, IconVideo, IconClose, IconPencil } from "@/components/icons";
 import { digits } from "@/lib/format";
 
 /**
@@ -61,6 +61,8 @@ export function TaskBoard() {
   /* the inline topic composer — open, and the name being typed */
   const [addingTopic, setAddingTopic] = useState(false);
   const [topicName, setTopicName] = useState("");
+  /** the topic being renamed — the inline composer doubles as the editor */
+  const [renamingTopic, setRenamingTopic] = useState<{ id: string; name: string } | null>(null);
   const [me, setMe] = useState<{ id: string } | null>(null);
 
   /* the COLUMN the new-card form was opened from — null when closed. A
@@ -222,19 +224,24 @@ export function TaskBoard() {
           solved the same problem the right way, so this is that pattern,
           not a second one.
         */}
-        {addingTopic ? (
+        {addingTopic || renamingTopic !== null ? (
           <span className="inline-flex items-center gap-1 rounded-md border border-accent bg-surface px-1.5">
+            {/* ONE composer, two jobs: a new topic and a rename. Two boxes
+                would be two places for the same rules to be written down. */}
             <input
               autoFocus
-              value={topicName}
+              value={renamingTopic !== null && topicName === "" ? renamingTopic.name : topicName}
               onChange={(e) => setTopicName(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && topicName.trim() !== "") {
-                  void api.createTaskTopic(topicName.trim())
-                    .then(() => { setTopicName(""); setAddingTopic(false); load(); })
-                    .catch(refusal);
+                const value = (topicName || renamingTopic?.name || "").trim();
+                if (e.key === "Enter" && value !== "") {
+                  const done = () => { setTopicName(""); setAddingTopic(false); setRenamingTopic(null); load(); };
+                  void (renamingTopic !== null
+                    ? api.updateTaskTopic(renamingTopic.id, { name: value })
+                    : api.createTaskTopic(value)
+                  ).then(done).catch(refusal);
                 }
-                if (e.key === "Escape") { setTopicName(""); setAddingTopic(false); }
+                if (e.key === "Escape") { setTopicName(""); setAddingTopic(false); setRenamingTopic(null); }
               }}
               placeholder={t("newTopicPrompt")}
               className="h-[30px] w-36 bg-transparent text-xs text-fg outline-none placeholder:text-fg-subtle"
@@ -242,7 +249,7 @@ export function TaskBoard() {
             <button
               type="button"
               aria-label={t("cancel")}
-              onClick={() => { setTopicName(""); setAddingTopic(false); }}
+              onClick={() => { setTopicName(""); setAddingTopic(false); setRenamingTopic(null); }}
               className="tap grid h-6 w-6 place-items-center rounded text-fg-muted hover:text-fg"
             >
               <IconClose width={12} height={12} />
@@ -275,22 +282,52 @@ export function TaskBoard() {
           </span>
         </button>
 
+        {/* the meetings chip, field for field (user directive, 2026-09-02:
+            "the added sub menu should have edit and delete option, fix it
+            both in tasks and meetings") — the same menu component, so the
+            two boards cannot grow different answers to one question */}
         {board.topics.map((entry) => (
-          <button
-            key={entry.id}
-            type="button"
-            aria-pressed={topic === entry.id}
-            onClick={() => setTopic((cur) => (cur === entry.id ? "all" : entry.id))}
-            className={`tap flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs ${
-              topic === entry.id ? "border-accent bg-accent-soft font-semibold text-accent" : "border-border text-fg-muted hover:text-fg"
-            }`}
-          >
-            <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden />
-            {entry.name}
-            <span className="badge-num rounded-md bg-surface-2 px-1 text-[10px]">
-              {digits(board.tasks.filter((x) => x.topic_id === entry.id).length, locale)}
-            </span>
-          </button>
+          <span key={entry.id} className="inline-flex items-center gap-0.5">
+            <button
+              type="button"
+              aria-pressed={topic === entry.id}
+              onClick={() => setTopic((cur) => (cur === entry.id ? "all" : entry.id))}
+              className={`btn btn-sm gap-1.5 border font-medium ${
+                topic === entry.id ? "border-accent bg-accent-soft font-semibold text-accent" : "border-border text-fg-muted hover:text-fg"
+              }`}
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden />
+              {entry.name}
+              <span className="badge-num rounded-md bg-surface-2 px-1 text-[10px]">
+                {digits(board.tasks.filter((x) => x.topic_id === entry.id).length, locale)}
+              </span>
+            </button>
+            <KebabMenu
+              label={t("topicOptions")}
+              triggerClassName="h-7 w-7 rounded-md text-fg-subtle hover:bg-surface-2 hover:text-fg"
+              items={[
+                {
+                  key: "rename",
+                  label: t("renameTopic"),
+                  icon: <IconPencil width={14} height={14} />,
+                  onSelect: () => setRenamingTopic({ id: entry.id, name: entry.name }),
+                },
+                {
+                  key: "remove",
+                  label: t("removeTopic"),
+                  icon: <IconTrash width={14} height={14} />,
+                  danger: true,
+                  /* archived, not deleted — the cards are re-pointed to
+                     no-folder by the schema */
+                  onSelect: () => {
+                    void api.updateTaskTopic(entry.id, { archived: true })
+                      .then(() => { setTopic((cur) => (cur === entry.id ? "all" : cur)); load(); })
+                      .catch(refusal);
+                  },
+                },
+              ]}
+            />
+          </span>
         ))}
 
         <button

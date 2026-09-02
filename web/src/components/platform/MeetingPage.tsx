@@ -328,13 +328,29 @@ export function MeetingPage({ id }: { id: string }) {
       key={s}
       type="button"
       aria-current={active === s ? "step" : undefined}
+      /*
+       * A SEALED step is inert, and says so QUIETLY (user directive,
+       * 2026-09-02: "the mouse should not look like disabled when it goes to
+       * before and in meeting — just not working").
+       *
+       * `cursor-not-allowed` is a refusal animation: it tells someone their
+       * pointer is unwelcome, on a control that is simply finished. The
+       * stepper is the SHAPE of the meeting — a past stage still says where
+       * this one has been — so the right register is "this is behind you",
+       * which the check mark and the muted tone already say.
+       *
+       * `aria-disabled` without `disabled` is deliberate and is the pair that
+       * makes this work: a screen reader still hears that the step is not
+       * actionable, the button stays in the tab order (so a keyboard user is
+       * not silently skipped past a third of the stepper), and the press does
+       * nothing because the handler returns.
+       */
       aria-disabled={sealed && s !== "post" ? true : undefined}
-      disabled={sealed && s !== "post"}
       title={sealed && s !== "post" ? t("stageSealed") : undefined}
-      onClick={() => setStage(s)}
+      onClick={() => { if (!(sealed && s !== "post")) setStage(s); }}
       className={`tap flex h-9 items-center gap-1.5 rounded-xl px-3 text-xs font-medium transition-colors ${
         active === s ? "bg-fg text-bg" : "text-fg-muted hover:text-fg"
-      } ${sealed && s !== "post" ? "cursor-not-allowed opacity-50 hover:text-fg-muted" : ""}`}
+      } ${sealed && s !== "post" ? "opacity-60 hover:text-fg-muted" : ""}`}
     >
       <span
         className={`grid min-h-[18px] min-w-[18px] place-items-center rounded-full text-[10px] ${

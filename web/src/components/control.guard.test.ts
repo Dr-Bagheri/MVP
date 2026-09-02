@@ -70,7 +70,14 @@ function handRolled(code: string): number {
   for (const m of code.matchAll(/className=[`"]([^`"]{0,220}?)[`"]/g)) {
     const cls = m[1]!;
     if (/\bbtn\b|\bbtn-/.test(cls)) continue;
-    if (!/\bh-\d+(?:\.\d+)?\b/.test(cls)) continue;
+    /*
+     * A FIXED height — not `min-h-` or `max-h-`, which are the utilities a
+     * flexible box uses to STAY flexible. `\b` holds before the `h` in
+     * `min-h-0`, so the obvious pattern fired on the one class that means the
+     * opposite of a hand-rolled height, and it reported a card the moment it
+     * was made more flexible rather than less.
+     */
+    if (!/(?<![\w-])h-\d+(?:\.\d+)?\b/.test(cls)) continue;
     if (!/\brounded-(?:md|lg|xl|2xl|full)\b/.test(cls)) continue;
     if (!/\b(?:inline-)?flex\b/.test(cls) || !cls.includes("items-center")) continue;
     n += 1;

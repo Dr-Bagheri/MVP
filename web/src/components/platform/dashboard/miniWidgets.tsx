@@ -615,7 +615,9 @@ function StatCard({ href, icon, tint, value, label, locale, percent = false }: {
   return (
     <Link
       href={href}
-      className="flex min-w-0 items-center gap-3 rounded-2xl border border-border bg-surface px-3.5 py-3 transition-colors hover:border-border-strong"
+      /* min-h-0 so a squeezed tile shrinks the CARD rather than overflowing
+         it — the card is what has slack, the figure inside it does not */
+      className="flex min-h-0 min-w-0 items-center gap-3 overflow-hidden rounded-2xl border border-border bg-surface px-3.5 py-3 transition-colors hover:border-border-strong"
     >
       <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${tint}`} aria-hidden>
         {icon}
@@ -673,13 +675,24 @@ export function StatsWidget() {
   const taskTotal = tasks === null ? null : tasks === "unreadable" ? "unreadable" as const : tasks.total;
 
   return (
-    /* STRETCH, not centre (user directive, 2026-09-02: "the dashboard item
-       for tasks is bigger than they actually are … the border to fit around
-       it so we close the gap it has with other items"). The strip's tile is
-       two rows tall and the cards needed about one, so `content-center` left
-       a band of dead air under them — a gap that read as a missing widget
-       rather than as spare room inside one. */
-    <div className="grid h-full grid-cols-2 gap-2.5 md:grid-cols-4">
+    /*
+     * THE STRIP FITS ITS TILE AND NEVER SCROLLS (user directive, 2026-09-02:
+     * "the smallest size should fit the size of the items in it, so it shows
+     * all of it" — at the small size it was scrolling instead).
+     *
+     * `auto-fit` rather than `md:grid-cols-4`: the `md:` breakpoint asks the
+     * VIEWPORT how wide it is, and the answer is about the window rather than
+     * about this tile — so a half-width tile on a wide monitor still tried
+     * for four columns and pushed its own contents out of view. auto-fit asks
+     * the container, which is the thing that actually got smaller: four
+     * across when there is room, two by two when there is not, and all four
+     * cards visible either way.
+     *
+     * `overflow-hidden` is the belt: a stat strip that scrolls is hiding the
+     * figure it exists to show, and a figure you have to scroll to is a
+     * figure you will not read.
+     */
+    <div className="grid h-full min-h-0 grid-cols-[repeat(auto-fit,minmax(7.5rem,1fr))] gap-2.5 overflow-hidden">
       <StatCard href="/meetings" icon={<IconCalendar width={18} height={18} />}
         tint="bg-surface-2 text-fg-muted" value={upcoming} label={t("statUpcoming")} locale={locale} />
       <StatCard href="/meetings" icon={<IconCalendar width={18} height={18} />}
@@ -946,7 +959,12 @@ export function WeekWidget() {
           <div className="mb-1 h-10 shrink-0" aria-hidden />
           <div className="relative" style={{ height: hours.length * HOUR_ROW }}>
             {hours.map((h, i) => (
-              <span key={h} className="badge-num absolute -translate-y-1/2 whitespace-nowrap"
+              /* `end-0` PINS the label to the lane's inner edge — the side
+                 the day columns are on, in either direction. Without an
+                 inline anchor an absolutely positioned box falls to its
+                 static position, which is the opposite edge in RTL, so the
+                 numbers sat away from the grid they label. */
+              <span key={h} className="badge-num absolute end-0 -translate-y-1/2 whitespace-nowrap"
                 style={{ top: i * HOUR_ROW }}>
                 {digits(String(h).padStart(2, "0"), locale)}:{digits("00", locale)}
               </span>

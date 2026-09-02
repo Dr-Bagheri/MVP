@@ -557,7 +557,8 @@
     "notebookHint": "Every entry is stamped with the take's clock; a multi-line entry's first line is the chapter title.",
     "modelField": "Summary model",
     "modelDefault": "Default (your preference, then the org's)",
-    "memoStarted": "Voice memo started — the pill up top stops it."
+    "memoStarted": "Voice memo started — the pill up top stops it.",
+    "finishShort": "Finish"
   },
   "call": {
     "summary": "Summary",
@@ -2683,7 +2684,9 @@
     "group_none": "No deadline",
     "deleteLabelTitle": "Retire the label “{name}”?",
     "deleteLabelBody": "It comes off every card that wears it. The cards stay; the label is gone for good.",
-    "columnNamePlaceholder": "Column name…"
+    "columnNamePlaceholder": "Column name…",
+    "renameTopic": "Rename topic",
+    "removeTopic": "Remove topic"
   },
   "meetings": {
     "title": "Meetings",

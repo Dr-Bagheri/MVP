@@ -1485,6 +1485,15 @@ export const api = {
     });
   },
 
+  /** Rename or retire a task topic. Archived, never deleted: the cards are
+      re-pointed to no-folder, and a folder that vanished would take the
+      answer to "where did that go" with it. */
+  async updateTaskTopic(id: string, patch: { name?: string; archived?: boolean }): Promise<void> {
+    await bff<null>(`/api/tasks/topics/${encodeURIComponent(id)}`, {
+      method: "PATCH", body: JSON.stringify(patch), headers: { "content-type": "application/json" },
+    });
+  },
+
   /** 0145 — meetings: list (upcoming+past in one read), create, detail,
       patch. The recorder links its call by patching call_id. */
   async meetings(opts?: { archived?: boolean }): Promise<MeetingRecord[]> {
