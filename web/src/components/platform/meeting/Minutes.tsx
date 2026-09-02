@@ -3,9 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
-import type { MeetingRecord, SummaryVersion } from "@/api/types";
-import { parseSummary } from "@/components/echo/SummaryBody";
-import { IconCheck, IconDownload, IconPrint } from "@/components/icons";
+import type { MeetingItem, MeetingRecord } from "@/api/types";
+import { IconCheck, IconDownload, IconPrint, IconRetry } from "@/components/icons";
 import { digits, formatDate } from "@/lib/format";
 
 /**
@@ -34,18 +33,14 @@ function esc(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
-function sectionItems(text: string, match: RegExp): string[] {
-  const blocks = parseSummary(text);
-  const items: string[] = [];
-  let inSection = false;
-  for (const block of blocks) {
-    if (block.kind === "heading") { inSection = match.test(block.text); continue; }
-    if (!inSection) continue;
-    if (block.kind === "bullets" || block.kind === "numbered") items.push(...block.items);
-    else if (block.text.trim() !== "") items.push(block.text.trim());
-  }
-  return items;
-}
+/*
+ * The heading-slicer that used to live here is GONE. It parsed the summary's
+ * prose into decisions and action items, which was a SECOND implementation of
+ * the one in the review panel — and that is exactly how this document came to
+ * report "no decisions extracted" while the panel beside it displayed three.
+ * The parser is on the server now (`sliceSummary` in core), it writes ROWS,
+ * and every reader reads the same rows.
+ */
 
 export function MinutesTab({ meeting, myName, myId, onChanged }: {
   meeting: MeetingRecord;
@@ -57,27 +52,48 @@ export function MinutesTab({ meeting, myName, myId, onChanged }: {
 }) {
   const t = useTranslations("meetings");
   const locale = useLocale();
-  const [versions, setVersions] = useState<SummaryVersion[] | null | "failed">(null);
   const [error, setError] = useState(false);
+  /* bumped by «تولید دوباره» — the document re-reads its own rows rather than
+     the page being reloaded, so a person who has scrolled to the signatures
+     stays where they were */
+  const [reloads, setReloads] = useState(0);
+  const [rerunning, setRerunning] = useState(false);
+  const [rerunNote, setRerunNote] = useState<string | null>(null);
 
-  const callId = meeting.call_id;
+  /*
+   * THE MINUTES READ THE ROWS (user report, 2026-09-02: "i already added
+   * action items and questions and all other but it not coming in the end
+   * page").
+   *
+   * They were sliced out of the SUMMARY'S PROSE — the design 0160 replaced
+   * everywhere else and did not replace here, so a person could add three
+   * decisions on the review tab, watch them save, open the minutes and read
+   * "no decisions extracted". Two sources for one fact, and the document that
+   * gets signed was reading the wrong one.
+   *
+   * `meeting_item` is the single source now. Anything the summarizer finds
+   * arrives as rows badged `ai`, so a re-run adds to the same list rather
+   * than to a second one, and the document cannot disagree with the panel it
+   * was built from.
+   */
+  const [items, setItems] = useState<MeetingItem[] | null | "failed">(null);
   useEffect(() => {
-    if (callId === null) return;
     let alive = true;
-    void api.getSummaries(callId)
-      .then((v) => { if (alive) setVersions(v); })
-      .catch(() => { if (alive) setVersions("failed"); });
+    void api.meetingItems(meeting.id)
+      .then((r) => { if (alive) setItems(r); })
+      .catch(() => { if (alive) setItems("failed"); });
     return () => { alive = false; };
-  }, [callId]);
+  }, [meeting.id, reloads]);
 
-  const summary = Array.isArray(versions) ? versions[0] : undefined;
+  const rows = Array.isArray(items) ? items : [];
   const decisions = useMemo(
-    () => (summary === undefined ? [] : sectionItems(summary.body, /مصوب|تصمیم/)),
-    [summary],
+    () => rows.filter((r) => r.kind === "decision").map((r) => r.body),
+    [rows],
   );
   const actions = useMemo(
-    () => (summary === undefined ? [] : sectionItems(summary.body, /اکشن|اقدام/)),
-    [summary],
+    () => rows.filter((r) => r.kind === "action")
+      .map((r) => (r.owner === null ? r.body : `${r.body} — ${r.owner}`)),
+    [rows],
   );
 
   const patch = (body: Record<string, unknown>) => {
@@ -123,6 +139,41 @@ export function MinutesTab({ meeting, myName, myId, onChanged }: {
     <div className="grid gap-4 lg:grid-cols-[1fr_290px]">
       {/* ── the document ─────────────────────────────────────────────── */}
       <article className="tile p-6" aria-label={t("tabMinutes")}>
+        {/*
+          «تولید دوباره» — the reference's own control, and the answer to "make
+          a re-run button to get all informations again". It re-derives the
+          items from the recording and ADDS what is missing; it never clears
+          the list, because a person's own decisions live in the same table
+          and a re-run that started fresh would delete work somebody typed.
+          The count it reports is what was ADDED, so pressing it twice
+          honestly says "nothing new" rather than repeating the first answer.
+        */}
+        {meeting.call_id !== null && !closed ? (
+          <div className="mb-3 flex items-center justify-end gap-2">
+            {rerunNote !== null ? (
+              <span className="text-[11px] text-fg-muted">{rerunNote}</span>
+            ) : null}
+            <button
+              type="button"
+              className="btn btn-sm gap-1.5 border border-border font-medium text-fg-muted hover:text-fg"
+              disabled={rerunning}
+              onClick={() => {
+                setRerunning(true);
+                setRerunNote(null);
+                void api.extractMeetingItems(meeting.id)
+                  .then((r) => {
+                    setRerunNote(t("rerunAdded", { n: digits(r.added, locale) }));
+                    setReloads((n) => n + 1);
+                  })
+                  .catch(() => setRerunNote(t("rerunFailed")))
+                  .finally(() => setRerunning(false));
+              }}
+            >
+              <IconRetry width={12} height={12} />
+              {rerunning ? t("rerunning") : t("rerun")}
+            </button>
+          </div>
+        ) : null}
         <header className="border-b border-border pb-3 text-center">
           <h2 className="text-lg font-bold text-fg">{t("minutesDocTitle", { title: meeting.title })}</h2>
           <p className="mt-1 text-[11px] text-fg-subtle">
@@ -147,7 +198,7 @@ export function MinutesTab({ meeting, myName, myId, onChanged }: {
 
         <section className="mt-4">
           <h3 className="text-sm font-bold text-accent">{digits(2, locale)}. {t("ext_decisions")}</h3>
-          {versions === null && callId !== null ? <p className="mt-1.5 text-sm text-fg-muted">…</p>
+          {items === null ? <p className="mt-1.5 text-sm text-fg-muted">…</p>
             : decisions.length === 0 ? <p className="mt-1.5 text-sm text-fg-muted">{t("minutesNoDecisions")}</p>
               : (
                 <ol className="mt-1.5 space-y-1.5">
@@ -165,7 +216,7 @@ export function MinutesTab({ meeting, myName, myId, onChanged }: {
 
         <section className="mt-4">
           <h3 className="text-sm font-bold text-accent">{digits(3, locale)}. {t("ext_actions")}</h3>
-          {versions === null && callId !== null ? <p className="mt-1.5 text-sm text-fg-muted">…</p>
+          {items === null ? <p className="mt-1.5 text-sm text-fg-muted">…</p>
             : actions.length === 0 ? <p className="mt-1.5 text-sm text-fg-muted">{t("minutesNoActions")}</p>
               : (
                 <ul className="mt-1.5 space-y-1.5">
@@ -206,7 +257,10 @@ export function MinutesTab({ meeting, myName, myId, onChanged }: {
           <h3 className="mb-2 text-sm font-semibold text-fg">{t("minutesStatusTitle")}</h3>
           <ol className="space-y-2">
             {[
-              { label: t("minutesStateDraft"), done: summary !== undefined },
+              /* "there is a draft" means the document HAS something in it — it
+                 was `a summary exists`, which is why all three lights read
+                 green above a page saying "no decisions extracted" */
+              { label: t("minutesStateDraft"), done: rows.length > 0 },
               { label: t("minutesStateApproved"), done: approved },
               { label: t("minutesStateSigned"), done: meeting.minutes_signatures.length > 0 },
             ].map((step, i) => (

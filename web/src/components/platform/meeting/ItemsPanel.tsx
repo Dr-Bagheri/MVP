@@ -48,8 +48,11 @@ function group(rows: MeetingItem[]): Record<MeetingItemKind, MeetingItem[]> {
   return out;
 }
 
-export function ItemsPanel({ meetingId, onSeek, locale }: {
+export function ItemsPanel({ meetingId, callId, onSeek, locale }: {
   meetingId: string;
+  /** the meeting's recording, when it has one — a task made from an action
+      item points at the call it came from, so the board can lead back */
+  callId?: string | null;
   /** a row that came from the recording can play from its moment */
   onSeek?: (ms: number) => void;
   locale: string;
@@ -65,6 +68,9 @@ export function ItemsPanel({ meetingId, onSeek, locale }: {
      unrecoverable line — a decision somebody typed has no undo, and the
      trash sits two pixels from the edit button */
   const [confirming, setConfirming] = useState<MeetingItem | null>(null);
+  /* the composer is CLOSED by default — the dashed button is the resting
+     state, and an input that is always open is a thing to look past */
+  const [composing, setComposing] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -87,6 +93,7 @@ export function ItemsPanel({ meetingId, onSeek, locale }: {
          record is a second copy of one fact */
       setRows((prev) => (Array.isArray(prev) ? [...prev, created] : [created]));
       setDraft("");
+      setComposing(false);
     } catch { setFailed(true); } finally { setBusy(false); }
   };
 
@@ -118,6 +125,30 @@ export function ItemsPanel({ meetingId, onSeek, locale }: {
       setRows((prev) => (Array.isArray(prev)
         ? prev.map((r) => (r.id === row.id ? { ...r, done: row.done } : r)) : prev));
     }
+  };
+
+  /**
+   * Every un-ticked action item becomes a task on the board, and is then
+   * ticked here so the two surfaces agree about what is still outstanding.
+   *
+   * Ticked ONE AT A TIME as each task lands, rather than all at the end: if
+   * the fourth write fails, the first three tasks exist and their items are
+   * marked, which is a true record of a partial run. Marking them all at the
+   * end would either lose three tasks' worth of state or claim work that was
+   * never created.
+   */
+  const convertToTasks = async () => {
+    const pending = buckets.action.filter((r) => !r.done);
+    if (pending.length === 0 || busy) return;
+    setBusy(true); setFailed(false);
+    try {
+      for (const row of pending) {
+        await api.createTask({ title: row.body.slice(0, 200), ...(callId === null ? {} : { call_id: callId }) });
+        await api.updateMeetingItem(meetingId, row.id, { done: true });
+        setRows((prev) => (Array.isArray(prev)
+          ? prev.map((r) => (r.id === row.id ? { ...r, done: true } : r)) : prev));
+      }
+    } catch { setFailed(true); } finally { setBusy(false); }
   };
 
   const remove = async (row: MeetingItem) => {
@@ -262,24 +293,85 @@ export function ItemsPanel({ meetingId, onSeek, locale }: {
         )}
       </div>
 
-      <div className="mt-2 flex gap-1.5 border-t border-border pt-2.5">
-        <input
-          className="input h-9 text-sm"
-          placeholder={t(`itemAdd_${kind}`)}
-          aria-label={t(`itemAdd_${kind}`)}
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void add(); } }}
-        />
-        <button
-          type="button"
-          className="btn btn-sm shrink-0 bg-accent text-on-accent"
-          disabled={draft.trim() === "" || busy}
-          onClick={() => void add()}
-        >
-          <IconPlus width={12} height={12} />
-          {t("add")}
-        </button>
+      {/*
+        THE REFERENCE'S ADD CONTROL (user directive, 2026-09-02: "make the add
+        button for the risk and following section there like the image").
+
+        A dashed full-width button that OPENS a composer, rather than a text
+        field parked at the foot. The difference is not decoration: an always-
+        present input is a thing to look past on a list you came to read,
+        while a dashed outline reads as a place where a row would go — which
+        is what it is. It is also what makes room for a composer with more
+        than one field the day a kind needs one.
+      */}
+      <div className="mt-2 space-y-1.5 border-t border-border pt-2.5">
+        {composing ? (
+          <div className="rounded-xl border border-accent bg-surface p-2">
+            <textarea
+              className="input min-h-[64px] resize-none py-2 text-sm"
+              placeholder={t(`itemAdd_${kind}`)}
+              aria-label={t(`itemAdd_${kind}`)}
+              value={draft}
+              autoFocus
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                /* Enter sends, Shift+Enter breaks the line — a risk is often
+                   a sentence and a composer that submitted on every Enter
+                   would make the multi-line box a lie */
+                if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void add(); }
+                if (e.key === "Escape") { setComposing(false); setDraft(""); }
+              }}
+            />
+            <div className="mt-1.5 flex justify-end gap-1.5">
+              <button
+                type="button"
+                className="btn btn-sm border border-border font-medium text-fg-muted hover:text-fg"
+                onClick={() => { setComposing(false); setDraft(""); }}
+              >
+                {t("cancel")}
+              </button>
+              <button
+                type="button"
+                className="btn btn-sm bg-accent font-medium text-on-accent"
+                disabled={draft.trim() === "" || busy}
+                onClick={() => void add()}
+              >
+                {t("add")}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setComposing(true)}
+            className="tap flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border py-2.5 text-xs font-medium text-fg-muted transition-colors hover:border-border-strong hover:text-fg"
+          >
+            <IconPlus width={12} height={12} />
+            {t(`itemAddLabel_${kind}`)}
+          </button>
+        )}
+
+        {/*
+          CONVERT WHAT IS LEFT (same directive: "and one for transform them
+          into tasks"). Only on action items, and only the ones NOT ticked —
+          "all remaining" is the reference's own word and it is the honest
+          one: an action item somebody already finished does not need a task,
+          and creating one would put closed work back on the board.
+
+          It is deliberately not reversible-looking: each converted item is
+          ticked, so pressing it twice creates nothing the second time.
+        */}
+        {kind === "action" && buckets.action.some((r) => !r.done) ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void convertToTasks()}
+            className="tap flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-accent bg-accent-soft py-2.5 text-xs font-medium text-accent transition-colors hover:bg-accent-soft/70 disabled:opacity-50"
+          >
+            <IconPlus width={12} height={12} />
+            {t("convertRemainingToTasks")}
+          </button>
+        ) : null}
       </div>
       {failed ? <p className="mt-1.5 text-[11px] text-danger">{t("itemWriteFailed")}</p> : null}
 

@@ -2987,6 +2987,16 @@
     "itemWriteFailed": "Not saved. Try again.",
     "itemRemoveTitle": "Remove this item?",
     "mixDeviceOnly": "This device only",
-    "mixVoices": "{n} voices recording"
+    "mixVoices": "{n} voices recording",
+    "rerun": "Regenerate",
+    "rerunning": "Generating…",
+    "rerunAdded": "{n} new item(s) added",
+    "rerunFailed": "Regeneration failed",
+    "itemAddLabel_decision": "Add a decision",
+    "itemAddLabel_action": "Add an action item",
+    "itemAddLabel_question": "Add a question",
+    "itemAddLabel_risk": "Add a risk",
+    "itemAddLabel_entity": "Add an entity",
+    "convertRemainingToTasks": "Turn all remaining into tasks"
   }
 }

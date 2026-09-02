@@ -202,6 +202,55 @@ function parseInvitees(value: unknown): string[] {
     .slice(0, 100);
 }
 
+/**
+ * Slice a summary's prose into typed items.
+ *
+ * This logic used to live in the BROWSER, in two copies — the review panel
+ * and the minutes document — each with its own regexes, which is how the
+ * minutes came to say "no decisions extracted" about decisions the review
+ * panel was displaying. It is one function on the server now, and its output
+ * is rows rather than a rendering, so every reader agrees by construction.
+ *
+ * The patterns match the headings the SHIPPED summary templates actually
+ * write (تصمیم‌ها، اقدامات بعدی، موانع و مشکلات…). A pattern that matches no
+ * heading any producer ever emits is a category that is always empty while
+ * reading as wired, which is the defect this whole area started as.
+ */
+const SECTIONS: Array<{ kind: MeetingItemKind; match: RegExp }> = [
+  { kind: "decision", match: /مصوب|تصمیم/ },
+  { kind: "action", match: /اکشن|اقدام|کار بعدی/ },
+  { kind: "question", match: /سؤال|سوال|پرسش/ },
+  { kind: "risk", match: /ریسک|خطر|موانع|مشکل|چالش/ },
+  { kind: "entity", match: /موجودیت|افراد و سازمان/ },
+];
+
+export function sliceSummary(text: string): Array<{ kind: MeetingItemKind; body: string }> {
+  const out: Array<{ kind: MeetingItemKind; body: string }> = [];
+  let current: MeetingItemKind | null = null;
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (line === "") continue;
+    /* a HEADING is a markdown hash, a bold line, or a short line ending in a
+       colon — the three shapes the templates produce. Anything else inside a
+       section is an item. */
+    const heading = /^#{1,6}\s+(.*)$/.exec(line)
+      ?? /^\*\*(.+?)\*\*:?$/.exec(line)
+      ?? (line.length <= 40 && line.endsWith(":") ? [line, line.slice(0, -1)] : null);
+    if (heading !== null) {
+      const title = String(heading[1] ?? "").trim();
+      const hit = SECTIONS.find((sec) => sec.match.test(title));
+      current = hit === undefined ? null : hit.kind;
+      continue;
+    }
+    if (current === null) continue;
+    /* strip a bullet or a number, then keep the sentence */
+    const body = line.replace(/^([-*•]|\d+[.)])\s*/, "").trim();
+    if (body === "") continue;
+    out.push({ kind: current, body: body.slice(0, 2000) });
+  }
+  return out;
+}
+
 export function createMeetingsRepo(db: Db) {
   async function list(identity: Identity, opts: { archived?: boolean } = {}): Promise<MeetingRecord[]> {
     return db.withIdentity(identity, async (tx: SqlTx) => {
@@ -373,6 +422,74 @@ export function createMeetingsRepo(db: Db) {
     await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe(
       "delete from echo.meeting_item where id = $1", [itemId],
     ));
+  }
+
+  /**
+   * «تولید دوباره» — re-derive the meeting's items from its latest summary.
+   *
+   * WHY IT RUNS ON THE AGENT CONNECTION. 0160 pins `source` to the writing
+   * ROLE: echo_app may only ever write 'user'. That is the wall which makes
+   * the sparkle badge a fact rather than a claim, so the api CANNOT write an
+   * ai-badged row on the caller's own connection, and it must not be able to.
+   * This borrows the agent role for exactly the insert, which is the same
+   * shape a confirmed proposal's write takes (M4).
+   *
+   * IT ADDS, IT NEVER REPLACES. A person's own decisions are in this table
+   * too, and a re-run that cleared the list first would silently delete work
+   * somebody typed — the agent holds no DELETE precisely so that cannot
+   * happen, and this function does not try to route around it. Rows already
+   * present (matched on their exact text) are skipped, so pressing the button
+   * twice does not double the list.
+   */
+  async function extractItems(
+    identity: Identity,
+    meetingId: string,
+    callId: string,
+  ): Promise<{ added: number }> {
+    const summaries = await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe<Record<string, unknown>>(
+      `select body from echo.summary
+        where call_id = $1
+        order by version desc
+        limit 1`,
+      [callId],
+    ));
+    const body = summaries[0] === undefined ? "" : String(summaries[0].body ?? "");
+    if (body.trim() === "") return { added: 0 };
+
+    const existing = await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe<Record<string, unknown>>(
+      "select kind, body from echo.meeting_item where meeting_id = $1", [meetingId],
+    ));
+    /* keyed by KIND then body — a single string key needs a separator, and
+       every separator is either a character that can appear in a sentence or
+       a control byte that a generator will eventually turn into a real one
+       (this line shipped a literal NUL once and the encoding sweep caught it) */
+    const seen = new Map<string, Set<string>>();
+    for (const r of existing) {
+      const kind = String(r.kind);
+      const set = seen.get(kind) ?? new Set<string>();
+      set.add(String(r.body));
+      seen.set(kind, set);
+    }
+
+    const found = sliceSummary(body);
+    let added = 0;
+    for (const row of found) {
+      const set = seen.get(row.kind) ?? new Set<string>();
+      if (set.has(row.body)) continue;
+      set.add(row.body);
+      seen.set(row.kind, set);
+      await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe(
+        `insert into echo.meeting_item
+           (meeting_id, org_id, kind, body, source, position, created_by)
+         values ($1, echo.actor_org_id(), $2, $3, 'ai',
+                 coalesce((select max(position) + 1 from echo.meeting_item
+                            where meeting_id = $1 and kind = $2), 0),
+                 echo.actor_id())`,
+        [meetingId, row.kind, row.body],
+      ), { role: "agent" });
+      added += 1;
+    }
+    return { added };
   }
 
   async function detail(identity: Identity, id: string): Promise<MeetingRecord> {
@@ -649,6 +766,6 @@ export function createMeetingsRepo(db: Db) {
   return {
     list, detail, create, update, remove, topics, createTopic, updateTopic,
     byJoinCode, setJoinCode, attachments, addAttachment, removeAttachment,
-    items, addItem, updateItem, removeItem,
+    items, addItem, updateItem, removeItem, extractItems,
   };
 }

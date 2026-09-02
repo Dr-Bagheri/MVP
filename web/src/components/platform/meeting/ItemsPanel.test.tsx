@@ -10,6 +10,7 @@ const meetingItems = vi.fn();
 const addMeetingItem = vi.fn();
 const updateMeetingItem = vi.fn();
 const deleteMeetingItem = vi.fn();
+const createTask = vi.fn();
 
 vi.mock("@/api/client", () => ({
   api: {
@@ -17,6 +18,7 @@ vi.mock("@/api/client", () => ({
     addMeetingItem: (...a: unknown[]) => addMeetingItem(...a),
     updateMeetingItem: (...a: unknown[]) => updateMeetingItem(...a),
     deleteMeetingItem: (...a: unknown[]) => deleteMeetingItem(...a),
+    createTask: (...a: unknown[]) => createTask(...a),
   },
 }));
 
@@ -32,6 +34,7 @@ beforeEach(() => {
   addMeetingItem.mockReset();
   updateMeetingItem.mockReset();
   deleteMeetingItem.mockReset();
+  createTask.mockReset();
 });
 
 describe("ItemsPanel", () => {
@@ -48,8 +51,10 @@ describe("ItemsPanel", () => {
     render(<ItemsPanel meetingId="m1" locale="fa" />);
     await screen.findByText("itemEmpty_decision");
 
+    /* the composer is CLOSED at rest now — the dashed button opens it */
+    fireEvent.click(screen.getByRole("button", { name: "itemAddLabel_decision" }));
     fireEvent.change(screen.getByLabelText("itemAdd_decision"), { target: { value: "typed text" } });
-    fireEvent.click(screen.getByRole("button", { name: /add/ }));
+    fireEvent.click(screen.getByRole("button", { name: "add" }));
 
     await screen.findByText("SERVER TEXT");
     expect(screen.queryByText("typed text")).toBeNull();
@@ -128,6 +133,61 @@ describe("ItemsPanel", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "itemRemove" }));
     await waitFor(() => expect(screen.queryByText("assistant wrote this")).toBeNull());
     expect(deleteMeetingItem).toHaveBeenCalledWith("m1", "b");
+  });
+
+  it("turns only the UNFINISHED action items into tasks, and ticks each as it lands", async () => {
+    /*
+     * "All remaining" is the reference's word and the honest one: an action
+     * item somebody already ticked does not need a task, and creating one
+     * would put closed work back on the board. The fixture therefore has one
+     * of each — a version that converted everything passes any count-only
+     * assertion and is wrong in the one way that matters.
+     */
+    meetingItems.mockResolvedValue([
+      row({ id: "open", kind: "action", body: "هنوز مانده", done: false }),
+      row({ id: "shut", kind: "action", body: "انجام شده", done: true }),
+    ]);
+    createTask.mockResolvedValue({ id: "t1" });
+    updateMeetingItem.mockResolvedValue(undefined);
+    render(<ItemsPanel meetingId="m1" callId="c1" locale="fa" />);
+
+    fireEvent.click(await screen.findByRole("tab", { name: /item_action/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "convertRemainingToTasks" }));
+
+    /*
+     * ANCHORED ON THE END STATE, not on the count. The first version awaited
+     * `toHaveBeenCalledTimes(1)` and passed against a version that converted
+     * BOTH items — waitFor is satisfied the instant the first call lands and
+     * stops looking, so a loop making a second call a tick later was
+     * invisible. The verify-red went green, which is how the trap was found.
+     *
+     * The convert button disappears only once every action item is ticked, so
+     * waiting for THAT waits for the loop to finish, and the assertions after
+     * it are about a settled system.
+     */
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: "convertRemainingToTasks" })).toBeNull());
+    expect(createTask).toHaveBeenCalledTimes(1);
+    expect(createTask).toHaveBeenCalledWith({ title: "هنوز مانده", call_id: "c1" });
+    /* said the other way round too — the count alone would pass if the loop
+       converted the finished item INSTEAD of the outstanding one */
+    expect(createTask).not.toHaveBeenCalledWith(expect.objectContaining({ title: "انجام شده" }));
+    /* and the item is ticked, so the two surfaces agree about what is still
+       outstanding — without this the button could be pressed forever, making
+       a new task each time */
+    expect(updateMeetingItem).toHaveBeenCalledWith("m1", "open", { done: true });
+  });
+
+  it("offers no convert button when nothing is outstanding", async () => {
+    /* the control: a button that renders unconditionally would satisfy the
+       test above and would also offer to convert an empty list */
+    meetingItems.mockResolvedValue([
+      row({ id: "shut", kind: "action", body: "انجام شده", done: true }),
+    ]);
+    render(<ItemsPanel meetingId="m1" locale="fa" />);
+    fireEvent.click(await screen.findByRole("tab", { name: /item_action/ }));
+    await screen.findByText("انجام شده");
+    expect(screen.queryByRole("button", { name: "convertRemainingToTasks" })).toBeNull();
   });
 
   it("offers to play from a moment only when the row has one", async () => {

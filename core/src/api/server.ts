@@ -1581,6 +1581,27 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     return reply.code(201).send(created);
   });
 
+  /**
+   * «تولید دوباره» — re-derive this meeting's items from its latest summary.
+   * The rows land badged `ai` because the repo borrows the agent connection
+   * to write them; the api's own role could not produce that badge if it
+   * tried, which is what makes the badge worth rendering.
+   */
+  app.post("/v1/meetings/:id/items/extract", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    const meeting = await meetings.detail(identity, id);
+    if (meeting.call_id === null) {
+      /* a SETTING of the world, not a fault: there is no recording to read,
+         so there is nothing to re-derive — and saying "failed" would send
+         somebody looking for a broken button */
+      throw new ValidationError("this meeting has no recording to extract from",
+        { code: "meeting_has_no_record" });
+    }
+    return reply.send(await meetings.extractItems(identity, id, meeting.call_id));
+  });
+
   app.patch("/v1/meetings/:id/items/:itemId", async (request, reply) => {
     const identity = await auth.requireActive(request);
     refuseApiKey(identity);

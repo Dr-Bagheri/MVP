@@ -2987,6 +2987,16 @@
     "itemWriteFailed": "ذخیره نشد. دوباره تلاش کنید.",
     "itemRemoveTitle": "حذف این مورد؟",
     "mixDeviceOnly": "فقط صدای این دستگاه",
-    "mixVoices": "{n} صدا در ضبط"
+    "mixVoices": "{n} صدا در ضبط",
+    "rerun": "تولید دوباره",
+    "rerunning": "در حال تولید…",
+    "rerunAdded": "{n} مورد تازه افزوده شد",
+    "rerunFailed": "تولید دوباره انجام نشد",
+    "itemAddLabel_decision": "افزودن مصوبه",
+    "itemAddLabel_action": "افزودن اکشن‌آیتم",
+    "itemAddLabel_question": "افزودن سؤال",
+    "itemAddLabel_risk": "افزودن ریسک",
+    "itemAddLabel_entity": "افزودن موجودیت",
+    "convertRemainingToTasks": "تبدیل همه باقی‌مانده‌ها به تسک"
   }
 }

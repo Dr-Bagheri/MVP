@@ -1149,7 +1149,7 @@ function PostStage({ meeting, call, me, locale, onGoHold, onChanged, onBackToMee
                   <TranscriptPanel callId={meeting.call_id} onSeek={(ms) => setSeekReq({ ms })} locale={locale} />
                 )}
           </div>
-          <ItemsPanel meetingId={meeting.id} onSeek={(ms) => setSeekReq({ ms })} locale={locale} />
+          <ItemsPanel meetingId={meeting.id} callId={meeting.call_id} onSeek={(ms) => setSeekReq({ ms })} locale={locale} />
         </div>
       ) : null}
       {tab === "tasks" ? (

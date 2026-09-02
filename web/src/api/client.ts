@@ -1630,6 +1630,12 @@ export const api = {
       { method: "PATCH", body: JSON.stringify(patch) },
     );
   },
+  /* «تولید دوباره» — re-derive the meeting's items from its own recording.
+     It ADDS: rows already present are skipped and nothing a person wrote is
+     touched, because the agent role that writes these holds no DELETE. */
+  async extractMeetingItems(id: string): Promise<{ added: number }> {
+    return bff(`/api/meetings/${encodeURIComponent(id)}/items/extract`, { method: "POST" });
+  },
   async deleteMeetingItem(id: string, itemId: string): Promise<void> {
     await bff<null>(
       `/api/meetings/${encodeURIComponent(id)}/items/${encodeURIComponent(itemId)}`,
