@@ -261,7 +261,10 @@ export function TaskBoard() {
             aria-label={t("newTopic")}
             title={t("newTopic")}
             onClick={() => setAddingTopic(true)}
-            className="btn btn-icon border border-border text-fg-muted hover:text-fg"
+            /* the MEETINGS chip-row's add button, exactly: dashed, the same
+               square, in the same place. Two boards showing the same row
+               should not disagree about what "add a folder" looks like. */
+            className="btn btn-icon border border-dashed border-border text-fg-muted hover:border-border-strong hover:text-fg"
           >
             <IconPlus width={12} height={12} />
           </button>
@@ -287,14 +290,19 @@ export function TaskBoard() {
             both in tasks and meetings") — the same menu component, so the
             two boards cannot grow different answers to one question */}
         {board.topics.map((entry) => (
-          <span key={entry.id} className="inline-flex items-center gap-0.5">
+          /* the meetings chip, field for field — the menu inside, the select
+             a button within the chip rather than a span wearing a role */
+          <span
+            key={entry.id}
+            className={`btn btn-sm inline-flex cursor-default items-center gap-1.5 border pe-1 font-medium ${
+              topic === entry.id ? "border-accent bg-accent-soft font-semibold text-accent" : "border-border text-fg-muted"
+            }`}
+          >
             <button
               type="button"
               aria-pressed={topic === entry.id}
               onClick={() => setTopic((cur) => (cur === entry.id ? "all" : entry.id))}
-              className={`btn btn-sm gap-1.5 border font-medium ${
-                topic === entry.id ? "border-accent bg-accent-soft font-semibold text-accent" : "border-border text-fg-muted hover:text-fg"
-              }`}
+              className="tap inline-flex items-center gap-1.5 hover:text-fg"
             >
               <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden />
               {entry.name}
@@ -304,7 +312,7 @@ export function TaskBoard() {
             </button>
             <KebabMenu
               label={t("topicOptions")}
-              triggerClassName="h-7 w-7 rounded-md text-fg-subtle hover:bg-surface-2 hover:text-fg"
+              triggerClassName="h-5 w-5 rounded text-current opacity-60 hover:opacity-100"
               items={[
                 {
                   key: "rename",

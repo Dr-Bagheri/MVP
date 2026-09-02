@@ -148,8 +148,28 @@ export function resolvedTimezone(): string {
  * This is where "auto follows the language" is spelled out exactly once.
  */
 export function resolvedCalendar(locale: string): "jalali" | "gregorian" {
+  /*
+   * ENGLISH IS ALWAYS GREGORIAN (user directive, 2026-09-02: "in the en
+   * version the date must change back to its Gregorian calendar, both on top
+   * and in items, through the whole platform").
+   *
+   * This SUPERSEDES the 2026-08-13 ruling that an explicit choice overrides
+   * the locale, and it is worth writing down as a reversal rather than
+   * quietly widening the condition. The old rule was defensible — somebody
+   * who picks Jalali means it — but it produced «1405 شهریور 11» on an
+   * English screen: Latin digits, a Persian month name, and a year no
+   * English reader can place. The setting was being honoured into
+   * unreadability.
+   *
+   * So the preference now decides the Persian surface only. `auto` is
+   * unchanged; an explicit `jalali` still wins in Persian, which is the
+   * case it was actually added for (a reader who wants Jalali dates while
+   * the interface is in Persian). What it can no longer do is put a Persian
+   * calendar on an English page.
+   */
+  if (locale !== "fa") return "gregorian";
   if (calendar !== "auto") return calendar;
-  return locale === "fa" ? "jalali" : "gregorian";
+  return "jalali";
 }
 
 /**

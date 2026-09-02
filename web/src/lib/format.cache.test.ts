@@ -147,7 +147,10 @@ describe("the Intl formatter cache is invisible in the output", () => {
   it("Jalali dates hold their known values in both zones and both locales", () => {
     __setPreferencesForTest({ calendar: "jalali", timezone: "UTC" });
     expect(formatDate("2026-06-14T09:00:00Z", "fa")).toBe("⁨۲۴ خرداد ۱۴۰۵⁩");
-    expect(formatDate("2026-06-14T09:00:00Z", "en")).toBe("⁨24 خرداد 1405⁩");
+    /* English is Gregorian whatever is stored (2026-09-02) — the cache is
+       keyed on the RESOLVED calendar, so this is also the assertion that a
+       shared cache does not leak one locale's answer into the other */
+    expect(formatDate("2026-06-14T09:00:00Z", "en")).toBe("⁨14 Jun 2026⁩");
     expect(formatDate("2026-01-01T20:15:00Z", "fa")).toBe("⁨۱۱ دی ۱۴۰۴⁩");
 
     /* 22:30 UTC is already the next day in Tehran (+03:30) — the case a cache

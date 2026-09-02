@@ -2,20 +2,17 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
-import { KebabMenu } from "@/components/rowActions";
-import { IconCheck, IconPencil, IconPin, IconPlus, IconTrash } from "@/components/icons";
+import { IconCheck, IconPencil, IconPin, IconTrash } from "@/components/icons";
 import {
-  WIDGET_GROUPS, WIDGET_SPECS,
-  defaultLayout, defaultSizeFor, nextFreeSpot, readLayout, writeLayout, specFor,
+  defaultLayout, readLayout, writeLayout, specFor,
   type DashboardLayout, type TilePlacement, type TileSize, type WidgetKey,
 } from "@/lib/dashboardLayout";
 import { WidgetBoard } from "./dashboard/WidgetBoard";
-import { useRouter, Link } from "@/i18n/routing";
+import { Link } from "@/i18n/routing";
 import { api } from "@/api/client";
-import { digits, formatDate, personName } from "@/lib/format";
-import { IconMic } from "@/components/icons";
+import { formatDate, personName, formatTime } from "@/lib/format";
 import { useLocale } from "next-intl";
-import type { Me } from "@/api/types";
+import type { Me, MeetingRecord } from "@/api/types";
 import {
   AgentsWidget, CalendarWidget, IntegrationsWidget, LatestMeetingsWidget, RecordsMiniWidget,
   StartRecordWidget, StatsWidget, UpcomingWidget, WeekWidget,
@@ -55,19 +52,31 @@ import {
  */
 function GreetingHead() {
   const t = useTranslations("dashboard");
+  /* the «ساعت …» clause is the meetings surface's sentence — one
+     vocabulary for one thing, wherever it is read */
+  const tMeetings = useTranslations("meetings");
   const locale = useLocale();
-  const router = useRouter();
   const [me, setMe] = useState<Me | null>(null);
-  const [upcoming, setUpcoming] = useState<number | null>(null);
+  /* THE next meeting itself, not how many there are (user directive,
+     2026-09-02: "remove the date under the username, just add the upcoming
+     meeting with its name and date and time of it"). A count answers a
+     question nobody asked at a greeting; the next thing on the calendar is
+     the thing a person opening a dashboard is looking for. */
+  const [next, setNext] = useState<MeetingRecord | null | "none">(null);
 
   useEffect(() => {
     void api.me().then(setMe).catch(() => setMe(null));
     void api.meetings()
       .then((rows) => {
         const now = Date.now();
-        setUpcoming(rows.filter((m) => new Date(m.scheduled_at).getTime() >= now && m.call_id === null).length);
+        const ahead = rows
+          .filter((m) => new Date(m.scheduled_at).getTime() >= now && m.call_id === null)
+          .sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at));
+        setNext(ahead[0] ?? "none");
       })
-      .catch(() => setUpcoming(null));
+      /* null stays "we do not know" — distinct from "none", which is an
+         answer. A failed read must not render as an empty calendar. */
+      .catch(() => setNext(null));
   }, []);
 
   const hour = new Date().getHours();
@@ -88,24 +97,24 @@ function GreetingHead() {
         <h1 className="text-3xl font-extrabold text-fg">
           {name === "" ? salute : t("greetWithName", { salute, name })} 👋
         </h1>
+        {/* the NEXT meeting — its name, its day, its time. Today's date said
+            nothing a clock does not, and it said it above the one line on the
+            screen that had somewhere to be. */}
         <p className="mt-1 text-xs text-fg-subtle">
-          {formatDate(new Date().toISOString(), locale)}
-          {" — "}
-          {upcoming === null
+          {next === null
             ? t("greetUpcomingUnknown")
-            : upcoming === 0
+            : next === "none"
               ? t("greetNoUpcoming")
-              : t("greetUpcoming", { n: digits(upcoming, locale) })}
+              : (
+                <Link href={`/meetings/${next.id}`} className="hover:text-accent">
+                  <span className="font-medium text-fg-muted">{next.title}</span>
+                  {" · "}
+                  {formatDate(next.scheduled_at, locale)}
+                  {tMeetings("dateAtTime", { time: formatTime(next.scheduled_at, locale) })}
+                </Link>
+              )}
         </p>
       </div>
-      <button
-        type="button"
-        onClick={() => router.push("/meetings?new=1")}
-        className="btn border border-border bg-surface font-medium text-fg shadow-card hover:border-border-strong"
-      >
-        <IconMic width={16} height={16} />
-        {t("startRecordMeeting")}
-      </button>
     </div>
   );
 }
@@ -146,14 +155,6 @@ export function Dashboard() {
     });
   }
 
-  const addWidget = (key: WidgetKey) => {
-    if (layout.tiles.some((tile) => tile.key === key)) return;
-    const spot = nextFreeSpot(layout.tiles);
-    update({
-      ...layout,
-      tiles: [...layout.tiles, { key, ...spot, size: defaultSizeFor(key) }],
-    });
-  };
   const removeWidget = (key: WidgetKey) =>
     update({ ...layout, tiles: layout.tiles.filter((tile) => tile.key !== key) });
 
@@ -293,9 +294,6 @@ export function Dashboard() {
     }
   }
 
-  const onBoard = new Set(layout.tiles.map((tile) => tile.key));
-  const hidden = WIDGET_SPECS.filter((spec) => !onBoard.has(spec.key));
-
   return (
     <div className="space-y-5">
       <GreetingHead />
@@ -328,48 +326,19 @@ export function Dashboard() {
         <span className="flex items-center gap-2">
           {editing ? (
             <>
-              <span className="flex overflow-hidden rounded-lg border border-border" role="group" aria-label={t("density")}>
-                {(["comfortable", "compact"] as const).map((d) => (
-                  <button
-                    key={d}
-                    type="button"
-                    aria-pressed={layout.density === d}
-                    className={`h-8 px-2.5 text-xs transition-colors ${
-                      layout.density === d
-                        ? "bg-accent-soft font-semibold text-accent"
-                        : "bg-surface text-fg-muted hover:text-fg"
-                    }`}
-                    onClick={() => update({ ...layout, density: d })}
-                  >
-                    {t(d)}
-                  </button>
-                ))}
-              </span>
-              {/* ADD — grouped by the registry's own sections, so the menu
-                  organises itself as the catalogue grows */}
-              <KebabMenu
-                label={t("addWidget")}
-                trigger={<span className="text-xs">＋ {t("addWidget")}</span>}
-                items={
-                  hidden.length === 0
-                    ? [{ key: "none", label: t("allShown"), icon: null, disabled: true }]
-                    : WIDGET_GROUPS.filter((group) => hidden.some((s) => s.group === group)).map(
-                        (group) => ({
-                          key: group,
-                          label: t(`group.${group}` as "group.overview"),
-                          icon: <IconPlus />,
-                          sub: hidden
-                            .filter((spec) => spec.group === group)
-                            .map((spec) => ({
-                              key: spec.key,
-                              label: t(`widget.${spec.labelKey}` as "widget.records"),
-                              icon: spec.icon,
-                              onSelect: () => addWidget(spec.key),
-                            })),
-                        }),
-                      )
-                }
-              />
+              {/*
+                THE DENSITY TOGGLE AND THE ADD MENU ARE GONE (user directive,
+                2026-09-02: "remove add card, remove compact and comfortable").
+                Both were controls over the board's SHAPE, and the board has a
+                shape now — the reference's, arrived at by measurement and
+                signed off. A density switch offers two answers to a question
+                that has one, and an add menu offers cards back onto a board
+                somebody deliberately arranged.
+                The catalogue and the layout engine are untouched: a widget
+                still declares its sizes and a tile can still be pinned,
+                dragged, resized and removed. What left is the two controls,
+                not the machinery under them.
+              */}
               <button
                 type="button"
                 className="btn btn-sm bg-accent font-semibold text-on-accent hover:opacity-90"

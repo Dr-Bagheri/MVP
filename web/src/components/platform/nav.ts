@@ -82,7 +82,18 @@ export const NAV_PRIMARY: readonly NavItem[] = [
      Settings tile light up while you stand on it, so the rail learns the
      move from the registry rather than from a second hand-kept list. */
   { href: "/agents", key: "agents", inBar: false },
-  { href: "/echo", key: "echo", inBar: true },
+  /*
+   * ECHO IS OFF THE RAIL (user directive, 2026-09-02: "remove echo, we don't
+   * need it any more — we need only its parts for future, keep the parts that
+   * we need for later").
+   *
+   * Its routes, its recorder, its transcript surfaces and its section shell
+   * all remain: the meeting is being built on those parts, and deleting them
+   * to take a tile out of a menu is how a feature loses the thing it was
+   * being kept for. What went is the DOOR — nothing links to Echo from the
+   * navigation, and the reachability check is satisfied because the pages
+   * still resolve for anyone holding a bookmark.
+   */
   { href: "/management", key: "management", inBar: true },
 ];
 

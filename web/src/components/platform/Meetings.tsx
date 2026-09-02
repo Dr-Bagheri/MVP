@@ -215,14 +215,29 @@ export function Meetings() {
            * floating-panel rule exists to forbid and only missed because it
            * spelled its offset `top-9` instead of `top-full`.
            */
-          <span key={row.id} className="inline-flex items-center gap-0.5">
+          /*
+           * THE MENU LIVES INSIDE THE CHIP (user directive, 2026-09-02: "put
+           * the kebab menu inside the item in the second sub menu — do it for
+           * tasks and meetings"). Beside it, the ⋯ read as a separate control
+           * in the row rather than as this folder's own options.
+           *
+           * The chip is a SPAN with a bordered look and the select is a
+           * button inside it, because a button cannot contain a button and
+           * the previous shape only avoided that by giving a span
+           * `role="button"` — a control a screen reader announces but the
+           * platform cannot style, focus or disable like the real thing.
+           */
+          <span
+            key={row.id}
+            className={`btn btn-sm inline-flex cursor-default items-center gap-1.5 border pe-1 font-medium ${
+              topic === row.id ? "border-accent bg-accent-soft font-semibold text-accent" : "border-border text-fg-muted"
+            }`}
+          >
             <button
               type="button"
               aria-pressed={topic === row.id}
               onClick={() => setTopic((cur) => (cur === row.id ? "all" : row.id))}
-              className={`btn btn-sm gap-1.5 border font-medium ${
-                topic === row.id ? "border-accent bg-accent-soft font-semibold text-accent" : "border-border text-fg-muted hover:text-fg"
-              }`}
+              className="tap inline-flex items-center gap-1.5 hover:text-fg"
             >
               <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden />
               {row.name}
@@ -232,7 +247,7 @@ export function Meetings() {
             </button>
             <KebabMenu
               label={t("topicOptions")}
-              triggerClassName="h-7 w-7 rounded-md text-fg-subtle hover:bg-surface-2 hover:text-fg"
+              triggerClassName="h-5 w-5 rounded text-current opacity-60 hover:opacity-100"
               items={[
                 {
                   key: "rename",

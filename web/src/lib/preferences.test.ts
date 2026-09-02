@@ -36,11 +36,28 @@ describe("calendar preference", () => {
     expect(resolvedCalendar("en")).toBe("gregorian");
   });
 
-  it("an explicit choice overrides the language, in both directions", () => {
+  it("an explicit choice decides the PERSIAN surface", () => {
     setCalendarPreference("gregorian");
     expect(resolvedCalendar("fa")).toBe("gregorian");
+  });
+
+  it("but English is always Gregorian, whatever is stored", () => {
+    /*
+     * REVERSES the 2026-08-13 rule that an explicit choice overrides the
+     * locale in both directions (user directive, 2026-09-02). That rule was
+     * defensible and it produced «1405 شهریور 11» on an English screen —
+     * Latin digits, a Persian month name, and a year no English reader can
+     * place. The setting was being honoured into unreadability.
+     *
+     * Asserted for BOTH stored values, because "en is gregorian" would also
+     * be true of an implementation that had simply stopped reading the
+     * preference at all — and that one breaks Persian.
+     */
     setCalendarPreference("jalali");
-    expect(resolvedCalendar("en")).toBe("jalali");
+    expect(resolvedCalendar("en")).toBe("gregorian");
+    expect(resolvedCalendar("fa")).toBe("jalali");
+    setCalendarPreference("gregorian");
+    expect(resolvedCalendar("en")).toBe("gregorian");
   });
 
   it("renders a Jalali date in fa by default", () => {
@@ -114,7 +131,9 @@ describe("preferences come from the wire", () => {
   it("adopts what identity carried", () => {
     hydratePreferences({ calendar: "jalali", timezone: "Asia/Tehran" });
     expect(getCalendarPreference()).toBe("jalali");
-    expect(formatDate("2026-06-14T09:00:00Z", "en")).toContain("خرداد");
+    /* the stored value is adopted, and it shows on the surface it governs —
+       Persian. English is Gregorian whatever is stored (2026-09-02). */
+    expect(formatDate("2026-06-14T09:00:00Z", "fa")).toContain("خرداد");
   });
 
   it("falls back to auto on a value this client does not understand", () => {
