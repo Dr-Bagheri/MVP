@@ -17,7 +17,7 @@
  *     and the meeting read resolves the call's title so the post stage can
  *     say what it produced without a second fetch.
  */
-import { NotFoundError, ValidationError } from "./errors.ts";
+import { NotFoundError, ValidationError, ConflictError } from "./errors.ts";
 import { iso } from "./vocabulary.ts";
 import type { Db, SqlTx } from "../db/identity.ts";
 import type { Identity } from "../agent/types.ts";
@@ -46,6 +46,8 @@ export interface MeetingRecord {
   scheduled_at: string;
   duration_minutes: number | null;
   mode: MeetingMode;
+  /** 0151: the folder's id — the NAME travels beside it, resolved by join */
+  topic_id: string | null;
   topic: string | null;
   location: string | null;
   description: string;
@@ -68,13 +70,17 @@ export interface MeetingRecord {
 }
 
 const MEETING_ROWS = `
-  select m.id, m.title, m.scheduled_at, m.duration_minutes, m.mode, m.topic,
+  select m.id, m.title, m.scheduled_at, m.duration_minutes, m.mode,
+         m.topic_id, mt.name as topic,
          m.location, m.description, m.invitees, m.agenda, m.call_id,
          c.title as call_title, m.archived_at, m.created_by, m.created_at,
          m.minutes_approved_at, m.minutes_closed_at, m.minutes_signatures,
          m.video_url, m.video_provider
     from echo.meeting m
-    left join echo.call c on c.id = m.call_id`;
+    left join echo.call c on c.id = m.call_id
+    /* LEFT: a meeting with no folder is the ordinary state, and an inner
+       join here would hide every one of them from the list */
+    left join echo.meeting_topic mt on mt.id = m.topic_id`;
 
 function toMeeting(row: Record<string, unknown>): MeetingRecord {
   const rawAgenda = Array.isArray(row.agenda) ? row.agenda : [];
@@ -85,6 +91,10 @@ function toMeeting(row: Record<string, unknown>): MeetingRecord {
     duration_minutes: row.duration_minutes === null || row.duration_minutes === undefined
       ? null : Number(row.duration_minutes),
     mode: row.mode as MeetingMode,
+    topic_id: (row.topic_id as string | null) ?? null,
+    /* the NAME, joined — a client rendering a chip needs the word, and a
+       second copy of it on the meeting row is the two-spellings defect the
+       migration exists to end */
     topic: (row.topic as string | null) ?? null,
     location: (row.location as string | null) ?? null,
     description: String(row.description ?? ""),
@@ -206,14 +216,14 @@ export function createMeetingsRepo(db: Db) {
     return db.withIdentity(identity, async (tx: SqlTx) => {
       const rows = await tx.unsafe<Record<string, unknown>>(
         `insert into echo.meeting
-           (org_id, title, scheduled_at, duration_minutes, mode, topic,
+           (org_id, title, scheduled_at, duration_minutes, mode, topic_id,
             location, description, invitees, agenda, created_by)
          values (echo.actor_org_id(), $1, $2, $3, $4, $5, $6, $7, $8, $9::text::jsonb,
                  echo.actor_id())
          returning id`,
         [
           title, when, duration, mode,
-          typeof input.topic === "string" && input.topic.trim() !== "" ? input.topic.trim().slice(0, 120) : null,
+          typeof input.topic_id === "string" && input.topic_id.trim() !== "" ? input.topic_id.trim() : null,
           typeof input.location === "string" && input.location.trim() !== "" ? input.location.trim().slice(0, 300) : null,
           typeof input.description === "string" ? input.description.slice(0, 8000) : "",
           invitees,
@@ -249,8 +259,11 @@ export function createMeetingsRepo(db: Db) {
         }
         case "scheduled_at": push("scheduled_at", parseWhen(value)); break;
         case "mode": push("mode", parseMode(value)); break;
-        case "topic":
-          push("topic", typeof value === "string" && value.trim() !== "" ? value.trim().slice(0, 120) : null);
+        case "topic_id":
+          /* the FK does the checking: a topic in another org is refused by
+             the composite constraint rather than by a lookup here, which
+             would be a second rule that can disagree with the first */
+          push("topic_id", typeof value === "string" && value.trim() !== "" ? value.trim() : null);
           break;
         case "location":
           push("location", typeof value === "string" && value.trim() !== "" ? value.trim().slice(0, 300) : null);
@@ -396,5 +409,54 @@ export function createMeetingsRepo(db: Db) {
     });
   }
 
-  return { list, detail, create, update, remove };
+  /**
+   * THE FOLDERS (0151). Archived, never deleted — the same rule as the task
+   * board's: a folder that disappears takes the answer to "where did that
+   * meeting go" with it, and the meetings themselves are re-pointed to null
+   * by the FK rather than deleted alongside it.
+   */
+  async function topics(identity: Identity): Promise<Array<{ id: string; name: string }>> {
+    return db.withIdentity(identity, async (tx: SqlTx) => {
+      const rows = await tx.unsafe<Record<string, unknown>>(
+        `select t.id, t.name from echo.meeting_topic t
+          where t.archived_at is null order by t.name`, [],
+      );
+      return rows.map((row) => ({ id: row.id as string, name: row.name as string }));
+    });
+  }
+
+  async function createTopic(identity: Identity, name: string): Promise<{ id: string; name: string }> {
+    const clean = name.trim().slice(0, 80);
+    if (clean === "") throw new ValidationError("a folder needs a name", { code: "topic_name_required" });
+    return db.withIdentity(identity, async (tx: SqlTx) => {
+      const rows = await tx.unsafe<Record<string, unknown>>(
+        `insert into echo.meeting_topic (org_id, name, created_by)
+         values (echo.actor_org_id(), $1, echo.actor_id())
+         returning id, name`, [clean],
+      );
+      const row = rows[0];
+      if (!row) throw new ConflictError("the folder was not created");
+      return { id: row.id as string, name: row.name as string };
+    });
+  }
+
+  async function updateTopic(
+    identity: Identity, id: string, patch: { name?: string; archived?: boolean },
+  ): Promise<void> {
+    await db.withIdentity(identity, async (tx: SqlTx) => {
+      if (typeof patch.name === "string") {
+        const clean = patch.name.trim().slice(0, 80);
+        if (clean === "") throw new ValidationError("a folder needs a name", { code: "topic_name_required" });
+        await tx.unsafe(`update echo.meeting_topic set name = $2 where id = $1`, [id, clean]);
+      }
+      if (typeof patch.archived === "boolean") {
+        await tx.unsafe(
+          `update echo.meeting_topic set archived_at = $2 where id = $1`,
+          [id, patch.archived ? new Date().toISOString() : null],
+        );
+      }
+    });
+  }
+
+  return { list, detail, create, update, remove, topics, createTopic, updateTopic };
 }

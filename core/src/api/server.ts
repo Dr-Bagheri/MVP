@@ -2513,6 +2513,35 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     return reply.send(await meetings.detail(identity, id));
   });
 
+  /* the meeting FOLDERS (0151) — the strip's own rows, so a folder can be
+     made before the first meeting uses it and renamed without rewriting
+     every meeting that shares a spelling */
+  app.get("/v1/meetings/topics", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    return reply.send({ topics: await meetings.topics(identity) });
+  });
+
+  app.post("/v1/meetings/topics", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const body = (request.body ?? {}) as { name?: unknown };
+    if (typeof body.name !== "string") throw new ValidationError("name must be a string");
+    return reply.code(201).send(await meetings.createTopic(identity, body.name));
+  });
+
+  app.patch("/v1/meetings/topics/:id", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { name?: unknown; archived?: unknown };
+    await meetings.updateTopic(identity, id, {
+      ...(typeof body.name === "string" ? { name: body.name } : {}),
+      ...(typeof body.archived === "boolean" ? { archived: body.archived } : {}),
+    });
+    return reply.code(204).send();
+  });
+
   app.delete("/v1/meetings/:id", async (request, reply) => {
     const identity = await auth.requireActive(request);
     refuseApiKey(identity);

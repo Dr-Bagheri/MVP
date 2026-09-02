@@ -28,11 +28,12 @@ vi.mock("@/i18n/routing", () => ({
 
 const pushSpy = vi.fn();
 const updateSpy = vi.fn();
+let TOPICS: Array<{ id: string; name: string }> = [];
 
 function meeting(over: Partial<MeetingRecord>): MeetingRecord {
   return {
     id: "m-1", title: "جلسهٔ برنامه‌ریزی", scheduled_at: "2099-01-01T09:00:00.000Z",
-    duration_minutes: 60, mode: "online", topic: null, location: null,
+    duration_minutes: 60, mode: "online", topic_id: null, topic: null, location: null,
     description: "", invitees: [], agenda: [], call_id: null, call_title: null,
     archived: false, created_by: "u-1", created_at: "2026-08-31T08:00:00.000Z",
     video_url: null, video_provider: null,
@@ -48,6 +49,11 @@ vi.mock("@/api/client", () => ({
   BffError: class BffError extends Error {},
   api: {
     meetings: async (opts?: { archived?: boolean }) => (opts?.archived === true ? [] : LIST),
+    /* the FOLDERS (0151) are their own read now — the strip asks for rows
+       rather than deriving chips from whatever the meetings happen to say */
+    meetingTopics: async () => TOPICS,
+    createMeetingTopic: async (name: string) => ({ id: "t-new", name }),
+    updateMeetingTopic: async () => undefined,
     updateMeeting: (id: string, body: Record<string, unknown>) => {
       updateSpy(id, body);
       return Promise.resolve(meeting({ id, ...body }));
@@ -67,6 +73,7 @@ beforeEach(() => {
   created.length = 0;
   pushSpy.mockClear();
   updateSpy.mockClear();
+  TOPICS = [];
 });
 
 describe("Meetings", () => {
@@ -138,9 +145,10 @@ describe("Meetings", () => {
      ALREADY in writes nothing — a no-op patch would put an untrue line in
      the audit trail and move a row that never moved. */
   it("the row menu moves a meeting between topics, and writes nothing for the one it is in", async () => {
+    TOPICS = [{ id: "t-p", name: "محصول" }, { id: "t-s", name: "فروش" }];
     LIST = [
-      meeting({ id: "m-a", title: "جلسهٔ الف", topic: "محصول" }),
-      meeting({ id: "m-b", title: "جلسهٔ ب", topic: "فروش" }),
+      meeting({ id: "m-a", title: "جلسهٔ الف", topic_id: "t-p", topic: "محصول" }),
+      meeting({ id: "m-b", title: "جلسهٔ ب", topic_id: "t-s", topic: "فروش" }),
     ];
     render(<Meetings />);
     await waitFor(() => expect(screen.getByText("جلسهٔ الف")).toBeInTheDocument());
@@ -157,13 +165,13 @@ describe("Meetings", () => {
 
     await userEvent.click(screen.getAllByRole("button", { name: "گزینه‌ها" })[0]!);
     await userEvent.click(within(screen.getByText("انتقال به موضوع").parentElement!).getByText("فروش"));
-    expect(updateSpy).toHaveBeenCalledWith("m-a", { topic: "فروش" });
+    expect(updateSpy).toHaveBeenCalledWith("m-a", { topic_id: "t-s" });
 
     // and «بدون موضوع» clears it — null, never the empty string
     updateSpy.mockClear();
     await userEvent.click(screen.getAllByRole("button", { name: "گزینه‌ها" })[0]!);
     await userEvent.click(within(screen.getByText("انتقال به موضوع").parentElement!).getByText("بدون موضوع"));
-    expect(updateSpy).toHaveBeenCalledWith("m-a", { topic: null });
+    expect(updateSpy).toHaveBeenCalledWith("m-a", { topic_id: null });
   });
 
   /* THE DESTRUCTIVE ENTRY MUST NAME ITSELF. `deleteMeeting` held the ARCHIVE

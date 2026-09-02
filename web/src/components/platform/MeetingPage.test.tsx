@@ -47,7 +47,7 @@ vi.mock("@/lib/recordingEngine", () => ({
 function meeting(over: Partial<MeetingRecord>): MeetingRecord {
   return {
     id: "m-1", title: "جلسهٔ محصول", scheduled_at: "2020-01-01T09:00:00.000Z",
-    duration_minutes: 60, mode: "online", topic: null, location: null,
+    duration_minutes: 60, mode: "online", topic_id: null, topic: null, location: null,
     description: "", invitees: [], agenda: [], call_id: null, call_title: null,
     archived: false, created_by: "u-1", created_at: "2026-08-31T08:00:00.000Z",
     video_url: null, video_provider: null,

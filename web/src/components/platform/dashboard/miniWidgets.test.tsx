@@ -247,7 +247,7 @@ describe("the connections tile", () => {
 function meetingRow(over: Partial<import("@/api/types").MeetingRecord>): import("@/api/types").MeetingRecord {
   return {
     id: "m-1", title: "جلسه", scheduled_at: "2099-01-01T09:00:00.000Z",
-    duration_minutes: null, mode: "online", topic: null, location: null,
+    duration_minutes: null, mode: "online", topic_id: null, topic: null, location: null,
     description: "", invitees: [], agenda: [], call_id: null, call_title: null,
     archived: false, created_by: "u-1", created_at: "2026-08-31T08:00:00.000Z",
     video_url: null, video_provider: null,

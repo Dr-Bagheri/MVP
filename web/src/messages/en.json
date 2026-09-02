@@ -2896,6 +2896,11 @@
     "stageSealed": "This meeting has a record — the plan and the live stage are closed.",
     "roomLoadFailed": "The video room could not load here. It still opens in a window.",
     "roomLeft": "You left the room.",
-    "roomRejoin": "Join again"
+    "roomRejoin": "Join again",
+    "addTopic": "New topic",
+    "topicOptions": "Topic options",
+    "renameTopic": "Rename topic",
+    "removeTopic": "Remove topic",
+    "topicNamePlaceholder": "Topic name…"
   }
 }

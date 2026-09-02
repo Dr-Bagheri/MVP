@@ -10,7 +10,7 @@ import { Overlay } from "./Overlay";
 import { Select } from "@/components/Select";
 import {
   IconArchive, IconCalendar, IconCheck, IconChevronRight, IconClose, IconDots,
-  IconFolder, IconMic, IconPlus, IconTrash, IconUpload, IconVideo,
+  IconFolder, IconMic, IconPencil, IconPlus, IconTrash, IconUpload, IconVideo,
 } from "@/components/icons";
 import { ConfirmDialog } from "@/components/rowActions";
 import { asciiDigits, dayKeyOf, digits, formatDate, formatTime, monthGridAt } from "@/lib/format";
@@ -39,6 +39,55 @@ export const MODE_ICON: Record<MeetingMode, ReturnType<typeof IconMic>> = {
   in_person: <IconMic width={14} height={14} />,
   online: <IconVideo width={14} height={14} />,
 };
+
+/**
+ * The strip's inline name box, used by BOTH adding and renaming.
+ *
+ * One component for the two because they are the same interaction with a
+ * different starting value — a second copy is the one that stops matching
+ * the first the day either gains a rule.
+ */
+function TopicNameBox({ initial, onCancel, onSubmit }: {
+  initial: string;
+  onCancel: () => void;
+  onSubmit: (name: string) => void;
+}) {
+  const t = useTranslations("meetings");
+  const [name, setName] = useState(initial);
+  return (
+    <span className="flex items-center gap-1">
+      <input
+        autoFocus
+        value={name}
+        maxLength={80}
+        onChange={(e) => setName(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && name.trim() !== "") onSubmit(name.trim());
+          if (e.key === "Escape") onCancel();
+        }}
+        placeholder={t("topicNamePlaceholder")}
+        className="h-8 w-40 rounded-lg border border-accent bg-surface px-2.5 text-xs text-fg outline-none"
+      />
+      <button
+        type="button"
+        disabled={name.trim() === ""}
+        onClick={() => onSubmit(name.trim())}
+        className="tap grid h-8 w-8 place-items-center rounded-lg bg-accent text-on-accent disabled:opacity-50"
+        aria-label={t("save")}
+      >
+        <IconCheck width={12} height={12} />
+      </button>
+      <button
+        type="button"
+        onClick={onCancel}
+        className="tap grid h-8 w-8 place-items-center rounded-lg border border-border text-fg-muted hover:text-fg"
+        aria-label={t("cancel")}
+      >
+        <IconClose width={12} height={12} />
+      </button>
+    </span>
+  );
+}
 
 export function Meetings() {
   const t = useTranslations("meetings");
@@ -72,9 +121,20 @@ export function Meetings() {
 
   const refusal = () => setError(t("writeFailed"));
 
-  const topics = Array.isArray(rows)
-    ? [...new Set(rows.map((m) => m.topic).filter((x): x is string => x !== null))]
-    : [];
+  /*
+   * THE FOLDERS ARE ROWS NOW (0151), not the distinct values of a column.
+   * That is the whole difference the user asked for: a folder can be made
+   * before any meeting uses it, and renaming one is one write rather than a
+   * rewrite of every meeting that happened to share a spelling.
+   */
+  const [topicRows, setTopicRows] = useState<Array<{ id: string; name: string }>>([]);
+  const loadTopics = useCallback(() => {
+    void api.meetingTopics().then(setTopicRows).catch(() => setTopicRows([]));
+  }, []);
+  useEffect(loadTopics, [loadTopics]);
+  const [topicMenu, setTopicMenu] = useState<string | null>(null);
+  const [renamingTopic, setRenamingTopic] = useState<{ id: string; name: string } | null>(null);
+  const [addingTopic, setAddingTopic] = useState(false);
 
   const shown = useMemo(() => {
     if (!Array.isArray(rows)) return [];
@@ -83,7 +143,7 @@ export function Meetings() {
       const ahead = new Date(m.scheduled_at).getTime() >= now && m.call_id === null;
       if (filter === "ahead" && !ahead) return false;
       if (filter === "held" && m.call_id === null) return false;
-      if (topic !== "all" && (topic === "none" ? m.topic !== null : m.topic !== topic)) return false;
+      if (topic !== "all" && (topic === "none" ? m.topic_id !== null : m.topic_id !== topic)) return false;
       return true;
     }).sort((a, b) => b.scheduled_at.localeCompare(a.scheduled_at));
   }, [rows, filter, topic]);
@@ -141,19 +201,66 @@ export function Meetings() {
             {digits(Array.isArray(rows) ? rows.length : 0, locale)}
           </span>
         </button>
-        {topics.map((name) => (
-          <button
-            key={name}
-            type="button"
-            aria-pressed={topic === name}
-            onClick={() => setTopic((cur) => (cur === name ? "all" : name))}
-            className={`tap flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs ${
-              topic === name ? "border-accent bg-accent-soft font-semibold text-accent" : "border-border text-fg-muted hover:text-fg"
-            }`}
-          >
-            <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden />
-            {name}
-          </button>
+        {/* ONLY A REAL FOLDER carries a menu (user directive: "only the added
+            one can be edited"). «همه جلسات» and «بدون موضوع» are the absence
+            of a filter and the absence of a folder — there is nothing there
+            to rename, and offering it would be a menu over a fiction. */}
+        {topicRows.map((row) => (
+          <span key={row.id} className="relative">
+            <button
+              type="button"
+              aria-pressed={topic === row.id}
+              onClick={() => setTopic((cur) => (cur === row.id ? "all" : row.id))}
+              onContextMenu={(e) => { e.preventDefault(); setTopicMenu(row.id); }}
+              className={`tap flex h-8 items-center gap-1.5 rounded-lg border ps-2.5 pe-1.5 text-xs ${
+                topic === row.id ? "border-accent bg-accent-soft font-semibold text-accent" : "border-border text-fg-muted hover:text-fg"
+              }`}
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden />
+              {row.name}
+              <span className="badge-num rounded-md bg-surface-2 px-1 text-[10px]">
+                {digits(Array.isArray(rows) ? rows.filter((m) => m.topic_id === row.id).length : 0, locale)}
+              </span>
+              <span
+                role="button"
+                tabIndex={0}
+                aria-label={t("topicOptions")}
+                onClick={(e) => { e.stopPropagation(); setTopicMenu((cur) => (cur === row.id ? null : row.id)); }}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); setTopicMenu(row.id); } }}
+                className="grid h-5 w-5 place-items-center rounded text-fg-subtle hover:text-fg"
+              >
+                <IconDots width={12} height={12} />
+              </span>
+            </button>
+            {topicMenu === row.id ? (
+              <span className="absolute end-0 top-9 z-40 flex w-44 flex-col rounded-xl border border-border bg-surface p-1 shadow-island">
+                <button
+                  type="button"
+                  onClick={() => { setTopicMenu(null); setRenamingTopic({ id: row.id, name: row.name }); }}
+                  className="tap flex h-9 items-center gap-2 rounded-lg px-2.5 text-start text-xs text-fg hover:bg-surface-2"
+                >
+                  <IconPencil width={12} height={12} />
+                  {t("renameTopic")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTopicMenu(null);
+                    /* ARCHIVED, not deleted: the meetings in it are re-pointed
+                       to no-folder by the schema, and a folder that vanished
+                       would take the answer to "where did that go" with it */
+                    void api.updateMeetingTopic(row.id, { archived: true })
+                      .then(() => { setTopic((cur) => (cur === row.id ? "all" : cur)); loadTopics(); load(); })
+                      .catch(refusal);
+                  }}
+                  className="tap flex h-9 items-center gap-2 rounded-lg px-2.5 text-start text-xs text-danger hover:bg-danger/10"
+                >
+                  <IconTrash width={12} height={12} />
+                  {t("removeTopic")}
+                </button>
+              </span>
+            ) : null}
+          </span>
         ))}
         <button
           type="button"
@@ -165,7 +272,37 @@ export function Meetings() {
         >
           <IconFolder width={12} height={12} />
           {t("noTopic")}
+          <span className="badge-num rounded-md bg-surface-2 px-1 text-[10px]">
+            {digits(Array.isArray(rows) ? rows.filter((m) => m.topic_id === null).length : 0, locale)}
+          </span>
         </button>
+
+        {/* the ADD, at the end of the strip like the reference's */}
+        {addingTopic || renamingTopic !== null ? (
+          <TopicNameBox
+            initial={renamingTopic?.name ?? ""}
+            onCancel={() => { setAddingTopic(false); setRenamingTopic(null); }}
+            onSubmit={(name) => {
+              const done = () => { setAddingTopic(false); setRenamingTopic(null); loadTopics(); load(); };
+              const target = renamingTopic;
+              void (target !== null
+                ? api.updateMeetingTopic(target.id, { name })
+                : api.createMeetingTopic(name).then(() => undefined))
+                .then(done)
+                .catch(() => { refusal(); done(); });
+            }}
+          />
+        ) : (
+          <button
+            type="button"
+            aria-label={t("addTopic")}
+            title={t("addTopic")}
+            onClick={() => setAddingTopic(true)}
+            className="tap grid h-8 w-8 place-items-center rounded-lg border border-dashed border-border text-fg-muted hover:border-border-strong hover:text-fg"
+          >
+            <IconPlus width={12} height={12} />
+          </button>
+        )}
       </div>
 
       {error !== null ? (
@@ -245,23 +382,23 @@ export function Meetings() {
                       can go — «بدون موضوع» is one of the choices, not the
                       absence of one */}
                   <p className="px-2.5 pb-1 pt-1.5 text-[10px] font-medium text-fg-subtle">{t("moveToTopic")}</p>
-                  {[null, ...topics].map((name) => (
+                  {[{ id: null as string | null, name: t("noTopic") }, ...topicRows].map((row) => (
                     <button
-                      key={name ?? "__none"}
+                      key={row.id ?? "__none"}
                       type="button"
                       onClick={() => {
                         setMenu(null);
-                        if ((m.topic ?? null) === name) return;
-                        void api.updateMeeting(m.id, { topic: name }).then(load).catch(refusal);
+                        if ((m.topic_id ?? null) === row.id) return;
+                        void api.updateMeeting(m.id, { topic_id: row.id }).then(load).catch(refusal);
                       }}
                       className={`tap flex h-9 items-center gap-2 rounded-lg px-2.5 text-start text-xs hover:bg-surface-2 ${
-                        (m.topic ?? null) === name ? "font-semibold text-accent" : "text-fg"
+                        (m.topic_id ?? null) === row.id ? "font-semibold text-accent" : "text-fg"
                       }`}
                     >
                       <span className="w-3 shrink-0" aria-hidden>
-                        {(m.topic ?? null) === name ? <IconCheck width={12} height={12} /> : null}
+                        {(m.topic_id ?? null) === row.id ? <IconCheck width={12} height={12} /> : null}
                       </span>
-                      <span className="min-w-0 flex-1 truncate">{name ?? t("noTopic")}</span>
+                      <span className="min-w-0 flex-1 truncate">{row.name}</span>
                     </button>
                   ))}
                   <span className="my-1 h-px bg-border" aria-hidden />
@@ -294,7 +431,7 @@ export function Meetings() {
 
       {creating ? (
         <NewMeetingDialog
-          topics={topics}
+          topics={topicRows}
           onClose={() => setCreating(false)}
           onCreated={(m) => { setCreating(false); router.push(`/meetings/${m.id}`); }}
           onRefused={refusal}
@@ -539,7 +676,7 @@ const INPUT = "h-10 w-full rounded-xl border border-border bg-surface px-3 text-
  * here — the subtitle says so, and the meeting's own page owns them.
  */
 function NewMeetingDialog({ topics, onClose, onCreated, onRefused }: {
-  topics: string[];
+  topics: Array<{ id: string; name: string }>;
   onClose: () => void;
   onCreated: (m: MeetingRecord) => void;
   onRefused: () => void;
@@ -569,7 +706,7 @@ function NewMeetingDialog({ topics, onClose, onCreated, onRefused }: {
       title: title.trim(),
       scheduled_at: new Date(`${date}T${time}`).toISOString(),
       mode,
-      topic: topic.trim() === "" ? undefined : topic.trim(),
+      topic_id: topic === "" ? undefined : topic,
       description: description.trim() === "" ? undefined : description,
     })
       .then(onCreated)
@@ -607,25 +744,17 @@ function NewMeetingDialog({ topics, onClose, onCreated, onRefused }: {
           </Field>
         </div>
         <Field label={t("fieldTopicFolder")}>
+          {/* the FOLDERS, by id (0151). The «new folder» row is gone from
+              here: folders are made on the strip now, where they are also
+              renamed and removed, and a second place to create one is a
+              second thing to keep in step. */}
           <Select
             value={topic}
             ariaLabel={t("fieldTopicFolder")}
-            onChange={(value) => {
-              if (value === "__new__") {
-                const name = window.prompt(t("newTopicPrompt"));
-                setTopic(name === null ? "" : name.trim().slice(0, 120));
-                return;
-              }
-              setTopic(value);
-            }}
+            onChange={setTopic}
             options={[
               { value: "", label: t("noTopic") },
-              ...topics.map((name) => ({ value: name, label: name })),
-              /* a topic typed a moment ago is not in `topics` yet — without
-                 this row the control would show the placeholder for a value
-                 it is actually holding */
-              ...(topic !== "" && !topics.includes(topic) ? [{ value: topic, label: topic }] : []),
-              { value: "__new__", label: t("newTopicOption") },
+              ...topics.map((row) => ({ value: row.id, label: row.name })),
             ]}
           />
         </Field>

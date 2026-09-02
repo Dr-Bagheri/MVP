@@ -1483,7 +1483,7 @@ export const api = {
   },
   async createMeeting(input: {
     title: string; scheduled_at: string; mode: MeetingMode;
-    duration_minutes?: number | null; topic?: string; location?: string;
+    duration_minutes?: number | null; topic_id?: string; location?: string;
     description?: string; invitees?: string[]; agenda?: MeetingAgendaItem[];
   }): Promise<MeetingRecord> {
     return bff("/api/meetings", {
@@ -1492,6 +1492,24 @@ export const api = {
   },
   async meetingDetail(id: string): Promise<MeetingRecord> {
     return bff(`/api/meetings/${encodeURIComponent(id)}`);
+  },
+  /* the meeting FOLDERS (0151) — real rows, so one can exist before its
+     first meeting and be renamed without rewriting the meetings */
+  async meetingTopics(): Promise<Array<{ id: string; name: string }>> {
+    const body = await bff<{ topics: Array<{ id: string; name: string }> }>("/api/meetings/topics");
+    return body.topics;
+  },
+  async createMeetingTopic(name: string): Promise<{ id: string; name: string }> {
+    return bff("/api/meetings/topics", {
+      method: "POST", body: JSON.stringify({ name }),
+      headers: { "content-type": "application/json" },
+    });
+  },
+  async updateMeetingTopic(id: string, patch: { name?: string; archived?: boolean }): Promise<void> {
+    await bff<null>(`/api/meetings/topics/${encodeURIComponent(id)}`, {
+      method: "PATCH", body: JSON.stringify(patch),
+      headers: { "content-type": "application/json" },
+    });
   },
   /** 0148: delete the PLAN — the record it produced is a different row */
   async deleteMeeting(id: string): Promise<void> {
