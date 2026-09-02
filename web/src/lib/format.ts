@@ -210,6 +210,32 @@ export function formatDate(iso: string, locale: string): string {
 }
 
 /**
+ * The DAY and the MONTH on their own — a calendar row's date block, where the
+ * day number leads and the month names it.
+ *
+ * It lives here beside `formatDate` rather than being pulled apart at the call
+ * site, because the calendar preference decides which month this IS: 11
+ * Shahrivar and 2 September are the same instant with different month names,
+ * and a dashboard reading one while the meetings list reads the other is the
+ * two-spellings defect wearing a date.
+ */
+export function formatDayMonth(iso: string, locale: string): { day: string; month: string } {
+  const date = new Date(iso);
+  const zone = resolvedTimezone();
+  const { y, m, d } = partsIn(date, zone);
+  if (resolvedCalendar(locale) === "gregorian") {
+    return {
+      day: digits(d, locale),
+      month: dateFormatter("en-GB", { month: "short", timeZone: "UTC" }).format(
+        new Date(Date.UTC(y, m - 1, d)),
+      ),
+    };
+  }
+  const { jm, jd } = jalaliFromParts(y, m, d);
+  return { day: digits(jd, locale), month: JALALI_MONTHS[jm - 1]! };
+}
+
+/**
  * Relative rendering for TABLE dates (2026-08-24 cleanup #3): «امروز»,
  * «دیروز», «N روز پیش» up to a week, then the full formatDate. Day
  * boundaries are computed in the viewer's resolved timezone — a call at

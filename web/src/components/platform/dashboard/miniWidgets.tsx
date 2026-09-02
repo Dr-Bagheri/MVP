@@ -13,7 +13,7 @@ import {
   IconPlay, IconPulse, IconSettings,
 } from "@/components/icons";
 import { EchoMark } from "@/components/platform/icons";
-import { dayKeyOf, digits, formatDate, formatTime, hourInResolvedZone, monthGrid, weekRangeLabel, weekStrip } from "@/lib/format";
+import { dayKeyOf, digits, formatDate, formatDayMonth, formatTime, hourInResolvedZone, monthGrid, weekRangeLabel, weekStrip } from "@/lib/format";
 import { useCalendarPreference, useTimezonePreference } from "@/lib/usePreferences";
 import { useAgentCopy } from "@/components/platform/agentAppearance";
 import {
@@ -673,7 +673,13 @@ export function StatsWidget() {
   const taskTotal = tasks === null ? null : tasks === "unreadable" ? "unreadable" as const : tasks.total;
 
   return (
-    <div className="grid h-full grid-cols-2 content-center gap-2.5 md:grid-cols-4">
+    /* STRETCH, not centre (user directive, 2026-09-02: "the dashboard item
+       for tasks is bigger than they actually are … the border to fit around
+       it so we close the gap it has with other items"). The strip's tile is
+       two rows tall and the cards needed about one, so `content-center` left
+       a band of dead air under them — a gap that read as a missing widget
+       rather than as spare room inside one. */
+    <div className="grid h-full grid-cols-2 gap-2.5 md:grid-cols-4">
       <StatCard href="/meetings" icon={<IconCalendar width={18} height={18} />}
         tint="bg-surface-2 text-fg-muted" value={upcoming} label={t("statUpcoming")} locale={locale} />
       <StatCard href="/meetings" icon={<IconCalendar width={18} height={18} />}
@@ -693,6 +699,9 @@ export function StatsWidget() {
  */
 export function UpcomingWidget({ size }: { size: TileSize }) {
   const t = useTranslations("dashboard");
+  /* the MODE and the STAGE are the meetings surface's words — one
+     vocabulary for one thing, wherever it is read */
+  const tMeetings = useTranslations("meetings");
   const locale = useLocale();
   const [meetings, setMeetings] = useState<MeetingRecord[] | null | "failed">(null);
 
@@ -728,13 +737,42 @@ export function UpcomingWidget({ size }: { size: TileSize }) {
         </div>
       ) : (
         <ul className="min-h-0 flex-1 divide-y divide-border/60 overflow-y-auto">
+          {/*
+            THE REFERENCE'S ROW (user directive, 2026-09-02: "the item for
+            future meeting and last meeting must look like these, with future
+            with dates and time and mode and the status same as the image").
+            A date BLOCK leads — day number over month, the shape a calendar
+            row has — then the title, then the time and how it is held, then
+            the stage. What stood here was a time chip and a title: the two
+            facts a person scanning "what is coming" needs least, because the
+            time alone does not say WHICH DAY and nothing said whether they
+            had to be in a room.
+          */}
           {ahead.map((m) => (
             <li key={m.id}>
-              <Link href={`/meetings/${m.id}`} className="flex items-baseline gap-2.5 py-1.5 hover:text-accent">
-                <span className="badge-num shrink-0 rounded-md bg-accent-soft px-1.5 py-0.5 text-[11px] font-medium text-accent">
-                  {formatTime(m.scheduled_at, locale)}
+              <Link
+                href={`/meetings/${m.id}`}
+                className="flex items-center gap-2.5 py-1.5 hover:text-accent"
+              >
+                <span className="grid shrink-0 place-items-center rounded-lg bg-surface-2 px-1.5 py-1 text-center">
+                  <span className="badge-num block text-sm font-bold leading-4 text-fg">
+                    {formatDayMonth(m.scheduled_at, locale).day}
+                  </span>
+                  <span className="block text-[9px] leading-3 text-fg-subtle">
+                    {formatDayMonth(m.scheduled_at, locale).month}
+                  </span>
                 </span>
-                <span className="min-w-0 flex-1 truncate text-sm text-fg" title={m.title}>{m.title}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm text-fg" title={m.title}>{m.title}</span>
+                  <span className="mt-0.5 flex items-center gap-1.5 text-[10px] text-fg-subtle">
+                    <span className="badge-num">{formatTime(m.scheduled_at, locale)}</span>
+                    <span aria-hidden>·</span>
+                    <span>{tMeetings(`mode_${m.mode}`)}</span>
+                  </span>
+                </span>
+                <span className="shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-medium text-accent">
+                  {tMeetings("stage_pre")}
+                </span>
               </Link>
             </li>
           ))}
@@ -891,9 +929,18 @@ export function WeekWidget() {
       ) : null}
 
       {/* ── the grid: [hour rail | seven day columns] ─────────────────── */}
-      <div className="scroll-quiet grid min-h-0 flex-1 grid-cols-[auto_1fr] gap-1.5 overflow-y-auto">
+      {/*
+        THE HOUR COLUMN IS A COLUMN (user directive, 2026-09-02: "there is an
+        extra without-title column just for the time"). It was `auto`-width,
+        so it shrank to the label and the day columns crowded straight up
+        against the numbers; the reference gives the time its own lane, with
+        an empty box where the day headers are. A fixed width also stops the
+        lane changing width between locales, which moved the whole grid
+        sideways when the digits did.
+      */}
+      <div className="scroll-quiet grid min-h-0 flex-1 grid-cols-[2.75rem_1fr] gap-1.5 overflow-y-auto">
         {/* day headers + columns share one grid so the tints run full height */}
-        <div className="flex flex-col pe-1 text-[10px] leading-none text-fg-subtle">
+        <div className="flex flex-col pe-1.5 text-end text-[10px] leading-none text-fg-subtle">
           {/* the SAME header spacer the day columns carry, so label k and
               line k compute their offsets inside identical boxes */}
           <div className="mb-1 h-10 shrink-0" aria-hidden />
