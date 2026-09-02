@@ -2942,6 +2942,17 @@
     "joinRefused": "این لینک دیگر معتبر نیست.",
     "copyGuestLink": "کپی لینک مهمان",
     "guestLinkCopied": "لینک مهمان کپی شد — لینک‌های پیشین دیگر کار نمی‌کنند.",
-    "guestLinkFailed": "ساخت لینک مهمان ممکن نشد."
+    "guestLinkFailed": "ساخت لینک مهمان ممکن نشد.",
+    "inviteOpen": "دعوت افراد",
+    "inviteTitle": "دعوت‌شدگان",
+    "inviteHint": "از میان هم‌تیمی‌ها انتخاب کنید، یا نشانی هرکس دیگری را بنویسید.",
+    "inviteSearch": "جست‌وجوی هم‌تیمی…",
+    "inviteNoPeople": "کسی پیدا نشد.",
+    "inviteOutside": "کسی خارج از سازمان",
+    "addInvitee": "افزودن",
+    "agendaAdd": "افزودن بند",
+    "agendaLess": "کمتر",
+    "agendaMore": "بیشتر",
+    "agendaNoMinutes": "— دقیقه"
   }
 }

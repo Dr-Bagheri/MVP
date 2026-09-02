@@ -14,7 +14,7 @@ import {
   IconFolder, IconMic, IconPencil, IconPlus, IconTrash, IconUpload, IconVideo,
 } from "@/components/icons";
 import { ConfirmDialog, KebabMenu } from "@/components/rowActions";
-import { asciiDigits, dayKeyOf, digits, formatDate, formatTime, monthGridAt, nowFields } from "@/lib/format";
+import { dayKeyOf, digits, formatDate, formatTime, monthGridAt, nowFields } from "@/lib/format";
 
 /**
  * MEETINGS (0145, the reference adoption) — "add a part name meeting and
@@ -633,57 +633,115 @@ export function AgendaEditor({ value, onChange }: {
 }) {
   const t = useTranslations("meetings");
   const locale = useLocale();
+  const [adding, setAdding] = useState(false);
   const [title, setTitle] = useState("");
-  const [minutes, setMinutes] = useState("");
+
   const add = () => {
     const clean = title.trim();
     if (clean === "") return;
-    const m = minutes.trim() === "" ? null : Number(minutes);
-    onChange([...value, { title: clean, minutes: Number.isInteger(m) && m! > 0 ? m : null }]);
+    onChange([...value, { title: clean, minutes: null }]);
     setTitle("");
-    setMinutes("");
+    setAdding(false);
   };
+
+  /*
+   * THE REFERENCE'S AGENDA (user directive, 2026-09-02: "the agenda must look
+   * like these and you add it like this").
+   *
+   * Each clause is EDITABLE IN PLACE with a minutes stepper beside it, rather
+   * than a read-only line plus a composer underneath. The difference is not
+   * decorative: an agenda is written by adjusting it — a clause gets renamed,
+   * five minutes become ten — and a row you can only delete and re-add makes
+   * every correction a retype.
+   *
+   * The stepper is − / + around the number rather than a text field, because
+   * the number is always a small multiple of five and the keyboard was the
+   * long way to say "a bit longer".
+   */
+  const patch = (index: number, next: Partial<MeetingAgendaItem>) => {
+    onChange(value.map((item, i) => (i === index ? { ...item, ...next } : item)));
+  };
+  const STEP = 5;
+
   return (
     <div className="space-y-1.5">
       {value.map((item, i) => (
-        <div key={`${item.title}-${i}`} className="flex items-center gap-2 rounded-lg bg-surface-2 px-2.5 py-1.5">
-          <span className="min-w-0 flex-1 truncate text-sm text-fg">{item.title}</span>
-          {item.minutes !== null ? (
-            <span className="badge-num shrink-0 text-xs text-fg-muted">{t("agendaMinutes", { n: digits(item.minutes, locale) })}</span>
-          ) : null}
+        <div key={i} className="flex items-center gap-1.5">
+          <input
+            value={item.title}
+            onChange={(e) => patch(i, { title: e.target.value })}
+            aria-label={t("agendaTitlePlaceholder")}
+            className="input h-[34px] min-h-[34px] flex-1"
+          />
+          <span className="flex shrink-0 items-center gap-0.5 rounded-md border border-border bg-field px-1">
+            <button
+              type="button"
+              aria-label={t("agendaLess")}
+              onClick={() => patch(i, { minutes: Math.max(0, (item.minutes ?? 0) - STEP) || null })}
+              className="tap grid h-6 w-6 place-items-center rounded text-fg-subtle hover:text-fg"
+            >
+              −
+            </button>
+            <span className="badge-num w-14 text-center text-[11px] text-fg-muted">
+              {item.minutes === null
+                ? t("agendaNoMinutes")
+                : t("agendaMinutes", { n: digits(item.minutes, locale) })}
+            </span>
+            <button
+              type="button"
+              aria-label={t("agendaMore")}
+              onClick={() => patch(i, { minutes: (item.minutes ?? 0) + STEP })}
+              className="tap grid h-6 w-6 place-items-center rounded text-fg-subtle hover:text-fg"
+            >
+              +
+            </button>
+          </span>
           <button
             type="button"
             aria-label={t("removeAgendaItem", { title: item.title })}
             onClick={() => onChange(value.filter((_, j) => j !== i))}
-            className="shrink-0 text-fg-subtle hover:text-danger"
+            className="tap grid h-[34px] w-8 shrink-0 place-items-center rounded-md text-fg-subtle hover:text-danger"
           >
             <IconTrash width={12} height={12} />
           </button>
         </div>
       ))}
-      <div className="flex gap-2">
-        <input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }}
-          placeholder={t("agendaTitlePlaceholder")}
-          className="h-9 min-w-0 flex-1 rounded-lg border border-border bg-surface px-2.5 text-sm text-fg outline-none placeholder:text-fg-subtle focus:border-accent"
-        />
-        <input
-          value={minutes}
-          onChange={(e) => setMinutes(asciiDigits(e.target.value).replace(/[^0-9]/g, ""))}
-          inputMode="numeric"
-          placeholder={t("agendaMinutesPlaceholder")}
-          className="h-9 w-20 rounded-lg border border-border bg-surface px-2.5 text-sm text-fg outline-none placeholder:text-fg-subtle focus:border-accent"
-        />
+
+      {adding ? (
+        <div className="flex items-center gap-1.5">
+          <input
+            autoFocus
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") { e.preventDefault(); add(); }
+              if (e.key === "Escape") { setTitle(""); setAdding(false); }
+            }}
+            placeholder={t("agendaTitlePlaceholder")}
+            className="input h-[34px] min-h-[34px] flex-1"
+          />
+          <button
+            type="button"
+            onClick={add}
+            disabled={title.trim() === ""}
+            className="btn btn-sm shrink-0 bg-accent text-on-accent"
+          >
+            {t("add")}
+          </button>
+        </div>
+      ) : (
+        /* the reference's dashed "add a clause" row — a whole-width target
+           where the next clause will appear, rather than a button beside a
+           field that is empty most of the time */
         <button
           type="button"
-          onClick={add}
-          className="tap h-9 rounded-lg bg-surface-2 px-3 text-xs font-medium text-fg hover:bg-border"
+          onClick={() => setAdding(true)}
+          className="btn btn-sm w-full justify-center border border-dashed border-border font-medium text-fg-muted hover:border-border-strong hover:text-fg"
         >
-          {t("add")}
+          <IconPlus width={12} height={12} />
+          {t("agendaAdd")}
         </button>
-      </div>
+      )}
     </div>
   );
 }

@@ -2942,6 +2942,17 @@
     "joinRefused": "This link is no longer valid.",
     "copyGuestLink": "Copy guest link",
     "guestLinkCopied": "Guest link copied — any earlier link no longer works.",
-    "guestLinkFailed": "The guest link could not be created."
+    "guestLinkFailed": "The guest link could not be created.",
+    "inviteOpen": "Invite people",
+    "inviteTitle": "Invitees",
+    "inviteHint": "Pick colleagues, or write anyone else's address.",
+    "inviteSearch": "Search colleagues…",
+    "inviteNoPeople": "Nobody found.",
+    "inviteOutside": "Someone outside the organisation",
+    "addInvitee": "Add",
+    "agendaAdd": "Add a clause",
+    "agendaLess": "Less",
+    "agendaMore": "More",
+    "agendaNoMinutes": "— min"
   }
 }

@@ -8,7 +8,8 @@ import { notify } from "@/lib/notify";
 import type { Call, CallNote, Me, MeetingAgendaItem, MeetingRecord } from "@/api/types";
 import { useCrumbTitle } from "@/components/platform/CrumbTitle";
 import { ConfirmDialog } from "@/components/rowActions";
-import { AgendaEditor, InviteeInput, MODE_ICON } from "./Meetings";
+import { AgendaEditor, MODE_ICON } from "./Meetings";
+import { InviteDialog } from "./meeting/InviteDialog";
 import { MeetingStage } from "./meeting/Stage";
 import { AudioBar, ExtractionPanel, ProcessingCard, TranscriptPanel } from "./meeting/Review";
 import { MinutesTab } from "./meeting/Minutes";
@@ -476,6 +477,28 @@ function PreStage({ meeting, onPatch, locale, me }: {
   const [editing, setEditing] = useState(false);
   /** minting the guest capability is a network act — the button says so */
   const [guestBusy, setGuestBusy] = useState(false);
+  /** the invite window, and whether a guest link has been handed out */
+  const [inviting, setInviting] = useState(false);
+  const [guestCopied, setGuestCopied] = useState(false);
+
+  /* ONE implementation, two callers (the panel's button and the invite
+     window's) — two copies of "mint a capability and put it on the
+     clipboard" is two places for the revocation note to go stale */
+  const copyGuestLink = () => {
+    if (guestBusy) return;
+    setGuestBusy(true);
+    void api.setMeetingJoinCode(meeting.id, true)
+      .then(({ join_code }) => {
+        if (join_code === null) return;
+        void navigator.clipboard?.writeText(
+          `${window.location.origin}/${locale}/join/${join_code}`,
+        ).catch(() => undefined);
+        setGuestCopied(true);
+        notify(t("guestLinkCopied"));
+      })
+      .catch(() => notify(t("guestLinkFailed"), "warn"))
+      .finally(() => setGuestBusy(false));
+  };
   const totalMinutes = meeting.agenda.reduce((sum, item) => sum + (item.minutes ?? 0), 0);
 
   return (
@@ -600,18 +623,7 @@ function PreStage({ meeting, onPatch, locale, me }: {
               <button
                 type="button"
                 disabled={guestBusy}
-                onClick={() => {
-                  setGuestBusy(true);
-                  void api.setMeetingJoinCode(meeting.id, true)
-                    .then(({ join_code }) => {
-                      if (join_code === null) return;
-                      const link = `${window.location.origin}/${locale}/join/${join_code}`;
-                      void navigator.clipboard?.writeText(link).catch(() => undefined);
-                      notify(t("guestLinkCopied"));
-                    })
-                    .catch(() => notify(t("guestLinkFailed"), "warn"))
-                    .finally(() => setGuestBusy(false));
-                }}
+                onClick={copyGuestLink}
                 className="btn w-full border border-border bg-surface font-medium text-fg hover:bg-border"
               >
                 <IconCopy width={12} height={12} />
@@ -659,15 +671,33 @@ function PreStage({ meeting, onPatch, locale, me }: {
               </li>
             ))}
           </ul>
-          <InviteeInput
-            value={meeting.invitees}
-            onChange={(invitees: string[]) => onPatch({ invitees })}
-          />
+          {/* ONE DOOR to adding people (user directive, 2026-09-02: "when you
+              press on invite this window must pop up"). The inline field is
+              gone: it could only take a typed name, so a person's own
+              colleagues — the list the platform already has — were the one
+              group it could not offer. */}
+          <button
+            type="button"
+            onClick={() => setInviting(true)}
+            className="btn w-full border border-border bg-surface font-medium text-fg hover:bg-border"
+          >
+            <IconUsers width={12} height={12} />
+            {t("inviteOpen")}
+          </button>
         </section>
       </div>
 
       {editing ? (
         <EditMeetingDialog meeting={meeting} onPatch={onPatch} onClose={() => setEditing(false)} />
+      ) : null}
+      {inviting ? (
+        <InviteDialog
+          invitees={meeting.invitees}
+          onChange={(invitees) => onPatch({ invitees })}
+          onClose={() => setInviting(false)}
+          guestLinkCopied={guestCopied}
+          onCopyGuestLink={copyGuestLink}
+        />
       ) : null}
     </div>
   );
