@@ -64,8 +64,7 @@ import type {
   TranscriptSegment,
   User,
   UserStatus,
-  WorkflowCard,
-} from "./types";
+  WorkflowCard, MeetingAttachment } from "./types";
 /**
  * The producer's own shape for `GET /v1/me`, imported rather than described.
  * `import type` is erased, so nothing from core/ reaches the bundle — the same
@@ -1561,6 +1560,54 @@ export const api = {
       method: "PUT", body: JSON.stringify({ enabled }),
       headers: { "content-type": "application/json" },
     });
+  },
+  /**
+   * 0159 — a meeting's attached documents.
+   *
+   * `uploadMeetingAttachment` is three steps and they are deliberately not
+   * one: the server signs a path, the BROWSER puts the bytes straight into
+   * Storage, and only then is the row written. A file that fails halfway
+   * leaves an orphan OBJECT, which the purge sweeps — the alternative order
+   * leaves a row pointing at bytes that never arrived, which every reader
+   * afterwards has to handle.
+   */
+  async meetingAttachments(id: string): Promise<MeetingAttachment[]> {
+    return bff(`/api/meetings/${encodeURIComponent(id)}/attachments`);
+  },
+  async uploadMeetingAttachment(id: string, file: File): Promise<void> {
+    const signed = await bff<{ path: string; url: string; token: string }>(
+      `/api/meetings/${encodeURIComponent(id)}/attachments/sign`,
+      {
+        method: "POST",
+        body: JSON.stringify({ name: file.name, size: file.size }),
+        headers: { "content-type": "application/json" },
+      },
+    );
+    const put = await fetch(signed.url, {
+      method: "PUT",
+      headers: {
+        authorization: `Bearer ${signed.token}`,
+        "content-type": file.type || "application/octet-stream",
+      },
+      body: file,
+    });
+    if (!put.ok) throw new Error("upload failed");
+    await bff<null>(`/api/meetings/${encodeURIComponent(id)}/attachments`, {
+      method: "POST",
+      body: JSON.stringify({
+        name: file.name,
+        path: signed.path,
+        size: file.size,
+        content_type: file.type || "application/octet-stream",
+      }),
+      headers: { "content-type": "application/json" },
+    });
+  },
+  async deleteMeetingAttachment(id: string, attachmentId: string): Promise<void> {
+    await bff<null>(
+      `/api/meetings/${encodeURIComponent(id)}/attachments/${encodeURIComponent(attachmentId)}`,
+      { method: "DELETE" },
+    );
   },
   /** 0148: delete the PLAN — the record it produced is a different row */
   async deleteMeeting(id: string): Promise<void> {

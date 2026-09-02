@@ -1230,3 +1230,16 @@ export interface AgentWorkflowLink {
   handle: string;
   name: string;
 }
+
+/**
+ * 0159 — the RECORD of a file attached to a meeting. Not the file: the bytes
+ * live in Storage, and this is what a list needs to name one and offer to
+ * remove it.
+ */
+export interface MeetingAttachment {
+  id: string;
+  name: string;
+  content_type: string;
+  size_bytes: number;
+  created_at: string;
+}

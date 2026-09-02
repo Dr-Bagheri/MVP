@@ -89,6 +89,11 @@ let CALL: Call | null = null;
 vi.mock("@/api/client", async () => ({
   ...(await vi.importActual<typeof import("@/api/client")>("@/api/client")),
   api: {
+    /* the plan reads its documents on mount (0159); a mock without it makes
+       every meeting test fail on a render error rather than on its subject */
+    meetingAttachments: async () => [],
+    uploadMeetingAttachment: async () => undefined,
+    deleteMeetingAttachment: async () => undefined,
     meetingDetail: async () => MEETING,
     updateMeeting: async (_id: string, body: Record<string, unknown>) => ({ ...MEETING, ...body }),
     getCall: async () => CALL,

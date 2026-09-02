@@ -187,7 +187,10 @@ export function Dashboard() {
        would put the box back. */
     if (spec.bare === true) {
       return (
-        <section className="group/card relative" aria-label={label}>
+        /* overflow-hidden: a BARE tile brings its own cards and has no frame
+           to scroll inside — if its content does not fit, the answer is a
+           smaller card or a taller tile, never a scrollbar over a figure */
+        <section className="group/card relative overflow-hidden" aria-label={label}>
           {editing ? (
             <span className="absolute end-1 top-1 z-10 flex gap-1">
               <button

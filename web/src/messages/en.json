@@ -2957,6 +2957,11 @@
     "agendaAdd": "Add a clause",
     "agendaLess": "Less",
     "agendaMore": "More",
-    "agendaNoMinutes": "— min"
+    "agendaNoMinutes": "— min",
+    "attachments": "Attachments",
+    "attachmentsEmpty": "No files have been attached yet.",
+    "attachmentAdd": "Upload document",
+    "attachmentUploading": "Uploading…",
+    "attachmentRemove": "Remove {name}"
   }
 }

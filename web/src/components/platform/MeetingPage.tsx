@@ -4,8 +4,9 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/routing";
 import { api } from "@/api/client";
+import { SkeletonLines } from "@/components/scaffold";
 import { notify } from "@/lib/notify";
-import type { Call, CallNote, Me, MeetingAgendaItem, MeetingRecord } from "@/api/types";
+import type { Call, CallNote, Me, MeetingAgendaItem, MeetingRecord, MeetingAttachment } from "@/api/types";
 import { useCrumbTitle } from "@/components/platform/CrumbTitle";
 import { ConfirmDialog } from "@/components/rowActions";
 import { AgendaEditor, MODE_ICON } from "./Meetings";
@@ -17,8 +18,7 @@ import { MeetingTasksBoard } from "./meeting/MiniTasks";
 import { MeetingAssistant } from "./meeting/MeetingAssistant";
 import {
   IconCheck, IconCopy, IconFileText, IconMic, IconPlus, IconRows, IconTrash,
-  IconUsers,
-} from "@/components/icons";
+  IconUsers, IconUpload } from "@/components/icons";
 import {
   finish, recorderSnapshot, startRecording, subscribeRecorder,
 } from "@/lib/recordingEngine";
@@ -474,9 +474,19 @@ function PreStage({ meeting, onPatch, locale, me }: {
   me: Me | null;
 }) {
   const t = useTranslations("meetings");
+  const tCommon = useTranslations("common");
   const [editing, setEditing] = useState(false);
   /** minting the guest capability is a network act — the button says so */
   const [guestBusy, setGuestBusy] = useState(false);
+  /** the meeting's documents — null while the read is in flight */
+  const [files, setFiles] = useState<MeetingAttachment[] | null>(null);
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const fileInput = useRef<HTMLInputElement | null>(null);
+  const loadFiles = useCallback(() => {
+    void api.meetingAttachments(meeting.id).then(setFiles).catch(() => setFiles([]));
+  }, [meeting.id]);
+  useEffect(loadFiles, [loadFiles]);
+
   /** the invite window, and whether a guest link has been handed out */
   const [inviting, setInviting] = useState(false);
   const [guestCopied, setGuestCopied] = useState(false);
@@ -617,14 +627,11 @@ function PreStage({ meeting, onPatch, locale, me }: {
                 thing "revoke" can honestly mean for something pasted into a
                 chat.
               */}
-              <button
-                type="button"
-                onClick={() => void navigator.clipboard?.writeText(window.location.href).catch(() => undefined)}
-                className="btn w-full border border-border bg-surface font-medium text-fg hover:bg-border"
-              >
-                <IconCopy width={12} height={12} />
-                {t("copyRoom")}
-              </button>
+              {/* ONE LINK (user directive, 2026-09-02: "remove the copy link,
+                  just the guest is enough"). The page's own address only
+                  worked for colleagues, who reach the meeting from the list
+                  anyway — so of the two links, the one that was always
+                  offered was the one nobody needed. */}
               <button
                 type="button"
                 disabled={guestBusy}
@@ -637,6 +644,72 @@ function PreStage({ meeting, onPatch, locale, me }: {
 
             </div>
           ) : null}
+        </section>
+
+        {/*
+          پیوست‌ها — the meeting's documents (0159). Deferred twice on purpose
+          and built once its home existed: a dropzone is ten minutes, and
+          giving files a home an organisation can be DELETED from is the work.
+          The bytes go browser → Storage on a one-shot signed URL; this list
+          is the record of them.
+        */}
+        <section className="tile p-4" aria-label={t("attachments")}>
+          <header className="mb-2 flex items-center justify-between">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-fg">
+              <IconFileText width={14} height={14} className="text-fg-subtle" aria-hidden />
+              {t("attachments")}
+            </h2>
+          </header>
+          {files === null ? (
+            <SkeletonLines lines={2} />
+          ) : files.length === 0 ? (
+            <p className="py-2 text-xs text-fg-subtle">{t("attachmentsEmpty")}</p>
+          ) : (
+            <ul className="mb-2 space-y-1.5">
+              {files.map((file) => (
+                <li key={file.id} className="flex items-center gap-2 rounded-xl border border-border bg-surface-2/50 px-2.5 py-2 text-sm">
+                  <IconFileText width={14} height={14} className="shrink-0 text-fg-subtle" aria-hidden />
+                  <span className="min-w-0 flex-1 truncate text-fg" title={file.name}>{file.name}</span>
+                  <button
+                    type="button"
+                    aria-label={t("attachmentRemove", { name: file.name })}
+                    onClick={() => {
+                      void api.deleteMeetingAttachment(meeting.id, file.id)
+                        .then(loadFiles)
+                        .catch(() => notify(tCommon("actionFailed"), "warn"));
+                    }}
+                    className="tap shrink-0 text-fg-subtle hover:text-danger"
+                  >
+                    <IconTrash width={12} height={12} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <input
+            ref={fileInput}
+            type="file"
+            hidden
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = "";
+              if (file === undefined) return;
+              setUploadingFile(true);
+              void api.uploadMeetingAttachment(meeting.id, file)
+                .then(loadFiles)
+                .catch(() => notify(tCommon("actionFailed"), "warn"))
+                .finally(() => setUploadingFile(false));
+            }}
+          />
+          <button
+            type="button"
+            disabled={uploadingFile}
+            onClick={() => fileInput.current?.click()}
+            className="btn w-full justify-center border border-dashed border-border font-medium text-fg-muted hover:border-border-strong hover:text-fg"
+          >
+            <IconUpload width={12} height={12} />
+            {uploadingFile ? t("attachmentUploading") : t("attachmentAdd")}
+          </button>
         </section>
 
         {/* دعوت‌شدگان — the reference's own shape: the count beside the

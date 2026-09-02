@@ -539,6 +539,21 @@
    * keep their own alignment, which is what makes the rule safe to state
    * globally.
    */
+  /*
+   * A FADED EDGE on a scroller (user directive, 2026-09-02: "the scroll is
+   * inside its text and conversation with small scroll and fade mode").
+   *
+   * The mask says "there is more above and below" without drawing a line —
+   * a rule at the top of a thread reads as a divider between two things, and
+   * there is only one thing here. `mask-image` rather than a gradient
+   * overlay, so it fades the CONTENT and needs no element stacked over it
+   * that would eat the scroll it sits on.
+   */
+  .fade-scroll {
+    -webkit-mask-image: linear-gradient(to bottom, transparent, black 1.25rem, black calc(100% - 1.25rem), transparent);
+    mask-image: linear-gradient(to bottom, transparent, black 1.25rem, black calc(100% - 1.25rem), transparent);
+  }
+
   .date-block {
     @apply grid shrink-0 place-content-center place-items-center rounded-lg bg-surface-2
            px-2.5 py-1.5 text-center leading-tight;

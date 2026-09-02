@@ -109,7 +109,14 @@ export function TwoPane({
             ))}
         </nav>
       </PageContainer>
-      <PageContainer width={width} className="!pt-0">
+      {/* pt-3, not the page's own top padding: the toolbar and the content it
+          filters are ONE block, and the meetings page (the shape every other
+          surface is being brought to) puts about twelve pixels between them.
+          A full page gap here made the menu look like a separate screen
+          floating above the table (user directive, 2026-09-02: "make the gap
+          between the table and the sub menu of the top closer, like the
+          meeting page, for all other pages"). */}
+      <PageContainer width={width} className="!pt-3">
         <div className="flex min-h-0 flex-1 flex-col">{children}</div>
       </PageContainer>
     </PlatformShell>

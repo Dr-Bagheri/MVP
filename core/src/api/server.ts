@@ -27,6 +27,7 @@ import { createOrgRepo, type OrgRepo } from "./org.ts";
 import { createSessionsRepo, type SessionsRepo } from "./sessions.ts";
 import { availableTools, createSkillAuthoring, type SkillAuthoring } from "./skills.ts";
 import { createUploadsRepo, type UploadsRepo } from "./uploads.ts";
+import { createStorageSigner } from "../storage/signer.ts";
 import { createDirectoryRepo, type DirectoryRepo } from "./directory.ts";
 import { createInvitationsRepo, type InvitationsRepo } from "./invitations.ts";
 import { createHealthRepo, type HealthRepo } from "./health.ts";
@@ -1455,6 +1456,84 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       changed = true;
     }
     return reply.send({ changed });
+  });
+
+  /**
+   * 0159 — a meeting's ATTACHED DOCUMENTS.
+   *
+   * Three routes and one flow: list, sign, record. The bytes go from the
+   * browser straight to Storage on a one-shot signed URL and never through
+   * this process — 50MB of document through Node is 50MB of heap to move
+   * something neither the API nor the database will ever read.
+   *
+   * Every one authorises against the MEETING first, exactly as the token and
+   * recording routes do: `meetings.detail` refuses a meeting the caller
+   * cannot see, so a path is only ever minted for a meeting they can open.
+   */
+  app.get("/v1/meetings/:id/attachments", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    await meetings.detail(identity, id);
+    return reply.send(await meetings.attachments(identity, id));
+  });
+
+  app.post("/v1/meetings/:id/attachments/sign", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    if (options.storageUrl === undefined || options.storageServiceKey === undefined) {
+      throw new ValidationError("file storage is not configured on this platform",
+        { code: "storage_not_configured" });
+    }
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { name?: unknown; size?: unknown };
+    if (typeof body.name !== "string" || body.name.trim() === "") {
+      throw new ValidationError("a file name is required", { code: "file_name_required" });
+    }
+    if (typeof body.size !== "number" || body.size <= 0 || body.size > 52_428_800) {
+      /* the same ceiling the column's CHECK holds — a limit stated in one
+         place and enforced in another is a limit that drifts */
+      throw new ValidationError("the file is too large", { code: "file_too_large" });
+    }
+    const meeting = await meetings.detail(identity, id);
+    /* the PATH is derived, never supplied: a caller who chose it could write
+       over another meeting's document, or read one back by guessing */
+    const path = `${meeting.id}/${randomUUID()}`;
+    const signer = createStorageSigner({
+      url: options.storageUrl, serviceKey: options.storageServiceKey,
+    });
+    return reply.send({ path, ...(await signer.signUpload("meeting-files", path)) });
+  });
+
+  app.post("/v1/meetings/:id/attachments", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as {
+      name?: unknown; path?: unknown; size?: unknown; content_type?: unknown;
+    };
+    if (typeof body.name !== "string" || typeof body.path !== "string"
+        || typeof body.size !== "number" || typeof body.content_type !== "string") {
+      throw new ValidationError("name, path, size and content_type are required",
+        { code: "attachment_fields_required" });
+    }
+    await meetings.detail(identity, id);
+    await meetings.addAttachment(identity, id, {
+      name: body.name.slice(0, 300),
+      contentType: body.content_type.slice(0, 200),
+      size: body.size,
+      path: body.path,
+    });
+    return reply.code(201).send({ ok: true });
+  });
+
+  app.delete("/v1/meetings/:id/attachments/:attachmentId", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id, attachmentId } = request.params as { id: string; attachmentId: string };
+    await meetings.detail(identity, id);
+    await meetings.removeAttachment(identity, attachmentId);
+    return reply.code(204).send();
   });
 
   /**

@@ -96,7 +96,7 @@ async function ask(text: string) {
 
 /** The thread's scroll box — the one region carrying the overflow class. */
 function scroller(): HTMLElement {
-  const el = document.querySelector('[class*="md:overflow-y-auto"]');
+  const el = document.querySelector('[class*="overflow-y-auto"]');
   if (!el) throw new Error("thread scroller not rendered");
   return el as HTMLElement;
 }
@@ -116,21 +116,26 @@ describe("Hub — the thread scrolls, the page does not", () => {
 
     /*
      * Structural halves of the Sana shape. The root refuses to grow —
-     * without `md:overflow-hidden` + the height bound, a long conversation
+     * without `overflow-hidden` + the height bound, a long conversation
      * grows the PAGE and the person scrolls the document to follow it,
-     * which is the reported bug. `md:max-h-dvh` is the belt that holds even
-     * if the shell's height chain breaks. The thread wrapper is the one
-     * scroller. jsdom cannot verify the resulting geometry; the classes are
+     * which is the reported bug.
+     *
+     * The bound is unconditional now, not `md:` — the IDLE hub grew with its
+     * suggestions and scrolled behind a composer pinned to its foot, so the
+     * one screen whose job is a fixed box with a fixed prompt was the one
+     * that moved (user directive, 2026-09-02). `max-w-content-small` is the
+     * other half of that directive: a conversation is reading width.
+     * The thread wrapper is the one scroller. jsdom cannot verify the resulting geometry; the classes are
      * the part a unit test can refuse to lose.
      */
     const root = container.firstElementChild as HTMLElement;
-    expect(root.className).toContain("md:overflow-hidden");
-    expect(root.className).toContain("md:h-full");
-    expect(root.className).toContain("md:max-h-dvh");
+    expect(root.className).toContain("overflow-hidden");
+    expect(root.className).toContain("h-full");
+    expect(root.className).toContain("max-w-content-small");
 
     const box = scroller();
-    expect(box.className).toContain("md:overflow-y-auto");
-    expect(box.className).toContain("md:min-h-0");
+    expect(box.className).toContain("overflow-y-auto");
+    expect(box.className).toContain("min-h-0");
     expect(box.className).toContain("flex-1");
 
     // the idle state keeps its own (approved) anatomy: nothing bounded there

@@ -211,6 +211,52 @@ export function createMeetingsRepo(db: Db) {
     ));
   }
 
+  /** 0159 — the documents attached to a meeting, newest last. */
+  async function attachments(identity: Identity, meetingId: string): Promise<Array<{
+    id: string; name: string; content_type: string; size_bytes: number; created_at: string;
+  }>> {
+    return db.withIdentity(identity, async (tx: SqlTx) => {
+      const rows = await tx.unsafe<Record<string, unknown>>(
+        `select id, name, content_type, size_bytes, created_at
+           from echo.meeting_attachment
+          where meeting_id = $1
+          order by created_at`,
+        [meetingId],
+      );
+      return rows.map((row) => ({
+        id: String(row.id),
+        name: String(row.name),
+        content_type: String(row.content_type),
+        size_bytes: Number(row.size_bytes),
+        created_at: iso(row.created_at),
+      }));
+    });
+  }
+
+  /**
+   * Record a file that has just been uploaded. `created_by` and `org_id` come
+   * from the ACTOR, never from the body — 0159's insert policy refuses any
+   * other value, so the api and the wall say the same sentence.
+   */
+  async function addAttachment(
+    identity: Identity,
+    meetingId: string,
+    file: { name: string; contentType: string; size: number; path: string },
+  ): Promise<void> {
+    await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe(
+      `insert into echo.meeting_attachment
+         (meeting_id, org_id, name, content_type, size_bytes, storage_path, created_by)
+       values ($1, echo.actor_org_id(), $2, $3, $4, $5, echo.actor_id())`,
+      [meetingId, file.name, file.contentType, file.size, file.path],
+    ));
+  }
+
+  async function removeAttachment(identity: Identity, id: string): Promise<void> {
+    await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe(
+      "delete from echo.meeting_attachment where id = $1", [id],
+    ));
+  }
+
   async function detail(identity: Identity, id: string): Promise<MeetingRecord> {
     return db.withIdentity(identity, async (tx: SqlTx) => {
       const rows = await tx.unsafe<Record<string, unknown>>(
@@ -484,6 +530,6 @@ export function createMeetingsRepo(db: Db) {
 
   return {
     list, detail, create, update, remove, topics, createTopic, updateTopic,
-    byJoinCode, setJoinCode,
+    byJoinCode, setJoinCode, attachments, addAttachment, removeAttachment,
   };
 }

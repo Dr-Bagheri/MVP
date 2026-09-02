@@ -952,11 +952,23 @@ export function Hub() {
        * the sticky composer stays visible there (it is inert on md+, where
        * the column never scrolls).
        */
-      className={`relative isolate mx-auto flex w-full max-w-content flex-col px-page-inline pt-page-sm md:px-page-inline-md md:pt-page ${
-        idle
-          ? "min-h-full justify-end pb-6"
-          : "min-h-full pb-6 md:min-h-0 md:h-full md:max-h-dvh md:overflow-hidden"
-      }`}
+      /*
+       * THE SMALL COLUMN, AND THE PAGE DOES NOT SCROLL (user directive,
+       * 2026-09-02: "the AI assistant must become the small page as well, and
+       * not scroll mode — it should be fixed, and the scroll is inside its
+       * text and conversation").
+       *
+       * `max-w-content-small`: a conversation is reading width, and a thread
+       * stretched across a list column makes every line a journey.
+       *
+       * `h-full overflow-hidden` on BOTH states, not only the active one. The
+       * idle hub grew with its suggestions and the page scrolled behind a
+       * composer pinned to its foot — so the one screen whose whole job is a
+       * fixed box with a fixed prompt was the one that moved. The thread's own
+       * scroller (below) is the only thing that scrolls, and it wears
+       * `scroll-quiet`, which is the thin bar this platform uses everywhere.
+       */
+      className="relative isolate mx-auto flex h-full w-full max-w-content-small flex-col overflow-hidden px-page-inline pb-6 pt-page-sm md:px-page-inline-md md:pt-page"
     >
       {/* the conversation controls — visible whenever we are not idle */}
       {!idle ? (
@@ -1001,7 +1013,9 @@ export function Hub() {
       ) : null}
 
       {idle ? (
-        <>
+        /* min-h-0 so this half can shrink inside the fixed page, and its own
+           scroller carries the overflow rather than the document */
+        <div className="scroll-quiet fade-scroll flex min-h-0 flex-1 flex-col justify-end overflow-y-auto">
           {/* THE WATERMARK IS GONE (user directive, 2026-09-02: "also remove
                 the background"). A brand mark behind the one screen whose
                 job is a blank prompt is decoration competing with an empty
@@ -1041,7 +1055,7 @@ export function Hub() {
               ))}
             </div>
           ) : null}
-        </>
+        </div>
       ) : (
         <div
           ref={scrollerRef}
@@ -1054,7 +1068,7 @@ export function Hub() {
           onScroll={(e) => {
             pinnedRef.current = shouldStick(e.currentTarget);
           }}
-          className="scroll-quiet mb-4 flex-1 md:min-h-0 md:overflow-y-auto"
+          className="scroll-quiet fade-scroll mb-4 min-h-0 flex-1 overflow-y-auto"
         >
           <ConversationThread
             messages={messages}

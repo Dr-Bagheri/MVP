@@ -71,7 +71,15 @@ export const SIZE_SPAN: Record<TileSize, { w: number; h: number }> = {
    * screen tall — day columns with hour rows need real height, and a 6-wide
    * tile squeezes seven day columns into unreadability.
    */
-  panel: { w: 9, h: 5 },
+  /*
+   * SIX ROWS (user directive, 2026-09-02: "make the calendar size from this
+   * to this for the default size as well"). At five, seven hours of the day
+   * were visible and the grid was scrolled from the moment it rendered — a
+   * week view whose first act is to hide most of the week. Six shows the
+   * working day, and the side column grows with it, which is the other half
+   * of what the reference's proportions do.
+   */
+  panel: { w: 9, h: 6 },
   /*
    * TALL is the calendar's tier: a month is five or six rows of squares, and
    * squares only stay square if the tile has the height to hold them. It is

@@ -8,7 +8,7 @@ import { Pagination, usePaged } from "@/components/Pagination";
 import { AssistantMenu } from "@/components/platform/AssistantMenu";
 import { PlatformShell } from "@/components/platform/PlatformShell";
 import { ConfirmDialog } from "@/components/rowActions";
-import { MenuLayout, PageContainer, PageHeader, Skeleton } from "@/components/scaffold";
+import { PageContainer, PageHeader, Skeleton } from "@/components/scaffold";
 import { useRouter } from "@/i18n/routing";
 import { notify } from "@/lib/notify";
 import { useRefreshEpoch } from "@/lib/refreshBus";
@@ -58,8 +58,11 @@ export default function ConversationsPage() {
 
   return (
     <PlatformShell>
-      <MenuLayout menu={<AssistantMenu activeSlug="history" />}>
-        <PageContainer>
+      {/* the toolbar is on TOP (2026-09-02) — AssistantMenu is a nav row now,
+          so wrapping it in MenuLayout would put a row where a pane used to be
+          and give the page a column it no longer has */}
+      <AssistantMenu activeSlug="history" />
+      <PageContainer className="!pt-0">
           <PageHeader title={t("title")} subtitle={t("hint")} />
           <div className="mb-4 max-w-xs">
             <input
@@ -150,7 +153,6 @@ export default function ConversationsPage() {
             <Pagination page={page} pageCount={pageCount} onPage={setPage} className="pb-3" />
           </div>
         </PageContainer>
-      </MenuLayout>
 
       {/* The platform's one destructive-action dialog. The title names the
           conversation being removed — an untitled one is named the way the

@@ -31,6 +31,17 @@
  * and a long part on a slow lane wants headroom without patching a module.
  */
 export interface StorageSigner {
+  /**
+   * A one-shot URL the BROWSER may PUT a file to (0159, meeting attachments).
+   *
+   * The bytes never pass through core, and that is the point rather than an
+   * optimisation: a 50MB document through a Node process is 50MB of heap and
+   * a request that holds a connection for a minute, to move something neither
+   * the API nor the database will ever read. The service key stays here; what
+   * the browser gets is a token scoped to one bucket, one path, and a few
+   * minutes.
+   */
+  signUpload(bucket: string, path: string): Promise<{ url: string; token: string }>;
   signDownload(bucket: string, path: string, ttlSeconds: number): Promise<string>;
 }
 
@@ -64,6 +75,37 @@ export function createStorageSigner(config: StorageSignerConfig): StorageSigner 
   const doFetch = config.fetchImpl ?? fetch;
 
   return {
+    async signUpload(bucket: string, path: string): Promise<{ url: string; token: string }> {
+      if (!bucket || !path) throw new StorageSignError("storage: bucket and path are required");
+      const encodedPath = path.split("/").filter(Boolean).map(encodeURIComponent).join("/");
+      if (encodedPath === "") throw new StorageSignError("storage: path is empty");
+      let response: Response;
+      try {
+        response = await doFetch(
+          `${base}/storage/v1/object/upload/sign/${encodeURIComponent(bucket)}/${encodedPath}`,
+          {
+            method: "POST",
+            headers: { authorization: `Bearer ${key}`, apikey: key, "content-type": "application/json" },
+            body: "{}",
+          },
+        );
+      } catch {
+        /* cause-free: it may hold the request, and the request holds the key */
+        throw new StorageSignError("storage: upload sign request failed");
+      }
+      if (!response.ok) throw new StorageSignError("storage: upload could not be signed");
+      const body = await response.json() as { url?: unknown; token?: unknown };
+      const token = typeof body.token === "string" ? body.token : "";
+      /* Supabase answers with a RELATIVE url; the caller needs an absolute
+         one, and building it here keeps the project host in the one module
+         that already knows it */
+      const relative = typeof body.url === "string" ? body.url : "";
+      if (token === "" || relative === "") {
+        throw new StorageSignError("storage: upload sign response was unusable");
+      }
+      return { url: `${base}/storage/v1${relative.startsWith("/") ? "" : "/"}${relative}`, token };
+    },
+
     async signDownload(bucket: string, path: string, ttlSeconds: number): Promise<string> {
       if (!bucket || !path) throw new StorageSignError("storage: bucket and path are required");
       if (!Number.isFinite(ttlSeconds) || ttlSeconds <= 0) {

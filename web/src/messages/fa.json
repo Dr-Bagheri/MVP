@@ -2957,6 +2957,11 @@
     "agendaAdd": "افزودن بند",
     "agendaLess": "کمتر",
     "agendaMore": "بیشتر",
-    "agendaNoMinutes": "— دقیقه"
+    "agendaNoMinutes": "— دقیقه",
+    "attachments": "پیوست‌ها",
+    "attachmentsEmpty": "هنوز فایلی پیوست نشده.",
+    "attachmentAdd": "بارگذاری سند",
+    "attachmentUploading": "در حال بارگذاری…",
+    "attachmentRemove": "حذف {name}"
   }
 }

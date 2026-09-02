@@ -37,6 +37,11 @@ select t.ok(
 --     on every card is worse than gone.
 --   · task_label_link (0147): the same membership shape as task_assignee —
 --     taking a label off a card must remove the row.
+--   · meeting_attachment (0159): a document somebody attached to a meeting.
+--     The same shape as a note — a person put it there and removing it is an
+--     ordinary act, not a purge. The OBJECT behind the row is a different
+--     question and a different role's: echo_purge deletes the bytes, and
+--     platform_meeting_storage_paths is how it finds them.
 --   · meeting (0148): a meeting is a PLAN, not a record — the call it
 --     produced is a separate row with its own ladder, and this delete
 --     cannot reach it (asserted in 0148: nothing cascades from meeting).
@@ -47,8 +52,8 @@ select t.ok(
   (select coalesce(array_agg(distinct table_name::text order by table_name::text), '{}')
      from information_schema.role_table_grants
     where grantee = 'echo_app' and privilege_type = 'DELETE' and table_schema = 'echo')
-   = array['call_note', 'meeting', 'task_assignee', 'task_checklist_item', 'task_label', 'task_label_link'],
-  'core/''s own role deletes exactly the argued list: a note author''s own note (0079), a task''s checklist lines and its assignee rows (0144), a label and a card''s wearing of one (0147) — every other product row is echo_purge''s alone');
+   = array['call_note', 'meeting', 'meeting_attachment', 'task_assignee', 'task_checklist_item', 'task_label', 'task_label_link'],
+  'core/''s own role deletes exactly the argued list: a note author''s own note (0079), a task''s checklist lines and its assignee rows (0144), a label and a card''s wearing of one (0147), a meeting''s attached document (0159) — every other product row is echo_purge''s alone');
 -- Scoped to the application roles: the schema owner also appears as a grantee
 -- of everything on a managed platform, and a superuser was never inside this
 -- wall to begin with — core/ simply never connects as one.
@@ -59,8 +64,9 @@ select t.ok(
       and grantee::text like 'echo\_%'
       and grantee::text <> 'echo_purge'
       and not (grantee::text = 'echo_app'
-               and table_name in ('call_note', 'meeting', 'task_assignee',
-                                  'task_checklist_item', 'task_label', 'task_label_link'))
+               and table_name in ('call_note', 'meeting', 'meeting_attachment',
+                                  'task_assignee', 'task_checklist_item',
+                                  'task_label', 'task_label_link'))
   ),
   'echo_purge is the only application role that deletes product rows — the 0079 note exception is the closed list''s single entry');
 
