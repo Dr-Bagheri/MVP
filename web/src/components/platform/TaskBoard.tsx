@@ -213,62 +213,6 @@ export function TaskBoard() {
 
       {/* ── the topic row ────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-1.5">
-        {/*
-          INLINE, never `window.prompt` (user directive, 2026-09-02: "this top
-          pop up should never appear anywhere in the platform … fix it like
-          the new column that you wrote there").
-          A native prompt is the browser's dialog, not ours: it says
-          "app.neurai.pt says", it is unstyled in both themes, it cannot be
-          dismissed by the platform's own Escape handling, and it blocks the
-          page while it is up. The column composer beside this row already
-          solved the same problem the right way, so this is that pattern,
-          not a second one.
-        */}
-        {addingTopic || renamingTopic !== null ? (
-          <span className="inline-flex items-center gap-1 rounded-md border border-accent bg-surface px-1.5">
-            {/* ONE composer, two jobs: a new topic and a rename. Two boxes
-                would be two places for the same rules to be written down. */}
-            <input
-              autoFocus
-              value={renamingTopic !== null && topicName === "" ? renamingTopic.name : topicName}
-              onChange={(e) => setTopicName(e.target.value)}
-              onKeyDown={(e) => {
-                const value = (topicName || renamingTopic?.name || "").trim();
-                if (e.key === "Enter" && value !== "") {
-                  const done = () => { setTopicName(""); setAddingTopic(false); setRenamingTopic(null); load(); };
-                  void (renamingTopic !== null
-                    ? api.updateTaskTopic(renamingTopic.id, { name: value })
-                    : api.createTaskTopic(value)
-                  ).then(done).catch(refusal);
-                }
-                if (e.key === "Escape") { setTopicName(""); setAddingTopic(false); setRenamingTopic(null); }
-              }}
-              placeholder={t("newTopicPrompt")}
-              className="h-[30px] w-36 bg-transparent text-xs text-fg outline-none placeholder:text-fg-subtle"
-            />
-            <button
-              type="button"
-              aria-label={t("cancel")}
-              onClick={() => { setTopicName(""); setAddingTopic(false); setRenamingTopic(null); }}
-              className="tap grid h-6 w-6 place-items-center rounded text-fg-muted hover:text-fg"
-            >
-              <IconClose width={12} height={12} />
-            </button>
-          </span>
-        ) : (
-          <button
-            type="button"
-            aria-label={t("newTopic")}
-            title={t("newTopic")}
-            onClick={() => setAddingTopic(true)}
-            /* the MEETINGS chip-row's add button, exactly: dashed, the same
-               square, in the same place. Two boards showing the same row
-               should not disagree about what "add a folder" looks like. */
-            className="btn btn-icon border border-dashed border-border text-fg-muted hover:border-border-strong hover:text-fg"
-          >
-            <IconPlus width={12} height={12} />
-          </button>
-        )}
 
         <button
           type="button"
@@ -352,6 +296,63 @@ export function TaskBoard() {
             {digits(board.tasks.filter((x) => x.topic_id === null).length, locale)}
           </span>
         </button>
+
+        {/*
+          INLINE, never `window.prompt` (user directive, 2026-09-02: "this top
+          pop up should never appear anywhere in the platform … fix it like
+          the new column that you wrote there").
+          A native prompt is the browser's dialog, not ours: it says
+          "app.neurai.pt says", it is unstyled in both themes, it cannot be
+          dismissed by the platform's own Escape handling, and it blocks the
+          page while it is up. The column composer beside this row already
+          solved the same problem the right way, so this is that pattern,
+          not a second one.
+        */}
+        {addingTopic || renamingTopic !== null ? (
+          <span className="inline-flex items-center gap-1 rounded-md border border-accent bg-surface px-1.5">
+            {/* ONE composer, two jobs: a new topic and a rename. Two boxes
+                would be two places for the same rules to be written down. */}
+            <input
+              autoFocus
+              value={renamingTopic !== null && topicName === "" ? renamingTopic.name : topicName}
+              onChange={(e) => setTopicName(e.target.value)}
+              onKeyDown={(e) => {
+                const value = (topicName || renamingTopic?.name || "").trim();
+                if (e.key === "Enter" && value !== "") {
+                  const done = () => { setTopicName(""); setAddingTopic(false); setRenamingTopic(null); load(); };
+                  void (renamingTopic !== null
+                    ? api.updateTaskTopic(renamingTopic.id, { name: value })
+                    : api.createTaskTopic(value)
+                  ).then(done).catch(refusal);
+                }
+                if (e.key === "Escape") { setTopicName(""); setAddingTopic(false); setRenamingTopic(null); }
+              }}
+              placeholder={t("newTopicPrompt")}
+              className="h-[30px] w-36 bg-transparent text-xs text-fg outline-none placeholder:text-fg-subtle"
+            />
+            <button
+              type="button"
+              aria-label={t("cancel")}
+              onClick={() => { setTopicName(""); setAddingTopic(false); setRenamingTopic(null); }}
+              className="tap grid h-6 w-6 place-items-center rounded text-fg-muted hover:text-fg"
+            >
+              <IconClose width={12} height={12} />
+            </button>
+          </span>
+        ) : (
+          <button
+            type="button"
+            aria-label={t("newTopic")}
+            title={t("newTopic")}
+            onClick={() => setAddingTopic(true)}
+            /* the MEETINGS chip-row's add button, exactly: dashed, the same
+               square, in the same place. Two boards showing the same row
+               should not disagree about what "add a folder" looks like. */
+            className="btn btn-icon border border-dashed border-border text-fg-muted hover:border-border-strong hover:text-fg"
+          >
+            <IconPlus width={12} height={12} />
+          </button>
+        )}
       </div>
 
       {error !== null ? (

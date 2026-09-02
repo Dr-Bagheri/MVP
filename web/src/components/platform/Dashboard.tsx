@@ -88,7 +88,11 @@ function GreetingHead() {
   const name = me === null ? "" : personName(me, locale);
 
   return (
-    <div className="flex flex-wrap items-end justify-between gap-3">
+    /* the greeting and the board's own control share ONE row (user directive,
+       2026-09-02: "make the title of the user name in the same row as the
+       edit") — Edit sat on a line of its own under a two-line block, which
+       spent a third row on a single button */
+    <div className="flex flex-wrap items-start justify-between gap-3">
       <div>
         {/* THE one large thing on this screen. The reference's dashboard has
             no page title and a 27px greeting: it is the only place in the
@@ -296,7 +300,12 @@ export function Dashboard() {
 
   return (
     <div className="space-y-5">
-      <GreetingHead />
+      {/* ONE ROW: the greeting and the board's own control (user directive,
+          2026-09-02: "make the title of the user name in the same row as the
+          edit"). Edit sat on a line of its own under a two-line block, which
+          spent a third row of the page on a single button. */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <GreetingHead />
       {/* ── the head: who, and the board's own controls ──────────────── */}
       {/*
         The ECHO LAUNCHER is gone (user directive, 2026-08-29: "remove the
@@ -314,7 +323,7 @@ export function Dashboard() {
         What is left is the board's own control, aligned to the end. A person
         arriving here knows who they are; the tiles are what they came for.
       */}
-      <div className="flex flex-wrap items-center justify-end gap-3">
+      <div className="flex shrink-0 flex-wrap items-center justify-end gap-3">
 
         {/*
           READING, or ARRANGING. Everything that changes the board lives
@@ -364,6 +373,7 @@ export function Dashboard() {
             </button>
           )}
         </span>
+        </div>
       </div>
 
       {/* ── the board ───────────────────────────────────────────────── */}

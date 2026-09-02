@@ -522,6 +522,28 @@
     @apply cursor-pointer transition-colors hover:bg-surface-2;
   }
 
+  /*
+   * A DATE BLOCK — the calendar-row badge: a day number over its month, in a
+   * tinted square (user directive, 2026-09-02: "make the date fill color
+   * bigger and the text inside it must be center both vertical and
+   * horizontal").
+   *
+   * A CLASS rather than the utilities repeated at each site, because the
+   * directive is explicitly about a KIND of thing: "make this a rule in the
+   * theme for items that needs it, not all of them — the ones that are
+   * already in center mode keep them both vertical and horizontal, don't
+   * change the one that text are not centered."
+   *
+   * So this centres on both axes and nothing else does. It is opted INTO by
+   * a badge that is already a centred block; prose, list rows and table cells
+   * keep their own alignment, which is what makes the rule safe to state
+   * globally.
+   */
+  .date-block {
+    @apply grid shrink-0 place-content-center place-items-center rounded-lg bg-surface-2
+           px-2.5 py-1.5 text-center leading-tight;
+  }
+
   .chip {
     @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium leading-none;
   }

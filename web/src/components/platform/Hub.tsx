@@ -3,22 +3,21 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api, BffError } from "@/api/client";
-import type { AgentCard, AgentEvent, AgentMessage, ConnectorProvider, MailDraft, ModelInfo, SearchHit, Skill, WorkflowCard } from "@/api/types";
+import type { AgentCard, AgentEvent, AgentMessage, ConnectorProvider, MailDraft, SearchHit, Skill, WorkflowCard } from "@/api/types";
 import { Link, useRouter } from "@/i18n/routing";
 import { useSearchParams } from "next/navigation";
-import { modelLabel } from "@/lib/format";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useDictation } from "@/lib/dictation";
 import { deliverDoc } from "@/lib/deliver";
 import { subscribeComposer, takePendingDraft } from "@/lib/assistantBus";
 import { shouldStick } from "@/lib/threadFollow";
-import { useSkillName, useSkillStarters } from "@/lib/skillName";
+import { useSkillStarters } from "@/lib/skillName";
 import { ConversationThread } from "./ConversationThread";
 import { AgentOverviewPanel } from "./AgentOverviewPanel";
 import { MailDraftCard } from "./MailDraftCard";
 import { useAssistantConversation } from "./AssistantConversationState";
 import { DocumentIcon, MicIcon, PlusIcon, SendIcon } from "./icons";
 import { SURFACE_TOOLS } from "@/lib/agentSurface";
-import { EchoMark } from "./icons";
 import { startRecording } from "@/lib/recordingEngine";
 
 type CreateKind = "doc" | "pdf";
@@ -84,7 +83,6 @@ export function Hub() {
   const [streaming, setStreaming] = useState(false);
   const [feedback, setFeedback] = useState<Record<string, string>>({});
   const [shared, setShared] = useState(false);
-  const [models, setModels] = useState<ModelInfo[]>([]);
   const [skills, setSkills] = useState<Skill[]>([]);
   const [agents, setAgents] = useState<AgentCard[]>([]);
   const [model, setModel] = useState<string>("");
@@ -129,9 +127,6 @@ export function Hub() {
    */
   const [webSearch, setWebSearch] = useState(false);
   /** The skill and model pickers — Sources-style hover menus, not selects. */
-  const [skillOpen, setSkillOpen] = useState(false);
-  const [modelOpen, setModelOpen] = useState(false);
-  const [modelFilter, setModelFilter] = useState("");
   const promptRef = useRef<HTMLInputElement>(null);
   const resetVersionRef = useRef(resetVersion);
   const appliedResetVersionRef = useRef(resetVersion);
@@ -140,7 +135,6 @@ export function Hub() {
     setInput((v) => (v.trim() === "" ? text : `${v} ${text}`)),
   );
   /* system skills localize (shipped product content); authored names never do */
-  const skillName = useSkillName();
 
   /* a suggestion pressed in the sub-menu: applied on arrival (the mailbox)
      and while already here (the subscription). Selecting the skill with it
@@ -238,37 +232,35 @@ export function Hub() {
     : undefined;
   const selectedAgent = agentHandle ? agents.find((candidate) => candidate.handle === agentHandle) : undefined;
 
+  /*
+   * The starter questions, through `useSkillStarters` — a SYSTEM skill's are
+   * shipped product copy and localize; an org-authored skill's are its
+   * author's words and come off the wire untouched. Resolving them here (and
+   * not reading the wire directly) is what keeps the English hub from
+   * suggesting «کارهای این تماس را فهرست کن».
+   */
+  const suggestions = skills.flatMap((s) => skillStarters(s)).slice(0, 4);
+
   useEffect(() => {
+    /*
+     * The MODELS CATALOGUE is still read, and `model` still rides the ask —
+     * only the picker left (user directive, 2026-09-02: "remove the models
+     * and skills as well").
+     *
+     * Keeping the read is the load-bearing part, and the reason is written in
+     * this repo twice: a saved preference outlives the catalogue. The first
+     * member's was `~anthropic/claude-opus-latest`, saved while it was served
+     * and barred the day the no-Claude filter learned to spell it — and every
+     * ask then sent a name the server never offered and came back 400. So the
+     * client still adopts only a model the server OFFERED; what changed is
+     * that nobody has to choose one.
+     */
     void api.models().then((res) => {
-      setModels(res.models);
-      /*
-       * The state ADOPTS what the select will render. `?? ""` here caused
-       * the live failure this line replaces: with no saved preference the
-       * state held "" while the <select> displayed its first option — the
-       * screen showed Gemini, the wire carried no model, and the server
-       * refused with "no model selected" against a picker that looked
-       * chosen (the silent-substitution select bug, FE3's class). M5 still
-       * holds: the product imposes nothing — the ORG's curated list is what
-       * the picker offers, and the state now simply tells the truth about
-       * which of them is on screen.
-       */
-      /*
-       * ...and it can only adopt a model the server actually OFFERED. A
-       * saved preference outlives the catalogue: the first member's was
-       * `~anthropic/claude-opus-latest`, saved while it was served and
-       * barred the day the no-Claude filter learned to spell it. The picker
-       * then showed, as the current choice, a model absent from its own
-       * option list — and every ask sent it and came back 400. The server is
-       * right to refuse by name; the client is wrong to send a name the
-       * server never offered. Same shape as the comment above, one level
-       * further out: the state must tell the truth about what is on screen,
-       * and what is on screen is the list.
-       */
       const offered = res.preferred_model !== null
         && res.models.some((m) => m.id === res.preferred_model);
       setModel((offered ? res.preferred_model : res.models[0]?.id) ?? "");
-    });
-    void api.skills().then(setSkills);
+    }).catch(() => setModel(""));
+    void api.skills().then(setSkills).catch(() => setSkills([]));
     void api.agents().then(setAgents).catch(() => setAgents([]));
     /* the workflow CARDS: the auto-run's opening line is the workflow's own
        name, which is the server's string — the client never invents the
@@ -784,7 +776,6 @@ export function Hub() {
        that does not show the question they sent reads as having eaten it */
     pinnedRef.current = true;
     setStarted(true);
-    setSkillOpen(false);
     setInput("");
     setAskError(null);
 
@@ -1011,10 +1002,11 @@ export function Hub() {
 
       {idle ? (
         <>
-          <div
-            aria-hidden="true"
-            className="neurai-watermark pointer-events-none absolute inset-0 -z-10 bg-center bg-no-repeat opacity-[0.035] [background-size:min(68vw,680px)]"
-          />
+          {/* THE WATERMARK IS GONE (user directive, 2026-09-02: "also remove
+                the background"). A brand mark behind the one screen whose
+                job is a blank prompt is decoration competing with an empty
+                box — and at 3.5% it was visible enough to notice and too
+                faint to read, which is the worst of both. */}
           {/* the picked-agent chip that lived here grew into the
               AgentOverviewPanel above — one panel, both hub states */}
           {workflowSlug ? (
@@ -1023,26 +1015,32 @@ export function Hub() {
             </p>
           ) : null}
 
-          {/* the active skill's starter questions (M29) — one press fills
-              the composer; sending stays the person's act */}
-          {(() => {
-            const active = skills.find((s) => s.slug === skill);
-            const activeStarters = active ? skillStarters(active) : [];
-            return !selectedAgent && !workflowSlug && active && activeStarters.length > 0 ? (
-              <div className="mx-auto mt-4 flex w-full max-w-content flex-wrap justify-center gap-2">
-                {activeStarters.map((q) => (
-                  <button
-                    key={q}
-                    type="button"
-                    className="chip border border-border bg-surface text-xs text-fg-muted transition-colors hover:border-border-strong hover:text-fg"
-                    onClick={() => setInput(q)}
-                  >
-                    {q}
-                  </button>
-                ))}
-              </div>
-            ) : null;
-          })()}
+          {/*
+            THE SUGGESTIONS ARE BACK ON THE HUB (user directive, 2026-09-02:
+            "with the suggestion on top after its first pre-answer
+            conversation"). They spent a while in the side menu, where they
+            read as a list of features; under the assistant's opening line
+            they read as things to say, which is what they are.
+            Every shipped skill's starters, not just a picked one's — the
+            skill picker went in the same round, so "the active skill" is now
+            always the default and gating on it would have shown nothing.
+            One press FILLS the composer; sending stays the person's act,
+            which is the rule these rows have carried since they existed.
+          */}
+          {!selectedAgent && !workflowSlug && suggestions.length > 0 ? (
+            <div className="mx-auto mt-4 flex w-full max-w-content flex-wrap justify-center gap-2">
+              {suggestions.map((q) => (
+                <button
+                  key={q}
+                  type="button"
+                  className="chip border border-border bg-surface text-xs text-fg-muted transition-colors hover:border-border-strong hover:text-fg"
+                  onClick={() => setInput(q)}
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </>
       ) : (
         <div
@@ -1368,179 +1366,27 @@ export function Hub() {
                 </button>
             </div>
           </HoverMenu>
-          {/*
-            START A TAKE, in place (user directive, 2026-08-29: "it must just
-            start recording not navigating back to the new record but to add
-            the mini record on top").
-            
-            The first version was a Link to /echo/record?agentStart= — the
-            agent's own path — which starts the right recording and takes you
-            off the page you were talking on. `startRecording` is the ENGINE,
-            not the screen: it survives navigation, and the FloatingRecorder
-            already docks into the top bar from anywhere a take is live. So
-            pressing this leaves you where you are and the mini recorder
-            appears above.
-            
-            Defaults rather than a form: no title, the page's own language,
-            the default microphone. The full recorder is where a take gets
-            configured, and this button's whole reason to exist is that
-            someone wanted to start one without going there. The engine
-            refuses a second take on its own, so a double press is not a
-            second recording.
-          */}
-          <button
-            type="button"
-            className={headerBtn}
-            onClick={() => {
-              void startRecording({
-                micId: "",
-                language: locale === "en" ? "en" : "fa",
-                source: "mic",
-                title: "",
-                locale,
-                resume: null,
-                boost: false,
-                noiseSuppression: true,
-              });
-            }}
-          >
-            <EchoMark size={14} />
-            {t("record")}
-          </button>
+          {/* THE RECORDER LEFT THE COMPOSER (user directive, 2026-09-02:
+              "remove record from it as well"). It started an Echo take from
+              the assistant's prompt box — two products in one control, on the
+              screen whose whole job is a sentence. The recorder still lives
+              on the meeting, which is where a recording belongs. */}
           {/* The Tools menu was REMOVED from the composer (user directive,
               2026-08-20). It listed the assistant's tool registry — facts,
               not switches — and reads better as documentation than as a
               composer control. The registry itself (api.assistantTools) still
               powers the Agents create-modal's tool checkboxes. */}
-          <span className="flex-1" />
-          {/*
-            The model choice (M5 precedence: skill pin → this explicit choice
-            → the saved preference; no product default underneath). "" =
-            "let the server resolve", rendered as the saved-choice line.
-          */}
-          {skills.length > 0 ? (
-            idle ? (
-            /* the Sources anatomy on the skill picker (user directive):
-               hover opens, leaving closes, the active row says so */
-            <HoverMenu
-              open={skillOpen}
-              onOpen={() => setSkillOpen(true)}
-              onClose={() => setSkillOpen(false)}
-              align="end"
-              panelClass="w-56 p-1.5"
-              button={
-                <button
-                  type="button"
-                  className={headerBtn}
-                  aria-haspopup="menu"
-                  aria-expanded={skillOpen}
-                  onClick={() => setSkillOpen((v) => !v)}
-                >
-                  <span className="max-w-[9rem] truncate">
-                    {skill ? skillName(skills.find((s) => s.slug === skill) ?? skills[0]!) : t("skillDefault")}
-                  </span>
-                  <Chevron />
-                </button>
-              }
-            >
-              <div role="menu" aria-label={t("skillPicker")}>
-                {[{ slug: "", label: t("skillDefault") }, ...skills.map((s) => ({ slug: s.slug, label: skillName(s) }))].map(
-                  (row) => (
-                    <button
-                      key={row.slug || "@default"}
-                      type="button"
-                      role="menuitemradio"
-                      aria-checked={skill === row.slug}
-                      className={`tap flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm hover:bg-surface-2 ${
-                        skill === row.slug ? "font-semibold text-accent" : "text-fg"
-                      }`}
-                      /* value = SLUG: core's resolver takes /slug, not an id —
-                         an id here would 400 as "unknown skill" on every ask */
-                      onClick={() => {
-                        setSkill(row.slug);
-                        setSkillOpen(false);
-                      }}
-                    >
-                      <span className="truncate">{row.label}</span>
-                      {skill === row.slug ? <span aria-hidden>✓</span> : null}
-                    </button>
-                  ),
-                )}
-              </div>
-            </HoverMenu>
-            ) : (
-              <button
-                type="button"
-                className={`${headerBtn} cursor-not-allowed opacity-55`}
-                disabled
-                aria-label={t("skillPicker")}
-              >
-                <span className="max-w-[9rem] truncate">
-                  {skill ? skillName(skills.find((s) => s.slug === skill) ?? skills[0]!) : t("skillDefault")}
-                </span>
-                <Chevron />
-              </button>
-            )
-          ) : null}
-          {models.length > 0 ? (
-            <HoverMenu
-              open={modelOpen}
-              onOpen={() => setModelOpen(true)}
-              onClose={() => setModelOpen(false)}
-              align="end"
-              panelClass="w-72 p-1.5"
-              button={
-                <button
-                  type="button"
-                  className={headerBtn}
-                  aria-haspopup="menu"
-                  aria-expanded={modelOpen}
-                  onClick={() => setModelOpen((v) => !v)}
-                >
-                  <span className="max-w-[10rem] truncate ltr">
-                    {modelLabel(models.find((m) => m.id === model)?.name ?? model)}
-                  </span>
-                  <Chevron />
-                </button>
-              }
-            >
-              {models.length > 12 ? (
-                /* the catalogue is hundreds of rows — a picker without a
-                   filter is a scroll test, not a choice */
-                <input
-                  className="input mb-1.5 h-9 w-full text-sm"
-                  placeholder={t("modelFilter")}
-                  value={modelFilter}
-                  onChange={(e) => setModelFilter(e.target.value)}
-                />
-              ) : null}
-              <div role="menu" aria-label={t("modelPicker")} className="max-h-64 overflow-y-auto">
-                {models
-                  .filter((m) => {
-                    const f = modelFilter.trim().toLowerCase();
-                    return f === "" || m.id.toLowerCase().includes(f) || modelLabel(m.name).toLowerCase().includes(f);
-                  })
-                  .map((m) => (
-                    <button
-                      key={m.id}
-                      type="button"
-                      role="menuitemradio"
-                      aria-checked={model === m.id}
-                      className={`tap flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm hover:bg-surface-2 ${
-                        model === m.id ? "font-semibold text-accent" : "text-fg"
-                      }`}
-                      onClick={() => {
-                        setModel(m.id);
-                        setModelOpen(false);
-                      }}
-                    >
-                      <span className="truncate ltr">{modelLabel(m.name)}</span>
-                      {model === m.id ? <span aria-hidden>✓</span> : null}
-                    </button>
-                  ))}
-              </div>
-            </HoverMenu>
-          ) : null}
+          {/* THE MODEL AND SKILL PICKERS ARE GONE (user directive,
+              2026-09-02: "remove the models and skills as well").
+              Both were choices about HOW the assistant answers, offered
+              beside the box where a person says WHAT they want — and the M5
+              ladder already answers the model question without being asked
+              (skill pin → saved preference → the org's list). What a picker
+              added was a decision to make before typing.
+              The ladder is untouched: `model` stays in the ask payload and
+              the server still resolves it. What left is the control, not the
+              capability — and a person who wants a particular model still
+              sets it once in Settings rather than every time they type. */}
         </div>
       </div>
 
@@ -1575,6 +1421,23 @@ export function Hub() {
  * row. Click still toggles, which is what a touch screen has. (It is `pb-2`
  * now that the panels open upward — same reason, other side.)
  */
+/**
+ * THE COMPOSER'S MENUS — the platform's popover, opening upward.
+ *
+ * User directive, 2026-09-02: "change the shape for create, make it the same
+ * as any dropdown that we have, just it opens upward — rewrite it whole so it
+ * becomes one with the theme itself; also do it for the sources."
+ *
+ * What this replaced was a hand-positioned `absolute bottom-full` panel that
+ * opened on HOVER, and both halves were wrong in the same way — they were
+ * this file's private answers to questions the platform had already answered.
+ * Hover in particular: a menu that opens because a pointer passed over it is
+ * a menu that opens by accident, and it has no keyboard equivalent at all.
+ *
+ * `side="top"` is a preference rather than a rule: Radix flips it when there
+ * is no room above, which is the half a hand-written `bottom-full` cannot do
+ * and the reason the old panel could be clipped on a short viewport.
+ */
 function HoverMenu({
   open,
   onOpen,
@@ -1593,36 +1456,17 @@ function HoverMenu({
   children: ReactNode;
 }) {
   return (
-    <div className="relative" onMouseEnter={onOpen} onMouseLeave={onClose}>
-      {button}
-      {open ? (
-        /*
-         * UPWARD (user directive, 2026-08-27: "the kebab menus on the prompt
-         * box must open upward not downward").
-         *
-         * The composer sits at the foot of the page, so a panel dropped below
-         * it opens into the viewport's edge — the list is either clipped or it
-         * pushes the page, and on a phone it lands under the keyboard. The
-         * gap stays on the PANEL (`pb-2` here, as `pt-2` was) so crossing it
-         * never fires mouseleave and closes the menu halfway to the first row.
-         */
-        <div className={`absolute ${align === "start" ? "start-0" : "end-0"} bottom-full z-30 pb-2`}>
-          <div
-            className={`rounded-xl border border-border bg-surface text-start shadow-lg ${panelClass}`}
-          >
-            {children}
-          </div>
-        </div>
-      ) : null}
-    </div>
+    <Popover open={open} onOpenChange={(next) => (next ? onOpen() : onClose())}>
+      <PopoverTrigger asChild>{button}</PopoverTrigger>
+      <PopoverContent
+        side="top"
+        align={align}
+        sideOffset={8}
+        className={`w-auto rounded-xl border-border bg-surface p-0 text-start shadow-island ${panelClass}`}
+      >
+        {children}
+      </PopoverContent>
+    </Popover>
   );
 }
 
-/** The pickers' chevron — the one visual the native select used to provide. */
-function Chevron() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="m6 9 6 6 6-6" />
-    </svg>
-  );
-}

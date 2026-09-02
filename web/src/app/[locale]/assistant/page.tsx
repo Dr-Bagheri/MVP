@@ -3,7 +3,6 @@ import { AssistantMenu } from "@/components/platform/AssistantMenu";
 import { AssistantConversationProvider } from "@/components/platform/AssistantConversationState";
 import { Hub } from "@/components/platform/Hub";
 import { PlatformShell } from "@/components/platform/PlatformShell";
-import { MenuLayout } from "@/components/scaffold";
 
 /**
  * The ASSISTANT hub — the composer screen (M22's approved anatomy), moved
@@ -33,9 +32,11 @@ export default function AssistantPage() {
       */}
       <Suspense fallback={null}>
         <AssistantConversationProvider>
-          <MenuLayout menu={<AssistantMenu activeSlug="new" />}>
-            <Hub />
-          </MenuLayout>
+          {/* the toolbar is on TOP now, like every other surface (user
+              directive, 2026-09-02) — and it is two links, because the
+              recents that used to live in that pane are a page of their own */}
+          <AssistantMenu activeSlug="new" />
+          <Hub />
         </AssistantConversationProvider>
       </Suspense>
     </PlatformShell>

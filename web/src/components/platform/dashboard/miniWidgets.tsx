@@ -764,11 +764,11 @@ export function UpcomingWidget({ size }: { size: TileSize }) {
                 href={`/meetings/${m.id}`}
                 className="flex items-center gap-2.5 py-1.5 hover:text-accent"
               >
-                <span className="grid shrink-0 place-items-center rounded-lg bg-surface-2 px-1.5 py-1 text-center">
-                  <span className="badge-num block text-sm font-bold leading-4 text-fg">
+                <span className="date-block">
+                  <span className="badge-num block text-base font-bold leading-5 text-fg">
                     {formatDayMonth(m.scheduled_at, locale).day}
                   </span>
-                  <span className="block text-[9px] leading-3 text-fg-subtle">
+                  <span className="block text-[10px] leading-3 text-fg-subtle">
                     {formatDayMonth(m.scheduled_at, locale).month}
                   </span>
                 </span>
@@ -845,11 +845,11 @@ export function LatestMeetingsWidget() {
         {latest.map((m) => (
           <li key={m.id}>
             <Link href={`/meetings/${m.id}`} className="flex items-center gap-2.5 py-1.5 hover:text-accent">
-              <span className="grid shrink-0 place-items-center rounded-lg bg-surface-2 px-1.5 py-1 text-center">
-                <span className="badge-num block text-sm font-bold leading-4 text-fg">
+              <span className="date-block">
+                <span className="badge-num block text-base font-bold leading-5 text-fg">
                   {formatDayMonth(m.scheduled_at, locale).day}
                 </span>
-                <span className="block text-[9px] leading-3 text-fg-subtle">
+                <span className="block text-[10px] leading-3 text-fg-subtle">
                   {formatDayMonth(m.scheduled_at, locale).month}
                 </span>
               </span>

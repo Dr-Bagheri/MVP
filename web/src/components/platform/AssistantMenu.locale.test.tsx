@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Skill } from "@/api/types";
 import en from "../../messages/en.json";
@@ -9,7 +9,7 @@ import fa from "../../messages/fa.json";
  * screenshot: the English UI's Suggestions rows read Persian questions).
  *
  * Why this file exists beside `lib/skillName.test.ts`, which already proves
- * the resolver: the resolver was never broken. `AssistantMenu` read
+ * the resolver: the resolver was never broken. The consumer read
  * `skill.starter_questions` straight off the wire and simply never called it —
  * a unit test of the localizer passes in full while the screen the user is
  * looking at renders Persian. The seam between a correct helper and a consumer
@@ -62,7 +62,11 @@ vi.mock("@/i18n/routing", () => ({
 }));
 
 const filled: { text: string; skillSlug: string }[] = [];
-vi.mock("@/lib/assistantBus", () => ({
+vi.mock("@/lib/assistantBus", async (importOriginal) => ({
+  /* the REAL module, with one function replaced — a hand-written stub of a
+     module with seven exports is a stub that goes stale the day an eighth
+     lands, which is exactly how this one broke when the subject moved */
+  ...(await importOriginal<typeof import("@/lib/assistantBus")>()),
   fillComposer: (draft: { text: string; skillSlug: string }) => { filled.push(draft); },
 }));
 
@@ -72,10 +76,28 @@ vi.mock("@/api/client", () => ({
     skills: () => Promise.resolve(skills),
     agentSessions: () => Promise.resolve([]),
     me: () => Promise.resolve(null),
+    /* the hub's own reads — the suggestions moved onto it (2026-09-02), so
+       this file follows them: the seam it guards is "a component renders the
+       wire instead of the resolver", and that seam is wherever the rows are */
+    models: () => Promise.resolve({ models: [], preferred_model: null }),
+    agents: () => Promise.resolve([]),
+    workflows: () => Promise.resolve([]),
+    assistantTools: () => Promise.resolve([]),
+    connectors: () => Promise.resolve([]),
+    autonomy: () => Promise.resolve(null),
   },
+  BffError: class extends Error {},
 }));
 
-const { AssistantMenu } = await import("./AssistantMenu");
+vi.mock("next/navigation", () => ({ useSearchParams: () => new URLSearchParams() }));
+vi.mock("@/i18n/routing", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  usePathname: () => "/assistant",
+  Link: ({ href, children }: { href: unknown; children: unknown }) =>
+    <a href={typeof href === "string" ? href : "#"}>{children as never}</a>,
+}));
+
+const { Hub } = await import("./Hub");
 
 /* the SEEDED row, exactly as db/0061 writes it and the wire serves it: a
    system skill whose starter questions are Persian literals. This is the
@@ -108,14 +130,14 @@ const FA_FIRST = (fa.skills.starters_tasks as string[])[0]!;
 
 async function renderMenu(as: "en" | "fa") {
   locale = as;
-  render(<AssistantMenu activeSlug="history" />);
+  render(<Hub />);
   /* anchored on a value that only exists AFTER the skills fetch resolves —
      awaiting "the Persian is gone" would pass instantly against the empty
      pre-fetch menu, which is a green that proves nothing */
   await screen.findByText(as === "en" ? EN_FIRST : FA_FIRST);
 }
 
-describe("AssistantMenu · Suggestions never mix languages", () => {
+describe("the hub’s suggestions never mix languages", () => {
   beforeEach(() => {
     skills = [SEEDED_TASKS, AUTHORED];
     filled.length = 0;
@@ -141,8 +163,20 @@ describe("AssistantMenu · Suggestions never mix languages", () => {
   });
 
   it("en: the composer is filled with the words the row showed, not the wire's", async () => {
+    /*
+     * On the HUB the suggestion IS the composer's own control, so it sets the
+     * value directly rather than going through the bus — the bus exists for
+     * the case where the row and the box are on different screens, which this
+     * no longer is (2026-09-02).
+     *
+     * The assertion that matters is unchanged and is the whole point of the
+     * file: what lands in the box is the string the ROW SHOWED, not the
+     * Persian the wire carried.
+     */
     await renderMenu("en");
-    screen.getByText(EN_FIRST).click();
-    expect(filled).toEqual([{ text: EN_FIRST, skillSlug: "tasks" }]);
+    await act(async () => { fireEvent.click(screen.getByText(EN_FIRST)); });
+    const box = screen.getByRole("textbox") as HTMLTextAreaElement;
+    expect(box.value).toBe(EN_FIRST);
+    expect(box.value).not.toContain("تماس");
   });
 });

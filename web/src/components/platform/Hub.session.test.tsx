@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgentEvent } from "@/api/types";
 
@@ -129,7 +130,15 @@ async function ask(text: string) {
   const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")!.set!;
   setter.call(box, text);
   box.dispatchEvent(new Event("input", { bubbles: true }));
-  const send = document.querySelector("button.bg-accent") as HTMLButtonElement;
+  /*
+   * BY ITS TITLE, not by a style class. `button.bg-accent` was "the first
+   * accent-coloured button in the document", which is a fact about the
+   * stylesheet rather than about the send control — and the day the toolbar
+   * above the hub grew an accent button, this helper started clicking that
+   * one instead and every test using it failed for a reason unrelated to its
+   * subject.
+   */
+  const send = screen.getByTitle("ارسال") as HTMLButtonElement;
   await waitFor(() => expect(send.disabled).toBe(false));
   send.click();
 }
@@ -186,7 +195,7 @@ describe("Hub — session continuity", () => {
     await ask("شروع گفتگو");
     await waitFor(() => expect(screen.getByText("پاسخ")).toBeTruthy());
 
-    const fresh = screen.getByRole("link", { name: "گفتگوی تازه" });
+    const fresh = screen.getByRole("button", { name: "گفتگوی تازه" });
     expect(fresh.getAttribute("aria-disabled")).toBeNull();
     fireEvent.click(fresh);
 
@@ -196,7 +205,10 @@ describe("Hub — session continuity", () => {
   it("searches Sources from the first character, without an instruction or Echo shortcut", async () => {
     render(<Hub />);
 
-    fireEvent.mouseEnter(screen.getByRole("button", { name: "منابع" }));
+    /* a PRESS, not a hover (2026-09-02): these are the platform's popover
+       now, and a menu that opens because a pointer passed over it is a menu
+       that opens by accident — with no keyboard equivalent at all */
+    await userEvent.click(screen.getByRole("button", { name: "منابع" }));
     const search = screen.getByPlaceholderText("جست‌وجو در تماس‌ها و جلسه‌ها…");
     fireEvent.change(search, { target: { value: "ا" } });
 
@@ -208,7 +220,7 @@ describe("Hub — session continuity", () => {
   it("selects Doc without putting an instruction inside the composer", async () => {
     render(<Hub />);
 
-    fireEvent.mouseEnter(screen.getByRole("button", { name: "ساختن" }));
+    await userEvent.click(screen.getByRole("button", { name: "ساختن" }));
     const doc = screen.getByRole("menuitem", { name: /^سند/ });
     expect(doc).toBeTruthy();
     expect(screen.getByRole("menuitem", { name: /^PDF/ })).toBeTruthy();
