@@ -255,6 +255,8 @@ export function MeetingPage({ id }: { id: string }) {
 
   const active: Stage = stage ?? "pre";
   const held = meeting.call_id !== null;
+  /** a linked record seals the meeting's earlier stages — see stepTab */
+  const sealed = held;
   const timePast = new Date(meeting.scheduled_at).getTime() <= Date.now();
   /* live when WE started it this mount, OR when the engine's take IS this
      meeting's linked call — a reload mid-recording must not hide the timer
@@ -307,15 +309,27 @@ export function MeetingPage({ id }: { id: string }) {
     });
   };
 
+  /*
+   * ONCE A RECORD EXISTS, THE EARLIER STAGES ARE HISTORY (user directive).
+   * The plan and the stage are things you do BEFORE there is a record; with
+   * one linked, walking back offers a recording that would start a second
+   * take over a finished meeting, and a plan whose editing changes nothing
+   * about what was already said. They stay VISIBLE — the stepper is the
+   * shape of the meeting and hiding two thirds of it would be a different
+   * screen — and stop being doors.
+   */
   const stepTab = (s: Stage, n: number, label: string, done: boolean) => (
     <button
       key={s}
       type="button"
       aria-current={active === s ? "step" : undefined}
+      aria-disabled={sealed && s !== "post" ? true : undefined}
+      disabled={sealed && s !== "post"}
+      title={sealed && s !== "post" ? t("stageSealed") : undefined}
       onClick={() => setStage(s)}
       className={`tap flex h-9 items-center gap-1.5 rounded-xl px-3 text-xs font-medium transition-colors ${
         active === s ? "bg-fg text-bg" : "text-fg-muted hover:text-fg"
-      }`}
+      } ${sealed && s !== "post" ? "cursor-not-allowed opacity-50 hover:text-fg-muted" : ""}`}
     >
       <span
         className={`grid min-h-[18px] min-w-[18px] place-items-center rounded-full text-[10px] ${
@@ -428,7 +442,7 @@ export function MeetingPage({ id }: { id: string }) {
           locale={locale}
           onGoHold={() => setStage("hold")}
           onChanged={(m) => setMeeting(m)}
-          onOpenRecord={() => router.push(`/calls/${meeting.call_id}`)}
+          onBackToMeetings={() => router.push("/meetings")}
         />
       ) : null}
     </div>
@@ -786,14 +800,14 @@ function HoldStage({ meeting, me, locale, recordingLive, recordedMs }: {
 }
 
 /* ═══ پس از جلسه — the tab set over the real artifacts ═══════════════════ */
-function PostStage({ meeting, call, me, locale, onGoHold, onChanged, onOpenRecord }: {
+function PostStage({ meeting, call, me, locale, onGoHold, onChanged, onBackToMeetings }: {
   meeting: MeetingRecord;
   call: Call | null | "gone";
   me: Me | null;
   locale: string;
   onGoHold: () => void;
   onChanged: (m: MeetingRecord) => void;
-  onOpenRecord: () => void;
+  onBackToMeetings: () => void;
 }) {
   const t = useTranslations("meetings");
   const [tab, setTab] = useState<PostTab>("review");
@@ -855,9 +869,14 @@ function PostStage({ meeting, call, me, locale, onGoHold, onChanged, onOpenRecor
             : call.status === "failed" ? (
               <div className="tile grid place-items-center p-10 text-center">
                 <p className="text-sm text-danger">{t("processingFailed")}</p>
-                <button type="button" onClick={onOpenRecord}
+                {/* BACK TO THE LIST, not into the record (user directive):
+                    a failed record has nothing to open — sending someone to
+                    the raw call page hands them the same failure wearing a
+                    different address. The way out is the table they came
+                    from. */}
+                <button type="button" onClick={onBackToMeetings}
                   className="tap mt-3 h-9 rounded-lg bg-surface-2 px-4 text-xs font-medium text-fg hover:bg-border">
-                  {t("openRecord")}
+                  {t("backToMeetings")}
                 </button>
               </div>
             ) : call.status !== "ready" ? (

@@ -5,7 +5,7 @@ import { useLocale, useTranslations } from "next-intl";
 import type { AssistantSession, Skill } from "@/api/types";
 import { api } from "@/api/client";
 import { SectionMenu } from "@/components/scaffold";
-import { IconAgent, IconAsk, IconHistory, IconPlug, IconPlus, IconZap } from "@/components/icons";
+import { IconAsk, IconHistory, IconPlus } from "@/components/icons";
 import { fillComposer } from "@/lib/assistantBus";
 import { useRouter } from "@/i18n/routing";
 import { useRefreshEpoch } from "@/lib/refreshBus";
@@ -33,7 +33,6 @@ export function AssistantMenu({
   const router = useRouter();
   const t = useTranslations("platform");
   const tConversations = useTranslations("conversations");
-  const tWorkflows = useTranslations("workflows");
   const locale = useLocale();
   const { started, startNewConversation } = useAssistantConversation();
   const isHub = activeSlug === "new" || activeSlug === "hub";
@@ -67,16 +66,6 @@ export function AssistantMenu({
      quietly opting out of it. */
   const skillStarters = useSkillStarters();
 
-  /* the CREATE row below is admin-only, so the menu has to know who is
-     reading it — a member seeing a door they cannot open is worse than not
-     seeing it, because the refusal arrives after the click */
-  const [role, setRole] = useState<string | null>(null);
-  useEffect(() => {
-    /* me() answers null when nobody is signed in — that is a state, not a
-       failure, and it must not read as an admin */
-    void api.me().then((who) => setRole(who?.role ?? null)).catch(() => setRole(null));
-  }, []);
-  const canAuthor = role === "admin" || role === "owner";
   /* resolved BEFORE the filter, not after: the row exists because there is a
      question to show, so "is there one" has to be asked of the string that
      will actually be rendered — asking the wire and rendering the catalogue
@@ -155,44 +144,11 @@ export function AssistantMenu({
             }]
           : []),
         /* Search LEFT this menu for Echo's (user directive, 2026-08-25) —
-           it searches the records, so it lives with them */
-        {
-          /* the assistant's setup doors (user directive, round 2: they left
-             the rail for this menu) — links into Management's own surfaces,
-             not copies of them */
-          key: "setup",
-          title: t("assistantMenuSetup"),
-          items: [
-            {
-              slug: "workflows", href: "/workflows", label: t("workflows"), icon: <IconZap />,
-              /*
-               * CREATE rides the Workflows row as a ＋ at its end — the same
-               * shape as Echo's quick-memo ＋ on New meeting (user directive,
-               * 2026-08-28: "remove it from here and add it in front of it
-               * in the row … like the new record"). A sub-row underneath
-               * read as a destination; a ＋ on the row reads as what it is,
-               * an act. Its own action, never part of the row's click; it
-               * still ARRIVES at the catalogue, because pressed from a
-               * conversation the builder needs its page under it.
-               */
-              ...(canAuthor
-                ? {
-                    trailing: {
-                      label: tWorkflows("createWorkflow"),
-                      icon: <IconPlus />,
-                      onSelect: () => router.push({
-                        pathname: "/workflows", query: { new: "1" },
-                      }),
-                    },
-                  }
-                : {}),
-            },
-            /* directly under Workflows (user directive, 2026-08-28) — the
-               accounts a workflow runs on, so the two sit together */
-            { slug: "integrations", href: "/integrations", label: t("integrations"), icon: <IconPlug /> },
-            { slug: "agents", href: "/agents", label: t("agents"), icon: <IconAgent /> },
-          ],
-        },
+           it searches the records, so it lives with them.
+           WORKFLOWS, INTEGRATIONS and AGENTS left too (2026-09-02): they are
+           on the main rail now. A door in two places is two things to keep
+           in step, and the rail is where a person goes looking for a
+           surface. */
       ]}
       activeSlug={activeSlug}
     />

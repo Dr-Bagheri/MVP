@@ -304,7 +304,13 @@ export function TaskBoard() {
                 }
                 dropCard(col.id, e);
               }}
-              className="flex w-[300px] shrink-0 flex-col rounded-2xl border border-border bg-surface p-2.5 shadow-card"
+              /* A COLUMN IS AS TALL AS THE BOARD, not as tall as its cards
+                 (user directive): an empty column that hugs three lines of
+                 chrome reads as a smaller thing than a full one, and a card
+                 dragged toward it has almost no target. `self-stretch` fills
+                 the scroller's height; `min-h-[70vh]` keeps it a column
+                 rather than a strip when the board itself is short. */
+              className="flex w-[300px] shrink-0 flex-col self-stretch rounded-2xl border border-border bg-surface p-2.5 shadow-card min-h-[70vh]"
               aria-label={col.name}
             >
               <header className="flex items-center justify-between gap-1 px-1 py-1">
@@ -606,7 +612,7 @@ function AddColumnInline({ onAdded, onRefused }: {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="tap flex h-14 w-[220px] shrink-0 items-center justify-center gap-2 rounded-2xl border border-dashed border-border text-sm text-fg-muted hover:border-border-strong hover:text-fg"
+        className="tap flex w-[220px] shrink-0 items-start justify-center gap-2 self-stretch rounded-2xl border border-dashed border-border pt-4 text-sm text-fg-muted hover:border-border-strong hover:text-fg min-h-[70vh]"
       >
         <IconPlus width={14} height={14} />
         {t("addColumn")}

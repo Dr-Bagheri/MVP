@@ -8,7 +8,6 @@ import type { User } from "@/api/types";
 import { IconMoon, IconSearch, IconSun } from "@/components/icons";
 import { storeTheme } from "@/lib/theme";
 import { useTheme } from "@/lib/useTheme";
-import { AvatarMenu } from "./AvatarMenu";
 import { formatDate } from "@/lib/format";
 import { useTimezonePreference } from "@/lib/usePreferences";
 import { Breadcrumbs } from "./Breadcrumbs";
@@ -60,7 +59,10 @@ function Clock() {
   );
 }
 
-export function TopBar({ me, isPlatformRoot = false }: { me: User | null; isPlatformRoot?: boolean }) {
+/* `isPlatformRoot` stays in the signature and is unused HERE: the platform
+   console's own guard reads it, and every caller passes it. Dropping the prop
+   would make those callers wrong about a fact that is still true. */
+export function TopBar({ me, isPlatformRoot: _isPlatformRoot = false }: { me: User | null; isPlatformRoot?: boolean }) {
   const locale = useLocale();
   const tPlatform = useTranslations("platform");
   const theme = useTheme();
@@ -95,11 +97,14 @@ export function TopBar({ me, isPlatformRoot = false }: { me: User | null; isPlat
           or the controls at the other end of the bar. */}
       <div className="relative z-20 grid h-14 grid-cols-[minmax(0,1fr)_72px_minmax(0,1fr)] items-center border-b border-border bg-surface px-3 md:grid-cols-[minmax(0,1fr)_84px_minmax(0,1fr)] md:px-4">
         <div className="flex min-w-0 items-center gap-2">
-          <AvatarMenu me={me} isPlatformRoot={isPlatformRoot} />
-
-          {/* the trail takes the free space rather than a fixed slot: it is
+          {/* The avatar LEFT this bar (user directive, 2026-09-02): the
+              person and their way out live at the foot of the rail, where
+              the reference puts them, and two doors to one profile is two
+              things to keep in step. Its menu's contents — theme, calendar,
+              timezone — are Settings' own, which is where they already are.
+              The trail takes the free space rather than a fixed slot: it is
               the only element here whose width is content, and it must be
-              able to truncate rather than push the controls off the bar */}
+              able to truncate rather than push the controls off the bar. */}
           <Breadcrumbs />
         </div>
 

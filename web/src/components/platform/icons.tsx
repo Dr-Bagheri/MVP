@@ -1,3 +1,4 @@
+import { IconAgent, IconZap } from "@/components/icons";
 /**
  * Platform icon set — inline SVG, stroke-based, one visual family.
  *
@@ -226,7 +227,12 @@ export const NAV_ICON: Record<string, (p: SVGProps<SVGSVGElement>) => ReactEleme
   hub: HomeIcon,
   history: HistoryIcon,
   search: SearchIcon,
+  /* the three that left the assistant's section menu for the rail
+     (2026-09-02) — a rail entry with no icon renders an empty slot, and
+     the map is a plain lookup with no complaint of its own */
+  workflows: IconZap,
   integrations: PlugIcon,
+  agents: IconAgent,
   management: UsersIcon,
   settings: CogIcon,
   help: HelpIcon,

@@ -7,8 +7,9 @@ import { api } from "@/api/client";
 import type { Me } from "@/api/types";
 import { useEffect, useState } from "react";
 import { personName } from "@/lib/format";
+import { signOutThisDevice } from "@/lib/signOut";
 import { useLocale } from "next-intl";
-import { IconPlus } from "@/components/icons";
+import { IconOpen, IconPlus } from "@/components/icons";
 import { NAV_PRIMARY, NAV_UTILITY, activeNavHref, type NavItem } from "./nav";
 import { EchoMark, NAV_ICON } from "./icons";
 
@@ -133,25 +134,43 @@ export function IconRail() {
         {NAV_UTILITY.map(item)}
       </div>
 
-      {/* ── the person ───────────────────────────────────────────────── */}
+      {/* ── the person, and the way out ──────────────────────────────
+          The sign-out is a SIBLING of the card, not inside it: a link that
+          opens the profile cannot also contain a button that ends the
+          session — one nested inside the other is a click target that means
+          two things depending on the pixel. */}
       {me !== null ? (
-        <Link
-          href="/profile"
-          className="flex items-center gap-2.5 rounded-2xl border border-border p-2.5 transition-colors hover:bg-surface-2"
-        >
-          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-accent-soft text-sm font-bold text-accent">
-            {personName(me, locale).slice(0, 1)}
-          </span>
-          <span className="min-w-0">
-            <span className="block truncate text-sm font-semibold text-fg">
-              {personName(me, locale)}
+        <div className="flex items-center gap-1.5 rounded-2xl border border-border p-2.5">
+          <Link
+            href="/profile"
+            className="-m-1 flex min-w-0 flex-1 items-center gap-2.5 rounded-xl p-1 transition-colors hover:bg-surface-2"
+          >
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-accent-soft text-sm font-bold text-accent">
+              {personName(me, locale).slice(0, 1)}
             </span>
-            <span className="block truncate text-[11px] text-fg-subtle">
-              {roleLabel}
-              {me.org_name ? ` · ${me.org_name}` : ""}
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-semibold text-fg">
+                {personName(me, locale)}
+              </span>
+              <span className="block truncate text-[11px] text-fg-subtle">
+                {roleLabel}
+                {me.org_name ? ` · ${me.org_name}` : ""}
+              </span>
             </span>
-          </span>
-        </Link>
+          </Link>
+          <button
+            type="button"
+            aria-label={t("signOut")}
+            title={t("signOut")}
+            /* the flow itself lives in lib/signOut — the sessions row has to
+               be closed as well as the cookie, and a second implementation
+               here would close one of the two */
+            onClick={() => { void signOutThisDevice(locale); }}
+            className="tap grid h-8 w-8 shrink-0 place-items-center rounded-lg text-fg-subtle transition-colors hover:bg-surface-2 hover:text-danger"
+          >
+            <IconOpen width={14} height={14} className="rotate-180 rtl:rotate-0" />
+          </button>
+        </div>
       ) : null}
     </nav>
   );

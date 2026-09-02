@@ -45,6 +45,12 @@ vi.mock("@/api/client", async (importOriginal) => {
       updateProfile: (patch: unknown) => updateProfile(patch),
       setPreferredModel: vi.fn(),
       setLocale: vi.fn(),
+      /* the header's two counts. They are a DIFFERENT subject from this
+         file's — what matters here is that a failing or slow read of them
+         cannot break the form, which is why they answer empty rather than
+         being left undefined for the component to trip over. */
+      meetings: async () => [],
+      taskBoard: async () => ({ columns: [], topics: [], tasks: [] }),
     },
   };
 });
@@ -91,7 +97,7 @@ describe("clearing a field is distinguishable from leaving it alone", () => {
 
   it("sends null for a Latin name that was emptied — and omits what was not touched", async () => {
     await open(SAVED);
-    fireEvent.change(field("نام لاتین"), { target: { value: "" } });
+    fireEvent.change(field("نام به انگلیسی"), { target: { value: "" } });
     fireEvent.click(saveButton());
 
     await waitFor(() => expect(updateProfile).toHaveBeenCalled());
@@ -105,7 +111,7 @@ describe("clearing a field is distinguishable from leaving it alone", () => {
 
   it("omits a box that was empty to begin with rather than sending null", async () => {
     await open(NO_HANDLE);
-    fireEvent.change(field("نام نمایشی"), { target: { value: "سارا ک" } });
+    fireEvent.change(field("نام به فارسی"), { target: { value: "سارا ک" } });
     fireEvent.click(saveButton());
 
     await waitFor(() => expect(updateProfile).toHaveBeenCalled());

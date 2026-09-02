@@ -57,13 +57,27 @@ export const NAV_PRIMARY: readonly NavItem[] = [
    * a door to the assistant on every screen that is not already one of the
    * assistant's own.
    */
+  /*
+   * THE ORDER IS THE USER'S (2026-09-02): dashboard, meetings, tasks,
+   * assistant — the day's work first and the assistant beside it, rather
+   * than the assistant second because it used to own the landing page.
+   */
   { href: "/", key: "dashboard", inBar: true },
-  { href: "/assistant", key: "assistant", inBar: false },
+  /* 0145 — meetings (the reference adoption). */
+  { href: "/meetings", key: "meetings", inBar: false },
   /* 0144 — the task board (the reference adoption). Rail only: M22's
      four-item bar ceiling has no free slot, and tasks are a desk surface. */
   { href: "/tasks", key: "tasks", inBar: false },
-  /* 0145 — meetings (the reference adoption). Rail only, same reasoning. */
-  { href: "/meetings", key: "meetings", inBar: false },
+  { href: "/assistant", key: "assistant", inBar: false },
+  /*
+   * Workflows, Integrations and Agents came OUT of the assistant's section
+   * menu and onto the rail (user directive): they are surfaces of their own,
+   * and a person looking for their integrations was opening the assistant to
+   * find them. The rail names surfaces; that is what these are.
+   */
+  { href: "/workflows", key: "workflows", inBar: false },
+  { href: "/integrations", key: "integrations", inBar: false },
+  { href: "/agents", key: "agents", inBar: false },
   { href: "/echo", key: "echo", inBar: true },
   { href: "/management", key: "management", inBar: true },
 ];

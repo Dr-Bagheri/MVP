@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+import { Select } from "@/components/Select";
 import { usePathname, useRouter } from "@/i18n/routing";
 import { api, BffError } from "@/api/client";
 import type { Me, ModelInfo } from "@/api/types";
@@ -10,7 +11,8 @@ import { ChangePassword } from "@/components/platform/ChangePassword";
 import { ExportAccountData } from "@/components/platform/ExportAccountData";
 import { PlatformShell } from "@/components/platform/PlatformShell";
 import { FormPanel, FormRow, PageContainer, PageHeader, PanelFooter, Section } from "@/components/scaffold";
-import { modelLabel } from "@/lib/format";
+import { digits, modelLabel, personName } from "@/lib/format";
+import { signOutThisDevice } from "@/lib/signOut";
 import { storeTheme, type Theme } from "@/lib/theme";
 import { useTheme } from "@/lib/useTheme";
 import { Chip } from "@/components/ui";
@@ -50,8 +52,24 @@ interface FormError {
   message: string;
 }
 
+/**
+ * The company's roles, as a closed list plus a way out.
+ *
+ * Closed because the point of the change is that two people with the same
+ * job pick the same value; `other` exists because a list that cannot say
+ * what someone does is a form they have to lie on, and it reveals the free
+ * text box rather than swallowing the answer.
+ */
+const JOB_TITLES: string[] = [
+  "founder", "ceo", "cto", "coo", "cfo", "product", "engineering", "design",
+  "marketing", "sales", "operations", "finance", "hr", "legal", "support",
+  "research", "data", "qa", "it", "assistant", "consultant", "intern",
+];
+
 export default function ProfilePage() {
   const t = useTranslations("profile");
+  const tPlatform = useTranslations("platform");
+  const locale = useLocale();
   const router = useRouter();
   const pathname = usePathname();
   /*
@@ -78,7 +96,16 @@ export default function ProfilePage() {
   const [username, setUsername] = useState("");
   /** Profile context (0080) — drafts, same clear-vs-omit rules as the names. */
   const [jobTitle, setJobTitle] = useState("");
-  const [about, setAbout] = useState("");
+  /**
+   * The header's two counts, derived from reads this page can already make.
+   *
+   * `undefined` until both answer — the tiles render «—» there, because a
+   * zero shown while the read is still out is a claim about the person that
+   * happens to be wrong for a second. A failed read leaves it undefined too:
+   * "we could not look" and "there are none" must not be the same number.
+   */
+  const [stats, setStats] = useState<{ meetings: number; tasksDone: number } | undefined>(undefined);
+
 
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [saving, setSaving] = useState(false);
@@ -91,8 +118,25 @@ export default function ProfilePage() {
     setDisplayNameEn(user.display_name_en ?? "");
     setUsername(user.username ?? "");
     setJobTitle(user.job_title ?? "");
-    setAbout(user.about ?? "");
   }
+
+  useEffect(() => {
+    let alive = true;
+    void Promise.all([api.meetings(), api.taskBoard()])
+      .then(([meetings, board]) => {
+        if (!alive) return;
+        /* `done` is the task's OWN flag, not "whichever column is last":
+           a board can be renamed and reordered, and a count that depended on
+           a column's position would change without anyone finishing
+           anything. */
+        setStats({
+          meetings: meetings.length,
+          tasksDone: board.tasks.filter((task) => task.done).length,
+        });
+      })
+      .catch(() => undefined);
+    return () => { alive = false; };
+  }, []);
 
   useEffect(() => {
     // `null` is "no identity" (401), not "an empty profile" — adopting it
@@ -148,8 +192,9 @@ export default function ProfilePage() {
     if (user.assistant_context !== undefined) {
       const role = jobTitle.trim();
       if (role !== (user.job_title ?? "")) patch.job_title = role === "" ? null : role;
-      const bio = about.trim();
-      if (bio !== (user.about ?? "")) patch.about = bio === "" ? null : bio;
+      /* «دربارهٔ شما» left this form (2026-09-02). The COLUMN stays and is
+         not cleared here: a form that stops showing a field must not also
+         delete what somebody wrote in it. */
     }
 
     return Object.keys(patch).length === 0 ? null : patch;
@@ -188,6 +233,45 @@ export default function ProfilePage() {
     <PlatformShell>
       <PageContainer>
         <PageHeader title={t("title")} subtitle={t("subtitle")} />
+
+        {/* THE PERSON, AND WHAT THEY HAVE DONE (user directive, after the
+            reference's own profile header): avatar, name, role, and the
+            three counts. The counts come from the SERVER's own summary —
+            deriving them here would be a second arithmetic that disagrees
+            with the dashboard's on an ordinary Tuesday — and each renders
+            «—» while it is still unknown, never a zero, because "we have
+            not looked yet" and "there are none" are different facts. */}
+        <section className="tile tile-row mb-4 flex-wrap items-center justify-between gap-4 p-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="grid h-14 w-14 shrink-0 place-items-center rounded-full bg-accent-soft text-lg font-bold text-accent">
+              {personName(me, locale).slice(0, 1)}
+            </span>
+            <span className="min-w-0">
+              <span className="block truncate text-lg font-bold text-fg">{personName(me, locale)}</span>
+              <span className="block truncate text-xs text-fg-muted">
+                {me.job_title ? me.job_title : t(`role_${me.role ?? "member"}`)}
+                {me.org_name ? ` · ${me.org_name}` : ""}
+              </span>
+            </span>
+          </div>
+          {/* TWO counts, not three. The reference shows a decisions total as
+              well and there is no read for one per person — a tile that can
+              only ever show a dash is a promise, not a metric, so it is
+              absent rather than permanently empty. */}
+          <dl className="flex shrink-0 items-center gap-6">
+            {([
+              ["statMeetings", stats?.meetings],
+              ["statTasksDone", stats?.tasksDone],
+            ] as const).map(([key, value]) => (
+              <div key={key} className="text-center">
+                <dd className="badge-num text-xl font-bold text-fg">
+                  {value === undefined ? "—" : digits(value, locale)}
+                </dd>
+                <dt className="text-[11px] text-fg-muted">{t(key)}</dt>
+              </div>
+            ))}
+          </dl>
+        </section>
 
         <Section title={t("identityTitle")}>
           <FormPanel>
@@ -246,25 +330,42 @@ export default function ProfilePage() {
                 would be controls that read as wired and do nothing. */}
             {me.assistant_context !== undefined ? (
               <>
+                {/* THE ROLE IS A CHOICE, not free text (user directive):
+                    a typed job title is a different string in every row —
+                    "CEO", "ceo", "مدیرعامل" — and nothing downstream can
+                    group by it. The list is a closed one the whole company
+                    shares, and the last entry keeps the door open for a role
+                    the list has not learned yet, because a closed list with
+                    no exit is a form somebody cannot fill in truthfully.
+                    «دربارهٔ شما» is GONE with it, on the same directive. */}
                 <FormRow label={t("jobTitle")} description={t("jobTitleHint")} htmlFor="profile-job">
-                  <input
+                  <Select
                     id="profile-job"
-                    className="input"
-                    value={jobTitle}
-                    onChange={(e) => setJobTitle(e.target.value)}
-                    maxLength={120}
+                    value={JOB_TITLES.includes(jobTitle) ? jobTitle : (jobTitle === "" ? "" : "other")}
+                    ariaLabel={t("jobTitle")}
+                    placeholder={t("jobTitleNone")}
+                    onChange={(value) => setJobTitle(value === "other" ? jobTitle || " " : value)}
+                    options={[
+                      { value: "", label: t("jobTitleNone") },
+                      ...JOB_TITLES.map((key) => ({ value: key, label: t(`job_${key}`) })),
+                      { value: "other", label: t("job_other") },
+                    ]}
                   />
                 </FormRow>
-                <FormRow label={t("about")} description={t("aboutHint")} htmlFor="profile-about">
-                  <textarea
-                    id="profile-about"
-                    className="input min-h-24 resize-y py-2 leading-6"
-                    value={about}
-                    onChange={(e) => setAbout(e.target.value)}
-                    maxLength={2000}
-                    placeholder={t("aboutPlaceholder")}
-                  />
-                </FormRow>
+                {/* the free-text box appears only when the list could not say
+                    it — an "other" that cannot be typed is a dead end */}
+                {jobTitle !== "" && !JOB_TITLES.includes(jobTitle) ? (
+                  <FormRow label={t("jobTitleOwnWords")} htmlFor="profile-job-other">
+                    <input
+                      id="profile-job-other"
+                      className="input"
+                      value={jobTitle.trim()}
+                      onChange={(e) => setJobTitle(e.target.value)}
+                      maxLength={120}
+                      autoFocus
+                    />
+                  </FormRow>
+                ) : null}
               </>
             ) : null}
 
@@ -391,6 +492,24 @@ export default function ProfilePage() {
             mean a rejected password discarded a perfectly good rename. */}
         <Section title={t("passwordTitle")} divided>
           <ChangePassword />
+        </Section>
+
+        {/* THE WAY OUT lives on this page too (user directive), beside the
+            account it belongs to. It ends THIS session on THIS device — the
+            hint says so, because a sign-out that read as "everywhere" would
+            be a promise the flow does not make. */}
+        <Section title={t("signOutTitle")} divided>
+          <FormPanel>
+            <FormRow label={tPlatform("signOut")} description={t("signOutHint")}>
+              <button
+                type="button"
+                onClick={() => { void signOutThisDevice(locale); }}
+                className="tap h-10 rounded-xl bg-danger/10 px-4 text-sm font-medium text-danger hover:bg-danger/20"
+              >
+                {tPlatform("signOut")}
+              </button>
+            </FormRow>
+          </FormPanel>
         </Section>
       </PageContainer>
     </PlatformShell>
