@@ -587,6 +587,28 @@ export default function PlatformControlPage() {
                             {t("reactivateOrganization")}
                           </ActionButton>
                         )}
+                        {/* THE ARRIVALS DOOR (0149). Exactly one organisation
+                            carries it — turning one on clears the other in
+                            the same database statement, so this is a single
+                            press and never a two-step move with a shut door
+                            in the middle. */}
+                        {o.status === "active" ? (
+                          <ActionButton
+                            disabled={busy}
+                            onClick={() =>
+                              setPending({
+                                key: `org-signups-${o.id}`,
+                                title: o.accepts_signups ? t("closeSignups") : t("openSignups"),
+                                effect: o.accepts_signups ? t("effectCloseSignups") : t("effectOpenSignups"),
+                                target: o.name,
+                                run: (r) =>
+                                  api.setPlatformOrganizationSignups(o.id, !o.accepts_signups, r),
+                              })
+                            }
+                          >
+                            {o.accepts_signups ? t("closeSignups") : t("openSignups")}
+                          </ActionButton>
+                        ) : null}
                         <ActionButton
                           danger
                           disabled={busy}
@@ -730,6 +752,30 @@ export default function PlatformControlPage() {
                           <ActionButton disabled={busy || tombstoned} onClick={() => setEdit(userEditForm(u))}>
                             {t("edit")}
                           </ActionButton>
+
+                          {/* ACCEPT — the pending queue's only exit, and the
+                              reason the queue exists (user directive: an
+                              arrival waits until an admin accepts). It is the
+                              same status write as reactivation and a
+                              different sentence, because "accept this person"
+                              and "undo a disabling" are different decisions
+                              wearing one verb. */}
+                          {u.status === "pending" ? (
+                            <ActionButton
+                              disabled={busy}
+                              onClick={() =>
+                                setPending({
+                                  key: `user-${u.id}`,
+                                  title: t("acceptUser"),
+                                  effect: t("effectAcceptUser"),
+                                  target: u.display_name || u.email,
+                                  run: (r) => api.setPlatformUserStatus(u.id, "active", r),
+                                })
+                              }
+                            >
+                              {t("acceptUser")}
+                            </ActionButton>
+                          ) : null}
 
                           {/* enable / disable — never a root, never yourself */}
                           {u.status === "disabled" ? (

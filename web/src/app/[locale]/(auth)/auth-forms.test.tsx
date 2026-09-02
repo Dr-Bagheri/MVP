@@ -126,48 +126,42 @@ describe("sign-in actually signs in", () => {
     await waitFor(() => expect(push).toHaveBeenCalledWith(destination));
   });
 
-  it("offers the org step when the token has no membership (M15 recovery)", async () => {
-    // `unregistered` is authenticated-but-unknown-to-the-product. Treated as
-    // signed-out, this person retries their correct password forever.
-    identityState.mockResolvedValue({ state: "unregistered" });
-    render(<SignInPage />);
-    type(/^رایانامه/, "person@example.com");
-    type(/^گذرواژه/, "hunter2");
-    fireEvent.click(screen.getByRole("button", { name: "ورود" }));
-
-    const orgField = await screen.findByLabelText(/^نام سازمان/);
-    expect(push).not.toHaveBeenCalled();
-
-    register.mockResolvedValue({ id: "u-1" });
-    fireEvent.change(orgField, { target: { value: "شرکت نمونه" } });
-    fireEvent.click(screen.getByRole("button", { name: "تکمیل ثبت‌نام" }));
-    await waitFor(() =>
-      expect(register).toHaveBeenCalledWith({ display_name: "person", org_name: "شرکت نمونه" }),
-    );
-  });
-
-  it("routes a founder STRAIGHT IN after the org step — no waiting room (0056)", async () => {
-    // unregistered at sign-in; after register the server reports MEMBER,
-    // because a founder is active at birth (email confirmation was the
-    // acceptance). The old form hard-coded /pending here, which would park
-    // a working account on a reassurance screen about a queue it isn't in.
+  /* NOTHING IS ASKED (user directive, 2026-09-02). `unregistered` is
+     authenticated-but-unknown-to-the-product — treated as signed-out, this
+     person retries their correct password forever. The old branch handed
+     them a form asking for the name of an organization nobody had told
+     them; db/0149 resolves it server-side and lands them pending. */
+  it("registers an unknown token with NO questions and routes to the waiting room", async () => {
     identityState
       .mockResolvedValueOnce({ state: "unregistered" })
-      .mockResolvedValue({ state: "member" });
-    // the invitation probe (a bare register, db/0060) REFUSES for a founder
-    // — nobody invited them; the refusal is what shows the org form
-    register.mockRejectedValueOnce(new Error("no invitation, no org named"));
+      .mockResolvedValue({ state: "pending" });
+    register.mockResolvedValue({ id: "u-1", status: "pending" });
     render(<SignInPage />);
     type(/^رایانامه/, "person@example.com");
     type(/^گذرواژه/, "hunter2");
     fireEvent.click(screen.getByRole("button", { name: "ورود" }));
 
-    const orgField = await screen.findByLabelText(/^نام سازمان/);
-    register.mockResolvedValue({ id: "u-1", status: "active" });
-    fireEvent.change(orgField, { target: { value: "شرکت نمونه" } });
-    fireEvent.click(screen.getByRole("button", { name: "تکمیل ثبت‌نام" }));
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/pending"));
+    // the whole point: one call, no org named, and no form in between
+    expect(register).toHaveBeenCalledWith({ display_name: "person" });
+    expect(screen.queryByLabelText(/^نام سازمان/)).toBeNull();
+  });
 
-    await waitFor(() => expect(push).toHaveBeenCalledWith("/"));
+  it("says what the SERVER said when registration is refused", async () => {
+    /* `signups_closed` is a fact about the platform and `org_not_found`
+       about a name — neither is something this person can fix by typing,
+       and a generic "try again" would hide which one it is. */
+    identityState.mockResolvedValue({ state: "unregistered" });
+    register.mockRejectedValue(
+      new BffError(400, "invalid", "this platform is not accepting new members yet"));
+    render(<SignInPage />);
+    type(/^رایانامه/, "person@example.com");
+    type(/^گذرواژه/, "hunter2");
+    fireEvent.click(screen.getByRole("button", { name: "ورود" }));
+
+    expect(await screen.findByRole("alert"))
+      .toHaveTextContent("this platform is not accepting new members yet");
+    expect(push).not.toHaveBeenCalled();
   });
 
   it("an INVITED arrival never sees the org form — the bare register redeems and routes in (db/0060)", async () => {
@@ -182,8 +176,6 @@ describe("sign-in actually signs in", () => {
     fireEvent.click(screen.getByRole("button", { name: "ورود" }));
 
     await waitFor(() => expect(push).toHaveBeenCalledWith("/"));
-    // the org form must never have rendered: the person answered no question
-    expect(screen.queryByLabelText(/^نام سازمان/)).toBeNull();
     expect(register).toHaveBeenCalledWith({ display_name: "invited" });
   });
 });
@@ -199,14 +191,17 @@ describe("the confirm-email landing (?confirmed=…)", () => {
     // /api/auth/confirm already wrote the session cookie; arriving here with
     // the marker must (a) say the confirmation worked — a silent redirect
     // reads as nothing happening — and (b) ask the server who we are and
-    // route: a fresh person gets the org step, no second password prompt two
-    // minutes after the first. Deleting the arrival effect leaves this red.
+    // route: a fresh person is registered and lands in the waiting room, with
+    // no second password prompt two minutes after the first. Deleting the
+    // arrival effect leaves this red.
     window.history.replaceState(null, "", "/?confirmed=1");
-    identityState.mockResolvedValue({ state: "unregistered" });
+    identityState
+      .mockResolvedValueOnce({ state: "unregistered" })
+      .mockResolvedValue({ state: "pending" });
+    register.mockResolvedValue({ id: "u-1", status: "pending" });
     render(<SignInPage />);
     expect(await screen.findByRole("status")).toHaveTextContent(/حسابتان آماده است/);
-    expect(await screen.findByLabelText(/^نام سازمان/)).toBeTruthy();
-    expect(push).not.toHaveBeenCalled();
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/pending"));
   });
 
   it("?confirmed=1 with a registered identity goes straight in", async () => {
@@ -298,7 +293,6 @@ describe("sign-up actually creates an account", () => {
   const fill = () => {
     type(/^رایانامه/, "person@example.com");
     type(/^نام نمایشی/, "شخص");
-    type(/^نام سازمان/, "شرکت نمونه");
     type(/^گذرواژه/, "hunter2");
   };
 
@@ -313,7 +307,6 @@ describe("sign-up actually creates an account", () => {
         email: "person@example.com",
         password: "hunter2",
         display_name: "شخص",
-        org_name: "شرکت نمونه",
       }),
     );
   });

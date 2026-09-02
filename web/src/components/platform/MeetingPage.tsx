@@ -141,41 +141,32 @@ export function MeetingPage({ id }: { id: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- linkNonce re-arms the retry
   }, [engine.callId, meeting, linkNonce]);
 
-  if (meeting === null) return <p className="p-6 text-sm text-fg-muted">…</p>;
-  if (meeting === "missing") return <p className="p-6 text-sm text-fg-muted">{t("notFound")}</p>;
-  if (meeting === "failed") return <p className="p-6 text-sm text-fg-muted">{t("readFailed")}</p>;
-
-  const active: Stage = stage ?? "pre";
-  const held = meeting.call_id !== null;
-  const timePast = new Date(meeting.scheduled_at).getTime() <= Date.now();
-  /* live when WE started it this mount, OR when the engine's take IS this
-     meeting's linked call — a reload mid-recording must not hide the timer
-     and the end button of a take that plainly belongs here */
-  const engineOwnsThisMeeting = engine.callId !== null && meeting.call_id === engine.callId;
-  const recordingLive = (startedHere.current || engineOwnsThisMeeting)
-    && (engine.phase === "recording" || engine.phase === "paused");
-  const engineFailed = (startedHere.current || engineOwnsThisMeeting) && engine.phase === "failed";
-
-  const patch = (body: Record<string, unknown>) => {
-    void api.updateMeeting(meeting.id, body)
-      .then((m) => setMeeting(m))
-      .catch(() => setError(t("writeFailed")));
-  };
-
-  const start = () => {
-    /* the UPLOAD mode's start is a FILE PICKER, not a microphone — a button
-       saying «آپلود فایل» must never request mic access */
-    if (meeting.mode === "upload") {
-      uploadInput.current?.click();
-      return;
-    }
+  /**
+   * BEGIN THE TAKE.
+   *
+   * A `useCallback` above the early returns rather than a plain function
+   * below them, because the live stage starts itself: entering «حین جلسه»
+   * IS the start (user directive — "in top bar says mid meet so it should
+   * already start the video or the audio"), so an effect has to be able to
+   * call this, and hooks cannot live after a conditional return.
+   *
+   * Everything it refuses is a state where starting would be wrong rather
+   * than merely inconvenient: no meeting loaded, a meeting that already has
+   * its record, the upload lane (whose "start" is a file picker and must
+   * never ask for a microphone), and an engine already running somebody
+   * else's take.
+   */
+  const beginTake = useCallback(() => {
+    if (typeof meeting !== "object" || meeting === null) return;
+    if (meeting.mode === "upload" || meeting.call_id !== null) return;
     /* the engine is module-level: an unrelated take may be live right now.
        Starting over it would silently hijack that take (the engine's
        one-take guard RESOLVES, it does not reject) — refuse with the name
        of the situation instead. */
     const before = recorderSnapshot();
     if (before.phase === "recording" || before.phase === "paused" || before.phase === "starting") {
-      setError(t("engineBusy"));
+      /* ours already, from this page — not a collision, just a re-entry */
+      if (!startedHere.current) setError(t("engineBusy"));
       return;
     }
     setError(null);
@@ -211,13 +202,57 @@ export function MeetingPage({ id }: { id: string }) {
         );
         return;
       }
-      setStage("hold");
       setStartedToast(true);
       setTimeout(() => setStartedToast(false), 4000);
     }).catch(() => {
       startedHere.current = false;
       setError(t("startFailed"));
     });
+  }, [meeting, locale, t]);
+
+  /*
+   * THE LIVE STAGE STARTS ITSELF, ONCE.
+   *
+   * The ref is what makes "once" true: without it a re-render after the
+   * engine's first phase change re-enters the effect, and `beginTake`'s own
+   * busy check would call that a collision with a stranger's take. It is
+   * never reset — walking back to the plan and forward again does not start
+   * a second take, because the first one is still running and this page has
+   * an end button for it.
+   */
+  const autoStarted = useRef(false);
+  useEffect(() => {
+    if (stage !== "hold" || autoStarted.current) return;
+    if (typeof meeting !== "object" || meeting === null) return;
+    /* the upload lane and an already-held meeting are refused by
+       `beginTake` itself, at the altitude where a microphone would actually
+       be opened. A second copy here read as extra rigour and made the test
+       for it vacuous — deleting the effect's guard left the suite green,
+       which is how it was found. */
+    if (meeting.call_id !== null) return;
+    autoStarted.current = true;
+    beginTake();
+  }, [stage, meeting, beginTake]);
+
+  if (meeting === null) return <p className="p-6 text-sm text-fg-muted">…</p>;
+  if (meeting === "missing") return <p className="p-6 text-sm text-fg-muted">{t("notFound")}</p>;
+  if (meeting === "failed") return <p className="p-6 text-sm text-fg-muted">{t("readFailed")}</p>;
+
+  const active: Stage = stage ?? "pre";
+  const held = meeting.call_id !== null;
+  const timePast = new Date(meeting.scheduled_at).getTime() <= Date.now();
+  /* live when WE started it this mount, OR when the engine's take IS this
+     meeting's linked call — a reload mid-recording must not hide the timer
+     and the end button of a take that plainly belongs here */
+  const engineOwnsThisMeeting = engine.callId !== null && meeting.call_id === engine.callId;
+  const recordingLive = (startedHere.current || engineOwnsThisMeeting)
+    && (engine.phase === "recording" || engine.phase === "paused");
+  const engineFailed = (startedHere.current || engineOwnsThisMeeting) && engine.phase === "failed";
+
+  const patch = (body: Record<string, unknown>) => {
+    void api.updateMeeting(meeting.id, body)
+      .then((m) => setMeeting(m))
+      .catch(() => setError(t("writeFailed")));
   };
 
   const onUploadFile = (file: File) => {
@@ -306,11 +341,26 @@ export function MeetingPage({ id }: { id: string }) {
               className="tap flex h-10 items-center gap-2 rounded-xl bg-danger px-4 text-sm font-semibold text-on-accent hover:opacity-90">
               {t("retryFinish")}
             </button>
-          ) : !held && active !== "post" ? (
-            <button type="button" onClick={start}
+          ) : !held && meeting.mode === "upload" ? (
+            /* the UPLOAD lane keeps its button, and it is a FILE PICKER —
+               there is nothing to start by walking into a stage, and a
+               button labelled «آپلود فایل» must never open a microphone.
+               Every other mode starts by ARRIVING: «حین جلسه» is the start
+               (user directive), so a second button promising to start what
+               is already running would be the screen disagreeing with
+               itself. */
+            <button type="button" onClick={() => uploadInput.current?.click()}
+              className="tap flex h-10 items-center gap-2 rounded-xl bg-accent px-4 text-sm font-semibold text-on-accent shadow-accent hover:opacity-90">
+              {MODE_ICON.upload}
+              {t("startUpload")}
+            </button>
+          ) : !held && active === "pre" ? (
+            /* the way IN, named for what it does — the plan's own step
+               forward, which is where the recording begins */
+            <button type="button" onClick={() => setStage("hold")}
               className="tap flex h-10 items-center gap-2 rounded-xl bg-accent px-4 text-sm font-semibold text-on-accent shadow-accent hover:opacity-90">
               {MODE_ICON[meeting.mode]}
-              {meeting.mode === "upload" ? t("startUpload") : t("startMeeting")}
+              {t("enterStage")}
             </button>
           ) : null}
         </div>
@@ -363,7 +413,6 @@ export function MeetingPage({ id }: { id: string }) {
           me={me}
           locale={locale}
           onGoHold={() => setStage("hold")}
-          onStart={start}
           onChanged={(m) => setMeeting(m)}
           onOpenRecord={() => router.push(`/calls/${meeting.call_id}`)}
         />
@@ -753,13 +802,12 @@ function HoldStage({ meeting, me, locale, recordingLive, recordedMs, onChanged }
 }
 
 /* ═══ پس از جلسه — the tab set over the real artifacts ═══════════════════ */
-function PostStage({ meeting, call, me, locale, onGoHold, onStart, onChanged, onOpenRecord }: {
+function PostStage({ meeting, call, me, locale, onGoHold, onChanged, onOpenRecord }: {
   meeting: MeetingRecord;
   call: Call | null | "gone";
   me: Me | null;
   locale: string;
   onGoHold: () => void;
-  onStart: () => void;
   onChanged: (m: MeetingRecord) => void;
   onOpenRecord: () => void;
 }) {
@@ -774,10 +822,12 @@ function PostStage({ meeting, call, me, locale, onGoHold, onStart, onChanged, on
       <div className="tile grid place-items-center p-10 text-center">
         <IconMic width={24} height={24} />
         <p className="mt-2 text-sm text-fg-muted">{t("noRecordYet")}</p>
-        <button type="button" onClick={() => { onGoHold(); onStart(); }}
+        {/* the way BACK to the stage — walking in is what starts a take, so
+            this hands over to the stage rather than starting anything here */}
+        <button type="button" onClick={onGoHold}
           className="tap mt-3 flex h-10 items-center gap-2 rounded-xl bg-accent px-4 text-sm font-semibold text-on-accent">
           {MODE_ICON[meeting.mode]}
-          {meeting.mode === "upload" ? t("startUpload") : t("startMeeting")}
+          {meeting.mode === "upload" ? t("startUpload") : t("enterStage")}
         </button>
       </div>
     );

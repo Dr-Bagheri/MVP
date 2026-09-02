@@ -167,16 +167,55 @@ describe("MeetingPage", () => {
     expect(screen.getByText("هنوز رکوردی از این جلسه نیست.")).toBeInTheDocument();
   });
 
-  it("starting hands the ENGINE the meeting's mapping — online becomes the system source", async () => {
+  /* WALKING IN IS THE START (user directive: the mid-meeting page should
+     already be recording). The plan does NOT record — that half is the one
+     worth asserting, because a page that starts a take on load would be
+     recording a room nobody has walked into yet. */
+  it("the STAGE starts the take, with the meeting's mapping — and the plan does not", async () => {
     MEETING = meeting({ call_id: null, mode: "online", title: "جلسهٔ آنلاین" });
     render(<MeetingPage id="m-1" />);
     await waitFor(() => expect(screen.getByText("مشخصات")).toBeInTheDocument());
+    expect(startSpy).not.toHaveBeenCalled();
 
-    await userEvent.click(screen.getByRole("button", { name: /شروع جلسه/ }));
+    await userEvent.click(screen.getByRole("button", { name: /حین جلسه/ }));
     await waitFor(() => expect(startSpy).toHaveBeenCalledTimes(1));
     const opts = startSpy.mock.calls[0]![0] as unknown as Record<string, unknown>;
     expect(opts.source).toBe("system");
     expect(opts.title).toBe("جلسهٔ آنلاین");
+
+    /* ONCE. Walking back to the plan and in again must not open a second
+       take over the first — the ref, not the engine, is what makes that
+       true, and without it the re-entry reads as a stranger's collision. */
+    await userEvent.click(screen.getByRole("button", { name: /پیش از جلسه/ }));
+    await userEvent.click(screen.getByRole("button", { name: /حین جلسه/ }));
+    expect(startSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("an in-person meeting records the MICROPHONE and is offered no video room", async () => {
+    /* the mapping's other half, and the mode rule the user asked for: a
+       meeting held in the room has no video room and never will, so the tab
+       is absent rather than present-and-empty */
+    MEETING = meeting({ call_id: null, mode: "in_person", title: "جلسهٔ حضوری" });
+    render(<MeetingPage id="m-1" />);
+    await waitFor(() => expect(screen.getByText("مشخصات")).toBeInTheDocument());
+
+    await userEvent.click(screen.getByRole("button", { name: /حین جلسه/ }));
+    await waitFor(() => expect(startSpy).toHaveBeenCalledTimes(1));
+    expect((startSpy.mock.calls[0]![0] as Record<string, unknown>).source).toBe("mic");
+    expect(screen.queryByRole("button", { name: "ویدیو" })).toBeNull();
+    // the canvas is what an in-person meeting opens on
+    expect(screen.getByTestId("whiteboard-stub")).toBeInTheDocument();
+  });
+
+  it("the upload lane opens a FILE PICKER and never a microphone", async () => {
+    MEETING = meeting({ call_id: null, mode: "upload" });
+    render(<MeetingPage id="m-1" />);
+    await waitFor(() => expect(screen.getByText("مشخصات")).toBeInTheDocument());
+
+    await userEvent.click(screen.getByRole("button", { name: /حین جلسه/ }));
+    /* the load-bearing assertion: arriving on the stage must not open a mic
+       for a lane whose whole premise is a file the person already has */
+    expect(startSpy).not.toHaveBeenCalled();
   });
 
   /* THE ROOM is made where the link is looked for. It writes an event to

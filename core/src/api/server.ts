@@ -1443,6 +1443,12 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       }
       changed = (await platform.setOrganizationStatus(identity, id, body.status, body.reason)) || changed;
     }
+    if ((body as { accepts_signups?: unknown }).accepts_signups !== undefined) {
+      const on = (body as { accepts_signups?: unknown }).accepts_signups;
+      if (typeof on !== "boolean") throw new ValidationError("accepts_signups must be a boolean");
+      await platform.setOrganizationSignups(identity, id, on, body.reason);
+      changed = true;
+    }
     return reply.send({ changed });
   });
 

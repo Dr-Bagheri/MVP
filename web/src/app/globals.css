@@ -177,9 +177,22 @@
     /* This deliberately owns ONLY the label's baseline. A global `display:
        flex` / `justify-content: center` rule overrode every component's
        layout, including left-aligned menus and suggestion rows. Individual
-       controls choose their own icon/text layout; direct-text buttons retain
-       a centered label by default. */
+       controls choose their own icon/text layout. */
     line-height: 1.25;
+  }
+  /*
+   * A CENTRED LABEL belongs to a real <button>, and not to everything that
+   * behaves like one.
+   *
+   * `[role="button"]` is worn by CONTAINERS — a clickable list row, a card
+   * that opens a page — whose contents are a title, a meta line and a badge.
+   * Centring those is centring a paragraph, and it is why a meetings row and
+   * a dialog title read as if someone had aligned them by hand and got it
+   * wrong. A control with a direct text label is a <button>; it keeps the
+   * centring, because that is the case the rule was written for.
+   */
+  button,
+  [role="tab"] {
     text-align: center;
   }
 

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
+import { Select } from "@/components/Select";
 import { api } from "@/api/client";
 import type {
   OrgPersonRecord, TaskColumnRecord, TaskDetailRecord, TaskLabelRecord,
@@ -344,25 +345,25 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
           <aside className="space-y-3 border-t border-border bg-surface-2/30 p-4 md:border-s md:border-t-0">
             <div>
               <span className="mb-1 block text-[11px] text-fg-muted">{t("fieldTopic")}</span>
-              <select
+              <Select
                 value={task.topic_id ?? ""}
-                onChange={(e) => patch({ topic_id: e.target.value === "" ? null : e.target.value })}
-                className="h-9 w-full rounded-lg border border-border bg-surface px-2 text-xs text-fg outline-none focus:border-accent"
-              >
-                <option value="">{t("noTopic")}</option>
-                {topics.map((topic) => <option key={topic.id} value={topic.id}>{topic.name}</option>)}
-              </select>
+                onChange={(v) => patch({ topic_id: v === "" ? null : v })}
+                ariaLabel={t("fieldTopic")}
+                options={[
+                  { value: "", label: t("noTopic") },
+                  ...topics.map((topic) => ({ value: topic.id, label: topic.name })),
+                ]}
+              />
             </div>
 
             <div>
               <span className="mb-1 block text-[11px] text-fg-muted">{t("fieldColumn")}</span>
-              <select
+              <Select
                 value={task.column_id}
-                onChange={(e) => patch({ column_id: e.target.value })}
-                className="h-9 w-full rounded-lg border border-border bg-surface px-2 text-xs text-fg outline-none focus:border-accent"
-              >
-                {columns.map((column) => <option key={column.id} value={column.id}>{column.name}</option>)}
-              </select>
+                onChange={(v) => patch({ column_id: v })}
+                ariaLabel={t("fieldColumn")}
+                options={columns.map((column) => ({ value: column.id, label: column.name }))}
+              />
             </div>
 
             <div>

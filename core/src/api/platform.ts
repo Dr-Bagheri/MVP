@@ -26,6 +26,8 @@ export interface PlatformOrganization {
   name: string;
   status: OrgStatus;
   locale: string;
+  /** Receives bare registrations (0149). At most one org platform-wide. */
+  accepts_signups: boolean;
   created_at: string;
   member_count: number;
   /** Soft-delete bookkeeping (0068). Null unless the org is in the purge window. */
@@ -83,6 +85,7 @@ interface OrganizationRow {
   name: string;
   status: OrgStatus;
   locale: string;
+  accepts_signups: boolean;
   created_at: Date | string;
   member_count: string | number;
   deleted_at: Date | string | null;
@@ -254,7 +257,7 @@ export function createPlatformRepo(db: Db) {
        */
       const viaDoor = await hasConsoleSightDoors(db);
       const rows = await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe<OrganizationRow>(viaDoor ? `
-        select o.id, o.name, o.status, o.locale, o.created_at, o.deleted_at, o.purge_after,
+        select o.id, o.name, o.status, o.locale, o.accepts_signups, o.created_at, o.deleted_at, o.purge_after,
                o.member_count
           from echo.platform_list_orgs() o
          where ${deletedClause}
@@ -262,7 +265,7 @@ export function createPlatformRepo(db: Db) {
          order by o.created_at desc, o.id desc
          offset $2 limit $3
       ` : `
-        select o.id, o.name, o.status, o.locale, o.created_at, o.deleted_at, o.purge_after,
+        select o.id, o.name, o.status, o.locale, o.accepts_signups, o.created_at, o.deleted_at, o.purge_after,
                count(u.id) as member_count
           from echo.org o
           left join echo.app_user u on u.org_id = o.id
@@ -277,6 +280,7 @@ export function createPlatformRepo(db: Db) {
         name: row.name,
         status: row.status,
         locale: row.locale,
+        accepts_signups: row.accepts_signups === true,
         created_at: iso(row.created_at),
         member_count: number(row.member_count),
         deleted_at: row.deleted_at ? iso(row.deleted_at) : null,
@@ -385,6 +389,25 @@ export function createPlatformRepo(db: Db) {
         [identity.userId, org, status, validReason],
       ));
       return rows[0]?.changed === true;
+    },
+
+    /**
+     * Mark the ONE organization that receives bare registrations (0149).
+     *
+     * The database enforces "at most one" with a partial unique index and
+     * clears the previous holder inside the same statement, so this repo
+     * carries no rule of its own — a second copy of "only one" is how the
+     * two spellings come to disagree.
+     */
+    async setOrganizationSignups(
+      identity: Identity, orgId: string, on: boolean, actionReason: string,
+    ): Promise<void> {
+      const org = uuid(orgId, "organization id");
+      const validReason = reason(actionReason);
+      await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe(
+        "select echo.platform_set_org_signups($1, $2, $3::boolean, $4)",
+        [identity.userId, org, on, validReason],
+      ));
     },
 
     async setUserStatus(

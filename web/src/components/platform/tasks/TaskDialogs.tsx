@@ -8,9 +8,10 @@ import type {
   TaskPriority, TaskTopicRecord,
 } from "@/api/types";
 import { Overlay } from "../Overlay";
+import { Select } from "@/components/Select";
 import { ConfirmDialog } from "@/components/rowActions";
 import { JalaliPicker } from "./JalaliPicker";
-import { IconCheck, IconClose, IconFolder, IconPencil, IconPlus, IconTrash, IconUser } from "@/components/icons";
+import { IconCheck, IconClose, IconPencil, IconPlus, IconTrash, IconUser } from "@/components/icons";
 import { digits, formatDate, personName } from "@/lib/format";
 
 /**
@@ -449,14 +450,18 @@ export function NewTaskDialog({ columns, topics, labels, defaultColumnId, defaul
 
         <label className="block">
           <span className="mb-1 block text-xs font-medium text-fg-muted">{t("fieldTopicFolder")}</span>
-          <span className="relative block">
-            <IconFolder width={14} height={14} className="pointer-events-none absolute inset-y-0 my-auto ms-3 text-fg-subtle" />
-            <select value={topicId} onChange={(e) => setTopicId(e.target.value)}
-              className="h-10 w-full rounded-xl border border-border bg-surface ps-9 pe-3 text-sm text-fg outline-none focus:border-accent">
-              <option value="">{t("noTopic")}</option>
-              {topics.map((topic) => <option key={topic.id} value={topic.id}>{topic.name}</option>)}
-            </select>
-          </span>
+          {/* the platform's own dropdown, not the browser's: a native
+              option list paints on Chrome's sheet with its own blue
+              selection and nothing in this stylesheet reaches it */}
+          <Select
+            value={topicId}
+            onChange={setTopicId}
+            ariaLabel={t("fieldTopicFolder")}
+            options={[
+              { value: "", label: t("noTopic") },
+              ...topics.map((topic) => ({ value: topic.id, label: topic.name })),
+            ]}
+          />
         </label>
 
         <div>

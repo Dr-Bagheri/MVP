@@ -618,6 +618,20 @@ export const api = {
       method: "PATCH", body: JSON.stringify({ status, reason }), headers: { "content-type": "application/json" },
     });
   },
+  /**
+   * 0149: mark the ONE organisation that receives bare registrations.
+   *
+   * Turning one on clears the previous holder in the same database
+   * statement, so the caller never has to sequence two writes — and the
+   * door is never shut by a half-finished move.
+   */
+  async setPlatformOrganizationSignups(id: string, on: boolean, reason: string) {
+    return bff<{ changed: boolean }>(`/api/platform/organizations/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ accepts_signups: on, reason }),
+      headers: { "content-type": "application/json" },
+    });
+  },
   /** M32 edit: organisation metadata (name, interface locale). */
   async updatePlatformOrganization(id: string, patch: { name?: string; locale?: string | null }, reason: string) {
     return bff<{ changed: boolean }>(`/api/platform/organizations/${id}`, {

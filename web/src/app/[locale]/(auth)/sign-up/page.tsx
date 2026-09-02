@@ -37,7 +37,6 @@ export default function SignUpPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
-  const [orgName, setOrgName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmEmail, setConfirmEmail] = useState(false);
@@ -52,7 +51,6 @@ export default function SignUpPage() {
         email,
         password,
         display_name: displayName,
-        org_name: orgName,
       });
       /*
        * 202 means the identity exists but the project requires email
@@ -123,9 +121,6 @@ export default function SignUpPage() {
           existing org needs an invite flow that does not exist yet, so
           offering the option would be a control that cannot succeed.
         */}
-        <Field label={t("orgName")} hint={t("orgNameHint")}>
-          <input className="input" value={orgName} onChange={(e) => setOrgName(e.target.value)} />
-        </Field>
         <Field label={t("password")}>
           <PasswordInput
               value={password}
@@ -140,7 +135,7 @@ export default function SignUpPage() {
         ) : null}
         <button
           className="btn-primary w-full"
-          disabled={busy || !email || !password || !displayName || !orgName.trim()}
+          disabled={busy || !email || !password || !displayName}
         >
           {busy ? t("working") : t("signUp")}
         </button>

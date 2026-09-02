@@ -358,19 +358,20 @@ export function createMembersRepo(db: Db) {
       }
 
       /*
-       * JOIN-ONLY signup (0082, user ruling 2026-08-23): with no invitation
-       * and no org named there is nothing to join — and FOUNDING is gone
-       * (every arrival used to become an org's active OWNER, which is the
-       * exact door the ruling closes). The SQL function refuses this too;
-       * this check exists to say it as a 400 with a name instead of a
-       * mapped surprise.
+       * NO PRE-CHECK for a missing org any more (0149, user directive: "don't
+       * ask for organization, just put it on waiting").
+       *
+       * A bare registration is now a real request: the database resolves the
+       * one org marked `accepts_signups` and lands the arrival there as a
+       * PENDING member. Founding is still gone — this joins an org that
+       * already exists and was deliberately marked — so 0082's ruling holds.
+       *
+       * The check that used to live here would now refuse the ordinary path
+       * before the function it was guarding ever ran. What replaces it is the
+       * function's own raise when nothing is marked, which is a fact about
+       * the PLATFORM's configuration rather than about the person arriving —
+       * see the 23503 branch below, which no longer says "name an org".
        */
-      if (!input.orgName?.trim() && !input.joinOrg) {
-        throw new ValidationError(
-          "no invitation for this address — the name of an existing organization is required",
-          { code: "org_required" });
-      }
-
       try {
         // Explicit casts: with bare placeholders Postgres cannot resolve the
         // (uuid, citext, text, text, uuid) signature and answers 42P18
@@ -397,10 +398,20 @@ export function createMembersRepo(db: Db) {
           // the org they asked to join does not exist, OR there is no
           // auth.users row for this token's subject (db/0002's FK). The
           // second means the identity itself is unknown to Supabase.
-          throw pg.constraint_name
-            ? new ValidationError("no auth identity for this token")
-            : new ValidationError("no such organization — check the name with your admin",
-                { code: "org_not_found" });
+          if (pg.constraint_name) throw new ValidationError("no auth identity for this token");
+          /*
+           * THREE causes now, and the third is not about this person at all
+           * (0149): they named an org that does not exist, OR they named
+           * none and the platform has not marked one as accepting arrivals.
+           * The second is a fact about our configuration — telling someone
+           * to "check the name with your admin" when they were never asked
+           * for a name sends them looking for a mistake they did not make.
+           */
+          throw (input.orgName?.trim() || input.joinOrg)
+            ? new ValidationError("no such organization — check the name with your admin",
+                { code: "org_not_found" })
+            : new ValidationError("this platform is not accepting new members yet",
+                { code: "signups_closed" });
         }
         if (pg.code === "21000") {
           // 0082's ambiguity refusal: two active orgs share the name, so

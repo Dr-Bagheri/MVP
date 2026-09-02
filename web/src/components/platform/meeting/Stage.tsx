@@ -37,7 +37,16 @@ export function MeetingStage({ meeting, recordingLive, recordedMs, onChanged }: 
 }) {
   const t = useTranslations("meetings");
   const locale = useLocale();
-  const [mode, setMode] = useState<Mode>(meeting.mode === "online" ? "video" : "board");
+  /*
+   * THE VIDEO MODE BELONGS TO AN ONLINE MEETING AND NOWHERE ELSE (user
+   * directive): a meeting held in the room, recorded through a microphone,
+   * has no video room and never will — offering the tab there is offering a
+   * button whose only possible outcome is an empty state. The mode list is
+   * derived rather than filtered at render, so nothing can select a mode
+   * that has no chip.
+   */
+  const video = meeting.mode === "online";
+  const [mode, setMode] = useState<Mode>(video ? "video" : "board");
   const [minting, setMinting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pdf, setPdf] = useState<{ url: string; name: string } | null>(null);
@@ -79,7 +88,7 @@ export function MeetingStage({ meeting, recordingLive, recordedMs, onChanged }: 
       {/* ── the stage header ─────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-0.5 rounded-xl border border-border bg-surface p-1">
-          {modeChip("video", t("modeVideo"), <IconVideo width={12} height={12} />)}
+          {video ? modeChip("video", t("modeVideo"), <IconVideo width={12} height={12} />) : null}
           {modeChip("board", t("modeBoard"), <IconPencil width={12} height={12} />)}
           {modeChip("slides", t("modeSlides"), <IconUpload width={12} height={12} />)}
         </div>
@@ -122,7 +131,7 @@ export function MeetingStage({ meeting, recordingLive, recordedMs, onChanged }: 
       {/* ── the surface ──────────────────────────────────────────────── */}
       {mode === "board" ? <Whiteboard meetingId={meeting.id} /> : null}
 
-      {mode === "video" ? (
+      {mode === "video" && video ? (
         <div className="grid min-h-[420px] flex-1 place-items-center overflow-hidden rounded-2xl border border-border bg-fg/95 p-6">
           {meeting.video_url === null ? (
             <div className="max-w-sm text-center">

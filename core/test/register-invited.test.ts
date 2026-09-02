@@ -66,14 +66,19 @@ describe("register tries the invitation door first", () => {
     expect(log.some((sql) => sql.includes("register_account"))).toBe(true);
   });
 
-  it("no invitation and NO org named is a 400 with a name — founding is gone (0082)", async () => {
+  /* 0149 REPLACED the refusal that used to live here. With no invitation and
+     no org named, this is now the ORDINARY path: the request reaches
+     `register_account`, which resolves the org the platform marked as
+     receiving arrivals and lands the person there as PENDING.
+     Founding is still gone — 0082's ruling is untouched, because that
+     function joins an org that already exists and never creates one. The
+     assertion that matters is therefore the opposite of the old one: the db
+     IS asked, with both org arguments null. */
+  it("no invitation and no org named REACHES register_account, with nothing named (0149)", async () => {
     const { db, log } = fakeDb([]);
-    await expect(
-      createMembersRepo(db).register({
-        userId: USER_ID, email: "nobody-invited@example.com", displayName: "کسی",
-      }),
-    ).rejects.toThrow(/organization is required/);
-    // and the db was never asked to found anything
-    expect(log.some((sql) => sql.includes("register_account"))).toBe(false);
+    await createMembersRepo(db).register({
+      userId: USER_ID, email: "nobody-invited@example.com", displayName: "کسی",
+    }).catch(() => undefined);
+    expect(log.some((sql) => sql.includes("register_account"))).toBe(true);
   });
 });

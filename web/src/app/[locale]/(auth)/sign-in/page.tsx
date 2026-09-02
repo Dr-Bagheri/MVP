@@ -43,9 +43,6 @@ export default function SignInPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [orgName, setOrgName] = useState("");
-  /** Set when the server says this token has no membership yet (M15 recovery). */
-  const [needsOrg, setNeedsOrg] = useState(false);
   /**
    * A first Google/GitHub arrival must choose a password before ANY route into
    * the product. The server, not membership status, tells us whether that
@@ -137,8 +134,24 @@ export default function SignInPage() {
          * refusal (no invitation, no org named) is the normal answer for
          * everyone else and routes to the org-choice form exactly as before.
          */
+        /*
+         * NOTHING IS ASKED (user directive, 2026-09-02: "after someone login
+         * don't ask for organization, just put it on waiting and tell it that
+         * admin must accept its entry").
+         *
+         * Registering is the whole branch now. db/0149 lands a bare arrival
+         * as a PENDING member of the org the platform marked as receiving
+         * them, so `/pending` is the truthful destination and the screen
+         * there says who has to act next. The org form this replaced asked
+         * for a name most arrivals had never been told, and typing it wrong
+         * looked exactly like not being welcome.
+         *
+         * The probe bound stays: register-succeeds-while-identity-stays-
+         * unregistered would recurse forever, and the suite found that once
+         * by eating the heap.
+         */
         if (invitationProbed.current) {
-          setNeedsOrg(true);
+          setError(t("registerStuck"));
           return;
         }
         invitationProbed.current = true;
@@ -147,17 +160,20 @@ export default function SignInPage() {
           await routeByIdentity();
         } catch (cause) {
           /*
-           * 409 = ALREADY REGISTERED — they are a member and the org form
-           * would be a dead end (found live: an invited arrival whose
-           * invitation had redeemed on a previous attempt was handed the
-           * org form, filled it, and got 409 — "the app got stuck"). Ask
-           * the server who they are instead of asking them anything.
+           * 409 = ALREADY REGISTERED — they are a member, so ask the server
+           * who they are rather than showing them anything (found live: an
+           * invited arrival whose invitation had redeemed on a previous
+           * attempt filled the org form and got 409 — "the app got stuck").
            */
           if (cause instanceof BffError && cause.status === 409) {
             await routeByIdentity();
             return;
           }
-          setNeedsOrg(true);
+          /* the server's own sentence: `signups_closed` is a fact about the
+             PLATFORM and `org_not_found` about a name — neither is something
+             this person can fix by typing, and both are worth reading */
+          setError(cause instanceof BffError && cause.detail
+            ? cause.detail : t("registerFailed"));
         }
         return;
       case "signed_out":
@@ -210,29 +226,6 @@ export default function SignInPage() {
     }
   }
 
-  async function register(event: React.FormEvent) {
-    event.preventDefault();
-    if (busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      // display_name defaults to the local part of the address: the token
-      // carries the email, and asking again for something we already know is
-      // friction. They rename themselves on the profile screen.
-      await api.register({ display_name: email.split("@")[0] ?? email, org_name: orgName });
-      // Route by what the server MADE of us, the same rule as sign-in: a
-      // founder is ACTIVE at birth (db/0056 — the confirmed email was the
-      // acceptance) and goes straight into the app; a joiner would still
-      // land pending and see the waiting screen. A hard-coded /pending here
-      // would park a working account in a waiting room (pre-0056 behavior).
-      await routeByIdentity();
-    } catch (cause) {
-      setError(refusalText(cause, t));
-    } finally {
-      setBusy(false);
-    }
-  }
-
   return (
     <Card>
       {/* no logo on the gate (user ruling): the title carries the identity */}
@@ -276,21 +269,6 @@ export default function SignInPage() {
           {error ? <p role="alert" className="text-sm text-danger">{error}</p> : null}
           <button className="btn-primary w-full" disabled={busy || !newPassword || !confirmNewPassword}>
             {busy ? t("working") : tPassword("setPassword")}
-          </button>
-        </form>
-      ) : needsOrg ? (
-        <form className="space-y-4" onSubmit={register}>
-          <p className="text-sm leading-7 text-fg-muted">{t("finishSetup")}</p>
-          <Field label={t("orgName")} hint={t("orgNameHint")}>
-            <input className="input" value={orgName} onChange={(e) => setOrgName(e.target.value)} />
-          </Field>
-          {error ? (
-            <p role="alert" className="text-sm text-danger">
-              {error}
-            </p>
-          ) : null}
-          <button className="btn-primary w-full" disabled={busy || !orgName.trim()}>
-            {busy ? t("working") : t("finish")}
           </button>
         </form>
       ) : (

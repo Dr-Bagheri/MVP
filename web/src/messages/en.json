@@ -22,11 +22,7 @@
     "signInTitle": "Sign in to NeurAI Platform",
     "signUpTitle": "Create an account",
     "email": "Email",
-    "orgName": "Your organization's name",
-    "orgNameHint": "The organization you are joining — it must already exist; your membership activates once an admin approves it.",
     "working": "Working…",
-    "finish": "Finish setting up",
-    "finishSetup": "Your account exists but is not attached to an organization yet. Enter your organization's name to join it.",
     "finishPasswordOauth": "Choose a password before entering NeurAI Platform. You can use it with your email as well as Google or GitHub.",
     "choosePassword": "Choose a password",
     "confirmPassword": "Confirm the password",
@@ -60,7 +56,9 @@
     "resetReady": "Your password is set. Sign in with it now.",
     "oauthDisabled": "This sign-in method has been turned off by an admin — sign in with email.",
     "showPassword": "Show password",
-    "hidePassword": "Hide password"
+    "hidePassword": "Hide password",
+    "registerStuck": "Your account is signed in but the platform has not finished registering it. Sign out and in again, or ask an administrator.",
+    "registerFailed": "Your account could not be registered. Try again, or ask an administrator."
   },
   "calls": {
     "title": "Records",
@@ -1115,7 +1113,13 @@
     "purgeUserNow": "Purge user now",
     "purgeOrgNow": "Purge organization now",
     "effectPurgeUser": "Irreversible: the user's identity is erased and all their records and audio are deleted NOW — no 7-day window.",
-    "effectPurgeOrg": "Irreversible: the entire organization — members, records, transcripts and audio — is deleted NOW — no 7-day window."
+    "effectPurgeOrg": "Irreversible: the entire organization — members, records, transcripts and audio — is deleted NOW — no 7-day window.",
+    "acceptUser": "Accept",
+    "effectAcceptUser": "They become an active member of their organization and can sign in to the platform.",
+    "openSignups": "Receive new members",
+    "closeSignups": "Stop receiving members",
+    "effectOpenSignups": "Anyone who signs up without an invitation joins THIS organization, pending acceptance. Any other organization currently receiving members stops.",
+    "effectCloseSignups": "New sign-ups without an invitation are refused platform-wide until another organization is marked."
   },
   "workflows": {
     "title": "Workflows",
@@ -2864,6 +2868,7 @@
     "deleteMeetingTitle": "Delete “{title}”?",
     "deleteMeetingBody": "The meeting and its plan go for good. The recording it produced, if any, stays — it is a separate record with its own history.",
     "moveToTopic": "Move to topic",
-    "roomScopeMissing": "This Google connection can read your calendar but not write to it, so it cannot make a room. Reconnect Google on Integrations to allow it."
+    "roomScopeMissing": "This Google connection can read your calendar but not write to it, so it cannot make a room. Reconnect Google on Integrations to allow it.",
+    "enterStage": "Go to the meeting"
   }
 }
