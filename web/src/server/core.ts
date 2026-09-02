@@ -80,6 +80,20 @@ export class CoreError extends Error {
     readonly kind: CoreErrorKind,
     readonly status: number,
     message: string,
+    /**
+     * core/'s own refusal CODE, when it catalogued one.
+     *
+     * The house rule is code-plus-params and localize at the reader: core
+     * owns the rule, the screen owns the language, and a translated sentence
+     * from the server would be the wrong altitude. That only works if the
+     * code survives the hop — it used to stop here, so a screen wanting to
+     * say something specific had to match on English prose or settle for its
+     * generic wording. `meet_scope_missing` is the case that found it: the
+     * refusal is "this connection may read your calendar but not write to
+     * it", and the generic wording sent someone to check a connection that
+     * was working.
+     */
+    readonly code?: string,
   ) {
     super(message);
   }
@@ -167,7 +181,11 @@ export async function coreFetch<T>(path: string, init: CoreFetchInit = {}): Prom
      */
     const body = await safeBody(response);
     const kind = body.kind === "invalid" || body.kind === "conflict" ? body.kind : declared4xx;
-    throw new CoreError(kind, response.status, body.error ?? body.message ?? `HTTP ${response.status}`);
+    throw new CoreError(
+      kind, response.status,
+      body.error ?? body.message ?? `HTTP ${response.status}`,
+      typeof body.code === "string" ? body.code : undefined,
+    );
   }
   if (!response.ok) {
     throw new CoreError("upstream", response.status, await safeDetail(response));
@@ -200,6 +218,8 @@ interface CoreErrorBody {
   error?: string;
   message?: string;
   kind?: string;
+  /** core/'s catalogued refusal code, when the refusal has one */
+  code?: string;
 }
 
 async function safeBody(response: Response): Promise<CoreErrorBody> {
@@ -218,7 +238,12 @@ async function safeDetail(response: Response): Promise<string> {
 /** One place that turns a CoreError into the JSON the client layer expects. */
 export function errorResponse(error: unknown): Response {
   if (error instanceof CoreError) {
-    return Response.json({ error: error.message, kind: error.kind }, { status: error.status });
+    return Response.json(
+      /* omitted rather than sent as null, so a screen can ask whether this
+         refusal is catalogued at all — the shape core/ uses upstream */
+      { error: error.message, kind: error.kind, ...(error.code ? { code: error.code } : {}) },
+      { status: error.status },
+    );
   }
   return Response.json({ error: "unexpected", kind: "upstream" }, { status: 500 });
 }

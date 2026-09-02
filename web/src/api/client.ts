@@ -118,6 +118,15 @@ export class BffError extends Error {
      * refusal, and the screen falls back to its own wording.
      */
     readonly detail?: string,
+    /**
+     * core/'s catalogued refusal code, when the refusal had one.
+     *
+     * This is what lets a screen say the specific true thing in its own
+     * language — the rule stays server-side, the sentence stays local. A
+     * screen with no entry for a code falls back to its generic wording,
+     * which is why this is optional rather than a union.
+     */
+    readonly code?: string,
   ) {
     super(`bff ${status}${kind ? ` (${kind})` : ""}${detail ? `: ${detail}` : ""}`);
   }
@@ -145,14 +154,16 @@ async function bff<T>(path: string, init?: RequestInit): Promise<T> {
   if (!response.ok) {
     let kind: string | undefined;
     let detail: string | undefined;
+    let code: string | undefined;
     try {
-      const body = (await response.json()) as { kind?: string; error?: string };
+      const body = (await response.json()) as { kind?: string; error?: string; code?: string };
       kind = body.kind;
       detail = body.error;
+      code = body.code;
     } catch {
       /* not JSON — the status is still the fact worth keeping */
     }
-    throw new BffError(response.status, kind, detail);
+    throw new BffError(response.status, kind, detail, code);
   }
   // ANY successful write invalidates the read cache — one rule, one place,
   // no per-mutation bookkeeping to forget (sign-in included: it is a POST)

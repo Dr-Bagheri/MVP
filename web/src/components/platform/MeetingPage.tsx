@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/routing";
-import { api } from "@/api/client";
+import { api, BffError } from "@/api/client";
 import type { Call, CallNote, Me, MeetingAgendaItem, MeetingRecord } from "@/api/types";
 import { useCrumbTitle } from "@/components/platform/CrumbTitle";
 import { ConfirmDialog } from "@/components/rowActions";
@@ -482,7 +482,15 @@ function PreStage({ meeting, onPatch, locale, onChanged }: {
                     setRoomError(null);
                     void api.createMeetingRoom(meeting.id)
                       .then((m) => { setMinting(false); onChanged(m); })
-                      .catch(() => { setMinting(false); setRoomError(t("roomFailed")); });
+                      .catch((e: unknown) => {
+                        setMinting(false);
+                        /* WHICH refusal: a connection that predates the write
+                           scope is connected and cannot make a room, and told
+                           the generic sentence a person goes to check a
+                           connection that is working */
+                        setRoomError(e instanceof BffError && e.code === "meet_scope_missing"
+                          ? t("roomScopeMissing") : t("roomFailed"));
+                      });
                   }}
                   className="tap flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-accent text-xs font-semibold text-on-accent disabled:opacity-60"
                 >

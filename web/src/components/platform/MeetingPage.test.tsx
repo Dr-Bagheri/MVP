@@ -71,8 +71,11 @@ function call(over: Partial<Call>): Call {
 let MEETING: MeetingRecord = meeting({});
 let CALL: Call | null = null;
 
-vi.mock("@/api/client", () => ({
-  BffError: class BffError extends Error {},
+/* the REAL BffError: the screen branches on `instanceof` and on its `code`,
+   and a hand-written stand-in makes every instanceof answer false while the
+   fixture looks right (the house rule, from miniWidgets) */
+vi.mock("@/api/client", async () => ({
+  ...(await vi.importActual<typeof import("@/api/client")>("@/api/client")),
   api: {
     meetingDetail: async () => MEETING,
     updateMeeting: async (_id: string, body: Record<string, unknown>) => ({ ...MEETING, ...body }),
@@ -89,6 +92,7 @@ vi.mock("@/api/client", () => ({
   },
 }));
 
+import { BffError } from "@/api/client";
 import { MeetingPage } from "./MeetingPage";
 
 beforeEach(() => {
@@ -204,6 +208,25 @@ describe("MeetingPage", () => {
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/اتصال گوگل/));
     // the button is still there to press again — a failure is not a dead end
     expect(screen.getByRole("button", { name: /ساخت اتاق ویدیویی/ })).toBeInTheDocument();
+  });
+
+  /* WHICH refusal, on the live one that found this. The Google account was
+     connected and the room still failed, because the connection predates the
+     calendar WRITE scope — and the generic sentence sent a person to check a
+     connection that was working. A missing scope and a missing connection are
+     different nothings, and only the code can tell them apart. */
+  it("a missing SCOPE is named as itself, not as a broken connection", async () => {
+    MEETING = meeting({ call_id: null, mode: "online" });
+    roomSpy.mockImplementationOnce(async () => {
+      throw new BffError(400, "invalid", "cannot create calendar events", "meet_scope_missing");
+    });
+    render(<MeetingPage id="m-1" />);
+    await waitFor(() => expect(screen.getByText("مشخصات")).toBeInTheDocument());
+
+    await userEvent.click(screen.getByRole("button", { name: /ساخت اتاق ویدیویی/ }));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/اجازهٔ نوشتن ندارد/));
+    // and NOT the sentence for a connection that is missing or broken
+    expect(screen.getByRole("alert").textContent).not.toMatch(/اتاق ساخته نشد/);
   });
 
   it("a recorded meeting opens on the post stage", async () => {

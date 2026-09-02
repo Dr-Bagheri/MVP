@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { api } from "@/api/client";
+import { api, BffError } from "@/api/client";
 import type { MeetingRecord } from "@/api/types";
 import { Whiteboard } from "./Whiteboard";
 import {
@@ -52,7 +52,11 @@ export function MeetingStage({ meeting, recordingLive, recordedMs, onChanged }: 
     setError(null);
     void api.createMeetingRoom(meeting.id)
       .then((m) => { setMinting(false); onChanged(m); })
-      .catch(() => { setMinting(false); setError(t("roomFailed")); });
+      .catch((e: unknown) => {
+        setMinting(false);
+        setError(e instanceof BffError && e.code === "meet_scope_missing"
+          ? t("roomScopeMissing") : t("roomFailed"));
+      });
   };
 
   const modeChip = (key: Mode, label: string, icon: React.ReactNode) => (

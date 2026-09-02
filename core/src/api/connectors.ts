@@ -37,6 +37,9 @@ export interface ConnectorStatus {
   expires_at: string | null;
   /** the granted scopes include drafting — see DRAFT_SCOPE */
   can_draft: boolean;
+  /** the granted scopes allow WRITING a calendar event, which is how a
+      meeting gets its video room — see MEET_SCOPE */
+  can_meet: boolean;
   /** the granted scopes include Drive's read — connections made before the
       scope joined the consent say "reconnect", not "broken" */
   can_drive: boolean;
@@ -137,7 +140,18 @@ const PROVIDERS: readonly ConnectorProvider[] = ["google", "microsoft"];
  */
 const GOOGLE_SCOPES = [
   "openid", "email", "profile",
-  "https://www.googleapis.com/auth/calendar.events.readonly",
+  /*
+   * `calendar.events`, not `.readonly` (0148): the product now MAKES a video
+   * room for a meeting, which is a calendar event with a conference request
+   * — Google mints the Meet link and hands it back on the created event.
+   * The write scope also covers every read the readonly one did, so this is
+   * one consent line rather than two.
+   *
+   * Existing connections PREDATE it and can only read: `can_meet` below is
+   * derived from what was GRANTED, so a connection made before this says so
+   * on the screen instead of failing at the provider.
+   */
+  "https://www.googleapis.com/auth/calendar.events",
   "https://www.googleapis.com/auth/gmail.readonly",
   "https://www.googleapis.com/auth/gmail.compose",
   /*
@@ -166,11 +180,42 @@ const MICROSOFT_SCOPES = [
   "Calendars.Read", "Mail.Read", "Mail.ReadWrite", "Mail.Send",
 ] as const;
 
+/**
+ * Turn the provider's own 403 into the sentence a person can act on.
+ *
+ * `provider_refused` alone reaches the caller as an upstream fault, which is
+ * true of the transport and useless to the reader: nothing is broken, a
+ * permission was never granted. Only the 403 is translated — a 500 from
+ * Google really is an outage, and calling that a scope problem would send
+ * someone to re-consent their way out of somebody else's incident.
+ */
+async function withScopeCheck<T>(work: Promise<T>): Promise<T> {
+  try {
+    return await work;
+  } catch (error) {
+    const refusal = error as { errorType?: string; providerStatus?: number };
+    if (refusal.errorType === "provider_refused" && refusal.providerStatus === 403) {
+      throw new ValidationError(
+        "this connection cannot create calendar events",
+        { code: "meet_scope_missing" },
+      );
+    }
+    throw error;
+  }
+}
+
 /** The scope each provider's drafting needs, for the reconnect prompt. */
 const DRAFT_SCOPE: Record<ConnectorProvider, string> = {
   google: "https://www.googleapis.com/auth/gmail.compose",
   microsoft: "Mail.Send",
 };
+/**
+ * The scope a video room needs. Google only: Microsoft mints Teams links a
+ * different way and nothing here does it yet, so `can_meet` is false there
+ * rather than a promise the code cannot keep.
+ */
+const MEET_SCOPE = "https://www.googleapis.com/auth/calendar.events";
+
 const CONTEXT_LIMIT = 16_000;
 
 function strings(value: unknown): string[] {
@@ -573,6 +618,7 @@ export function createConnectorsRepo(db: Db, options: ConnectorOAuthOptions = {}
              to be able to say "reconnect to grant" instead of failing */
           can_drive: provider === "google"
             && strings(row?.scopes).includes("https://www.googleapis.com/auth/drive.readonly"),
+          can_meet: provider === "google" && strings(row?.scopes).includes(MEET_SCOPE),
           polled_at: row?.polled_at ? iso(row.polled_at) : null,
           messages_seen: Number(row?.messages_seen ?? 0),
         };
@@ -642,6 +688,7 @@ export function createConnectorsRepo(db: Db, options: ConnectorOAuthOptions = {}
         can_draft: payload.scopes.includes(DRAFT_SCOPE[provider]),
         can_drive: provider === "google"
           && payload.scopes.includes("https://www.googleapis.com/auth/drive.readonly"),
+        can_meet: provider === "google" && payload.scopes.includes(MEET_SCOPE),
         /* a fresh connection has been looked at zero times, which is a fact
            and not a gap — the table says "Active" until the first poll */
         polled_at: null,
@@ -787,7 +834,16 @@ export function createConnectorsRepo(db: Db, options: ConnectorOAuthOptions = {}
       /* the request id only has to be unique per insert; the event's own
          start plus its title is enough and needs no clock of its own */
       const requestId = `neurai-${start.getTime().toString(36)}-${input.title.length}`;
-      const data = await providerFetch(
+      /*
+       * A connection that predates the write scope is CONNECTED and cannot
+       * make a room, which Google answers with a 403 — a different nothing
+       * from "nobody connected Google", and told the wrong one a person goes
+       * to check a connection that is fine. (It sent exactly one person
+       * there, on the first live press.) `can_meet` on the connector status
+       * is the same fact read before the attempt, so the screen can offer
+       * the reconnect instead of a button that fails.
+       */
+      const data = await withScopeCheck(providerFetch(
         `https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1`,
         {
           method: "POST",
@@ -804,7 +860,7 @@ export function createConnectorsRepo(db: Db, options: ConnectorOAuthOptions = {}
             },
           }),
         },
-      );
+      ));
       const url = text((data as Record<string, unknown>).hangoutLink);
       const eventId = text((data as Record<string, unknown>).id);
       if (url === "") {

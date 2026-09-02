@@ -2863,6 +2863,7 @@
     "pdfUnsupported": "This browser cannot display the PDF inline.",
     "deleteMeetingTitle": "Delete “{title}”?",
     "deleteMeetingBody": "The meeting and its plan go for good. The recording it produced, if any, stays — it is a separate record with its own history.",
-    "moveToTopic": "Move to topic"
+    "moveToTopic": "Move to topic",
+    "roomScopeMissing": "This Google connection can read your calendar but not write to it, so it cannot make a room. Reconnect Google on Integrations to allow it."
   }
 }
