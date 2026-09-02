@@ -18,7 +18,9 @@ import { actorAutonomy, hasAutonomyColumn, hasSignalTables } from "../db/capabil
 import { iso } from "./vocabulary.ts";
 import { assertUuid } from "../db/identity.ts";
 import { createAuditRepo, type AuditRepo } from "./audit.ts";
-import { livekitConfig, mintRoomToken, roomNameFor } from "./livekit.ts";
+import {
+  egressConfig, livekitConfig, mintRoomToken, roomNameFor, startRoomEgress, stopEgress,
+} from "./livekit.ts";
 import { createOrgRepo, type OrgRepo } from "./org.ts";
 import { createSessionsRepo, type SessionsRepo } from "./sessions.ts";
 import { availableTools, createSkillAuthoring, type SkillAuthoring } from "./skills.ts";
@@ -2582,6 +2584,54 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       config, identity, roomNameFor(meeting.id),
       me.display_name.trim() || me.email,
     ));
+  });
+
+  /**
+   * START / STOP the room's own recording (user directive, 2026-09-02: "use
+   * this — record our own room server-side").
+   *
+   * The server is already routing every participant's audio, so asking a
+   * laptop to re-capture what its speakers are playing was the long way
+   * round — and it cost a share-screen dialog, a video track thrown away
+   * immediately, and the quality of a room mic re-recording a speaker.
+   *
+   * Authorisation is the meeting's, exactly as the token route's is: the
+   * caller has to be able to SEE the meeting before anything is started, and
+   * the room name is derived rather than supplied.
+   */
+  app.post("/v1/meetings/:id/recording", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const config = egressConfig();
+    if (config === null) {
+      /* a SETTING that is absent, not a fault — the screen says so and
+         offers the device recorder, which needs no server storage */
+      throw new ValidationError("room recording is not configured on this platform",
+        { code: "recording_not_configured" });
+    }
+    const { id } = request.params as { id: string };
+    const meeting = await meetings.detail(identity, id);
+    return reply.send(await startRoomEgress(config, roomNameFor(meeting.id), meeting.id));
+  });
+
+  app.delete("/v1/meetings/:id/recording", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const config = egressConfig();
+    if (config === null) {
+      throw new ValidationError("room recording is not configured on this platform",
+        { code: "recording_not_configured" });
+    }
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { egress_id?: unknown };
+    if (typeof body.egress_id !== "string" || body.egress_id === "") {
+      throw new ValidationError("egress_id is required", { code: "egress_id_required" });
+    }
+    /* the meeting is read first so a caller cannot stop a recording for a
+       meeting they cannot see, even holding a valid egress id */
+    await meetings.detail(identity, id);
+    await stopEgress(config, body.egress_id);
+    return reply.code(204).send();
   });
 
   app.delete("/v1/meetings/:id", async (request, reply) => {

@@ -1525,6 +1525,22 @@ export const api = {
   async meetingRoomToken(id: string): Promise<{ token: string; url: string; expires_at: string }> {
     return bff(`/api/meetings/${encodeURIComponent(id)}/token`, { method: "POST" });
   },
+  /**
+   * Start the ROOM recording itself, on the server. No microphone permission,
+   * no share-screen dialog, and every participant's voice arrives on its own
+   * track from its own device — which is the same mechanism for a meeting
+   * held online and one held around a table, where everyone opens the link
+   * on their own phone.
+   */
+  async startRoomRecording(id: string): Promise<{ egress_id: string }> {
+    return bff(`/api/meetings/${encodeURIComponent(id)}/recording`, { method: "POST" });
+  },
+  async stopRoomRecording(id: string, egressId: string): Promise<void> {
+    await bff<null>(`/api/meetings/${encodeURIComponent(id)}/recording`, {
+      method: "DELETE", body: JSON.stringify({ egress_id: egressId }),
+      headers: { "content-type": "application/json" },
+    });
+  },
   /** 0148: delete the PLAN — the record it produced is a different row */
   async deleteMeeting(id: string): Promise<void> {
     await bff<null>(`/api/meetings/${encodeURIComponent(id)}`, { method: "DELETE" });
