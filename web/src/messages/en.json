@@ -1525,7 +1525,13 @@
     "makeEditable": "Make these steps editable",
     "editStepsFailed": "The steps could not be opened for editing.",
     "detailRecordTitle": "Start a recording when I run this",
-    "detailRecordHint": "Running this workflow from the assistant will start a take on this device first — the mini recorder appears in the top bar. Your choice only; it does not change it for anyone else, and a scheduled run records nothing."
+    "detailRecordHint": "Running this workflow from the assistant will start a take on this device first — the mini recorder appears in the top bar. Your choice only; it does not change it for anyone else, and a scheduled run records nothing.",
+    "filterLabel": "Filter workflows",
+    "filterAll": "All",
+    "filterOn": "On",
+    "filterOff": "Off",
+    "emptyFiltered": "No workflow matches this filter. Choose “All” to show everything again.",
+    "libraryChip": "Library"
   },
   "integrations": {
     "subtitle": "The data sources the assistant and your workflows read from.",

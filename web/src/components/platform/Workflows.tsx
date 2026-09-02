@@ -11,7 +11,8 @@ import { Link } from "@/i18n/routing";
 import { PlatformShell } from "./PlatformShell";
 import { WorkflowBuilder } from "./WorkflowBuilder";
 import { WorkflowTile } from "./WorkflowTile";
-import { PageContainer, PageHeader, SkeletonCards } from "@/components/scaffold";
+import { PageContainer, SkeletonCards } from "@/components/scaffold";
+import { IconChevronEnd, IconPlus } from "@/components/icons";
 import { EmptyState } from "@/components/ui";
 
 /**
@@ -68,6 +69,8 @@ export function Workflows() {
   const [starters, setStarters] = useState<StarterWorkflow[] | null>(null);
   /** `undefined` = closed; `null` = a new workflow; a row = editing it */
   const [editing, setEditing] = useState<AuthoredWorkflow | null | undefined>(undefined);
+  /* the meetings page's own filter row; "all" is the resting state */
+  const [filter, setFilter] = useState<"all" | "on" | "off">("all");
 
   const isAdmin = me?.role === "admin" || me?.role === "owner";
 
@@ -134,136 +137,130 @@ export function Workflows() {
   const library = (starters ?? []).filter((starter) => !installedHandles.has(starter.handle));
   const libraryReady = me !== null && (!isAdmin || authored !== null);
 
+  /*
+   * ONE LIST, THE REFERENCE'S ROW (user directive, 2026-09-02: "redesign the
+   * whole platform like the tasks and meetings pages with same structure,
+   * buttons, fonts, tables").
+   *
+   * This page was two big 2-column cards, then half-height cards, then a
+   * separate "library" section under its own text-lg heading — three shapes
+   * for one kind of thing, and the only page in the product whose rows were
+   * 224px tall. Every row is the platform's list row now: a mark, a name with
+   * one line under it, a state pill, a kebab. The two shipped templates lead,
+   * then what this organisation authored, then the library — one list, told
+   * apart by the pill and by the line under the name, not by size.
+   *
+   * The filter row is the meetings page's own device (همه / فعال / خاموش),
+   * and it only filters what HAS a state: a shipped template and a library
+   * starter are neither on nor off, so they show under «همه» and step aside
+   * for the two state filters rather than being counted as one of them.
+   */
+  type Row =
+    | { kind: "template"; key: string; href: string; name: string; description: string; icon: string; color: string }
+    | { kind: "authored"; key: string; href: string; name: string; description: string; enabled: boolean }
+    | { kind: "library"; key: string; href: string; name: string; description: string };
+
+  const rows: Row[] = [
+    ...(workflows ?? []).map((w): Row => ({
+      kind: "template", key: w.id, href: `/workflows/${w.slug}`,
+      name: templateCopy(w).name, description: templateCopy(w).description,
+      icon: w.icon, color: w.color,
+    })),
+    ...(authored ?? []).map((row): Row => ({
+      kind: "authored", key: row.id, href: `/workflows/${row.handle}`,
+      name: workflowCopy(row).name,
+      description: row.current_version === null
+        ? tb("unpublished")
+        : tb("versionN", { n: String(row.current_version) }),
+      enabled: row.enabled,
+    })),
+    ...(libraryReady ? library : []).map((starter): Row => {
+      const copy = workflowCopy({ handle: starter.handle, name: starter.name, description: starter.description });
+      return { kind: "library", key: starter.handle, href: `/workflows/${starter.handle}`, name: copy.name, description: copy.description };
+    }),
+  ];
+  const shown = rows.filter((r) =>
+    filter === "all" ? true : r.kind === "authored" && (filter === "on" ? r.enabled : !r.enabled));
+
   return (
     <PlatformShell>
       <>
         <PageContainer>
-          <PageHeader
-            title={t("title")}
-            subtitle={t("subtitle")}
-            actions={isAdmin ? (
+          {/* the meetings page's own top row: the filter pills at the start,
+              the one action at the end — no page title (the breadcrumb has
+              it) and no subtitle paragraph above a list */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <nav aria-label={t("filterLabel")} className="flex items-center gap-1">
+              {(["all", "on", "off"] as const).map((f) => (
+                <button
+                  key={f}
+                  type="button"
+                  aria-pressed={filter === f}
+                  onClick={() => setFilter(f)}
+                  className={`btn btn-sm font-medium ${
+                    filter === f ? "bg-accent text-on-accent" : "text-fg-muted hover:bg-surface-2 hover:text-fg"
+                  }`}
+                >
+                  {t(f === "all" ? "filterAll" : f === "on" ? "filterOn" : "filterOff")}
+                </button>
+              ))}
+            </nav>
+            {isAdmin ? (
               <button
                 type="button"
-                className="btn-primary h-9 min-h-0 px-4 text-sm"
+                className="btn gap-1.5 bg-accent font-semibold text-on-accent"
                 onClick={() => setEditing(null)}
               >
+                <IconPlus width={14} height={14} />
                 {t("createWorkflow")}
               </button>
-            ) : undefined}
-          />
-          {workflows === null ? (
-            <SkeletonCards count={2} height="h-56" />
-          ) : workflows.length === 0 ? (
-            <EmptyState text={t("empty")} />
-          ) : (
-            <div className="grid gap-5 lg:grid-cols-2">
-              {/*
-                The two shipped templates first, then whatever this
-                organization has authored — one grid, one visual language
-                (user directive, 2026-08-28: "any new workflow must have half
-                the size of the email and meeting calendar button with same
-                style"). A separate list underneath was the previous shape and
-                it read as a different KIND of thing, which these are not: a
-                workflow somebody wrote is a workflow.
-              */}
-              {workflows.map((workflow) => (
-                <Link
-                  key={workflow.id}
-                  href={`/workflows/${workflow.slug}`}
-                  /* one element, so there is no dead margin inside the card
-                     and no second focus stop competing with the first */
-                  className="group flex min-h-56 flex-col rounded-2xl border border-border bg-surface p-7 transition-colors hover:border-border-strong hover:bg-surface-2"
-                >
-                  <WorkflowTile icon={workflow.icon} color={workflow.color} />
-                  {/* THROUGH THE CATALOGUE, like every other list on this
-                      page. These two rendered the wire's English straight,
-                      so the product's flagship workflows introduced
-                      themselves in English on a Persian screen. */}
-                  <h2 className="mt-7 text-xl font-semibold text-fg group-hover:text-accent">
-                    {templateCopy(workflow).name}
-                  </h2>
-                  <p className="mt-2 max-w-md text-sm leading-6 text-fg-muted">
-                    {templateCopy(workflow).description}
-                  </p>
-                </Link>
-              ))}
+            ) : null}
+          </div>
 
-              {(authored ?? []).map((row) => (
-                <Link
-                  key={row.id}
-                  href={`/workflows/${row.handle}`}
-                  /* HALF the height of a template card and the same
-                     everything else: same corner, same border, same hover,
-                     same tile — the size says "smaller", not "lesser" */
-                  className="group flex min-h-28 flex-col justify-center rounded-2xl border border-border bg-surface p-7 transition-colors hover:border-border-strong hover:bg-surface-2"
-                >
-                  <span className="flex items-center gap-4">
-                    <WorkflowTile icon="sparkles" color="violet" size="sm" />
-                    <span className="min-w-0">
-                      <span className="block truncate text-base font-semibold text-fg group-hover:text-accent">
-                        {/* shipped starters localize; an org's own name renders as written */}
-                        {workflowCopy(row).name}
-                      </span>
-                      <span className="mt-0.5 block text-xs text-fg-subtle">
-                        {row.enabled ? tb("enabled") : tb("disabled")}
-                        {row.current_version === null
-                          ? ` · ${tb("unpublished")}`
-                          : ` · ${tb("versionN", { n: String(row.current_version) })}`}
-                      </span>
-                    </span>
-                  </span>
-                </Link>
-              ))}
-            </div>
-          )}
-
-          {/*
-            The LIBRARY (user directive, 2026-08-28: "make all the workflows
-            that you put in skill real in workflow section, so anyone else can
-            use them for real later") — every shipped starter, each a link to
-            its own page, where the install lives. The list comes off the
-            wire (`GET /v1/workflows/starters`, derived from the registry
-            itself) so a starter added in core is on this shelf without
-            anybody editing this file; the NAMES localize through the same
-            `useWorkflowCopy` path every installed starter uses.
-          */}
-          {libraryReady && library.length > 0 ? (
-            <section className="mt-10">
-              <h2 className="text-lg font-semibold text-fg">{t("libraryTitle")}</h2>
-              <p className="mt-1 text-sm text-fg-muted">{t("libraryHint")}</p>
-              <div className="mt-5 grid gap-5 lg:grid-cols-2">
-                {library.map((starter) => {
-                  const copy = workflowCopy({
-                    handle: starter.handle,
-                    name: starter.name,
-                    description: starter.description,
-                  });
-                  return (
+          <div className="mt-4">
+            {workflows === null ? (
+              <SkeletonCards count={4} height="h-16" />
+            ) : shown.length === 0 ? (
+              <EmptyState text={t(filter === "all" ? "empty" : "emptyFiltered")} />
+            ) : (
+              <ul className="space-y-2">
+                {shown.map((row) => (
+                  <li key={`${row.kind}:${row.key}`}>
                     <Link
-                      key={starter.handle}
-                      href={`/workflows/${starter.handle}`}
-                      /* the authored card's own skin — half a template's
-                         height, same corner, same border, same hover */
-                      className="group flex min-h-28 flex-col justify-center rounded-2xl border border-border bg-surface p-7 transition-colors hover:border-border-strong hover:bg-surface-2"
+                      href={row.href}
+                      className="tile tile-row flex items-center gap-3 p-3.5 transition-colors hover:border-border-strong"
                     >
-                      <span className="flex items-center gap-4">
-                        <WorkflowTile icon="sparkles" color="violet" size="sm" />
-                        <span className="min-w-0">
-                          <span className="block truncate text-base font-semibold text-fg group-hover:text-accent">
-                            {copy.name}
-                          </span>
-                          <span className="mt-0.5 block truncate text-xs text-fg-subtle">
-                            {copy.description}
-                          </span>
+                      {row.kind === "template"
+                        ? <WorkflowTile icon={row.icon} color={row.color} size="sm" />
+                        : <WorkflowTile icon="sparkles" color="violet" size="sm" />}
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-semibold text-fg">{row.name}</span>
+                        <span className="mt-0.5 block truncate text-[12.5px] text-fg-muted">{row.description}</span>
+                      </span>
+                      {/* the STATE, where it exists: a template runs when
+                          asked and a library starter is not installed yet —
+                          neither is "off", so neither wears a pill that says
+                          so. `library` names the shelf instead. */}
+                      {row.kind === "authored" ? (
+                        <span className={`shrink-0 rounded-lg px-2 py-1 text-[11px] font-medium ${
+                          row.enabled ? "bg-success/10 text-success" : "bg-surface-2 text-fg-subtle"
+                        }`}>
+                          {row.enabled ? tb("enabled") : tb("disabled")}
                         </span>
+                      ) : row.kind === "library" ? (
+                        <span className="shrink-0 rounded-lg bg-surface-2 px-2 py-1 text-[11px] font-medium text-fg-muted">
+                          {t("libraryChip")}
+                        </span>
+                      ) : null}
+                      <span className="grid h-7 w-7 shrink-0 place-items-center text-fg-subtle" aria-hidden>
+                        <IconChevronEnd width={14} height={14} />
                       </span>
                     </Link>
-                  );
-                })}
-              </div>
-            </section>
-          ) : null}
-
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </PageContainer>
       </>
 
