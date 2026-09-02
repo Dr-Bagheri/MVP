@@ -3157,3 +3157,67 @@ sessions) for the cross-session narrative.
   Deploy note re-learned twice: **an un-cache-busted Vercel check measures the
   CDN, not the deployment**; and core deploys are git-archive + restart, with
   the discriminating check being 401 (wired) vs 404 (absent) on the new route.
+
+- 2026-09-02 (evening — ECHO STARTS FOLDING IN, and an outsider can finally
+  join): **the pending queue, Echo's menu, and the guest door.**
+  Two menus were broken by the previous round and both were found by the
+  user: Integrations became a Settings section and the PAGE never learned
+  it, so the one screen with no way back to its siblings was the one the
+  menu had just been extended to include; and Audit Logs was the product's
+  only caller of the WIDE column, so with the nav inside that container the
+  same toolbar sat at 1240 on seven sections and 1600 on the eighth — **a
+  control that changes place between siblings has to be re-found every
+  time**, which is the one thing chrome may never do. One width everywhere
+  now, and the nav renders in its own container so a future wide section
+  cannot take the menu with it. Its dropdown carried FOUR overrides of
+  `.input` (`h-11 min-h-0 py-0 text-sm md:h-10`) — four ways of re-answering
+  the one question that class exists to answer, which is exactly why it was
+  the one control on the page that did not match.
+  **`window.prompt` is gone and guarded** (`nativeDialog.guard.test.ts`):
+  three of them (task topic, call chapter, whiteboard text). The browser's
+  dialog says "app.neurai.pt says", is unstyled in both themes, carries no
+  RTL or Persian type, blocks the page, and cannot hold a second answer or a
+  refusal — **the first requirement past "one short string" forces a rewrite
+  anyway**. The topic became the inline composer the COLUMN beside it already
+  used: the platform had solved it correctly ten pixels away.
+  **ECHO**: search row gone (the top bar's field is the door on every screen;
+  it had been pushing `/echo/search`, an address the route no longer serves,
+  so the platform's one search box led nowhere), the three guided walks gone,
+  **speakers moved to Management** (a voice print is a fact about a COLLEAGUE,
+  not about a recording), and the side menu became a top toolbar like every
+  other surface. Echo is on its way into the meeting; until then it should at
+  least not be the one app with a different anatomy.
+  **THE GUEST DOOR (0158)** — «کپی لینک» copied the meeting PAGE, which needs
+  an account in the org, so **the invite link worked for exactly the people
+  who did not need one**, and an external participant — the ordinary case for
+  a meeting — was the one case the room could not serve. A code is a
+  CAPABILITY, not an identity: CSPRNG, mintable and revocable by the
+  meeting's own members, and what it buys is deliberately tiny. **The SQL
+  function RETURNS THREE COLUMNS, so the security surface is a SHAPE rather
+  than a filter somebody has to remember** — with a self-check on the column
+  count for the day someone widens it. Unknown and revoked codes answer
+  identically ("this used to work" tells a stranger there is something here).
+  The token carries `guest:` in its subject precisely because the display
+  name is theirs to type. The page renders outside the shell entirely: every
+  shell element would be a door into a product they have no account in, and
+  **offering doors that refuse is worse than offering none**.
+  FOUR guards fired on that one page and every one was right — auth coverage
+  (the platform's only anonymous capability endpoint), icon scale, the
+  second viewport-height root, and trail coverage. Each got an ENTRY WITH ITS
+  REASON, never a loosened rule; and `coreFetch` gained an explicit
+  `anonymous` opt-in rather than a fallback, **so a missing session keeps
+  meaning 401 and an auth bug cannot quietly become an anonymous call**.
+  Dashboard, from the screenshots: the stat strip's `content-center` left a
+  band of dead air under the cards (a gap that reads as a MISSING WIDGET
+  rather than as spare room inside one); the hour lane was `auto`-width so
+  the day columns crowded the digits — and an auto lane changes width with
+  the digits, moving the whole grid sideways on a locale switch; the upcoming
+  rows took the reference's shape (date block, title, time · mode, stage),
+  with `formatDayMonth` added beside `formatDate` because **the calendar
+  preference decides which month a date IS** — 11 Shahrivar and 2 September
+  are the same instant with different month names, and two surfaces
+  disagreeing about it is the two-spellings defect wearing a date.
+  Meeting details: `justify-between` had thrown each label to one edge and
+  its value to the other, so reading a field meant crossing empty space and
+  hoping the thing on the far side belonged to the label you started from —
+  a failure that gets worse the wider the card gets.
