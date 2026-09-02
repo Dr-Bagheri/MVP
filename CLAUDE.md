@@ -3084,3 +3084,76 @@ sessions) for the cross-session narrative.
   that exists only in the commit under test, bust the cache, and assert the
   probe had a subject (an empty `css=` variable made twenty zeros mean
   nothing).
+
+- 2026-09-02 (later — THE STRUCTURE ROUND: one page shell, one control set,
+  the vendor places arrivals, and the room records itself): **every sub-menu
+  is a top toolbar now.** Thirteen pages render through `TwoPane`, so the
+  shape changed in ONE component and they all followed. The group TITLES went
+  with the pane — a vertical menu needs them to break a long list into
+  different questions; a horizontal row of eight buttons does not, and a
+  heading above a toolbar reads as a label for the page. Groups survive as
+  the separators between runs of buttons, the meetings toolbar's own device.
+  **Page headers gone at `PageHeader` itself** (18 pages, no 18 edits that
+  could each drop a button): a 24px title, a subtitle and a hairline — ~90px
+  at the top of every screen restating a name the breadcrumb already showed.
+  Asserted as an ABSENCE as well as a presence, "because the version that
+  still renders a title looks perfectly fine and is only wrong beside every
+  other page".
+  **PENDING ARRIVALS MOVED TO THE PLATFORM CONSOLE** (0153–0157). The queue
+  sat in Management·Users where an org admin approved their own arrivals —
+  right for someone they invited, wrong for what actually produces those
+  rows: a stranger signs up, lands in an org of their own naming, and only
+  the vendor can decide where they belong. Placement is org + role +
+  activation in ONE statement (two would leave a member ACTIVE in the org
+  they invented if the second never happened). It needed a door in
+  `tg_app_user_guard`, whose org-immutability is "true on every path,
+  operator included" — the exception is written as **the condition that
+  makes it true rather than as a permission**: `old.status='pending'` (the
+  row has nothing hanging off its org — that is what pending MEANS) AND `not
+  from_app` (echo_app cannot reach it by any UPDATE it writes; only a definer
+  door can, and there is exactly one).
+  Three corrections the checks forced, all worth keeping: (1) I asserted the
+  status change "rides the history trigger" — **there is no such trigger**;
+  `record_status_change` refuses every caller outside a trigger and the guard
+  never calls it, so acceptance, suspension and placement all leave the trend
+  table untouched. Recorded in the migration as a real gap; the check asserts
+  what the operation DOES guarantee (`accepted_at` set, `accepted_by` NULL =
+  M15's spelling of "the vendor did this"). (2) 0155 rebuilt the guard from
+  **0036's text — where I had just been reading it — reverting 0038, 0040 and
+  0044**; one assertion caught it (17_roles forbids any function outside
+  `role_is_admin` comparing a literal role, which 0036's body does, four
+  migrations before the rule existed). 0157 rebuilds on 0044's body, the true
+  predecessor. 0132's lesson in the same shape: **`create or replace` accepts
+  a stale body as cheerfully as a current one — it is not a diff.** (3) the
+  probe could not walk the ordinary path until it BECAME the actor
+  (`set_config('echo.actor_id', …)`), because `require_platform_root` demands
+  the supplied actor equal the session's — a self-check that only asserts
+  refusals is the authorization-matrix corollary's exact failure.
+  **ELEVEN BUTTON SHAPES**, measured: 47 controls hand-rolled their geometry
+  against 109 using `.btn` — because **`.btn` offered exactly one size**, so
+  every screen wanting a compact control had to invent one. `.btn-sm` /
+  `.btn-icon` added (measured off the reference), 30 sites converted, the
+  rest a WORKLIST in `control.guard.test.ts` failing in BOTH directions.
+  Same shape for the loading rule (`loading.guard.test.ts`): Skeleton /
+  SkeletonLines / SkeletonCards + `loading` on DataTable, applied to search,
+  speakers, integrations, conversations, agents, workflows and the dashboard
+  tiles (whose loading state was an ellipsis — "reads as *this tile is
+  broken*, not *this tile is coming*"). Several worklist entries are NOT
+  defects (a modal flag, an error code, a picker's value) and stay listed
+  rather than pattern-matched away, **because telling a list from a flag by
+  its NAME is the false-positive factory that gets a check muted inside a
+  week**.
+  **THE ROOM RECORDS ITSELF** (LiveKit egress, audio-only, S3 out): the
+  server already routes every participant's audio, so asking a laptop to
+  re-capture what its speakers play was the long way round — and it cost a
+  share dialog, a discarded video track, and the quality of a mic
+  re-recording a loudspeaker. IN PERSON needs no second design: everyone
+  opens the link on their own phone, so each voice arrives on its own track.
+  The participant token does NOT carry `roomRecord` (verified red by adding
+  it); `egressConfig()` reports absent unless every value is present, and the
+  test drops each of the eight in turn — "a check that only removes the first
+  proves nothing about the eighth". **Needs one credential to switch on:
+  a Supabase Storage S3 access key (`EGRESS_S3_*` in core.env).**
+  Deploy note re-learned twice: **an un-cache-busted Vercel check measures the
+  CDN, not the deployment**; and core deploys are git-archive + restart, with
+  the discriminating check being 401 (wired) vs 404 (absent) on the new route.

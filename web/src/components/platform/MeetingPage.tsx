@@ -475,7 +475,7 @@ function PreStage({ meeting, onPatch, locale, me }: {
               {t("detailsTitle")}
             </h2>
             <button type="button" onClick={() => setEditing(true)}
-              className="tap h-8 rounded-lg border border-border px-3 text-xs font-medium text-fg hover:bg-border">
+              className="btn btn-sm border border-border font-medium text-fg hover:bg-border">
               {t("edit")}
             </button>
           </header>
