@@ -320,7 +320,7 @@ describe("جلسات پیش‌رو (the product's own upcoming)", () => {
 });
 
 describe("آخرین جلسات", () => {
-  it("shows THE last meeting that already happened — one row, and never a future one", async () => {
+  it("shows the last TWO meetings that already happened — newest first, never a future one", async () => {
     /*
      * The panel listed the newest meetings by date, so on a board that also
      * shows «جلسات پیش‌رو» the same FUTURE meeting appeared in both — a card
@@ -328,9 +328,11 @@ describe("آخرین جلسات", () => {
      * directive, 2026-09-02).
      *
      * Three rows on purpose: one future (must not appear), one past without a
-     * record, one past WITH a record. The last is the newest of the two that
-     * happened, so it is the one row expected — and the future one being
-     * absent is what distinguishes this from "sort by date and take one".
+     * record, one past WITH a record. Both past rows are expected, newest
+     * first (user directive, 2026-09-02: "make the last meetings two"), and
+     * the future one being absent is what distinguishes this from "sort by
+     * date and take two" — a version that did THAT would also show two rows
+     * and would be wrong in the one way this test exists to catch.
      */
     MEETINGS = async () => [
       meetingRow({ id: "m-future", title: "آینده", scheduled_at: "2099-01-01T09:00:00.000Z" }),
@@ -340,8 +342,9 @@ describe("آخرین جلسات", () => {
     let view: ReturnType<typeof render>;
     await act(async () => { view = render(<LatestMeetingsWidget />); });
     const rows = [...view!.container.querySelectorAll("li")];
-    expect(rows).toHaveLength(1);
+    expect(rows).toHaveLength(2);
     expect(rows[0]!.textContent).toContain("تازه");
+    expect(rows[1]!.textContent).toContain("قدیمی");
     expect(view!.container.textContent).not.toContain("آینده");
     /* the recorded row wears the review chip */
     expect(rows[0]!.textContent).toContain("بازبینی");

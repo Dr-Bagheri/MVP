@@ -855,7 +855,9 @@ export function LatestMeetingsWidget() {
   const latest = [...meetings]
     .filter((m) => m.call_id !== null || new Date(m.scheduled_at).getTime() < now)
     .sort((a, b) => b.scheduled_at.localeCompare(a.scheduled_at))
-    .slice(0, 1);
+    /* TWO (user directive, 2026-09-02: "make the last meetings two option
+       the box in dashboard as well, it set to one now") */
+    .slice(0, 2);
 
   return (
     <div className="flex h-full min-h-0 flex-col">

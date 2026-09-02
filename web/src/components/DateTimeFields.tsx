@@ -189,7 +189,13 @@ export function TimeField({ value, onChange, id }: {
 
       </PopoverTrigger>
       <PopoverContent align="start" className="w-auto rounded-xl border-border bg-surface p-2 shadow-island">
-        <div className="flex w-40 gap-1">
+        {/* HOUR ON THE RIGHT, MINUTES ON THE LEFT, in both locales (user
+            directive, 2026-09-02: "hour must be at the right side always").
+            A flex row follows the page's direction, so in English the
+            columns swapped sides and the same picker read back-to-front
+            depending on language. `dir="rtl"` pins the layout; the digits
+            inside stay the locale's own. */}
+        <div className="flex w-40 gap-1" dir="rtl">
           {column(t("hourLabel"), HOURS, hour, (h) => set(h, minute))}
           <span className="w-px bg-border" aria-hidden />
           {column(t("minuteLabel"), MINUTES, minute, (m) => set(hour, m))}

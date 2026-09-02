@@ -28,6 +28,10 @@ import { join } from "node:path";
 const SRC = join(process.cwd(), "src");
 const DOCK = join(SRC, "components/platform/PresenceDock.tsx");
 const DIALOG = join(SRC, "components/ui/dialog.tsx");
+/* every surface that wears role="dialog" outside the ui/ primitive — a
+   fixed panel at the dock's level is the exact tie this guard exists for,
+   and MemberDetail was one until 2026-09-02 */
+const OTHER_MODALS = [join(SRC, "components/platform/MemberDetail.tsx")];
 
 /**
  * Every `z-<n>` / `z-[<n>]` Tailwind class in a file, COMMENTS STRIPPED.
@@ -62,6 +66,13 @@ describe("the stacking ladder", () => {
 
     const top = Math.min(...modal);
     expect(Math.max(...dock)).toBeLessThan(top);
+
+    /* and every other modal surface sits AT the modal layer, not under it */
+    for (const file of OTHER_MODALS) {
+      const lv = levels(file);
+      expect(lv.length).toBeGreaterThan(0);
+      expect(Math.min(...lv)).toBeGreaterThanOrEqual(top);
+    }
   });
 
   it("can answer NO — a dock level at the modal's height is reported", () => {

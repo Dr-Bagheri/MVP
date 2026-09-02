@@ -31,6 +31,7 @@ export function MemberDetail({
   onToggleStatus,
   onRename,
   onDelete,
+  onSetPassword,
   onClose,
 }: {
   user: User;
@@ -45,6 +46,10 @@ export function MemberDetail({
   onRename?: (id: string, patch: { display_name?: string; username?: string | null }) => Promise<void>;
   /** Owner-only true delete (tombstone). Absent = the button never renders. */
   onDelete?: (user: User, reason: string) => void;
+  /** opens the platform's set-password dialog for this person (user
+      directive, 2026-09-02: "put the password in the page it opens").
+      Absent = the door never renders — the caller decides who may. */
+  onSetPassword?: (user: User) => void;
   onClose: () => void;
 }) {
   const t = useTranslations("management");
@@ -126,7 +131,12 @@ export function MemberDetail({
 
   return (
     <aside
-      className="fixed inset-y-0 end-0 z-40 flex w-full max-w-md flex-col border-s border-border bg-surface shadow-xl"
+      /* z-50: THE MODAL LAYER (user report, 2026-09-02: "the orb still on the
+         page"). This panel sat at z-40, the same level as the assistant's
+         orb, so which one covered the other was decided by DOM order — a
+         coin toss that landed on the orb. A panel with role="dialog" belongs
+         with the dialogs; stacking.guard.test.ts now counts it as one. */
+      className="fixed inset-y-0 end-0 z-50 flex w-full max-w-md flex-col border-s border-border bg-surface shadow-xl"
       role="dialog"
       aria-label={t("detailTitle")}
     >
@@ -262,6 +272,19 @@ export function MemberDetail({
             >
               {tAdmin(user.status === "disabled" ? "enable" : "disable")}
             </button>
+            {onSetPassword ? (
+              /* the same door the row's kebab offers, from inside the panel
+                 (user directive, 2026-09-02): a person who opened the panel
+                 to look at somebody should not have to close it and hunt
+                 for the ⋯ to act on them */
+              <button
+                className="btn-secondary"
+                disabled={busy}
+                onClick={() => onSetPassword(user)}
+              >
+                {t("setPassword")}
+              </button>
+            ) : null}
             {onDelete ? (
               <button
                 className="text-sm text-danger/80 underline-offset-2 hover:text-danger hover:underline"

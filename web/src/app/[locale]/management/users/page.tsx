@@ -5,7 +5,19 @@ import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import { notify } from "@/lib/notify";
 import { useRefreshEpoch } from "@/lib/refreshBus";
-import type { Role, User } from "@/api/types";
+import type { Role, User, UserStatus } from "@/api/types";
+
+/* the admin namespace spells these camelCase; a template literal that built
+   `role_${role}` shipped a raw key to the users list on 2026-09-02 — every
+   role read "admin.role_owner" on production while typecheck and the locale
+   parity test stayed green, because neither can see a computed key. A map
+   is a key the checks CAN see. */
+const ROLE_KEY: Record<Role, "roleOwner" | "roleAdmin" | "roleMember"> = {
+  owner: "roleOwner", admin: "roleAdmin", member: "roleMember",
+};
+const STATUS_KEY: Record<UserStatus, "statusActive" | "statusPending" | "statusDisabled"> = {
+  active: "statusActive", pending: "statusPending", disabled: "statusDisabled",
+};
 import { ManagementPane } from "@/components/platform/ManagementPane";
 import { PageHeader } from "@/components/scaffold";
 import { MemberDetail } from "@/components/platform/MemberDetail";
@@ -13,7 +25,7 @@ import { Card, EmptyState } from "@/components/ui";
 import { ConfirmDialog } from "@/components/rowActions";
 import { DataTable } from "@/components/DataTable";
 import { IconKey, IconPencil, IconToggleOff, IconToggleOn, IconTrash } from "@/components/icons";
-import { digits, personName } from "@/lib/format";
+import { personName } from "@/lib/format";
 import { SetMemberPassword } from "@/components/platform/SetMemberPassword";
 
 /**
@@ -72,8 +84,6 @@ export default function UsersPage() {
       receives the fixed consent line instead of a typed reason */
   const [confirmDeleteMember, setConfirmDeleteMember] = useState<User | null>(null);
 
-  // ---- bulk selection + detail (Part 4 tail) ----
-  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [detailId, setDetailId] = useState<string | null>(null);
   /** The last bulk run's honest tally — failures are COUNTED, never swallowed. */
 
@@ -147,9 +157,6 @@ export default function UsersPage() {
     return rank(me.role) > rank(u.role);
   };
   const listed = rows.filter((m) => m.status !== "pending");
-
-  /** The rows bulk actions may touch: never the owner, never yourself. */
-  const selectable = listed.filter((u) => u.role !== "owner" && u.id !== me?.id);
   /** Derived from the live rows so the panel refreshes with every load(). */
   const detailUser = detailId === null ? null : (rows.find((u) => u.id === detailId) ?? null);
 
@@ -223,33 +230,6 @@ export default function UsersPage() {
     }
   }
 
-  async function bulkSetStatus(target: "active" | "disabled"): Promise<void> {
-    if (busy) return;
-    setBusy(true);
-    let done = 0;
-    let failed = 0;
-    try {
-      for (const u of selectable.filter((row) => selected.has(row.id))) {
-        if (u.status === target) continue;
-        try {
-          await api.setUserStatus(u.id, target);
-          done += 1;
-        } catch {
-          failed += 1;
-        }
-      }
-      await load();
-    } finally {
-      setBusy(false);
-    }
-    // the outcome rides the notification system (orb toast + top bell) —
-    // the table itself stays quiet (user directive, 2026-08-21)
-    notify(
-      t("bulkResult", { done: digits(done, locale), failed: digits(failed, locale) }),
-      failed > 0 ? "warn" : "info",
-    );
-    setSelected(new Set());
-  }
 
   /*
    * `me === null` renders nothing rather than the gate: "not loaded yet" and
@@ -297,35 +277,11 @@ export default function UsersPage() {
 
         <Card>
 
-          {selected.size > 0 ? (
-            /* the bulk bar appears WITH a selection and leaves with it —
-               permanent chrome for an occasional action is noise */
-            <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface-2 px-3 py-2">
-              <span className="text-sm text-fg">
-                {t("bulkSelected", { count: digits(selected.size, locale) })}
-              </span>
-              <button
-                className="btn-secondary h-9 min-h-0 px-3 text-xs"
-                disabled={busy}
-                onClick={() => void bulkSetStatus("active")}
-              >
-                {t("bulkEnable")}
-              </button>
-              <button
-                className="btn-secondary h-9 min-h-0 px-3 text-xs"
-                disabled={busy}
-                onClick={() => void bulkSetStatus("disabled")}
-              >
-                {t("bulkDisable")}
-              </button>
-              <button
-                className="ms-auto text-xs text-fg-muted underline-offset-2 hover:underline"
-                onClick={() => setSelected(new Set())}
-              >
-                {t("bulkClear")}
-              </button>
-            </div>
-          ) : null}
+          {/* NO SELECTION, NO BULK BAR (user directive, 2026-09-02: "remove the
+              check boxes of the users table"). The reference has none: every
+              action on a person is on their row's kebab, and a bulk toolbar
+              that appeared with a selection was a second surface for the
+              same two verbs. Enable/disable stay per row. */}
 
           {listed.length === 0 ? (
             <EmptyState text={t("noMatches")} />
@@ -337,10 +293,6 @@ export default function UsersPage() {
             <DataTable
               rows={listed}
               rowKey={(u) => u.id}
-              selected={selected}
-              onSelect={setSelected}
-              selectableRow={(u) => u.role !== "owner" && u.id !== me?.id}
-              selectLabel={(u) => t("bulkSelectRow", { name: personName(u, locale) })}
               onRowClick={(u) => setDetailId(u.id)}
               menuItems={(u) => [
                 {
@@ -414,7 +366,10 @@ export default function UsersPage() {
                           {personName(u, locale)}
                         </span>
                         <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-fg-muted">
-                          {tAdmin(`role_${u.role}` as "role_member")}
+                          {/* the namespace's own spelling — `role_owner` was an
+                              invented key that rendered raw on production,
+                              because a computed key skips the parity check */}
+                          {tAdmin(ROLE_KEY[u.role])}
                           {/* status only when it is NOT the ordinary one: a
                               row that says "active" about everybody is a
                               column of one repeated word, which is what the
@@ -423,7 +378,7 @@ export default function UsersPage() {
                             <>
                               <span aria-hidden>·</span>
                               <span className={u.status === "pending" ? "text-warning" : "text-danger"}>
-                                {tAdmin(`status_${u.status}` as "status_active")}
+                                {tAdmin(STATUS_KEY[u.status])}
                               </span>
                             </>
                           ) : null}
@@ -492,6 +447,7 @@ export default function UsersPage() {
             onSetRole={(id, r) => void setRoleFor(id, r)}
             onToggleStatus={(u) => void toggleStatusFor(u)}
             onRename={renameFor}
+            {...(canSetPasswordFor(detailUser) ? { onSetPassword: setPasswordFor } : {})}
             /* the true delete is the OWNER's alone (tombstone: emptied
                person, retired handle — core's DELETE endpoint, M11 family);
                admins keep disable, which is reversible */

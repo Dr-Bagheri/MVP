@@ -2,7 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { MemberStats, User } from "@/api/types";
-import { notifyHistory, resetNotifications } from "@/lib/notify";
+import { resetNotifications } from "@/lib/notify";
 
 /**
  * Part 4 tail — bulk member actions and the detail panel.
@@ -54,38 +54,19 @@ const { default: UsersPage } = await import("./page");
 describe("Management · Users — bulk actions", () => {
   beforeEach(() => { setUserStatus.mockClear(); resetNotifications(); });
 
-  it("offers no checkbox for the owner or yourself — the refusable rows cannot enter a selection", async () => {
+  it("offers no checkbox on any row — actions live on the kebab, as in the reference", async () => {
+    /*
+     * The selection column and the bulk bar LEFT this table (user directive,
+     * 2026-09-02: "remove the check boxes of the users table"). This is the
+     * absence asserted, and it is worth asserting because the wrong version
+     * renders perfectly: a checkbox column that came back would look like a
+     * feature. The control is the positive line under it — the rows still
+     * render, so an empty page cannot satisfy the absence.
+     */
     render(<UsersPage />);
     await screen.findByText("نیما");
-    // header select-all + one per SELECTABLE row (نیما، بهار) — the owner
-    // (who is also `me`) contributes none
-    expect(screen.getAllByRole("checkbox")).toHaveLength(3);
-    expect(screen.queryByLabelText("انتخاب سارا")).toBeNull();
-  });
-
-  it("bulk-disables the selected members and SKIPS one already disabled", async () => {
-    const user = userEvent.setup();
-    render(<UsersPage />);
-    await screen.findByText("نیما");
-
-    await user.click(screen.getByLabelText("انتخاب نیما"));
-    await user.click(screen.getByLabelText("انتخاب بهار"));
-    expect(screen.getByText("۲ عضو انتخاب شده")).toBeTruthy();
-
-    await user.click(screen.getByRole("button", { name: "غیرفعال‌سازی انتخاب‌شده‌ها" }));
-
-    // the tally rides the NOTIFICATION BUS now (orb toast + top bell) —
-    // the table itself stays quiet (user directive, 2026-08-21)
-    await waitFor(() => {
-      const tally = notifyHistory()[0];
-      expect(tally?.text).toContain("۱ تغییر");
-      // a skip is not a failure
-      expect(tally?.text).toContain("۰ ناموفق");
-    });
-    // بهار is already disabled: exactly ONE write proves the skip — a second
-    // call would mean idempotence was spelled as a redundant mutation
-    expect(setUserStatus).toHaveBeenCalledTimes(1);
-    expect(setUserStatus).toHaveBeenCalledWith("u-a", "disabled");
+    expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
+    expect(screen.getByText("بهار")).toBeTruthy();
   });
 });
 
