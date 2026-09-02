@@ -50,7 +50,8 @@ import { agentWorkflows, createAssistantAgent, listAssistantAgents, resolveAssis
 import { createConnectorsRepo, type ConnectorOAuthOptions, type ConnectorProvider } from "./connectors.ts";
 import { createMailDraftsRepo } from "./mail-drafts.ts";
 import { createTasksRepo } from "./tasks.ts";
-import { createMeetingsRepo } from "./meetings.ts";
+import { createMeetingsRepo, MEETING_ITEM_KINDS } from "./meetings.ts";
+import type { MeetingItemKind } from "./meetings.ts";
 import { createTts } from "./tts.ts";
 import { createLiveStt } from "./live-stt.ts";
 import { createCapabilitiesRepo, CAPABILITIES, type CapabilitiesRepo } from "./capabilities.ts";
@@ -1533,6 +1534,78 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     const { id, attachmentId } = request.params as { id: string; attachmentId: string };
     await meetings.detail(identity, id);
     await meetings.removeAttachment(identity, attachmentId);
+    return reply.code(204).send();
+  });
+
+  /**
+   * 0160 — the meeting's decisions, action items, questions, risks and
+   * entities. Four ordinary routes over rows, and one thing worth saying:
+   * none of them accepts a `source`. The database pins it to the writing
+   * role, so a caller cannot badge their own line as the assistant's, and
+   * the assistant — which holds INSERT and nothing else — cannot touch these
+   * three write routes at all.
+   */
+  app.get("/v1/meetings/:id/items", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    await meetings.detail(identity, id);
+    return reply.send(await meetings.items(identity, id));
+  });
+
+  app.post("/v1/meetings/:id/items", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as {
+      kind?: unknown; body?: unknown; owner?: unknown; at_ms?: unknown;
+    };
+    if (typeof body.kind !== "string"
+        || !(MEETING_ITEM_KINDS as readonly string[]).includes(body.kind)) {
+      throw new ValidationError("kind must be one of the meeting item kinds", {
+        code: "meeting_item_kind_invalid",
+        params: { kinds: MEETING_ITEM_KINDS.join(", ") },
+      });
+    }
+    if (typeof body.body !== "string" || body.body.trim() === "") {
+      throw new ValidationError("an item needs text", { code: "meeting_item_body_required" });
+    }
+    await meetings.detail(identity, id);
+    const created = await meetings.addItem(identity, id, {
+      kind: body.kind as MeetingItemKind,
+      body: body.body.trim().slice(0, 2000),
+      owner: typeof body.owner === "string" && body.owner.trim() !== ""
+        ? body.owner.trim().slice(0, 120) : null,
+      atMs: typeof body.at_ms === "number" && body.at_ms >= 0 ? Math.floor(body.at_ms) : null,
+    });
+    return reply.code(201).send(created);
+  });
+
+  app.patch("/v1/meetings/:id/items/:itemId", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id, itemId } = request.params as { id: string; itemId: string };
+    const body = (request.body ?? {}) as { body?: unknown; done?: unknown; owner?: unknown };
+    await meetings.detail(identity, id);
+    /* omitted leaves it, null clears it — the distinction a form gets wrong
+       by reflex, so the two are separate facts here rather than one field */
+    await meetings.updateItem(identity, itemId, {
+      ...(typeof body.body === "string" && body.body.trim() !== ""
+        ? { body: body.body.trim().slice(0, 2000) } : {}),
+      ...(typeof body.done === "boolean" ? { done: body.done } : {}),
+      ...("owner" in body
+        ? { owner: typeof body.owner === "string" && body.owner.trim() !== ""
+          ? body.owner.trim().slice(0, 120) : null } : {}),
+    });
+    return reply.code(204).send();
+  });
+
+  app.delete("/v1/meetings/:id/items/:itemId", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id, itemId } = request.params as { id: string; itemId: string };
+    await meetings.detail(identity, id);
+    await meetings.removeItem(identity, itemId);
     return reply.code(204).send();
   });
 

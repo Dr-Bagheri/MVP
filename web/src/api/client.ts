@@ -64,7 +64,7 @@ import type {
   TranscriptSegment,
   User,
   UserStatus,
-  WorkflowCard, MeetingAttachment } from "./types";
+  WorkflowCard, MeetingAttachment, MeetingItem, MeetingItemKind } from "./types";
 /**
  * The producer's own shape for `GET /v1/me`, imported rather than described.
  * `import type` is erased, so nothing from core/ reaches the bundle — the same
@@ -1602,6 +1602,39 @@ export const api = {
       }),
       headers: { "content-type": "application/json" },
     });
+  },
+  /* 0160 — the meeting's decisions, action items, questions, risks and
+     entities. `source` is deliberately absent from `addMeetingItem`: it is
+     the database's to decide, and a client that could send it would be a
+     client that could badge its own text as the assistant's. */
+  async meetingItems(id: string): Promise<MeetingItem[]> {
+    return bff(`/api/meetings/${encodeURIComponent(id)}/items`);
+  },
+  async addMeetingItem(
+    id: string,
+    item: { kind: MeetingItemKind; body: string; owner?: string | null; at_ms?: number | null },
+  ): Promise<MeetingItem> {
+    return bff(`/api/meetings/${encodeURIComponent(id)}/items`, {
+      method: "POST", body: JSON.stringify(item),
+    });
+  },
+  /* omitting a field leaves it; sending owner:null clears it — the
+     distinction the server keeps, carried here rather than flattened */
+  async updateMeetingItem(
+    id: string,
+    itemId: string,
+    patch: { body?: string; done?: boolean; owner?: string | null },
+  ): Promise<void> {
+    await bff<null>(
+      `/api/meetings/${encodeURIComponent(id)}/items/${encodeURIComponent(itemId)}`,
+      { method: "PATCH", body: JSON.stringify(patch) },
+    );
+  },
+  async deleteMeetingItem(id: string, itemId: string): Promise<void> {
+    await bff<null>(
+      `/api/meetings/${encodeURIComponent(id)}/items/${encodeURIComponent(itemId)}`,
+      { method: "DELETE" },
+    );
   },
   async deleteMeetingAttachment(id: string, attachmentId: string): Promise<void> {
     await bff<null>(

@@ -1236,6 +1236,31 @@ export interface AgentWorkflowLink {
  * live in Storage, and this is what a list needs to name one and offer to
  * remove it.
  */
+/**
+ * 0160 — a decision, action item, question, risk or entity, as a ROW.
+ *
+ * `source` is the wire's most load-bearing field and the one nobody can
+ * forge: the database pins it to the writing ROLE, so "the assistant added
+ * this" is a fact about which connection wrote the row, not a flag a caller
+ * set. It is therefore safe to render as a badge.
+ *
+ * `at_ms` null means a person typed it rather than "it happened at zero" —
+ * the two are different, and only one of them can seek the audio.
+ */
+export const MEETING_ITEM_KINDS = ["decision", "action", "question", "risk", "entity"] as const;
+export type MeetingItemKind = (typeof MEETING_ITEM_KINDS)[number];
+
+export interface MeetingItem {
+  id: string;
+  kind: MeetingItemKind;
+  body: string;
+  source: "user" | "ai";
+  done: boolean;
+  owner: string | null;
+  at_ms: number | null;
+  created_at: string;
+}
+
 export interface MeetingAttachment {
   id: string;
   name: string;

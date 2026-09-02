@@ -42,18 +42,30 @@ select t.ok(
 --     ordinary act, not a purge. The OBJECT behind the row is a different
 --     question and a different role's: echo_purge deletes the bytes, and
 --     platform_meeting_storage_paths is how it finds them.
+--   · meeting_item (0160): a decision, action item, question, risk or
+--     entity. Removing one is the ordinary act the surface is FOR — the
+--     assistant may add these and holds no DELETE, so the authority runs one
+--     way and this grant is the half that makes the other half meaningful.
 --   · meeting (0148): a meeting is a PLAN, not a record — the call it
 --     produced is a separate row with its own ladder, and this delete
 --     cannot reach it (asserted in 0148: nothing cascades from meeting).
 --
 -- Task ROWS themselves stay undeletable by every app role: archived_at is
 -- the only way off the board.
+-- ONE list, read twice. It was written out twice until 0160, and the second
+-- copy is the one that goes stale: adding a table here turned the first check
+-- green and left the second red, in a file whose whole job is to be exact.
+create temp table argued_deletes (name text) on commit drop;
+insert into argued_deletes (name) values
+  ('call_note'), ('meeting'), ('meeting_attachment'), ('meeting_item'),
+  ('task_assignee'), ('task_checklist_item'), ('task_label'), ('task_label_link');
+
 select t.ok(
   (select coalesce(array_agg(distinct table_name::text order by table_name::text), '{}')
      from information_schema.role_table_grants
     where grantee = 'echo_app' and privilege_type = 'DELETE' and table_schema = 'echo')
-   = array['call_note', 'meeting', 'meeting_attachment', 'task_assignee', 'task_checklist_item', 'task_label', 'task_label_link'],
-  'core/''s own role deletes exactly the argued list: a note author''s own note (0079), a task''s checklist lines and its assignee rows (0144), a label and a card''s wearing of one (0147), a meeting''s attached document (0159) — every other product row is echo_purge''s alone');
+   = (select array_agg(name order by name) from argued_deletes),
+  'core/''s own role deletes exactly the argued list: a note author''s own note (0079), a task''s checklist lines and its assignee rows (0144), a label and a card''s wearing of one (0147), a meeting''s attached document (0159), a meeting''s decisions and action items (0160) — every other product row is echo_purge''s alone');
 -- Scoped to the application roles: the schema owner also appears as a grantee
 -- of everything on a managed platform, and a superuser was never inside this
 -- wall to begin with — core/ simply never connects as one.
@@ -64,9 +76,7 @@ select t.ok(
       and grantee::text like 'echo\_%'
       and grantee::text <> 'echo_purge'
       and not (grantee::text = 'echo_app'
-               and table_name in ('call_note', 'meeting', 'meeting_attachment',
-                                  'task_assignee', 'task_checklist_item',
-                                  'task_label', 'task_label_link'))
+               and table_name in (select name from argued_deletes))
   ),
   'echo_purge is the only application role that deletes product rows — the 0079 note exception is the closed list''s single entry');
 

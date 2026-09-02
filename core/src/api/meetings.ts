@@ -25,6 +25,33 @@ import type { Identity } from "../agent/types.ts";
 export const MEETING_MODES = ["upload", "in_person", "online"] as const;
 export type MeetingMode = (typeof MEETING_MODES)[number];
 
+/**
+ * 0160 — the five things a meeting produces, as ROWS.
+ *
+ * These used to be slices of the summary's prose, which is why they could
+ * only ever be read: "remove this action item" against a paragraph means
+ * rewriting a model's text and hoping the headings still line up. They are
+ * rows now, so a person can add one before a word has been recorded and edit
+ * one the assistant heard.
+ */
+export const MEETING_ITEM_KINDS = ["decision", "action", "question", "risk", "entity"] as const;
+export type MeetingItemKind = (typeof MEETING_ITEM_KINDS)[number];
+
+export interface MeetingItemRecord {
+  id: string;
+  kind: MeetingItemKind;
+  body: string;
+  /** WHO SAID SO — pinned by the writing role, never supplied (0160). The
+      badge on screen is therefore a fact, not a claim. */
+  source: "user" | "ai";
+  done: boolean;
+  owner: string | null;
+  /** the moment in the recording this came from; null = a person typed it,
+      which is a different thing from "at zero" */
+  at_ms: number | null;
+  created_at: string;
+}
+
 export interface MeetingAgendaItem {
   title: string;
   /** planned minutes — null = unplanned, never 0 (a zero-minute item is a
@@ -254,6 +281,97 @@ export function createMeetingsRepo(db: Db) {
   async function removeAttachment(identity: Identity, id: string): Promise<void> {
     await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe(
       "delete from echo.meeting_attachment where id = $1", [id],
+    ));
+  }
+
+  /** 0160 — the meeting's decisions, action items, questions, risks and
+      entities, oldest first inside each kind. */
+  async function items(identity: Identity, meetingId: string): Promise<MeetingItemRecord[]> {
+    return db.withIdentity(identity, async (tx: SqlTx) => {
+      const rows = await tx.unsafe<Record<string, unknown>>(
+        `select id, kind, body, source, done, owner, at_ms, created_at
+           from echo.meeting_item
+          where meeting_id = $1
+          order by position, created_at`,
+        [meetingId],
+      );
+      return rows.map((row) => ({
+        id: String(row.id),
+        kind: String(row.kind) as MeetingItemKind,
+        body: String(row.body),
+        source: String(row.source) === "ai" ? "ai" as const : "user" as const,
+        done: row.done === true,
+        owner: row.owner === null ? null : String(row.owner),
+        at_ms: row.at_ms === null ? null : Number(row.at_ms),
+        created_at: iso(row.created_at),
+      }));
+    });
+  }
+
+  /**
+   * `source` is NOT in this signature, and that is the point: the policy pins
+   * it to 'user' for echo_app and to 'ai' for echo_agent, so the api cannot
+   * offer a caller a way to badge their own line as the assistant's.
+   */
+  async function addItem(
+    identity: Identity,
+    meetingId: string,
+    item: { kind: MeetingItemKind; body: string; owner: string | null; atMs: number | null },
+  ): Promise<MeetingItemRecord> {
+    return db.withIdentity(identity, async (tx: SqlTx) => {
+      const rows = await tx.unsafe<Record<string, unknown>>(
+        `insert into echo.meeting_item
+           (meeting_id, org_id, kind, body, source, owner, at_ms, position, created_by)
+         values ($1, echo.actor_org_id(), $2, $3, 'user', $4, $5,
+                 coalesce((select max(position) + 1 from echo.meeting_item
+                            where meeting_id = $1 and kind = $2), 0),
+                 echo.actor_id())
+         returning id, kind, body, source, done, owner, at_ms, created_at`,
+        [meetingId, item.kind, item.body, item.owner, item.atMs],
+      );
+      const row = rows[0];
+      if (row === undefined) throw new NotFoundError();
+      return {
+        id: String(row.id),
+        kind: String(row.kind) as MeetingItemKind,
+        body: String(row.body),
+        source: "user" as const,
+        done: row.done === true,
+        owner: row.owner === null ? null : String(row.owner),
+        at_ms: row.at_ms === null ? null : Number(row.at_ms),
+        created_at: iso(row.created_at),
+      };
+    });
+  }
+
+  /**
+   * An edit changes the WORDS and the TICK. It cannot change `source` or
+   * `meeting_id` — a trigger refuses both for every role at once (0160), so
+   * this signature simply has nowhere to put them.
+   *
+   * Undefined means "leave it"; null on `owner` means "clear it". The two are
+   * different and a form gets them wrong by reflex, so they are separate
+   * facts on the wire rather than one nullable field.
+   */
+  async function updateItem(
+    identity: Identity,
+    itemId: string,
+    patch: { body?: string; done?: boolean; owner?: string | null },
+  ): Promise<void> {
+    const sets: string[] = [];
+    const values: unknown[] = [itemId];
+    if (patch.body !== undefined) { values.push(patch.body); sets.push(`body = $${values.length}`); }
+    if (patch.done !== undefined) { values.push(patch.done); sets.push(`done = $${values.length}`); }
+    if (patch.owner !== undefined) { values.push(patch.owner); sets.push(`owner = $${values.length}`); }
+    if (sets.length === 0) return;
+    await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe(
+      `update echo.meeting_item set ${sets.join(", ")} where id = $1`, values,
+    ));
+  }
+
+  async function removeItem(identity: Identity, itemId: string): Promise<void> {
+    await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe(
+      "delete from echo.meeting_item where id = $1", [itemId],
     ));
   }
 
@@ -531,5 +649,6 @@ export function createMeetingsRepo(db: Db) {
   return {
     list, detail, create, update, remove, topics, createTopic, updateTopic,
     byJoinCode, setJoinCode, attachments, addAttachment, removeAttachment,
+    items, addItem, updateItem, removeItem,
   };
 }

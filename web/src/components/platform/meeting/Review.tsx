@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { api } from "@/api/client";
-import type { Call, Speaker, SummaryVersion, TranscriptSegment } from "@/api/types";
-import { parseSummary, type SummaryBlock } from "@/components/echo/SummaryBody";
+import type { Call, Speaker, TranscriptSegment } from "@/api/types";
 import { IconCheck, IconMic, IconMicOff, IconPlay, IconPause } from "@/components/icons";
 import { digits, formatClock } from "@/lib/format";
 
@@ -307,120 +306,12 @@ export function TranscriptPanel({ callId, onSeek, locale }: {
   );
 }
 
-/* ── the extraction panel: the summary's sections, sliced by heading ───── */
-interface Section { title: string; blocks: SummaryBlock[] }
-
-/** the reference's tab set, each matched to the headings the shipped
-    summary skill actually produces; a miss renders a named absence */
-const EXTRACTION_TABS: Array<{ key: string; match: RegExp }> = [
-  /* the patterns cover the SHIPPED templates' own section names (worker
-     summarizer addenda: تصمیم‌ها، اقدامات بعدی، موانع و مشکلات، …) — a
-     regex that matches no heading the producer ever writes is a tab that
-     is always empty while reading as wired */
-  { key: "decisions", match: /مصوب|تصمیم/ },
-  { key: "actions", match: /اکشن|اقدام/ },
-  { key: "summary", match: /خلاصه|چکیده|جمع‌بندی/ },
-  { key: "questions", match: /سؤال|سوال|پرسش/ },
-  { key: "risks", match: /ریسک|خطر|موانع|مشکل/ },
-];
-
-function sliceSections(text: string): Section[] {
-  const blocks = parseSummary(text);
-  const sections: Section[] = [];
-  let current: Section = { title: "", blocks: [] };
-  for (const block of blocks) {
-    if (block.kind === "heading") {
-      if (current.blocks.length > 0 || current.title !== "") sections.push(current);
-      current = { title: block.text, blocks: [] };
-    } else {
-      current.blocks.push(block);
-    }
-  }
-  if (current.blocks.length > 0 || current.title !== "") sections.push(current);
-  return sections;
-}
-
-function renderBlocks(blocks: SummaryBlock[]): React.ReactNode {
-  return blocks.map((block, i) => {
-    if (block.kind === "heading") return <h4 key={i} className="text-sm font-semibold text-fg">{block.text}</h4>;
-    if (block.kind === "bullets" || block.kind === "numbered") {
-      return (
-        <ul key={i} className="space-y-1.5">
-          {block.items.map((item, j) => (
-            <li key={j} className="rounded-xl border border-border bg-surface p-3 text-sm leading-6 text-fg shadow-card">
-              {item}
-            </li>
-          ))}
-        </ul>
-      );
-    }
-    return <p key={i} className="text-sm leading-7 text-fg">{block.text}</p>;
-  });
-}
-
-export function ExtractionPanel({ callId }: { callId: string }) {
-  const t = useTranslations("meetings");
-  const [versions, setVersions] = useState<SummaryVersion[] | null | "failed">(null);
-  const [tab, setTab] = useState("decisions");
-
-  useEffect(() => {
-    let alive = true;
-    void api.getSummaries(callId)
-      .then((v) => { if (alive) setVersions(v); })
-      .catch(() => { if (alive) setVersions("failed"); });
-    return () => { alive = false; };
-  }, [callId]);
-
-  const sections = useMemo(
-    () => (Array.isArray(versions) && versions[0] !== undefined ? sliceSections(versions[0].body) : []),
-    [versions],
-  );
-
-  if (versions === null) return <p className="p-4 text-sm text-fg-muted">…</p>;
-  if (versions === "failed") return <p className="p-4 text-sm text-fg-muted">{t("readFailed")}</p>;
-  if (versions[0] === undefined) return <p className="p-4 text-sm text-fg-muted">{t("noMinutesYet")}</p>;
-
-  const sectionFor = (key: string): Section | undefined => {
-    const spec = EXTRACTION_TABS.find((entry) => entry.key === key);
-    const hit = spec === undefined ? undefined : sections.find((s) => spec.match.test(s.title));
-    if (hit !== undefined) return hit;
-    /* the خلاصه tab falls back to EVERYTHING the summary said — a summary
-       with no matching heading (the default skill writes free prose) must
-       not render five empty tabs while the text sits unreachable */
-    if (key === "summary") {
-      const untitled = sections.filter((s) => s.title === "");
-      const blocks = untitled.flatMap((s) => s.blocks);
-      if (blocks.length > 0) return { title: "", blocks };
-      return { title: "", blocks: parseSummary(Array.isArray(versions) && versions[0] !== undefined ? versions[0].body : "") };
-    }
-    return undefined;
-  };
-  const active = sectionFor(tab);
-
-  return (
-    <section aria-label={t("extractionTitle")} className="tile flex min-h-0 flex-col p-4">
-      <div role="tablist" className="mb-3 flex flex-wrap items-center gap-1 rounded-xl bg-surface-2 p-1">
-        {EXTRACTION_TABS.map((entry) => (
-          <button
-            key={entry.key}
-            type="button"
-            role="tab"
-            aria-selected={tab === entry.key}
-            onClick={() => setTab(entry.key)}
-            className={`tap h-8 rounded-lg px-3 text-xs font-medium transition-colors ${
-              tab === entry.key ? "bg-surface text-fg shadow-card" : "text-fg-muted hover:text-fg"
-            }`}
-          >
-            {t(`ext_${entry.key}`)}
-          </button>
-        ))}
-      </div>
-      <p className="mb-2 text-[11px] text-fg-subtle">{t("extractionProvenance")}</p>
-      <div className="scroll-quiet min-h-0 flex-1 space-y-2 overflow-y-auto pe-1">
-        {active === undefined
-          ? <p className="p-2 text-sm text-fg-muted">{t("extractionSectionAbsent")}</p>
-          : renderBlocks(active.blocks)}
-      </div>
-    </section>
-  );
-}
+/*
+ * The extraction panel that used to live here is GONE (0160). It sliced the
+ * summary's prose by heading and rendered the paragraphs under each, which
+ * could only ever be read — and was empty for every meeting whose audio had
+ * not been processed, which is the complaint that replaced it. Its five
+ * sections are rows now, in `ItemsPanel`, where a person can add one before
+ * anybody has spoken; its خلاصه tab was a second rendering of the minutes,
+ * which have their own tab and their own document.
+ */

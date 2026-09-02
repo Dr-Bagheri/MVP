@@ -94,6 +94,13 @@ vi.mock("@/api/client", async () => ({
     meetingAttachments: async () => [],
     uploadMeetingAttachment: async () => undefined,
     deleteMeetingAttachment: async () => undefined,
+    /* and its ITEMS (0160) — decisions and action items are rows now, and
+       the panel is deliberately NOT gated on a recording, so this stub is
+       needed by every meeting test rather than only the review ones */
+    meetingItems: async () => [],
+    addMeetingItem: async () => undefined,
+    updateMeetingItem: async () => undefined,
+    deleteMeetingItem: async () => undefined,
     meetingDetail: async () => MEETING,
     updateMeeting: async (_id: string, body: Record<string, unknown>) => ({ ...MEETING, ...body }),
     getCall: async () => CALL,

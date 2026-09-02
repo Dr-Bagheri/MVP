@@ -12,7 +12,8 @@ import { ConfirmDialog } from "@/components/rowActions";
 import { AgendaEditor, MODE_ICON } from "./Meetings";
 import { InviteDialog } from "./meeting/InviteDialog";
 import { MeetingStage } from "./meeting/Stage";
-import { AudioBar, ExtractionPanel, ProcessingCard, TranscriptPanel } from "./meeting/Review";
+import { AudioBar, ProcessingCard, TranscriptPanel } from "./meeting/Review";
+import { ItemsPanel } from "./meeting/ItemsPanel";
 import { MinutesTab } from "./meeting/Minutes";
 import { MeetingTasksBoard } from "./meeting/MiniTasks";
 import { MeetingAssistant } from "./meeting/MeetingAssistant";
@@ -1074,10 +1075,21 @@ function PostStage({ meeting, call, me, locale, onGoHold, onChanged, onBackToMee
         ))}
       </div>
 
+      {/*
+        THE ITEMS PANEL IS NOT GATED ON A RECORDING (0160). Everything else in
+        this tab is a view of the call — the ladder, the transcript — so it
+        waits for one. The decisions and action items do not: the complaint
+        that produced this table was that they were empty, and they were empty
+        because they were slices of a summary that does not exist until the
+        audio has been processed. A person planning a meeting must be able to
+        write down a decision before anyone has spoken.
+      */}
       {tab === "review" ? (
-        call === null ? <p className="p-4 text-sm text-fg-muted">…</p>
-          : call === "gone" ? <p className="p-4 text-sm text-fg-muted">{t("recordGone")}</p>
-            : call.status === "failed" ? (
+        <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-2">
+          <div className="flex min-h-0 flex-col">
+            {call === null ? <p className="p-4 text-sm text-fg-muted">…</p>
+              : call === "gone" ? <p className="p-4 text-sm text-fg-muted">{t("recordGone")}</p>
+                : call.status === "failed" ? (
               <div className="tile grid place-items-center p-10 text-center">
                 <p className="text-sm text-danger">{t("processingFailed")}</p>
                 {/* BACK TO THE LIST, not into the record (user directive):
@@ -1090,14 +1102,14 @@ function PostStage({ meeting, call, me, locale, onGoHold, onChanged, onBackToMee
                   {t("backToMeetings")}
                 </button>
               </div>
-            ) : call.status !== "ready" ? (
-              <ProcessingCard call={call} title={meeting.title} locale={locale} />
-            ) : (
-              <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-2">
-                <TranscriptPanel callId={meeting.call_id} onSeek={(ms) => setSeekReq({ ms })} locale={locale} />
-                <ExtractionPanel callId={meeting.call_id} />
-              </div>
-            )
+                ) : call.status !== "ready" ? (
+                  <ProcessingCard call={call} title={meeting.title} locale={locale} />
+                ) : (
+                  <TranscriptPanel callId={meeting.call_id} onSeek={(ms) => setSeekReq({ ms })} locale={locale} />
+                )}
+          </div>
+          <ItemsPanel meetingId={meeting.id} onSeek={(ms) => setSeekReq({ ms })} locale={locale} />
+        </div>
       ) : null}
       {tab === "tasks" ? (
         <MeetingTasksBoard callId={meeting.call_id}
