@@ -1,5 +1,6 @@
 "use client";
 
+import { ConfirmDialog } from "@/components/rowActions";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
@@ -37,9 +38,13 @@ function storageKey(meetingId: string): string {
 
 export function Whiteboard({ meetingId }: { meetingId: string }) {
   const t = useTranslations("meetings");
+  const tCommon = useTranslations("common");
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const [tool, setTool] = useState<Tool>("pen");
+  /* the text composer: the world point pressed, and the words */
+  const [textAt, setTextAt] = useState<{ x: number; y: number } | null>(null);
+  const [textValue, setTextValue] = useState("");
   const [color, setColor] = useState(COLORS[0]!);
   const [shapes, setShapes] = useState<Shape[]>(() => {
     try {
@@ -183,10 +188,11 @@ export function Whiteboard({ meetingId }: { meetingId: string }) {
     const world = toWorld(e);
     if (tool === "eraser") { eraseAt(world); return; }
     if (tool === "text") {
-      const text = window.prompt(t("whiteboardTextPrompt"));
-      if (text !== null && text.trim() !== "") {
-        commit({ tool: "text", color, width: 2, points: [world], text: text.trim() });
-      }
+      /* the platform's dialog, never the browser's (user directive,
+         2026-09-02) — and the world point is remembered so the text lands
+         where the person pressed, not where the pointer ended up */
+      setTextAt(world);
+      setTextValue("");
       return;
     }
     drawing.current = {
@@ -331,6 +337,30 @@ export function Whiteboard({ meetingId }: { meetingId: string }) {
         <button type="button" aria-label={t("wbClear")} title={t("wbClear")} onClick={clear}
           className="tap grid h-8 w-8 place-items-center rounded-lg text-fg-muted hover:text-danger">🗑</button>
       </div>
+      {textAt !== null ? (
+        <ConfirmDialog
+          title={t("whiteboardTextPrompt")}
+          body={
+            <input
+              autoFocus
+              className="input"
+              value={textValue}
+              onChange={(e) => setTextValue(e.target.value)}
+            />
+          }
+          confirmLabel={tCommon("add")}
+          cancelLabel={tCommon("cancel")}
+          danger={false}
+          confirmDisabled={textValue.trim() === ""}
+          onCancel={() => setTextAt(null)}
+          onConfirm={() => {
+            const at = textAt;
+            const text = textValue.trim();
+            setTextAt(null);
+            commit({ tool: "text", color, width: 2, points: [at], text });
+          }}
+        />
+      ) : null}
     </div>
   );
 }

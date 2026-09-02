@@ -29,9 +29,13 @@ import type { ReactNode } from "react";
 export function PageContainer({
   width = "default",
   fill = false,
+  className = "",
   children,
 }: {
   width?: "default" | "wide" | "full";
+  /** for the rare caller that has to trim the rhythm — a surface split into
+      two containers must not pay the top padding twice */
+  className?: string;
   /**
    * Fill the height the shell grants instead of growing with the content.
    *
@@ -66,7 +70,7 @@ export function PageContainer({
    */
   return (
     <div
-      className={`mx-auto w-full ${max} px-page-inline pb-page-bottom pt-page-sm md:px-page-inline-md md:pt-page${
+      className={`${className} mx-auto w-full ${max} px-page-inline pb-page-bottom pt-page-sm md:px-page-inline-md md:pt-page${
         fill ? " flex h-full min-h-0 flex-col" : ""
       }`}
     >

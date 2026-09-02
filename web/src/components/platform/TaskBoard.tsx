@@ -16,8 +16,7 @@ import {
 import { TaskDetail } from "./tasks/TaskDetail";
 import { TaskCalendar, TaskListView } from "./tasks/TaskViews";
 import {
-  IconCheck, IconClock, IconDots, IconFolder, IconPlus, IconTrash, IconUser, IconVideo,
-} from "@/components/icons";
+  IconCheck, IconClock, IconDots, IconFolder, IconPlus, IconTrash, IconUser, IconVideo, IconClose } from "@/components/icons";
 import { digits } from "@/lib/format";
 
 /**
@@ -59,6 +58,9 @@ export function TaskBoard() {
   const [mineOnly, setMineOnly] = useState(false);
   const [dueToday, setDueToday] = useState(false);
   const [topic, setTopic] = useState<string>("all");
+  /* the inline topic composer — open, and the name being typed */
+  const [addingTopic, setAddingTopic] = useState(false);
+  const [topicName, setTopicName] = useState("");
   const [me, setMe] = useState<{ id: string } | null>(null);
 
   /* the COLUMN the new-card form was opened from — null when closed. A
@@ -209,20 +211,54 @@ export function TaskBoard() {
 
       {/* ── the topic row ────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-1.5">
-        <button
-          type="button"
-          aria-label={t("newTopic")}
-          title={t("newTopic")}
-          onClick={() => {
-            const name = window.prompt(t("newTopicPrompt"));
-            if (name !== null && name.trim() !== "") {
-              void api.createTaskTopic(name.trim()).then(load).catch(refusal);
-            }
-          }}
-          className="tap grid h-8 w-8 place-items-center rounded-lg border border-border text-fg-muted hover:text-fg"
-        >
-          <IconPlus width={12} height={12} />
-        </button>
+        {/*
+          INLINE, never `window.prompt` (user directive, 2026-09-02: "this top
+          pop up should never appear anywhere in the platform … fix it like
+          the new column that you wrote there").
+          A native prompt is the browser's dialog, not ours: it says
+          "app.neurai.pt says", it is unstyled in both themes, it cannot be
+          dismissed by the platform's own Escape handling, and it blocks the
+          page while it is up. The column composer beside this row already
+          solved the same problem the right way, so this is that pattern,
+          not a second one.
+        */}
+        {addingTopic ? (
+          <span className="inline-flex items-center gap-1 rounded-md border border-accent bg-surface px-1.5">
+            <input
+              autoFocus
+              value={topicName}
+              onChange={(e) => setTopicName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && topicName.trim() !== "") {
+                  void api.createTaskTopic(topicName.trim())
+                    .then(() => { setTopicName(""); setAddingTopic(false); load(); })
+                    .catch(refusal);
+                }
+                if (e.key === "Escape") { setTopicName(""); setAddingTopic(false); }
+              }}
+              placeholder={t("newTopicPrompt")}
+              className="h-[30px] w-36 bg-transparent text-xs text-fg outline-none placeholder:text-fg-subtle"
+            />
+            <button
+              type="button"
+              aria-label={t("cancel")}
+              onClick={() => { setTopicName(""); setAddingTopic(false); }}
+              className="tap grid h-6 w-6 place-items-center rounded text-fg-muted hover:text-fg"
+            >
+              <IconClose width={12} height={12} />
+            </button>
+          </span>
+        ) : (
+          <button
+            type="button"
+            aria-label={t("newTopic")}
+            title={t("newTopic")}
+            onClick={() => setAddingTopic(true)}
+            className="btn btn-icon border border-border text-fg-muted hover:text-fg"
+          >
+            <IconPlus width={12} height={12} />
+          </button>
+        )}
 
         <button
           type="button"

@@ -5,8 +5,8 @@ import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { ConnectorProvider, ConnectorStatus, Me } from "@/api/types";
 import { useRouter } from "@/i18n/routing";
-import { PlatformShell } from "./PlatformShell";
-import { PageContainer, PageHeader, Section } from "@/components/scaffold";
+import { SettingsPane } from "./SettingsPane";
+import { Section } from "@/components/scaffold";
 import { DataTable, StatusDot, type Column } from "@/components/DataTable";
 import { EmptyState } from "@/components/ui";
 import { ConfirmDialog } from "@/components/rowActions";
@@ -97,7 +97,6 @@ export function Integrations() {
      sentences here — a second copy is a second thing to keep in step, and the
      one that drifts is always the copy nobody is looking at */
   const tw = useTranslations("workflows");
-  const tp = useTranslations("platform");
   const locale = useLocale() as "fa" | "en";
   const router = useRouter();
   const copy = useIntegrationCopy();
@@ -271,14 +270,17 @@ export function Integrations() {
   ];
 
   return (
-    <PlatformShell>
-      {/* NO SECTION MENU (user directive, 2026-09-02). These three left the
-          assistant's sub-menu for the main rail, and a page that still opens
-          that menu beside itself is the door it was moved out of, shown
-          twice — the rail says where you are, and this pane said it again in
-          another vocabulary. */}
-        <PageContainer>
-          <PageHeader title={tp("integrations")} subtitle={t("subtitle")} />
+    /*
+     * SETTINGS' TOOLBAR (user directive, 2026-09-02: "in settings in
+     * integrations the menu of top that we made disappear, fix it").
+     *
+     * Integrations became a Settings section in this round and the page never
+     * learned it — so the one screen in that menu with no way back to its
+     * siblings was the screen the menu had just been extended to include. The
+     * pane is the top toolbar now, so wearing it costs nothing and every
+     * sibling stays one press away.
+     */
+    <SettingsPane activeSlug="integrations">
 
           <Section title={t("connectedTitle")} description={t("connectedHint")}>
             {connectors !== null && allRows.length === 0 ? (
@@ -440,7 +442,6 @@ export function Integrations() {
             </div>
             {error ? <p role="status" className="mt-4 text-sm text-danger">{error}</p> : null}
           </Section>
-        </PageContainer>
 
       {/*
         THE CONNECT BRIEFING (user directive: "when you click the one without
@@ -492,7 +493,7 @@ export function Integrations() {
           onCancel={() => setBriefing(null)}
         />
       ) : null}
-    </PlatformShell>
+    </SettingsPane>
   );
 }
 

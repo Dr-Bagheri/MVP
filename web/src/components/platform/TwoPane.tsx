@@ -66,9 +66,20 @@ export function TwoPane({
   const pathname = usePathname();
   return (
     <PlatformShell>
-      <PageContainer width={width}>
-        <div className="flex min-h-0 flex-1 flex-col gap-3">
-          <nav aria-label={navLabel} className="flex flex-wrap items-center gap-1">
+      {/*
+        THE TOOLBAR KEEPS THE PAGE'S NORMAL COLUMN, whatever width the
+        SECTION asks for (user directive, 2026-09-02: "the top menu got out of
+        position"). Audit Logs asks for the wide column because it is a dense
+        table — and with the nav inside that container, the same menu sat at
+        1240 on seven sections and 1600 on the eighth. It moved under the
+        pointer when you switched section, which is the one thing chrome may
+        never do: a control that changes place between siblings has to be
+        re-found every time.
+        So the nav is its own container at the default width and only the
+        CONTENT widens. The capability stays; the menu stops travelling.
+      */}
+      <PageContainer>
+        <nav aria-label={navLabel} className="flex flex-wrap items-center gap-1">
             {groups.map((group, index) => (
               <Fragment key={group.key}>
                 {index > 0 ? <span className="mx-1 h-5 w-px bg-border" aria-hidden /> : null}
@@ -96,9 +107,10 @@ export function TwoPane({
                 })}
               </Fragment>
             ))}
-          </nav>
-          {children}
-        </div>
+        </nav>
+      </PageContainer>
+      <PageContainer width={width} className="!pt-0">
+        <div className="flex min-h-0 flex-1 flex-col">{children}</div>
       </PageContainer>
     </PlatformShell>
   );

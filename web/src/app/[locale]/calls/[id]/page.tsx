@@ -242,6 +242,9 @@ export default function CallDetailPage({
   /** the custom template about to be deleted — armed by its card's ✕ */
   const [confirmTemplateDelete, setConfirmTemplateDelete] = useState<string | null>(null);
   /** the note about to be deleted — armed by the note row's «حذف» */
+  /** the chapter composer: the playhead it was opened at, and the name */
+  const [chapterAt, setChapterAt] = useState<number | null>(null);
+  const [chapterName, setChapterName] = useState("");
   const [confirmNoteDelete, setConfirmNoteDelete] = useState<string | null>(null);
   /** the notes section's own ADD box (user directive, 2026-08-28: the two
       side-menu sections take data, not just show it) — multi-line, and
@@ -1477,18 +1480,13 @@ export default function CallDetailPage({
             onChange={(e) => setVolumeBoth(Number(e.target.value))}
           />
           {/* a CHAPTER minted at the playhead — it joins the seekbar's marks
-              and the notes list; native prompt is the honest v1 name box */}
+              and the notes list. Asked in the PLATFORM's dialog, never
+              `window.prompt`: that one is the browser's, says
+              "app.neurai.pt says", is unstyled in both themes and blocks the
+              page while it is up (user directive, 2026-09-02). */}
           <IconAction
             label={t("chapterAdd")}
-            onClick={() => {
-              const name = window.prompt(t("chapterPrompt"))?.trim();
-              if (!name) return;
-              void api
-                .addCallNote(id, { kind: "chapter", at_ms: Math.floor(playheadMs), body: name })
-                .then(() => api.callNotes(id)).then(setNotes)
-                .then(() => notify(t("noteAdded")))
-                .catch(() => notify(tCommon("actionFailed"), "warn"));
-            }}
+            onClick={() => { setChapterAt(Math.floor(playheadMs)); setChapterName(""); }}
           >
             <IconTag width={14} height={14} />
           </IconAction>
@@ -2403,6 +2401,39 @@ export default function CallDetailPage({
           not: a note is a person's own annotation, there is one copy, and
           nothing on the record can bring it back. Same dialog as everything
           else destructive on the platform (confirm.guard.test.ts). */}
+      {/* the chapter's name box — the platform's own dialog, whose `body`
+          takes a whole form precisely so a question needing an ANSWER does
+          not have to invent a second kind of window */}
+      {chapterAt !== null ? (
+        <ConfirmDialog
+          title={t("chapterAdd")}
+          body={
+            <input
+              autoFocus
+              className="input"
+              value={chapterName}
+              placeholder={t("chapterPrompt")}
+              onChange={(e) => setChapterName(e.target.value)}
+            />
+          }
+          confirmLabel={tCommon("add")}
+          cancelLabel={tCommon("cancel")}
+          danger={false}
+          confirmDisabled={chapterName.trim() === ""}
+          onCancel={() => setChapterAt(null)}
+          onConfirm={() => {
+            const at = chapterAt;
+            const body = chapterName.trim();
+            setChapterAt(null);
+            void api
+              .addCallNote(id, { kind: "chapter", at_ms: at, body })
+              .then(() => api.callNotes(id)).then(setNotes)
+              .then(() => notify(t("noteAdded")))
+              .catch(() => notify(tCommon("actionFailed"), "warn"));
+          }}
+        />
+      ) : null}
+
       {confirmNoteDelete !== null ? (
         <ConfirmDialog
           title={t("noteDeleteTitle")}

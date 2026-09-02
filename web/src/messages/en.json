@@ -2233,7 +2233,8 @@
     "all": "All",
     "done": "Done",
     "on": "On",
-    "off": "Off"
+    "off": "Off",
+    "add": "Add"
   },
   "security": {
     "passwordLabel": "Password",

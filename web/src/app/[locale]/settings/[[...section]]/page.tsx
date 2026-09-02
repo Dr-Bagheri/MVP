@@ -83,8 +83,16 @@ export default function SettingsPage({
       heading={t("title")}
       groups={groups}
       activeSlug={active.slug}
-      /* the audit feed is a data-dense table — the blueprint's wide column */
-      width={active.slug === "audit-logs" ? "wide" : "default"}
+      /*
+       * ONE WIDTH for every section (user directive, 2026-09-02: the audit
+       * page's menu "got out of position"). Audit Logs was the product's only
+       * caller of the wide column, and the cost was that the same toolbar sat
+       * at one width on seven sections and another on the eighth — a control
+       * that moves between siblings has to be re-found every time.
+       * A dense table does not need a wider page: DataTable scrolls inside
+       * its own box, which is the whole reason that wrapper exists.
+       */
+      width="default"
     >
       <PageHeader title={t(`section.${active.slug}`)} subtitle={t(`desc.${active.slug}`)} />
 

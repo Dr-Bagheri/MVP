@@ -7,6 +7,7 @@ import type { BffError } from "@/api/client";
 import { AUDIT_SOURCES } from "@echo/core/vocabulary";
 import type { AuditCursor, AuditEntry, AuditSource, User } from "@/api/types";
 import { Pagination, usePaged } from "@/components/Pagination";
+import { Skeleton } from "@/components/scaffold";
 import { DataTable } from "@/components/DataTable";
 import { Card, Chip, EmptyState } from "@/components/ui";
 import { digits, formatDate, formatTime } from "@/lib/format";
@@ -335,7 +336,11 @@ export function AuditLogs() {
         <label>
           <span className="sr-only">{t("filterSource")}</span>
           <select
-            className="input h-11 min-h-0 w-auto py-0 text-sm md:h-10"
+            /* the THEME's field. It carried `h-11 min-h-0 py-0 text-sm md:h-10`
+               — four overrides of the one class whose whole job is to say how
+               tall a field is, which is why this dropdown was the one control
+               on the page that did not match the platform. */
+            className="input w-auto"
             value={source}
             onChange={(event) => setSource(event.target.value as AuditSource | "")}
           >
@@ -356,7 +361,7 @@ export function AuditLogs() {
         <Card className="mb-4 border-danger/40 bg-danger/10">
           <p className="text-sm font-medium text-fg">{t("failed")}</p>
           <button
-            className="btn-secondary mt-2 h-9 min-h-0 px-3 text-xs"
+            className="btn-secondary btn-sm mt-2"
             onClick={() => void load()}
           >
             {t("retry")}
@@ -365,7 +370,20 @@ export function AuditLogs() {
       ) : null}
 
       {loading ? (
-        <p className="text-sm text-fg-muted">{t("loading")}</p>
+        /* the table's own frame with skeleton rows, not a sentence where the
+           table goes — the platform's loading rule */
+        <Card className="!p-0">
+          <div className="divide-y divide-border">
+            {Array.from({ length: 6 }, (_, i) => (
+              <div key={i} className="flex items-center gap-4 px-4 py-3.5">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-4 w-28" />
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-4 flex-1" />
+              </div>
+            ))}
+          </div>
+        </Card>
       ) : entries.length === 0 && !failed ? (
         <EmptyState text={source ? t("emptyFiltered") : t("empty")} />
       ) : entries.length > 0 ? (
@@ -377,7 +395,9 @@ export function AuditLogs() {
             skin. The cells are unchanged; only the frame moved: DataTable
             inside a Card, exactly the members table's dress.
           */}
-          <Card>
+          {/* !p-0 — a table brings its own cell padding, and a card's
+              padding on top of it is a second inset the rows do not share */}
+          <Card className="!p-0">
           <DataTable
             rows={visible}
             rowKey={entryKey}
