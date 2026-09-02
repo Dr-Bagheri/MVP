@@ -60,7 +60,10 @@ export function IconRail() {
         <span className="truncate text-sm">{label}</span>
       </>
     );
-    const className = `flex h-10 items-center gap-2.5 rounded-xl px-3 transition-colors duration-150 ${
+    /* rounded-lg = the 12px the reference gives a menu row; xl (16) is
+       for a list card, and using it here made the rail read as a stack of
+       tiles rather than a menu */
+    const className = `flex h-10 items-center gap-2.5 rounded-lg px-3 transition-colors duration-150 ${
       active
         ? "bg-accent-soft font-semibold text-accent"
         : "text-fg-muted hover:bg-surface-2 hover:text-fg"
@@ -121,7 +124,10 @@ export function IconRail() {
       {/* ── the one big thing to do ──────────────────────────────────── */}
       <Link
         href="/meetings?new=1"
-        className="tap flex h-11 items-center justify-center gap-2 rounded-xl bg-primary text-sm font-semibold text-on-primary shadow-accent transition-opacity hover:opacity-90"
+        /* the rail's one primary action goes through `.btn` like every other
+           primary in the product. It was the most prominent button on screen
+           and the last one still choosing its own height and corner. */
+        className="btn w-full bg-primary text-on-primary shadow-accent hover:opacity-90"
       >
         <IconPlus width={16} height={16} />
         {t("newMeeting")}

@@ -35,7 +35,6 @@ const REMAINING: Record<string, number> = {
   "components/RichTextEditor.tsx": 1,
   "components/echo/SpeakersDirectory.tsx": 1,
   "components/platform/Hub.tsx": 1,
-  "components/platform/IconRail.tsx": 1,
   "components/platform/Integrations.tsx": 1,
   "components/platform/Meetings.tsx": 1,
   "components/platform/TaskBoard.tsx": 1,
