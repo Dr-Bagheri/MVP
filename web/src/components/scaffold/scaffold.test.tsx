@@ -107,13 +107,18 @@ describe("the Tailwind theme derives from the scaffold constants", () => {
 
   it("keeps the menu heading and the page title on one line", () => {
     /*
-     * The pair is a RELATIONSHIP, not two numbers: a 17px pane title sits
-     * 12px lower than a 24px page title to share its line (user directive,
+     * The pair is a RELATIONSHIP, not two numbers: the menu heading sits
+     * lower than the page title so the two share a line (user directive,
      * 2026-08-18). Asserting the gap means raising the page's top margin
      * cannot silently leave the menu heading behind — which is precisely
      * what a later "just add some space" edit would do.
+     *
+     * The gap is 2 rather than 12 since the arameet measurement: both
+     * headings came down (24→16 and 17→14), and the offset between two
+     * text sizes closes as the sizes do. The RULE did not change, which is
+     * the point of asserting the relationship instead of the numbers.
      */
-    expect(SCAFFOLD.page.top - SCAFFOLD.page.menuTop).toBe(12);
+    expect(SCAFFOLD.page.top - SCAFFOLD.page.menuTop).toBe(2);
   });
 
   it("dimensions: menu, rail, content columns, controls, top bar", () => {
@@ -126,15 +131,24 @@ describe("the Tailwind theme derives from the scaffold constants", () => {
     expect(theme.height.topbar).toBe(rem(SCAFFOLD.topBarHeight));
   });
 
-  it("the page/section title sizes ride Tailwind defaults — pinned so a future theme edit cannot silently shrink them", () => {
-    // text-2xl = 24px and text-xl = 20px are DEFAULTS the blueprint relies on;
-    // overriding fontSize['2xl'/'xl'] in the theme would change every page
-    // title at once. This pins the reliance: if someone adds an override, one
-    // of these goes red and the blueprint conversation happens first.
-    expect(theme.fontSize["2xl"]).toBeUndefined();
-    expect(theme.fontSize.xl).toBeUndefined();
-    expect(SCAFFOLD.fontSize.pageTitle).toBe(24);
-    expect(SCAFFOLD.fontSize.sectionTitle).toBe(20);
+  it("the page and section titles are SCAFFOLD roles, not Tailwind defaults", () => {
+    /*
+     * They used to ride `text-2xl`/`text-xl`, and this test pinned that
+     * reliance. It was the wrong shape: the two most structural sizes in the
+     * product were the only ones the blueprint did not own, so the
+     * 2026-09-02 measurement could not move them without editing a
+     * stylesheet by hand — which is the fork this whole file exists to make
+     * impossible. They are derived entries now, asserted the same way every
+     * other role is.
+     */
+    const fontSize = theme.fontSize as Record<string, [string, string]>;
+    expect(fontSize["page-title"]?.[0]).toBe(`${SCAFFOLD.fontSize.pageTitle / 16}rem`);
+    expect(fontSize["section-title"]?.[0]).toBe(`${SCAFFOLD.fontSize.sectionTitle / 16}rem`);
+    /* the ORDER is the invariant worth pinning, not the pixel values — a
+       page's name reads larger than a block's, which reads larger than the
+       body, whatever the measurement moves them to */
+    expect(SCAFFOLD.fontSize.pageTitle).toBeGreaterThan(SCAFFOLD.fontSize.sectionTitle);
+    expect(SCAFFOLD.fontSize.sectionTitle).toBeGreaterThan(SCAFFOLD.fontSize.body);
   });
 });
 

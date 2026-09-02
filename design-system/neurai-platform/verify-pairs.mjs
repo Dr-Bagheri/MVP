@@ -72,7 +72,8 @@ export const DARK = {
      palette this replaces is in git history. */
   bg: "#0F1113",            // the ground
   surface: "#16191C",       // panels and cards sit ABOVE it
-  surface2: "#272C32",      // raised: inputs, chips, hovered rows
+  surface2: "#272C32",      // raised: chips, hovered rows
+  field: "#272C32",         // dark: the raised tone does the field's job too
   border: "#2B2E31",        // hairline (reference: white at 9% over surface)
   borderStrong: "#727982",  // control boundaries — clears 3:1
   fg: "#F2F4F6",
@@ -97,7 +98,12 @@ export const LIGHT = {
      white cards, the green as ink and fill */
   bg: "#F6F5F1",            // warm cream ground, cards pure white
   surface: "#FFFFFF",
-  surface2: "#EDEAE3",      // raised: inputs, chips, hovered rows
+  surface2: "#EDEAE3",      // raised: chips, hovered rows
+  /* the FIELD's own ground (2026-09-02 measurement of the reference). An
+     input given the chip's colour reads as a chip; given the card's, it has
+     to be found by its border alone. It is a surface that carries typed
+     text, so it owes the same floors every other surface owes. */
+  field: "#FBFAF7",
   border: "#E1E0DB",        // hairline (reference: ink at 10% over cream)
   borderStrong: "#8F8B80",  // nudged from the reference's #9C988D: 3.4:1
   fg: "#1C1A16",
@@ -144,6 +150,11 @@ for (const [name, T] of [["DARK (primary)", DARK], ["LIGHT (derived)", LIGHT]]) 
   check("fg-muted on bg", T.fgMuted, T.bg);
   check("fg-muted on surface", T.fgMuted, T.surface);
   check("fg-muted on surface-2", T.fgMuted, T.surface2);
+  /* the field carries TYPED TEXT and a placeholder, and its edge is a
+     control boundary — three floors, all of them owed */
+  check("fg on the field (typed text)", T.fg, T.field);
+  check("fg-subtle on the field (placeholder)", T.fgSubtle, T.field);
+  check("border-strong vs field (control edge)", T.borderStrong, T.field, 3);
   check("accent as text on bg", T.accent, T.bg);
   check("accent as text on surface", T.accent, T.surface);
   check("ON-ACCENT on accent fill", T.onAccent, T.accent);

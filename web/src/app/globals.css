@@ -50,7 +50,14 @@
        fifth place for the numbers to disagree. */
     --bg: 15 17 19;               /* #0F1113 — the ground */
     --surface: 22 25 28;          /* #16191C — panels sit above it */
-    --surface-2: 39 44 50;        /* #272C32 — inputs, chips, hovered rows */
+    --surface-2: 39 44 50;        /* #272C32 — chips, hovered rows */
+    /* THE FIELD'S GROUND (2026-09-02 measurement). The reference gives an
+       input its own tone, a shade off the card rather than the chip grey:
+       an input that shares the chip's colour reads as a chip, and one that
+       shares the card's reads as nothing at all and has to be found by its
+       border. In dark the same job wants the raised tone, so this equals
+       surface-2 here — one token, two theme answers. */
+    --field: 39 44 50;            /* #272C32 */
     --border: 43 46 49;           /* #2B2E31 — hairline, decorative */
     --border-strong: 114 121 130; /* #727982 — control edges, 3:1+ */
     --fg: 242 244 246;            /* #F2F4F6 */
@@ -130,7 +137,8 @@
        cards, the green as ink and fill. Now the product default. */
     --bg: 246 245 241;            /* #F6F5F1 — warm cream, cards white */
     --surface: 255 255 255;
-    --surface-2: 237 234 227;     /* #EDEAE3 */
+    --surface-2: 237 234 227;     /* #EDEAE3 — chips, hovered rows */
+    --field: 251 250 247;         /* #FBFAF7 — measured off the reference */
     --border: 225 224 219;        /* #E1E0DB */
     --border-strong: 143 139 128; /* #8F8B80 — 3.4:1 control edges */
     --fg: 28 26 22;               /* #1C1A16 */
@@ -169,12 +177,21 @@
      * with the monitor instead of leaving 16px-era proportions frozen on a
      * 4K panel and cramped on a 13" one.
      *
-     * Calibration: 16px at 1920w (the design baseline — nothing changes
-     * there), ~14px at 1280, ~18px at 2560, clamped both ways so a phone
-     * never shrinks below legible and a wall display never balloons.
-     * 10px + 0.3125vw crosses exactly those points.
+     * RE-CALIBRATED 2026-09-02, against the measured reference. The old
+     * baseline put 16px at 1920 and ~14px at 1280 — and since every role is
+     * rem, a 13px label rendered at 10.9px on an ordinary laptop. The
+     * reference has no fluid root at all: it is 16px everywhere, so at the
+     * width most people actually work at we were rendering the same design
+     * about an eighth smaller than the thing we were copying, and no amount
+     * of adjusting the type scale could have found that — the scale was
+     * right and the unit under it was not.
+     *
+     * The slope stays (the directive is that the platform tracks monitor
+     * size); the baseline moves so 16px lands at 1440 — a laptop, not a
+     * large desktop. 1280 → 15.5 · 1440 → 16 · 1920 → 17.5 · 2560 → 20
+     * (clamped). Below md the floor keeps a phone legible.
      */
-    font-size: clamp(13px, 10px + 0.3125vw, 19px);
+    font-size: clamp(14px, 11.5px + 0.3125vw, 20px);
   }
   html[data-theme="dark"] {
     color-scheme: dark;
@@ -291,8 +308,13 @@
    * tool, and dashboard density is the point (verdict item 4).
    */
   .card {
-    @apply rounded-lg border border-border bg-surface p-4 transition-shadow duration-200
-           hover:shadow-card;
+    /* the reference's card, measured: 20px corner, hairline border, and an
+       AMBIENT shadow rather than a hover-only one — a card that only lifts
+       under the pointer reads as flat paper next to one that always sits
+       slightly above the page, which is most of why our screens looked
+       plainer than theirs at identical colours */
+    @apply rounded-2xl border border-border bg-surface p-4 shadow-card
+           transition-shadow duration-200;
   }
 
   /*
@@ -377,8 +399,20 @@
    * thing to press" and "a thing to read" still never look alike.
    */
   .btn {
+    /*
+     * NOT A PILL. `rounded-full` was the single biggest reason our screens
+     * did not look like the reference at identical colours and identical
+     * copy: every button in the product was a lozenge, and theirs are
+     * 11px-cornered rectangles that sit in the same family as the inputs
+     * beside them. Measured: h38, padding 9/15, 13px semibold.
+     *
+     * The radius comes from the token (`rounded-md` = radius.control), so
+     * buttons and inputs can never drift apart again — they read the same
+     * number.
+     */
     @apply tap inline-flex min-h-control cursor-pointer items-center justify-center gap-2
-           rounded-full px-5 text-center text-sm font-semibold leading-control transition-all duration-150
+           rounded-md px-[15px] text-center text-detail font-semibold leading-control
+           transition-all duration-150
            disabled:pointer-events-none disabled:opacity-50;
   }
   .btn-primary {
@@ -401,9 +435,12 @@
    * do not, and pretending otherwise is the inert-.tap-on-a-select bug again.
    */
   .input {
-    @apply min-h-[44px] w-full rounded-md border border-border bg-surface px-3
-           text-sm leading-tight text-fg transition-colors duration-150 placeholder:text-fg-muted
-           focus:border-accent md:min-h-control;
+    /* the reference's field: h40, padding-inline 13, 11px corner, and the
+       RECESSED surface rather than the card's white — an input that shares
+       its container's background has to be found by its border alone */
+    @apply min-h-[44px] w-full rounded-md border border-border bg-field px-[13px]
+           text-detail leading-tight text-fg transition-colors duration-150
+           placeholder:text-fg-subtle focus:border-accent md:min-h-[40px];
   }
 
   /*
@@ -499,10 +536,10 @@
      which is exactly the flat hierarchy the directive names. NO tracking:
      letter-spacing breaks joined Persian script. */
   .h-section {
-    @apply text-pane-title font-semibold text-fg;
+    @apply text-section-title font-semibold text-fg;
   }
   .h-page {
-    @apply text-2xl font-bold text-fg;
+    @apply text-page-title font-bold text-fg;
   }
 
   /* Anything clickable says so. */

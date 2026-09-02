@@ -28,6 +28,10 @@ const config: Config = {
         bg: "rgb(var(--bg) / <alpha-value>)",
         surface: "rgb(var(--surface) / <alpha-value>)",
         "surface-2": "rgb(var(--surface-2) / <alpha-value>)",
+        /* the input's own ground — REGISTERED here, which is the half the
+           `text-on-accent` incident was about: a variable in globals.css
+           with no entry in this file produces a class that emits nothing */
+        field: "rgb(var(--field) / <alpha-value>)",
         border: "rgb(var(--border) / <alpha-value>)",
         /*
          * REGISTERED, not just declared in globals.css. A CSS variable with no
@@ -120,6 +124,41 @@ const config: Config = {
         "2xl": `${SCAFFOLD.radius.modal}px`,
       },
       fontSize: {
+        /*
+         * ── THE WHOLE TYPE SCALE, RE-PITCHED TO THE REFERENCE ──
+         *
+         * 1095 size classes in this app and 94% of them are `text-sm` or
+         * `text-xs`. Re-labelling headings one file at a time would have
+         * moved 71 of them and left the other thousand where they were —
+         * which is precisely how a product ends up looking like ten people
+         * built it: the exceptions get fixed and the default never does.
+         *
+         * So the DEFAULT moves. Tailwind's own steps are re-pointed at the
+         * measured scale, and every screen lands on it without being
+         * edited. The steps below are the reference's actual sizes:
+         *   11.5 caption · 13 body · 14 card title · 15 block title
+         *   16 page title · 20, 27 the rare large moment (its greeting)
+         *
+         * scaffold.test.tsx used to PIN the absence of these overrides, on
+         * the reasoning that one edit here changes every page title at once.
+         * That reasoning was right and is now the point: the change is
+         * deliberate, measured, and in the one place that can make it
+         * everywhere.
+         */
+        xs: [rem(11.5), "1.6"],
+        sm: [rem(SCAFFOLD.fontSize.body), "1.65"],
+        base: [rem(SCAFFOLD.fontSize.paneTitle), "1.6"],
+        lg: [rem(SCAFFOLD.fontSize.sectionTitle), "1.5"],
+        xl: [rem(SCAFFOLD.fontSize.pageTitle), "1.45"],
+        "2xl": [rem(20), "1.35"],
+        "3xl": [rem(27), "1.25"],
+        /* the page's and a block's names are SCAFFOLD roles now, not Tailwind
+           defaults. They rode `text-2xl`/`text-xl` — which meant the two most
+           structural sizes in the product were the only ones not derived from
+           the blueprint, and the 2026-09-02 measurement could not move them
+           without a hand edit in a stylesheet. */
+        "page-title": [rem(SCAFFOLD.fontSize.pageTitle), "1.45"],
+        "section-title": [rem(SCAFFOLD.fontSize.sectionTitle), "1.5"],
         "pane-title": [rem(SCAFFOLD.fontSize.paneTitle), "1.6"],
         "menu-item": [rem(SCAFFOLD.fontSize.menuItem), "1.7"],
         detail: [rem(SCAFFOLD.fontSize.detail), "1.7"],
