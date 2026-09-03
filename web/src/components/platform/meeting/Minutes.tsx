@@ -5,6 +5,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { MeetingItem, MeetingRecord } from "@/api/types";
 import { IconCheck, IconDownload, IconPrint, IconRetry } from "@/components/icons";
+import { SkeletonLines } from "@/components/scaffold";
 import { digits, formatDate, personName } from "@/lib/format";
 
 /**
@@ -42,8 +43,10 @@ function esc(value: string): string {
  * and every reader reads the same rows.
  */
 
-export function MinutesTab({ meeting, myName, myId, onChanged }: {
+export function MinutesTab({ meeting, callId, myName, myId, onChanged }: {
   meeting: MeetingRecord;
+  /** the meeting's recording, when it has one — where the summary lives */
+  callId: string | null;
   /** the signer's display name — personName(me), resolved by the page */
   myName: string;
   /** the signer's ID — the dedupe key (a display name changes with locale) */
@@ -108,6 +111,38 @@ export function MinutesTab({ meeting, myName, myId, onChanged }: {
     ...meeting.invitees.filter((n) => n !== hostName),
   ];
 
+  /**
+   * THE SUMMARY BELONGS IN THE MINUTES (user report, 2026-09-03: "summary is
+   * not included in Minutes of the meeting — add it there, and it must be
+   * added to the report it saves also").
+   *
+   * The document had the decisions and the action items, which are ROWS, and
+   * nothing of what was actually said. A minute of a meeting that lists its
+   * outcomes and omits its account of the discussion is a checklist wearing a
+   * document's clothes — and it is the half a person who was not there
+   * actually needs.
+   *
+   * It is the CURRENT version, and it is read here rather than passed down:
+   * the tab already re-reads its own rows on «تولید دوباره» (see `reloads`), and
+   * a summary handed in as a prop would go stale against them at exactly the
+   * moment somebody regenerates. Same counter, same refetch, one truth.
+   */
+  const [summary, setSummary] = useState<string | null | "failed">(null);
+  useEffect(() => {
+    if (callId === null) { setSummary(""); return; }
+    let alive = true;
+    void api.getSummaries(callId)
+      .then((versions) => {
+        if (!alive) return;
+        /* the LAST version is the current one — the ladder appends and moves
+           the pointer, it never rewrites (invariant 4) */
+        const current = versions[versions.length - 1];
+        setSummary(current === undefined ? "" : current.body);
+      })
+      .catch(() => { if (alive) setSummary("failed"); });
+    return () => { alive = false; };
+  }, [callId, reloads]);
+
   const rows = Array.isArray(items) ? items : [];
   const decisions = useMemo(
     () => rows.filter((r) => r.kind === "decision").map((r) => r.body),
@@ -129,12 +164,28 @@ export function MinutesTab({ meeting, myName, myId, onChanged }: {
   const closed = meeting.minutes_closed_at !== null;
   const approved = meeting.minutes_approved_at !== null;
 
+  /**
+   * ONE derivation, two consumers: the section on screen and the section in
+   * the saved file. Two splits of the same prose is how a document comes to
+   * disagree with the page it was exported from.
+   *
+   * `esc()` is applied at the point of USE and not here, because the screen
+   * renders text nodes (React escapes) while the document is a string being
+   * concatenated into HTML — escaping twice would put `&amp;` in front of a
+   * reader.
+   */
+  const summaryParagraphs = useMemo(
+    () => (typeof summary === "string" ? summary.split(/\r?\n+/).map((l) => l.trim()).filter((l) => l !== "") : []),
+    [summary],
+  );
+
   const documentHtml = () => {
     const item = (x: string, i: number) => `<p>${i + 1}. ${esc(x)}</p>`;
     return `<!doctype html><html dir="rtl" lang="fa"><head><meta charset="utf-8"><title>${esc(meeting.title)}</title></head><body style="font-family:Vazirmatn,Tahoma,sans-serif">
 <h1>${esc(t("minutesDocTitle", { title: meeting.title }))}</h1>
 <p>${esc(t("minutesDate"))}: ${esc(formatDate(meeting.scheduled_at, locale))}</p>
 <h2>${esc(t("minutesAttendees"))}</h2>${attendees.length === 0 ? `<p>${esc(t("minutesNoAttendees"))}</p>` : attendees.map((n) => `<p>${esc(n)}</p>`).join("")}
+<h2>${esc(t("minutesSummary"))}</h2>${summaryParagraphs.length === 0 ? `<p>${esc(t("minutesNoSummary"))}</p>` : summaryParagraphs.map((line) => `<p>${esc(line)}</p>`).join("")}
 <h2>${esc(t("ext_decisions"))}</h2>${decisions.length === 0 ? `<p>${esc(t("minutesNoDecisions"))}</p>` : decisions.map(item).join("")}
 <h2>${esc(t("ext_actions"))}</h2>${actions.length === 0 ? `<p>${esc(t("minutesNoActions"))}</p>` : actions.map(item).join("")}
 <h2>${esc(t("minutesSignatures"))}</h2>${meeting.minutes_signatures.map((sig) => `<p>${esc(sig.name)} — ${esc(formatDate(sig.at, locale))}</p>`).join("") || `<p>${esc(t("minutesAwaitingSignature"))}</p>`}
@@ -219,8 +270,29 @@ export function MinutesTab({ meeting, myName, myId, onChanged }: {
           )}
         </section>
 
+        {/* THE SUMMARY (user report, 2026-09-03). It sits above the outcomes
+            on purpose: a reader who was not in the room needs the account of
+            what was said before the list of what was decided, and every
+            minute-of-meeting this product is modelled on is ordered that way.
+            Its own loading state, because it is its own read — the rows
+            arriving does not mean the summary has. */}
         <section className="mt-4">
-          <h3 className="text-sm font-bold text-accent">{digits(2, locale)}. {t("ext_decisions")}</h3>
+          <h3 className="text-sm font-bold text-accent">{digits(2, locale)}. {t("minutesSummary")}</h3>
+          {summary === null ? <SkeletonLines lines={3} className="mt-1.5" />
+            : summary === "failed" ? <p className="mt-1.5 text-sm text-fg-muted">{t("minutesSummaryFailed")}</p>
+              : summaryParagraphs.length === 0
+                ? <p className="mt-1.5 text-sm text-fg-muted">{t("minutesNoSummary")}</p>
+                : (
+                  <div className="mt-1.5 space-y-2">
+                    {summaryParagraphs.map((line, i) => (
+                      <p key={i} className="text-sm leading-7 text-fg">{line}</p>
+                    ))}
+                  </div>
+                )}
+        </section>
+
+        <section className="mt-4">
+          <h3 className="text-sm font-bold text-accent">{digits(3, locale)}. {t("ext_decisions")}</h3>
           {items === null ? <p className="mt-1.5 text-sm text-fg-muted">…</p>
             : decisions.length === 0 ? <p className="mt-1.5 text-sm text-fg-muted">{t("minutesNoDecisions")}</p>
               : (
@@ -238,7 +310,7 @@ export function MinutesTab({ meeting, myName, myId, onChanged }: {
         </section>
 
         <section className="mt-4">
-          <h3 className="text-sm font-bold text-accent">{digits(3, locale)}. {t("ext_actions")}</h3>
+          <h3 className="text-sm font-bold text-accent">{digits(4, locale)}. {t("ext_actions")}</h3>
           {items === null ? <p className="mt-1.5 text-sm text-fg-muted">…</p>
             : actions.length === 0 ? <p className="mt-1.5 text-sm text-fg-muted">{t("minutesNoActions")}</p>
               : (
@@ -254,7 +326,7 @@ export function MinutesTab({ meeting, myName, myId, onChanged }: {
         </section>
 
         <section className="mt-4 border-t border-border pt-3">
-          <h3 className="text-sm font-bold text-accent">{digits(4, locale)}. {t("minutesSignatures")}</h3>
+          <h3 className="text-sm font-bold text-accent">{digits(5, locale)}. {t("minutesSignatures")}</h3>
           {meeting.minutes_signatures.length === 0 ? (
             <div className="mt-2 grid place-items-center">
               <span className="grid h-20 w-20 place-items-center rounded-full border-2 border-dashed border-border text-center text-[10px] leading-4 text-fg-subtle">

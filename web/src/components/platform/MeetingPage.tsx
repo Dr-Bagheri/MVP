@@ -1319,7 +1319,8 @@ function PostStage({ meeting, call, me, locale, onGoHold, onChanged, onBackToMee
       ) : null}
       {tab === "notes" ? <NotesTab callId={meeting.call_id} locale={locale} /> : null}
       {tab === "minutes" ? (
-        <MinutesTab meeting={meeting} myName={me !== null ? personName(me, locale) : ""}
+        <MinutesTab meeting={meeting} callId={meeting.call_id}
+          myName={me !== null ? personName(me, locale) : ""}
           myId={me !== null ? me.id : null} onChanged={onChanged} />
       ) : null}
     </div>

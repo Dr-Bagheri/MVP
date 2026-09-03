@@ -247,7 +247,10 @@ export function IconRail() {
         >
           <Link
             href="/profile"
-            className="-m-1 flex min-w-0 flex-1 items-center gap-2.5 rounded-xl p-1 transition-colors hover:bg-surface-2"
+            title={personName(me, locale)}
+            className={`-m-1 flex min-w-0 items-center rounded-xl p-1 transition-colors hover:bg-surface-2 ${
+              compact ? "justify-center" : "flex-1 gap-2.5"
+            }`}
           >
             {/* 2026-09-03: the platform's avatar, not a fifth hand-drawn one.
                 `md` IS the 36px this drew by hand, so the picture is the same
@@ -258,6 +261,7 @@ export function IconRail() {
                 header, over three different grounds, for the same person on
                 the same screen. */}
             <Avatar name={personName(me, locale)} src={me.avatar_url} size="md" />
+            {compact ? null : (
             <span className="min-w-0">
               <span className="block truncate text-sm font-semibold text-fg">
                 {personName(me, locale)}
@@ -269,7 +273,21 @@ export function IconRail() {
                 {me.org_name ? ` · ${me.org_name}` : ""}
               </span>
             </span>
+            )}
           </Link>
+          {/* SIGN OUT IS NOT IN THE COMPACT MENU (user report, 2026-09-03:
+              "the sign out icon came into the profile icon — just remove it in
+              compact version of the menu"). At 64px the row has space for one
+              thing, and the two controls were landing on top of each other:
+              an avatar with a second button inside its own box is a click
+              target that means two different things depending on the pixel,
+              which is the exact reason this button is a SIBLING of the profile
+              link rather than nested in it.
+              It is not lost — the avatar menu in the top bar carries sign-out
+              too, at every width. Removing the second copy from a 64px column
+              costs nothing; leaving it there costs a mis-click that ends the
+              session. */}
+          {compact ? null : (
           <button
             type="button"
             aria-label={t("signOut")}
@@ -289,6 +307,7 @@ export function IconRail() {
           >
             <IconOpen width={14} height={14} className="rotate-180 rtl:rotate-0" />
           </button>
+          )}
         </div>
       ) : null}
     </nav>
