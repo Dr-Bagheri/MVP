@@ -50,8 +50,13 @@ function Clock() {
   }).format(now);
   return (
     /* boxed like its neighbours (user directive): the bar's controls all
-       wear the same bordered pill, and the clock was the one bare element */
-    <span className="hidden h-9 shrink-0 items-center gap-1.5 rounded-lg border border-border bg-surface px-3 text-xs text-fg-muted lg:flex">
+       wear the same bordered pill, and the clock was the one bare element.
+       audit finding, 2026-09-02: that box was hand-rolled (h-9, 12px corner,
+       11.5px) beside a bar of 8px-cornered controls — the theme's compact
+       size says the same thing and cannot drift from it. A span wearing
+       `.btn btn-sm` is Meetings.tsx:526's own idiom: this is a readout, not
+       a control, so it takes the shape without becoming pressable. */
+    <span className="btn btn-sm hidden cursor-default gap-1.5 border border-border font-medium text-fg-muted lg:inline-flex">
       <span>{formatDate(now.toISOString(), locale)}</span>
       <span aria-hidden>·</span>
       <span>{time}</span>
@@ -96,14 +101,21 @@ export function TopBar({
   const switchTo = (next: "fa" | "en") => router.replace(pathname, { locale: next });
 
   return (
+    /* audit finding, 2026-09-02: the bar was `h-14` (56px) while
+       SCAFFOLD.topBarHeight has been 62 since the reference measurement and
+       tailwind emits `height.topbar` for it — with NO consumer anywhere in
+       src, so the token had never once described this bar (48 before the
+       measurement, 62 after, the bar 56 throughout). `h-topbar` is the whole
+       point of the token: the blueprint's number reaches the shell, and a
+       future change to it lands here without a hand edit. */
     <header
-      className="relative z-30 h-14 shrink-0 overflow-visible"
+      className="relative z-30 h-topbar shrink-0 overflow-visible"
       data-platform-topbar
     >
       {/* Three real columns reserve the centre for the assistant. This keeps
           the orb ring from becoming an invisible layer over breadcrumbs
           or the controls at the other end of the bar. */}
-      <div className="relative z-20 grid h-14 grid-cols-[minmax(0,1fr)_72px_minmax(0,1fr)] items-center border-b border-border bg-surface px-3 md:grid-cols-[minmax(0,1fr)_84px_minmax(0,1fr)] md:px-4">
+      <div className="relative z-20 grid h-topbar grid-cols-[minmax(0,1fr)_72px_minmax(0,1fr)] items-center border-b border-border bg-surface px-3 md:grid-cols-[minmax(0,1fr)_84px_minmax(0,1fr)] md:px-4">
         <div className="flex min-w-0 items-center gap-2">
           {/* The avatar LEFT this bar (user directive, 2026-09-02): the
               person and their way out live at the foot of the rail, where
@@ -142,9 +154,17 @@ export function TopBar({
             goes to the search surface with the query — the box is a door,
             not a second implementation of search.
           */}
+          {/* audit finding, 2026-09-02: this box was a `rounded-xl bg-surface`
+              frame — the 16px TILE corner and the card's own ground — around
+              an `h-9 text-xs` field, so the product's one search box wore
+              none of `.input` and put a second radius in a bar whose other
+              controls are 8/11px. `.input` supplies the corner, the recessed
+              `bg-field` ground, the border, the inline padding and the type;
+              only the width and the focus-within (the ring belongs to the
+              form, the focus to the field inside it) are written here. */}
           <form
             role="search"
-            className="hidden min-w-0 items-center gap-2 rounded-xl border border-border bg-surface px-3 lg:flex"
+            className="input hidden w-56 min-w-0 items-center gap-2 focus-within:border-accent lg:flex"
             onSubmit={(e) => {
               e.preventDefault();
               const q = new FormData(e.currentTarget).get("q");
@@ -162,35 +182,49 @@ export function TopBar({
             <IconSearch width={14} height={14} className="shrink-0 text-fg-subtle" />
             <input
               name="q"
-              className="h-9 w-44 min-w-0 bg-transparent text-xs text-fg outline-none placeholder:text-fg-subtle"
+              className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-fg-subtle"
               placeholder={tPlatform("searchEverything")}
               aria-label={tPlatform("searchEverything")}
             />
           </form>
 
           {/* the theme, one press away (the reference keeps it in the bar) —
-              the SAME store Settings·General writes, never a second state */}
+              the SAME store Settings·General writes, never a second state.
+              audit finding, 2026-09-02: it was a hand-rolled 36px square with
+              the 16px tile corner, which the control guard cannot see (its
+              `place-items-center` is a grid, and the regex asks for
+              flex+items-center). `.btn-icon` is the theme's icon button, 28
+              on a side — the same line Meetings.tsx:532 writes. `.btn`
+              already composes `.tap` and the transition. */}
           <button
             type="button"
             onClick={() => storeTheme(theme === "dark" ? "light" : "dark")}
             title={tPlatform("themeToggle")}
             aria-label={tPlatform("themeToggle")}
-            className="tap hidden h-9 w-9 shrink-0 place-items-center rounded-xl border border-border bg-surface text-fg-muted transition-colors hover:text-fg md:grid"
+            className="btn btn-icon hidden border border-border text-fg-muted hover:text-fg md:inline-flex"
           >
             {theme === "dark" ? <IconSun width={16} height={16} /> : <IconMoon width={16} height={16} />}
           </button>
 
-          <div className="hidden overflow-hidden rounded-lg border border-border md:flex">
+          {/* audit finding, 2026-09-02: the two segments were a 36px,
+              12px-cornered group written by hand — invisible to the control
+              guard, whose regex reads only quoted class strings and these are
+              a template literal. The theme's segmented shape is `.btn-sm`,
+              and the meetings toolbar directly under this bar renders its own
+              segments exactly this way (Meetings.tsx:194) — same pair, same
+              active face, so the bar and the page below it stop disagreeing
+              about what a segmented control looks like. */}
+          <div className="hidden items-center gap-1 md:flex">
             {(["fa", "en"] as const).map((l) => (
               <button
                 key={l}
                 type="button"
                 onClick={() => switchTo(l)}
                 aria-current={l === locale ? "true" : undefined}
-                className={`h-9 px-3 text-xs transition-colors ${
+                className={`btn btn-sm border font-medium ${
                   l === locale
-                    ? "bg-accent-soft font-semibold text-accent"
-                    : "bg-surface text-fg-muted hover:text-fg"
+                    ? "border-accent bg-accent-soft font-semibold text-accent"
+                    : "border-border text-fg-muted hover:text-fg"
                 }`}
               >
                 {l}
@@ -215,7 +249,13 @@ export function TopBar({
           (user directive, 2026-08-22: "just one line circle … make the orb
           and the particles small and fit 65% of it on the top menu") —
           no glass sphere, no curved bulge, no highlight layers. 65% of
-          the ring sits within the 56px bar; the rest floats below it. */}
+          the ring sits within the bar (`h-topbar`); the rest floats below.
+
+          The offsets are DERIVED from that rule, not chosen: top = bar −
+          0.65·ring, so 62 − 39 = 23 for the 60px ring and 62 − 44.2 ≈ 18
+          for the 68px one. They were 17/12, which is the same rule solved
+          for a 56px bar — the bar's real height until this pass, and the
+          reason these two numbers had to move with it. */}
       <div
         ref={setPresenceAnchorRef}
         id="neurai-topbar-presence"
@@ -225,7 +265,7 @@ export function TopBar({
            exactly the "trace" the directive removes; invisible keeps the
            element (the anchor registration and the drop target) without
            the visual */
-        className="pointer-events-auto absolute left-1/2 top-[17px] z-30 h-[60px] w-[60px] -translate-x-1/2 rounded-full border border-border-strong bg-surface empty:invisible md:top-[12px] md:h-[68px] md:w-[68px]"
+        className="pointer-events-auto absolute left-1/2 top-[23px] z-30 h-[60px] w-[60px] -translate-x-1/2 rounded-full border border-border-strong bg-surface empty:invisible md:top-[18px] md:h-[68px] md:w-[68px]"
       />
     </header>
   );

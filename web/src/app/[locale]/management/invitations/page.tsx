@@ -35,6 +35,14 @@ export default function InvitationsPage() {
 
   const [me, setMe] = useState<User | null>(null);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
+  /* audit finding, 2026-09-02: `invitations` starts as [] and the "no
+     invitations" sentence rendered on EVERY load until the fetch answered —
+     loading and empty were one picture, and the card grew after first paint.
+     The flag flips on the answer (refusal included: the list is then honestly
+     empty of anything we can show); until then DataTable draws skeleton rows
+     in its own frame. A refresh through the epoch keeps the rows on screen —
+     the skeleton is for the first paint, never for a refetch. */
+  const [loaded, setLoaded] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<Role>("member");
   const [minted, setMinted] = useState<MintedInvitation | null>(null);
@@ -52,7 +60,11 @@ export default function InvitationsPage() {
 
   useEffect(() => {
     if (!isAdmin) return;
-    void api.invitations().then(setInvitations).catch(() => undefined);
+    void api
+      .invitations()
+      .then(setInvitations)
+      .catch(() => undefined)
+      .finally(() => setLoaded(true));
   }, [isAdmin, invitationsEpoch]);
 
   /* ONLY the outstanding ones (user verdict): a revoked or redeemed
@@ -111,8 +123,6 @@ export default function InvitationsPage() {
     }
   }
 
-
-
   if (me && !isAdmin) {
     return (
       <ManagementPane activeSlug="invitations">
@@ -139,8 +149,14 @@ export default function InvitationsPage() {
               <p className="text-sm text-fg" role="status">
                 {t("inviteEmailed", { email: minted.email })}
               </p>
+              {/* audit finding, 2026-09-02: this was `.btn-secondary` re-sized
+                  by hand to 36px/text-xs — a height matching neither .btn (38)
+                  nor .btn-sm (34). It wears .btn-sm now, and a BORDER rather
+                  than .btn-secondary's surface-2 fill, because the notice it
+                  sits on is itself surface-2: a filled button on its own
+                  ground has no edge to find. */}
               <button
-                className="btn-secondary mt-2 h-9 min-h-0 px-3 text-xs"
+                className="btn btn-sm mt-2 border border-border font-medium text-fg"
                 onClick={() => setMinted(null)}
               >
                 {tCommon("done")}
@@ -160,8 +176,10 @@ export default function InvitationsPage() {
               <p className="ltr mt-2 break-all rounded-md bg-surface p-2 font-mono text-xs text-fg">
                 {minted.token}
               </p>
+              {/* audit finding, 2026-09-02: same shape as the emailed notice's
+                  button above — one control, one size, on the same ground */}
               <button
-                className="btn-secondary mt-3 h-9 min-h-0 px-3 text-xs"
+                className="btn btn-sm mt-3 border border-border font-medium text-fg"
                 onClick={() => setMinted(null)}
               >
                 {t("inviteStored")}
@@ -184,8 +202,14 @@ export default function InvitationsPage() {
               value={inviteEmail}
               onChange={(e) => setInviteEmail(e.target.value)}
             />
+            {/* audit finding, 2026-09-02: the select carried four overrides of
+                .input (h-11 min-h-0 py-0 text-sm md:h-10) — the exact string
+                the Settings dropdown was stripped of the same day — so below
+                md it was the one control in this row not level with the email
+                field beside it. `.input` owns height and type; only the width
+                is this row's to decide. */}
             <select
-              className="input h-11 min-h-0 w-auto py-0 text-sm md:h-10"
+              className="input w-auto"
               value={inviteRole}
               onChange={(e) => setInviteRole(e.target.value as Role)}
             >
@@ -212,6 +236,7 @@ export default function InvitationsPage() {
           <DataTable
             hideHeader
             rows={open}
+            loading={!loaded}
             rowKey={(inv) => inv.id}
             empty={<p className="text-sm text-fg-muted">{t("noInvitations")}</p>}
             menuItems={(inv) => [{

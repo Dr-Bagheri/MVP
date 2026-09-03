@@ -3,10 +3,19 @@ import { Children, cloneElement, isValidElement, type ReactNode } from "react";
 /**
  * M26 scaffold — the one card shape every form row lives in.
  *
- * Anatomy (from the approved blueprint, Supabase's FormPanel/FormSection
- * measurements): bordered panel, radius 8, rows on a 5/7 grid — label +
- * description at inline-start, control at inline-end — hairlines BETWEEN
- * rows (never around them), footer with actions at inline-end.
+ * Anatomy: bordered panel, label + description at inline-start and control at
+ * inline-end, hairlines BETWEEN rows (never around them), footer with actions
+ * at inline-end.
+ *
+ * audit finding, 2026-09-03: the sentence that stood here still quoted the
+ * blueprint's FIRST measurements — "radius 8, rows on a 5/7 grid, 24×32
+ * padding" — and this file had drawn none of the three for weeks (the radius
+ * moved to the card's 20, the grid was replaced by the fixed 160/380 row, and
+ * the rows are px-5 py-4 at every width). That is not a cosmetic slip: the
+ * footer's own gutter had frozen at the blueprint's 32 while the rows moved,
+ * so the prose describing the artifact and the artifact itself drifted apart
+ * together. The anatomy says what the component IS, and each move keeps its
+ * reason at the line where it happened.
  *
  * The rows are divided by the PANEL (divide-y), not by each row knowing
  * whether it is first — so reordering rows cannot break the hairlines.
@@ -24,9 +33,9 @@ export function FormPanel({ children }: { children: ReactNode }) {
 }
 
 /**
- * One label-start / control-end row. Stacks below lg (the blueprint's grid
- * collapses on narrow screens); 24×32 padding from md up, one notch tighter
- * below.
+ * One label-start / control-end row. Stacks below md, and carries the panel's
+ * gutter: `px-5 py-4` at EVERY width — the blueprint's 24×32 went out with the
+ * 5/7 grid it belonged to (see the layout note below).
  *
  * **The description is NOT inside the <label>.** A hint nested in the label
  * becomes part of the control's accessible NAME — announced whole on every
@@ -101,8 +110,15 @@ export function FormRow({
  * hairline); primary action at inline-end, per the blueprint.
  */
 export function PanelFooter({ children }: { children: ReactNode }) {
+  /* audit finding, 2026-09-03: `md:px-8` was a frozen copy of the panel's OLD
+     32px gutter. FormRow took the fixed-160/380 layout and moved to `px-5`,
+     and nothing moved the footer with it — so from md up the save button sat
+     12px further in than every label it stands under, on the one row whose
+     whole job is to line up with the form it closes. The footer takes the
+     rows' gutter because it sits under the rows; if that gutter ever changes,
+     it changes here and at FormRow together. */
   return (
-    <div className="flex items-center justify-end gap-2 bg-surface px-5 py-4 md:px-8">
+    <div className="flex items-center justify-end gap-2 bg-surface px-5 py-4">
       {children}
     </div>
   );

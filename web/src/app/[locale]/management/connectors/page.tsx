@@ -5,6 +5,9 @@ import { useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { GatewayKey, User } from "@/api/types";
 import { SettingsPane } from "@/components/platform/SettingsPane";
+// audit finding, 2026-09-02: the keys slot rendered NOTHING until identity
+// arrived — the loading rule wants the frame first and the content waiting in it
+import { SkeletonLines } from "@/components/scaffold";
 import { Card, Chip, PageHeader } from "@/components/ui";
 import { KeysCard } from "./_components/KeysCard";
 
@@ -79,7 +82,22 @@ export default function ConnectorsPage() {
         <p className="text-sm leading-7 text-fg-muted">{g("intro")}</p>
       </Card>
 
-      {me === null ? null : isAdmin ? (
+      {me === null ? (
+        /*
+         * audit finding, 2026-09-02: this slot was `null` until api.me()
+         * resolved, so the page was the intro card and then a gap, and the
+         * keys card (or the refusal card) dropped in afterwards. Which of the
+         * two it will be is unknown until identity lands — that is exactly why
+         * it cannot be either of them yet — but the CARD is known, so the card
+         * renders now and only its contents wait. Three lines is the promise:
+         * the refusal card is a heading and a sentence; the keys card is a
+         * heading, a button row and a table, so the space is a floor, not a
+         * guess at the table.
+         */
+        <Card className="mb-4">
+          <SkeletonLines lines={3} />
+        </Card>
+      ) : isAdmin ? (
         <KeysCard
           keys={keys}
           members={members}

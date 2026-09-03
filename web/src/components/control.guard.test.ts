@@ -31,14 +31,28 @@ const SRC = join(process.cwd(), "src");
 
 const REMAINING: Record<string, number> = {
   "app/[locale]/(auth)/pending/page.tsx": 1,
-  "app/[locale]/(auth)/suspended/page.tsx": 1,
+  /* (auth)/suspended/page.tsx LEFT this list on 2026-09-03 (audit finding):
+     its entry was never a control — a decorative status mark that only
+     matched because it was spelled `flex items-center`. It is the platform's
+     40px icon well now (`grid place-items-center`, a set icon instead of an
+     emoji), so the match is gone with the drift rather than around it. The
+     pending wall next door still carries the same emoji-in-a-circle and its
+     own entry; converting it is the same one-line change. */
   "components/RichTextEditor.tsx": 1,
   "components/echo/SpeakersDirectory.tsx": 1,
-  "components/platform/Hub.tsx": 1,
-  "components/platform/Integrations.tsx": 1,
-  "components/platform/Meetings.tsx": 1,
+  /* Hub.tsx LEFT this list on 2026-09-02 (audit finding): its one entry was
+     the Create chip's hand-rolled h-8 geometry, which wears `.chip` now. */
+  /* Integrations.tsx LEFT this list on 2026-09-02 (audit finding): its one
+     entry was the "not configured" sentence dressed as a rounded-full pill,
+     which is plain copy now. */
   "components/platform/TaskBoard.tsx": 1,
-  "components/platform/TopBar.tsx": 1,
+  /* TopBar.tsx LEFT this list on 2026-09-02 (audit finding): its one entry
+     was the clock's hand-rolled h-9/12px box, which wears `.btn btn-sm` now.
+     The same pass converted the theme toggle to `.btn-icon` and the fa/en
+     segments to `.btn-sm` — neither of which this guard could see (a grid,
+     and a template-literal className), which is worth remembering when this
+     list reads as short. The entry is deleted rather than zeroed: a zero row
+     reads as coverage and is a hole. */
   "components/platform/WorkflowRunDialog.tsx": 1,
   "components/platform/meeting/Room.tsx": 1,
   "components/platform/meeting/Stage.tsx": 1,

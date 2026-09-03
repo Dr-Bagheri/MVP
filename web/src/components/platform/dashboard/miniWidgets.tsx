@@ -645,7 +645,19 @@ function StatCard({ href, icon, tint, value, label, locale, percent = false }: {
        * card stretches to the cell it is given and refuses to go below the
        * height its own contents need.
        */
-      className="flex h-full min-h-[56px] min-w-0 items-center gap-2.5 overflow-hidden rounded-2xl border border-border bg-surface px-3 transition-colors hover:border-border-strong"
+      /*
+       * Audit finding, 2026-09-02: the chrome was re-spelled by hand
+       * (`rounded-2xl border border-border bg-surface`) — the same corner,
+       * edge and ground as `.card`, minus its ambient shadow, so these four
+       * sat as flat paper beside every card on the board (globals.css's own
+       * words for a card without the shadow). It wears `.card` now. NOT
+       * `.tile`: `.tile` is unlayered and sets `min-height: 0`, which beats
+       * the layered `min-h-[56px]` utility whatever the order and would
+       * silently drop the floor the comment above calls load-bearing; `.card`
+       * lives in @layer components, so `px-3 py-0` and the min-height win
+       * over its `p-4`, and the height decisions above stand unchanged.
+       */
+      className="card flex h-full min-h-[56px] min-w-0 items-center gap-2.5 overflow-hidden px-3 py-0 transition-colors hover:border-border-strong"
     >
       <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${tint}`} aria-hidden>
         {icon}
@@ -976,14 +988,23 @@ export function WeekWidget() {
                   : t("weekMeetingCount", { n: digits(weekCount, locale) })}
           </span>
         </div>
+        {/*
+          Audit finding, 2026-09-02: these two hand-rolled a 28px square with
+          a 12px corner (`grid h-7 w-7 rounded-lg`) — the exact size
+          `.btn-icon` exists for, at the wrong radius, and without `.btn`'s
+          hover transition. Beside the meetings page's week nav (the same
+          two chevrons in `btn btn-icon`) they read as a different button
+          family. The control guard could not see it: it keys on
+          `flex`+`items-center`, and `grid place-items-center` slips past.
+        */}
         <span className="flex items-center gap-1">
           <button type="button" aria-label={t("weekPrev")} onClick={() => setOffset((v) => v - 1)}
-            className="tap grid h-7 w-7 place-items-center rounded-lg border border-border text-fg-muted hover:text-fg">
+            className="btn btn-icon border border-border text-fg-muted hover:text-fg">
             {/* BACK points against the reading direction */}
             <IconChevronRight width={12} height={12} className="rotate-180 rtl:rotate-0" />
           </button>
           <button type="button" aria-label={t("weekNext")} onClick={() => setOffset((v) => v + 1)}
-            className="tap grid h-7 w-7 place-items-center rounded-lg border border-border text-fg-muted hover:text-fg">
+            className="btn btn-icon border border-border text-fg-muted hover:text-fg">
             <IconChevronRight width={12} height={12} className="rtl:rotate-180" />
           </button>
         </span>

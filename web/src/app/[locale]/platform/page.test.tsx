@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const platformAccess = vi.fn();
@@ -96,12 +96,23 @@ function rootData() {
   });
 }
 
-/** Find the user row that contains a given email. */
-function userRow(email: string): HTMLElement {
-  const cell = screen.getByText(email);
-  const row = cell.closest("div.flex.flex-wrap");
-  if (!row) throw new Error(`row for ${email} not found`);
-  return row as HTMLElement;
+/**
+ * Open a row's action menu the way a person does.
+ *
+ * The console's actions used to be a strip of bordered buttons in each row;
+ * they are the platform's right-click row menu now (audit finding,
+ * 2026-09-02), which is the same gesture the records table, the members table
+ * and the sessions table answer to. The tests moved with the affordance — what
+ * they assert is unchanged: WHICH actions a given row offers, and which of
+ * them it refuses.
+ */
+function openRowMenu(text: string): void {
+  fireEvent.contextMenu(screen.getByText(text));
+}
+
+/** A menu entry, by its label. */
+function item(name: string): HTMLElement {
+  return screen.getByRole("menuitem", { name });
 }
 
 describe("Platform-root console", () => {
@@ -127,9 +138,10 @@ describe("Platform-root console", () => {
     await screen.findByText("Northwind");
     expect(platformOrganizations).toHaveBeenCalledWith({ search: "", limit: 50, deleted: false });
 
-    // The whole point of the redesign: the action is a live button, not a
+    // The whole point of the redesign: the action is a live entry, not a
     // permanently-disabled one gated behind a hidden textarea.
-    expect(screen.getByRole("button", { name: "تعلیق سازمان" })).not.toBeDisabled();
+    openRowMenu("Northwind");
+    expect(item("تعلیق سازمان")).not.toHaveAttribute("aria-disabled", "true");
 
     // The black title and the privacy banner were removed by request; guard
     // against either quietly returning (the banner text is unique to it).
@@ -144,7 +156,9 @@ describe("Platform-root console", () => {
     setPlatformOrganizationStatus.mockResolvedValue({ changed: true });
     render(<PlatformControlPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "تعلیق سازمان" }));
+    await screen.findByText("Northwind");
+    openRowMenu("Northwind");
+    fireEvent.click(item("تعلیق سازمان"));
 
     // dialog open: confirm is disabled until a valid reason is typed
     const reason = await screen.findByLabelText(/دلیل/);
@@ -167,10 +181,31 @@ describe("Platform-root console", () => {
 
     fireEvent.click(screen.getByRole("tab", { name: /کاربران/ }));
     await screen.findByText("operator@example.test");
-    const self = userRow("operator@example.test");
-    expect(within(self).getByRole("button", { name: "غیرفعال‌کردن کاربر" })).toBeDisabled();
-    expect(within(self).getByRole("button", { name: "برداشتن ریشهٔ پلتفرم" })).toBeDisabled();
-    expect(within(self).getByRole("button", { name: "حذف کاربر" })).toBeDisabled();
+    openRowMenu("operator@example.test");
+    /* REFUSED, not absent. The three acts stay in the menu and say no —
+       "you may not disable yourself" and "there is no such action" are
+       different sentences, and this is the screen where the difference is
+       the point. */
+    expect(item("غیرفعال‌کردن کاربر")).toHaveAttribute("aria-disabled", "true");
+    expect(item("برداشتن ریشهٔ پلتفرم")).toHaveAttribute("aria-disabled", "true");
+    expect(item("حذف کاربر")).toHaveAttribute("aria-disabled", "true");
+  });
+
+  it("offers those same three acts on SOMEBODY ELSE — the row that must answer YES", async () => {
+    /* the control that makes the assertion above mean something: without it,
+       a menu that disabled everything unconditionally would pass it, and the
+       console would be a screen that can only watch. */
+    platformAccess.mockResolvedValue({ platform_root: true });
+    render(<PlatformControlPage />);
+    await screen.findByText("Northwind");
+
+    fireEvent.click(screen.getByRole("tab", { name: /کاربران/ }));
+    await screen.findByText("member@example.test");
+    openRowMenu("member@example.test");
+    expect(item("غیرفعال‌کردن کاربر")).not.toHaveAttribute("aria-disabled", "true");
+    expect(item("حذف کاربر")).not.toHaveAttribute("aria-disabled", "true");
+    /* a member is not a root, so the grant is what their row offers */
+    expect(item("تبدیل به ریشهٔ پلتفرم")).not.toHaveAttribute("aria-disabled", "true");
   });
 
   it("edits organization metadata with a reason; sends name + locale, never content", async () => {
@@ -179,7 +214,8 @@ describe("Platform-root console", () => {
     render(<PlatformControlPage />);
     await screen.findByText("Northwind");
 
-    fireEvent.click(screen.getByRole("button", { name: "ویرایش" }));
+    openRowMenu("Northwind");
+    fireEvent.click(item("ویرایش"));
 
     const name = await screen.findByLabelText("نام سازمان");
     expect((name as HTMLInputElement).value).toBe("Northwind"); // prefilled from the record
@@ -201,7 +237,8 @@ describe("Platform-root console", () => {
 
     fireEvent.click(screen.getByRole("tab", { name: /کاربران/ }));
     await screen.findByText("member@example.test");
-    fireEvent.click(within(userRow("member@example.test")).getByRole("button", { name: "ویرایش" }));
+    openRowMenu("member@example.test");
+    fireEvent.click(item("ویرایش"));
 
     // The immutability note is shown; the email is nowhere editable.
     expect(await screen.findByText("ایمیل، هویتِ ورود است و اینجا قابل تغییر نیست.")).toBeTruthy();
@@ -214,7 +251,8 @@ describe("Platform-root console", () => {
     render(<PlatformControlPage />);
     await screen.findByText("Northwind");
 
-    fireEvent.click(screen.getByRole("button", { name: "حذف سازمان" }));
+    openRowMenu("Northwind");
+    fireEvent.click(item("حذف سازمان"));
     fireEvent.change(await screen.findByLabelText(/دلیل/), { target: { value: "offboarding the account" } });
     fireEvent.click(screen.getByRole("button", { name: "تأیید" }));
 
@@ -234,9 +272,14 @@ describe("Platform-root console", () => {
       expect(platformOrganizations).toHaveBeenCalledWith({ search: "", limit: 50, deleted: true }),
     );
     expect(await screen.findByText("Oldco")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "بازیابی سازمان" })).toBeTruthy();
-    // In trash view the destructive suspend/delete controls are not present.
-    expect(screen.queryByRole("button", { name: "حذف سازمان" })).toBeNull();
+    openRowMenu("Oldco");
+    expect(item("بازیابی سازمان")).toBeTruthy();
+    // In trash view the suspend/delete acts are not offered at all — the row
+    // is already deleted, and the only two questions left are put it back or
+    // finish it now.
+    expect(screen.queryByRole("menuitem", { name: "حذف سازمان" })).toBeNull();
+    expect(screen.queryByRole("menuitem", { name: "تعلیق سازمان" })).toBeNull();
+    expect(item("پاک‌سازی فوری")).toBeTruthy();
   });
 
   it("claims only the signed-in account; no target email or password is sent", async () => {

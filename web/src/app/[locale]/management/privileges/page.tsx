@@ -5,9 +5,21 @@ import { useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { CapabilityState, User } from "@/api/types";
 import { ManagementPane } from "@/components/platform/ManagementPane";
-import { PageHeader } from "@/components/scaffold";
+import { PageHeader, Skeleton } from "@/components/scaffold";
 import { Card } from "@/components/ui";
 import { notify } from "@/lib/notify";
+
+/**
+ * audit finding, 2026-09-03: how many member rows the loading skeleton stands
+ * in for. 0101's catalogue serves five member capabilities to every admin and
+ * owner alike, so that group is STRUCTURE — known before the network. The
+ * admin group is not reserved: whether it arrives at all depends on who is
+ * asking, and a placeholder for a group that then never comes moves the layout
+ * exactly the way an absent one does. Reserved space is a promise about the
+ * size of what is coming; if the catalogue grows, this number is what keeps
+ * the promise true.
+ */
+const MEMBER_ROWS = 5;
 
 /**
  * MEMBER PRIVILEGES (user directive, 2026-08-26; db/0101).
@@ -33,6 +45,12 @@ export default function PrivilegesPage() {
   const tAdmin = useTranslations("admin");
   const [me, setMe] = useState<User | null>(null);
   const [state, setState] = useState<CapabilityState | null>(null);
+  /* audit finding, 2026-09-03: `state === null` used to mean two things —
+     "not answered yet" and "the read failed" — and once a skeleton stands in
+     for the first, the second would keep it pulsing forever, reporting
+     "loading" about a state that is not loading. A failed fetch is an answer;
+     it gets its own flag so the screen can name which nothing it is showing. */
+  const [loadFailed, setLoadFailed] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const isAdmin = me?.role === "admin" || me?.role === "owner";
@@ -43,7 +61,14 @@ export default function PrivilegesPage() {
 
   useEffect(() => {
     if (!isAdmin) return;
-    void api.capabilities().then(setState).catch(() => setState(null));
+    setLoadFailed(false);
+    void api
+      .capabilities()
+      .then(setState)
+      .catch(() => {
+        setState(null);
+        setLoadFailed(true);
+      });
   }, [isAdmin]);
 
   /** absent means ALLOWED — the table records decisions, not permissions */
@@ -97,10 +122,53 @@ export default function PrivilegesPage() {
         * A component that hid data it had been sent would be a curtain,
         * not a wall.
         */}
-      {(["member", "admin"] as const)
-        .filter((role) => (state?.capabilities ?? []).some((cap) => cap.role === role))
+      {/* audit finding, 2026-09-03: `state` is null until capabilities()
+          answers (and that fetch waits on identity first), so the filter
+          below yielded nothing and the page was the heading followed by
+          empty space until the cards dropped in and extended it — loading
+          and "nothing arrived" as one picture. The member card's frame is
+          known before the network, so it stands first with the rows'
+          geometry inside it (title line, hint line, the switch's label) and
+          only the words wait. The loading guard could not see this one:
+          its regex matches `=== null ? null :` and this page hid the same
+          vanish behind `?? []`. */}
+      {state === null ? (
+        loadFailed ? (
+          <Card>
+            <p className="text-sm text-fg-muted">{t("privilegeLoadFailed")}</p>
+          </Card>
+        ) : (
+          <Card className="mb-4">
+            <div className="mb-3 flex items-baseline justify-between gap-3">
+              <h2 className="h-section">{t("privilegeGroup_member")}</h2>
+            </div>
+            {/* audit finding, 2026-09-03: `aria-busy` and `aria-hidden` sat on
+                this one element, and aria-hidden takes the subtree out of the
+                accessibility tree — so the busy state it announces was
+                unreachable, present and inert, on the page where it was
+                written to be heard. No test could see it either: the sibling
+                skeletons are asserted with querySelector("[aria-busy]"),
+                which does not care about aria-hidden. The platform's own
+                idiom (AssistantSettings, Hub, MeetingPage) is busy on the
+                container and hidden on the leaves — and every Skeleton sets
+                its own aria-hidden, so the placeholders stay decorative. */}
+            <ul className="divide-y divide-border" aria-busy="true">
+              {Array.from({ length: MEMBER_ROWS }, (_, i) => (
+                <li key={i} className="flex items-start justify-between gap-4 py-3">
+                  <span className="min-w-0 flex-1">
+                    <Skeleton className="h-4 w-1/3" />
+                    <Skeleton className="mt-3 h-3 w-2/3" />
+                  </span>
+                  <Skeleton className="h-4 w-14 shrink-0" />
+                </li>
+              ))}
+            </ul>
+          </Card>
+        )
+      ) : (["member", "admin"] as const)
+        .filter((role) => state.capabilities.some((cap) => cap.role === role))
         .map((role) => {
-        const editable = role === "member" || (state?.may_set_admin ?? false);
+        const editable = role === "member" || state.may_set_admin;
         return (
           <Card key={role} className="mb-4">
             <div className="mb-3 flex items-baseline justify-between gap-3">
@@ -110,7 +178,11 @@ export default function PrivilegesPage() {
               )}
             </div>
             <ul className="divide-y divide-border">
-              {(state?.capabilities ?? [])
+              {/* audit finding, 2026-09-03: this branch only renders once
+                  `state` has answered, so the `?? []` that used to stand in
+                  for "not yet" would now be a second, silent spelling of the
+                  loading state one level down. */}
+              {state.capabilities
                 .filter((cap) => cap.role === role)
                 .map((cap) => (
                   <li key={cap.key} className="flex items-start justify-between gap-4 py-3">

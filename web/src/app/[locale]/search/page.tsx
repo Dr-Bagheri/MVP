@@ -177,33 +177,39 @@ export default function SearchPage() {
               {t("results", { count: digits(hits.length, locale) })}
             </p>
           ) : null}
-          <div className="rounded-lg border border-border bg-surface">
-            <DataTable
-              loading={hits === null}
-              rows={rows}
-              rowKey={(hit) => hit.rowId}
-              columns={columns}
-              onRowClick={(hit) => router.push(`/calls/${hit.call_id}`)}
-              menuItems={(hit) => [
-                {
-                  key: "open",
-                  label: t("openRecord"),
-                  icon: <IconOpen width={16} height={16} />,
-                  onSelect: () => router.push(`/calls/${hit.call_id}`),
+          {/* NO FRAME (audit finding, 2026-09-02): the table renders bare,
+              like members, invitations and Audit Logs. DataTable's rows are
+              cards of their own — each one bg-surface with its own border
+              and a 16px corner — so a bg-surface box around them draws an
+              edge around a set of edges, and this hand-drawn rounded-lg was
+              the last one of its kind on a list screen. If the records
+              anatomy above ever wants its frame back, it is RecordsSection's
+              own `<Card className="!p-0">`, never a hand-drawn border. */}
+          <DataTable
+            loading={hits === null}
+            rows={rows}
+            rowKey={(hit) => hit.rowId}
+            columns={columns}
+            onRowClick={(hit) => router.push(`/calls/${hit.call_id}`)}
+            menuItems={(hit) => [
+              {
+                key: "open",
+                label: t("openRecord"),
+                icon: <IconOpen width={16} height={16} />,
+                onSelect: () => router.push(`/calls/${hit.call_id}`),
+              },
+              {
+                key: "copy",
+                label: t("copyText"),
+                icon: <IconCopy width={16} height={16} />,
+                onSelect: () => {
+                  void navigator.clipboard
+                    .writeText(hit.snippet.replace(/<\/?mark>/g, ""))
+                    .then(() => notify(t("copied")));
                 },
-                {
-                  key: "copy",
-                  label: t("copyText"),
-                  icon: <IconCopy width={16} height={16} />,
-                  onSelect: () => {
-                    void navigator.clipboard
-                      .writeText(hit.snippet.replace(/<\/?mark>/g, ""))
-                      .then(() => notify(t("copied")));
-                  },
-                },
-              ]}
-            />
-          </div>
+              },
+            ]}
+          />
         </>
       )}
         </PageContainer>

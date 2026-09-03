@@ -8,7 +8,7 @@ import { ConfirmDialog } from "@/components/rowActions";
 import { notify } from "@/lib/notify";
 import { DataTable, StatusDot } from "@/components/DataTable";
 import { IconClose } from "@/components/icons";
-import { Card, Chip } from "@/components/ui";
+import { Chip } from "@/components/ui";
 import { formatDate, formatTime, personName } from "@/lib/format";
 import { useLocale } from "next-intl";
 import { signOutThisDevice } from "@/lib/signOut";
@@ -128,7 +128,7 @@ export function SecuritySettings() {
           {Array.isArray(orgSessions) && orgSessions.length === 0 ? (
             <p className="mt-3 text-sm text-fg-muted">{t("orgSessionsEmpty")}</p>
           ) : (
-            <Card className="mt-3 !p-0">
+            <div className="mt-3">
               <DataTable
                 loading={orgSessions === null}
                 rows={Array.isArray(orgSessions) ? orgSessions : []}
@@ -202,7 +202,7 @@ export function SecuritySettings() {
                   },
                 ]}
               />
-            </Card>
+            </div>
           )}
       </div>
       ) : null}
@@ -269,7 +269,7 @@ export function SecuritySettings() {
           /* the records table's own dress: the table lives in a Card (M42)
              — without it the rows float on the page background and the
              user rightly asked whether this was the same table */
-          <Card className="mt-3 !p-0">
+          <div className="mt-3">
             <DataTable
               loading={sessions === null}
               rows={sessions ?? []}
@@ -350,7 +350,7 @@ export function SecuritySettings() {
                 },
               ]}
             />
-          </Card>
+          </div>
         )}
       </div>
 

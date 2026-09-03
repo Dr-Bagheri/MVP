@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/routing";
 import { api } from "@/api/client";
-import { SkeletonLines } from "@/components/scaffold";
+import { Skeleton, SkeletonLines } from "@/components/scaffold";
 import { notify } from "@/lib/notify";
 import type { Call, CallNote, Me, MeetingAgendaItem, MeetingRecord, MeetingAttachment } from "@/api/types";
 import { useCrumbTitle } from "@/components/platform/CrumbTitle";
@@ -70,6 +70,14 @@ type Stage = "pre" | "hold" | "post";
  */
 const PLAN_COLUMNS = "lg:grid-cols-[1.5fr_1fr]";
 const STAGE_COLUMNS = "lg:grid-cols-[4fr_1fr]";
+/**
+ * The stepper's segmented frame — ONE spelling, worn by the real nav and by
+ * its loading stand-in, so the two cannot drift apart (audit finding,
+ * 2026-09-02). `rounded-lg` (12) is the concentric fit around 8px-cornered
+ * `.btn-sm` steps with 4px of padding; the 20px it wore before was the card
+ * radius on a control.
+ */
+const STEPPER_FRAME = "flex items-center gap-0.5 rounded-lg border border-border bg-surface p-1";
 type PostTab = "review" | "tasks" | "files" | "assistant" | "notes" | "minutes";
 
 export function MeetingPage({ id }: { id: string }) {
@@ -282,9 +290,48 @@ export function MeetingPage({ id }: { id: string }) {
     beginTake();
   }, [stage, meeting, beginTake]);
 
-  if (meeting === null) return <p className="p-6 text-sm text-fg-muted">…</p>;
-  if (meeting === "missing") return <p className="p-6 text-sm text-fg-muted">{t("notFound")}</p>;
-  if (meeting === "failed") return <p className="p-6 text-sm text-fg-muted">{t("readFailed")}</p>;
+  /*
+   * THE FRAME BEFORE THE RECORD (audit finding, 2026-09-02). This was a lone
+   * «…»: no stepper, no top bar, no cards until the read landed, and then
+   * all of it at once — "loading" and "an empty page" were the same picture.
+   * The stepper and the plan's two columns are structure, known before the
+   * network, so they render now and only their contents wait. The pills are
+   * `.btn-sm` tall and the action slot is `.btn` tall, so nothing moves when
+   * the real controls take their place. loading.guard.test.ts cannot see an
+   * early `return <p>…</p>`, which is why it never fired here; the page test
+   * is the instrument instead.
+   */
+  if (meeting === null) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col gap-4" aria-busy="true">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <nav aria-label={t("stages")} className={STEPPER_FRAME}>
+            <Skeleton className="h-[34px] w-24" />
+            <Skeleton className="h-[34px] w-24" />
+            <Skeleton className="h-[34px] w-24" />
+          </nav>
+          <Skeleton className="h-control w-32" />
+        </div>
+        <div className={`grid items-start gap-4 ${PLAN_COLUMNS}`}>
+          <div className="space-y-4">
+            <section className="tile p-4"><SkeletonLines lines={4} /></section>
+            <section className="tile p-4"><SkeletonLines lines={3} /></section>
+          </div>
+          <div className="space-y-4">
+            <section className="tile p-4"><SkeletonLines lines={2} /></section>
+            <section className="tile p-4"><SkeletonLines lines={2} /></section>
+            <section className="tile p-4"><SkeletonLines lines={3} /></section>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  /* NO PADDING OF THE PAGE'S OWN (audit finding, 2026-09-02, the same
+     verdict as the frame above): the container owns the gutters, and the
+     `p-6` these two sentences wore was the loading branch's — it moved a
+     one-line answer 24px off the column every other state sits on. */
+  if (meeting === "missing") return <p className="text-sm text-fg-muted">{t("notFound")}</p>;
+  if (meeting === "failed") return <p className="text-sm text-fg-muted">{t("readFailed")}</p>;
 
   const active: Stage = stage ?? "pre";
   const held = meeting.call_id !== null;
@@ -376,7 +423,13 @@ export function MeetingPage({ id }: { id: string }) {
       aria-disabled={sealed && s !== "post" ? true : undefined}
       title={sealed && s !== "post" ? t("stageSealed") : undefined}
       onClick={() => { if (!(sealed && s !== "post")) setStage(s); }}
-      className={`tap flex h-9 items-center gap-1.5 rounded-xl px-3 text-xs font-medium transition-colors ${
+      /* THE THEME'S CONTROL, not a 36px lozenge with the 16px tile radius
+         (audit finding, 2026-09-02: the stepper was "a third idiom" beside
+         the list page's pills and this page's own tabs). `.btn-sm` inside
+         the segmented frame; the ink stays the stepper's — a step is a
+         place, not the accent's action colour. control.guard.test.ts reads
+         only literal className strings, so this template never showed. */
+      className={`btn btn-sm gap-1.5 font-medium ${
         active === s ? "bg-fg text-bg" : "text-fg-muted hover:text-fg"
       } ${sealed && s !== "post" ? "opacity-60 hover:text-fg-muted" : ""}`}
     >
@@ -396,7 +449,7 @@ export function MeetingPage({ id }: { id: string }) {
     <div className="flex min-h-0 flex-1 flex-col gap-4">
       {/* ── the page's OWN top bar: the stepper and the stage's action ── */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <nav aria-label={t("stages")} className="flex items-center gap-0.5 rounded-2xl border border-border bg-surface p-1">
+        <nav aria-label={t("stages")} className={STEPPER_FRAME}>
           {stepTab("pre", 1, t("stage_pre"), timePast || held)}
           {stepTab("hold", 2, t("stage_hold"), held)}
           {stepTab("post", 3, t("stage_post"), held && typeof call === "object" && call?.status === "ready")}
@@ -725,7 +778,13 @@ function PreStage({ meeting, onPatch, locale }: {
                        foot of this stage (the platform's destructive-action
                        rule — confirm.guard.test.ts) */
                     onClick={() => setCondemnedFile({ id: file.id, name: file.name })}
-                    className="tap shrink-0 text-fg-subtle hover:text-danger"
+                    /* THE THEME'S ICON BUTTON (audit finding, 2026-09-02): a
+                       bare glyph with `.tap` was a third shape for the same
+                       control — the items panel's trash on this very page is
+                       `btn btn-icon`, and an icon-only control is that class
+                       everywhere else. `.btn` composes `.tap`, so nothing is
+                       lost below md. */
+                    className="btn btn-icon shrink-0 text-fg-subtle hover:text-danger"
                   >
                     <IconTrash width={12} height={12} />
                   </button>
@@ -998,14 +1057,21 @@ function HoldStage({ meeting, me, locale, recordingLive }: {
         {/* اقدام‌های سریع */}
         <section className="tile p-3.5" aria-label={t("quickActions")}>
           <h3 className="mb-2 text-sm font-semibold text-fg">{t("quickActions")}</h3>
-          <div className="flex gap-1.5">
+          {/* THE THEME'S FIELD AND BUTTON (audit finding, 2026-09-02): this
+              row hand-rolled a 36px/12px-corner input and a 36px square, so
+              the rail's composer matched nothing else on the page — the
+              plan's dialog fields are `.input`, its actions `.btn`. `px-3`
+              around the 14px glyph is what makes the `.btn` a square, with
+              no size re-stated on top of it; `items-center` holds the 38 on
+              the 40px field's midline. */}
+          <div className="flex items-center gap-1.5">
             <input value={taskDraft} onChange={(e) => setTaskDraft(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") addTask(); }}
               placeholder={t("quickTaskPlaceholder")}
-              className="h-9 min-w-0 flex-1 rounded-lg border border-border bg-surface px-2.5 text-xs text-fg outline-none placeholder:text-fg-subtle focus:border-accent" />
+              className="input min-w-0 flex-1" />
             <button type="button" onClick={addTask} disabled={taskDraft.trim() === ""}
               aria-label={t("quickTaskAdd")}
-              className="tap grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-accent text-on-accent disabled:opacity-50">
+              className="btn shrink-0 bg-accent px-3 text-on-accent">
               <IconPlus width={14} height={14} />
             </button>
           </div>
@@ -1068,15 +1134,17 @@ function HoldStage({ meeting, me, locale, recordingLive }: {
           {meeting.call_id === null && !recordingLive ? (
             <p className="text-xs text-fg-muted">{t("notesNeedRecording")}</p>
           ) : (
-            <div className="flex gap-1.5">
+            /* the same composer as the quick task above — `.input` and a
+               `.btn` square (audit finding, 2026-09-02) */
+            <div className="flex items-center gap-1.5">
               <input value={noteDraft} onChange={(e) => setNoteDraft(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") addNote(); }}
                 placeholder={t("quickNotePlaceholder")}
                 disabled={meeting.call_id === null}
-                className="h-9 min-w-0 flex-1 rounded-lg border border-border bg-surface px-2.5 text-xs text-fg outline-none placeholder:text-fg-subtle focus:border-accent disabled:opacity-60" />
+                className="input min-w-0 flex-1 disabled:opacity-60" />
               <button type="button" onClick={addNote} disabled={noteDraft.trim() === "" || meeting.call_id === null}
                 aria-label={t("addNote")}
-                className="tap grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-accent text-on-accent disabled:opacity-50">
+                className="btn shrink-0 bg-accent px-3 text-on-accent">
                 <IconPlus width={14} height={14} />
               </button>
             </div>
@@ -1178,7 +1246,9 @@ function PostStage({ meeting, call, me, locale, onGoHold, onChanged, onBackToMee
       {tab === "review" ? (
         <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-2">
           <div className="flex min-h-0 flex-col">
-            {call === null ? <p className="p-4 text-sm text-fg-muted">…</p>
+            {/* the panel's frame while the call is read (audit finding,
+                2026-09-02): a `.tile` in the transcript's shape, not «…» */}
+            {call === null ? <div className="tile p-4" aria-busy="true"><SkeletonLines lines={6} /></div>
               : call === "gone" ? <p className="p-4 text-sm text-fg-muted">{t("recordGone")}</p>
                 : call.status === "failed" ? (
               <div className="tile grid place-items-center p-10 text-center">
@@ -1188,8 +1258,10 @@ function PostStage({ meeting, call, me, locale, onGoHold, onChanged, onBackToMee
                     the raw call page hands them the same failure wearing a
                     different address. The way out is the table they came
                     from. */}
+                {/* `.btn-sm`, not a 36px button of its own (audit finding,
+                    2026-09-02) */}
                 <button type="button" onClick={onBackToMeetings}
-                  className="tap mt-3 h-9 rounded-lg bg-surface-2 px-4 text-xs font-medium text-fg hover:bg-border">
+                  className="btn btn-sm mt-3 bg-surface-2 font-medium text-fg hover:bg-border">
                   {t("backToMeetings")}
                 </button>
               </div>
@@ -1222,7 +1294,25 @@ function PostStage({ meeting, call, me, locale, onGoHold, onChanged, onBackToMee
 /* ── فایل‌ها: the recording's parts — the meeting's real files ────────── */
 function FilesTab({ call, locale }: { call: Call | null | "gone"; locale: string }) {
   const t = useTranslations("meetings");
-  if (call === null) return <p className="p-4 text-sm text-fg-muted">…</p>;
+  /* THE LIST'S FRAME BEFORE ITS ROWS (audit finding, 2026-09-02): «…»
+     stood here until the call was read. Two rows in the real row's shape —
+     the icon square, a name line, a duration line — so the tab has the same
+     silhouette loading as loaded. */
+  if (call === null) {
+    return (
+      <ul className="mx-auto w-full max-w-2xl space-y-2" aria-busy="true">
+        {[0, 1].map((i) => (
+          <li key={i} className="tile tile-row flex items-center gap-3 p-3">
+            <Skeleton className="h-9 w-9 shrink-0" />
+            <span className="min-w-0 flex-1 space-y-2">
+              <Skeleton className="h-4 w-1/3" />
+              <Skeleton className="h-3 w-1/5" />
+            </span>
+          </li>
+        ))}
+      </ul>
+    );
+  }
   if (call === "gone") return <p className="p-4 text-sm text-fg-muted">{t("recordGone")}</p>;
   const parts = call.parts ?? [];
   if (parts.length === 0) return <p className="p-4 text-sm text-fg-muted">{t("noFiles")}</p>;
@@ -1271,24 +1361,38 @@ function NotesTab({ callId, locale }: { callId: string; locale: string }) {
       .catch(() => setWriteError(true));
   };
 
-  if (notes === null) return <p className="p-4 text-sm text-fg-muted">…</p>;
   if (notes === "failed") return <p className="p-4 text-sm text-fg-muted">{t("readFailed")}</p>;
 
   return (
     <div className="mx-auto w-full max-w-2xl space-y-3">
       {writeError ? <p role="alert" className="text-xs text-danger">{t("writeFailed")}</p> : null}
-      <div className="flex gap-2">
+      {/* THE THEME'S FIELD AND BUTTON (audit finding, 2026-09-02): a 40px
+          16px-corner input and a 40px square drawn by hand — the composer
+          matched neither the plan's `.input` fields nor any `.btn` on the
+          page. `px-3` around the 14px glyph is what makes the `.btn` a
+          square, with no size re-stated on top of it. */}
+      <div className="flex items-center gap-2">
         <input value={draft} onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") add(); }}
           placeholder={t("notePlaceholder")}
-          className="h-10 min-w-0 flex-1 rounded-xl border border-border bg-surface px-3 text-sm text-fg outline-none placeholder:text-fg-subtle focus:border-accent" />
+          className="input min-w-0 flex-1" />
         <button type="button" onClick={add} disabled={draft.trim() === ""}
           aria-label={t("addNote")}
-          className="tap grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-accent text-on-accent disabled:opacity-50">
+          className="btn shrink-0 bg-accent px-3 text-on-accent">
           <IconPlus width={14} height={14} />
         </button>
       </div>
-      {notes.length === 0 ? (
+      {/* THE LIST'S FRAME BEFORE ITS ROWS (audit finding, 2026-09-02): this
+          tab was a lone «…» until the notes arrived, and the composer — which
+          needs no network to exist — appeared with them. It stands first now;
+          two placeholder rows in the rows' own shape hold the list's slot. */}
+      {notes === null ? (
+        <ul className="space-y-2" aria-busy="true">
+          {[0, 1].map((i) => (
+            <li key={i} className="tile tile-row p-3.5"><SkeletonLines lines={2} /></li>
+          ))}
+        </ul>
+      ) : notes.length === 0 ? (
         <p className="p-2 text-sm text-fg-muted">{t("noNotes")}</p>
       ) : (
         <ul className="space-y-2">
@@ -1301,8 +1405,11 @@ function NotesTab({ callId, locale }: { callId: string; locale: string }) {
                   {note.at_ms !== null ? ` · ${formatDuration(Math.round(note.at_ms / 1000), locale)}` : ""}
                 </span>
               </span>
+              {/* `btn btn-icon`, like the attachment row's trash and the items
+                  panel's (audit finding, 2026-09-02): this one had no `.tap`
+                  either, so below md its hit area was the 12px glyph */}
               <button type="button" aria-label={t("deleteNote")} onClick={() => setCondemned(note)}
-                className="shrink-0 text-fg-subtle hover:text-danger">
+                className="btn btn-icon shrink-0 text-fg-subtle hover:text-danger">
                 <IconTrash width={12} height={12} />
               </button>
             </li>

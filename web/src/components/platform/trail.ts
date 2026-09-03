@@ -120,16 +120,28 @@ export const TRAIL: Readonly<Record<string, TrailEntry>> = {
 
   /* a root for the same reason as /echo — see the note there */
   "/management": { label: "platform.management" },
-  /* the four assistant/service sections wear the SETTINGS menu now (user
-     directive, 2026-08-26) and their pages did not move, so the TRAIL has
-     to follow the menu rather than the URL: a crumb that says Management
-     while the menu says Settings is the redirect lesson again — the route
-     resolves, every reachability check stays green, and the trail quietly
-     lies about where you are. */
-  "/management/skills": { label: "management.section.skills", parent: "/settings" },
+  /* THE CRUMB FOLLOWS WHICHEVER MENU CLAIMS THE PAGE, and falls back to
+     the URL when none does.
+        Models wears the Settings menu (SETTINGS_SECTIONS carries it with an
+     absolute href), so its crumb says Settings — the original rule, and
+     still right: a crumb that says Management while the menu says Settings
+     is the redirect lesson again, the route resolving while the trail
+     quietly lies about where you are.
+        Skills, Connectors and Service health are the case that rule did not
+     cover. Each was taken OUT of the Settings menu on the user's own word
+     (Service health 2026-08-26, Connectors 2026-08-28 — Integrations is
+     that door now, Skills 2026-09-02) and no menu picked them up, so
+     "Settings ›" had become a promise the Settings pane cannot keep: follow
+     it and the row you came from is not there. Their crumb is now the
+     section they actually live in, which is the user's own stated rule for
+     the trail (2026-09-02: "the first is name of the section that they are
+     in"). Derived by hand rather than from the registry deliberately — a
+     menu-less page has no producer to derive from, which is exactly why it
+     needs a written reason. */
+  "/management/skills": { label: "management.section.skills", parent: "/management" },
   "/management/models": { label: "management.section.models", parent: "/settings" },
-  "/management/connectors": { label: "management.section.connectors", parent: "/settings" },
-  "/management/server": { label: "management.section.server", parent: "/settings" },
+  "/management/connectors": { label: "management.section.connectors", parent: "/management" },
+  "/management/server": { label: "management.section.server", parent: "/management" },
   /* Speakers moved INTO Management (2026-09-02) and keeps the label it had
      under Echo — the word is the same, only the room changed */
   "/management/speakers": { label: "echo.section.speakers", parent: "/management" },

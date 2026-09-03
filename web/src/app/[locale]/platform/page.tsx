@@ -79,7 +79,30 @@ const PAGE = 50;
  */
 
 import { CreateOrg } from "@/components/platform/CreateOrg";
-import { ConfirmDialog } from "@/components/rowActions";
+import { ConfirmDialog, type KebabItem } from "@/components/rowActions";
+/* audit finding, 2026-09-02: the console's three lists were the only
+   list-of-rows in the product still hand-rolled — a hairline-divided box
+   instead of the theme's card rows, with no loading frame and no pager.
+   DataTable brings all three, and a fourth thing worth more than any of
+   them: the row actions become the same right-click menu every other table
+   in the platform answers with. */
+import { DataTable } from "@/components/DataTable";
+import { Card, Chip, EmptyState } from "@/components/ui";
+/* the platform's ONE date and ONE numeral rule. The console used to build
+   its own Intl.DateTimeFormat, which ignored the reader's calendar
+   preference — so the same instant could be named a different month here
+   than on every other screen — and printed Latin digits in the Persian UI. */
+import { digits, formatDate, formatTime } from "@/lib/format";
+import {
+  IconCheck,
+  IconGlobe,
+  IconKey,
+  IconPencil,
+  IconRetry,
+  IconToggleOff,
+  IconToggleOn,
+  IconTrash,
+} from "@/components/icons";
 
 export default function PlatformControlPage() {
   const t = useTranslations("platformRoot");
@@ -111,24 +134,38 @@ export default function PlatformControlPage() {
   const [working, setWorking] = useState<string | null>(null);
   const [error, setError] = useState<"load" | "claim" | null>(null);
   const [claiming, setClaiming] = useState(false);
+  /* THE ANSWER HAS ARRIVED — not "there are rows". The three lists start as
+     `[]`, so before this flag existed every first paint said «چیزی با این
+     فیلترها مطابقت ندارد» about organizations nobody had looked at yet:
+     loading and empty were one picture, which is the kinds-of-nothing
+     confusion rendered in pixels. DataTable's `loading` keeps the frame with
+     skeleton rows in it until the console can honestly say "nothing". */
+  const [loaded, setLoaded] = useState(false);
 
   const load = useCallback(
     async (
       opts: { organizations?: string; users?: string; orgDeleted?: boolean; userDeleted?: boolean } = {},
     ) => {
-      const [ov, o, u, a] = await Promise.all([
-        api.platformOverview(),
-        api.platformOrganizations({ search: opts.organizations ?? "", limit: PAGE, deleted: opts.orgDeleted ?? false }),
-        api.platformUsers({ search: opts.users ?? "", limit: PAGE, deleted: opts.userDeleted ?? false }),
-        api.platformAudit({ limit: PAGE }),
-      ]);
-      setOverview(ov);
-      setOrgs(o.items);
-      setNextOrgs(o.next_offset);
-      setUsers(u.items);
-      setNextUsers(u.next_offset);
-      setAudit(a.items);
-      setNextAudit(a.next_offset);
+      try {
+        const [ov, o, u, a] = await Promise.all([
+          api.platformOverview(),
+          api.platformOrganizations({ search: opts.organizations ?? "", limit: PAGE, deleted: opts.orgDeleted ?? false }),
+          api.platformUsers({ search: opts.users ?? "", limit: PAGE, deleted: opts.userDeleted ?? false }),
+          api.platformAudit({ limit: PAGE }),
+        ]);
+        setOverview(ov);
+        setOrgs(o.items);
+        setNextOrgs(o.next_offset);
+        setUsers(u.items);
+        setNextUsers(u.next_offset);
+        setAudit(a.items);
+        setNextAudit(a.next_offset);
+      } finally {
+        /* whatever it said. A table that keeps its skeletons after a refusal
+           claims a fetch is still running, and the error banner above it is
+           already saying the opposite. */
+        setLoaded(true);
+      }
     },
     [],
   );
@@ -202,6 +239,9 @@ export default function PlatformControlPage() {
     if (kind === "organizations") setOrgTrash(on);
     else setUserTrash(on);
     setWorking(`view-${kind}`);
+    /* the rows on screen belong to the OTHER view: showing them under the
+       new heading while the query runs is a list that is briefly false */
+    setLoaded(false);
     try {
       if (kind === "organizations") {
         const p = await api.platformOrganizations({ search: orgSearch, limit: PAGE, deleted: on });
@@ -215,6 +255,7 @@ export default function PlatformControlPage() {
     } catch {
       setError("load");
     } finally {
+      setLoaded(true);
       setWorking(null);
     }
   }
@@ -264,17 +305,17 @@ export default function PlatformControlPage() {
     }
   }
 
+  /* audit finding, 2026-09-02: this was a second date formatter — a raw
+     `Intl.DateTimeFormat` keyed off the locale alone. It could not see the
+     person's CALENDAR preference or the platform timezone, so a Persian
+     reader who chose Gregorian got a Jalali date here and a Gregorian one
+     everywhere else: two spellings of one instant, and the console is where
+     they would be compared. `formatDate` resolves both and carries its own
+     bidi isolate. `fmtDateTime` went with it — the audit feed splits date and
+     time onto two lines the way Audit Logs does. */
   const fmtDate = useCallback(
-    (value: string | null) =>
-      value
-        ? `⁨${new Intl.DateTimeFormat(locale === "fa" ? "fa-IR" : "en-GB", { dateStyle: "medium" }).format(new Date(value))}⁩`
-        : t("never"),
+    (value: string | null) => (value ? formatDate(value, locale) : t("never")),
     [locale, t],
-  );
-  const fmtDateTime = useCallback(
-    (value: string) =>
-      `⁨${new Intl.DateTimeFormat(locale === "fa" ? "fa-IR" : "en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value))}⁩`,
-    [locale],
   );
 
   const orgNames = useMemo(() => new Map(orgs.map((o) => [o.id, o.name])), [orgs]);
@@ -361,6 +402,285 @@ export default function PlatformControlPage() {
     };
   }
 
+  /* ---- row menus ---------------------------------------------------------
+     THE ACTIONS MOVED INTO THE ROW'S OWN MENU (audit finding, 2026-09-02).
+     They used to be a strip of five bordered text buttons per row — the
+     affordance the whole platform left behind, and the reason this console
+     read as a different product from Management·Users, which offers exactly
+     these decisions about exactly these people.
+
+     What is deliberately NOT lost: an action that is REFUSED for a row stays
+     in the menu, disabled, rather than disappearing. "You may not disable
+     yourself" and "there is no such action" are different sentences, and the
+     console is the one screen where the difference is the point. */
+  function orgMenu(o: PlatformOrganization): KebabItem[] {
+    if (orgTrash) {
+      return [
+        {
+          key: "restore",
+          label: t("restoreOrganization"),
+          icon: <IconRetry />,
+          disabled: busy,
+          onSelect: () =>
+            setPending({
+              key: `org-${o.id}`,
+              title: t("restoreOrganization"),
+              effect: t("effectRestoreOrg"),
+              target: o.name,
+              run: (r) => api.restorePlatformOrganization(o.id, r),
+            }),
+        },
+        {
+          key: "purge",
+          label: t("purgeNow"),
+          icon: <IconTrash />,
+          danger: true,
+          disabled: busy,
+          onSelect: () =>
+            setPending({
+              key: `org-purge-${o.id}`,
+              title: t("purgeOrgNow"),
+              effect: t("effectPurgeOrg"),
+              target: o.name,
+              danger: true,
+              run: (r) => api.purgePlatformOrganization(o.id, r),
+            }),
+        },
+      ];
+    }
+    return [
+      {
+        key: "edit",
+        label: t("edit"),
+        icon: <IconPencil />,
+        disabled: busy,
+        onSelect: () => setEdit(orgEditForm(o)),
+      },
+      /* THE ARRIVALS DOOR (0149). Exactly one organisation carries it —
+         turning one on clears the other in the same database statement, so
+         this is a single press and never a two-step move with a shut door in
+         the middle. */
+      ...(o.status === "active"
+        ? [
+            {
+              key: "signups",
+              label: o.accepts_signups ? t("closeSignups") : t("openSignups"),
+              icon: <IconGlobe />,
+              disabled: busy,
+              onSelect: () =>
+                setPending({
+                  key: `org-signups-${o.id}`,
+                  title: o.accepts_signups ? t("closeSignups") : t("openSignups"),
+                  effect: o.accepts_signups ? t("effectCloseSignups") : t("effectOpenSignups"),
+                  target: o.name,
+                  run: (r) => api.setPlatformOrganizationSignups(o.id, !o.accepts_signups, r),
+                }),
+            } satisfies KebabItem,
+          ]
+        : []),
+      o.status === "active"
+        ? {
+            key: "status",
+            label: t("suspendOrganization"),
+            icon: <IconToggleOff />,
+            danger: true,
+            disabled: busy,
+            onSelect: () =>
+              setPending({
+                key: `org-${o.id}`,
+                title: t("suspendOrganization"),
+                effect: t("effectSuspendOrg"),
+                target: o.name,
+                danger: true,
+                run: (r) => api.setPlatformOrganizationStatus(o.id, "suspended", r),
+              }),
+          }
+        : {
+            key: "status",
+            label: t("reactivateOrganization"),
+            icon: <IconToggleOn />,
+            disabled: busy,
+            onSelect: () =>
+              setPending({
+                key: `org-${o.id}`,
+                title: t("reactivateOrganization"),
+                effect: t("effectReactivateOrg"),
+                target: o.name,
+                run: (r) => api.setPlatformOrganizationStatus(o.id, "active", r),
+              }),
+          },
+      {
+        key: "delete",
+        label: t("deleteOrganization"),
+        icon: <IconTrash />,
+        danger: true,
+        disabled: busy,
+        onSelect: () =>
+          setPending({
+            key: `org-del-${o.id}`,
+            title: t("deleteOrganization"),
+            effect: t("effectDeleteOrg"),
+            target: o.name,
+            danger: true,
+            run: (r) => api.softDeletePlatformOrganization(o.id, r),
+          }),
+      },
+    ];
+  }
+
+  function userMenu(u: PlatformUser): KebabItem[] {
+    const isSelf = u.id === overview.current_user_id;
+    const tombstoned = isTombstone(u);
+    const named = u.display_name || u.email;
+    if (userTrash) {
+      return [
+        {
+          key: "restore",
+          label: t("restoreUser"),
+          icon: <IconRetry />,
+          disabled: busy,
+          onSelect: () =>
+            setPending({
+              key: `user-${u.id}`,
+              title: t("restoreUser"),
+              effect: t("effectRestoreUser"),
+              target: named,
+              run: (r) => api.restorePlatformUser(u.id, r),
+            }),
+        },
+        {
+          key: "purge",
+          label: t("purgeNow"),
+          icon: <IconTrash />,
+          danger: true,
+          disabled: busy,
+          onSelect: () =>
+            setPending({
+              key: `user-purge-${u.id}`,
+              title: t("purgeUserNow"),
+              effect: t("effectPurgeUser"),
+              target: named,
+              danger: true,
+              run: (r) => api.purgePlatformUser(u.id, r),
+            }),
+        },
+      ];
+    }
+    return [
+      {
+        key: "edit",
+        label: t("edit"),
+        icon: <IconPencil />,
+        disabled: busy || tombstoned,
+        onSelect: () => setEdit(userEditForm(u)),
+      },
+      /* ACCEPT — the pending queue's only exit, and the reason the queue
+         exists (user directive: an arrival waits until an admin accepts). It
+         is the same status write as reactivation and a different sentence,
+         because "accept this person" and "undo a disabling" are different
+         decisions wearing one verb. */
+      ...(u.status === "pending"
+        ? [
+            {
+              key: "accept",
+              label: t("acceptUser"),
+              icon: <IconCheck />,
+              disabled: busy,
+              onSelect: () =>
+                setPending({
+                  key: `user-${u.id}`,
+                  title: t("acceptUser"),
+                  effect: t("effectAcceptUser"),
+                  target: named,
+                  run: (r) => api.setPlatformUserStatus(u.id, "active", r),
+                }),
+            } satisfies KebabItem,
+          ]
+        : []),
+      /* enable / disable — never a root, never yourself */
+      u.status === "disabled"
+        ? {
+            key: "enable",
+            label: t("reactivateUser"),
+            icon: <IconToggleOn />,
+            disabled: busy,
+            onSelect: () =>
+              setPending({
+                key: `user-${u.id}`,
+                title: t("reactivateUser"),
+                effect: t("effectReactivateUser"),
+                target: named,
+                run: (r) => api.setPlatformUserStatus(u.id, "active", r),
+              }),
+          }
+        : {
+            key: "enable",
+            label: t("disableUser"),
+            icon: <IconToggleOff />,
+            danger: true,
+            disabled: busy || u.is_platform_root || isSelf,
+            onSelect: () =>
+              setPending({
+                key: `user-${u.id}`,
+                title: t("disableUser"),
+                effect: t("effectDisableUser"),
+                target: named,
+                danger: true,
+                run: (r) => api.setPlatformUserStatus(u.id, "disabled", r),
+              }),
+          },
+      /* grant / revoke root */
+      u.is_platform_root
+        ? {
+            key: "root",
+            label: t("removeRoot"),
+            icon: <IconKey />,
+            danger: true,
+            disabled: busy || isSelf,
+            onSelect: () =>
+              setPending({
+                key: `root-${u.id}`,
+                title: t("removeRoot"),
+                effect: t("effectRemoveRoot"),
+                target: named,
+                danger: true,
+                run: (r) => api.revokePlatformRoot(u.id, r),
+              }),
+          }
+        : {
+            key: "root",
+            label: t("makeRoot"),
+            icon: <IconKey />,
+            disabled: busy || u.status !== "active" || tombstoned,
+            onSelect: () =>
+              setPending({
+                key: `root-${u.id}`,
+                title: t("makeRoot"),
+                effect: t("effectMakeRoot"),
+                target: named,
+                run: (r) => api.grantPlatformRoot(u.id, r),
+              }),
+          },
+      /* soft delete — never a root, never yourself, never a tombstone */
+      {
+        key: "delete",
+        label: t("deleteUser"),
+        icon: <IconTrash />,
+        danger: true,
+        disabled: busy || u.is_platform_root || isSelf || tombstoned,
+        onSelect: () =>
+          setPending({
+            key: `user-del-${u.id}`,
+            title: t("deleteUser"),
+            effect: t("effectDeleteUser"),
+            target: named,
+            danger: true,
+            run: (r) => api.softDeletePlatformUser(u.id, r),
+          }),
+      },
+    ];
+  }
+
   /* ---- access gates ------------------------------------------------------ */
   if (access === "checking") {
     return <Centered className="text-fg-muted">{t("checking")}</Centered>;
@@ -370,9 +690,14 @@ export default function PlatformControlPage() {
   }
   if (access === "claim") {
     return (
+      /* audit finding, 2026-09-02: a hand-rolled card with a 20px heading and
+         a hand-rolled button. Every sibling centred-card screen (pending,
+         suspended, forgot, reset, sign-up) is a `.card` with a `text-lg
+         font-bold` title — this one screen was a different shape from the
+         five it stands beside, and it is the first thing a new vendor sees. */
       <Centered>
-        <div className="w-full max-w-xl rounded-2xl border border-border bg-surface p-6 shadow-sm">
-          <h1 className="text-2xl font-semibold text-fg">{t("claimTitle")}</h1>
+        <Card className="w-full max-w-xl">
+          <h1 className="text-lg font-bold text-fg">{t("claimTitle")}</h1>
           <p className="mt-3 text-sm leading-6 text-fg-muted">{t("claimBody")}</p>
           {error === "claim" ? (
             <p role="alert" className="mt-3 text-sm text-danger">
@@ -381,13 +706,13 @@ export default function PlatformControlPage() {
           ) : null}
           <button
             type="button"
-            className="tap mt-5 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-on-accent disabled:opacity-50"
+            className="btn-primary mt-5"
             onClick={() => void claim()}
             disabled={claiming}
           >
             {claiming ? t("workingLabel") : t("claim")}
           </button>
-        </div>
+        </Card>
       </Centered>
     );
   }
@@ -400,22 +725,29 @@ export default function PlatformControlPage() {
       {/* sticky operator bar */}
       <header className="sticky top-0 z-20 border-b border-border bg-bg/90 backdrop-blur">
         <div className="mx-auto flex max-w-content flex-wrap items-center gap-3 px-5 py-3">
-          <span className="rounded-md bg-accent-soft px-2 py-1 text-xs font-bold uppercase tracking-wide text-accent">
+          {/* found by running persianType.guard on this file (2026-09-02, and
+              red before this pass — the line predates it): `uppercase
+              tracking-wide` on «کنترل پلتفرم». Letter-spacing pulls joined
+              Persian script apart and the uppercase does nothing at all to
+              it; `text-group-label` is the scaffold's own role for a small
+              label, and it holds in both locales. */}
+          <span className="rounded-md bg-accent-soft px-2 py-1 text-group-label font-bold text-accent">
             {t("menu")}
           </span>
+          {/* audit finding, 2026-09-02: both were a private ~30px, 12px-corner
+              button — a shape that exists nowhere else in the product. The
+              theme's compact control is `.btn-sm`, which is what the section
+              toolbar one row below already wears. */}
           <span className="ms-auto flex items-center gap-2">
             <button
               type="button"
-              className="tap rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-fg hover:bg-surface-2 disabled:opacity-50"
+              className="btn-secondary btn-sm"
               onClick={() => void refresh()}
               disabled={busy}
             >
               {t("refresh")}
             </button>
-            <a
-              href={`/${locale}`}
-              className="tap rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-fg hover:bg-surface-2"
-            >
+            <a href={`/${locale}`} className="btn-secondary btn-sm">
               {t("exitToApp")}
             </a>
           </span>
@@ -475,8 +807,14 @@ export default function PlatformControlPage() {
             >
               {t(key)}
               {key !== "audit" ? (
-                <span className="ms-2 rounded-full bg-surface-2 px-1.5 text-xs text-fg-muted">
-                  {key === "organizations" ? overview.organizations.total : overview.users.total}
+                /* audit finding, 2026-09-02: the count printed Latin digits in
+                   the Persian console — `badge-num` is the theme's numeral
+                   box (tabular figures), `digits()` the locale's numerals */
+                <span className="badge-num ms-2 rounded-md bg-surface-2 px-1.5 text-xs text-fg-muted">
+                  {digits(
+                    key === "organizations" ? overview.organizations.total : overview.users.total,
+                    locale,
+                  )}
                 </span>
               ) : null}
             </button>
@@ -517,136 +855,48 @@ export default function PlatformControlPage() {
                 </div>
               }
             />
-            <div className="mt-3 divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface">
-              {shownOrgs.length === 0 ? (
-                <Empty>{orgTrash ? t("deletedEmptyOrgs") : t("nothingFound")}</Empty>
-              ) : (
-                shownOrgs.map((o) => (
-                  <div key={o.id} className="flex flex-wrap items-center gap-3 px-4 py-3 text-sm">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium text-fg">{o.name}</p>
-                      <p className="mt-0.5 text-xs text-fg-muted">
-                        {o.locale} · {t("memberCount")}: {o.member_count} · {t("created")}: {fmtDate(o.created_at)}
-                      </p>
-                    </div>
-                    {orgTrash ? (
-                      <>
+            {/* THE THEME'S ONE TABLE (audit finding, 2026-09-02). This was a
+                hairline-divided box of hand-rolled rows — the last list in
+                the product wearing its own skin. `hideHeader` for the same
+                reason the members list hides its own: the first thing under
+                the toolbar should be a record, not a caption for records. */}
+            <div className="mt-3">
+              <DataTable
+                hideHeader
+                rows={shownOrgs}
+                loading={!loaded}
+                empty={<EmptyState text={orgTrash ? t("deletedEmptyOrgs") : t("nothingFound")} />}
+                rowKey={(o) => o.id}
+                menuItems={orgMenu}
+                columns={[
+                  {
+                    key: "organization",
+                    header: t("organization"),
+                    cell: (o) => (
+                      <span className="block min-w-0 leading-tight">
+                        <span className="block truncate font-medium text-fg">{o.name}</span>
+                        <span className="mt-0.5 block text-xs text-fg-muted">
+                          <span className="ltr">{o.locale}</span> · {t("memberCount")}:{" "}
+                          {digits(o.member_count, locale)} · {t("created")}: {fmtDate(o.created_at)}
+                        </span>
+                      </span>
+                    ),
+                  },
+                  {
+                    key: "status",
+                    header: t("status"),
+                    cell: (o) =>
+                      orgTrash ? (
                         <PurgeBadge purgeAfter={o.purge_after} fmt={(d) => t("purgeIn", { days: d })} />
-                        <ActionButton
-                          disabled={busy}
-                          onClick={() =>
-                            setPending({
-                              key: `org-${o.id}`,
-                              title: t("restoreOrganization"),
-                              effect: t("effectRestoreOrg"),
-                              target: o.name,
-                              run: (r) => api.restorePlatformOrganization(o.id, r),
-                            })
-                          }
-                        >
-                          {t("restoreOrganization")}
-                        </ActionButton>
-                        <ActionButton
-                          danger
-                          disabled={busy}
-                          onClick={() =>
-                            setPending({
-                              key: `org-purge-${o.id}`,
-                              title: t("purgeOrgNow"),
-                              effect: t("effectPurgeOrg"),
-                              target: o.name,
-                              danger: true,
-                              run: (r) => api.purgePlatformOrganization(o.id, r),
-                            })
-                          }
-                        >
-                          {t("purgeNow")}
-                        </ActionButton>
-                      </>
-                    ) : (
-                      <>
-                        <Pill ok={o.status === "active"}>
+                      ) : (
+                        <Chip tone={o.status === "active" ? "success" : "danger"}>
                           {o.status === "active" ? t("active") : t("suspended")}
-                        </Pill>
-                        <ActionButton disabled={busy} onClick={() => setEdit(orgEditForm(o))}>
-                          {t("edit")}
-                        </ActionButton>
-                        {o.status === "active" ? (
-                          <ActionButton
-                            danger
-                            disabled={busy}
-                            onClick={() =>
-                              setPending({
-                                key: `org-${o.id}`,
-                                title: t("suspendOrganization"),
-                                effect: t("effectSuspendOrg"),
-                                target: o.name,
-                                danger: true,
-                                run: (r) => api.setPlatformOrganizationStatus(o.id, "suspended", r),
-                              })
-                            }
-                          >
-                            {t("suspendOrganization")}
-                          </ActionButton>
-                        ) : (
-                          <ActionButton
-                            disabled={busy}
-                            onClick={() =>
-                              setPending({
-                                key: `org-${o.id}`,
-                                title: t("reactivateOrganization"),
-                                effect: t("effectReactivateOrg"),
-                                target: o.name,
-                                run: (r) => api.setPlatformOrganizationStatus(o.id, "active", r),
-                              })
-                            }
-                          >
-                            {t("reactivateOrganization")}
-                          </ActionButton>
-                        )}
-                        {/* THE ARRIVALS DOOR (0149). Exactly one organisation
-                            carries it — turning one on clears the other in
-                            the same database statement, so this is a single
-                            press and never a two-step move with a shut door
-                            in the middle. */}
-                        {o.status === "active" ? (
-                          <ActionButton
-                            disabled={busy}
-                            onClick={() =>
-                              setPending({
-                                key: `org-signups-${o.id}`,
-                                title: o.accepts_signups ? t("closeSignups") : t("openSignups"),
-                                effect: o.accepts_signups ? t("effectCloseSignups") : t("effectOpenSignups"),
-                                target: o.name,
-                                run: (r) =>
-                                  api.setPlatformOrganizationSignups(o.id, !o.accepts_signups, r),
-                              })
-                            }
-                          >
-                            {o.accepts_signups ? t("closeSignups") : t("openSignups")}
-                          </ActionButton>
-                        ) : null}
-                        <ActionButton
-                          danger
-                          disabled={busy}
-                          onClick={() =>
-                            setPending({
-                              key: `org-del-${o.id}`,
-                              title: t("deleteOrganization"),
-                              effect: t("effectDeleteOrg"),
-                              target: o.name,
-                              danger: true,
-                              run: (r) => api.softDeletePlatformOrganization(o.id, r),
-                            })
-                          }
-                        >
-                          {t("deleteOrganization")}
-                        </ActionButton>
-                      </>
-                    )}
-                  </div>
-                ))
-              )}
+                        </Chip>
+                      ),
+                  },
+                  { key: "actions", header: t("colActions"), srOnly: true, cell: () => null },
+                ]}
+              />
             </div>
             {nextOrgs !== null ? (
               <More busy={working === "more-organizations"} onClick={() => void loadMore("organizations")}>
@@ -685,9 +935,13 @@ export default function PlatformControlPage() {
                         <p className="truncate text-sm font-semibold text-fg">{u.display_name}</p>
                         <p className="truncate text-xs text-fg-subtle"><span className="ltr">{u.email}</span></p>
                       </div>
+                      {/* audit finding, 2026-09-02: both selects were cut to
+                          34px on top of `.input`, so the arrivals queue's
+                          fields sat 6px shorter than every other field on the
+                          console. `.input` owns the height. */}
                       <select
                         aria-label={t("placeOrg")}
-                        className="input h-[34px] min-h-[34px] w-48"
+                        className="input w-48"
                         value={placement[u.id]?.org ?? ""}
                         onChange={(e) => setPlacement((prev) => ({
                           ...prev,
@@ -701,7 +955,7 @@ export default function PlatformControlPage() {
                       </select>
                       <select
                         aria-label={t("placeRole")}
-                        className="input h-[34px] min-h-[34px] w-32"
+                        className="input w-32"
                         value={placement[u.id]?.role ?? "member"}
                         onChange={(e) => setPlacement((prev) => ({
                           ...prev,
@@ -797,193 +1051,63 @@ export default function PlatformControlPage() {
                 </div>
               }
             />
-            <div className="mt-3 divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface">
-              {shownUsers.length === 0 ? (
-                <Empty>{userTrash ? t("deletedEmptyUsers") : t("nothingFound")}</Empty>
-              ) : (
-                shownUsers.map((u) => {
-                  const isSelf = u.id === overview.current_user_id;
-                  const tombstoned = u.email.endsWith("@tombstone.invalid");
-                  return (
-                    <div key={u.id} className="flex flex-wrap items-center gap-3 px-4 py-3 text-sm">
-                      <div className="min-w-0 flex-1">
-                        <p className="flex items-center gap-2 truncate font-medium text-fg">
-                          {tombstoned ? t("tombstoned") : u.display_name}
+            {/* the same table as Organizations and as Management·Users — one
+                shape for one job (audit finding, 2026-09-02) */}
+            <div className="mt-3">
+              <DataTable
+                hideHeader
+                rows={shownUsers}
+                loading={!loaded}
+                empty={<EmptyState text={userTrash ? t("deletedEmptyUsers") : t("nothingFound")} />}
+                rowKey={(u) => u.id}
+                menuItems={userMenu}
+                columns={[
+                  {
+                    key: "user",
+                    header: t("user"),
+                    cell: (u) => (
+                      <span className="block min-w-0 leading-tight">
+                        <span className="flex items-center gap-2 truncate font-medium text-fg">
+                          {isTombstone(u) ? t("tombstoned") : u.display_name}
                           {u.is_platform_root ? (
                             <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-semibold text-accent">
-                              {isSelf ? t("selfBadge") : t("currentRoot")}
+                              {u.id === overview.current_user_id ? t("selfBadge") : t("currentRoot")}
                             </span>
                           ) : null}
-                        </p>
-                        <p className="mt-0.5 truncate text-xs text-fg-muted">
+                        </span>
+                        <span className="mt-0.5 block truncate text-xs text-fg-muted">
                           <span className="ltr">{u.email}</span> · {u.org_name} · {t("role")}: {u.role}
                           {u.username ? <> · @{u.username}</> : null}
-                        </p>
-                        <p className="mt-0.5 text-[11px] text-fg-subtle">
+                        </span>
+                        <span className="mt-0.5 block text-[11px] text-fg-subtle">
                           {t("lastSeen")}: {fmtDate(u.last_seen_at)} · {t("created")}: {fmtDate(u.created_at)}
-                        </p>
-                      </div>
-                      {userTrash ? (
-                        <>
-                          <PurgeBadge purgeAfter={u.purge_after} fmt={(d) => t("purgeIn", { days: d })} />
-                          <ActionButton
-                            disabled={busy}
-                            onClick={() =>
-                              setPending({
-                                key: `user-${u.id}`,
-                                title: t("restoreUser"),
-                                effect: t("effectRestoreUser"),
-                                target: u.display_name || u.email,
-                                run: (r) => api.restorePlatformUser(u.id, r),
-                              })
-                            }
-                          >
-                            {t("restoreUser")}
-                          </ActionButton>
-                          <ActionButton
-                            danger
-                            disabled={busy}
-                            onClick={() =>
-                              setPending({
-                                key: `user-purge-${u.id}`,
-                                title: t("purgeUserNow"),
-                                effect: t("effectPurgeUser"),
-                                target: u.display_name || u.email,
-                                danger: true,
-                                run: (r) => api.purgePlatformUser(u.id, r),
-                              })
-                            }
-                          >
-                            {t("purgeNow")}
-                          </ActionButton>
-                        </>
+                        </span>
+                      </span>
+                    ),
+                  },
+                  {
+                    key: "status",
+                    header: t("status"),
+                    cell: (u) =>
+                      userTrash ? (
+                        <PurgeBadge purgeAfter={u.purge_after} fmt={(d) => t("purgeIn", { days: d })} />
                       ) : (
-                        <>
-                          <Pill ok={u.status === "active"} warn={u.status === "pending"}>
-                            {t(u.status)}
-                          </Pill>
-
-                          <ActionButton disabled={busy || tombstoned} onClick={() => setEdit(userEditForm(u))}>
-                            {t("edit")}
-                          </ActionButton>
-
-                          {/* ACCEPT — the pending queue's only exit, and the
-                              reason the queue exists (user directive: an
-                              arrival waits until an admin accepts). It is the
-                              same status write as reactivation and a
-                              different sentence, because "accept this person"
-                              and "undo a disabling" are different decisions
-                              wearing one verb. */}
-                          {u.status === "pending" ? (
-                            <ActionButton
-                              disabled={busy}
-                              onClick={() =>
-                                setPending({
-                                  key: `user-${u.id}`,
-                                  title: t("acceptUser"),
-                                  effect: t("effectAcceptUser"),
-                                  target: u.display_name || u.email,
-                                  run: (r) => api.setPlatformUserStatus(u.id, "active", r),
-                                })
-                              }
-                            >
-                              {t("acceptUser")}
-                            </ActionButton>
-                          ) : null}
-
-                          {/* enable / disable — never a root, never yourself */}
-                          {u.status === "disabled" ? (
-                            <ActionButton
-                              disabled={busy}
-                              onClick={() =>
-                                setPending({
-                                  key: `user-${u.id}`,
-                                  title: t("reactivateUser"),
-                                  effect: t("effectReactivateUser"),
-                                  target: u.display_name || u.email,
-                                  run: (r) => api.setPlatformUserStatus(u.id, "active", r),
-                                })
-                              }
-                            >
-                              {t("reactivateUser")}
-                            </ActionButton>
-                          ) : (
-                            <ActionButton
-                              danger
-                              disabled={busy || u.is_platform_root || isSelf}
-                              onClick={() =>
-                                setPending({
-                                  key: `user-${u.id}`,
-                                  title: t("disableUser"),
-                                  effect: t("effectDisableUser"),
-                                  target: u.display_name || u.email,
-                                  danger: true,
-                                  run: (r) => api.setPlatformUserStatus(u.id, "disabled", r),
-                                })
-                              }
-                            >
-                              {t("disableUser")}
-                            </ActionButton>
-                          )}
-
-                          {/* grant / revoke root */}
-                          {u.is_platform_root ? (
-                            <ActionButton
-                              danger
-                              disabled={busy || isSelf}
-                              onClick={() =>
-                                setPending({
-                                  key: `root-${u.id}`,
-                                  title: t("removeRoot"),
-                                  effect: t("effectRemoveRoot"),
-                                  target: u.display_name || u.email,
-                                  danger: true,
-                                  run: (r) => api.revokePlatformRoot(u.id, r),
-                                })
-                              }
-                            >
-                              {t("removeRoot")}
-                            </ActionButton>
-                          ) : (
-                            <ActionButton
-                              disabled={busy || u.status !== "active" || tombstoned}
-                              onClick={() =>
-                                setPending({
-                                  key: `root-${u.id}`,
-                                  title: t("makeRoot"),
-                                  effect: t("effectMakeRoot"),
-                                  target: u.display_name || u.email,
-                                  run: (r) => api.grantPlatformRoot(u.id, r),
-                                })
-                              }
-                            >
-                              {t("makeRoot")}
-                            </ActionButton>
-                          )}
-
-                          {/* soft delete — never a root, never yourself, never a tombstone */}
-                          <ActionButton
-                            danger
-                            disabled={busy || u.is_platform_root || isSelf || tombstoned}
-                            onClick={() =>
-                              setPending({
-                                key: `user-del-${u.id}`,
-                                title: t("deleteUser"),
-                                effect: t("effectDeleteUser"),
-                                target: u.display_name || u.email,
-                                danger: true,
-                                run: (r) => api.softDeletePlatformUser(u.id, r),
-                              })
-                            }
-                          >
-                            {t("deleteUser")}
-                          </ActionButton>
-                        </>
-                      )}
-                    </div>
-                  );
-                })
-              )}
+                        <Chip
+                          tone={
+                            u.status === "active"
+                              ? "success"
+                              : u.status === "pending"
+                                ? "warning"
+                                : "danger"
+                          }
+                        >
+                          {t(u.status)}
+                        </Chip>
+                      ),
+                  },
+                  { key: "actions", header: t("colActions"), srOnly: true, cell: () => null },
+                ]}
+              />
             </div>
             {nextUsers !== null ? (
               <More busy={working === "more-users"} onClick={() => void loadMore("users")}>
@@ -996,35 +1120,58 @@ export default function PlatformControlPage() {
         {/* AUDIT */}
         {tab === "audit" ? (
           <section className="mt-4">
-            <div className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface">
-              {audit.length === 0 ? (
-                <Empty>{t("noAudit")}</Empty>
-              ) : (
-                audit.map((e) => {
-                  const target = e.target_org_id
-                    ? orgNames.get(e.target_org_id) ?? shortId(e.target_org_id)
-                    : e.target_user_id
-                      ? userNames.get(e.target_user_id) ?? shortId(e.target_user_id)
-                      : "—";
-                  return (
-                    <div key={e.id} className="px-4 py-3 text-sm">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-medium text-fg">{auditLabel(t, e.action)}</span>
-                        <span className="text-xs text-fg-subtle">·</span>
-                        <span className="text-xs text-fg-muted">
-                          {t("dialogTarget")}: {target}
-                        </span>
-                        <span className="ms-auto text-xs text-fg-subtle">{fmtDateTime(e.created_at)}</span>
-                      </div>
-                      <p className="mt-1 text-xs text-fg-muted">
-                        {t("auditBy")} <span className="ltr">{e.actor_email}</span>
-                      </p>
-                      <p className="mt-1.5 rounded-md bg-surface-2 px-3 py-2 text-sm text-fg">{e.reason}</p>
-                    </div>
-                  );
-                })
-              )}
-            </div>
+            {/* the feed keeps its column HEADERS, unlike the two lists above:
+                its sibling is Audit Logs, which is five columns of facts
+                rather than a roster, and there the header is what says which
+                fact is which (audit finding, 2026-09-02) */}
+            <DataTable
+              rows={audit}
+              loading={!loaded}
+              empty={<EmptyState text={t("noAudit")} />}
+              rowKey={(e) => e.id}
+              columns={[
+                {
+                  key: "when",
+                  header: t("colWhen"),
+                  cell: (e) => (
+                    <span className="block text-xs text-fg-muted">
+                      <span className="block">{formatDate(e.created_at, locale)}</span>
+                      <span className="block">{formatTime(e.created_at, locale)}</span>
+                    </span>
+                  ),
+                },
+                {
+                  key: "who",
+                  header: t("colWho"),
+                  cell: (e) => <span className="ltr block text-xs text-fg-muted">{e.actor_email}</span>,
+                },
+                {
+                  key: "what",
+                  header: t("colWhat"),
+                  cell: (e) => (
+                    <span className="text-xs font-medium text-fg">{auditLabel(t, e.action)}</span>
+                  ),
+                },
+                {
+                  key: "target",
+                  header: t("dialogTarget"),
+                  cell: (e) => <span className="text-xs">{auditTarget(e, orgNames, userNames)}</span>,
+                },
+                {
+                  key: "reason",
+                  header: t("auditReason"),
+                  /* the reason is the ONE free-text field on this screen and
+                     the only one worth reading in full — it wraps inside a
+                     capped column rather than widening the table, which
+                     `min-w-max` would otherwise let it do without limit */
+                  cell: (e) => (
+                    <span className="block max-w-[46ch] whitespace-normal text-xs leading-5 text-fg">
+                      {e.reason}
+                    </span>
+                  ),
+                },
+              ]}
+            />
             {nextAudit !== null ? (
               <More busy={working === "more-audit"} onClick={() => void loadMore("audit")}>
                 {t("loadMore")}
@@ -1093,6 +1240,25 @@ function auditLabel(t: (k: string) => string, action: string): string {
 
 const shortId = (id: string) => `#${id.slice(0, 8)}`;
 
+/** A tombstoned account: the address is REPLACED at deletion (db/0044). */
+const isTombstone = (u: PlatformUser) => u.email.endsWith("@tombstone.invalid");
+
+/**
+ * What an audit line was ABOUT, named rather than numbered where the console
+ * happens to hold the row. The short id is the honest fallback — the entry
+ * may point at something outside the page we loaded, and inventing a name for
+ * it would be worse than showing the identifier.
+ */
+function auditTarget(
+  entry: PlatformAuditEntry,
+  orgNames: Map<string, string>,
+  userNames: Map<string, string>,
+): string {
+  if (entry.target_org_id) return orgNames.get(entry.target_org_id) ?? shortId(entry.target_org_id);
+  if (entry.target_user_id) return userNames.get(entry.target_user_id) ?? shortId(entry.target_user_id);
+  return "—";
+}
+
 function Centered({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
     <main className={`grid min-h-dvh place-items-center bg-bg px-5 text-sm ${className}`}>
@@ -1109,6 +1275,13 @@ const TONE: Record<Tone, string> = {
   accent: "text-accent",
 };
 
+/**
+ * audit finding, 2026-09-02: three 27px bold figures in Latin digits, inside
+ * a hand-rolled tile. `text-3xl` is the dashboard greeting's size and nothing
+ * else's; the platform's stat figure is `badge-num text-xl`, which is also
+ * what the four agent numbers on Management·Server already use — two sizes
+ * for one kind of number was the whole complaint.
+ */
 function StatCard({
   label,
   value,
@@ -1118,14 +1291,16 @@ function StatCard({
   value: number;
   parts: { label: string; value: number; tone: Tone }[];
 }) {
+  const locale = useLocale();
   return (
-    <div className="rounded-xl border border-border bg-surface p-4">
+    <div className="tile p-4">
       <p className="text-sm text-fg-muted">{label}</p>
-      <p className="mt-1 text-3xl font-bold text-fg">{value}</p>
+      <p className="badge-num mt-1 text-xl font-bold text-fg">{digits(value, locale)}</p>
       <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs">
         {parts.map((p) => (
           <span key={p.label} className="text-fg-muted">
-            {p.label}: <span className={`font-semibold ${TONE[p.tone]}`}>{p.value}</span>
+            {p.label}:{" "}
+            <span className={`font-semibold ${TONE[p.tone]}`}>{digits(p.value, locale)}</span>
           </span>
         ))}
       </div>
@@ -1133,59 +1308,31 @@ function StatCard({
   );
 }
 
-function Pill({ ok, warn, children }: { ok: boolean; warn?: boolean; children: ReactNode }) {
-  const cls = ok
-    ? "bg-success/15 text-success"
-    : warn
-      ? "bg-warning/15 text-warning"
-      : "bg-danger/10 text-danger";
-  return <span className={`rounded-full px-2 py-1 text-xs font-semibold ${cls}`}>{children}</span>;
-}
-
-function ActionButton({
-  children,
-  onClick,
-  disabled,
-  danger,
-}: {
-  children: ReactNode;
-  onClick: () => void;
-  disabled?: boolean;
-  danger?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={`tap rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-40 ${
-        danger
-          ? "border-danger/40 text-danger hover:bg-danger/10"
-          : "border-border text-fg hover:bg-surface-2"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
+/*
+ * `Pill`, `ActionButton` and `Empty` were DELETED here (audit finding,
+ * 2026-09-02), not restyled: the status pill is the theme's `Chip`, the row
+ * action is a menu entry, and the empty sentence is `EmptyState` inside
+ * DataTable — which is also what makes it appear only after the answer.
+ * Three local dialects of three things the theme already says.
+ */
 
 function More({ busy, onClick, children }: { busy: boolean; onClick: () => void; children: ReactNode }) {
   return (
-    <button
-      type="button"
-      className="tap mt-3 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-fg hover:bg-surface-2 disabled:opacity-50"
-      disabled={busy}
-      onClick={onClick}
-    >
+    /* the cursor button sits BESIDE the table's pager, the way Audit Logs
+       keeps its own: a page of fifty is ten pages to walk, and the last one
+       has no door to the next fifty without this */
+    <button type="button" className="btn-secondary btn-sm mt-3" disabled={busy} onClick={onClick}>
       {children}
     </button>
   );
 }
 
-function Empty({ children }: { children: ReactNode }) {
-  return <p className="px-4 py-6 text-center text-sm text-fg-muted">{children}</p>;
-}
-
+/**
+ * The toolbar's filter chips — the meetings toolbar's own idiom, which is the
+ * shape every section-switching row in the product wears (audit finding,
+ * 2026-09-02: these were `rounded-full` lozenges, and the segmented switch
+ * beside them was a third shape again).
+ */
 function Chips({
   value,
   onChange,
@@ -1196,15 +1343,17 @@ function Chips({
   options: { value: string; label: string }[];
 }) {
   return (
-    <div className="flex flex-wrap gap-1">
+    <div className="flex flex-wrap items-center gap-1">
       {options.map((o) => (
         <button
           key={o.value}
           type="button"
           aria-pressed={value === o.value}
           onClick={() => onChange(o.value)}
-          className={`tap rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
-            value === o.value ? "bg-accent text-on-accent" : "bg-surface-2 text-fg-muted hover:text-fg"
+          className={`btn btn-sm gap-1.5 font-medium ${
+            value === o.value
+              ? "bg-accent text-on-accent"
+              : "text-fg-muted hover:bg-surface-2 hover:text-fg"
           }`}
         >
           {o.label}
@@ -1236,15 +1385,19 @@ function Toolbar({
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
       {filters}
+      {/* audit finding, 2026-09-02: the field re-answered `.input`'s one
+          question — height and type size — and the button was a third button
+          shape on a screen that already had two. `.input` owns the geometry;
+          `w-56` is the only thing left for a caller to say. */}
       <form className="flex gap-2" onSubmit={submit}>
         <input
-          className="input h-9 min-h-0 w-56 text-sm"
+          className="input w-56"
           value={search}
           onChange={(e) => onSearch(e.target.value)}
           placeholder={placeholder}
           aria-label={placeholder}
         />
-        <button type="submit" className="tap rounded-lg border border-border px-3 py-1 text-xs font-semibold text-fg hover:bg-surface-2">
+        <button type="submit" className="btn-secondary btn-sm">
           {apply}
         </button>
       </form>
@@ -1263,15 +1416,22 @@ function ViewToggle({
   labels: { current: string; deleted: string };
 }) {
   return (
-    <div className="inline-flex rounded-full border border-border p-0.5">
+    /* audit finding, 2026-09-02: two pill buttons inside a `rounded-full`
+       ring. The reference's segmented control is the same `.btn-sm` pair the
+       meetings toolbar uses — pills are for chips and badges, and a button
+       that borrows their shape is why one row of this console had three
+       button families in it. */
+    <div className="flex items-center gap-1">
       {([false, true] as const).map((v) => (
         <button
           key={String(v)}
           type="button"
           aria-pressed={trash === v}
           onClick={() => onChange(v)}
-          className={`tap rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
-            trash === v ? "bg-accent text-on-accent" : "text-fg-muted hover:text-fg"
+          className={`btn btn-sm font-medium ${
+            trash === v
+              ? "bg-accent text-on-accent"
+              : "text-fg-muted hover:bg-surface-2 hover:text-fg"
           }`}
         >
           {v ? labels.deleted : labels.current}
@@ -1289,8 +1449,12 @@ function PurgeBadge({ purgeAfter, fmt }: { purgeAfter: string | null; fmt: (days
   if (!purgeAfter) return null;
   const ms = new Date(purgeAfter).getTime() - Date.now();
   const days = Math.max(0, Math.ceil(ms / 86_400_000));
-  const cls = days <= 1 ? "bg-danger/15 text-danger" : "bg-warning/15 text-warning";
-  return <span className={`rounded-full px-2 py-1 text-xs font-semibold ${cls}`}>{fmt(days)}</span>;
+  /* the theme's `Chip`, which is the same two tones this drew by hand plus
+     the dot — status is never carried by colour alone. The days themselves
+     stay ICU's: `purgeIn` is a plural message, and `#` is already localised
+     by next-intl, so putting `digits()` in front of it would be a second
+     spelling of the same rule. */
+  return <Chip tone={days <= 1 ? "danger" : "warning"}>{fmt(days)}</Chip>;
 }
 
 /**
@@ -1317,6 +1481,7 @@ function EditDialog({
     failed: string;
   };
 }) {
+  const locale = useLocale();
   const [values, setValues] = useState<Record<string, string>>(() =>
     Object.fromEntries(edit.fields.map((f) => [f.name, f.value])),
   );
@@ -1381,7 +1546,7 @@ function EditDialog({
                     id={id}
                     value={values[f.name] ?? ""}
                     onChange={(e) => setValues((prev) => ({ ...prev, [f.name]: e.target.value }))}
-                    className="input mt-1 h-9 min-h-0 w-full text-sm"
+                    className="input mt-1 w-full"
                   >
                     {(f.options ?? []).map((o) => (
                       <option key={o.value} value={o.value}>
@@ -1396,7 +1561,7 @@ function EditDialog({
                     value={values[f.name] ?? ""}
                     placeholder={f.placeholder}
                     onChange={(e) => setValues((prev) => ({ ...prev, [f.name]: e.target.value }))}
-                    className="input mt-1 h-9 min-h-0 w-full text-sm"
+                    className="input mt-1 w-full"
                   />
                 )}
                 {f.hint ? <p className="mt-1 text-xs text-fg-subtle">{f.hint}</p> : null}
@@ -1414,12 +1579,16 @@ function EditDialog({
               maxLength={500}
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              className="input mt-1 min-h-0 w-full resize-y text-sm"
+              className="input mt-1 min-h-[80px] w-full resize-y py-2"
               aria-describedby="ef-reason-hint"
             />
             <div className="mt-1 flex items-center justify-between text-xs text-fg-muted">
               <span id="ef-reason-hint">{labels.hint}</span>
-              <span className="ltr tabular-nums">{reason.trim().length}/500</span>
+              {/* audit finding, 2026-09-02: the counter printed Latin digits
+                  beside a Persian hint */}
+              <span className="ltr tabular-nums">
+                {digits(reason.trim().length, locale)}/{digits(500, locale)}
+              </span>
             </div>
           </div>
         </div>
@@ -1430,18 +1599,16 @@ function EditDialog({
           </p>
         ) : null}
 
+        {/* audit finding, 2026-09-02: a 40px, 12px-corner pair — the primary
+            action changing shape between the page and its own dialog. These
+            are the theme's two buttons, the ones `ConfirmDialog` uses. */}
         <div className="mt-5 flex justify-end gap-2">
-          <button
-            type="button"
-            className="tap rounded-lg border border-border px-4 py-2 text-sm font-semibold text-fg hover:bg-surface-2 disabled:opacity-50"
-            onClick={onClose}
-            disabled={busy}
-          >
+          <button type="button" className="btn-secondary" onClick={onClose} disabled={busy}>
             {labels.cancel}
           </button>
           <button
             type="button"
-            className="tap rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-on-accent disabled:opacity-50"
+            className="btn-primary"
             onClick={() => void go()}
             disabled={!valid || busy}
           >
@@ -1472,6 +1639,7 @@ function ActionDialog({
     failed: string;
   };
 }) {
+  const locale = useLocale();
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -1536,12 +1704,15 @@ function ActionDialog({
             maxLength={500}
             value={reason}
             onChange={(e) => setReason(e.target.value)}
-            className="input mt-1 min-h-0 w-full resize-y text-sm"
+            className="input mt-1 min-h-[80px] w-full resize-y py-2"
             aria-describedby="pa-reason-hint"
           />
           <div className="mt-1 flex items-center justify-between text-xs text-fg-muted">
             <span id="pa-reason-hint">{labels.hint}</span>
-            <span className="ltr tabular-nums">{reason.trim().length}/500</span>
+            {/* audit finding, 2026-09-02: Latin digits beside a Persian hint */}
+            <span className="ltr tabular-nums">
+              {digits(reason.trim().length, locale)}/{digits(500, locale)}
+            </span>
           </div>
 
           {failed ? (

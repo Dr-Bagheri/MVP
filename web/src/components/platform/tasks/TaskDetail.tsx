@@ -9,13 +9,13 @@ import type {
   OrgPersonRecord, TaskColumnRecord, TaskDetailRecord, TaskLabelRecord,
   TaskPriority, TaskTopicRecord,
 } from "@/api/types";
-import { ConfirmDialog } from "@/components/rowActions";
+import { ConfirmDialog, KebabMenu } from "@/components/rowActions";
 import {
   AssigneePicker, DueField, LabelRow, PRIORITY_DOT, PRIORITY_ORDER, TONE_CHIP, TONE_DOT,
   relativeTime,
 } from "./TaskDialogs";
 import {
-  IconCheck, IconClose, IconDots, IconPencil, IconPlus, IconTrash, IconVideo,
+  IconArchive, IconCheck, IconClose, IconPencil, IconPlus, IconTrash, IconVideo,
 } from "@/components/icons";
 import { digits, formatDate, personName } from "@/lib/format";
 
@@ -48,8 +48,9 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
   const [description, setDescription] = useState(task.description);
   const [comment, setComment] = useState("");
   const [item, setItem] = useState("");
-  const [menu, setMenu] = useState(false);
   const [confirmArchive, setConfirmArchive] = useState(false);
+  /** the 0162 delete awaiting the platform's are-you-sure — final, unlike archiving */
+  const [confirmDelete, setConfirmDelete] = useState(false);
   /** the checklist line awaiting the platform's are-you-sure (dialog at the foot) */
   const [condemnedLine, setCondemnedLine] = useState<{ id: string; label: string } | null>(null);
   const [failed, setFailed] = useState(false);
@@ -94,22 +95,29 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
               className="tap grid h-9 w-9 place-items-center rounded-xl text-fg-subtle hover:bg-surface-2 hover:text-fg">
               <IconClose width={14} height={14} />
             </button>
-            <span className="relative">
-              <button type="button" aria-label={t("more")} onClick={() => setMenu((v) => !v)}
-                className="tap grid h-9 w-9 place-items-center rounded-xl text-fg-subtle hover:bg-surface-2 hover:text-fg">
-                <IconDots width={14} height={14} />
-              </button>
-              {menu ? (
-                <span className="absolute top-10 z-50 flex w-48 flex-col rounded-xl border border-border bg-surface p-1 shadow-island">
-                  <button type="button"
-                    onClick={() => { setMenu(false); setConfirmArchive(true); }}
-                    className="btn btn-sm text-start text-danger hover:bg-danger/10">
-                    <IconTrash width={12} height={12} />
-                    {task.archived ? t("unarchive") : t("archiveTask")}
-                  </button>
-                </span>
-              ) : null}
-            </span>
+            {/* THE THEME'S KEBAB, not a hand-rolled popover (audit finding,
+                2026-09-02) — and the red item is now a real DELETE (0162, the
+                user's ask: "the red button should truly delete"). Archiving
+                stays as the reversible, ordinary item; both go through the
+                platform's one dialog. */}
+            <KebabMenu
+              label={t("more")}
+              items={[
+                {
+                  key: "archive",
+                  label: task.archived ? t("unarchive") : t("archiveTask"),
+                  icon: <IconArchive width={14} height={14} />,
+                  onSelect: () => setConfirmArchive(true),
+                },
+                {
+                  key: "delete",
+                  label: t("deleteTask"),
+                  icon: <IconTrash width={14} height={14} />,
+                  danger: true,
+                  onSelect: () => setConfirmDelete(true),
+                },
+              ]}
+            />
             <button type="button" onClick={() => setEditing((v) => !v)}
               className="btn btn-sm border border-border font-medium text-fg hover:bg-border">
               <IconPencil width={12} height={12} />
@@ -448,6 +456,25 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
             setConfirmArchive(false);
             patch({ archived: !task.archived });
             onClose();
+          }}
+        />
+      ) : null}
+
+      {/* 0162: the true delete — the creator's or an admin's; the door
+          refuses anyone else and the refusal reads as "not found". The
+          board refetches on success, so the card is gone the moment the
+          modal is. */}
+      {confirmDelete ? (
+        <ConfirmDialog
+          danger
+          title={t("deleteTaskTitle", { title: task.title })}
+          body={t("deleteTaskBody")}
+          confirmLabel={t("deleteConfirm")}
+          cancelLabel={t("cancel")}
+          onCancel={() => setConfirmDelete(false)}
+          onConfirm={() => {
+            setConfirmDelete(false);
+            void api.deleteTask(task.id).then(() => { onChanged(); onClose(); }).catch(() => setFailed(true));
           }}
         />
       ) : null}

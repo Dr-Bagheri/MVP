@@ -9,6 +9,7 @@ import { AssistantMenu } from "@/components/platform/AssistantMenu";
 import { PlatformShell } from "@/components/platform/PlatformShell";
 import { ConfirmDialog } from "@/components/rowActions";
 import { DataTable } from "@/components/DataTable";
+import { IconTrash } from "@/components/icons";
 import { PageContainer, PageHeader } from "@/components/scaffold";
 import { useRouter } from "@/i18n/routing";
 import { notify } from "@/lib/notify";
@@ -22,9 +23,13 @@ import { untitledNumbers } from "@/lib/sessionTitles";
  *
  * The docked AssistantPane this page used as its reader is GONE (user
  * directive, 2026-08-21: the side-docked assistant leaves every page —
- * this was the last one standing). Clicking a record hands the stored
- * conversation to the presence dock (`openAssistant`): one assistant, one
- * home, the same thread continued wherever the person goes next.
+ * this was the last one standing). Clicking a record OPENS THE ASSISTANT
+ * PAGE with the stored conversation (`/assistant?c=`): one assistant, one
+ * home, the same thread continued wherever the person goes next. (Audit
+ * pass, 2026-09-02: this header still named the presence dock's
+ * `openAssistant` as the row's destination — a mechanism the orb-stands-
+ * down ruling of 2026-08-27 retired on this surface; the row's own comment
+ * below had the truth and the header had the old story.)
  */
 export default function ConversationsPage() {
   const router = useRouter();
@@ -74,7 +79,11 @@ export default function ConversationsPage() {
         sat in the one place on the page where the eye lands first — the top
         bar's own search already covers conversations.
       */}
-      <PageContainer className="!pt-3">
+      {/* 16px under the toolbar — TwoPane's `!pt-4`, the meeting page's
+          `gap-4` (audit finding, 2026-09-02: this was the product's one
+          `!pt-3`, a table sitting 4px closer to its menu than every
+          sibling's, with no reason on record for the difference) */}
+      <PageContainer className="!pt-4">
           <PageHeader title={t("title")} subtitle={t("hint")} />
           <DataTable
             rows={visible}
@@ -85,6 +94,33 @@ export default function ConversationsPage() {
                down on this surface, so handing the conversation to it would
                be a row that clicks into nothing */
             onRowClick={(s) => router.push({ pathname: "/assistant", query: { c: s.id } })}
+            /* THE TABLE'S OWN MENU, not a text link in a cell (audit finding,
+               2026-09-02: an underlined red «حذف» sat in the row while every
+               other DataTable — members, invitations, models, search,
+               sessions — keeps its actions in the right-click menu the table
+               owns; the 2026-08-25 directive took the ⋯ out of table rows
+               for exactly that one menu). The actions column went with it: a
+               column that held one link is a column of nothing once the link
+               is a menu, and the menu's own panel already stops the press
+               from reaching the row, which is what the cell's `stopClick`
+               was for.
+
+               The press still ASKS; the write lives in the dialog below (the
+               platform's destructive-action rule). Removal is archive under
+               the hood: nothing in the product may DELETE a conversation row
+               (the audit survives), but an archived one never returns to any
+               list, which is why this is a delete to the person pressing it.
+               `danger` sorts it to the bottom under the theme's rule, so a
+               second item can never end up beneath it. */
+            menuItems={(s) => [
+              {
+                key: "delete",
+                label: t("delete"),
+                icon: <IconTrash width={14} height={14} />,
+                danger: true,
+                onSelect: () => setConfirmDelete(s),
+              },
+            ]}
             columns={[
               {
                 key: "title",
@@ -103,27 +139,6 @@ export default function ConversationsPage() {
                 header: t("colMessages"),
                 className: "text-fg-muted",
                 cell: (s) => digits(s.message_count, locale),
-              },
-              {
-                key: "actions",
-                header: t("colActions"),
-                headClassName: "sr-only",
-                stopClick: true,
-                cell: (s) => (
-                  <button
-                    type="button"
-                    className="text-xs text-danger/80 underline-offset-2 hover:text-danger hover:underline"
-                    /* the press ASKS; the write lives in the dialog below (the
-                       platform's destructive-action rule). Removal is archive
-                       under the hood: nothing in the product may DELETE a
-                       conversation row (the audit survives), but an archived
-                       one never returns to any list, which is why this is a
-                       delete to the person pressing it. */
-                    onClick={() => setConfirmDelete(s)}
-                  >
-                    {t("delete")}
-                  </button>
-                ),
               },
             ]}
           />

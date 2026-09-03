@@ -5,6 +5,7 @@ import { useLocale, useTranslations } from "next-intl";
 import type { Role, User } from "@/api/types";
 import { BffError } from "@/api/client";
 import { ConfirmDialog } from "@/components/rowActions";
+import { IconClose } from "@/components/icons";
 import { Chip } from "@/components/ui";
 import { formatDate, personName } from "@/lib/format";
 
@@ -142,13 +143,19 @@ export function MemberDetail({
     >
       <div className="flex items-center justify-between border-b border-border px-5 py-4">
         <h2 className="text-base font-semibold text-fg">{t("detailTitle")}</h2>
+        {/* audit finding, 2026-09-02: this close was a 36px, 12px-cornered
+            square drawn by hand around a text glyph. `grid place-items-center`
+            is the spelling of `flex items-center` the control guard does not
+            look for, and a typed character shares nothing with the icon set's
+            stroke or box — so beside every other dialog's 28px `.btn-icon`
+            with IconClose it read as a different product's button. */}
         <button
           type="button"
-          className="tap grid h-9 w-9 place-items-center rounded-lg text-fg-muted hover:bg-surface-2 hover:text-fg"
+          className="btn btn-icon text-fg-muted hover:bg-surface-2 hover:text-fg"
           aria-label={t("detailClose")}
           onClick={onClose}
         >
-          ×
+          <IconClose width={14} height={14} />
         </button>
       </div>
 
@@ -180,8 +187,16 @@ export function MemberDetail({
           {editable && onRename ? (
             <label className="block py-2">
               <span className="text-xs text-fg-muted">{t("detailNameFa")}</span>
+              {/* audit finding, 2026-09-02: four fields in this panel re-answered
+                  `.input`'s one height and type size by hand (h-9 min-h-0
+                  py-0 text-xs/text-sm) — 36px fields in a product whose every
+                  other form is the 40px `.input`, and below md the override
+                  also discarded the 44px hit-area ruling. `.input` owns height
+                  and size; the fields keep only their placement (mt-1, ltr,
+                  w-*). Same fix on the handle, the role select and the
+                  delete-reason field below. */}
               <input
-                className="input mt-1 h-9 min-h-0 text-sm"
+                className="input mt-1"
                 value={nameDraft}
                 disabled={busy}
                 onChange={(e) => setNameDraft(e.target.value)}
@@ -197,8 +212,10 @@ export function MemberDetail({
           {editable && onRename ? (
             <label className="block py-2">
               <span className="text-xs text-fg-muted">{t("detailUsername")}</span>
+              {/* audit finding, 2026-09-02: `.input` owns height and size (see
+                  the name field above) */}
               <input
-                className="input ltr mt-1 h-9 min-h-0 text-sm"
+                className="input ltr mt-1"
                 value={usernameDraft}
                 disabled={busy}
                 placeholder={t("detailNoUsername")}
@@ -235,7 +252,9 @@ export function MemberDetail({
               <Chip tone="accent">{t("roleOwner")}</Chip>
             ) : editable ? (
               <select
-                className="input h-9 min-h-0 w-32 py-0 text-xs"
+                /* audit finding, 2026-09-02: `.input` owns height and size
+                   (see the name field above); only the width stays local */
+                className="input w-32"
                 value={user.role}
                 disabled={busy}
                 onChange={(e) => onSetRole(user.id, e.target.value as Role)}
@@ -309,9 +328,11 @@ export function MemberDetail({
               <label className="block text-xs text-fg-muted" htmlFor="member-delete-reason">
                 {t("deleteReasonHint")}
               </label>
+              {/* audit finding, 2026-09-02: `.input` owns height and size (see
+                  the name field above) */}
               <input
                 id="member-delete-reason"
-                className="input h-9 min-h-0 w-full py-0 text-sm"
+                className="input w-full"
                 autoFocus
                 placeholder={t("deleteReasonHint")}
                 value={deleteReason}

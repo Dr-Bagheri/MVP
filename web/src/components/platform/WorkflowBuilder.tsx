@@ -777,7 +777,8 @@ export function WorkflowBuilder({
           ) : null}
 
           {/* ── trigger ─────────────────────────────────────────────── */}
-          <h3 className="mt-6 text-xs font-semibold uppercase tracking-wide text-fg-subtle">
+          {/* group-label role: no tracking on Persian (2026-09-03) */}
+          <h3 className="mt-6 text-group-label font-semibold text-fg-subtle">
             {t("triggerTitle")}
           </h3>
           {picking ? (
@@ -880,7 +881,7 @@ export function WorkflowBuilder({
 
           {/* ── steps ───────────────────────────────────────────────── */}
           <div className="mt-6 flex items-center gap-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-fg-subtle">
+            <h3 className="text-group-label font-semibold text-fg-subtle">
               {t("stepsTitle")}
             </h3>
             {steps.length === 0 ? (

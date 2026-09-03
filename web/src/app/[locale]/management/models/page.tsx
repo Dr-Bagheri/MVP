@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { AdminModelRow, User } from "@/api/types";
 import { SettingsPane } from "@/components/platform/SettingsPane";
-import { PageHeader } from "@/components/scaffold";
+import { PageHeader, SkeletonLines } from "@/components/scaffold";
 import { modelLabel } from "@/lib/format";
 import { Card, Chip, EmptyState } from "@/components/ui";
 import { DataTable, type Column } from "@/components/DataTable";
@@ -39,6 +39,13 @@ export default function ModelsPage() {
   const tCommon = useTranslations("common");
   const [me, setMe] = useState<User | null>(null);
   const [models, setModels] = useState<AdminModelRow[]>([]);
+  /* audit finding, 2026-09-02: `models` starts as [] and the table gated on
+     `active.length === 0`, so every load opened on the "no curation — every
+     model is offered" sentence BEFORE the answer existed — a claim about the
+     org that the header comment above says this screen must never make
+     falsely. `loaded` is "the catalogue has answered" (success or failure);
+     until then the table shows skeleton rows and says nothing. */
+  const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -54,7 +61,13 @@ export default function ModelsPage() {
 
   useEffect(() => {
     if (!isAdmin) return;
-    void api.adminModels().then(setModels).catch(() => setFailed(true));
+    void api
+      .adminModels()
+      .then(setModels)
+      .catch(() => setFailed(true))
+      /* both branches end the loading state: a failure is an answer too,
+         just not one about curation (the failed card carries it) */
+      .finally(() => setLoaded(true));
   }, [isAdmin]);
 
   const active = useMemo(() => models.filter((m) => m.allowed), [models]);
@@ -155,7 +168,11 @@ export default function ModelsPage() {
           <button
             type="button"
             className="btn btn-sm gap-1.5 border border-border font-medium text-fg"
-            disabled={busy}
+            /* audit finding's sibling, 2026-09-03: a picker over a catalogue
+               that did NOT load could only ever say "no model matches" — the
+               wrong nothing (rule 12). The failed card above names the real
+               one, so the door stays shut while it is the answer. */
+            disabled={busy || failed}
             onClick={() => { setSearch(""); setAdding(true); }}
           >
             <IconPlus width={14} height={14} />
@@ -166,15 +183,22 @@ export default function ModelsPage() {
         {/* NO OUTER BOX (user directive, 2026-09-02: the same rows as users
             and speakers — the meetings list's shape, no header, no box) */}
         <div>
-          {active.length === 0 ? (
-            /* the honest empty state: an empty allow-list is NO CURATION,
-               which core reads as every model the platform offers. Saying
-               "no models" here would be the opposite of the truth. */
-            <EmptyState text={t("modelsNoCuration")} />
-          ) : (
+          {/* audit finding, 2026-09-02: rendered UNCONDITIONALLY, with the
+              loading/empty decision inside DataTable, so the frame stands
+              first and the empty sentence appears only after the answer.
+              The empty node is the honest empty state: an empty allow-list is
+              NO CURATION, which core reads as every model the platform
+              offers — saying "no models" here would be the opposite of the
+              truth. A FAILED load is a third nothing and gets no sentence at
+              all: "every model is offered" under "the catalogue could not be
+              loaded" would be two claims about the org that cannot both be
+              read as true (rule 12: name WHICH nothing). */}
+          {failed ? null : (
             <DataTable
               hideHeader
               rows={active}
+              loading={!loaded}
+              empty={<EmptyState text={t("modelsNoCuration")} />}
               rowKey={(model) => model.id}
               columns={columns}
               menuItems={(model) => [
@@ -203,14 +227,30 @@ export default function ModelsPage() {
           wide
           body={
             <div className="space-y-3">
+              {/* audit finding, 2026-09-02: this field wore `.input` and then
+                  re-answered its height and type size by hand (h-9 min-h-0
+                  py-0 text-sm) — the "four overrides of .input" pattern, a
+                  36px box inside the 40px-field system. `.input` owns both. */}
               <input
-                className="input h-9 min-h-0 py-0 text-sm"
+                className="input"
                 placeholder={t("modelsSearch")}
                 value={search}
                 autoFocus
                 onChange={(event) => setSearch(event.target.value)}
               />
               <ul className="max-h-72 divide-y divide-border overflow-y-auto">
+                {/* audit finding's sibling, 2026-09-03 (rule 9: fixing one
+                    instance does not fix its siblings): the table's []-means-
+                    nothing conflation lived one dialog over too — `inactive`
+                    is [] until the catalogue answers, so opening the picker
+                    inside the load window showed «مدلی با این نام پیدا نشد»
+                    about a catalogue nobody had read yet. Skeleton lines until
+                    the answer; the sentence only after it. */}
+                {!loaded ? (
+                  <li className="py-3">
+                    <SkeletonLines lines={4} />
+                  </li>
+                ) : null}
                 {inactive.map((model) => (
                   <li key={model.id} className="flex items-center gap-3 py-2">
                     <IconChip width={14} height={14} />
@@ -229,7 +269,7 @@ export default function ModelsPage() {
                     </IconAction>
                   </li>
                 ))}
-                {inactive.length === 0 ? (
+                {loaded && inactive.length === 0 ? (
                   <li className="py-3 text-sm text-fg-muted">{t("modelsNoMatch")}</li>
                 ) : null}
               </ul>

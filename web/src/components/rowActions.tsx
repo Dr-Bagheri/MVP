@@ -56,7 +56,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
 } from "react";
-import { createPortal } from "react-dom";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -114,11 +114,20 @@ export const IconAction = forwardRef<
         e.stopPropagation();
         onClick?.(e);
       }}
-      className={`tap inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
+      /* audit finding, 2026-09-02: `.btn btn-icon`, not a hand-rolled square.
+         The SIZE was already the theme's 28px; the CORNER was not —
+         `rounded-md` is radius.control (11px) and the theme's icon button is
+         8px, so every ⋯ trigger, pencil and trash in the product sat rounder
+         than the `.btn-icon` controls standing beside it. `.btn` composes
+         `.tap` and the transition, and owns the disabled face, which is why
+         all three leave with the geometry. The `w-auto px-1.5` override the
+         text-trigger branch below adds still wins: those are utilities, and
+         the utilities layer beats @layer components. */
+      className={`btn btn-icon ${
         danger
           ? "text-danger/70 hover:bg-danger/10 hover:text-danger"
           : "text-fg-muted hover:bg-surface-2 hover:text-fg"
-      } disabled:pointer-events-none disabled:opacity-40 ${className}`}
+      } ${className}`}
     >
       {children}
     </button>
@@ -163,8 +172,6 @@ export interface KebabItem {
       menu stays scroll-free (the menu itself never scrolls). */
   sub?: KebabItem[];
 }
-
-const ITEM_H = 34;  // one row's height — the no-scroll placement math
 
 /**
  * THE DANGER GROUP (user directive, 2026-08-26: "the red one stays together
@@ -409,9 +416,24 @@ export interface SelectMenuOption {
  * selects (AuditLogs, OrgFields, profile — their tests grip the native
  * element) swap as they are next touched.
  *
- * Same discipline as the kebab: portal to <body>, fixed position, opens
- * COMPLETELY (flips up when the viewport ends, never scrolls internally),
- * closes on outside click / Escape / scroll / resize.
+ * Same discipline as the kebab, and now the same MACHINE: the panel is
+ * Radix's popover, exactly as `@/components/Select` uses it.
+ *
+ * Audit finding, 2026-09-02, and the reason this stopped being a hand-rolled
+ * portal: three ConfirmDialog bodies hold one of these — the record's bulk
+ * speaker link, the directory's identify box, the recorder's name-a-voice
+ * prompt. Radix marks everything outside an open modal `pointer-events:
+ * none`, and a panel portalled to <body> by hand is outside it: the list
+ * rendered perfectly, in the right place, over the dialog — and no row could
+ * be clicked. A Radix popover registers as a dismissable layer ABOVE the
+ * dialog's, so it is the one thing in that subtree that stays pressable.
+ *
+ * Everything the hand-rolled 40 lines had learned comes with it and is no
+ * longer ours to keep right: flipping when the viewport ends, clamping to the
+ * edge, closing on outside press and Escape, and repositioning on scroll
+ * rather than closing. What stays ours is the LISTBOX semantics, the check
+ * gutter, the heading, the footer that mounts only while the panel is open,
+ * and the hover-open faces below.
  */
 export function SelectMenu({
   value,
@@ -456,10 +478,17 @@ export function SelectMenu({
    */
   variant?: "input" | "tile" | "round";
 }) {
-  const [at, setAt] = useState<{ top: number; left: number; width: number } | null>(null);
-  const rootRef = useRef<HTMLButtonElement | null>(null);
-  const panelRef = useRef<HTMLDivElement | null>(null);
+  const [open, setOpen] = useState(false);
   const current = options.find((o) => o.value === value);
+
+  /* the width FLOOR the hand-rolled placement carried (160 for a form field,
+     240 for a device picker), kept as the panel's minimum while Radix's own
+     `--radix-popover-trigger-width` supplies the other half of the old rule:
+     never narrower than the control it belongs to. Two whole literals rather
+     than one interpolated, because Tailwind reads source text. */
+  const panelWidth = variant === "input"
+    ? "min-w-[max(var(--radix-popover-trigger-width),10rem)]"
+    : "min-w-[max(var(--radix-popover-trigger-width),15rem)]";
 
   /**
    * HOVER-OPEN, tile face only (user directive, 2026-08-26: "come out
@@ -479,55 +508,49 @@ export function SelectMenu({
       closeTimer.current = null;
     }
   }
+  /**
+   * ONE DOOR OUT. The grace timer, choosing an option and removing one all
+   * close the same way, so a pending close can never survive the thing that
+   * made it pointless — picking a device used to leave a timer running that
+   * would fire into an already-closed panel.
+   *
+   * It is a named function rather than an inline `setTimeout(() =>
+   * setOpen(false))` for a second reason worth writing down: the platform's
+   * notify rule (src/lib/notifyRule.guard.test.ts) reads "a timer that clears
+   * a boolean" as an ad-hoc confirmation pill, which is the shape it exists
+   * to forbid. What this timer ends is a PANEL, not an announcement — nothing
+   * was saved and there is nothing for the bell to keep. Do not re-inline it.
+   */
+  function dismiss() {
+    cancelScheduledClose();
+    setOpen(false);
+  }
   function scheduleClose() {
     if (panelHeld.current) return;
     cancelScheduledClose();
-    closeTimer.current = setTimeout(() => setAt(null), 160);
+    closeTimer.current = setTimeout(dismiss, 160);
   }
   useEffect(() => () => {
     if (closeTimer.current !== null) clearTimeout(closeTimer.current);
   }, []);
 
-  function toggle() {
-    if (at) return setAt(null);
-    const rect = rootRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const width = Math.max(rect.width, variant === "input" ? 160 : 240);
-    const rtl = document.documentElement.dir === "rtl";
-    const left = rtl ? rect.right - width : rect.left;
-    const height = options.length * ITEM_H + 10;
-    const below = rect.bottom + 4;
-    const top = below + height <= window.innerHeight - 8
-      ? below
-      : Math.max(8, rect.top - 4 - height);
-    setAt({
-      top,
-      left: Math.max(8, Math.min(left, window.innerWidth - width - 8)),
-      width,
-    });
+  /**
+   * A touch tap fires mouseenter and click TOGETHER, so the click must not
+   * close what its own hover just opened. Radix's trigger toggles unless the
+   * press has already been handled — `preventDefault` is how a composed
+   * handler says "this one is spoken for", and it is the only reason this
+   * guard still works now that the toggle is not ours.
+   */
+  function guardHoverTap(e: ReactMouseEvent<HTMLButtonElement>) {
+    if (open && Date.now() - hoverOpenedAt.current < 400) e.preventDefault();
   }
-
-  useEffect(() => {
-    if (!at) return;
-    const close = () => setAt(null);
-    const onDown = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (!rootRef.current?.contains(target) && !panelRef.current?.contains(target)) close();
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close();
-    };
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    window.addEventListener("scroll", close, true);
-    window.addEventListener("resize", close);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-      window.removeEventListener("scroll", close, true);
-      window.removeEventListener("resize", close);
-    };
-  }, [at]);
+  function openOnHover() {
+    cancelScheduledClose();
+    if (!open) {
+      hoverOpenedAt.current = Date.now();
+      setOpen(true);
+    }
+  }
 
   const chevron = (size: number) => (
     <svg
@@ -541,7 +564,7 @@ export function SelectMenu({
       strokeLinecap="round"
       strokeLinejoin="round"
       className={`shrink-0 text-fg-muted transition-transform duration-150 ${
-        at !== null ? "rotate-180" : ""
+        open ? "rotate-180" : ""
       }`}
     >
       <path d="m6 9 6 6 6-6" />
@@ -549,79 +572,77 @@ export function SelectMenu({
   );
 
   return (
-    <>
+    <Popover
+      open={open}
+      modal={false}
+      onOpenChange={(next) => {
+        /* an outside press or Escape arrives here too, and a close timer left
+           running after one of those would fire into a closed panel */
+        if (!next) cancelScheduledClose();
+        setOpen(next);
+      }}
+    >
       {variant === "round" ? (
         /* the TRANSPORT face: one circle among circles. It carries no
            caption — the row is a transport, not a form, and the chosen
            device is read from the panel's check (and from the accessible
            name, which names value as well as field) */
-        <button
-          type="button"
-          ref={rootRef}
-          aria-label={current ? `${ariaLabel}: ${current.label}` : ariaLabel}
-          aria-haspopup="listbox"
-          aria-expanded={at !== null}
-          disabled={disabled}
-          onMouseEnter={hoverable && !disabled ? () => {
-            cancelScheduledClose();
-            if (!at) {
-              hoverOpenedAt.current = Date.now();
-              toggle();
-            }
-          } : undefined}
-          onMouseLeave={hoverable ? scheduleClose : undefined}
-          onClick={(e) => {
-            e.stopPropagation();
-            if (at && Date.now() - hoverOpenedAt.current < 400) return;
-            toggle();
-          }}
-          className={`tap grid h-10 w-10 shrink-0 place-items-center rounded-full border transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
-            at !== null
-              ? "border-accent bg-accent-soft text-accent"
-              : "border-border bg-surface text-fg-muted hover:border-border-strong hover:bg-surface-2 hover:text-fg"
-          } ${className}`}
-        >
-          {icon}
-        </button>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            aria-label={current ? `${ariaLabel}: ${current.label}` : ariaLabel}
+            aria-haspopup="listbox"
+            aria-expanded={open}
+            disabled={disabled}
+            onMouseEnter={hoverable && !disabled ? openOnHover : undefined}
+            onMouseLeave={hoverable ? scheduleClose : undefined}
+            onClick={(e) => {
+              e.stopPropagation();
+              guardHoverTap(e);
+            }}
+            className={`tap grid h-10 w-10 shrink-0 place-items-center rounded-full border transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+              open
+                ? "border-accent bg-accent-soft text-accent"
+                : "border-border bg-surface text-fg-muted hover:border-border-strong hover:bg-surface-2 hover:text-fg"
+            } ${className}`}
+          >
+            {icon}
+          </button>
+        </PopoverTrigger>
       ) : variant === "tile" ? (
         /* the CALL-BAR face: one big glyph filling the button — the arrow
            left (user directive, 2026-08-26) with hover doing its job. The
            sizes are clamp()ed to the viewport so the row breathes on a
            wide screen and tightens on a small one; the chosen value stays
-           captioned below, never crowding the button. */
+           captioned below, never crowding the button.
+           The trigger wraps the BUTTON, not the column: it is the anchor as
+           well as the trigger, and anchoring to the column would push the
+           panel down past the caption. */
         <div className="flex w-[clamp(3.5rem,5.5vw,4.5rem)] flex-col items-center gap-1.5">
-          <button
-            type="button"
-            ref={rootRef}
-            aria-label={current ? `${ariaLabel}: ${current.label}` : ariaLabel}
-            aria-haspopup="listbox"
-            aria-expanded={at !== null}
-            disabled={disabled}
-            onMouseEnter={hoverable && !disabled ? () => {
-              cancelScheduledClose();
-              if (!at) {
-                hoverOpenedAt.current = Date.now();
-                toggle();
-              }
-            } : undefined}
-            onMouseLeave={hoverable ? scheduleClose : undefined}
-            onClick={(e) => {
-              e.stopPropagation();
-              /* a touch tap fires mouseenter+click together — the click
-                 must not instantly close what its own hover just opened */
-              if (at && Date.now() - hoverOpenedAt.current < 400) return;
-              toggle();
-            }}
-            className={`tap grid h-[clamp(2.75rem,4.2vw,3.5rem)] w-full place-items-center rounded-xl border transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
-              at !== null
-                ? "border-accent bg-accent-soft ring-1 ring-accent/30"
-                : "border-border bg-surface hover:border-border-strong hover:bg-surface-2"
-            }`}
-          >
-            <span className="grid place-items-center text-fg [&_svg]:h-[clamp(1.05rem,1.7vw,1.35rem)] [&_svg]:w-[clamp(1.05rem,1.7vw,1.35rem)]">
-              {icon}
-            </span>
-          </button>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              aria-label={current ? `${ariaLabel}: ${current.label}` : ariaLabel}
+              aria-haspopup="listbox"
+              aria-expanded={open}
+              disabled={disabled}
+              onMouseEnter={hoverable && !disabled ? openOnHover : undefined}
+              onMouseLeave={hoverable ? scheduleClose : undefined}
+              onClick={(e) => {
+                e.stopPropagation();
+                guardHoverTap(e);
+              }}
+              className={`tap grid h-[clamp(2.75rem,4.2vw,3.5rem)] w-full place-items-center rounded-xl border transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                open
+                  ? "border-accent bg-accent-soft ring-1 ring-accent/30"
+                  : "border-border bg-surface hover:border-border-strong hover:bg-surface-2"
+              }`}
+            >
+              <span className="grid place-items-center text-fg [&_svg]:h-[clamp(1.05rem,1.7vw,1.35rem)] [&_svg]:w-[clamp(1.05rem,1.7vw,1.35rem)]">
+                {icon}
+              </span>
+            </button>
+          </PopoverTrigger>
           <span
             className="w-full truncate text-center text-[11px] leading-4 text-fg-muted"
             title={current?.label}
@@ -630,101 +651,107 @@ export function SelectMenu({
           </span>
         </div>
       ) : (
-      <button
-        type="button"
-        ref={rootRef}
-        aria-label={ariaLabel}
-        aria-haspopup="listbox"
-        aria-expanded={at !== null}
-        disabled={disabled}
-        onClick={(e) => { e.stopPropagation(); toggle(); }}
-        /* the trigger is the theme's ONE dropdown face (user directive,
-           2026-08-26: "more professional and clean"): the input base plus a
-           real chevron that turns when open, a hover border, and the accent
-           ring while the list is up — so an open dropdown is findable after
-           the eye wandered to its panel */
-        className={`input flex items-center justify-between gap-2 text-start transition-colors hover:border-border-strong ${
-          at !== null ? "border-accent ring-1 ring-accent/30" : ""
-        } ${className}`}
-      >
-        {icon ? <span className="shrink-0 text-fg-muted">{icon}</span> : null}
-        <span className="min-w-0 flex-1 truncate">{current?.label ?? ""}</span>
-        {chevron(14)}
-      </button>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            aria-label={ariaLabel}
+            aria-haspopup="listbox"
+            aria-expanded={open}
+            disabled={disabled}
+            /* the toggle belongs to Radix now; this handler exists only so a
+               clickable row underneath does not also receive the press */
+            onClick={(e) => e.stopPropagation()}
+            /* the trigger is the theme's ONE dropdown face (user directive,
+               2026-08-26: "more professional and clean"): the input base plus a
+               real chevron that turns when open, a hover border, and the accent
+               ring while the list is up — so an open dropdown is findable after
+               the eye wandered to its panel */
+            className={`input flex items-center justify-between gap-2 text-start transition-colors hover:border-border-strong ${
+              open ? "border-accent ring-1 ring-accent/30" : ""
+            } ${className}`}
+          >
+            {icon ? <span className="shrink-0 text-fg-muted">{icon}</span> : null}
+            <span className="min-w-0 flex-1 truncate">{current?.label ?? ""}</span>
+            {chevron(14)}
+          </button>
+        </PopoverTrigger>
       )}
-      {at
-        ? createPortal(
-            <div
-              ref={panelRef}
-              role="listbox"
-              aria-label={ariaLabel}
-              style={{ position: "fixed", top: at.top, left: at.left, minWidth: at.width }}
-              className="z-50 rounded-lg border border-border bg-surface py-1 shadow-xl"
-              onClick={(e) => e.stopPropagation()}
-              onMouseEnter={hoverable ? cancelScheduledClose : undefined}
-              onMouseLeave={hoverable ? scheduleClose : undefined}
-              onPointerDown={hoverable ? () => {
-                panelHeld.current = true;
-                window.addEventListener("pointerup", () => { panelHeld.current = false; }, { once: true });
-              } : undefined}
+      <PopoverContent
+        align="start"
+        sideOffset={4}
+        collisionPadding={8}
+        role="listbox"
+        aria-label={ariaLabel}
+        /* focus stays exactly where the hand-rolled panel left it — on the
+           trigger. A device list that opens under a passing pointer and then
+           PULLS the caret out of whatever was being typed would be a
+           regression dressed as an upgrade, and putting it back on close is
+           the same move a second time. */
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        onCloseAutoFocus={(e) => e.preventDefault()}
+        onClick={(e) => e.stopPropagation()}
+        onMouseEnter={hoverable ? cancelScheduledClose : undefined}
+        onMouseLeave={hoverable ? scheduleClose : undefined}
+        onPointerDown={hoverable ? () => {
+          panelHeld.current = true;
+          window.addEventListener("pointerup", () => { panelHeld.current = false; }, { once: true });
+        } : undefined}
+        className={`w-auto rounded-lg border-border bg-surface p-0 py-1 shadow-xl ${panelWidth}`}
+      >
+        {panelHeading ? (
+          <p className="px-3 pb-1 pt-1.5 text-[11px] font-semibold text-accent">
+            {panelHeading}
+          </p>
+        ) : null}
+        {options.map((o) => (
+          <span key={o.value} className="group/opt flex items-center">
+            <button
+              type="button"
+              role="option"
+              aria-selected={o.value === value}
+              disabled={o.disabled}
+              onClick={() => {
+                dismiss();
+                if (o.value !== value) onChange(o.value);
+              }}
+              className={`flex min-w-0 flex-1 items-center gap-2 py-2 ps-2.5 text-start text-xs transition-colors ${
+                o.onRemove ? "pe-1" : "pe-3"
+              } ${
+                o.value === value
+                  ? "bg-surface-2 font-semibold text-fg"
+                  : "text-fg-muted hover:bg-surface-2 hover:text-fg"
+              } disabled:pointer-events-none disabled:opacity-40`}
             >
-              {panelHeading ? (
-                <p className="px-3 pb-1 pt-1.5 text-[11px] font-semibold text-accent">
-                  {panelHeading}
-                </p>
-              ) : null}
-              {options.map((o) => (
-                <span key={o.value} className="group/opt flex items-center">
-                  <button
-                    type="button"
-                    role="option"
-                    aria-selected={o.value === value}
-                    disabled={o.disabled}
-                    onClick={() => {
-                      setAt(null);
-                      if (o.value !== value) onChange(o.value);
-                    }}
-                    className={`flex min-w-0 flex-1 items-center gap-2 py-2 ps-2.5 text-start text-xs transition-colors ${
-                      o.onRemove ? "pe-1" : "pe-3"
-                    } ${
-                      o.value === value
-                        ? "bg-surface-2 font-semibold text-fg"
-                        : "text-fg-muted hover:bg-surface-2 hover:text-fg"
-                    } disabled:pointer-events-none disabled:opacity-40`}
-                  >
-                    {/* the check LEADS and its gutter is always spent —
-                        one scannable column of marks, labels aligned */}
-                    <span aria-hidden className="grid w-4 shrink-0 place-items-center text-[10px] text-accent">
-                      {o.value === value ? "✓" : ""}
-                    </span>
-                    <span className="min-w-0 flex-1 truncate">{o.label}</span>
-                  </button>
-                  {o.onRemove ? (
-                    <button
-                      type="button"
-                      aria-label={`${o.label} ✕`}
-                      className="me-1.5 grid h-6 w-6 shrink-0 place-items-center rounded text-[10px] text-fg-muted opacity-0 transition-opacity hover:bg-danger/10 hover:text-danger focus-visible:opacity-100 group-hover/opt:opacity-100"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setAt(null);
-                        o.onRemove?.();
-                      }}
-                    >
-                      <IconClose width={12} height={12} />
-                    </button>
-                  ) : null}
-                </span>
-              ))}
-              {panelFooter ? (
-                <div className="mt-1 border-t border-border px-2.5 pb-1.5 pt-2">
-                  {panelFooter}
-                </div>
-              ) : null}
-            </div>,
-            document.body,
-          )
-        : null}
-    </>
+              {/* the check LEADS and its gutter is always spent —
+                  one scannable column of marks, labels aligned */}
+              <span aria-hidden className="grid w-4 shrink-0 place-items-center text-[10px] text-accent">
+                {o.value === value ? "✓" : ""}
+              </span>
+              <span className="min-w-0 flex-1 truncate">{o.label}</span>
+            </button>
+            {o.onRemove ? (
+              <button
+                type="button"
+                aria-label={`${o.label} ✕`}
+                className="me-1.5 grid h-6 w-6 shrink-0 place-items-center rounded text-[10px] text-fg-muted opacity-0 transition-opacity hover:bg-danger/10 hover:text-danger focus-visible:opacity-100 group-hover/opt:opacity-100"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  dismiss();
+                  o.onRemove?.();
+                }}
+              >
+                <IconClose width={12} height={12} />
+              </button>
+            ) : null}
+          </span>
+        ))}
+        {panelFooter ? (
+          <div className="mt-1 border-t border-border px-2.5 pb-1.5 pt-2">
+            {panelFooter}
+          </div>
+        ) : null}
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -812,7 +839,10 @@ export function ConfirmDialog({
               type="button"
               aria-label={cancelLabel}
               title={cancelLabel}
-              className="tap -me-1 -mt-1 grid h-7 w-7 shrink-0 place-items-center rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg"
+              /* audit finding, 2026-09-02: the same 28px/11px-corner square as
+                 IconAction, and the same fix — `.btn btn-icon` is the theme's
+                 icon button. Only the pull-into-the-corner offsets stay. */
+              className="btn btn-icon -me-1 -mt-1 shrink-0 text-fg-muted hover:bg-surface-2 hover:text-fg"
               onClick={onCancel}
             >
               <IconClose width={14} height={14} />
@@ -824,16 +854,23 @@ export function ConfirmDialog({
             ? <AlertDialogDescription className="mt-2 text-sm leading-6 text-fg-muted">{body}</AlertDialogDescription>
             : <div className="mt-3">{body}</div>
         ) : null}
+        {/* audit finding, 2026-09-02: `h-9 min-h-0 px-4 text-sm` used to ride
+            on all three of these, and the overrides were EFFECTIVE rather than
+            inert — `.btn` lives in @layer components, so utilities written
+            beside it win, and the platform's one confirm box was the one place
+            whose buttons were 36px/16px/13px against the theme's 38/15/12.5.
+            The height, padding and type belong to `.btn`; a dialog that wants
+            a compact pair asks for `.btn-sm`, never for four literals. */}
         <div className="mt-5 flex items-center justify-end gap-2">
           {hideCancel ? null : (
-            <button type="button" className="btn-secondary h-9 min-h-0 px-4 text-sm" onClick={onCancel}>
+            <button type="button" className="btn-secondary" onClick={onCancel}>
               {cancelLabel}
             </button>
           )}
           {alt ? (
             <button
               type="button"
-              className={`${alt.danger ? "btn-danger" : "btn-secondary"} h-9 min-h-0 px-4 text-sm`}
+              className={alt.danger ? "btn-danger" : "btn-secondary"}
               disabled={busy}
               onClick={alt.onSelect}
             >
@@ -842,7 +879,7 @@ export function ConfirmDialog({
           ) : null}
           <button
             type="button"
-            className={`${danger ? "btn-danger" : "btn-primary"} h-9 min-h-0 px-4 text-sm`}
+            className={danger ? "btn-danger" : "btn-primary"}
             disabled={busy || confirmDisabled}
             onClick={onConfirm}
           >

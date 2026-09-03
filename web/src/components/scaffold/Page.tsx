@@ -138,9 +138,10 @@ export function PageHeader({
 }
 
 /**
- * A section block: 20px title, optional muted description, content 16px
- * below. Sections stack at a 24px rhythm; `divided` draws the hairline ABOVE
- * this section (the blueprint separates sections, not panels).
+ * A section block: a section title (`.h-section`, text-section-title 15px),
+ * optional muted description, content 16px below. Sections stack at a 24px
+ * rhythm; `divided` draws the hairline ABOVE this section (the blueprint
+ * separates sections, not panels).
  */
 export function Section({
   title,
@@ -158,7 +159,21 @@ export function Section({
        top) carries the space; pt-8 on top of it read as a hole under every
        divider */
     <section className={`py-6 first-of-type:pt-0 ${divided ? "border-t border-border" : ""}`}>
-      {title ? <h2 className="text-xl font-semibold text-fg">{title}</h2> : null}
+      {/* audit finding, 2026-09-02: this h2 wore `text-xl`, and the re-pitched
+          scale points `xl` at rem(SCAFFOLD.fontSize.pageTitle) = 16 — so every
+          block heading inside a page rendered at the PAGE title's size, a step
+          above the 15px `.h-section` its ~30 siblings across management and
+          settings already wear. On the settings screens the two sit on one
+          scroll: an untitled <Section> wrapping GeneralSettings' `.h-section`
+          headings, and a titled one a press away, disagreeing by a step about
+          what a block heading is. `.h-section` IS the theme's role for this
+          (globals.css: text-section-title, same weight and colour), so the
+          class carries all three and nothing is restated on top of it.
+          The doc comment above said "20px title" — true before the scale moved
+          and describing no rendered size since; prose cannot hold a number a
+          token owns. Integrations.tsx:285 fixed its own copy and left the
+          platform-wide half here, which is where it belongs. */}
+      {title ? <h2 className="h-section">{title}</h2> : null}
       {description ? <p className="mt-0.5 text-sm text-fg-muted">{description}</p> : null}
       <div className={title || description ? "mt-4" : ""}>{children}</div>
     </section>

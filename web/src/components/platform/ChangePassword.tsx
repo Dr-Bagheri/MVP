@@ -100,7 +100,12 @@ export function ChangePassword() {
         </FormRow>
 
         {error ? (
-          <div className="px-5 py-3 md:px-8">
+          /* audit finding, 2026-09-03: the same frozen `md:px-8` the panel
+             footer carried, copied one screen over — this refusal sits among
+             the ROWS, so it takes the rows' `px-5` gutter and stops standing
+             12px inside the fields it is about. profile's copy of this line
+             was corrected first; this was the last one. */
+          <div className="px-5 py-3">
             <p role="alert" className="text-sm text-danger">
               {error}
             </p>

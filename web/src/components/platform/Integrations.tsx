@@ -282,7 +282,17 @@ export function Integrations() {
      */
     <SettingsPane activeSlug="integrations">
 
-          <Section title={t("connectedTitle")}>
+          <Section>
+            {/* audit finding, 2026-09-02: `Section` sets its title in
+                `text-xl`, which the re-pitched scale points at the 16px PAGE
+                title — so this block's heading stood a step above the 15px
+                `.h-section` headings General, Assistant and Security give the
+                same job, one press away in the same menu. The shared class
+                carries the heading here (`mb-4` is the gap `Section` puts
+                under its own title, kept exactly); `Section`'s h2 is the
+                platform-wide half of this and belongs to whoever owns the
+                scaffold, not to one of its thirteen callers. */}
+            <h2 className="h-section mb-4">{t("connectedTitle")}</h2>
             {connectors !== null && allRows.length === 0 ? (
               <EmptyState text={t("noneConnected")} />
             ) : (
@@ -292,7 +302,13 @@ export function Integrations() {
                     <span className="sr-only">{t("searchPlaceholder")}</span>
                     <input
                       type="search"
-                      className="input h-10 min-h-0 py-0 text-sm"
+                      /* audit finding, 2026-09-02: `h-10 min-h-0 py-0 text-sm`
+                         re-answered the one question `.input` exists to answer
+                         — and pinned 40px at EVERY width, discarding the 44px
+                         hit-area floor the class carries below md. The Audit
+                         Logs filter was stripped of the same four for the
+                         same reason; the class owns height and type here too. */
+                      className="input"
                       placeholder={t("searchPlaceholder")}
                       value={query}
                       onChange={(event) => setQuery(event.target.value)}
@@ -311,7 +327,10 @@ export function Integrations() {
                     <label>
                       <span className="sr-only">{t("filterApps")}</span>
                       <select
-                        className="input h-10 min-h-0 w-auto py-0 text-sm"
+                        /* audit finding, 2026-09-02: same four overrides as the
+                           search box beside it; only the width is this
+                           control's to decide */
+                        className="input w-auto"
                         value={app}
                         onChange={(event) =>
                           setApp(event.target.value as ConnectorProvider | "")}
@@ -343,7 +362,11 @@ export function Integrations() {
             )}
           </Section>
 
-          <Section title={t("availableTitle")} divided>
+          <Section divided>
+            {/* audit finding, 2026-09-02: the same step down as the block
+                above — two headings on one screen must not answer the
+                "how big is a block title" question twice */}
+            <h2 className="h-section mb-4">{t("availableTitle")}</h2>
             {/* one row of four from xl up (the offer IS four Google sources) —
                 compact, Sana-shaped (user directive, 2026-08-28) */}
             {/* TWO PER ROW, not four (user directive, 2026-09-02: "change the
@@ -375,8 +398,14 @@ export function Integrations() {
                        one row, closer together, per the Sana reference). The
                        first round's "look like the workflow big buttons"
                        verbatim copy is deliberately superseded: kinship now
-                       lives in the recipe, not the measurements. */
-                    className={`group flex flex-col rounded-2xl border border-border bg-surface p-4 ${open ? "cursor-pointer transition-colors hover:border-border-strong hover:bg-surface-2" : ""}`}
+                       lives in the recipe, not the measurements.
+                       audit finding, 2026-09-02: the recipe is `.card` — this
+                       spelled out its corner, border, ground and padding by
+                       hand and left out the one part that is not a
+                       measurement, the ambient shadow, so four cards sat flat
+                       under shadowed table rows. Wearing the class means the
+                       next change to what a card is reaches these too. */
+                    className={`card group flex flex-col ${open ? "cursor-pointer transition-colors hover:border-border-strong hover:bg-surface-2" : ""}`}
                     {...(open
                       ? {
                           role: "button",
@@ -532,9 +561,14 @@ function TileControl({
 }) {
   if (action.kind === "sentence") {
     return (
-      <span className="inline-flex h-9 items-center rounded-full border border-border px-3 text-xs text-fg-subtle">
-        {labels.notConfigured}
-      </span>
+      /* audit finding, 2026-09-02: this wore a 36px bordered rounded-full
+         pill in the tile's button slot — sized to the buttons on the
+         neighbouring tiles, which is exactly the shape the comment above says
+         it must never take; on screen it read as a disabled control. A claim
+         about the product is a sentence, and a sentence is set as copy: no
+         height, no corner, nothing to mistake for something to press. (It
+         was also this file's one entry in control.guard's worklist.) */
+      <p className="text-xs text-fg-subtle">{labels.notConfigured}</p>
     );
   }
   if (action.kind === "connected") return <StatusDot label={labels.connected} />;

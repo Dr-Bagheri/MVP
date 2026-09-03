@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgentEvent, AgentMessage } from "@/api/types";
 
@@ -44,6 +44,13 @@ const failedThread: AgentMessage[] = [
 ];
 
 const askCalls: (string | undefined)[] = [];
+/**
+ * A thread fetch the test can HOLD OPEN. The loading window is a moment, and
+ * a mock that resolves on the next microtask makes that moment unobservable —
+ * an assertion about it would pass or fail on scheduling luck. When `gate` is
+ * set, `agentMessages` waits for the test to release it.
+ */
+let gate: Promise<AgentMessage[]> | null = null;
 async function* scriptedAsk(
   _q: string,
   _ctx: { page: string; callIds: string[] },
@@ -74,7 +81,7 @@ vi.mock("@/api/client", () => ({
       avatar_url: null, role: "admin", status: "active", locale: "fa",
       model_id: null, created_at: new Date().toISOString(),
     }),
-    agentMessages: async () => failedThread,
+    agentMessages: () => gate ?? Promise.resolve(failedThread),
     ask: (...args: Parameters<typeof scriptedAsk>) => scriptedAsk(...args),
     // the Part-1 surface the hub now touches on mount / after done
     models: async () => ({ models: [], preferred_model: null, curated: false, tool_capability_filtered: false }),
@@ -96,6 +103,35 @@ const { Hub } = await import("./Hub");
 describe("Hub — resuming a stored conversation", () => {
   beforeEach(() => {
     askCalls.length = 0;
+    gate = null;
+  });
+
+  it("shows the thread's skeleton, not the welcome screen, while the stored thread loads", async () => {
+    /*
+     * audit finding, 2026-09-02: `idle` was `messages.length === 0`, and a
+     * resumed thread is exactly that until its fetch lands — so opening a
+     * stored conversation painted the welcome line and the suggestion chips,
+     * then swapped them for the thread. Loading and empty are different
+     * nothings; this holds the fetch open and looks at the window.
+     */
+    let release!: (thread: AgentMessage[]) => void;
+    gate = new Promise((resolve) => { release = resolve; });
+    render(<Hub />);
+
+    // in flight: a skeleton in the thread's own box…
+    expect(document.querySelector("[aria-busy='true']")).not.toBeNull();
+    // …and NOT the idle hub. Both halves, because each alone is vacuous in
+    // one direction: absence of the welcome line also holds on a blank box,
+    // and a busy marker alone would pass with the welcome still under it.
+    expect(screen.queryByText(/من دستیار نورای/)).toBeNull();
+
+    /* the release is the test's own state update, so it is the test's own
+       act — a bare resolve here fires the thread's arrival outside React's
+       knowledge and is reported as an un-acted update */
+    await act(async () => { release(failedThread); });
+    await screen.findByText("این تماس را خلاصه کن.");
+    // the skeleton left with the thread's arrival
+    expect(document.querySelector("[aria-busy='true']")).toBeNull();
   });
 
   it("renders a resumed failed run as a question with no answer — and invents nothing", async () => {

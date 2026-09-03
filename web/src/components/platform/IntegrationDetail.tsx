@@ -7,7 +7,7 @@ import type { ConnectorItem, ConnectorStatus, Me } from "@/api/types";
 import { useRouter } from "@/i18n/routing";
 import { PlatformShell } from "./PlatformShell";
 import { useCrumbTitle } from "./CrumbTitle";
-import { PageContainer } from "@/components/scaffold";
+import { PageContainer, Skeleton, SkeletonLines } from "@/components/scaffold";
 import { DataTable, StatusDot, type Column } from "@/components/DataTable";
 import { Card, EmptyState } from "@/components/ui";
 import { ConfirmDialog, KebabMenu } from "@/components/rowActions";
@@ -175,17 +175,37 @@ export function IntegrationDetail({ slug }: { slug: string }) {
         <PageContainer width="small">
           {entry === undefined ? (
             <Card><p className="text-sm text-fg-muted">{t("detailMissing")}</p></Card>
-          ) : connectors === null ? null : (
+          ) : (
             <>
-              <header className="flex flex-wrap items-start gap-6">
+              {/* audit finding, 2026-09-02: the WHOLE page used to wait on
+                  api.connectors() — `connectors === null ? null :` — although
+                  the icon, the name, the provider and the description are all
+                  known synchronously from the catalogue (`entry`, `copy`,
+                  `providerLabel` — none of them is on the wire). The frame
+                  is structure and structure does not wait for the network;
+                  only what the wire decides waits, below. */}
+              <header className="flex flex-wrap items-start gap-4">
                 <span
-                  className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl bg-surface-2 text-fg-muted"
+                  /* audit finding, 2026-09-02: a 64px hero tile beside a 20px
+                     title was a title BLOCK; the identity row is the
+                     Integrations tile's own recipe now — 40px tile, 18px
+                     glyph — so the card you clicked and the page it opens
+                     read as the same object */
+                  className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-surface-2 text-fg-muted"
                   aria-hidden
                 >
-                  <Icon name={entry.icon} size="hero" />
+                  <Icon name={entry.icon} size="lg" />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <h1 className="text-2xl font-semibold text-fg">{name}</h1>
+                  {/* audit finding, 2026-09-02: this was `text-2xl` — a 20px
+                      heading restating the name useCrumbTitle already put in
+                      the breadcrumb, on the one settings page that opened
+                      with a large title. The card-title role is the
+                      platform's own spelling for a page's h1 (scaffold's
+                      SectionMenu heading); the element stays so the page
+                      still HAS a heading, only its size comes back to the
+                      scale. */}
+                  <h1 className="text-pane-title font-semibold text-fg">{name}</h1>
                   <p className="mt-1 text-xs text-fg-muted">{providerLabel}</p>
                   <p className="mt-2 max-w-[70ch] text-sm leading-7 text-fg-muted">
                     {copy[entry.key].description}
@@ -219,7 +239,18 @@ export function IntegrationDetail({ slug }: { slug: string }) {
               </header>
 
               <div className="mt-8">
-                {state === undefined || !state.configured ? (
+                {connectors === null ? (
+                  /* THE ARRIVAL SHAPE (audit finding, 2026-09-02). The
+                     overview only routes a CONNECTED tile here — the others
+                     open the connect briefing — so the state a person lands
+                     in is the two-panel one, and that is the frame worth
+                     reserving: the space the answer will fill, rather than a
+                     blank that the answer then pushes everything below. */
+                  <div className="grid items-start gap-6 lg:grid-cols-[3fr_2fr]">
+                    <Card><SkeletonLines lines={6} /></Card>
+                    <Card><SkeletonLines lines={5} /></Card>
+                  </div>
+                ) : state === undefined || !state.configured ? (
                   /* a claim about the PRODUCT, so a sentence and no button */
                   <Card>
                     <p className="text-sm text-fg-muted">
@@ -230,7 +261,11 @@ export function IntegrationDetail({ slug }: { slug: string }) {
                   <EmptyState
                     text={t("notConnectedYet")}
                     action={
-                      <button type="button" className="btn-primary h-10 min-h-0 px-4 text-sm" onClick={() => void connect()}>
+                      /* audit finding, 2026-09-02: was `h-10 min-h-0 px-4
+                         text-sm` on top of .btn-primary — a fourth height on
+                         a page that already had two others. The class owns
+                         the geometry. */
+                      <button type="button" className="btn-primary" onClick={() => void connect()}>
                         {tw("connect", { provider: providerLabel })}
                       </button>
                     }
@@ -242,7 +277,10 @@ export function IntegrationDetail({ slug }: { slug: string }) {
                       label={state.status === "expired" ? t("statusExpired") : t("statusRevoked")}
                       tone={state.status === "expired" ? "warning" : "danger"}
                     />
-                    <button type="button" className="btn-secondary h-9 min-h-0 px-3 text-xs" onClick={() => void connect()}>
+                    {/* audit finding, 2026-09-02: 36px by hand, which is
+                        neither .btn (38) nor .btn-sm (34) — the compact
+                        control exists, so this asks for it by name */}
+                    <button type="button" className="btn-secondary btn-sm" onClick={() => void connect()}>
                       {tw("reconnect", { provider: providerLabel })}
                     </button>
                   </Card>
@@ -255,9 +293,11 @@ export function IntegrationDetail({ slug }: { slug: string }) {
                     <p className="mt-1 max-w-[70ch] text-sm leading-6 text-fg-muted">
                       {t("reconnectDriveHint")}
                     </p>
+                    {/* audit finding, 2026-09-02: the same hand-set 36px as
+                        the reconnect button above — one page, three heights */}
                     <button
                       type="button"
-                      className="btn-secondary mt-4 h-9 min-h-0 px-3 text-xs"
+                      className="btn-secondary btn-sm mt-4"
                       onClick={() => void connect()}
                     >
                       {tw("reconnect", { provider: providerLabel })}
@@ -265,14 +305,25 @@ export function IntegrationDetail({ slug }: { slug: string }) {
                   </Card>
                 ) : (
                   <div className="grid items-start gap-6 lg:grid-cols-[3fr_2fr]">
-                    <section className="rounded-xl border border-border bg-surface p-6">
+                    {/* audit finding, 2026-09-02: this panel and its sibling
+                        aside hand-drew the card — 16px corner, 24px padding,
+                        and no ambient shadow — so the two main panels of the
+                        CONNECTED state were a different shape from the <Card>
+                        every other state of this same page renders. Wearing
+                        the class means the next change to what a card is
+                        reaches these too. */}
+                    <Card>
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <h2 className="text-lg font-semibold text-fg">{t("assetsTitle")}</h2>
                         <label className="min-w-0 sm:w-64">
                           <span className="sr-only">{t("searchAssets")}</span>
                           <input
                             type="search"
-                            className="input h-9 min-h-0 py-0 text-sm"
+                            /* audit finding, 2026-09-02: `h-9 min-h-0 py-0
+                               text-sm` re-answered all four questions .input
+                               exists to answer — a 36px field beside the
+                               product's 40px ones */
+                            className="input"
                             placeholder={t("searchAssets")}
                             value={query}
                             onChange={(event) => setQuery(event.target.value)}
@@ -280,74 +331,108 @@ export function IntegrationDetail({ slug }: { slug: string }) {
                         </label>
                       </div>
                       <div className="mt-4">
-                        {items === undefined ? null : items === null ? (
+                        {items === null ? (
                           <p role="status" className="py-8 text-center text-sm text-danger">
                             {t("assetsFailed")}
                           </p>
                         ) : (
                           /* ten rows then pages — the table rule (M42) rides
-                             in with DataTable's default page size */
+                             in with DataTable's default page size.
+                             audit finding, 2026-09-02: `items === undefined`
+                             (the loading nothing) used to render NOTHING here
+                             — on first paint and on every gear-menu refresh —
+                             which is the same picture as «no assets». The
+                             table keeps its header, its borders and its
+                             column widths and puts skeletons where the rows
+                             go, so loading and empty stop looking alike. */
                           <DataTable
                             rows={visible}
+                            loading={items === undefined}
                             columns={columns}
                             rowKey={(item) => item.id}
                             empty={
                               <EmptyState
-                                text={items.length === 0 ? t("noAssets") : t("noAssetsMatch")}
+                                /* the source returned nothing vs. the search
+                                   matched nothing — two different sentences.
+                                   The loading `undefined` reads as the first
+                                   only in principle: DataTable does not
+                                   render `empty` while `loading`. */
+                                text={
+                                  !items || items.length === 0
+                                    ? t("noAssets")
+                                    : t("noAssetsMatch")
+                                }
                               />
                             }
                           />
                         )}
                       </div>
-                    </section>
+                    </Card>
 
-                    <aside className="rounded-xl border border-border bg-surface p-6">
-                      <h2 className="text-lg font-semibold text-fg">{t("detailsTitle")}</h2>
-                      <dl className="mt-4 space-y-4">
-                        <Row label={t("connectedBy")}>
-                          <span className="block">{personName(me, locale) || "—"}</span>
-                          {state.account_label ? (
-                            <span dir="ltr" className="block truncate text-xs text-fg-muted">
-                              {state.account_label}
-                            </span>
+                    {/* the same audit finding as the section above; the
+                        <aside> stays as the wrapper because it is a landmark
+                        and <Card> is a div — the frame is the theme's, the
+                        semantics are still the page's */}
+                    <aside>
+                      <Card>
+                        <h2 className="text-lg font-semibold text-fg">{t("detailsTitle")}</h2>
+                        <dl className="mt-4 space-y-4">
+                          <Row label={t("connectedBy")}>
+                            <span className="block">{personName(me, locale) || "—"}</span>
+                            {state.account_label ? (
+                              <span dir="ltr" className="block truncate text-xs text-fg-muted">
+                                {state.account_label}
+                              </span>
+                            ) : null}
+                          </Row>
+                          {/* "Connection created": not on the wire — omitted
+                              rather than faked with expires_at or the poll
+                              time wearing its costume */}
+                          {entry.source === "mail" ? (
+                            <>
+                              <Row label={t("lastSynced")}>
+                                {state.polled_at
+                                  ? `${formatRelativeDate(state.polled_at, locale)} ${formatTime(state.polled_at, locale)}`
+                                  : "—"}
+                              </Row>
+                              <Row label={t("messagesProcessed")}>
+                                {digits(state.messages_seen, locale)}
+                              </Row>
+                            </>
                           ) : null}
-                        </Row>
-                        {/* "Connection created": not on the wire — omitted
-                            rather than faked with expires_at or the poll
-                            time wearing its costume */}
-                        {entry.source === "mail" ? (
-                          <>
-                            <Row label={t("lastSynced")}>
-                              {state.polled_at
-                                ? `${formatRelativeDate(state.polled_at, locale)} ${formatTime(state.polled_at, locale)}`
-                                : "—"}
-                            </Row>
-                            <Row label={t("messagesProcessed")}>
-                              {digits(state.messages_seen, locale)}
-                            </Row>
-                          </>
-                        ) : null}
-                        <Row label={t("colAssets")}>
-                          {items ? digits(items.length, locale) : "—"}
-                        </Row>
-                        <Row label={t("colStatus")}>
-                          <StatusDot
-                            label={
-                              entry.source === "mail" && state.polled_at !== null
-                                ? t("statusSynced")
-                                : t("statusActive")
-                            }
-                          />
-                        </Row>
-                        <Row label={t("colAccess")}>{t("accessJustYou")}</Row>
-                      </dl>
-                      {/* the privacy card, Sana's "Private integration" told
-                          truthfully: per-person grant (D29), read on demand,
-                          never in logs */}
-                      <div className="mt-6 rounded-xl border border-border bg-surface-2/40 p-4">
-                        <p className="text-sm font-medium text-fg">{t("privacyTitle")}</p>
-                        <p className="mt-1 text-sm leading-6 text-fg-muted">{t("privacyNote")}</p>
-                      </div>
+                          <Row label={t("colAssets")}>
+                            {/* audit finding, 2026-09-02, the same
+                                loading-nothing as the table beside it: while
+                                the listing is in flight this said "—", which
+                                is what an ANSWER of none looks like. Three
+                                states, three pictures — a skeleton while it
+                                is coming, the dash only when the fetch
+                                actually failed. */}
+                            {items
+                              ? digits(items.length, locale)
+                              : items === null
+                                ? "—"
+                                : <Skeleton className="ms-auto h-4 w-8" />}
+                          </Row>
+                          <Row label={t("colStatus")}>
+                            <StatusDot
+                              label={
+                                entry.source === "mail" && state.polled_at !== null
+                                  ? t("statusSynced")
+                                  : t("statusActive")
+                              }
+                            />
+                          </Row>
+                          <Row label={t("colAccess")}>{t("accessJustYou")}</Row>
+                        </dl>
+                        {/* the privacy card, Sana's "Private integration" told
+                            truthfully: per-person grant (D29), read on demand,
+                            never in logs */}
+                        <div className="mt-6 rounded-xl border border-border bg-surface-2/40 p-4">
+                          <p className="text-sm font-medium text-fg">{t("privacyTitle")}</p>
+                          <p className="mt-1 text-sm leading-6 text-fg-muted">{t("privacyNote")}</p>
+                        </div>
+                      </Card>
                     </aside>
                   </div>
                 )}

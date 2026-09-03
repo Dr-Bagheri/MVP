@@ -1462,6 +1462,11 @@ export const api = {
       headers: { "content-type": "application/json" },
     });
   },
+  /** 0162: the board's true delete — the creator's or an admin's; a refusal
+      reads as 404, the way a call's does */
+  async deleteTask(id: string): Promise<void> {
+    await bff<null>(`/api/tasks/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
   async deleteTaskLabel(id: string): Promise<void> {
     await bff<null>(`/api/tasks/labels/${encodeURIComponent(id)}`, { method: "DELETE" });
   },

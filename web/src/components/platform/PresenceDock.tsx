@@ -39,6 +39,10 @@ import type { AuroraState } from "./EchoEOrb";
  */
 const AuroraOrb = dynamic(() => import("./EchoEOrb").then((m) => m.EchoEOrb), { ssr: false });
 import { recorderControls } from "@/components/echo/recorderControls";
+/* the constants module, not the scaffold barrel: this dock is imported by
+   the root layout, and the barrel would drag SectionMenu/Resizable into
+   every route's graph to fetch one number */
+import { SCAFFOLD } from "@/components/scaffold/constants";
 import {
   getPresenceAnchorSnapshot,
   getServerPresenceAnchorSnapshot,
@@ -86,7 +90,7 @@ interface DockMessage {
 }
 
 /** where the orb is pinned, and what SHAPE the assistant takes there */
-interface OrbPin {
+export interface OrbPin {
   x: number;
   y: number;
   /** float = the popup card; a side mode seats the orb in its holder */
@@ -170,23 +174,36 @@ function defaultSidePin(): OrbPin {
   };
 }
 
-/** the orb's resting spot: a side dock SEATS it in the holder's socket —
-    centre on the socket's centre, so orb and holder read as one thing */
-function orbStyle(
-  pin: OrbPin,
-  drag: { x: number; y: number } | null,
-): CSSProperties {
-  if (drag) return { left: drag.x, top: drag.y };
-  if (pin.mode === "side-left") return { left: SOCKET_CX, top: pin.y };
-  if (pin.mode === "side-right") {
-    return { left: window.innerWidth - SOCKET_CX, top: pin.y };
-  }
-  return { left: pin.x, top: pin.y };
+/** the socket's y, kept clear of the top bar and the page edge */
+export function clampSocketY(y: number, innerHeight: number = window.innerHeight): number {
+  return Math.min(Math.max(y, 120), innerHeight - 72);
 }
 
-/** the socket's y, kept clear of the top bar and the page edge */
-function clampSocketY(y: number): number {
-  return Math.min(Math.max(y, 120), window.innerHeight - 72);
+/**
+ * The orb's resting spot: a side dock SEATS it in the holder's socket —
+ * centre on the socket's centre, so orb and holder read as one thing.
+ *
+ * THE SOCKET'S CLAMP, APPLIED HERE TOO (user report, 2026-09-02: "its
+ * position is not inside its circle"). The holder draws its socket at
+ * clampSocketY(pin.y); this function drew the orb at the RAW pin.y. The two
+ * agree for a fresh drop (the drop clamps before storing) and disagree for
+ * a stored pin the window has since outgrown — shrink the window below the
+ * pin's height and the socket climbs to stay on screen while the orb keeps
+ * its stored row, so the orb sits under its circle, off-centre by however
+ * far the clamp moved. One y for both, computed once; exported so the
+ * agreement can be asserted rather than believed.
+ */
+export function orbStyle(
+  pin: OrbPin,
+  drag: { x: number; y: number } | null,
+  viewport: { width: number; height: number } = { width: window.innerWidth, height: window.innerHeight },
+): CSSProperties {
+  if (drag) return { left: drag.x, top: drag.y };
+  if (pin.mode === "side-left") return { left: SOCKET_CX, top: clampSocketY(pin.y, viewport.height) };
+  if (pin.mode === "side-right") {
+    return { left: viewport.width - SOCKET_CX, top: clampSocketY(pin.y, viewport.height) };
+  }
+  return { left: pin.x, top: pin.y };
 }
 
 /**
@@ -202,14 +219,29 @@ export function DockHolder({ side, y, active }: {
   active: boolean;
 }) {
   const cy = clampSocketY(y);
-  const cyLocal = cy - 56; // the container starts under the 56px top bar
+  /*
+   * The container starts under the top bar, and BOTH uses of that fact read
+   * the same number (audit finding, 2026-09-02): the offset was the literal
+   * 56 here and `top-14` on the box, copied from a bar that is 62 —
+   * SCAFFOLD.topBarHeight — so the whole rail and its socket sat 6px above
+   * the bar they hang from.
+   *
+   * Written as PX rather than as the bar's own rem, deliberately: `y` is a
+   * pointer/viewport coordinate in physical px, so a px offset makes the
+   * socket land at exactly `cy` in viewport space — which is what keeps the
+   * seated orb (drawn `fixed` at clampSocketY) centred in its circle at every
+   * root size. The price is a sub-2px gap under the bar away from the 16px
+   * baseline, on a decorative line; the alternative pays it as the orb
+   * sitting off-centre in its socket, which is a user report we already have.
+   */
+  const cyLocal = cy - SCAFFOLD.topBarHeight;
   const lineColor = active ? "rgb(var(--accent))" : "rgb(var(--border-strong) / 0.55)";
   const lineX = { [side]: SOCKET_CX - 1 } as CSSProperties;
   return (
     <div
       aria-hidden
-      className="pointer-events-none fixed bottom-0 top-14 z-30"
-      style={{ [side]: 0, width: 76 } as CSSProperties}
+      className="pointer-events-none fixed bottom-0 z-30"
+      style={{ [side]: 0, width: 76, top: SCAFFOLD.topBarHeight } as CSSProperties}
     >
       {/* the rail, from the top menu to the socket */}
       <span
@@ -975,12 +1007,16 @@ export function PresenceDock() {
      stands down. */
   if (orbIsSilentOn(pathname)) return null;
 
-  /* the small ring pokes ~21/24px below the 56px bar — surfaces hang just
-     under that (user redesign, 2026-08-22). A PINNED orb gets its panel
-     beside wherever it was dragged (computed at open time). */
+  /* the small ring pokes ~21/24px below the bar — surfaces hang just under
+     that (user redesign, 2026-08-22). A PINNED orb gets its panel beside
+     wherever it was dragged (computed at open time).
+     audit finding, 2026-09-02: these two rode the cradle's 56px-bar offsets;
+     the bar is `h-topbar` (62) now and the cradle moved down with it, so
+     both moved by the same 6 — otherwise the panel opens ON the ring's tail
+     instead of under it. */
   const surfacePosition = pin
     ? "" // inline style below
-    : "left-1/2 top-[88px] -translate-x-1/2 md:top-[92px]";
+    : "left-1/2 top-[94px] -translate-x-1/2 md:top-[98px]";
   /*
    * The panel's SHAPE follows the dock mode: a side dock is a full-height
    * column beside its holder; the float/cradle keeps the compact card it

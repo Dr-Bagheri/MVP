@@ -2526,6 +2526,15 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     return reply.send(await tasks.update(identity, id, (request.body ?? {}) as Record<string, unknown>));
   });
 
+  // 0162: the board's true delete — creator or admin, children and all
+  app.delete("/v1/tasks/:id", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    await tasks.remove(identity, id);
+    return reply.code(204).send();
+  });
+
   app.post("/v1/tasks/:id/checklist", async (request, reply) => {
     const identity = await auth.requireActive(request);
     refuseApiKey(identity);

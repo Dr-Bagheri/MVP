@@ -10,7 +10,7 @@ import { AvatarEditor } from "@/components/platform/AvatarEditor";
 import { ChangePassword } from "@/components/platform/ChangePassword";
 import { ExportAccountData } from "@/components/platform/ExportAccountData";
 import { PlatformShell } from "@/components/platform/PlatformShell";
-import { FormPanel, FormRow, PageContainer, PageHeader, PanelFooter, Section } from "@/components/scaffold";
+import { FormPanel, FormRow, PageContainer, PageHeader, PanelFooter, Section, Skeleton } from "@/components/scaffold";
 import { digits, modelLabel, personName } from "@/lib/format";
 import { signOutThisDevice } from "@/lib/signOut";
 import { notify } from "@/lib/notify";
@@ -219,10 +219,69 @@ export default function ProfilePage() {
     }
   }
 
+  /*
+   * audit finding, 2026-09-02: this returned an EMPTY column while `me` was
+   * out, then dropped the identity tile and four panels in at once. The
+   * platform's loading rule says the frame is STRUCTURE and structure is known
+   * before the network — the tile, the panels and every label are the same
+   * whatever the server answers, so only the VALUES wait, and while they wait
+   * they occupy the space they are about to fill.
+   *
+   * It reserves the identity tile and the two panels that always land; the
+   * assistant/password/sign-out sections below are deliberately absent,
+   * because reserving space for something that turns out to be a different
+   * size moves the layout exactly as much as reserving none.
+   */
   if (!me)
     return (
       <PlatformShell>
-        <PageContainer>{null}</PageContainer>
+        <PageContainer>
+          <section className="tile tile-row mb-4 flex-wrap items-center justify-between gap-4 p-4">
+            <div className="flex min-w-0 items-center gap-3">
+              <Skeleton className="h-14 w-14 shrink-0 rounded-full" />
+              <div className="min-w-0 space-y-2">
+                <Skeleton className="h-4 w-40" />
+                <Skeleton className="h-3 w-28" />
+              </div>
+            </div>
+            <dl className="flex shrink-0 items-center gap-6">
+              {(["statMeetings", "statTasksDone"] as const).map((key) => (
+                <div key={key} className="text-center">
+                  {/* the LABEL is not a value — it is the same word before and
+                      after the read, so it renders now and only the figure
+                      above it waits. `dd`, not a bare span: the loaded tile is
+                      a dd/dt pair and a dt with no dd is a different list. */}
+                  <dd>
+                    <Skeleton className="mx-auto h-6 w-8" />
+                  </dd>
+                  <dt className="text-[11px] text-fg-muted">{t(key)}</dt>
+                </div>
+              ))}
+            </dl>
+          </section>
+
+          <Section title={t("identityTitle")}>
+            <FormPanel>
+              {[t("photo"), t("displayName"), t("displayNameEn"), t("username")].map((label) => (
+                <FormRow key={label} label={label}>
+                  {/* h-10 = `.input`'s own height, so the row does not resize
+                      under the pointer when the real field arrives */}
+                  <Skeleton className="h-10 w-full" />
+                </FormRow>
+              ))}
+            </FormPanel>
+          </Section>
+
+          <Section title={t("prefsTitle")} divided>
+            <FormPanel>
+              {[t("language"), t("theme"), t("model")].map((label) => (
+                <FormRow key={label} label={label}>
+                  <Skeleton className="h-10 w-full" />
+                </FormRow>
+              ))}
+            </FormPanel>
+          </Section>
+        </PageContainer>
       </PlatformShell>
     );
 
@@ -257,6 +316,14 @@ export default function ProfilePage() {
             </span>
             <span className="min-w-0">
               <span className="block truncate text-lg font-bold text-fg">{personName(me, locale)}</span>
+              {/* audit finding, 2026-09-02: `profile.role_owner|admin|member`
+                  existed in NEITHER locale, so anyone without a job title read
+                  the literal string «profile.role_member» under their own name
+                  — the dashboard.widget.ask shape exactly. keys.test skips
+                  computed keys, and locale PARITY cannot see a key missing
+                  from both, so nothing was ever going to go red. Keys added to
+                  fa.json and en.json in the wording tasks.role_* already uses;
+                  verified on the rendered page in both directions. */}
               <span className="block truncate text-xs text-fg-muted">
                 {me.job_title ? me.job_title : t(`role_${me.role ?? "member"}`)}
                 {me.org_name ? ` · ${me.org_name}` : ""}
@@ -372,7 +439,14 @@ export default function ProfilePage() {
                 username rule and is the only thing that knows whether a
                 handle is taken or permanently retired. */}
             {error && error.field === null ? (
-              <div className="px-5 py-3 md:px-8">
+              /* audit finding, 2026-09-02 (the FormPanel gutter finding names
+                 this line): `md:px-8` was a frozen copy of the panel's OLD
+                 32px gutter. FormRow took the fixed-160/380 layout and moved
+                 to `px-5`, so from md up this refusal sat 12px inside every
+                 label it stands under — the sentence a person is reading
+                 indented further than the fields it is about. It shares the
+                 rows' gutter now, because it sits among the ROWS. */
+              <div className="px-5 py-3">
                 <p role="alert" className="text-sm text-danger">
                   {error.message}
                 </p>
@@ -393,10 +467,17 @@ export default function ProfilePage() {
 
         <Section title={t("prefsTitle")} divided>
           <FormPanel>
+            {/* audit finding, 2026-09-02: these three wore `.input` and then
+                re-answered its one question — `min-h-0 h-11 md:h-control` made
+                them 38px from md up, beside 40px text boxes in the panel above
+                and the 40px `<Select>` trigger on the row before. `.input`
+                owns the height (and, via `select.input`, the chevron and the
+                option colours); a control that re-states it is how one panel
+                comes to hold two control heights. */}
             <FormRow label={t("language")} htmlFor="profile-language">
               <select
                 id="profile-language"
-                className="input min-h-0 h-11 md:h-control"
+                className="input"
                 value={me.locale}
                 onChange={(e) => {
                   const locale = e.target.value as "fa" | "en";
@@ -413,7 +494,7 @@ export default function ProfilePage() {
             <FormRow label={t("theme")} description={t("themeHint")} htmlFor="profile-theme">
               <select
                 id="profile-theme"
-                className="input min-h-0 h-11 md:h-control"
+                className="input"
                 value={theme}
                 onChange={(e) => storeTheme(e.target.value as Theme)}
               >
@@ -430,7 +511,7 @@ export default function ProfilePage() {
             <FormRow label={t("model")} htmlFor="profile-model">
               <select
                 id="profile-model"
-                className="input min-h-0 h-11 md:h-control"
+                className="input"
                 value={me.model_id ?? ""}
                 onChange={(e) => {
                   setMe({ ...me, model_id: e.target.value });
@@ -502,10 +583,18 @@ export default function ProfilePage() {
         <Section title={t("signOutTitle")} divided>
           <FormPanel>
             <FormRow label={tPlatform("signOut")} description={t("signOutHint")}>
+              {/* audit finding, 2026-09-02: this was a hand-rolled 40px button
+                  with the 16px TILE corner, one section under a Save button
+                  that is `.btn-primary` (38px, 11px) — two button shapes on
+                  one page. `.btn` owns height, corner, padding and type (and
+                  already composes `.tap`); only the TONE is stated here,
+                  because a sign-out is not destructive — it is reversible by
+                  signing back in, so it stays the soft danger wash rather
+                  than becoming a solid `btn-danger`. */}
               <button
                 type="button"
                 onClick={() => { void signOutThisDevice(locale); }}
-                className="tap h-10 rounded-xl bg-danger/10 px-4 text-sm font-medium text-danger hover:bg-danger/20"
+                className="btn bg-danger/10 text-danger hover:bg-danger/20"
               >
                 {tPlatform("signOut")}
               </button>

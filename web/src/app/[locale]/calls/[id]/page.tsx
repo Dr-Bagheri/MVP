@@ -15,9 +15,9 @@ import {
 } from "@/components/rowActions";
 import { RichTextEditor } from "@/components/RichTextEditor";
 import {
-  IconArchive, IconAsk, IconChip, IconCopy, IconDownload, IconEye, IconFileText, IconFilter, IconGavel, IconGlobe, IconMic, IconOutline, IconParagraph, IconPencil, IconPeople3, IconPlus, IconPrint, IconRedact, IconRetry, IconRows, IconShare, IconSparkle, IconTag, IconTrash, IconUsers, IconWarn, IconZap,
+  IconArchive, IconAsk, IconChip, IconCopy, IconDownload, IconEye, IconFileText, IconFilter, IconGavel, IconGlobe, IconMic, IconOutline, IconParagraph, IconPause, IconPencil, IconPeople3, IconPlay, IconPlus, IconPrint, IconRedact, IconRetry, IconRows, IconShare, IconSparkle, IconTag, IconTrash, IconUsers, IconWarn, IconZap,
 } from "@/components/icons";
-import { PageContainer, SectionScroller } from "@/components/scaffold";
+import { PageContainer, SectionScroller, Skeleton, SkeletonLines } from "@/components/scaffold";
 import { SummaryBody, parseSummary } from "@/components/echo/SummaryBody";
 import { appendLaneItem, summaryLanes, type Lane } from "@/lib/summaryLanes";
 import { faDisplay } from "@/lib/faDisplay";
@@ -924,7 +924,77 @@ export default function CallDetailPage({
       .sort((a, b) => b.version - a.version)[0] ?? null;
   }, [versions, summary]);
 
-  if (!call) return <EchoAppShell>{null}</EchoAppShell>;
+  /* THE TOOLBAR SHAPE (audit finding, 2026-09-02). EchoAppShell stacks its
+     menu ABOVE the content now, and this page was still handing it the old
+     vertical SectionMenu — so the record opened with a pane heading, a group
+     label and a column of rows sitting on top of the document, while every
+     other surface shows one row of pills. Four buttons, no heading, no group
+     title; the section is picked in place, which is why these are buttons and
+     not links.
+
+     It is built HERE, above the loading branch, so the frame that stands
+     while the record is fetched and the frame that stands after it are the
+     same object — a second copy is the one that stops matching. */
+  const sectionMenu = (
+    <nav aria-label={t("docSections")} className="flex flex-wrap items-center gap-1">
+      {([
+        { slug: "summary", label: t("summary"), icon: <IconFileText width={14} height={14} /> },
+        { slug: "transcript", label: t("transcript"), icon: <IconRows width={14} height={14} /> },
+        { slug: "actions", label: t("sectionActions"), icon: <IconZap width={14} height={14} /> },
+        { slug: "notes", label: t("sectionNotes"), icon: <IconTag width={14} height={14} /> },
+      ] as const).map((item) => (
+        <button
+          key={item.slug}
+          type="button"
+          aria-current={section === item.slug ? "page" : undefined}
+          onClick={() => setSection(item.slug)}
+          className={`btn btn-sm gap-1.5 font-medium ${
+            section === item.slug ? "bg-accent text-on-accent" : "text-fg-muted hover:bg-surface-2 hover:text-fg"
+          }`}
+        >
+          {item.icon}
+          {item.label}
+        </button>
+      ))}
+    </nav>
+  );
+
+  /*
+   * THE FRAME BEFORE THE DATA (audit finding, 2026-09-02). This branch used
+   * to be `<EchoAppShell>{null}</EchoAppShell>`: until getCall answered, the
+   * record page was an empty column with no menu, no card and no player, and
+   * then the whole document appeared at once. The card, its header row and
+   * the player bar are STRUCTURE — they do not depend on the network — so
+   * they stand first and only their contents wait, in the space they are
+   * about to fill (components/scaffold/Skeleton).
+   */
+  if (!call) {
+    return (
+      <EchoAppShell menu={sectionMenu}>
+        <PageContainer fill>
+          <Card className="flex min-h-0 flex-1 flex-col !p-0">
+            <div className="flex items-start justify-between gap-3 px-5 pb-4 pt-5">
+              <Skeleton className="h-5 w-64" />
+              <Skeleton className="h-4 w-28" />
+            </div>
+            {/* the transport pair, the clock and the seek bar, at the sizes
+                they will be — no radius stated: Skeleton already carries the
+                control radius, and a second `rounded-*` beside it would be a
+                bet on which utility Tailwind emits last */}
+            <div className="flex items-center gap-3 border-t border-border px-5 py-2.5">
+              <Skeleton className="h-7 w-7" />
+              <Skeleton className="h-7 w-7" />
+              <Skeleton className="h-3 w-24" />
+              <Skeleton className="h-1.5 min-w-0 flex-1" />
+            </div>
+            <div className="border-t border-border px-5 py-4">
+              <SkeletonLines lines={6} />
+            </div>
+          </Card>
+        </PageContainer>
+      </EchoAppShell>
+    );
+  }
 
   const durMs = call.duration_ms ?? 0;
   const stepIdx = PIPELINE_LADDER.indexOf(call.status);
@@ -1192,38 +1262,7 @@ export default function CallDetailPage({
   ];
 
   return (
-    <EchoAppShell
-      menu={
-        /* THE TOOLBAR SHAPE (audit finding, 2026-09-02). EchoAppShell stacks
-           its menu ABOVE the content now, and this page was still handing it
-           the old vertical SectionMenu — so the record opened with a pane
-           heading, a group label and a column of rows sitting on top of the
-           document, while every other surface shows one row of pills. Four
-           buttons, no heading, no group title; the section is picked in
-           place, which is why these are buttons and not links. */
-        <nav aria-label={t("docSections")} className="flex flex-wrap items-center gap-1">
-          {([
-            { slug: "summary", label: t("summary"), icon: <IconFileText width={14} height={14} /> },
-            { slug: "transcript", label: t("transcript"), icon: <IconRows width={14} height={14} /> },
-            { slug: "actions", label: t("sectionActions"), icon: <IconZap width={14} height={14} /> },
-            { slug: "notes", label: t("sectionNotes"), icon: <IconTag width={14} height={14} /> },
-          ] as const).map((item) => (
-            <button
-              key={item.slug}
-              type="button"
-              aria-current={section === item.slug ? "page" : undefined}
-              onClick={() => setSection(item.slug)}
-              className={`btn btn-sm gap-1.5 font-medium ${
-                section === item.slug ? "bg-accent text-on-accent" : "text-fg-muted hover:bg-surface-2 hover:text-fg"
-              }`}
-            >
-              {item.icon}
-              {item.label}
-            </button>
-          ))}
-        </nav>
-      }
-    >
+    <EchoAppShell menu={sectionMenu}>
       {/* ONE document card (user directive, 2026-08-24): header, player,
           summary, transcript, notes — divisions inside one box, not a
           stack of separate cards. Since 2026-08-25 the summary and the
@@ -1253,8 +1292,12 @@ export default function CallDetailPage({
             <div className="min-w-0 flex-1">
               {titleDraft !== null ? (
                 <span className="flex items-center gap-2">
+                  {/* audit finding, 2026-09-02: this re-answered `.input`'s own
+                      height and type by hand (`h-10 min-h-0 … text-lg`). The
+                      class owns both; only the WEIGHT is set here, so the box
+                      reads as the title it is replacing. */}
                   <input
-                    className="input h-10 min-h-0 w-full max-w-md text-lg font-bold"
+                    className="input w-full max-w-md font-semibold"
                     value={titleDraft}
                     autoFocus
                     onChange={(e) => setTitleDraft(e.target.value)}
@@ -1268,8 +1311,12 @@ export default function CallDetailPage({
                       }
                     }}
                   />
+                  {/* audit finding, 2026-09-02: `h-9 min-h-0 px-3 text-xs` on
+                      top of `.btn` drew a 36px control — neither .btn (38) nor
+                      .btn-sm (34), a twelfth shape beside a 40px field. The
+                      theme's form button, and nothing on top of it. */}
                   <button
-                    className="btn-primary h-9 min-h-0 px-3 text-xs"
+                    className="btn-primary"
                     disabled={titleDraft.trim() === ""}
                     onClick={() => {
                       void api.setCallTitle(id, titleDraft.trim())
@@ -1282,7 +1329,12 @@ export default function CallDetailPage({
                   </button>
                 </span>
               ) : (
-                <h1 className="group flex items-center gap-2 text-2xl font-bold leading-tight text-fg">
+                /* audit finding, 2026-09-02: this was `text-2xl font-bold` —
+                   a large page heading inside the content, and the SECOND
+                   place the record's name appears, since useCrumbTitle already
+                   puts it in the breadcrumb. The card title role instead; the
+                   rename pencil and the suggestion sparkle stay on the row. */
+                <h1 className="group flex items-center gap-2 text-pane-title font-semibold leading-tight text-fg">
                   <span className="truncate">
                     {call.title.trim() === "" ? tCalls("untitled") : call.title}
                   </span>
@@ -1349,8 +1401,12 @@ export default function CallDetailPage({
           {/* inline tag editor, opened from ⋯ */}
           {tagsOpen && call.tags !== undefined ? (
             <div className="no-print mt-3 flex items-center gap-2">
+              {/* audit finding, 2026-09-02: `h-8 min-h-0 py-0 text-xs` made
+                  this the 32px member of four field heights on one screen.
+                  `.input` owns height, padding and type — only the width is
+                  this site's to say. */}
               <input
-                className="input h-8 min-h-0 w-64 py-0 text-xs"
+                className="input w-64"
                 autoFocus
                 placeholder={tCalls("tagsHint")}
                 value={tagsDraft}
@@ -1387,17 +1443,23 @@ export default function CallDetailPage({
             }}
             onPause={() => setPlaying(false)}
           />
+          {/* audit finding, 2026-09-02: both transport buttons hand-rolled a
+              36px square (`h-9 w-9 min-h-0 px-0`) — a size the theme does not
+              offer — and drew Unicode glyphs instead of the icon set. The
+              theme's square icon button, with the set's own play/pause marks.
+              STOP keeps its glyph: @/components/icons has no stop mark, and
+              minting one belongs in that file, not in this page. */}
           <button
-            className="btn-primary h-9 w-9 min-h-0 shrink-0 px-0 disabled:opacity-50"
+            className="btn-primary btn-icon shrink-0"
             onClick={togglePlay}
             disabled={audioParts === null || audioParts.length === 0}
             title={audioParts === null ? t("noAudio") : undefined}
             aria-label={playing ? t("pause") : t("play")}
           >
-            {playing ? "⏸" : "▶"}
+            {playing ? <IconPause width={14} height={14} /> : <IconPlay width={14} height={14} />}
           </button>
           <button
-            className="btn-secondary h-9 w-9 min-h-0 shrink-0 px-0 disabled:opacity-50"
+            className="btn-secondary btn-icon shrink-0"
             onClick={stopPlayback}
             disabled={audioParts === null || audioParts.length === 0}
             aria-label={t("stop")}
@@ -1470,12 +1532,15 @@ export default function CallDetailPage({
           >
             <IconTag width={14} height={14} />
           </IconAction>
+          {/* audit finding, 2026-09-02: the speed rode raw Latin digits on a
+              Persian screen — digits follow the LANGUAGE (the axes ruling),
+              on the trigger and on every row of the menu behind it. */}
           <KebabMenu
             label={t("speed")}
-            trigger={<span className="ltr text-xs font-semibold">{rate}×</span>}
+            trigger={<span className="ltr text-xs font-semibold">{digits(rate, locale)}×</span>}
             items={[1, 1.5, 2].map((r) => ({
               key: String(r),
-              label: `${r}×${rate === r ? " ✓" : ""}`,
+              label: `${digits(r, locale)}×${rate === r ? " ✓" : ""}`,
               /* a playback SPEED is a value, not an action */
               icon: null,
               onSelect: () => setRateBoth(r),
@@ -1514,14 +1579,18 @@ export default function CallDetailPage({
               ) : null}
               {/* #6: what changed against the previous version */}
               {prevVersion ? (
+                /* audit finding, 2026-09-02: this was a hand-rolled 32px
+                   `rounded-full` lozenge — a pill, which the theme keeps for
+                   chips and badges and never for a button. The toolbar's own
+                   idiom, and the pressed state is the toolbar's too. */
                 <button
                   type="button"
                   aria-pressed={compareOpen}
                   onClick={() => setCompareOpen((v) => !v)}
-                  className={`h-8 rounded-full px-2.5 text-xs transition-colors ${
+                  className={`btn btn-sm font-medium ${
                     compareOpen
-                      ? "bg-accent-soft font-semibold text-accent"
-                      : "bg-surface-2 text-fg-muted hover:text-fg"
+                      ? "bg-accent text-on-accent"
+                      : "text-fg-muted hover:bg-surface-2 hover:text-fg"
                   }`}
                 >
                   {t("compare")}
@@ -1582,16 +1651,19 @@ export default function CallDetailPage({
                     onChange={setSummaryDraft}
                     fontScale={editFontSize}
                   />
+                  {/* audit finding, 2026-09-02: both wore `h-9 min-h-0 px-4
+                      text-sm` over `.btn` — the 36px shape that exists nowhere
+                      in the theme. A form's save/cancel pair is `.btn`. */}
                   <div className="flex items-center gap-2">
                     <button
-                      className="btn-primary h-9 min-h-0 px-4 text-sm"
+                      className="btn-primary"
                       disabled={summaryDraft.trim() === ""}
                       onClick={() => void saveSummaryEdit()}
                     >
                       {tCommon("save")}
                     </button>
                     <button
-                      className="btn-secondary h-9 min-h-0 px-4 text-sm"
+                      className="btn-secondary"
                       onClick={() => setEditingSummary(false)}
                     >
                       {tCommon("cancel")}
@@ -1692,8 +1764,10 @@ export default function CallDetailPage({
               {/* #2: find in this record */}
               {rows.length > 0 ? (
                 <span className="flex items-center gap-1.5">
+                  {/* audit finding, 2026-09-02: `h-7 min-h-0 py-0 text-xs` made
+                      this the 28px member of the same four-height set. */}
                   <input
-                    className="input h-7 min-h-0 w-40 py-0 text-xs"
+                    className="input w-40"
                     placeholder={t("findPlaceholder")}
                     value={findQ}
                     onChange={(e) => {
@@ -1707,10 +1781,13 @@ export default function CallDetailPage({
                     }}
                   />
                   {findQ.trim() !== "" ? (
+                    /* audit finding, 2026-09-02: the one number on this screen
+                       that did not follow the language. `ltr` fixes the reading
+                       direction of "2/7"; it does not choose the digit script. */
                     <span className="ltr text-xs tabular-nums text-fg-muted">
                       {findMatches.length === 0
-                        ? "0"
-                        : `${(((findIdx % findMatches.length) + findMatches.length) % findMatches.length) + 1}/${findMatches.length}`}
+                        ? digits(0, locale)
+                        : `${digits((((findIdx % findMatches.length) + findMatches.length) % findMatches.length) + 1, locale)}/${digits(findMatches.length, locale)}`}
                     </span>
                   ) : null}
                 </span>
@@ -1805,9 +1882,13 @@ export default function CallDetailPage({
                       offered only while there is still someone unlinked */}
                   {ownsCall && directory.length > 0
                     && speakers.some((s) => s.person_id === null) ? (
+                    /* audit finding, 2026-09-02: another hand-rolled pill.
+                       `.btn` draws no border of its own, so the dashed hairline
+                       — the "this is an offer, not a state" reading the author
+                       wanted — is stated explicitly beside it. */
                     <button
                       type="button"
-                      className="h-7 rounded-full border border-dashed border-border px-2.5 text-xs text-fg-muted transition-colors hover:border-accent hover:text-accent"
+                      className="btn btn-sm border border-dashed border-border font-medium text-fg-muted hover:border-accent hover:text-accent"
                       onClick={openBulkLink}
                     >
                       {t("bulkLink")}
@@ -1984,8 +2065,10 @@ export default function CallDetailPage({
                           data-speaker-pop
                           className="absolute start-0 top-6 z-40 block w-64 rounded-lg border border-border bg-surface p-3 shadow-xl"
                         >
+                          {/* audit finding, 2026-09-02: `h-8 min-h-0 py-0
+                              text-xs` — the same re-answering of `.input`. */}
                           <input
-                            className="input h-8 min-h-0 w-full py-0 text-xs"
+                            className="input w-full"
                             aria-label={t("speakerLabel")}
                             placeholder={t("speakerLabel")}
                             value={speakerDraft}
@@ -2047,7 +2130,9 @@ export default function CallDetailPage({
                       ) : null}
                     </span>
                     {row.channel !== null ? (
-                      <span className="text-[11px] text-fg-muted ltr">ch{row.channel + 1}</span>
+                      /* audit finding, 2026-09-02: digits follow the language
+                         here too — a channel number is still a number. */
+                      <span className="text-[11px] text-fg-muted ltr">ch{digits(row.channel + 1, locale)}</span>
                     ) : null}
                     {row.edited ? (
                       <span className="chip bg-surface-2 text-fg-muted">{t("edited")}</span>
@@ -2207,10 +2292,13 @@ export default function CallDetailPage({
                     ))}
                   </ul>
                 )}
+                {/* audit finding, 2026-09-02: the compose row wore the 36px
+                    pair — `input h-9 min-h-0 py-0` beside `btn h-9 min-h-0
+                    px-3 text-xs`. Both classes already answer that. */}
                 <div className="no-print mt-3 flex items-center gap-2">
                   <input
                     ref={actionBoxRef}
-                    className="input h-9 min-h-0 flex-1 py-0 text-sm"
+                    className="input flex-1"
                     placeholder={t("actionPlaceholder")}
                     aria-label={t("actionAdd")}
                     value={actionDraft}
@@ -2220,7 +2308,7 @@ export default function CallDetailPage({
                     }}
                   />
                   <button
-                    className="btn-secondary h-9 min-h-0 shrink-0 px-3 text-xs"
+                    className="btn-secondary shrink-0"
                     disabled={actionDraft.trim() === "" || laneBusy}
                     onClick={() => void addLaneItem("actions")}
                   >
@@ -2233,17 +2321,30 @@ export default function CallDetailPage({
                 {lanes.decisions.length === 0 ? (
                   <p className="text-sm text-fg-muted">{t("laneEmpty")}</p>
                 ) : (
-                  <ol className="list-inside list-decimal space-y-2">
+                  /* audit finding, 2026-09-02: `list-decimal` prints the
+                     BROWSER's markers, which are Western digits on the Persian
+                     screen — and the `[dir=rtl] list-style: persian` rule in
+                     globals.css is scoped to `.rte`, so it never reached here.
+                     The number is rendered instead, through digits(), the way
+                     the help page's steps already do it. */
+                  <ol className="space-y-2">
                     {lanes.decisions.map((item, i) => (
-                      <li key={i} className="text-sm leading-7 text-fg" dir="auto">
-                        {faDisplay(item)}
+                      <li key={i} className="flex gap-2 text-sm leading-7 text-fg">
+                        <span
+                          aria-hidden
+                          className="badge-num mt-1 h-5 w-5 shrink-0 rounded-full bg-accent-soft text-[11px] font-semibold text-accent"
+                        >
+                          {digits(i + 1, locale)}
+                        </span>
+                        <span dir="auto">{faDisplay(item)}</span>
                       </li>
                     ))}
                   </ol>
                 )}
+                {/* audit finding, 2026-09-02: the actions row's twin, same fix */}
                 <div className="no-print mt-3 flex items-center gap-2">
                   <input
-                    className="input h-9 min-h-0 flex-1 py-0 text-sm"
+                    className="input flex-1"
                     placeholder={t("decisionPlaceholder")}
                     aria-label={t("decisionAdd")}
                     value={decisionDraft}
@@ -2253,7 +2354,7 @@ export default function CallDetailPage({
                     }}
                   />
                   <button
-                    className="btn-secondary h-9 min-h-0 shrink-0 px-3 text-xs"
+                    className="btn-secondary shrink-0"
                     disabled={decisionDraft.trim() === "" || laneBusy}
                     onClick={() => void addLaneItem("decisions")}
                   >
@@ -2326,8 +2427,10 @@ export default function CallDetailPage({
                 onChange={(e) => setNoteDraft(e.target.value)}
               />
               <div className="mt-2 flex flex-wrap items-center gap-3">
+                {/* audit finding, 2026-09-02: the sixth 36px button on the
+                    page — `.btn` is the form button and says so itself */}
                 <button
-                  className="btn-primary h-9 min-h-0 px-4 text-sm"
+                  className="btn-primary"
                   disabled={noteDraft.trim() === ""}
                   onClick={() => void saveNoteDraft()}
                 >
@@ -2452,8 +2555,10 @@ export default function CallDetailPage({
           }}
           body={
             <div className="space-y-3">
+              {/* audit finding, 2026-09-02: `h-9 min-h-0 py-0 text-sm` — the
+                  36px field, in a dialog whose other box is `.input`'s own */}
               <input
-                className="input h-9 min-h-0 w-full py-0 text-sm"
+                className="input w-full"
                 maxLength={60}
                 autoFocus
                 aria-label={t("templateNameHint")}

@@ -41,7 +41,9 @@ import { describe, expect, it } from "vitest";
 const SRC = join(process.cwd(), "src");
 
 const REMAINING: Record<string, number> = {
-  "app/[locale]/management/connectors/page.tsx": 1,
+  // audit finding, 2026-09-02: connectors/page.tsx left the worklist — its one
+  // vanish-while-loading slot renders a Card of SkeletonLines now (entry at 0
+  // is deleted, not zeroed: a zero row reads as coverage and is a hole)
   "app/[locale]/management/server/page.tsx": 1,
   "app/[locale]/management/users/page.tsx": 1,
   "app/[locale]/workflows/[handle]/page.tsx": 2,
@@ -49,7 +51,10 @@ const REMAINING: Record<string, number> = {
   "components/echo/Recorder.tsx": 1,
   "components/echo/SummariesSection.tsx": 1,
   "components/platform/AgentOverviewPanel.tsx": 2,
-  "components/platform/IntegrationDetail.tsx": 1,
+  // audit finding, 2026-09-02: IntegrationDetail.tsx LEFT this list — its one
+  // entry made the WHOLE page wait on api.connectors() although the icon,
+  // name and description come from the catalogue; the header renders at once
+  // now and the body holds two Cards of SkeletonLines while the wire answers
   "components/platform/Integrations.tsx": 2,
   "components/platform/NotificationsSettings.tsx": 1,
   "components/platform/TopBar.tsx": 1,

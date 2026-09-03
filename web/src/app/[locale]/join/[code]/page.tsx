@@ -84,7 +84,14 @@ export default function JoinPage({ params }: { params: Promise<{ code: string }>
           connect
           video
           audio
-          data-lk-theme="default"
+          /* audit finding, 2026-09-02: "default" is LIVEKIT's palette — its
+             blue, its Latin system font, its 8px corners — and it was the
+             only thing declaring the `--lk-*` variables the room's own
+             controls read, so the guest met the stock kit one click after a
+             screen wearing ours. The named theme is defined once in
+             globals.css; LiveKit's generic `[data-lk-theme]` rules still
+             apply, its `[data-lk-theme=default]` palette no longer does. */
+          data-lk-theme="neurai"
           className="flex min-h-0 flex-1 flex-col"
         >
           <Stage />

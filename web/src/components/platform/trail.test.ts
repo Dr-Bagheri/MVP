@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { NO_TRAIL, TRAIL, patternFor, trailFor } from "./trail";
+import { SETTINGS_SECTIONS } from "./settingsSections";
 
 /**
  * The trail is the platform's only back-navigation, so the failure that costs
@@ -233,5 +234,64 @@ describe("every crumb label resolves in BOTH catalogues", () => {
   it.each(["fa", "en"])("%s has every label", (locale) => {
     const catalogue = locale === "fa" ? fa : en;
     expect(labels.filter((key) => !messageKeyExists(catalogue, key))).toEqual([]);
+  });
+});
+
+describe("a crumb that says Settings is a promise Settings can keep", () => {
+  /*
+   * THE ROT THIS CATCHES, found 2026-09-03 and true for months before that.
+   * Skills, Connectors and Service health each left the Settings menu on the
+   * user's own word, one at a time, months apart. Their pages stayed at
+   * /management/* and their crumbs stayed "Settings ›" — so the trail offered
+   * a door back to a menu that no longer lists the page you are standing on.
+   * Nothing went red: every route still resolved, every label still existed,
+   * every crumb still rendered. The trail's coverage check asks whether a
+   * page HAS a parent; it never asked whether the parent was TRUE.
+   *
+   * The list is derived from SETTINGS_SECTIONS — the menu's own registry, the
+   * producer (13½) — rather than hand-enumerated beside it, because a
+   * hand-written copy is the seam that drifted in the first place.
+   */
+  const claimedBySettings = new Set(
+    SETTINGS_SECTIONS.map((s) => s.href ?? `/settings/${s.slug}`),
+  );
+
+  /* CONCRETE paths only. `/settings/[section]` is the pattern the registry's
+     own rows resolve THROUGH — every one of its instances is a `/settings/…`
+     slug the menu lists — so reading it as an orphan is the checker accusing
+     the menu of not listing itself. That was this guard's first red, caught
+     before it was believed: a checker that manufactures false positives is
+     muted inside a week and is then worse than absent. */
+  const pointingAtSettings = Object.entries(TRAIL)
+    .filter(([path, node]) => node.parent === "/settings" && path !== "/settings")
+    .map(([path]) => path)
+    .filter((path) => !path.includes("["));
+
+  it("has something to check", () => {
+    /* the vacuum guard: if the filter matched nothing — a renamed parent, a
+       reshaped TRAIL — every assertion below would pass by having no subject */
+    expect(pointingAtSettings.length).toBeGreaterThan(0);
+    expect(claimedBySettings.size).toBeGreaterThan(0);
+  });
+
+  it("only lets a page claim Settings as its parent when the Settings menu offers it", () => {
+    const orphans = pointingAtSettings.filter((path) => !claimedBySettings.has(path));
+    expect(
+      orphans,
+      `these say "Settings ›" but the Settings menu does not list them, so the crumb ` +
+      `leads to a pane without that row: ${orphans.join(", ")}. Either add the section ` +
+      `to SETTINGS_SECTIONS, or point the crumb at the section the page lives in.`,
+    ).toEqual([]);
+  });
+
+  it("can answer NO — a page the menu does not offer is reported", () => {
+    /* The negative control, and the reason the assertion above means anything:
+       "no orphans" also holds when the two sets are read wrongly and both come
+       back empty. This stages exactly the state that shipped — a /management
+       page pointing at Settings with no menu row — and demands the same
+       comparison fail. */
+    const staged = [...pointingAtSettings, "/management/skills"];
+    const orphans = staged.filter((path) => !claimedBySettings.has(path));
+    expect(orphans).toContain("/management/skills");
   });
 });

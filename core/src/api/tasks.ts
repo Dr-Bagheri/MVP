@@ -497,6 +497,24 @@ export function createTasksRepo(db: Db) {
     });
   }
 
+  /**
+   * 0162 — the board's TRUE delete, through the one door. The creator's or
+   * an admin's; the door deletes the children and the row in one
+   * transaction, and echo_app holds no DELETE on echo.task itself.
+   *
+   * The refusal is 42501 with one sentence for "no such task" and "not
+   * yours" (0032's posture), so it reads as 404 here — a distinct 403 would
+   * let a member enumerate the cards they cannot delete.
+   */
+  async function remove(identity: Identity, id: string): Promise<void> {
+    await db.withIdentity(identity, async (tx: SqlTx) => {
+      await tx.unsafe(`select echo.delete_task($1::uuid)`, [id]);
+    }).catch((cause) => {
+      if ((cause as { code?: string }).code === "42501") throw new NotFoundError("task not found");
+      throw cause;
+    });
+  }
+
   async function addComment(identity: Identity, taskId: string, body: unknown): Promise<TaskCommentRecord> {
     const text = typeof body === "string" ? body.trim() : "";
     if (text === "" || text.length > 4000) {
@@ -821,7 +839,7 @@ export function createTasksRepo(db: Db) {
   }
 
   return {
-    board, detail, create, update,
+    board, detail, create, update, remove,
     addChecklistItem, updateChecklistItem, deleteChecklistItem,
     addComment, setAssigned: setAssignedWithNote, createColumn, updateColumn, createTopic, updateTopic,
     people, labels, createLabel, updateLabel, deleteLabel, setLabel, events,

@@ -103,6 +103,15 @@ const REQUIRED_ROUTES: [method: string, path: string, why: string][] = [
   ["POST", "/v1/gateway/keys", "M17 — per-org API keys"],
   ["GET", "/v1/gateway/keys", "M17"],
   ["DELETE", "/v1/gateway/keys/:id", "M17 — revoke, never delete"],
+
+  // the board (db/0144) — listed the day its first destructive door landed;
+  // until then the whole family was unmanifested, which is the exact
+  // "not built or wrong path?" question this file exists to answer
+  ["GET", "/v1/tasks/board", "db/0144 — the board, columns and cards in one read"],
+  ["POST", "/v1/tasks", "db/0144 — a new card"],
+  ["GET", "/v1/tasks/:id", "db/0144 — the card's own screen"],
+  ["PATCH", "/v1/tasks/:id", "db/0144 — move, rename, tick, archive"],
+  ["DELETE", "/v1/tasks/:id", "db/0162 — the true delete: the creator's or an admin's, through echo.delete_task"],
 ];
 
 /**

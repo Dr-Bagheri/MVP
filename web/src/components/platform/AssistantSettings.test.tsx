@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
@@ -17,6 +17,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  *    says "act" — a component that quietly rendered the stored dial again
  *    would put a watch/act option or the old heading back on screen and go
  *    red here.
+ *
+ * audit finding, 2026-09-02: the card's heading is FRAME now and renders
+ * before api.me() answers, so `findByRole("heading")` no longer proves the
+ * form loaded — awaiting it would pass during the skeleton and the option
+ * queries below would run against an empty form (the temporal vacuum). The
+ * anchor is the loaded state itself: `loaded()` waits for the form's own
+ * language option.
  */
 
 const ME = {
@@ -45,6 +52,14 @@ vi.mock("@/api/client", () => ({
 
 const { AssistantSettings } = await import("./AssistantSettings");
 
+/** the form is on screen — anchored on a node that exists ONLY after the
+    wire answered with the group, never on the frame */
+async function loaded() {
+  await waitFor(() => expect(document.querySelector('option[value="fa"]')).not.toBeNull());
+}
+
+const skeleton = () => document.querySelector("[aria-busy='true']");
+
 beforeEach(() => {
   me.mockReset();
   weeklyDigest.mockReset();
@@ -59,11 +74,11 @@ describe("the autonomy dial is GONE — assist is pinned, and not shown", () => 
     render(<AssistantSettings />);
 
     // positive identification: the screen under test actually rendered
-    expect(await screen.findByRole("heading", { name: "لحن و رفتار دستیار" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "لحن و رفتار دستیار" })).toBeInTheDocument();
 
     // the instrument's positive control: this query style CAN find options
-    // in this DOM (the voice card's language select)
-    expect(document.querySelector('option[value="fa"]')).not.toBeNull();
+    // in this DOM (the voice card's language select) — once it is loaded
+    await loaded();
 
     // the absence itself: no control offers watch or act — a re-added dial
     // would reintroduce exactly these option values
@@ -77,7 +92,7 @@ describe("the autonomy dial is GONE — assist is pinned, and not shown", () => 
     /* the wire deliberately says act (see ME) — if any code path adopted it
        back into a rendered control, one of these would light up */
     render(<AssistantSettings />);
-    await screen.findByRole("heading", { name: "لحن و رفتار دستیار" });
+    await loaded();
     expect(screen.queryByText("خوداجرا")).toBeNull();
     expect(screen.queryByText("فقط تماشا")).toBeNull();
   });
@@ -96,8 +111,8 @@ describe("the notification switches are GONE — they live in Settings·Notifica
     render(<AssistantSettings />);
 
     // the control: this screen still renders, and its remaining card is whole
-    expect(await screen.findByRole("heading", { name: "لحن و رفتار دستیار" })).toBeInTheDocument();
-    expect(document.querySelector('option[value="fa"]')).not.toBeNull();
+    expect(screen.getByRole("heading", { name: "لحن و رفتار دستیار" })).toBeInTheDocument();
+    await loaded();
 
     /* the absence, by STRUCTURE first: after the move this screen owns no
        boolean control at all — a re-added toggle in any dress (checkbox,
@@ -110,5 +125,54 @@ describe("the notification switches are GONE — they live in Settings·Notifica
     expect(screen.queryByText("گزارش هفتگی")).toBeNull();
     expect(screen.queryByText("پیش‌نویس خودکار پاسخ ایمیل")).toBeNull();
     expect(screen.queryByText("آماده‌سازی پیش از جلسه")).toBeNull();
+  });
+});
+
+describe("the card is frame; only its body waits for the wire (audit finding, 2026-09-02)", () => {
+  /*
+   * Before: one boolean gated the whole card, so "not answered yet", "this
+   * deployment has no assistant columns" and "the read failed" were the same
+   * blank area. Each is its own picture now, and the frame never moves.
+   */
+  it("pending: the heading stands, a skeleton holds the form's place, no control yet", () => {
+    me.mockReturnValue(new Promise(() => undefined)); // never answers
+    render(<AssistantSettings />);
+
+    expect(screen.getByRole("heading", { name: "لحن و رفتار دستیار" })).toBeInTheDocument();
+    expect(skeleton()).not.toBeNull();
+    expect(screen.queryByRole("combobox")).toBeNull();
+    // and neither of the two sentences is shown for a state nobody knows yet
+    expect(screen.queryByText("این استقرار هنوز تنظیمات لحن دستیار را ذخیره نمی‌کند.")).toBeNull();
+    expect(screen.queryByText("تنظیمات فعلی دستیار خوانده نشد.")).toBeNull();
+  });
+
+  it("absent: a wire without the group renders the honest sentence, not defaults wearing controls", async () => {
+    const { assistant_instructions: _dropped, ...withoutGroup } = ME;
+    void _dropped;
+    me.mockResolvedValue(withoutGroup);
+    render(<AssistantSettings />);
+
+    expect(await screen.findByText("این استقرار هنوز تنظیمات لحن دستیار را ذخیره نمی‌کند.")).toBeInTheDocument();
+    expect(screen.queryByRole("combobox")).toBeNull();
+    expect(skeleton()).toBeNull();
+  });
+
+  it("unreadable: a rejected read says so instead of staying blank forever", async () => {
+    me.mockRejectedValue(new Error("network"));
+    render(<AssistantSettings />);
+
+    expect(await screen.findByText("تنظیمات فعلی دستیار خوانده نشد.")).toBeInTheDocument();
+    expect(screen.queryByRole("combobox")).toBeNull();
+    expect(skeleton()).toBeNull();
+  });
+
+  it("ready: the negative control — no skeleton and no sentence once the form is up", async () => {
+    render(<AssistantSettings />);
+    await loaded();
+
+    expect(skeleton()).toBeNull();
+    expect(screen.getAllByRole("combobox")).toHaveLength(4);
+    expect(screen.queryByText("این استقرار هنوز تنظیمات لحن دستیار را ذخیره نمی‌کند.")).toBeNull();
+    expect(screen.queryByText("تنظیمات فعلی دستیار خوانده نشد.")).toBeNull();
   });
 });

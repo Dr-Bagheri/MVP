@@ -55,8 +55,13 @@ export function BottomBar() {
                   <span>{t(nav.key)}</span>
                 </>
               );
+              /* audit finding, 2026-09-02: these are the rail's own nav rows
+                 rendered as a menu, so they take the menu row's 12px corner —
+                 rounded-xl (16) is the list-tile radius, and wearing it made
+                 the sheet read as a stack of tiles rather than a menu, the
+                 same mistake IconRail's comment records at its own rows */
               const cls =
-                "flex min-h-[48px] items-center gap-3 rounded-xl px-3 text-sm text-fg hover:bg-surface-2";
+                "flex min-h-[48px] items-center gap-3 rounded-lg px-3 text-sm text-fg hover:bg-surface-2";
               return external ? (
                 <a key={nav.key} href={nav.href} target="_blank" rel="noreferrer noopener" className={cls}>
                   {inner}

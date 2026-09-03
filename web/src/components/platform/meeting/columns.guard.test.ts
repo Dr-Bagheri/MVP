@@ -36,7 +36,14 @@ describe("the meeting's two columns", () => {
     expect(stage, "STAGE_COLUMNS must be declared in MeetingPage.tsx").not.toBeNull();
     expect(plan![1]).toBe("lg:grid-cols-[1.5fr_1fr]");
     expect(stage![1]).toBe("lg:grid-cols-[4fr_1fr]");
-    expect(SOURCE.match(/\$\{PLAN_COLUMNS\}/g) ?? []).toHaveLength(1);
+    /* PLAN_COLUMNS is worn TWICE since 2026-09-03: by the plan and by the
+       page's loading frame, which draws the plan's two columns as skeletons
+       so nothing moves when the record lands. That second use is the rule
+       working, not a violation — the frame wearing a literal would be the
+       exact drift this guard exists to catch (a skeleton 150px off from the
+       columns it stands in for). "Exactly once" was only ever a proxy for
+       "never a literal", and the negative half below is the real rule. */
+    expect(SOURCE.match(/\$\{PLAN_COLUMNS\}/g) ?? []).toHaveLength(2);
     expect(SOURCE.match(/\$\{STAGE_COLUMNS\}/g) ?? []).toHaveLength(1);
   });
 

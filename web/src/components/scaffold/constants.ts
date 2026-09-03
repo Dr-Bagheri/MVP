@@ -142,9 +142,16 @@ export const SCAFFOLD = {
   /**
    * Everything else still rides the STANDARD 4px Tailwind scale — section
    * rhythm 24 = py-6, title→subtitle 4 = mt-1, section title→panel 16 =
-   * mb-4, panel row 24x32 = py-6 px-8, panel footer 16x32 = py-4 px-8, menu
+   * mb-4, panel row 16x20 = py-4 px-5, panel footer 16x20 = py-4 px-5, menu
    * pill 5x12 = py-[5px] px-3. Those live inside the scaffold components
    * that own them, which is the same rule as above: one place each.
+   *
+   * audit finding, 2026-09-03: the two panel numbers read 24x32 / 16x32 here
+   * long after FormRow moved to px-5 for the fixed-160/380 layout, and the
+   * footer had stayed at the 32 this line still promised. Prose describing a
+   * component it does not control is exactly what the page rhythm above was
+   * made config to stop; these two are corrected rather than kept as a second
+   * spelling of the scaffold's own classes.
    */
   spacingDoc: "standard-4px-scale",
 } as const;

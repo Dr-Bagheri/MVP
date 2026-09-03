@@ -169,7 +169,11 @@ export function AvatarMenu({ me, isPlatformRoot = false }: { me: User | null; is
 
           {/* Theme — the same state Settings · General edits */}
           <div className="mt-1 border-t border-border px-3 pb-1 pt-2">
-            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-fg-subtle">
+            {/* the group-label role, not a hand-spelled small-caps line
+                (2026-09-03): `uppercase tracking-wider` on a translated string
+                breaks joined Persian script — globals.css states that rule two
+                lines above the one that broke it — and shouts in English. */}
+            <p className="mb-1.5 text-group-label font-semibold text-fg-subtle">
               {tSettings("theme")}
             </p>
             <div className="flex gap-1">

@@ -117,7 +117,13 @@ export function IconRail() {
           <span className="block truncate text-sm font-bold text-fg">
             {me?.org_name ?? t("name")}
           </span>
-          <span className="block text-[11px] text-fg-subtle">{t("workspace")}</span>
+          {/* audit finding, 2026-09-02: a px literal here is a stated
+              deviation — tailwind.config.ts says px-emitting entries "would
+              keep the menus and titles frozen while the text around them
+              scaled", and the root is a clamp. `text-group-label` IS 11, the
+              scaffold's own role for group labels, so the number at 1440 is
+              unchanged and the caption now scales with everything beside it. */}
+          <span className="block text-group-label text-fg-subtle">{t("workspace")}</span>
         </span>
       </div>
 
@@ -165,7 +171,9 @@ export function IconRail() {
               <span className="block truncate text-sm font-semibold text-fg">
                 {personName(me, locale)}
               </span>
-              <span className="block truncate text-[11px] text-fg-subtle">
+              {/* audit finding, 2026-09-02: the workspace caption's twin —
+                  same px literal, same role (see the comment above it) */}
+              <span className="block truncate text-group-label text-fg-subtle">
                 {roleLabel}
                 {me.org_name ? ` · ${me.org_name}` : ""}
               </span>
@@ -179,7 +187,14 @@ export function IconRail() {
                be closed as well as the cookie, and a second implementation
                here would close one of the two */
             onClick={() => { void signOutThisDevice(locale); }}
-            className="tap grid h-8 w-8 shrink-0 place-items-center rounded-lg text-fg-subtle transition-colors hover:bg-surface-2 hover:text-danger"
+            /* audit finding, 2026-09-02: this was a twelfth invented shape —
+               a 32px square with the 12px menu corner, where the theme's icon
+               button is 28 with an 8px corner (`.btn-icon`, measured off the
+               reference). It escaped control.guard because it was a GRID and
+               the guard demands flex+items-center, which is exactly the kind
+               of entry that makes a worklist read shorter than the problem.
+               `.btn` already composes `.tap` and the transition. */
+            className="btn btn-icon shrink-0 text-fg-subtle hover:bg-surface-2 hover:text-danger"
           >
             <IconOpen width={14} height={14} className="rotate-180 rtl:rotate-0" />
           </button>

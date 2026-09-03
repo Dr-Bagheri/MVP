@@ -5,7 +5,8 @@ import { useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import { notify } from "@/lib/notify";
 import { clearSpeechCache } from "@/lib/voice";
-import { Card } from "@/components/ui";
+import { Card, Field } from "@/components/ui";
+import { SkeletonLines } from "@/components/scaffold";
 
 /**
  * Settings·Assistant (user directive, 2026-08-21): the assistant's voice,
@@ -26,6 +27,25 @@ import { Card } from "@/components/ui";
  * on two pages is the drift this repo keeps burying). What stays here is
  * the VOICE: reply language, reply length, standing instructions.
  */
+
+/**
+ * audit finding, 2026-09-02: the card used to be gated on ONE boolean, so
+ * "the wire has not answered yet" and "this deployment has no assistant
+ * columns" were the same nothing — a blank area that turned into a card
+ * once the network came back, and stayed blank forever if it did not. The
+ * kinds of nothing are named now, and the FRAME (card, heading, hint) does
+ * not wait for any of them; only the controls do.
+ *
+ *  - `pending`    = api.me() has not answered → skeleton in the form's place
+ *  - `absent`     = the wire lacks the group (db/0112 not on this deployment)
+ *                   → an honest sentence, never controls over columns that do
+ *                   not exist (they would save nothing and look saved)
+ *  - `unreadable` = api.me() rejected → the current values could not be read;
+ *                   controls would show defaults as if they were the person's
+ *  - `ready`      = the form, adopting the server's answer
+ */
+type PrefsState = "pending" | "absent" | "unreadable" | "ready";
+
 export function AssistantSettings() {
   const t = useTranslations("settings");
   /** db/0112 - the standing voice. null = auto; save-on-change, adopt the
@@ -37,20 +57,24 @@ export function AssistantSettings() {
   /* 0128: the SPOKEN voice, per language — 'female' | 'male' */
   const [voiceFa, setVoiceFa] = useState<string>("female");
   const [voiceEn, setVoiceEn] = useState<string>("female");
-  const [prefsReady, setPrefsReady] = useState(false);
+  const [prefs, setPrefs] = useState<PrefsState>("pending");
 
   useEffect(() => {
     void api.me().then((me) => {
       if (me && "assistant_instructions" in me) {
-        setPrefsReady(true);
+        setPrefs("ready");
         setReplyLanguage(me.assistant_reply_language ?? "");
         setReplyLength(me.assistant_reply_length ?? "");
         setInstructions(me.assistant_instructions ?? "");
         setSavedInstructions(me.assistant_instructions ?? "");
         setVoiceFa(me.assistant_voice_fa ?? "female");
         setVoiceEn(me.assistant_voice_en ?? "female");
+      } else {
+        /* audit finding, 2026-09-02: a wire without the group used to leave
+           the same nothing as a wire still in flight — say which it is */
+        setPrefs("absent");
       }
-    }).catch(() => undefined);
+    }).catch(() => setPrefs("unreadable"));
   }, []);
 
   async function savePrefs(patch: Parameters<typeof api.updateAssistant>[0]) {
@@ -73,101 +97,135 @@ export function AssistantSettings() {
 
   return (
     <div className="space-y-5">
-      {/* db/0112 - the standing voice. Rendered ONLY when the wire carries
-          the group: controls over columns that do not exist would save
-          nothing and look saved. */}
-      {prefsReady ? (
-        <Card>
-          <h2 className="text-sm font-semibold text-fg">{t("voiceTitle")}</h2>
-          <p className="mt-1 text-xs leading-5 text-fg-muted">{t("voiceHint")}</p>
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            <label className="block text-xs text-fg-muted">
-              {t("replyLanguage")}
-              <select
-                className="input mt-1 h-9 min-h-0 w-full text-sm"
-                value={replyLanguage}
-                onChange={(e) => {
-                  setReplyLanguage(e.target.value);
-                  void savePrefs({ assistant_reply_language: e.target.value === "" ? null : e.target.value });
-                }}
-              >
-                <option value="">{t("replyAuto")}</option>
-                <option value="fa">فارسی</option>
-                <option value="en">English</option>
-              </select>
-            </label>
-            <label className="block text-xs text-fg-muted">
-              {t("replyLength")}
-              <select
-                className="input mt-1 h-9 min-h-0 w-full text-sm"
-                value={replyLength}
-                onChange={(e) => {
-                  setReplyLength(e.target.value);
-                  void savePrefs({ assistant_reply_length: e.target.value === "" ? null : e.target.value });
-                }}
-              >
-                <option value="">{t("replyAuto")}</option>
-                <option value="short">{t("replyShort")}</option>
-                <option value="detailed">{t("replyDetailed")}</option>
-              </select>
-            </label>
+      {/* db/0112 - the standing voice. The card is structure and renders with
+          the page; what waits for the wire is the body (see PrefsState). */}
+      <Card>
+        {/* audit finding, 2026-09-02: the sibling sections (General,
+            Security) title their cards with .h-section and hint in
+            text-sm leading-6 — this card's 13px title and 11.5px hint made
+            the heading shrink when switching General → Assistant */}
+        <h2 className="h-section">{t("voiceTitle")}</h2>
+        <p className="mt-1 text-sm leading-6 text-fg-muted">{t("voiceHint")}</p>
+        {prefs === "pending" ? (
+          /* audit finding, 2026-09-02: the loading rule — a skeleton in the
+             form's shape (two rows of two fields, then the instructions
+             box), so the card does not grow when the answer lands */
+          <div className="mt-4" aria-busy="true">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <SkeletonLines lines={2} />
+              <SkeletonLines lines={2} />
+            </div>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <SkeletonLines lines={2} />
+              <SkeletonLines lines={2} />
+            </div>
+            <SkeletonLines lines={4} className="mt-4" />
           </div>
-          {/* 0128 (user directive, 2026-08-28): the gender of the SPOKEN
-              voice, chosen per language — the Persian and English voices
-              are different models, and one switch for both would decide
-              something the person did not say */}
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            <label className="block text-xs text-fg-muted">
-              {t("voiceFa")}
-              <select
-                className="input mt-1 h-9 min-h-0 w-full text-sm"
-                value={voiceFa}
-                onChange={(e) => {
-                  setVoiceFa(e.target.value);
-                  void savePrefs({ assistant_voice_fa: e.target.value });
-                }}
+        ) : prefs !== "ready" ? (
+          <p className="mt-4 text-detail text-fg-muted">
+            {t(prefs === "absent" ? "voiceUnavailable" : "voiceUnreadable")}
+          </p>
+        ) : (
+          <>
+            {/* audit finding, 2026-09-02: labels through the theme's Field
+                (one spelling of a form label across General / Assistant /
+                Notifications), and the selects wear .input UNMODIFIED — the
+                h-9 min-h-0 text-sm overrides made these four dropdowns
+                36px beside General's 40px, and threw away the sub-md 44px
+                hit area .input carries */}
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <Field label={t("replyLanguage")}>
+                <select
+                  className="input"
+                  value={replyLanguage}
+                  onChange={(e) => {
+                    setReplyLanguage(e.target.value);
+                    void savePrefs({ assistant_reply_language: e.target.value === "" ? null : e.target.value });
+                  }}
+                >
+                  <option value="">{t("replyAuto")}</option>
+                  <option value="fa">فارسی</option>
+                  <option value="en">English</option>
+                </select>
+              </Field>
+              <Field label={t("replyLength")}>
+                <select
+                  className="input"
+                  value={replyLength}
+                  onChange={(e) => {
+                    setReplyLength(e.target.value);
+                    void savePrefs({ assistant_reply_length: e.target.value === "" ? null : e.target.value });
+                  }}
+                >
+                  <option value="">{t("replyAuto")}</option>
+                  <option value="short">{t("replyShort")}</option>
+                  <option value="detailed">{t("replyDetailed")}</option>
+                </select>
+              </Field>
+            </div>
+            {/* 0128 (user directive, 2026-08-28): the gender of the SPOKEN
+                voice, chosen per language — the Persian and English voices
+                are different models, and one switch for both would decide
+                something the person did not say */}
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <Field label={t("voiceFa")}>
+                <select
+                  className="input"
+                  value={voiceFa}
+                  onChange={(e) => {
+                    setVoiceFa(e.target.value);
+                    void savePrefs({ assistant_voice_fa: e.target.value });
+                  }}
+                >
+                  <option value="female">{t("voiceFemale")}</option>
+                  <option value="male">{t("voiceMale")}</option>
+                </select>
+              </Field>
+              <Field label={t("voiceEn")}>
+                <select
+                  className="input"
+                  value={voiceEn}
+                  onChange={(e) => {
+                    setVoiceEn(e.target.value);
+                    void savePrefs({ assistant_voice_en: e.target.value });
+                  }}
+                >
+                  <option value="female">{t("voiceFemale")}</option>
+                  <option value="male">{t("voiceMale")}</option>
+                </select>
+              </Field>
+            </div>
+            <div className="mt-4">
+              <Field label={t("customInstructions")}>
+                {/* audit finding, 2026-09-02: .input owns the type size; the
+                    textarea keeps only what a multi-line box needs on top of
+                    it (a floor for its height, vertical padding, prose
+                    leading — .input's leading-tight is a one-line field's) */}
+                <textarea
+                  className="input min-h-24 py-2 leading-6"
+                  maxLength={2000}
+                  value={instructions}
+                  onChange={(e) => setInstructions(e.target.value)}
+                />
+              </Field>
+            </div>
+            {instructions.trim() !== savedInstructions ? (
+              <button
+                type="button"
+                /* audit finding, 2026-09-02: was h-8 min-h-0 px-3 text-xs —
+                   a 32px control no theme size has; .btn-sm is the 34px the
+                   toolbar above this card already uses */
+                className="btn-primary btn-sm mt-3"
+                onClick={() => void savePrefs({
+                  assistant_instructions: instructions.trim() === "" ? null : instructions.trim(),
+                })}
               >
-                <option value="female">{t("voiceFemale")}</option>
-                <option value="male">{t("voiceMale")}</option>
-              </select>
-            </label>
-            <label className="block text-xs text-fg-muted">
-              {t("voiceEn")}
-              <select
-                className="input mt-1 h-9 min-h-0 w-full text-sm"
-                value={voiceEn}
-                onChange={(e) => {
-                  setVoiceEn(e.target.value);
-                  void savePrefs({ assistant_voice_en: e.target.value });
-                }}
-              >
-                <option value="female">{t("voiceFemale")}</option>
-                <option value="male">{t("voiceMale")}</option>
-              </select>
-            </label>
-          </div>
-          <label className="mt-3 block text-xs text-fg-muted">
-            {t("customInstructions")}
-            <textarea
-              className="input mt-1 min-h-24 py-2 text-sm leading-6"
-              maxLength={2000}
-              value={instructions}
-              onChange={(e) => setInstructions(e.target.value)}
-            />
-          </label>
-          {instructions.trim() !== savedInstructions ? (
-            <button
-              type="button"
-              className="btn-primary mt-2 h-8 min-h-0 px-3 text-xs"
-              onClick={() => void savePrefs({
-                assistant_instructions: instructions.trim() === "" ? null : instructions.trim(),
-              })}
-            >
-              {t("saveInstructions")}
-            </button>
-          ) : null}
-        </Card>
-      ) : null}
+                {t("saveInstructions")}
+              </button>
+            ) : null}
+          </>
+        )}
+      </Card>
     </div>
   );
 }

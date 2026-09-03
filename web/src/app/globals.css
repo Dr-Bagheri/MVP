@@ -300,6 +300,92 @@
   }
 }
 
+/*
+ * ── THE ROOM'S OWN CONTROLS (audit finding, 2026-09-02) ─────────────────
+ *
+ * LiveKit draws the meeting's mic / camera / leave bar itself, and
+ * `[data-lk-theme=default]` is ITS palette: a #1f8cf9 blue, a Latin
+ * `system-ui` stack and 8px corners. That one attribute value is the only
+ * thing declaring the ~50 `--lk-*` variables the unscoped `.lk-*` rules
+ * consume, and nothing here ever mapped it — so both rooms (the member's and
+ * the guest's) shipped the stock kit one click after a screen wearing ours.
+ *
+ * A NAMED theme is the whole mechanism. LiveKit's generic `[data-lk-theme]`
+ * rules match on the attribute's PRESENCE and keep working; its
+ * `[data-lk-theme=default]` palette stops matching. So this block owns the
+ * variables outright instead of fighting a stylesheet for them, and it sits
+ * outside `@layer` because the stylesheet it replaces is unlayered too.
+ * Both call sites say "neurai" (join/[code]/page.tsx and meeting/Room.tsx):
+ * one palette, because there is one definition.
+ *
+ * Only what the product OWNS is mapped — family, body size, control corner,
+ * accent. The dark bg/fg ladder, the danger red, the success and connection
+ * colours are LiveKit's own values, copied from
+ * `@livekit/components-styles/dist/general/themes/default.css` so the room's
+ * surfaces are provably what shipped yesterday. That is deliberate, not
+ * laziness: the stage is a near-black surface (`bg-fg/95` under the product
+ * default), and our light-theme `--danger` measures ~3.06:1 on it where
+ * LiveKit's own red sits well above. Handing a token to a ground it was
+ * never verified against is how the accent chip shipped at 4.42.
+ *
+ * ON UPGRADING LIVEKIT: a variable added to their default theme is a
+ * variable this block does not declare, and an undefined `--lk-*` renders as
+ * nothing rather than as an error. Diff this list against that file.
+ */
+[data-lk-theme="neurai"] {
+  color-scheme: dark;
+
+  /* ── ours ── */
+  --lk-font-family: var(--font-vazirmatn), system-ui, sans-serif;
+  --lk-font-size: 0.8125rem; /* the body role, 13 at the 1440 baseline */
+  --lk-border-radius: 11px; /* radius.control — the corner `.btn`/`.input` wear */
+  --lk-accent-fg: rgb(var(--on-accent));
+  --lk-accent-bg: rgb(var(--accent));
+  /* the hover/active lift, derived the way LiveKit derives its own rather
+     than picked by hand — three literals here would be three more places for
+     the accent to disagree with itself */
+  --lk-accent2: color-mix(in srgb, rgb(var(--accent)) 92%, #fff);
+  --lk-accent3: color-mix(in srgb, rgb(var(--accent)) 84%, #fff);
+  --lk-accent4: color-mix(in srgb, rgb(var(--accent)) 76%, #fff);
+
+  /* ── LiveKit's, verbatim ── */
+  --lk-bg: #111;
+  --lk-bg2: rgb(29.75, 29.75, 29.75);
+  --lk-bg3: rgb(42.5, 42.5, 42.5);
+  --lk-bg4: rgb(55.25, 55.25, 55.25);
+  --lk-bg5: #444444;
+  --lk-fg: #fff;
+  --lk-fg2: rgb(244.8, 244.8, 244.8);
+  --lk-fg3: rgb(234.6, 234.6, 234.6);
+  --lk-fg4: rgb(224.4, 224.4, 224.4);
+  --lk-fg5: rgb(214.2, 214.2, 214.2);
+  --lk-border-color: rgba(255, 255, 255, 0.1);
+  --lk-danger-fg: #fff;
+  --lk-danger: #f91f31;
+  --lk-danger2: rgb(249.532173913, 50.867826087, 67.2713043478);
+  --lk-danger3: rgb(250.0643478261, 70.7356521739, 85.5426086957);
+  --lk-danger4: rgb(250.5965217391, 90.6034782609, 103.8139130435);
+  --lk-success-fg: #fff;
+  --lk-success: #1ff968;
+  --lk-success2: rgb(50.867826087, 249.532173913, 117.3930434783);
+  --lk-success3: rgb(70.7356521739, 250.0643478261, 130.7860869565);
+  --lk-success4: rgb(90.6034782609, 250.5965217391, 144.1791304348);
+  --lk-control-fg: var(--lk-fg);
+  --lk-control-bg: var(--lk-bg2);
+  --lk-control-hover-bg: var(--lk-bg3);
+  --lk-control-active-bg: var(--lk-bg4);
+  --lk-control-active-hover-bg: var(--lk-bg5);
+  --lk-connection-excellent: #06db4d;
+  --lk-connection-good: #f9b11f;
+  --lk-connection-poor: #f91f31;
+  --lk-line-height: 1.5;
+  --lk-box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.15);
+  --lk-drop-shadow: rgba(255, 255, 255, 0.2) 0px 0px 24px;
+  --lk-grid-gap: 0.5rem;
+  --lk-control-bar-height: 69px;
+  --lk-chat-header-height: 69px;
+}
+
 @layer components {
   /*
    * Card discipline: the border is always visible so a card never floats
@@ -609,8 +695,17 @@
     @apply cursor-pointer;
   }
 
+  /* audit finding, 2026-09-02: this shipped small-caps and letter-spacing
+     onto every table header in the product — seventeen lines under this
+     file's own "letter-spacing breaks joined Persian script". Tracking pulls
+     a joined word apart at its joins, and the case transform does nothing to
+     Persian at all while shouting on the English half of the same bilingual
+     product: the header read as broken in fa and as a Latin small-caps line
+     in en. `text-group-label` is the scaffold's own role for these (11px —
+     constants.ts names "group labels, table headers" as its consumers), and
+     the spelling SectionMenu's group titles already wear. */
   .table-head {
-    @apply text-start text-xs font-semibold uppercase tracking-wide text-fg-muted;
+    @apply text-start text-group-label font-semibold text-fg-muted;
   }
 }
 
@@ -808,6 +903,15 @@
   flex-direction: row;
   height: auto;
   text-align: start;
+  /* audit finding, 2026-09-02: a LIST ROW rounds at 16, not at the shell's
+     20. `.tile` carries radius.modal, which is right for a dashboard card
+     and 4px too round for a line in a list — so a meetings or tasks
+     `tile tile-row` sat at 20 while a DataTable row on the next page sat at
+     16 (`.table-cards` below, the shape lifted FROM this very list), two
+     answers for one thing. The scaffold measures `radius.tile: 16 — list
+     rows and tiles`; the literal matches `.table-cards` because this file
+     uses no theme(). `.tile` keeps 20 for the cards it also dresses. */
+  border-radius: 16px;
 }
 
 /* --- ONE TABLE SHAPE, for every table in the platform ------------------

@@ -70,6 +70,18 @@ export default function UsersPage() {
 
   const [me, setMe] = useState<User | null>(null);
   const [rows, setRows] = useState<User[]>([]);
+  /* audit finding, 2026-09-02: `rows` starts as [] and the table was gated on
+     `listed.length === 0`, so from first paint until the members request
+     answered the page said «عضوی با این نام پیدا نشد» — and while identity
+     was still in flight too, since `me === null` falls through to the same
+     return. Loading and empty were one picture, and a table then dropped in
+     under a sentence claiming there was nobody. `loaded` is "the list has
+     answered" (refusal included: the list is then honestly empty of anything
+     we can show — the invitations page's spelling); until then DataTable
+     draws skeleton rows in its own frame and says nothing about the org. It
+     never flips back: a refetch through the epoch keeps the rows on screen,
+     the skeleton is for the first paint only. */
+  const [loaded, setLoaded] = useState(false);
   /**
    * Counts come from `GET /v1/admin/members/stats`, NOT from the rows.
    *
@@ -102,7 +114,14 @@ export default function UsersPage() {
    * a re-implementation.
    */
   const load = useCallback(async () => {
-    setRows(await api.members({ sort: "default" }));
+    try {
+      setRows(await api.members({ sort: "default" }));
+    } finally {
+      /* audit finding, 2026-09-02: both branches end the loading state — a
+         failure is an answer too, and a skeleton left standing after the
+         request has ended claims a fetch is in flight that is not */
+      setLoaded(true);
+    }
   }, []);
 
   /* any write to members/invitations — the person's click OR the agent's
@@ -288,124 +307,129 @@ export default function UsersPage() {
               that appeared with a selection was a second surface for the
               same two verbs. Enable/disable stay per row. */}
 
-          {listed.length === 0 ? (
-            <EmptyState text={t("noMatches")} />
-          ) : (
-            /* the theme's ONE table (2026-08-26): the members list wears
-               exactly the records table — hover-revealed selection, no
-               action icons in the row, every action in the right-click
-               menu, the quiet dot for the ordinary good state */
-            <DataTable
-              hideHeader
-              rows={listed}
-              rowKey={(u) => u.id}
-              onRowClick={(u) => setDetailId(u.id)}
-              menuItems={(u) => [
-                {
-                  key: "edit",
-                  label: t("memberEdit"),
-                  icon: <IconPencil />,
-                  onSelect: () => setDetailId(u.id),
-                },
-                ...(u.role !== "owner" && u.id !== me?.id
-                  ? [{
-                      key: "status",
-                      label: tAdmin(u.status === "disabled" ? "enable" : "disable"),
-                      icon: u.status === "disabled" ? <IconToggleOn /> : <IconToggleOff />,
-                      disabled: busy,
-                      onSelect: () => void toggleStatusFor(u),
-                    }]
-                  : []),
-                ...(canSetPasswordFor(u)
-                  ? [{
-                      key: "password",
-                      label: t("setPassword"),
-                      icon: <IconKey />,
-                      onSelect: () => setPasswordFor(u),
-                    }]
-                  : []),
-                ...(me?.role === "owner" && u.role !== "owner" && u.id !== me?.id
-                  ? [{
-                      key: "delete",
-                      label: t("deleteMember"),
-                      icon: <IconTrash />,
-                      danger: true,
-                      disabled: busy,
-                      onSelect: () => setConfirmDeleteMember(u),
-                    }]
-                  : []),
-              ]}
-              columns={[
-                {
-                  /*
-                   * ONE COLUMN (user directive, 2026-09-02: "a simple name
-                   * and its role small under it … remove Email, Status,
-                   * Online, Role, Added, Last action title and data from the
-                   * table … with kebab menu at the end and if clicked the
-                   * side window with details in it").
-                   *
-                   * Six columns became a mark, a name and one line under it.
-                   * The facts did not go anywhere — every one of them is in
-                   * the detail panel a row opens, which is where a person
-                   * goes when they want them. What the table is FOR is
-                   * finding somebody, and six columns of metadata is six
-                   * things to read past while doing that.
-                   *
-                   * The role sits under the name rather than beside it for
-                   * the same reason the handle already did: under the name it
-                   * costs no horizontal room, which is the scarce thing in a
-                   * table and the reason this one used to scroll sideways.
-                   */
-                  key: "member",
-                  header: t("colName"),
-                  headClassName: "sr-only",
-                  cell: (u) => (
-                    <span className="flex items-center gap-2.5">
-                      <span
-                        /* accent-soft with a ring, not a solid accent disc: a
-                           list of eight bright green circles is eight accents
-                           on one screen, and the accent stops meaning anything
-                           (Lovable's reading of the same tokens, ported) */
-                        className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-accent-soft text-xs font-semibold text-fg ring-1 ring-border-strong"
-                        aria-hidden
-                      >
-                        {personName(u, locale).slice(0, 1).toUpperCase()}
+          {/* audit finding, 2026-09-02: the table renders UNCONDITIONALLY —
+              the frame is structure and structure is known before the
+              network. `loading` keeps skeleton rows in it until the list has
+              answered, and `empty` is DataTable's own empty state, which it
+              shows only once it is not loading: the sentence "nobody matches"
+              is a claim about the org and appears only after the answer.
+              The ternary this replaced made loading and empty one picture. */}
+          {/* the theme's ONE table (2026-08-26): the members list wears
+              exactly the records table — hover-revealed selection, no
+              action icons in the row, every action in the right-click
+              menu, the quiet dot for the ordinary good state */}
+          <DataTable
+            hideHeader
+            rows={listed}
+            loading={!loaded}
+            empty={<EmptyState text={t("noMatches")} />}
+            rowKey={(u) => u.id}
+            onRowClick={(u) => setDetailId(u.id)}
+            menuItems={(u) => [
+              {
+                key: "edit",
+                label: t("memberEdit"),
+                icon: <IconPencil />,
+                onSelect: () => setDetailId(u.id),
+              },
+              ...(u.role !== "owner" && u.id !== me?.id
+                ? [{
+                    key: "status",
+                    label: tAdmin(u.status === "disabled" ? "enable" : "disable"),
+                    icon: u.status === "disabled" ? <IconToggleOn /> : <IconToggleOff />,
+                    disabled: busy,
+                    onSelect: () => void toggleStatusFor(u),
+                  }]
+                : []),
+              ...(canSetPasswordFor(u)
+                ? [{
+                    key: "password",
+                    label: t("setPassword"),
+                    icon: <IconKey />,
+                    onSelect: () => setPasswordFor(u),
+                  }]
+                : []),
+              ...(me?.role === "owner" && u.role !== "owner" && u.id !== me?.id
+                ? [{
+                    key: "delete",
+                    label: t("deleteMember"),
+                    icon: <IconTrash />,
+                    danger: true,
+                    disabled: busy,
+                    onSelect: () => setConfirmDeleteMember(u),
+                  }]
+                : []),
+            ]}
+            columns={[
+              {
+                /*
+                 * ONE COLUMN (user directive, 2026-09-02: "a simple name
+                 * and its role small under it … remove Email, Status,
+                 * Online, Role, Added, Last action title and data from the
+                 * table … with kebab menu at the end and if clicked the
+                 * side window with details in it").
+                 *
+                 * Six columns became a mark, a name and one line under it.
+                 * The facts did not go anywhere — every one of them is in
+                 * the detail panel a row opens, which is where a person
+                 * goes when they want them. What the table is FOR is
+                 * finding somebody, and six columns of metadata is six
+                 * things to read past while doing that.
+                 *
+                 * The role sits under the name rather than beside it for
+                 * the same reason the handle already did: under the name it
+                 * costs no horizontal room, which is the scarce thing in a
+                 * table and the reason this one used to scroll sideways.
+                 */
+                key: "member",
+                header: t("colName"),
+                headClassName: "sr-only",
+                cell: (u) => (
+                  <span className="flex items-center gap-2.5">
+                    <span
+                      /* accent-soft with a ring, not a solid accent disc: a
+                         list of eight bright green circles is eight accents
+                         on one screen, and the accent stops meaning anything
+                         (Lovable's reading of the same tokens, ported) */
+                      className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-accent-soft text-xs font-semibold text-fg ring-1 ring-border-strong"
+                      aria-hidden
+                    >
+                      {personName(u, locale).slice(0, 1).toUpperCase()}
+                    </span>
+                    <span className="block min-w-0 leading-tight">
+                      <span className="block truncate font-medium text-fg">
+                        {personName(u, locale)}
                       </span>
-                      <span className="block min-w-0 leading-tight">
-                        <span className="block truncate font-medium text-fg">
-                          {personName(u, locale)}
-                        </span>
-                        <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-fg-muted">
-                          {/* the namespace's own spelling — `role_owner` was an
-                              invented key that rendered raw on production,
-                              because a computed key skips the parity check */}
-                          {tAdmin(ROLE_KEY[u.role])}
-                          {/* status only when it is NOT the ordinary one: a
-                              row that says "active" about everybody is a
-                              column of one repeated word, which is what the
-                              status column was */}
-                          {u.status !== "active" ? (
-                            <>
-                              <span aria-hidden>·</span>
-                              <span className={u.status === "pending" ? "text-warning" : "text-danger"}>
-                                {tAdmin(STATUS_KEY[u.status])}
-                              </span>
-                            </>
-                          ) : null}
-                        </span>
+                      <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-fg-muted">
+                        {/* the namespace's own spelling — `role_owner` was an
+                            invented key that rendered raw on production,
+                            because a computed key skips the parity check */}
+                        {tAdmin(ROLE_KEY[u.role])}
+                        {/* status only when it is NOT the ordinary one: a
+                            row that says "active" about everybody is a
+                            column of one repeated word, which is what the
+                            status column was */}
+                        {u.status !== "active" ? (
+                          <>
+                            <span aria-hidden>·</span>
+                            <span className={u.status === "pending" ? "text-warning" : "text-danger"}>
+                              {tAdmin(STATUS_KEY[u.status])}
+                            </span>
+                          </>
+                        ) : null}
                       </span>
                     </span>
-                  ),
-                },
-                {
-                  key: "actions",
-                  header: t("colMemberActions"),
-                  srOnly: true,
-                  cell: () => null,
-                },
-              ]}
-            />
-          )}
+                  </span>
+                ),
+              },
+              {
+                key: "actions",
+                header: t("colMemberActions"),
+                srOnly: true,
+                cell: () => null,
+              },
+            ]}
+          />
         </div>
 
         {/*

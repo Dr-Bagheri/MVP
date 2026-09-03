@@ -14,6 +14,7 @@ import {
   IconFolder, IconMic, IconPencil, IconPlus, IconTrash, IconUpload, IconVideo,
 } from "@/components/icons";
 import { ConfirmDialog, KebabMenu } from "@/components/rowActions";
+import { Skeleton } from "@/components/scaffold";
 import { dayKeyOf, digits, formatDate, formatTime, monthGridAt, nowFields, instantFromFields } from "@/lib/format";
 
 /**
@@ -322,7 +323,28 @@ export function Meetings() {
       ) : null}
 
       {rows === null ? (
-        <p className="text-sm text-fg-subtle">…</p>
+        /* audit finding, 2026-09-02: while the list fetched, the column held a
+           lone «…» — indistinguishable from a broken tile (the dashboard's own
+           verdict on the ellipsis), and the layout jumped when the rows landed.
+           The frame is the ROWS' OWN SHAPE: three `tile tile-row` placeholders
+           with the icon / title / meta / stage slots of the real row below, so
+           nothing moves when the rows replace them. Not SkeletonCards: its card
+           body (p-7, four stacked bars) is a tile's anatomy and overflows a
+           68px row by twice its height — a reserved space of the wrong size
+           still moves the layout, which is the thing a skeleton exists to
+           prevent. */
+        <ul className="space-y-2" aria-hidden>
+          {Array.from({ length: 3 }, (_, i) => (
+            <li key={i} className="tile tile-row flex items-center gap-3 p-3.5">
+              <Skeleton className="h-10 w-10 shrink-0 rounded-xl" />
+              <span className="min-w-0 flex-1">
+                <Skeleton className="h-4 w-48 max-w-full" />
+                <Skeleton className="mt-1.5 h-3 w-64 max-w-full" />
+              </span>
+              <Skeleton className="h-6 w-14 shrink-0 rounded-lg" />
+            </li>
+          ))}
+        </ul>
       ) : rows === "failed" ? (
         <p className="text-sm text-fg-subtle">{t("readFailed")}</p>
       ) : shown.length === 0 ? (
@@ -497,8 +519,13 @@ function MeetingCalendar({ meetings, locale, onOpen }: {
     <div className="tile flex min-h-0 flex-1 flex-col p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5">
+          {/* audit finding, 2026-09-02 (sibling of the dialog pair, same file):
+              «امروز» was a hand-rolled 32px box with the 12px panel corner,
+              sitting between two `.btn-icon`s — a third button shape in one
+              row. The control guard cannot see it (no flex/items-center), so
+              it survived the dialog fix; `.btn-sm` is the toolbar's own size. */}
           <button type="button" onClick={() => setOffset(0)}
-            className="tap h-8 rounded-lg border border-border bg-surface px-3 text-xs font-medium text-fg hover:border-border-strong">
+            className="btn btn-sm border border-border text-fg hover:border-border-strong">
             {t("today")}
           </button>
           <button type="button" aria-label={t("prev")} onClick={() => setOffset((v) => v - 1)}
@@ -742,8 +769,6 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-const INPUT = "h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-fg outline-none placeholder:text-fg-subtle focus:border-accent";
-
 /**
  * The reference's create dialog, exactly: title, an optional description,
  * date and time DEFAULTING TO THE CLICK MOMENT (user directive: "the date
@@ -793,20 +818,31 @@ function NewMeetingDialog({ topics, onClose, onCreated, onRefused }: {
           <h2 className="text-base font-bold text-fg">{t("newMeeting")}</h2>
           <p className="mt-0.5 text-xs text-fg-muted">{t("newMeetingSubtitle")}</p>
         </div>
+        {/* audit finding, 2026-09-02: this × was a hand-rolled 36px box with the
+            16px tile corner while InviteDialog's, one dialog over in the same
+            flow, is the theme's 28px `.btn-icon` — two close buttons in the
+            same corner of two dialogs, different sizes. This is InviteDialog's
+            line, verbatim. */}
         <button type="button" aria-label={t("close")} onClick={onClose}
-          className="tap grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-border text-fg-subtle hover:text-fg">
+          className="btn btn-icon shrink-0 border border-border text-fg-subtle hover:text-fg">
           <IconClose width={14} height={14} />
         </button>
       </div>
       <div className="scroll-quiet min-h-0 flex-1 space-y-3 overflow-y-auto pe-1 pt-2">
+        {/* audit finding, 2026-09-02: the title box and the description wore a
+            file-local INPUT recipe — white ground, 16px corner — while the
+            Select and the date/time pickers three rows down are `.input`
+            (recessed `--field` ground, 11px corner). Two input looks inside one
+            form. The const is deleted rather than corrected: `.input` is the
+            one spelling, and a second one is what stops matching the first. */}
         <Field label={t("fieldTitleRequired")}>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} className={INPUT}
+          <input value={title} onChange={(e) => setTitle(e.target.value)} className="input"
             placeholder={t("titlePlaceholder")} />
         </Field>
         <Field label={t("fieldDescriptionOptional")}>
           <textarea value={description} onChange={(e) => setDescription(e.target.value)}
             rows={3} placeholder={t("descriptionPlaceholder")}
-            className="w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-fg outline-none placeholder:text-fg-subtle focus:border-accent" />
+            className="input min-h-[80px] py-2" />
         </Field>
         <div className="grid grid-cols-2 gap-2">
           {/* OUR pickers, not the browser's: a native date input renders a
@@ -840,13 +876,20 @@ function NewMeetingDialog({ topics, onClose, onCreated, onRefused }: {
           <ModePicker value={mode} onChange={setMode} />
         </div>
       </div>
+      {/* audit finding, 2026-09-02: the pair was 40px tall with the 16px tile
+          corner, while the «جلسه جدید» button that OPENED this dialog is the
+          38px, 11px-cornered `.btn` — the primary action changed shape between
+          the page and its own dialog. `.btn` owns height, corner, padding and
+          the disabled state now (the local `disabled:opacity-50` restated what
+          the class already does). This was the control guard's one worklist
+          entry for this file; the entry is gone with it. */}
       <div className="mt-3 flex items-center justify-between">
         <button type="button" onClick={onClose}
-          className="tap h-10 rounded-xl border border-border bg-surface px-4 text-sm font-medium text-fg hover:bg-border">
+          className="btn border border-border text-fg">
           {t("cancel")}
         </button>
         <button type="button" onClick={submit} disabled={title.trim() === "" || date === "" || time === "" || busy}
-          className="tap flex h-10 items-center gap-2 rounded-xl bg-accent px-4 text-sm font-semibold text-on-accent shadow-accent disabled:opacity-50">
+          className="btn bg-accent text-on-accent shadow-accent">
           <IconPlus width={14} height={14} />
           {t("createMeeting")}
         </button>

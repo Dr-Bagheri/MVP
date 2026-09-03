@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { Card } from "@/components/ui";
+import { Card, Field } from "@/components/ui";
 import { saveCalendarPreference, saveTimezonePreference } from "@/lib/preferences";
 import { useCalendarPreference, useTimezonePreference } from "@/lib/usePreferences";
 import { storeTheme, type Theme } from "@/lib/theme";
@@ -33,6 +33,24 @@ import type { CalendarPreference } from "@/lib/preferences";
  *
  * **Calendar and timezone** stay as they were: the identical
  * save-then-adopt functions, consumed, never forked.
+ *
+ * **Audit findings, 2026-09-02 — two spellings of one habit: re-answering a
+ * question the theme had already answered.** The three selects wore
+ * `input h-10 min-h-0 text-sm` on top of `.input`, which pins 40px at every
+ * width — throwing away the 44px hit area the class deliberately keeps below
+ * md — and bumps the field type off the theme's 12.5 detail step. That is the
+ * same override the Audit Logs filter was stripped of, for the same reason:
+ * `.input`'s whole job is to say how tall a field is, and a local answer only
+ * makes one screen disagree with the rest. The calendar and timezone labels
+ * were a hand-rolled `text-xs font-medium text-fg-subtle` span — a THIRD
+ * spelling of a form label beside `Field`'s `text-sm font-medium text-fg` and
+ * scaffold's `FormRow`, so labels changed size and tone between General and
+ * Assistant on one settings page. Both now use the theme's own answers: bare
+ * `.input`, and `Field` from @/components/ui (which also carries the
+ * `aria-describedby` wiring, should either field ever earn a hint).
+ *
+ * The theme select keeps its `sr-only` span rather than joining them: `Field`
+ * renders a VISIBLE label, and this one's visible label is the card's heading.
  */
 export function GeneralSettings() {
   const t = useTranslations("settings");
@@ -53,8 +71,10 @@ export function GeneralSettings() {
             {/* the card's own heading is the visible label — a second
                 «پوسته» above the box would be the same word twice */}
             <span className="sr-only">{t("theme")}</span>
+            {/* audit finding, 2026-09-02: bare `.input` — the class owns the
+                height and the type size */}
             <select
-              className="input h-10 min-h-0 text-sm"
+              className="input"
               value={theme}
               onChange={(changeEvent) => storeTheme(changeEvent.target.value as Theme)}
             >
@@ -70,12 +90,11 @@ export function GeneralSettings() {
         <h2 className="h-section">{t("generalLocaleTitle")}</h2>
         <p className="mt-1 text-sm leading-6 text-fg-muted">{t("generalLocaleHint")}</p>
         <div className="mt-4 grid max-w-xl gap-4 sm:grid-cols-2">
-          <label className="block">
-            <span className="mb-1 block text-xs font-medium text-fg-subtle">
-              {tAvatar("calendar")}
-            </span>
+          {/* audit finding, 2026-09-02: the theme's `Field`, not a third
+              spelling of a form label */}
+          <Field label={tAvatar("calendar")}>
             <select
-              className="input h-10 min-h-0 text-sm"
+              className="input"
               value={calendar}
               onChange={(changeEvent) => {
                 setSaveFailed(false);
@@ -87,13 +106,10 @@ export function GeneralSettings() {
               <option value="jalali">{tAvatar("calendarJalali")}</option>
               <option value="gregorian">{tAvatar("calendarGregorian")}</option>
             </select>
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-xs font-medium text-fg-subtle">
-              {tAvatar("timezone")}
-            </span>
+          </Field>
+          <Field label={tAvatar("timezone")}>
             <select
-              className="input h-10 min-h-0 text-sm"
+              className="input"
               value={timezone}
               onChange={(changeEvent) => {
                 setSaveFailed(false);
@@ -106,7 +122,7 @@ export function GeneralSettings() {
                 <option key={zone} value={zone}>{zone}</option>
               ))}
             </select>
-          </label>
+          </Field>
         </div>
         {/* the control still shows the OLD value, which is true — this says
             why, instead of leaving a change that silently didn't happen */}

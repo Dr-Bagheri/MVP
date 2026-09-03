@@ -22,3 +22,15 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     return errorResponse(error);
   }
 }
+
+/* 0162: the board's true delete — a verbatim forward like the rest; the
+   creator-or-admin rule and the one-sentence refusal are the door's */
+export async function DELETE(_request: Request, ctx: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await ctx.params;
+    await coreFetch(`/v1/tasks/${encodeURIComponent(id)}`, { method: "DELETE" });
+    return new Response(null, { status: 204 });
+  } catch (error) {
+    return errorResponse(error);
+  }
+}

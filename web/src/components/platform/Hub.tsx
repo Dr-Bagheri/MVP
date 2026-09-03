@@ -4,9 +4,10 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { useLocale, useTranslations } from "next-intl";
 import { api, BffError } from "@/api/client";
 import type { AgentCard, AgentEvent, AgentMessage, ConnectorProvider, MailDraft, SearchHit, Skill, WorkflowCard } from "@/api/types";
-import { Link, useRouter } from "@/i18n/routing";
+import { useRouter } from "@/i18n/routing";
 import { useSearchParams } from "next/navigation";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { SkeletonLines } from "@/components/scaffold";
 import { useDictation } from "@/lib/dictation";
 import { deliverDoc } from "@/lib/deliver";
 import { subscribeComposer, takePendingDraft } from "@/lib/assistantBus";
@@ -68,6 +69,18 @@ export function Hub() {
   const router = useRouter();
   const { resetVersion, setStarted } = useAssistantConversation();
   const [messages, setMessages] = useState<AgentMessage[]>([]);
+  /**
+   * WHICH conversation's thread the screen currently holds (audit finding,
+   * 2026-09-02). `resumeId` alone says which one is WANTED; until the two
+   * agree the fetch is in flight, and an empty `messages` in that window is
+   * "not here yet", not "nothing was said". The idle hub used to render on
+   * `messages.length === 0` alone, so opening a stored conversation showed the
+   * welcome line and the suggestion chips for a beat and then swapped them
+   * for the thread — the wrong screen assembling itself in front of the
+   * reader. Loading and empty are different nothings; this is the flag that
+   * keeps them apart.
+   */
+  const [heldThreadId, setHeldThreadId] = useState<string | null>(null);
   const [workflowCards, setWorkflowCards] = useState<WorkflowCard[]>([]);
   /**
    * M43 — the replies written in THIS conversation. Fetched rather than
@@ -466,6 +479,10 @@ export function Hub() {
     /* A just-cleared hub must not be repopulated by an older in-flight fetch. */
     if (versionAtStart !== resetVersionRef.current) return;
     setMessages(thread);
+    /* beside setMessages, in the same synchronous block, so the two land in
+       one render — a tick apart and the skeleton would flash once more over
+       a thread that had already arrived */
+    setHeldThreadId(id);
     setFeedback(verdicts);
     sessionId.current = id;
     setStarted(true);
@@ -489,6 +506,14 @@ export function Hub() {
          place the reply can be sent from inside the product, so coming back
          to the thread has to bring it back too */
       void refreshDrafts(resumeId);
+    }).catch(() => {
+      /* audit finding, 2026-09-02: the skeleton stands for a request IN
+         FLIGHT, never for a refusal — a fetch that fails settles too, or the
+         screen would load forever. What renders then is what rendered before
+         this flag existed (the idle hub); the refusal has no sentence of its
+         own on this screen yet, and that gap is named here rather than hidden
+         behind a skeleton that never ends. */
+      if (!cancelled) setHeldThreadId(resumeId);
     });
     return () => {
       cancelled = true;
@@ -505,6 +530,7 @@ export function Hub() {
     sessionId.current = undefined;
     pinnedRef.current = true;
     setMessages([]);
+    setHeldThreadId(null);
     setInput("");
     setFeedback({});
     setShared(false);
@@ -574,6 +600,10 @@ export function Hub() {
   }, [input, resumeId]);
 
   const idle = messages.length === 0;
+  /* a wanted conversation the screen does not hold yet — see heldThreadId;
+     `idle` is still true in this window, which is exactly why it cannot be
+     the thing that decides between the welcome screen and a skeleton */
+  const loadingThread = resumeId !== null && heldThreadId !== resumeId;
 
   /* the dashboard LEFT this component (user directive, 2026-08-25): it is
      the landing PAGE now (components/platform/Dashboard.tsx), not a view of
@@ -905,8 +935,21 @@ export function Hub() {
     URL.revokeObjectURL(url);
   }
 
-  const headerBtn =
-    "tap flex h-8 items-center gap-1.5 rounded-full border border-border px-3 text-xs text-fg-muted hover:border-border-strong hover:text-fg";
+  /*
+   * THE TOOLBAR'S OWN IDIOM, not a fifth button shape (audit finding,
+   * 2026-09-02). This const used to spell a 32px rounded-full lozenge with
+   * 11.5px text — a pill on a BUTTON, which the radii rule forbids — and it
+   * dressed five controls on a screen whose toolbar, one row up, is 34px
+   * `.btn-sm` rectangles: two button families stacked on one page, the "ten
+   * developers" symptom exactly. The control guard could not see it because
+   * the classes lived in a const rather than a className literal. The string
+   * is now AssistantMenu's, verbatim, so the two rows read as one toolbar.
+   */
+  const headerBtn = "btn btn-sm gap-1.5 font-medium text-fg-muted hover:bg-surface-2 hover:text-fg";
+  /* the PRESSED state (Share is a toggle): the soft accent the listening mic
+     already wears. Not `border-accent` — `.btn-sm` draws no border, so that
+     class would be present, read as satisfied, and paint nothing. */
+  const headerBtnOn = "btn btn-sm gap-1.5 font-medium bg-accent-soft text-accent";
 
   return (
     <div
@@ -956,8 +999,13 @@ export function Hub() {
        * not scroll mode — it should be fixed, and the scroll is inside its
        * text and conversation").
        *
-       * `max-w-content-small`: a conversation is reading width, and a thread
-       * stretched across a list column makes every line a journey.
+       * The small column is the PAGE's now — `<PageContainer width="small">`
+       * in assistant/page.tsx (audit finding, 2026-09-02) — and the reason
+       * travelled with it: a conversation is reading width, and a thread
+       * stretched across a list column makes every line a journey. This
+       * paragraph used to name `max-w-content-small` as a class on this root,
+       * and kept saying so after the class left; a comment that describes a
+       * class the line under it does not carry is the kind a reader trusts.
        *
        * `h-full overflow-hidden` on BOTH states, not only the active one. The
        * idle hub grew with its suggestions and the page scrolled behind a
@@ -973,27 +1021,32 @@ export function Hub() {
          toolbar and the content in two different columns. */
       className="relative isolate flex h-full min-h-0 w-full flex-col overflow-hidden"
     >
-      {/* the conversation controls — visible whenever we are not idle */}
-      {!idle ? (
+      {/*
+        the conversation's own actions — Share and Export, once there is a
+        persisted conversation to share or export.
+
+        THE HISTORY LINK LEFT THIS ROW (audit finding, 2026-09-02): the page
+        mounts <AssistantMenu> directly above this component, and that toolbar
+        already carries the door to /conversations as a `.btn-sm`. Keeping a
+        second one here put two toolbars back to back with two History doors
+        — a leftover from when the menu was a side pane. The meetings and
+        tasks pages have exactly one toolbar row and never repeat a
+        destination. The row now renders only when it has something in it:
+        an empty `mb-4` div under a first live ask was 16px of dead space.
+      */}
+      {!idle && sessionId.current ? (
         <div className="mb-4 flex flex-wrap items-center gap-2">
-          <Link href="/conversations" className={headerBtn}>
-            {t("history")}
-          </Link>
-          {messages.length > 0 && sessionId.current ? (
-            <>
-              <button
-                type="button"
-                className={shared ? `${headerBtn} border-accent text-accent` : headerBtn}
-                aria-pressed={shared}
-                onClick={() => void toggleShare()}
-              >
-                {shared ? t("sharedWithOrg") : t("share")}
-              </button>
-              <button type="button" className={headerBtn} onClick={exportMarkdown}>
-                {t("exportMd")}
-              </button>
-            </>
-          ) : null}
+          <button
+            type="button"
+            className={shared ? headerBtnOn : headerBtn}
+            aria-pressed={shared}
+            onClick={() => void toggleShare()}
+          >
+            {shared ? t("sharedWithOrg") : t("share")}
+          </button>
+          <button type="button" className={headerBtn} onClick={exportMarkdown}>
+            {t("exportMd")}
+          </button>
         </div>
       ) : null}
 
@@ -1015,7 +1068,16 @@ export function Hub() {
         />
       ) : null}
 
-      {idle ? (
+      {loadingThread ? (
+        /* audit finding, 2026-09-02: a stored conversation being opened shows
+           the THREAD's shape while its rows are on the way — the same box the
+           thread will scroll in, filled with skeleton lines — never the
+           welcome screen. The frame is structure and structure is known
+           before the network; only the words wait. */
+        <div className="scroll-quiet fade-scroll mb-4 min-h-0 flex-1 overflow-y-auto" aria-busy="true">
+          <SkeletonLines lines={6} className="mt-2" />
+        </div>
+      ) : idle ? (
         /* min-h-0 so this half can shrink inside the fixed page, and its own
            scroller carries the overflow rather than the document */
         /* justify-START, not end (user directive, 2026-09-02: "put the
@@ -1147,9 +1209,17 @@ export function Hub() {
               if (e.key === "Escape" && streaming) stop();
             }}
           />
+          {/* THE THEME'S CONTROL GEOMETRY on all three composer buttons (audit
+              finding, 2026-09-02): they were hand-rolled 38px squares wearing
+              the 16px TILE radius (`rounded-xl`) beside a product whose every
+              button is the 11px `rounded-md` — and they slipped past the
+              control guard only because `grid place-items-center` is the grid
+              spelling of `flex items-center`. `.btn` owns height, corner,
+              centring and the disabled fade now; `w-[38px] px-0` makes it the
+              square, and the state classes stay. */}
           <button
             type="button"
-            className={`tap grid h-[38px] w-[38px] place-items-center rounded-xl ${
+            className={`btn w-[38px] shrink-0 px-0 ${
               dictation.status === "listening"
                 ? "animate-pulse bg-accent-soft text-accent"
                 : "text-fg-muted hover:bg-surface-2 hover:text-fg"
@@ -1165,7 +1235,7 @@ export function Hub() {
                composer; Esc does the same from the keyboard */
             <button
               type="button"
-              className="tap grid h-[38px] w-[38px] place-items-center rounded-xl bg-surface-2 text-fg"
+              className="btn w-[38px] shrink-0 px-0 bg-surface-2 text-fg"
               title={t("stop")}
               onClick={stop}
             >
@@ -1174,7 +1244,7 @@ export function Hub() {
           ) : (
             <button
               type="button"
-              className="tap grid h-[38px] w-[38px] place-items-center rounded-xl bg-accent text-on-accent disabled:opacity-50"
+              className="btn w-[38px] shrink-0 px-0 bg-accent text-on-accent"
               title={t("send")}
               disabled={input.trim() === ""}
               onClick={() => void send()}
@@ -1241,12 +1311,16 @@ export function Hub() {
           {/* CREATE — choosing a format makes it a visible chip beside the
               real request. It never pre-fills the editor. */}
           {createKind ? (
-            <span className="flex h-8 items-center gap-1.5 rounded-full bg-accent-soft px-3 text-xs font-medium text-accent">
+            /* `.chip`, the same spelling as the context and attachment chips a
+               few lines up (audit finding, 2026-09-02): this one had copied
+               `headerBtn`'s 32px geometry, so one composer showed two chip
+               heights. Its × is the sibling chips' × too. */
+            <span className="chip bg-accent-soft text-xs text-accent">
               <DocumentIcon width={14} height={14} />
               {createKind === "doc" ? t("createDoc") : t("createPdf")}
               <button
                 type="button"
-                className="tap -me-1 ms-0.5 grid h-5 w-5 place-items-center rounded-full text-accent/80 hover:bg-accent/10 hover:text-accent"
+                className="ms-1 text-accent/70 hover:text-accent"
                 aria-label={t("removeCreate", { name: createKind === "doc" ? t("createDoc") : t("createPdf") })}
                 onClick={() => setCreateKind(null)}
               >
@@ -1284,7 +1358,11 @@ export function Hub() {
                     key={item.key}
                     type="button"
                     role="menuitem"
-                    className="tap flex w-full items-center justify-start gap-3 rounded-2xl bg-surface-2 px-3 py-3 text-start transition-colors hover:bg-accent-soft"
+                    /* the PANEL radius on a row inside a panel (audit
+                       finding, 2026-09-02): `rounded-2xl` is the card/dialog
+                       radius, and the rows were rounder than the menu holding
+                       them */
+                    className="tap flex w-full items-center justify-start gap-3 rounded-lg bg-surface-2 px-3 py-2.5 text-start transition-colors hover:bg-accent-soft"
                     onClick={() => {
                       setCreateKind(item.key);
                       setCreateOpen(false);
@@ -1334,7 +1412,10 @@ export function Hub() {
             <div>
                 <input
                   autoFocus
-                  className="input mb-1.5 h-9 w-full text-sm"
+                  /* `.input` owns its height and type size (audit finding,
+                     2026-09-02): `h-9 text-sm` on top of it was the same
+                     re-answering the Settings dropdown was stripped of */
+                  className="input mb-1.5 w-full"
                   placeholder={t("sourcesSearch")}
                   value={sourceQuery}
                   onChange={(e) => setSourceQuery(e.target.value)}
@@ -1499,7 +1580,11 @@ function HoverMenu({
         side="top"
         align={align}
         sideOffset={8}
-        className={`w-auto rounded-xl border-border bg-surface p-0 text-start shadow-island ${panelClass}`}
+        /* KebabMenu's panel classes verbatim (audit finding, 2026-09-02): the
+           directive above asks for "the same as any dropdown that we have",
+           and what shipped was the 16px tile radius with the island shadow
+           beside menus that are all `rounded-lg … shadow-xl` (rowActions) */
+        className={`w-auto rounded-lg border-border bg-surface p-0 text-start shadow-xl ${panelClass}`}
       >
         {children}
       </PopoverContent>

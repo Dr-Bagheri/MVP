@@ -96,3 +96,38 @@ describe("Management · Users role gate", () => {
     expect(screen.queryByText(/این بخش در اختیار مدیر سازمان است/)).toBeNull();
   });
 });
+
+describe("Management · Users — loading is not empty", () => {
+  beforeEach(() => {
+    me.mockReset();
+    members.mockReset();
+  });
+
+  /*
+   * audit finding, 2026-09-02: `rows` starts as [] and the table was gated on
+   * `listed.length === 0`, so for the whole time the members request was in
+   * flight the page said «عضوی با این نام پیدا نشد» — an empty state wearing
+   * loading's clothes — and then a table dropped in under it. The fetch is
+   * held OPEN here on purpose (the temporal-vacuum trap: an assertion that
+   * also holds in a state you did not mean passes there and stops looking),
+   * so the in-flight state is the one being measured; the empty sentence is
+   * asserted only after an empty answer has actually arrived. Against the
+   * old ternary the first assertion fails — that is the red this test owes.
+   */
+  it("draws the table's skeleton frame while the list is in flight, and the empty sentence only after an empty answer", async () => {
+    let answer!: (rows: User[]) => void;
+    members.mockReturnValue(new Promise<User[]>((resolve) => { answer = resolve; }));
+    me.mockResolvedValue(admin);
+    render(<UsersPage />);
+
+    // anchored on the request being OPEN — never on a duration
+    await waitFor(() => expect(members).toHaveBeenCalled());
+    expect(screen.queryByText("عضوی با این نام پیدا نشد.")).toBeNull();
+    expect(screen.getByRole("table")).toBeTruthy();
+
+    answer([]);
+    await screen.findByText("عضوی با این نام پیدا نشد.");
+    // the frame yields to the sentence: a table under "nobody matches" is two answers
+    expect(screen.queryByRole("table")).toBeNull();
+  });
+});

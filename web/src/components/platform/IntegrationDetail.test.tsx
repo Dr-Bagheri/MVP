@@ -18,6 +18,9 @@ import type { ConnectorItem, ConnectorStatus } from "@/api/types";
  */
 let CONNECTORS: ConnectorStatus[] = [];
 let ITEMS: ConnectorItem[] = [];
+/** hold the connectors call out so the LOADING page can be looked at — the
+    settled page is the only thing every other test here can see */
+let HOLD_CONNECTORS = false;
 
 const GOOGLE: ConnectorStatus = {
   provider: "google",
@@ -57,7 +60,10 @@ const disconnectConnector = vi.fn(async () => undefined);
 
 vi.mock("@/api/client", () => ({
   api: {
-    connectors: async () => CONNECTORS,
+    connectors: () =>
+      HOLD_CONNECTORS
+        ? new Promise<ConnectorStatus[]>(() => {})
+        : Promise.resolve(CONNECTORS),
     me: async () => ({
       id: "u-1", org_id: "o-1", username: "amir", email: "amir@example.test",
       display_name: "امیررضا", display_name_en: null, avatar_url: null,
@@ -77,6 +83,7 @@ beforeEach(() => {
   push.mockClear();
   connectorItems.mockClear();
   disconnectConnector.mockClear();
+  HOLD_CONNECTORS = false;
   CONNECTORS = [GOOGLE];
   ITEMS = [
     { id: "ev-1", title: "جلسهٔ برنامه‌ریزی", subtitle: "دفتر مرکزی", occurred_at: "2026-08-29T09:00:00.000Z" },
@@ -158,6 +165,30 @@ describe("the integration detail page", () => {
     await screen.findByRole("table");
     expect(screen.queryByText("برای دسترسی به درایو دوباره وصل شوید")).toBeNull();
     expect(connectorItems).toHaveBeenCalledWith("google", "drive");
+  });
+
+  /**
+   * THE FRAME DOES NOT WAIT (audit finding, 2026-09-02). The icon, the name,
+   * the provider and the description come from the catalogue, so none of them
+   * depends on the network — and the version that rendered `null` until
+   * api.connectors() answered passed every other test in this file, because
+   * every other test looks at the settled page.
+   *
+   * The second assertion is the discriminating one: while the wire is out we
+   * know nothing about the connection, so the page must not have picked a
+   * state yet. The shape this replaces fell through to «پیکربندی نشده» —
+   * a claim about the org, made before anyone had looked.
+   */
+  it("renders the catalogue identity, and claims nothing, while the wire is out", async () => {
+    HOLD_CONNECTORS = true;
+    await act(async () => { render(<IntegrationDetail slug="gmail" />); });
+
+    expect(screen.getByRole("heading", { name: "جی‌میل" })).toBeTruthy();
+    // the body holds the space the answer will fill rather than standing blank
+    expect(document.querySelectorAll(".animate-pulse").length).toBeGreaterThan(0);
+    // …and says nothing about a connection nobody has asked about yet
+    expect(screen.queryByText(/پیکربندی نشده/)).toBeNull();
+    expect(screen.queryByRole("table")).toBeNull();
   });
 
   it("answers an unknown slug with a sentence, not a broken screen", async () => {

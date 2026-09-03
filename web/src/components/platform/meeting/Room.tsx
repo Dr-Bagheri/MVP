@@ -147,7 +147,11 @@ export function MeetingRoom({ meetingId }: { meetingId: string }) {
         connect
         video
         audio
-        data-lk-theme="default"
+        /* audit finding, 2026-09-02: the product's LiveKit palette, defined
+           once in globals.css. "default" is LiveKit's own — its blue, its
+           Latin system font, its 8px corners. Changed here and on the guest's
+           join page together: two rooms one click apart must not differ. */
+        data-lk-theme="neurai"
         className="flex min-h-0 flex-1 flex-col"
       >
         <Stage />

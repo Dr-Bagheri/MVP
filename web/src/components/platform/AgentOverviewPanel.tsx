@@ -340,7 +340,19 @@ export function AgentOverviewPanel({
       {collapsed ? null : (
         <div className="grid gap-5 border-t border-border p-4 sm:grid-cols-2">
           <div>
-            <h3 className="text-xs font-medium uppercase tracking-wide text-fg-subtle">{t("overviewWorkflows")}</h3>
+            {/*
+              Audit finding, 2026-09-02: this heading and its two twins in the
+              right column wore `text-xs uppercase tracking-wide`, and the
+              labels are joined Persian («گردش‌کارها», «ابزارها»). The theme
+              says it in prose seventeen lines above `.table-head`
+              (globals.css): letter-spacing breaks joined script, and uppercase
+              does nothing to it while shouting on the English half. The
+              scaffold's own role for a group label is `text-group-label`
+              (11px, "group labels, table headers"), which is what every other
+              one in the product wears — SectionMenu, SpeakersDirectory, the
+              call detail's field labels.
+            */}
+            <h3 className="text-group-label font-medium text-fg-subtle">{t("overviewWorkflows")}</h3>
             {/*
               ONE list, two shapes.
 
@@ -459,7 +471,8 @@ export function AgentOverviewPanel({
             */}
             {starterOptions.length > 0 && (workflows !== null || failed) ? (
               <>
-                <h3 className="text-xs font-medium uppercase tracking-wide text-fg-subtle">{t("overviewStarters")}</h3>
+                {/* group-label role, same reason as the workflows heading */}
+                <h3 className="text-group-label font-medium text-fg-subtle">{t("overviewStarters")}</h3>
                 <ul className="mt-2 max-h-56 space-y-1.5 overflow-y-auto">
                   {starterOptions.map((handle) => {
                     const seeded = SEEDED_STARTERS[handle]!;
@@ -495,7 +508,8 @@ export function AgentOverviewPanel({
             */}
             {agent.tools.length > 0 ? (
               <>
-                <h3 className="mt-4 text-xs font-medium uppercase tracking-wide text-fg-subtle">
+                {/* group-label role, same reason as the workflows heading */}
+                <h3 className="mt-4 text-group-label font-medium text-fg-subtle">
                   {t("overviewTools")}
                 </h3>
               <ul className="mt-2 flex flex-wrap gap-1.5">

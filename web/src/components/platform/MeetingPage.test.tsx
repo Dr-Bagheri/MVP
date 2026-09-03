@@ -86,6 +86,10 @@ function call(over: Partial<Call>): Call {
 
 let MEETING: MeetingRecord = meeting({});
 let CALL: Call | null = null;
+/* a read that stays IN FLIGHT until the test says so — the only way the
+   loading state is a state at all; a mock that resolves at once renders the
+   frame for no measurable moment (audit finding, 2026-09-02) */
+let DETAIL_GATE: Promise<MeetingRecord> | null = null;
 
 /* the REAL BffError: the screen branches on `instanceof` and on its `code`,
    and a hand-written stand-in makes every instanceof answer false while the
@@ -105,7 +109,7 @@ vi.mock("@/api/client", async () => ({
     addMeetingItem: async () => undefined,
     updateMeetingItem: async () => undefined,
     deleteMeetingItem: async () => undefined,
-    meetingDetail: async () => MEETING,
+    meetingDetail: async () => DETAIL_GATE ?? MEETING,
     updateMeeting: async (_id: string, body: Record<string, unknown>) => ({ ...MEETING, ...body }),
     getCall: async () => CALL,
     me: async () => ({ id: "u-me", display_name: "سینا", display_name_en: null }),
@@ -130,6 +134,7 @@ import { MeetingPage } from "./MeetingPage";
 beforeEach(() => {
   MEETING = meeting({});
   CALL = null;
+  DETAIL_GATE = null;
   startSpy.mockClear();
   tokenSpy.mockClear();
 });
@@ -278,6 +283,25 @@ describe("MeetingPage", () => {
     await userEvent.click(screen.getByRole("button", { name: /حین جلسه/ }));
 
     await waitFor(() => expect(tokenSpy).toHaveBeenCalledWith("m-1"));
+  });
+
+  /* THE FRAME BEFORE THE RECORD (audit finding, 2026-09-02). The page was a
+     lone «…» until the read landed; loading.guard.test.ts cannot see an early
+     `return <p>…</p>`, so this is the instrument for it. Verified red against
+     the old branch on both halves: no navigation landmark, and the ellipsis
+     present. The third assertion is the control — a frame is a frame, not the
+     page rendered over invented data. */
+  it("renders the stepper frame while the record loads — never a bare ellipsis", async () => {
+    let release: (m: MeetingRecord) => void = () => undefined;
+    DETAIL_GATE = new Promise<MeetingRecord>((resolve) => { release = resolve; });
+    render(<MeetingPage id="m-1" />);
+    expect(screen.getByRole("navigation", { name: "مراحل جلسه" })).toBeInTheDocument();
+    expect(screen.queryByText("…")).toBeNull();
+    expect(screen.queryByText("مشخصات")).toBeNull();
+
+    release(meeting({}));
+    await waitFor(() => expect(screen.getByText("مشخصات")).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: /پیش از جلسه/ })).toBeInTheDocument();
   });
 
   it("a recorded meeting opens on the post stage", async () => {
