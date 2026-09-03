@@ -474,16 +474,32 @@ export function AssistantSidebar() {
   /**
    * Whether the assistant belongs on this screen at all: a member, on a
    * surface where the platform shell renders.
-   *
-   * THE GUTTER THAT USED TO RIDE WITH IT IS GONE (2026-09-03). An effect here
-   * published the panel's width as `--assistant-rail`, and PlatformShell
-   * padded its inline-end by it, so opening the assistant re-flowed every page
-   * underneath. The user asked for the opposite — a fixed column that floats
-   * over — so one writer and one reader went, and the `:root` default in
-   * globals.css with them: a variable nobody writes is a value waiting to be
-   * read by mistake.
    */
   const visible = member && !sidebarIsSilentOn(pathname);
+
+  /**
+   * THE WIDTH THIS COLUMN OCCUPIES, published for the page to step aside by.
+   *
+   * It went away and came back the same day, and the round trip is the useful
+   * part. Version one had PlatformShell pad the whole ROW by it, so the top
+   * bar was inset too and opening the assistant re-flowed everything: the user
+   * asked for it to stop pushing. Version two removed the reservation
+   * entirely — and then the page sat centred in the whole window while a
+   * 248px panel covered one side of it, which is the "content is not in the
+   * middle" they reported next, with a before/after to settle it.
+   *
+   * So: published again, read by `main` ALONE (the top bar spans the full
+   * width), and carrying the ACTUAL width rather than a constant. Both menus
+   * are fixed; the page is the space between them; when this one is wider the
+   * page is narrower.
+   */
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.setProperty("--assistant-rail", visible ? (open ? PANEL_W : RAIL_W) : "0px");
+    /* and nothing when the assistant is not on this screen — an auth page has
+       no column to leave room for */
+    return () => { root.style.setProperty("--assistant-rail", "0px"); };
+  }, [visible, open]);
 
   /**
    * The RECORDING rule (user, 2026-08-21): a rolling take owns the room. The

@@ -158,23 +158,40 @@ describe("the assistant sidebar floats, and is shut until asked for", () => {
       .toBe(`${SCAFFOLD.menuWidth / 16}rem`);
   });
 
-  it("reserves NO column — the shell is not pushed", () => {
+  it("reserves the page's column, and NEVER the row's — the top bar reaches the corner", () => {
     /*
-     * The regression this exists for, and it is a source check on purpose:
-     * the first version had the sidebar publish `--assistant-rail` and
-     * PlatformShell pad its inline-end by it, so opening the assistant
-     * re-flowed every page underneath. Both halves are gone; either coming
-     * back is the defect, and neither is visible in a rendered jsdom tree.
+     * THE REGRESSION THIS EXISTS FOR, and it has been wrong in three
+     * different directions on one day, which is why it is pinned in source:
+     * none of it is visible in a rendered jsdom tree.
+     *
+     *  1. the shell padded the whole ROW, so the TOP BAR was inset too and a
+     *     column of dead window sat above the assistant — "the top menu is not
+     *     going to the end of the page and there is gap on the corner";
+     *  2. the reservation was removed altogether, and the page then centred in
+     *     the whole window while a 248px panel covered one side of it;
+     *  3. it came back as a CONSTANT 48, which keeps the layout still but
+     *     leaves the page centred against a strip that is not there when the
+     *     panel is open.
+     *
+     * What is true now: the sidebar publishes its ACTUAL width, `main` is the
+     * only reader, and the row carries no padding at all.
      */
     const shell = readFileSync(
       resolve(process.cwd(), "src/components/platform/PlatformShell.tsx"), "utf8",
     ).replace(/\/\*[\s\S]*?\*\//g, " ");
-    expect(shell).not.toContain("--assistant-rail");
 
+    /* the row is clean — this is the corner-gap half */
+    const row = shell.slice(shell.indexOf('"flex h-dvh'), shell.indexOf('"flex h-dvh') + 120);
+    expect(row).not.toContain("pe-");
+
+    /* and `main` steps aside by the published width — the centring half */
+    expect(shell).toContain('md:pe-[var(--assistant-rail)]');
+
+    /* the producer's side: somebody has to write what main reads */
     const sidebar = readFileSync(
       resolve(process.cwd(), "src/components/platform/AssistantSidebar.tsx"), "utf8",
     ).replace(/\/\*[\s\S]*?\*\//g, " ");
-    expect(sidebar).not.toContain("setProperty(\"--assistant-rail\"");
+    expect(sidebar).toContain('setProperty("--assistant-rail"');
   });
 
   it("remembers the choice, and the remembered choice is the one that opens it", async () => {

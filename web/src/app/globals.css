@@ -42,10 +42,14 @@
  */
 @layer base {
   :root {
-    /* `--assistant-rail` LEFT on 2026-09-03: the assistant floats over the
-     page instead of reserving a column, so nothing writes it and nothing
-     reads it. A variable with no writer is a value waiting to be read by
-     mistake. */
+    /* The width the assistant column occupies, published by AssistantSidebar and
+     read by PlatformShell's `main` so the page centres between the two fixed
+     menus. 0 by default: the auth pages and the guest door render no
+     assistant, and a page there must not hold a gutter open for a column
+     that is not coming. */
+  :root {
+    --assistant-rail: 0px;
+  }
     /* DARK — the reference product's own dark palette (user directive,
        2026-08-31: "i want our to get this theme so get all of it and
        correct ours"). A deep blue-grey ground with a GREEN primary; every

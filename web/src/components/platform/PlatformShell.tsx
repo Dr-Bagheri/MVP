@@ -141,30 +141,33 @@ export function PlatformShell({ children }: { children: ReactNode }) {
      */
     <>
       {/*
-        THE PAGE CENTRES IN WHAT IS LEFT (user directive, 2026-09-03: "the
-        content of the pages are not in the middle because we added the
-        sidebar for assistant — fix it and use the center of the remaining
-        page for all platform").
+        THE PAGE CENTRES BETWEEN THE TWO MENUS (user directive, 2026-09-03,
+        third pass — the first two got it wrong in different ways and the user
+        sent a before/after of the meetings screen to settle it).
 
-        It was centred in the whole window: `mx-auto` inside a column that ran
-        under the assistant, so every page sat visibly off-centre toward it —
-        the rail took its width out of the row at the inline-start and nothing
-        accounted for the strip at the inline-end.
+        "when both menu on right and left are in a fix position the remaining
+        area in the middle is the page and put the data there."
 
-        The reservation is the strip's CONSTANT width (`pe-assistant`, the
-        48px resting state), never the open panel's. That is the whole trick,
-        and it settles both halves of what the user asked for on one day:
-        the layout accounts for a permanent fixture, so pages are centred in
-        the space that actually exists — and OPENING the assistant still moves
-        nothing, because the panel expands OVER the page rather than pushing
-        it, which was the earlier complaint. A reservation that changed with
-        the panel would re-flow every screen on every open.
+        So the reservation is on the PAGE, not on the row. It was on the row —
+        which insets everything inside it, the TOP BAR included, and that is
+        the second half of the same report: "the top menu is not going to the
+        end of the page and there is gap on the corner". A 48px column of dead
+        window sat above the assistant, beside a bar that stopped short of the
+        edge. The bar spans the full width now and only `main` steps aside.
 
-        Only from `md`: below that the strip is not drawn at all (a 48px
-        column across a phone buys nothing), so there is nothing to leave room
-        for.
+        And it reserves the assistant's ACTUAL width, not its resting one. A
+        constant 48 keeps the layout still when the panel opens, which is what
+        the second pass optimised for — but it also leaves the page centred
+        against a strip that is not there any more, which is exactly what the
+        user's "before" image shows and their "after" corrects. Both menus are
+        fixed; the page is what is between them; when one of them is wider, the
+        page is narrower. The sidebar publishes the number (`--assistant-rail`)
+        and this is its one reader.
+
+        Only from `md`: below that the strip is not drawn at all, so there is
+        nothing to leave room for.
       */}
-      <div className="flex h-dvh bg-bg text-fg md:pe-assistant">
+      <div className="flex h-dvh bg-bg text-fg">
         <IconRail />
         <div className="flex min-w-0 flex-1 flex-col">
           {/* the whole person, not an initial: the avatar menu's identity
@@ -200,7 +203,10 @@ export function PlatformShell({ children }: { children: ReactNode }) {
             moves the scroll into its content column so the section menu
             holds still too (THE SHELL SCROLL, scaffold/SectionMenu.tsx).
           */}
-          <main key={`${calendar}|${timezone}`} className="scroll-quiet min-h-0 flex-1 overflow-y-auto">
+          <main
+            key={`${calendar}|${timezone}`}
+            className="scroll-quiet min-h-0 flex-1 overflow-y-auto md:pe-[var(--assistant-rail)]"
+          >
             {children}
           </main>
           <BottomBar />
