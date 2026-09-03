@@ -52,6 +52,8 @@ import { createMailDraftsRepo } from "./mail-drafts.ts";
 import { createTasksRepo } from "./tasks.ts";
 import { createMeetingsRepo, MEETING_ITEM_KINDS } from "./meetings.ts";
 import type { MeetingItemKind } from "./meetings.ts";
+import { createRoomsRepo, ROOM_MAX_AGENTS, type RoomEvent } from "./rooms.ts";
+import { formatEvent } from "./sse.ts";
 import { createTts } from "./tts.ts";
 import { createLiveStt } from "./live-stt.ts";
 import { createCapabilitiesRepo, CAPABILITIES, type CapabilitiesRepo } from "./capabilities.ts";
@@ -176,6 +178,13 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
   const mailDrafts = createMailDraftsRepo(options.db, connectors);
   const tasks = createTasksRepo(options.db);
   const meetings = createMeetingsRepo(options.db);
+  /* db/0164 — the rooms. The same key and the same env fallback the rest of
+     the agent surface runs on; the ladder itself is `firstServable`'s. */
+  const rooms = createRoomsRepo(options.db, {
+    apiKey: options.openrouterKey,
+    fallbackModel: process.env.WORKER_SUMMARY_MODEL,
+    log: (fields) => app.log.warn(fields, String(fields.event ?? "room")),
+  });
   // One resolver for the assistant's `/slug` and the pipeline's summarizer.
   // A caller may still inject its own, but the default is the shared one —
   // if the summarizer resolved skills differently, an org that customised the
@@ -2306,10 +2315,14 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
   const workflowAuthoring = createWorkflowAuthoringRepo(options.db);
 
   /** W23, once for the whole workflow surface: a gateway key holds none
-      of these doors — author, publish, run, signal, schedule, decide. */
-  const refuseApiKey = (identity: unknown): void => {
+      of these doors — author, publish, run, signal, schedule, decide.
+      `surface` names the door in the refusal, because a room telling an
+      integrator it may not use "the workflow surface" is an accurate status
+      wrapped around a wrong diagnosis. The default keeps every existing
+      caller's message byte-identical. */
+  const refuseApiKey = (identity: unknown, surface = "workflow"): void => {
     if ((identity as { viaApiKey?: boolean }).viaApiKey === true) {
-      throw new NotActivatedError("api keys may not use the workflow surface");
+      throw new NotActivatedError(`api keys may not use the ${surface} surface`);
     }
   };
 
@@ -3630,6 +3643,144 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     return reply.code(204).send();
   });
 
+
+  /**
+   * ---- the rooms (db/0164) ------------------------------------------------
+   *
+   * A person's own surface end to end, so every route here refuses gateway
+   * keys — the workflow and mail posture: a stolen integration credential
+   * must not be able to start a room full of agents spending model calls
+   * under the person who minted it.
+   *
+   * `assistant.ask` is the capability, deliberately the same one the
+   * assistant uses. An admin who narrowed a member's assistant must not find
+   * the room is a way around the narrowing.
+   */
+  app.get("/v1/rooms", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity, "rooms");
+    const query = (request.query ?? {}) as { archived?: unknown };
+    return reply.send({ rooms: await rooms.list(identity, { archived: query.archived === "true" }) });
+  });
+
+  app.post("/v1/rooms", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity, "rooms");
+    await capabilities.require(identity, "assistant.ask");
+    const body = (request.body ?? {}) as {
+      title?: unknown; agents?: unknown; subject_kind?: unknown; subject_id?: unknown;
+    };
+    if (!Array.isArray(body.agents) || body.agents.some((handle) => typeof handle !== "string")) {
+      throw new ValidationError("agents must be a list of handles", { code: "room_agents_required" });
+    }
+    if (body.agents.length > ROOM_MAX_AGENTS) {
+      throw new ValidationError("too many agents for one room", {
+        code: "room_agents_too_many", params: { max: ROOM_MAX_AGENTS },
+      });
+    }
+    /* both halves or neither — the column check says the same thing, and a
+       kind with no id is a claim with nothing behind it (0164) */
+    const subject = typeof body.subject_kind === "string" && typeof body.subject_id === "string"
+      ? { kind: body.subject_kind, id: body.subject_id }
+      : undefined;
+    return reply.code(201).send(await rooms.open(identity, {
+      title: typeof body.title === "string" ? body.title : "",
+      agentHandles: body.agents as string[],
+      subject,
+    }));
+  });
+
+  app.get("/v1/rooms/:id", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity, "rooms");
+    const { id } = request.params as { id: string };
+    return reply.send(await rooms.detail(identity, id));
+  });
+
+  app.patch("/v1/rooms/:id", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity, "rooms");
+    const { id } = request.params as { id: string };
+    return reply.send(await rooms.update(identity, id, (request.body ?? {}) as Record<string, unknown>));
+  });
+
+  /**
+   * The person speaks, and the room answers (SSE).
+   *
+   * STREAMED, and the reason is the same one the reference shows: a room
+   * answers with several turns over tens of seconds, and a POST that returns
+   * the whole exchange at the end is a minute of nothing. What is streamed is
+   * TURNS, not tokens — one `working` event naming who is thinking, then the
+   * finished `message`. A token stream would have to attribute every delta to
+   * an author and then deliver the same text twice.
+   *
+   * THE ROW IS THE RECORD and the stream is a view of it: every `message`
+   * event is emitted AFTER its row has landed, so a client that reloads
+   * mid-exchange sees exactly the turns it was shown, and the exchange
+   * survives the client leaving.
+   *
+   * Everything that can refuse does so BEFORE the headers go out — the
+   * assistant's own rule. Once the stream is open the only way to say "no
+   * such room" is an error event every client has to special-case.
+   */
+  app.post("/v1/rooms/:id/messages", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity, "rooms");
+    await capabilities.require(identity, "assistant.ask");
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { body?: unknown; locale?: unknown };
+    if (typeof body.body !== "string" || body.body.trim() === "") {
+      throw new ValidationError("a message needs a body", { code: "room_body_invalid" });
+    }
+    /* the person's turn is written before the stream opens: a bad room id
+       must be a 404, and the question stands in the room even if the answer
+       never comes (the assistant's ordering, for the same reason) */
+    const said = await rooms.say(identity, id, body.body);
+
+    reply.raw.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    });
+    /* writable, checked every time: a turn can finish after the person has
+       closed the tab, and writing to a socket nobody is holding is how a
+       stream ends a process instead of a response */
+    const send = (event: RoomEvent): void => {
+      if (!reply.raw.writableEnded && !reply.raw.destroyed) reply.raw.write(formatEvent(event));
+    };
+    send({ type: "message", message: said });
+
+    /* a single turn can outlast a proxy's idle timeout, and the events
+       between turns are minutes apart at worst — a comment costs nothing and
+       is ignored by every client */
+    const beat = setInterval(() => {
+      if (!reply.raw.writableEnded && !reply.raw.destroyed) reply.raw.write(":ka\n\n");
+    }, 15_000);
+    // A tab closing stops the room rather than orphaning a stream that keeps
+    // spending; the turns already written stay written.
+    const controller = new AbortController();
+    request.raw.on("close", () => { controller.abort(); clearInterval(beat); });
+
+    let failed = false;
+    try {
+      ({ failed } = await rooms.exchange(identity, id, send, {
+        locale: body.locale === "en" ? "en" : "fa",
+        signal: controller.signal,
+      }));
+    } catch (error) {
+      failed = true;
+      request.log.error({
+        event: "room_exchange_failed", room_id: id, pg: pgErrorFields(error),
+        err: error instanceof Error ? error.constructor.name : typeof error,
+      }, "a room exchange ended in a fault");
+    } finally {
+      clearInterval(beat);
+    }
+    send({ type: "done", failed });
+    reply.raw.end();
+    return reply;
+  });
 
   // ---- assistant (SSE) ---------------------------------------------------
 
