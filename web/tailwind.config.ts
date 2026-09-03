@@ -181,7 +181,16 @@ const config: Config = {
         "page-bottom": rem(SCAFFOLD.page.bottom),
         "page-menu": rem(SCAFFOLD.page.menuTop),
       },
+      padding: {
+        /* the assistant's resting strip — see SCAFFOLD.assistantRail */
+        assistant: rem(SCAFFOLD.assistantRail),
+      },
       width: {
+        /* no `assistant` width token: the sidebar draws its own width from
+           `--assistant-w` because it has TWO (the strip and the open panel),
+           and a token nothing asks for is a size waiting to be picked. The
+           PADDING token exists because the shell has exactly one number to
+           reserve. */
         menu: rem(SCAFFOLD.menuWidth),
         rail: rem(SCAFFOLD.railWidth),
         /* the icon button is SQUARE, so its width is the same token as its

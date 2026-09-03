@@ -140,16 +140,31 @@ export function PlatformShell({ children }: { children: ReactNode }) {
      * it, and the only thing above every page is the layout.
      */
     <>
-      {/* the inline-END padding is the space the assistant sidebar occupies —
-          see the header. It lands on the row, so the LAST flex child (the
-          content column) shrinks; the rail is at the inline-start and is
-          untouched. */}
-      {/* NO GUTTER FOR THE ASSISTANT (2026-09-03). This padded the shell's
-          inline-end by the sidebar's width, so opening the assistant re-flowed
-          every page under it. The user asked for a fixed column that floats
-          over instead — so the shell knows nothing about it now, which is also
-          one fewer thing to keep in step. */}
-      <div className="flex h-dvh bg-bg text-fg">
+      {/*
+        THE PAGE CENTRES IN WHAT IS LEFT (user directive, 2026-09-03: "the
+        content of the pages are not in the middle because we added the
+        sidebar for assistant — fix it and use the center of the remaining
+        page for all platform").
+
+        It was centred in the whole window: `mx-auto` inside a column that ran
+        under the assistant, so every page sat visibly off-centre toward it —
+        the rail took its width out of the row at the inline-start and nothing
+        accounted for the strip at the inline-end.
+
+        The reservation is the strip's CONSTANT width (`pe-assistant`, the
+        48px resting state), never the open panel's. That is the whole trick,
+        and it settles both halves of what the user asked for on one day:
+        the layout accounts for a permanent fixture, so pages are centred in
+        the space that actually exists — and OPENING the assistant still moves
+        nothing, because the panel expands OVER the page rather than pushing
+        it, which was the earlier complaint. A reservation that changed with
+        the panel would re-flow every screen on every open.
+
+        Only from `md`: below that the strip is not drawn at all (a 48px
+        column across a phone buys nothing), so there is nothing to leave room
+        for.
+      */}
+      <div className="flex h-dvh bg-bg text-fg md:pe-assistant">
         <IconRail />
         <div className="flex min-w-0 flex-1 flex-col">
           {/* the whole person, not an initial: the avatar menu's identity

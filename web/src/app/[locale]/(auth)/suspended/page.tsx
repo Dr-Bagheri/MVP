@@ -33,8 +33,8 @@ export default function SuspendedPage() {
           drift icons.tsx exists to end (a text glyph shares none of the
           set's stroke, weight or box, and paints in the OS emoji font in
           both themes, ignoring the tone beside it). This is the platform's
-          own 40px well instead — the spelling Meetings and AgentEditor
-          already use — carrying a set icon at 16. The tone stays `danger`:
+          own 40px well instead — the spelling Meetings and the settings
+          forms already use — carrying a set icon at 16. The tone stays `danger`:
           pending waits in warning, a suspension is a stop. Decorative, so
           aria-hidden — the heading under it is what says this. */}
       <span

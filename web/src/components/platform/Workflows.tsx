@@ -99,7 +99,7 @@ export function Workflows() {
     void api.workflows().then(setWorkflows).catch(() => setWorkflows([]));
     /* try/catch AND .catch — a client without the method throws
        synchronously, and that must degrade the same way a rejection does
-       (the AgentOverviewPanel's own precedent) */
+       (the agent overview panel's precedent, deleted 2026-09-03) */
     try {
       void api.workflowStarters().then(setStarters).catch(() => setStarters([]));
     } catch {

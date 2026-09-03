@@ -279,8 +279,15 @@ export function Integrations() {
      * toolbar was showing a menu the page no longer belongs to: eight
      * Settings sections above a screen that is not one of them.
      *
-     * A page reached from the rail has the rail as its way back. Its own
-     * container now, at the platform's default width.
+     * A page reached from the rail has the rail as its way back.
+     *
+     * The shell itself is mounted by the ROUTE (app/[locale]/integrations),
+     * exactly as meetings and tasks do it. The first attempt dropped
+     * `SettingsPane` and nothing else — which took `TwoPane` with it, and
+     * TwoPane is what renders `PlatformShell`, so the page lost the rail and
+     * the top bar along with the menu it was meant to lose. Removing a
+     * wrapper removes everything the wrapper was doing, not just the part
+     * that was in the way.
      */
     <PageContainer>
 

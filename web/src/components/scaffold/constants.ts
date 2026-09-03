@@ -96,6 +96,18 @@ export const SCAFFOLD = {
   controlHeightSm: 34,
   /** the square icon button */
   controlHeightIcon: 28,
+  /**
+   * The assistant's resting strip at the inline-end — the width the SHELL
+   * leaves for it so every page centres in the space that is actually there.
+   *
+   * It is the CLOSED width on purpose. The open panel is the menu's 248 and
+   * it floats over the page; reserving that instead would re-flow every
+   * screen each time the assistant opened, which the user asked to be undone
+   * earlier the same day. One number, two consumers: AssistantSidebar draws
+   * the strip at this width and PlatformShell pads by it.
+   */
+  assistantRail: 48,
+
   /** the field at md and up */
   fieldHeight: 40,
   /**

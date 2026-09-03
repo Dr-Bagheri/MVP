@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api, BffError } from "@/api/client";
-import type { AgentCard, AgentEvent, AgentMessage, ConnectorProvider, MailDraft, SearchHit, Skill, WorkflowCard } from "@/api/types";
+import type { AgentEvent, AgentMessage, ConnectorProvider, MailDraft, SearchHit, Skill, WorkflowCard } from "@/api/types";
 import { useRouter } from "@/i18n/routing";
 import { useSearchParams } from "next/navigation";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -14,7 +14,6 @@ import { subscribeComposer, takePendingDraft } from "@/lib/assistantBus";
 import { shouldStick } from "@/lib/threadFollow";
 import { useSkillStarters } from "@/lib/skillName";
 import { ConversationThread } from "./ConversationThread";
-import { AgentOverviewPanel } from "./AgentOverviewPanel";
 import { MailDraftCard } from "./MailDraftCard";
 import { useAssistantConversation } from "./AssistantConversationState";
 import { DocumentIcon, MicIcon, PlusIcon, SendIcon } from "./icons";
@@ -97,7 +96,6 @@ export function Hub() {
   const [feedback, setFeedback] = useState<Record<string, string>>({});
   const [shared, setShared] = useState(false);
   const [skills, setSkills] = useState<Skill[]>([]);
-  const [agents, setAgents] = useState<AgentCard[]>([]);
   const [model, setModel] = useState<string>("");
   const [skill, setSkill] = useState<string>("");
   /** The SERVER's refusal sentence, when an ask never opened a stream. */
@@ -243,7 +241,6 @@ export function Hub() {
   const connectorProvider: ConnectorProvider | undefined = connectorProviderParam === "google" || connectorProviderParam === "microsoft"
     ? connectorProviderParam
     : undefined;
-  const selectedAgent = agentHandle ? agents.find((candidate) => candidate.handle === agentHandle) : undefined;
 
   /*
    * The starter questions, through `useSkillStarters` — a SYSTEM skill's are
@@ -274,7 +271,6 @@ export function Hub() {
       setModel((offered ? res.preferred_model : res.models[0]?.id) ?? "");
     }).catch(() => setModel(""));
     void api.skills().then(setSkills).catch(() => setSkills([]));
-    void api.agents().then(setAgents).catch(() => setAgents([]));
     /* the workflow CARDS: the auto-run's opening line is the workflow's own
        name, which is the server's string — the client never invents the
        sentence a workflow is called by */
@@ -1051,22 +1047,18 @@ export function Hub() {
       ) : null}
 
       {/*
-       * M47 — the overview that comes up WITH the agent (Sana's shape): its
-       * workflows and its reach, above the thread and never over it. Keyed
-       * by hub state so the first message REMOUNTS it folded — the panel's
-       * job is done once the conversation is the screen's subject, and a
-       * same-children re-render would keep it open (the children-bailout
-       * lesson: a re-render is not a remount). The idle centrepiece below
-       * stays exactly the user-approved anatomy; this renders only when an
-       * agent is picked.
-       */}
-      {selectedAgent ? (
-        <AgentOverviewPanel
-          key={idle ? "agent-panel-idle" : "agent-panel-active"}
-          agent={selectedAgent}
-          defaultCollapsed={!idle}
-        />
-      ) : null}
+        THE AGENT PANEL IS GONE (user directive, 2026-09-03: the agents must
+        not "come to the AI assistant like a window or options any more").
+        What stood here was an agent's overview — its workflows, its reach,
+        and an arranging UI — unfolding above the thread whenever `?agent=`
+        was set. The agents have their own surface now (db/0164, /agents),
+        where they answer in a room instead of decorating this one.
+
+        The `agent` PARAM still rides the ask below: it picks whose persona
+        answers, which is a fact about the run and not a window on this
+        screen, and `record_on_agents` (db/0142) arms a take off the same
+        handle. Only the panel went.
+      */}
 
       {loadingThread ? (
         /* audit finding, 2026-09-02: a stored conversation being opened shows
@@ -1096,7 +1088,7 @@ export function Hub() {
             actually said is a lie on a delay, so this one lives only on the
             empty screen and disappears the moment a real turn exists.
           */}
-          {!selectedAgent && !workflowSlug ? (
+          {!workflowSlug ? (
             <p className="message-arrives mx-auto mt-2 w-full max-w-content text-sm leading-7 text-fg">
               {t("hubWelcome")}
             </p>
@@ -1106,8 +1098,9 @@ export function Hub() {
                 job is a blank prompt is decoration competing with an empty
                 box — and at 3.5% it was visible enough to notice and too
                 faint to read, which is the worst of both. */}
-          {/* the picked-agent chip that lived here grew into the
-              AgentOverviewPanel above — one panel, both hub states */}
+          {/* the picked-agent chip that lived here became the agent
+              overview panel, and that went with the agents surface on
+              2026-09-03 — the agents answer in a room now (db/0164) */}
           {workflowSlug ? (
             <p className="mx-auto mt-3 w-fit rounded-full bg-accent-soft px-3 py-1 text-xs font-medium text-accent">
               {t("activeWorkflow")}
@@ -1126,7 +1119,7 @@ export function Hub() {
             One press FILLS the composer; sending stays the person's act,
             which is the rule these rows have carried since they existed.
           */}
-          {!selectedAgent && !workflowSlug && suggestions.length > 0 ? (
+          {!workflowSlug && suggestions.length > 0 ? (
             <div className="mx-auto mt-3 flex w-full max-w-content flex-wrap justify-start gap-2">
               {suggestions.map((q) => (
                 <button

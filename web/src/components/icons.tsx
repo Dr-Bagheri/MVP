@@ -59,6 +59,13 @@ export const IconSearch = (p: SVGProps<SVGSVGElement>) => (
 export const IconZap = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><path d="M13 2 4.5 13.5H11L9.5 22 19 10.5h-6.5L13 2Z" /></svg>
 );
+/* MENTION — the @ that calls an agent into a conversation (2026-09-03). Drawn
+   as a ring with a tail rather than typeset, so it sits on the same 24-box,
+   stroke weight and cap style as every other glyph here; a text "@" in a
+   button is a different size in every font the two locales fall back to. */
+export const IconAt = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><circle cx="12" cy="12" r="3.6" /><path d="M15.6 8.4v4.9a2.6 2.6 0 0 0 5.2 0V12a8.8 8.8 0 1 0-3.5 7" /></svg>
+);
 export const IconAgent = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><rect x="3" y="5" width="18" height="14" rx="2.5" /><circle cx="9" cy="11" r="2" /><path d="M6 16c.7-1.4 1.8-2 3-2s2.3.6 3 2" /><path d="M15 10h4M15 14h3" /></svg>
 );
@@ -354,6 +361,7 @@ export const IconWarn = (p: SVGProps<SVGSVGElement>) => (
    =======================================================================*/
 export const ICONS = {
   "agent": IconAgent,
+  "at": IconAt,
   "archive": IconArchive,
   "arrowDown": IconArrowDown,
   "arrowUp": IconArrowUp,

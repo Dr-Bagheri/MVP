@@ -138,7 +138,10 @@ const PANEL_W = `${SCAFFOLD.menuWidth / 16}rem`; // 248px, the menu's own
    on every screen. Shut, it is a narrow strip carrying its own mark; open, it
    is the menu's width. What it never does is push the page — that half of the
    earlier correction stands. */
-const RAIL_W = "3rem"; // 48px, the strip that is always on screen
+/* the strip that is always on screen, from the blueprint rather than typed:
+   PlatformShell pads by the SAME number so a page centres in what is left,
+   and two literals is how the space reserved and the space occupied drift */
+const RAIL_W = `${SCAFFOLD.assistantRail / 16}rem`;
 
 /**
  * The top of the column: the top bar's own height, read from the blueprint
@@ -848,6 +851,20 @@ export function AssistantSidebar() {
   );
 
   const headerButton = "btn btn-icon text-fg-muted hover:bg-surface-2 hover:text-fg";
+  /* the same class, and deliberately so: the bottom row is the header's
+     controls MOVED, not a new family of them */
+  const composerButton = headerButton;
+
+  /**
+   * Drop an `@` into the box and put the cursor after it, so the next thing
+   * typed is a handle. It writes the token rather than opening a picker: the
+   * user asked to be able to "write in the chat @roya or @ava", and a menu
+   * that inserts what you could have typed is a second way to do one thing.
+   */
+  function mentionAgent(): void {
+    setInput((prev) => (prev === "" || prev.endsWith(" ") ? `${prev}@` : `${prev} @`));
+    inputRef.current?.focus();
+  }
 
   return (
     <>
@@ -882,34 +899,16 @@ export function AssistantSidebar() {
               {voiceStatus ? (
                 <span className="text-group-label text-accent">{voiceStatus}</span>
               ) : null}
-              {/* the dial and the digest toggle live in Settings·Assistant —
-                  this header carries conversation only */}
+              {/* THE VOICE CONTROLS MOVED DOWN (user directive, 2026-09-03:
+                  "put the icons of the ai assistant in bottom row + mic and
+                  speaker, without a fill and look like the other"). They sat
+                  here in filled accent-soft wells, so two of the four header
+                  icons read as lit warnings rather than as a state — and they
+                  belong beside the thing they act on, which is the composer.
+                  The header keeps what NAMES the room and what closes it. */}
               <button
                 type="button"
-                className={`${headerButton} ms-auto ${silent ? "bg-accent-soft text-accent" : ""}`}
-                aria-label={t("silentLabel")}
-                aria-pressed={silent}
-                title={t("silentLabel")}
-                onClick={toggleSilent}
-              >
-                {/* the theme's OFF state, not an emoji (user report,
-                    2026-08-26): `<Icon off>` is the same speaker glyph under
-                    the theme's red slash. */}
-                <Icon name="speaker" size="md" off={silent} />
-              </button>
-              <button
-                type="button"
-                className={`${headerButton} ${ears ? "" : "bg-accent-soft"}`}
-                aria-label={t("earsLabel")}
-                aria-pressed={!ears}
-                title={t("earsLabel")}
-                onClick={toggleEars}
-              >
-                <Icon name="mic" size="md" off={!ears} />
-              </button>
-              <button
-                type="button"
-                className={headerButton}
+                className={`${headerButton} ms-auto`}
                 aria-label={t("newConversation")}
                 title={t("newConversation")}
                 onClick={freshConversation}
@@ -995,13 +994,13 @@ export function AssistantSidebar() {
             </div>
 
             <form
-              className="flex items-end gap-2 border-t border-border p-2"
+              className="border-t border-border p-2"
               onSubmit={(e) => { e.preventDefault(); send(); }}
             >
               <textarea
                 ref={inputRef}
                 rows={1}
-                className="input flex-1 resize-none py-2.5"
+                className="input w-full resize-none py-2.5"
                 placeholder={t("placeholder")}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
@@ -1009,13 +1008,64 @@ export function AssistantSidebar() {
                   if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
                 }}
               />
-              <button
-                type="submit"
-                className="btn-primary btn-sm"
-                disabled={streaming || input.trim() === ""}
-              >
-                {streaming ? "…" : t("send")}
-              </button>
+              {/*
+                THE BOTTOM ROW (user directive, 2026-09-03). Mic, speaker and
+                the mention control sit under the box they act on, in the
+                theme's plain icon button — NO FILL. The two voice toggles wore
+                `bg-accent-soft` wells when engaged, which on a dark panel
+                reads as two lit warnings; the OFF state is carried by
+                `<Icon off>`, the theme's own slashed glyph, and ON is simply
+                the icon.
+              */}
+              <div className="mt-2 flex items-center gap-1">
+                <button
+                  type="button"
+                  className={composerButton}
+                  aria-label={t("earsLabel")}
+                  aria-pressed={!ears}
+                  title={t("earsLabel")}
+                  onClick={toggleEars}
+                >
+                  <Icon name="mic" size="md" off={!ears} />
+                </button>
+                <button
+                  type="button"
+                  className={composerButton}
+                  aria-label={t("silentLabel")}
+                  aria-pressed={silent}
+                  title={t("silentLabel")}
+                  onClick={toggleSilent}
+                >
+                  <Icon name="speaker" size="md" off={silent} />
+                </button>
+                {/*
+                  CALLING AN AGENT IN (user directive: "add @ as well for
+                  mentioning the agents into the chat so they can be called —
+                  the user can write in the chat @roya or @ava as well").
+                  The button WRITES the token; typing it by hand does the same
+                  thing, which is the point — it is a reminder the mechanism
+                  exists, not a second mechanism. The handles are the ones
+                  db/0163 seeds, and they are the same tokens an agent uses to
+                  hand work to another agent in a room, so one convention
+                  covers both directions.
+                */}
+                <button
+                  type="button"
+                  className={composerButton}
+                  aria-label={t("mentionLabel")}
+                  title={t("mentionLabel")}
+                  onClick={mentionAgent}
+                >
+                  <Icon name="at" size="md" />
+                </button>
+                <button
+                  type="submit"
+                  className="btn-primary btn-sm ms-auto"
+                  disabled={streaming || input.trim() === ""}
+                >
+                  {streaming ? "…" : t("send")}
+                </button>
+              </div>
             </form>
           </>
         ) : (

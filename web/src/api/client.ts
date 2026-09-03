@@ -25,7 +25,6 @@ import type {
   AgentMessage,
   AgentCard,
   AgentStats,
-  AgentWorkflowLink,
   CallNote,
   RunTrace,
   AssistantSession,
@@ -55,6 +54,10 @@ import type {
   ModelsResponse,
   Org,
   Role,
+  /* db/0164 — the rooms, inherited from core through types.ts */
+  RoomEvent,
+  RoomMessageRecord,
+  RoomRecord,
   SearchHit,
   ServerHealth,
   Skill,
@@ -260,12 +263,19 @@ function meOutcome(): Promise<{ row: MeRecord } | { refusal: BffError }> {
  * `signal` is the STOP button: aborting rejects the read, the finally
  * releases the socket, the BFF's upstream fetch is torn down, and core's
  * close handler aborts the run — one chain, no orphaned spend.
+ *
+ * GENERIC in the event type (db/0164): the rooms have their own vocabulary —
+ * turns and who is taking one, never deltas — and core's sse.ts declined to
+ * widen the assistant's union for exactly that reason. What the two share is
+ * the FRAMING, so the framing lives here once. A second hand-written frame
+ * reader would be a copy of the torn-frame fix that nobody remembers to keep
+ * in step with this one.
  */
-async function* streamAssistant(
+async function* streamEvents<TEvent>(
   path: string,
   body: unknown,
   signal?: AbortSignal,
-): AsyncGenerator<AgentEvent> {
+): AsyncGenerator<TEvent> {
   const response = await fetch(path, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -299,7 +309,7 @@ async function* streamAssistant(
         const data = frame.split("\n").find((line) => line.startsWith("data: "));
         if (data) {
           try {
-            yield JSON.parse(data.slice(6)) as AgentEvent;
+            yield JSON.parse(data.slice(6)) as TEvent;
           } catch {
             /* a malformed frame is dropped; the contract is unknown-ignorable */
           }
@@ -1324,63 +1334,72 @@ export const api = {
   },
 
   // ---- persistent agents, workflows & private connectors (M30) -------------
+  /**
+   * The agents a person may call into a room.
+   *
+   * The only agent read left on this client (2026-09-03). Creating, editing
+   * and arranging workflows onto an agent went with the browse-and-edit
+   * surface they belonged to — core still serves those routes, and nothing in
+   * this product reaches them, which is stated in the removal report rather
+   * than left as three methods nobody calls.
+   */
   async agents(): Promise<AgentCard[]> {
     const { agents } = await bff<{ agents: AgentCard[] }>("/api/agents");
     return agents;
   },
-  async createAgent(input: {
-    level: "org" | "user";
-    name: string;
-    description?: string;
-    instructions: string;
-    model?: string | null;
-    tools?: string[];
-    icon?: string;
-    color?: string;
-    web?: boolean;
-  }): Promise<AgentCard> {
-    return bff<AgentCard>("/api/agents", {
-      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input),
+
+  // ---- the rooms (db/0164) ------------------------------------------------
+  /**
+   * A room is a conversation with more than two voices — a person and the
+   * agents they called in — and it is ITS OWNER'S: 0164's read policy says
+   * so, which is why there is no scope parameter here to get wrong.
+   */
+  async rooms(opts?: { archived?: boolean }): Promise<RoomRecord[]> {
+    const { rooms } = await bff<{ rooms: RoomRecord[] }>(
+      `/api/rooms?archived=${opts?.archived === true}`);
+    return rooms;
+  },
+  /** Open one. Handles, not ids: the producer resolves them through the agent
+      store, which owns the system < org < user collapse. */
+  async openRoom(input: { title: string; agents: string[] }): Promise<RoomRecord> {
+    return bff<RoomRecord>("/api/rooms", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: input.title, agents: input.agents }),
+    });
+  },
+  /** The room, who is in it, and what was said — the screen's one read. */
+  async room(id: string): Promise<{ room: RoomRecord; messages: RoomMessageRecord[] }> {
+    return bff<{ room: RoomRecord; messages: RoomMessageRecord[] }>(
+      `/api/rooms/${encodeURIComponent(id)}`);
+  },
+  /** Rename, or file away. */
+  async updateRoom(id: string, patch: { title?: string; archived?: boolean }): Promise<RoomRecord> {
+    return bff<RoomRecord>(`/api/rooms/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(patch),
     });
   },
   /**
-   * M47 — the editor's save. `patch` carries ONLY the fields the person
-   * changed (the org-form precedent: diff-based send, so a stale screen
-   * cannot clobber a colleague's edit with old values it never touched).
-   * `instructions` never reads back over the wire — absent here means KEEP,
-   * which is the platform's patch contract and the only honest option for a
-   * write-only field.
+   * The person speaks, and the room answers — SSE, TURN by turn.
+   *
+   * The first frame is the person's OWN message, echoed back from the row
+   * that was written before the stream opened; the screen adopts it rather
+   * than keeping a local copy, so what is on screen is what is in the
+   * database. `locale` rides because the room answers in the interface
+   * language, exactly as the assistant does.
    */
-  async updateAgent(id: string, patch: Partial<{
-    name: string;
-    description: string;
-    instructions: string;
-    model: string | null;
-    tools: string[];
-    icon: string;
-    color: string;
-    web: boolean;
-  }>): Promise<AgentCard> {
-    return bff<AgentCard>(`/api/agents/${encodeURIComponent(id)}`, {
-      method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(patch),
-    });
-  },
-  /** M47 — what an agent carries, for the overview that opens with it. */
-  async agentWorkflows(id: string): Promise<AgentWorkflowLink[]> {
-    const { workflows } = await bff<{ workflows: AgentWorkflowLink[] }>(
-      `/api/agents/${encodeURIComponent(id)}/workflows`);
-    return workflows;
-  },
-  /** M47 — whole-set write (the producer's contract); answers the set as it
-      now stands, so the caller adopts the server's truth rather than its own. */
-  async setAgentWorkflows(id: string, workflowIds: string[]): Promise<AgentWorkflowLink[]> {
-    const { workflows } = await bff<{ workflows: AgentWorkflowLink[] }>(
-      `/api/agents/${encodeURIComponent(id)}/workflows`, {
-        method: "PUT",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ workflow_ids: workflowIds }),
-      });
-    return workflows;
+  async *sayInRoom(
+    id: string,
+    body: string,
+    opts?: { locale?: string; signal?: AbortSignal },
+  ): AsyncGenerator<RoomEvent> {
+    yield* streamEvents<RoomEvent>(
+      `/api/rooms/${encodeURIComponent(id)}/messages`,
+      { body, ...(opts?.locale ? { locale: opts.locale } : {}) },
+      opts?.signal,
+    );
   },
   // ---- the task board (0144) ---------------------------------------------
   async taskBoard(opts?: { archived?: boolean }): Promise<{
@@ -2464,7 +2483,7 @@ export const api = {
        chip — a control that read as wired and dropped the rest). `web`
        rides only when true, so an older core sees nothing new. */
     try {
-      yield* streamAssistant(
+      yield* streamEvents<AgentEvent>(
         '/api/assistant/ask',
         {
           question,
@@ -2587,7 +2606,7 @@ export const api = {
     sessionId: string,
     opts?: { model?: string; signal?: AbortSignal; locale?: string },
   ): AsyncGenerator<AgentEvent> {
-    yield* streamAssistant(
+    yield* streamEvents<AgentEvent>(
       `/api/assistant/sessions/${sessionId}/regenerate`,
       { model: opts?.model, ...(opts?.locale ? { locale: opts.locale } : {}) },
       opts?.signal,

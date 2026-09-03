@@ -81,7 +81,6 @@ const REMAINING: Record<string, number> = {
      by the shape of the ternary is exactly what a false-positive factory
      does, so it stays on the list with its reason. */
   "components/platform/MeetingPage.tsx": 1,
-  "components/platform/AgentOverviewPanel.tsx": 2,
   // audit finding, 2026-09-02: IntegrationDetail.tsx LEFT this list — its one
   // entry made the WHOLE page wait on api.connectors() although the icon,
   // name and description come from the catalogue; the header renders at once

@@ -33,6 +33,22 @@ export type {
   TaskLabelRecord, TaskLabelColor, TaskEventRecord, TaskEventKind, OrgPersonRecord,
 } from "@echo/core/wire";
 export type { PlatformAuditEntry, PlatformOrganization, PlatformOverview, PlatformPage, PlatformUser };
+/*
+ * db/0164 — the rooms, INHERITED from the producer rather than described here.
+ *
+ * `RoomEvent` is the one that matters: it is a stream vocabulary the thread
+ * switches on, and the last hand-written stream union in this file invented
+ * four members of `CallStatus` that had never existed. A room's turn events
+ * are `message | working | turn_failed | bounded | done` because core/'s
+ * rooms.ts says so, and a rename there is a compile error here instead of a
+ * frame the reducer silently drops.
+ *
+ * Only what this app consumes is re-exported. `RoomSubjectKind` stays in
+ * core's wire — it travels inside `RoomRecord` either way, and a name
+ * re-exported here that nothing imports is the producer-with-no-consumer
+ * shape at its smallest.
+ */
+export type { RoomRecord, RoomMessageRecord, RoomAgentCard, RoomEvent } from "@echo/core/wire";
 
 // ---- org & people (M2, M15) -------------------------------------------------
 
@@ -1216,19 +1232,6 @@ export interface OrgSessionRow extends AuthSessionRow {
      one screen calling someone by a different name than every other */
   display_name: string;
   display_name_en?: string | null;
-}
-
-/**
- * M47 — one workflow an agent carries (`GET /v1/agents/:id/workflows`).
- * Core returns this shape inline from `agentWorkflows()` in
- * agent-store.ts rather than exporting a name for it, so this is a
- * description of the producer's wire, not a browser-side invention —
- * the shape is asserted against a producer-shaped fixture in the tests.
- */
-export interface AgentWorkflowLink {
-  id: string;
-  handle: string;
-  name: string;
 }
 
 /**

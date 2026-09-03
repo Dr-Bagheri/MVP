@@ -164,6 +164,9 @@ export const TRAIL: Readonly<Record<string, TrailEntry>> = {
      dashboard */
   "/conversations": { label: "conversations.title", parent: "/assistant" },
   "/agents": { label: "platform.agents" },
+  /** db/0164 — one ROOM. The leaf is the room's own title (entity), supplied
+   *  by the page: a room is a thing a person named, so the crumb is data. */
+  "/agents/[id]": { entity: true, parent: "/agents" },
   "/workflows": { label: "platform.workflows" },
   /** M41 P1 — one run's ledger; the leaf is the workflow's name (entity). */
   "/workflows/runs/[id]": { entity: true, parent: "/workflows" },
