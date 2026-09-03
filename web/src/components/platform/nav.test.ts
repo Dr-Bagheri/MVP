@@ -107,8 +107,21 @@ describe("activeNavHref", () => {
     expect(activeNavHref("/meetings")).toBe("/meetings");
   });
 
-  it("the hub matches exactly, never by prefix", () => {
-    expect(activeNavHref("/assistant")).toBe("/assistant");
+  it("lights NOTHING on the assistant, because the menu no longer offers it", () => {
+    /*
+     * 2026-09-03: the assistant left the nav list — it is the rail's green
+     * primary now, and a product whose main verb is "ask" should not also
+     * list asking as a row further down. So nothing lights on /assistant, and
+     * that is the correct answer rather than a gap: a lit row would name a
+     * destination this menu does not have.
+     *
+     * The CONTROL is the second line. "Undefined" is also what a broken
+     * resolver returns for everything, so an address that must still resolve
+     * is asserted beside it — without that this test passes against a
+     * function that has stopped working entirely.
+     */
+    expect(activeNavHref("/assistant")).toBeUndefined();
     expect(activeNavHref("/somewhere")).toBeUndefined();
+    expect(activeNavHref("/meetings")).toBe("/meetings");
   });
 });

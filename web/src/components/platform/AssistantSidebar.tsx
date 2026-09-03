@@ -183,6 +183,24 @@ const SIDEBAR_TOP = `${SCAFFOLD.topBarHeight / 16}rem`;
  */
 export function sidebarIsSilentOn(pathname: string): boolean {
   const route = pathname.replace(/^\/(fa|en)(?=\/|$)/, "") || "/";
+  /*
+   * THE PAGE IS ALREADY THE ASSISTANT (user directive, 2026-09-03: "one
+   * exception in platform — that in assistant page there is no need for
+   * assistant side bar on the page, so remove it there").
+   *
+   * This is a different reason from every other line here. The rest are
+   * silent because the platform SHELL does not render there, so there is no
+   * content column to step aside and a fixed strip would lie over the page.
+   * /assistant is silent because it is the same conversation at full width: a
+   * strip beside it offering to open a second copy is a door into the room
+   * you are standing in.
+   *
+   * And it is the ONE surface where that is true. /agents is a room of
+   * agents, not this conversation; /workflows and /integrations are ABOUT the
+   * assistant rather than being it — the orb was once silent on all of them
+   * and that was too wide.
+   */
+  if (/^\/assistant(\/|$)/.test(route)) return true;
   if (/^\/platform(\/|$)/.test(route)) return true;
   if (/^\/join(\/|$)/.test(route)) return true;
   return /^\/(sign-in|sign-up|reset|forgot|pending|suspended)(\/|$)/.test(route);

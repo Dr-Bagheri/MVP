@@ -6,17 +6,21 @@ import { sidebarIsSilentOn } from "./AssistantSidebar";
 /**
  * Where the assistant sidebar appears, and where it must not.
  *
- * This replaces `orbSilence.test.ts`, and the rule it checks is a smaller one
- * than the orb's. The orb's list had three reasons in it; the sidebar's has
- * one: **it is silent exactly where the platform shell does not render.**
+ * This replaces `orbSilence.test.ts`, and the rule it checks has TWO reasons
+ * where the orb's had three:
  *
- * The clause that went is the assistant's own surfaces (`/assistant`,
- * `/conversations`, `/workflows`, `/agents`, `/integrations`). The orb was
- * silent there because "an orb is a second door to the room you are standing
- * in — one whose panel covers the thing it duplicates". A docked column does
- * not cover what it sits beside; the directive of 2026-09-03 is "in all
- * pages"; and the sidebar is now where AGENTS POST, so silencing it on
- * `/agents` would hide an agent's own message on the page about that agent.
+ *  1. **the platform shell does not render there** — the auth pages, the guest
+ *     door, the vendor console. No content column to step aside, so a fixed
+ *     strip would lie over the page rather than beside it.
+ *  2. **the page IS this conversation** — /assistant alone. A strip there
+ *     offers to open a second copy of what fills the screen (user directive,
+ *     2026-09-03: "in assistant page there is no need for assistant side bar").
+ *
+ * What went is the orb's WIDER version of reason 2: it was silent on
+ * `/conversations`, `/workflows`, `/agents` and `/integrations` too, because
+ * "an orb is a second door to the room you are standing in — one whose panel
+ * covers the thing it duplicates". A docked column does not cover what it sits
+ * beside, and those surfaces are ABOUT the assistant rather than being it.
  *
  * The negative control is the point of the file — a predicate that only ever
  * said "silent" would satisfy every positive assertion above it and be
@@ -43,11 +47,25 @@ describe("sidebarIsSilentOn", () => {
     }
   });
 
-  it("SPEAKS on the assistant's own surfaces now — the clause the orb had", () => {
-    /* the change this pass makes, asserted as a change rather than left to be
-       inferred from the absence of an entry */
+  it("is silent on /assistant ALONE among the assistant's surfaces", () => {
+    /*
+     * TWO CHANGES, one line apart, and asserting them together is the point.
+     *
+     * The orb was silent on every assistant-adjacent surface, on the reasoning
+     * that it was "a second door to the room you are standing in". A docked
+     * column is not a door, so the sidebar SPEAKS on conversations, workflows,
+     * agents and integrations — they are ABOUT the assistant rather than being
+     * it.
+     *
+     * /assistant is the exception the user named (2026-09-03): that page IS
+     * this conversation at full width, so a strip beside it would offer to
+     * open a second copy of what is already on screen. One surface, and the
+     * neighbours below are what stop that becoming the orb's over-wide rule
+     * again.
+     */
+    expect(sidebarIsSilentOn("/fa/assistant"), "/fa/assistant").toBe(true);
+    expect(sidebarIsSilentOn("/en/assistant"), "/en/assistant").toBe(true);
     for (const route of [
-      "/fa/assistant",
       "/en/conversations",
       "/fa/workflows",
       "/en/workflows/draft-email-replies",

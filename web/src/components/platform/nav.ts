@@ -79,7 +79,16 @@ export const NAV_PRIMARY: readonly NavItem[] = [
   /* 0144 — the task board (the reference adoption). Rail only: M22's
      four-item bar ceiling has no free slot, and tasks are a desk surface. */
   { href: "/tasks", key: "tasks", inBar: false },
-  { href: "/assistant", key: "assistant", inBar: false },
+  /* THE ASSISTANT LEFT THIS LIST (user directive, 2026-09-03: "change [the
+     green button] to the assistant and remove the assistant access in the
+     menu"). It is the rail's PRIMARY action now — the green button at the top
+     — and a product whose main verb is "ask" should not also list asking as a
+     row further down. The address, the trail entry and every bookmark are
+     unchanged; only this row went.
+
+     `activeNavHref` therefore matches nothing on /assistant, so no row lights
+     there — correct, since the lit row would name a destination the menu no
+     longer offers. */
   /*
    * Workflows, Integrations and Agents came OUT of the assistant's section
    * menu and onto the rail (user directive): they are surfaces of their own,

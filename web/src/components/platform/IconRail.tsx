@@ -10,7 +10,7 @@ import { personName } from "@/lib/format";
 import { Avatar } from "@/components/Avatar";
 import { signOutThisDevice } from "@/lib/signOut";
 import { useLocale } from "next-intl";
-import { IconOpen, IconPlus } from "@/components/icons";
+import { IconChevronEnd, IconChevronRight, IconOpen, IconSparkle } from "@/components/icons";
 import { NAV_PRIMARY, NAV_UTILITY, activeNavHref, type NavItem } from "./nav";
 import { EchoMark, NAV_ICON } from "./icons";
 
@@ -37,6 +37,9 @@ import { EchoMark, NAV_ICON } from "./icons";
  * left, and `dir` resolves it with no mirroring logic. Inline-*end* is the
  * LEFT edge in RTL — learned by rendering it wrong once; do not "fix" it.
  */
+/** the person's own choice of menu width, remembered per browser */
+const RAIL_KEY = "neurai-rail-compact";
+
 export function IconRail() {
   const t = useTranslations("platform");
   const locale = useLocale();
@@ -45,6 +48,30 @@ export function IconRail() {
   useEffect(() => {
     void api.me().then(setMe).catch(() => setMe(null));
   }, []);
+
+  /**
+   * TWO STATES (user directive, 2026-09-03: "make the side menu two stage of
+   * open and compact — in the compact only icons will be shown").
+   *
+   * Open is the default and the remembered choice is read in an EFFECT, not
+   * in `useState`: the server has no localStorage, and a value read during
+   * render would make the first paint disagree with the markup the server
+   * sent. Open is also the safe direction — a menu whose labels fail to
+   * appear is worse than one that starts wide.
+   */
+  const [compact, setCompact] = useState(false);
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(RAIL_KEY) === "1") setCompact(true);
+    } catch { /* storage unavailable — open, which is the safe default */ }
+  }, []);
+  function toggleCompact(): void {
+    setCompact((prev) => {
+      const next = !prev;
+      try { localStorage.setItem(RAIL_KEY, next ? "1" : "0"); } catch { /* fine */ }
+      return next;
+    });
+  }
 
   const activeHref = activeNavHref(pathname);
 
@@ -58,13 +85,20 @@ export function IconRail() {
         <span className="grid w-6 shrink-0 place-items-center" aria-hidden>
           {nav.key === "echo" ? <EchoMark size={18} /> : Icon ? <Icon width={16} height={16} /> : null}
         </span>
-        <span className="truncate text-sm">{label}</span>
+        {/* COMPACT DROPS THE WORD, NOT THE NAME. The row keeps `title` and
+            `aria-label` below, so the destination is still announced to a
+            screen reader and still named on hover — a menu of unlabelled
+            glyphs that is also unlabelled to assistive technology is not
+            compact, it is unusable. */}
+        {compact ? null : <span className="truncate text-sm">{label}</span>}
       </>
     );
     /* rounded-lg = the 12px the reference gives a menu row; xl (16) is
        for a list card, and using it here made the rail read as a stack of
        tiles rather than a menu */
-    const className = `flex h-10 items-center gap-2.5 rounded-lg px-3 transition-colors duration-150 ${
+    const className = `flex h-10 items-center rounded-lg transition-colors duration-150 ${
+      compact ? "justify-center px-0" : "gap-2.5 px-3"
+    } ${
       active
         ? "bg-accent-soft font-semibold text-accent"
         : "text-fg-muted hover:bg-surface-2 hover:text-fg"
@@ -73,11 +107,11 @@ export function IconRail() {
     // the GitHub entry leaves the app — a plain anchor, or next-intl would
     // locale-prefix an external URL
     return external ? (
-      <a key={nav.key} href={nav.href} target="_blank" rel="noreferrer noopener" className={className}>
+      <a key={nav.key} href={nav.href} target="_blank" rel="noreferrer noopener" title={label} aria-label={label} className={className}>
         {content}
       </a>
     ) : (
-      <Link key={nav.key} href={nav.href} aria-current={active ? "page" : undefined} className={className}>
+      <Link key={nav.key} href={nav.href} aria-current={active ? "page" : undefined} title={label} aria-label={label} className={className}>
         {content}
       </Link>
     );
@@ -92,10 +126,16 @@ export function IconRail() {
     <nav
       aria-label={t("primaryNav")}
       // `border-e` IS the inline-end border (Tailwind's logical utility)
-      className="hidden w-60 shrink-0 flex-col gap-3 border-e border-border bg-surface px-3 py-3 md:flex"
+      className={`hidden shrink-0 flex-col gap-3 border-e border-border bg-surface py-3 transition-[width] duration-150 md:flex ${
+        compact ? "w-16 px-2" : "w-60 px-3"
+      }`}
     >
-      {/* ── the workspace ────────────────────────────────────────────── */}
-      <div className="flex items-center gap-2.5 rounded-2xl border border-border bg-surface p-2.5 shadow-card">
+      {/* ── the workspace, and the width toggle ──────────────────────── */}
+      <div
+        className={`flex items-center rounded-2xl border border-border bg-surface shadow-card ${
+          compact ? "justify-center p-1.5" : "gap-2.5 p-2.5"
+        }`}
+      >
         <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-surface-2">
           <Image
             src="/brand/neurai-mark.png"
@@ -114,7 +154,8 @@ export function IconRail() {
             className="neurai-mark-light h-5 w-5 object-contain"
           />
         </span>
-        <span className="min-w-0">
+        {compact ? null : (
+        <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-bold text-fg">
             {me?.org_name ?? t("name")}
           </span>
@@ -126,18 +167,64 @@ export function IconRail() {
               unchanged and the caption now scales with everything beside it. */}
           <span className="block text-group-label text-fg-subtle">{t("workspace")}</span>
         </span>
+        )}
+        {/* THE TOGGLE lives with the workspace rather than at the foot: it is
+            a fact about this menu, and the foot belongs to the person. In
+            compact it drops out entirely — a 64px column has no room for a
+            second control beside the mark, and the button below the mark is
+            the one that comes back. */}
+        {compact ? null : (
+          <button
+            type="button"
+            className="btn btn-icon shrink-0 text-fg-subtle hover:bg-surface-2 hover:text-fg"
+            aria-label={t("railCompact")}
+            title={t("railCompact")}
+            aria-expanded
+            onClick={toggleCompact}
+          >
+            <IconChevronEnd width={14} height={14} />
+          </button>
+        )}
       </div>
 
-      {/* ── the one big thing to do ──────────────────────────────────── */}
+      {/* the way BACK to the full menu, when there is no room beside the
+          workspace mark for it */}
+      {compact ? (
+        <button
+          type="button"
+          className="btn btn-icon mx-auto text-fg-subtle hover:bg-surface-2 hover:text-fg"
+          aria-label={t("railExpand")}
+          title={t("railExpand")}
+          aria-expanded={false}
+          onClick={toggleCompact}
+        >
+          <IconChevronRight width={14} height={14} />
+        </button>
+      ) : null}
+
+      {/* ── THE ONE BIG THING, and it is the assistant now ───────────────
+          User directive, 2026-09-03: "for the green button in the menu with
+          text new meeting change it to the assistant, and remove the
+          assistant access in the menu".
+
+          One door, in the most prominent place, and the row it used to have
+          further down is gone (nav.ts) — a product whose primary action is
+          "ask" should not also list asking as the fourth item in a list.
+          Starting a meeting is still one press from the meetings screen,
+          which is where somebody who wants a meeting already is. */}
       <Link
-        href="/meetings?new=1"
+        href="/assistant"
+        title={t("assistant")}
+        aria-label={t("assistant")}
         /* the rail's one primary action goes through `.btn` like every other
            primary in the product. It was the most prominent button on screen
            and the last one still choosing its own height and corner. */
-        className="btn w-full bg-primary text-on-primary shadow-accent hover:opacity-90"
+        className={`btn bg-primary text-on-primary shadow-accent hover:opacity-90 ${
+          compact ? "w-full px-0" : "w-full"
+        }`}
       >
-        <IconPlus width={16} height={16} />
-        {t("newMeeting")}
+        <IconSparkle width={16} height={16} />
+        {compact ? null : t("assistant")}
       </Link>
 
       {/* ── the destinations ─────────────────────────────────────────── */}
@@ -153,7 +240,11 @@ export function IconRail() {
           session — one nested inside the other is a click target that means
           two things depending on the pixel. */}
       {me !== null ? (
-        <div className="flex items-center gap-1.5 rounded-2xl border border-border p-2.5">
+        <div
+          className={`flex items-center rounded-2xl border border-border ${
+            compact ? "justify-center p-1.5" : "gap-1.5 p-2.5"
+          }`}
+        >
           <Link
             href="/profile"
             className="-m-1 flex min-w-0 flex-1 items-center gap-2.5 rounded-xl p-1 transition-colors hover:bg-surface-2"
