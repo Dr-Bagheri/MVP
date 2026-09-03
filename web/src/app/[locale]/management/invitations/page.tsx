@@ -5,10 +5,11 @@ import { useLocale, useTranslations } from "next-intl";
 import { api, BffError } from "@/api/client";
 import { useRefreshEpoch } from "@/lib/refreshBus";
 import type { Invitation, MintedInvitation, Role, User } from "@/api/types";
-import { Pagination, usePaged } from "@/components/Pagination";
+import { IconTrash } from "@/components/icons";
 import { ManagementPane } from "@/components/platform/ManagementPane";
 import { ConfirmDialog } from "@/components/rowActions";
 import { PageHeader } from "@/components/scaffold";
+import { DataTable } from "@/components/DataTable";
 import { Card, Chip } from "@/components/ui";
 import { formatDate } from "@/lib/format";
 
@@ -65,7 +66,6 @@ export default function InvitationsPage() {
   const open = invitations.filter(
     (inv) => !inv.redeemed_at && !inv.revoked_at && new Date(inv.expires_at) >= new Date(),
   );
-  const { page, setPage, pageCount, visible } = usePaged(open);
 
   /**
    * The revoke, lifted out of its button so the dialog owns the write.
@@ -195,7 +195,7 @@ export default function InvitationsPage() {
               {me?.role === "owner" ? <option value="admin">{tAdmin("roleAdmin")}</option> : null}
             </select>
             <button
-              className="btn-primary h-10 min-h-0 px-4 text-sm"
+              className="btn bg-accent font-semibold text-on-accent"
               disabled={busy || !inviteEmail.trim()}
               onClick={() => void issueInvitation()}
             >
@@ -203,39 +203,46 @@ export default function InvitationsPage() {
             </button>
           </div>
 
-          {open.length === 0 ? (
-            <p className="text-sm text-fg-muted">{t("noInvitations")}</p>
-          ) : (
-            <>
-            <ul className="divide-y divide-border">
-              {visible.map((inv) => (
-                <li key={inv.id} className="flex flex-wrap items-center gap-3 py-2.5">
-                  <span className="ltr min-w-0 flex-1 truncate text-sm text-fg">{inv.email}</span>
-                  <Chip tone="neutral">
-                    {inv.role === "admin" ? tAdmin("roleAdmin") : tAdmin("roleMember")}
-                  </Chip>
-                  <Chip tone="success">{t("inviteState_open")}</Chip>
-                  <span className="text-xs text-fg-muted">
-                    {formatDate(inv.expires_at, locale)}
-                  </span>
-                  {/* revoking is terminal by design — D23's terms are
-                      immutable, so "change your mind" means issuing a NEW
-                      invitation, and the person's link dies the moment this
-                      lands. That is a destructive act, so it asks first
-                      (the platform rule; confirm.guard.test.ts). */}
-                  <button
-                    className="text-xs text-fg-muted underline-offset-2 hover:underline"
-                    disabled={busy}
-                    onClick={() => setConfirmRevoke(inv)}
-                  >
-                    {t("inviteRevoke")}
-                  </button>
-                </li>
-              ))}
-            </ul>
-            <Pagination page={page} pageCount={pageCount} onPage={setPage} />
-            </>
-          )}
+          {/* THE PLATFORM'S TABLE (audit finding, 2026-09-02): this list was
+              hairline-divided <li> rows with an underlined text link to
+              revoke and its own pager — a second list anatomy beside the
+              members table. DataTable pages by the house rule on its own,
+              puts revoke on the row's menu where every other destructive
+              act lives, and wears the same card rows as every other list. */}
+          <DataTable
+            hideHeader
+            rows={open}
+            rowKey={(inv) => inv.id}
+            empty={<p className="text-sm text-fg-muted">{t("noInvitations")}</p>}
+            menuItems={(inv) => [{
+              key: "revoke",
+              label: t("inviteRevoke"),
+              icon: <IconTrash width={14} height={14} />,
+              danger: true,
+              disabled: busy,
+              /* revoking is terminal by design — D23's terms are immutable,
+                 so "change your mind" means issuing a NEW invitation; it
+                 asks first (the platform rule; confirm.guard.test.ts) */
+              onSelect: () => setConfirmRevoke(inv),
+            }]}
+            columns={[
+              {
+                key: "email", header: t("inviteEmailPlaceholder"),
+                cell: (inv) => <span className="ltr block truncate text-sm text-fg">{inv.email}</span>,
+              },
+              {
+                key: "role", header: tAdmin("role"),
+                cell: (inv) => (
+                  <Chip tone="neutral">{inv.role === "admin" ? tAdmin("roleAdmin") : tAdmin("roleMember")}</Chip>
+                ),
+              },
+              { key: "state", header: t("inviteState_open"), cell: () => <Chip tone="success">{t("inviteState_open")}</Chip> },
+              {
+                key: "expires", header: t("inviteExpires"), className: "text-xs text-fg-muted",
+                cell: (inv) => formatDate(inv.expires_at, locale),
+              },
+            ]}
+          />
         </Card>
 
         {/* the platform's one destructive-action dialog; the address is what

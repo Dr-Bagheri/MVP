@@ -1921,7 +1921,8 @@
     "cancel": "انصراف",
     "colOnline": "آنلاین",
     "onlineYes": "آنلاین",
-    "onlineNo": "آفلاین"
+    "onlineNo": "آفلاین",
+    "inviteExpires": "انقضا"
   },
   "settings": {
     "title": "تنظیمات",
@@ -2244,7 +2245,8 @@
     "done": "تمام شد",
     "on": "فعال",
     "off": "غیرفعال",
-    "add": "افزودن"
+    "add": "افزودن",
+    "delete": "حذف"
   },
   "security": {
     "passwordLabel": "گذرواژه",
@@ -2699,7 +2701,9 @@
     "column_backlog": "بک‌لاگ",
     "column_todo": "برای انجام",
     "column_doing": "در حال انجام",
-    "column_done": "انجام‌شده"
+    "column_done": "انجام‌شده",
+    "removeItemBody": "این مورد از چک‌لیست برداشته می‌شود و قابل بازگردانی نیست.",
+    "removeItemConfirm": "حذف"
   },
   "meetings": {
     "title": "جلسات",
@@ -3005,6 +3009,7 @@
     "itemAddLabel_risk": "افزودن ریسک",
     "itemAddLabel_entity": "افزودن موجودیت",
     "convertRemainingToTasks": "تبدیل همه باقی‌مانده‌ها به تسک",
-    "audioSpeed": "سرعت پخش"
+    "audioSpeed": "سرعت پخش",
+    "attachmentRemoveBody": "این فایل از جلسه برداشته می‌شود و قابل بازگردانی نیست."
   }
 }

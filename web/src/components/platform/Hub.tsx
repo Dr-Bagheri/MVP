@@ -929,14 +929,12 @@ export function Hub() {
        * control that matters where the hand already is, and the empty
        * space above it is the point rather than somewhere to put things.
        */
-      /* the TABLE width (user directive, 2026-08-27: "as large as the
-         tables"). `max-w-3xl` was the outer cap, so widening the composer
-         alone changed nothing — the child could not exceed its parent, which
-         is why this line and not just that one. */
-      /* the page rhythm's gutters and top, from the theme. The BOTTOM stays
-         `pb-6` rather than the page's `pb-page-bottom`: the composer is
-         sticky at the foot, and 64px under it would be dead space the
-         conversation has to scroll past on every turn. */
+      /* WIDTH, GUTTERS AND RHYTHM ARE THE PAGE'S NOW (2026-09-02): the
+         assistant page renders this inside PageContainer, which owns the
+         column and the padding. Two earlier notes here — the table-width
+         cap and the sticky-composer bottom — described classes this root
+         no longer carries; the bottom lives on the container as a stated
+         override for the same sticky-composer reason. */
       /*
        * THE ASSISTANT'S OWN SCROLL (user directive, 2026-08-28, the Sana
        * shape: "the scroll is just for the prompt and its answers, the page
@@ -968,7 +966,12 @@ export function Hub() {
        * scroller (below) is the only thing that scrolls, and it wears
        * `scroll-quiet`, which is the thin bar this platform uses everywhere.
        */
-      className="relative isolate mx-auto flex h-full w-full max-w-content-small flex-col overflow-hidden px-page-inline pb-6 pt-page-sm md:px-page-inline-md md:pt-page"
+      /* NO COLUMN OF ITS OWN any more (audit finding, 2026-09-02): the
+         assistant page renders this inside <PageContainer width="small">
+         like every other surface, so the column, the gutters and the top
+         padding are the container's. Drawing them here as well put the
+         toolbar and the content in two different columns. */
+      className="relative isolate flex h-full min-h-0 w-full flex-col overflow-hidden"
     >
       {/* the conversation controls — visible whenever we are not idle */}
       {!idle ? (

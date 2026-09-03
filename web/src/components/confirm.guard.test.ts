@@ -135,7 +135,20 @@ const localCallSite = (name: string) => new RegExp(`(^|[^.\\w])${name}\\s*\\(`, 
  */
 const wiredStraightToPress = (name: string) =>
   new RegExp(
-    `on(?:Click|Select)\\s*[=:]\\s*\\{?\\s*(?:async\\s*)?\\(\\s*\\)\\s*=>\\s*(?:void\\s+|await\\s+)?api\\s*\\.\\s*${name}\\s*\\(`,
+    /*
+     * `(?:\{\s*)?` after the arrow (2026-09-02): a BLOCK-bodied handler whose
+     * first statement is the destructive call —
+     *
+     *     onClick={() => {
+     *       void api.deleteMeetingAttachment(meeting.id, file.id)
+     *
+     * — is the same defect wearing braces, and this pattern never matched
+     * it. The meeting plan's attachment trash shipped exactly that shape
+     * with no dialog, and the design audit found it, not this guard. A
+     * guard that only sees the one-liner is a guard that teaches people to
+     * add a newline.
+     */
+    `on(?:Click|Select)\\s*[=:]\\s*\\{?\\s*(?:async\\s*)?\\(\\s*\\)\\s*=>\\s*(?:\\{\\s*)?(?:void\\s+|await\\s+)?api\\s*\\.\\s*${name}\\s*\\(`,
   );
 
 const clientText = readFileSync(CLIENT, "utf8");
@@ -271,6 +284,38 @@ describe("destructive controls confirm, in the theme's one dialog", () => {
     expect(destructiveCallsIn(staged)).toContain("deleteCall");
     expect(confirmsHere(staged)).toBe(false);
     expect(wiredStraightToPress("deleteCall").test(staged)).toBe(true);
+  });
+
+  it("flags the same press wearing braces — the block-bodied handler", () => {
+    /*
+     * The shape that shipped past this guard (2026-09-02): the meeting
+     * plan's attachment trash was `onClick={() => {` NEWLINE `void
+     * api.deleteMeetingAttachment(` — the destructive call was the handler's
+     * first and only statement, and the one-line pattern never saw it. The
+     * design audit found it; the guard had not. Staged here so the widened
+     * pattern is proven on the exact shape, and so a future narrowing that
+     * "cleans up" the regex fails for its own reason.
+     */
+    const staged = `
+      import { api } from "@/api/client";
+      export function Bad({ id }: { id: string }) {
+        return (
+          <button
+            onClick={() => {
+              void api.deleteCall(id, "why")
+                .then(reload)
+                .catch(() => undefined);
+            }}
+          >x</button>
+        );
+      }
+    `;
+    expect(wiredStraightToPress("deleteCall").test(staged)).toBe(true);
+    /* and the CORRECT shape — the write inside the dialog's onConfirm — is
+       still untouched, which is what keeps this from being a false-positive
+       factory */
+    const fine = `onConfirm={() => { void api.deleteCall(id, "why"); }}`;
+    expect(wiredStraightToPress("deleteCall").test(fine)).toBe(false);
   });
 
   it("does NOT flag the confirmed shape — the discriminating half", () => {

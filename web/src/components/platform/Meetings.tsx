@@ -10,7 +10,7 @@ import { Overlay } from "./Overlay";
 import { Select } from "@/components/Select";
 import { DateField, TimeField } from "@/components/DateTimeFields";
 import {
-  IconArchive, IconCalendar, IconCheck, IconChevronRight, IconClose, IconDots,
+  IconArchive, IconCalendar, IconCheck, IconChevronRight, IconClose,
   IconFolder, IconMic, IconPencil, IconPlus, IconTrash, IconUpload, IconVideo,
 } from "@/components/icons";
 import { ConfirmDialog, KebabMenu } from "@/components/rowActions";
@@ -101,7 +101,6 @@ export function Meetings() {
   const [view, setView] = useState<"list" | "calendar">("list");
   const [filter, setFilter] = useState<"all" | "ahead" | "held" | "archived">("all");
   const [topic, setTopic] = useState<string>("all");
-  const [menu, setMenu] = useState<string | null>(null);
   const [condemned, setCondemned] = useState<MeetingRecord | null>(null);
 
   const load = useCallback(() => {
@@ -375,66 +374,54 @@ export function Meetings() {
                   {m.minutes_closed_at !== null ? t("stageClosed")
                     : m.call_id !== null ? t("tabReview") : t("stage_pre")}
                 </span>
-                <button
-                  type="button"
-                  aria-label={t("rowOptions")}
-                  onClick={(e) => { e.stopPropagation(); setMenu((cur) => (cur === m.id ? null : m.id)); }}
-                  className="tap grid h-8 w-8 shrink-0 place-items-center rounded-lg text-fg-subtle hover:text-fg"
-                >
-                  <IconDots width={14} height={14} />
-                </button>
+                {/* THE THEME'S KEBAB, not a hand-rolled panel (audit finding,
+                    2026-09-02). The panel this replaced had learned to
+                    position itself, close on outside press and Escape, and
+                    step its topic list — every one a thing KebabMenu already
+                    does, and the two it never reached (focus trap, arrow
+                    keys) it now gets for free. Topics are a SUB flyout with
+                    the current one carrying the check; archive and delete
+                    are ordinary items, and `danger` sorts delete to the
+                    bottom under its rule, so nobody has to remember to. */}
+                <span onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+                  <KebabMenu
+                    label={t("rowOptions")}
+                    items={[
+                      {
+                        key: "topic",
+                        label: t("moveToTopic"),
+                        icon: <IconFolder width={14} height={14} />,
+                        sub: [{ id: null as string | null, name: t("noTopic") }, ...topicRows].map((row) => ({
+                          key: row.id ?? "__none",
+                          label: row.name,
+                          /* the CURRENT topic wears the check — the menu says where
+                             the meeting IS as well as where it can go */
+                          icon: (m.topic_id ?? null) === row.id ? <IconCheck width={12} height={12} /> : null,
+                          onSelect: () => {
+                            if ((m.topic_id ?? null) === row.id) return;
+                            void api.updateMeeting(m.id, { topic_id: row.id }).then(load).catch(refusal);
+                          },
+                        })),
+                      },
+                      {
+                        key: "archive",
+                        label: m.archived ? t("unarchive") : t("archiveMeeting"),
+                        icon: <IconArchive width={14} height={14} />,
+                        onSelect: () => {
+                          void api.updateMeeting(m.id, { archived: !m.archived }).then(load).catch(refusal);
+                        },
+                      },
+                      {
+                        key: "delete",
+                        label: t("deleteMeeting"),
+                        icon: <IconTrash width={14} height={14} />,
+                        danger: true,
+                        onSelect: () => setCondemned(m),
+                      },
+                    ]}
+                  />
+                </span>
               </div>
-
-              {menu === m.id ? (
-                <div className="absolute end-2 top-14 z-40 flex w-52 flex-col rounded-xl border border-border bg-surface p-1 shadow-island">
-                  {/* MOVE TO TOPIC heads the menu, as it does in the product
-                      this was walked from: the current topic carries a check,
-                      so the menu says where the meeting IS as well as where it
-                      can go — «بدون موضوع» is one of the choices, not the
-                      absence of one */}
-                  <p className="px-2.5 pb-1 pt-1.5 text-[10px] font-medium text-fg-subtle">{t("moveToTopic")}</p>
-                  {[{ id: null as string | null, name: t("noTopic") }, ...topicRows].map((row) => (
-                    <button
-                      key={row.id ?? "__none"}
-                      type="button"
-                      onClick={() => {
-                        setMenu(null);
-                        if ((m.topic_id ?? null) === row.id) return;
-                        void api.updateMeeting(m.id, { topic_id: row.id }).then(load).catch(refusal);
-                      }}
-                      className={`tap flex h-9 items-center gap-2 rounded-lg px-2.5 text-start text-xs hover:bg-surface-2 ${
-                        (m.topic_id ?? null) === row.id ? "font-semibold text-accent" : "text-fg"
-                      }`}
-                    >
-                      <span className="w-3 shrink-0" aria-hidden>
-                        {(m.topic_id ?? null) === row.id ? <IconCheck width={12} height={12} /> : null}
-                      </span>
-                      <span className="min-w-0 flex-1 truncate">{row.name}</span>
-                    </button>
-                  ))}
-                  <span className="my-1 h-px bg-border" aria-hidden />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMenu(null);
-                      void api.updateMeeting(m.id, { archived: !m.archived })
-                        .then(load).catch(refusal);
-                    }}
-                    className="btn btn-sm w-full justify-start gap-2 font-medium text-fg hover:bg-surface-2"
-                  >
-                    <IconArchive width={12} height={12} />
-                    {m.archived ? t("unarchive") : t("archiveMeeting")}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setMenu(null); setCondemned(m); }}
-                    className="btn btn-sm w-full justify-start gap-2 font-medium text-danger hover:bg-danger/10"
-                  >
-                    <IconTrash width={12} height={12} />
-                    {t("deleteMeeting")}
-                  </button>
-                </div>
-              ) : null}
             </li>
           ))}
         </ul>

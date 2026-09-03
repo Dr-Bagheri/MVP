@@ -131,7 +131,12 @@ describe("Hub — the thread scrolls, the page does not", () => {
     const root = container.firstElementChild as HTMLElement;
     expect(root.className).toContain("overflow-hidden");
     expect(root.className).toContain("h-full");
-    expect(root.className).toContain("max-w-content-small");
+    /* the COLUMN is the page's, not the hub's (2026-09-02, the audit): the
+       assistant page renders the hub inside <PageContainer width="small">,
+       and a hub that also drew `max-w-content-small` put the toolbar and the
+       content in two different columns. So the assertion flipped: the root
+       must NOT name a width of its own. */
+    expect(root.className).not.toContain("max-w-content");
 
     const box = scroller();
     expect(box.className).toContain("overflow-y-auto");

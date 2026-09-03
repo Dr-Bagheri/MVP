@@ -1921,7 +1921,8 @@
     "cancel": "Cancel",
     "colOnline": "Online",
     "onlineYes": "Online",
-    "onlineNo": "Offline"
+    "onlineNo": "Offline",
+    "inviteExpires": "Expires"
   },
   "settings": {
     "title": "Settings",
@@ -2244,7 +2245,8 @@
     "done": "Done",
     "on": "On",
     "off": "Off",
-    "add": "Add"
+    "add": "Add",
+    "delete": "Delete"
   },
   "security": {
     "passwordLabel": "Password",
@@ -2699,7 +2701,9 @@
     "column_backlog": "Backlog",
     "column_todo": "To do",
     "column_doing": "In progress",
-    "column_done": "Done"
+    "column_done": "Done",
+    "removeItemBody": "This line will be removed from the checklist and cannot be restored.",
+    "removeItemConfirm": "Remove"
   },
   "meetings": {
     "title": "Meetings",
@@ -3005,6 +3009,7 @@
     "itemAddLabel_risk": "Add a risk",
     "itemAddLabel_entity": "Add an entity",
     "convertRemainingToTasks": "Turn all remaining into tasks",
-    "audioSpeed": "Playback speed"
+    "audioSpeed": "Playback speed",
+    "attachmentRemoveBody": "This file will be removed from the meeting and cannot be restored."
   }
 }

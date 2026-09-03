@@ -392,12 +392,11 @@ export function AuditLogs() {
             The theme's ONE table (user directive, 2026-08-28: "fix the
             table with same rule of the theme") — the hand-rolled <table>
             predated DataTable and was the last surface wearing its own
-            skin. The cells are unchanged; only the frame moved: DataTable
-            inside a Card, exactly the members table's dress.
+            skin. The cells are unchanged. The Card that used to frame it is
+            gone too (audit finding, 2026-09-02): DataTable's rows are cards
+            of their own now, and the members table renders it bare — so the
+            frame here was the one outer box left on the platform.
           */}
-          {/* !p-0 — a table brings its own cell padding, and a card's
-              padding on top of it is a second inset the rows do not share */}
-          <Card className="!p-0">
           <DataTable
             rows={visible}
             rowKey={entryKey}
@@ -486,7 +485,6 @@ export function AuditLogs() {
             ]}
           />
           <Pagination page={page} pageCount={pageCount} onPage={setPage} />
-          </Card>
 
           <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
             {cursor ? (

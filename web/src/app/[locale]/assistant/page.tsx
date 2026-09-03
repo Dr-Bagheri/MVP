@@ -3,6 +3,7 @@ import { AssistantMenu } from "@/components/platform/AssistantMenu";
 import { AssistantConversationProvider } from "@/components/platform/AssistantConversationState";
 import { Hub } from "@/components/platform/Hub";
 import { PlatformShell } from "@/components/platform/PlatformShell";
+import { PageContainer } from "@/components/scaffold";
 
 /**
  * The ASSISTANT hub — the composer screen (M22's approved anatomy), moved
@@ -53,10 +54,16 @@ export default function AssistantPage() {
             scroller carries the thread.
           */}
           <div className="flex h-full min-h-0 flex-col">
-            <AssistantMenu activeSlug="new" />
-            <div className="min-h-0 flex-1">
+            {/* ONE COLUMN for the toolbar and the hub (audit finding,
+                2026-09-02): the menu sat in the default 1240 column while the
+                hub drew its own 1040 one, so the buttons began ~100px outside
+                the column the composer began in. The hub no longer draws a
+                column of its own — this container is it, with the same 16px
+                under the toolbar every other surface has. */}
+            <AssistantMenu activeSlug="new" width="small" />
+            <PageContainer width="small" fill className="!pt-4 !pb-6">
               <Hub />
-            </div>
+            </PageContainer>
           </div>
         </AssistantConversationProvider>
       </Suspense>

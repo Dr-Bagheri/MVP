@@ -50,6 +50,8 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
   const [item, setItem] = useState("");
   const [menu, setMenu] = useState(false);
   const [confirmArchive, setConfirmArchive] = useState(false);
+  /** the checklist line awaiting the platform's are-you-sure (dialog at the foot) */
+  const [condemnedLine, setCondemnedLine] = useState<{ id: string; label: string } | null>(null);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
@@ -203,9 +205,12 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
                       <button
                         type="button"
                         aria-label={t("removeItem", { label: line.label })}
-                        onClick={() => {
-                          void api.deleteTaskChecklistItem(line.id).then(onChanged).catch(() => setFailed(true));
-                        }}
+                        /* the press ASKS; the write lives in the dialog at the
+                           foot (the platform's destructive-action rule). This
+                           was wired straight to the delete and the confirm
+                           guard only saw it once its pattern learned the
+                           block-bodied shape (2026-09-02). */
+                        onClick={() => setCondemnedLine({ id: line.id, label: line.label })}
                         className="shrink-0 text-fg-subtle opacity-0 transition-opacity hover:text-danger group-hover:opacity-100"
                       >
                         <IconTrash width={12} height={12} />
@@ -443,6 +448,25 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
             setConfirmArchive(false);
             patch({ archived: !task.archived });
             onClose();
+          }}
+        />
+      ) : null}
+
+      {/* THE PLATFORM'S ONE DESTRUCTIVE DIALOG for a checklist line (the
+          widened confirm guard's first catch, 2026-09-02). A line somebody
+          typed has no undo; the dialog names it so the person sees what they
+          are about to lose. */}
+      {condemnedLine !== null ? (
+        <ConfirmDialog
+          title={t("removeItem", { label: condemnedLine.label })}
+          body={t("removeItemBody")}
+          confirmLabel={t("removeItemConfirm")}
+          cancelLabel={t("cancel")}
+          onCancel={() => setCondemnedLine(null)}
+          onConfirm={() => {
+            const line = condemnedLine;
+            setCondemnedLine(null);
+            void api.deleteTaskChecklistItem(line.id).then(onChanged).catch(() => setFailed(true));
           }}
         />
       ) : null}

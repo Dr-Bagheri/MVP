@@ -6,6 +6,8 @@ import { api } from "@/api/client";
 import type { ServerHealth, User } from "@/api/types";
 import { SettingsPane } from "@/components/platform/SettingsPane";
 import { PageHeader } from "@/components/scaffold";
+import { DataTable } from "@/components/DataTable";
+import { SkeletonCards } from "@/components/scaffold";
 import { Card } from "@/components/ui";
 import { digits, formatTime } from "@/lib/format";
 
@@ -183,7 +185,9 @@ export default function ServerManagementPage() {
           </Card>
         ) : null}
 
-        {loading ? <p className="text-sm text-fg-muted">{t("server.loading")}</p> : null}
+        {/* the platform's loading rule: a frame in the shape of the content,
+            never a sentence that says "loading" */}
+        {loading ? <SkeletonCards count={2} height="h-28" /> : null}
 
         {health ? (
           <>
@@ -194,41 +198,42 @@ export default function ServerManagementPage() {
               ) : health.queues.items.length === 0 ? (
                 <p className="text-sm text-fg-muted">{t("server.noQueues")}</p>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[32rem] border-collapse text-sm">
-                    <thead>
-                      <tr className="border-b border-border">
-                        <th className="table-head py-2 pe-3">{t("server.colQueue")}</th>
-                        <th className="table-head py-2 pe-3">{t("server.colDepth")}</th>
-                        <th className="table-head py-2 pe-3" title={t("server.retryingHint")}>
-                          {t("server.colRetrying")}
-                        </th>
-                        <th className="table-head py-2" title={t("server.archivedHint")}>
-                          {t("server.colArchived")}
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {health.queues.items.map((queue) => (
-                        <tr key={queue.name}>
-                          <td className="ltr py-3 pe-3 font-mono text-xs text-fg">{queue.name}</td>
-                          <td className="py-3 pe-3 text-fg">{digits(queue.depth, locale)}</td>
-                          {/* the only value here that warrants attention — and
-                              only when it is non-zero. `retrying` counts work
-                              that keeps failing; `archived` counts work that
-                              finished, successfully or not, so it is never
-                              coloured as an alarm. */}
-                          <td
-                            className={`py-3 pe-3 ${queue.retrying > 0 ? "font-semibold text-warning" : "text-fg"}`}
-                          >
-                            {digits(queue.retrying, locale)}
-                          </td>
-                          <td className="py-3 text-fg-muted">{digits(queue.archived, locale)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                /* THE PLATFORM'S TABLE (audit finding, 2026-09-02): this was
+                   the one hairline-collapsed grid left in the product —
+                   beside the members list it read as a different product.
+                   Unpaged on purpose: the queue set is bounded by
+                   construction (one row per pgmq queue) and belongs on
+                   screen whole. (A JS comment, not a JSX one: an expression
+                   container is not valid as a ternary's bare consequent.) */
+                <DataTable
+                  rows={health.queues.items}
+                  rowKey={(queue) => queue.name}
+                  pageSize={null}
+                  columns={[
+                    {
+                      key: "name", header: t("server.colQueue"),
+                      cell: (queue) => <span className="ltr font-mono text-xs text-fg">{queue.name}</span>,
+                    },
+                    { key: "depth", header: t("server.colDepth"), cell: (queue) => digits(queue.depth, locale) },
+                    {
+                      key: "retrying", header: t("server.colRetrying"),
+                      /* the only value here that warrants attention — and only
+                         when it is non-zero. `retrying` counts work that keeps
+                         failing; `archived` counts work that finished,
+                         successfully or not, so it is never coloured as an alarm. */
+                      cell: (queue) => (
+                        <span className={queue.retrying > 0 ? "font-semibold text-warning" : "text-fg"}
+                          title={t("server.retryingHint")}>
+                          {digits(queue.retrying, locale)}
+                        </span>
+                      ),
+                    },
+                    {
+                      key: "archived", header: t("server.colArchived"), className: "text-fg-muted",
+                      cell: (queue) => <span title={t("server.archivedHint")}>{digits(queue.archived, locale)}</span>,
+                    },
+                  ]}
+                />
               )}
               {measuredAt(health.queues.measured_at)}
             </Card>

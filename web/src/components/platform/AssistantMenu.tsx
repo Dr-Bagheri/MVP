@@ -16,8 +16,15 @@ import { useAssistantConversation } from "./AssistantConversationState";
  */
 export function AssistantMenu({
   activeSlug,
+  width = "default",
 }: {
   activeSlug: "new" | "hub" | "history" | "workflows" | "integrations" | "agents";
+  /** the column the toolbar sits in — the SAME column as the content under
+      it (audit finding, 2026-09-02: the hub is the small column and this
+      toolbar was the default one, so the buttons began ~100px outside the
+      column the composer began in — the split TwoPane had already removed
+      for Management and Settings) */
+  width?: "small" | "default";
 }) {
   const router = useRouter();
   const t = useTranslations("platform");
@@ -52,7 +59,7 @@ export function AssistantMenu({
      * assistant's first line, where they read as things to say rather than
      * as a menu of features.
      */
-    <PageContainer className="!pb-0">
+    <PageContainer width={width} className="!pb-0">
       <nav aria-label={t("assistantMenuLabel")} className="flex flex-wrap items-center gap-1">
         <button
           type="button"

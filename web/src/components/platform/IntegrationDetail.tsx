@@ -168,7 +168,11 @@ export function IntegrationDetail({ slug }: { slug: string }) {
   return (
     <PlatformShell>
       <>
-        <PageContainer>
+        {/* SMALL, like the overview it opens from (audit finding, 2026-09-02):
+            this is a Settings sub-page — an identity row, one table, a details
+            aside, the meeting-plan shape — and it opened at the list width, so
+            clicking a row widened the page by 200px */}
+        <PageContainer width="small">
           {entry === undefined ? (
             <Card><p className="text-sm text-fg-muted">{t("detailMissing")}</p></Card>
           ) : connectors === null ? null : (

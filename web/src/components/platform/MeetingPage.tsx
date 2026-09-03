@@ -9,6 +9,7 @@ import { notify } from "@/lib/notify";
 import type { Call, CallNote, Me, MeetingAgendaItem, MeetingRecord, MeetingAttachment } from "@/api/types";
 import { useCrumbTitle } from "@/components/platform/CrumbTitle";
 import { ConfirmDialog } from "@/components/rowActions";
+import { Overlay } from "@/components/platform/Overlay";
 import { AgendaEditor, MODE_ICON } from "./Meetings";
 import { InviteDialog } from "./meeting/InviteDialog";
 import { MeetingStage } from "./meeting/Stage";
@@ -516,6 +517,9 @@ function PreStage({ meeting, onPatch, locale }: {
   const t = useTranslations("meetings");
   const tCommon = useTranslations("common");
   const [editing, setEditing] = useState(false);
+  /** the attachment awaiting the platform's are-you-sure (dialog at the foot) */
+  const [condemnedFile, setCondemnedFile] = useState<{ id: string; name: string } | null>(null);
+  const [removingFile, setRemovingFile] = useState(false);
   const hostName = personName(
     { display_name: meeting.host_name ?? "", display_name_en: meeting.host_name_en },
     locale,
@@ -717,11 +721,10 @@ function PreStage({ meeting, onPatch, locale }: {
                   <button
                     type="button"
                     aria-label={t("attachmentRemove", { name: file.name })}
-                    onClick={() => {
-                      void api.deleteMeetingAttachment(meeting.id, file.id)
-                        .then(loadFiles)
-                        .catch(() => notify(tCommon("actionFailed"), "warn"));
-                    }}
+                    /* the press ASKS; the write lives in the dialog at the
+                       foot of this stage (the platform's destructive-action
+                       rule — confirm.guard.test.ts) */
+                    onClick={() => setCondemnedFile({ id: file.id, name: file.name })}
                     className="tap shrink-0 text-fg-subtle hover:text-danger"
                   >
                     <IconTrash width={12} height={12} />
@@ -831,6 +834,32 @@ function PreStage({ meeting, onPatch, locale }: {
           onCopyGuestLink={copyGuestLink}
         />
       ) : null}
+
+      {/* THE PLATFORM'S ONE DESTRUCTIVE DIALOG for an attachment (audit
+          finding, 2026-09-02). The trash press used to call the delete
+          DIRECTLY — the exact shape confirm.guard.test.ts forbids — and the
+          guard did not fire because the press was a multi-line arrow its
+          pattern never matched. A document somebody attached has no undo;
+          the dialog names the file so the person can see what they are
+          about to lose. */}
+      {condemnedFile !== null ? (
+        <ConfirmDialog
+          title={t("attachmentRemove", { name: condemnedFile.name })}
+          body={t("attachmentRemoveBody")}
+          confirmLabel={tCommon("delete")}
+          cancelLabel={tCommon("cancel")}
+          busy={removingFile}
+          onCancel={() => setCondemnedFile(null)}
+          onConfirm={() => {
+            const file = condemnedFile;
+            setRemovingFile(true);
+            void api.deleteMeetingAttachment(meeting.id, file.id)
+              .then(() => { setCondemnedFile(null); loadFiles(); })
+              .catch(() => notify(tCommon("actionFailed"), "warn"))
+              .finally(() => setRemovingFile(false));
+          }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -864,52 +893,53 @@ function EditMeetingDialog({ meeting, onPatch, onClose }: {
     onClose();
   };
 
+  /*
+   * THE PLATFORM'S ONE DIALOG SHELL (audit finding, 2026-09-02). This was a
+   * hand-rolled fixed overlay — a backdrop div with onClick, a div wearing
+   * role="dialog" — which is the shape Overlay's own header lists as
+   * lacking a focus trap, focus return, an inert background, scroll lock and
+   * Escape. NewMeetingDialog and InviteDialog both wear Overlay; this one now
+   * does too, and its fields are the theme's `.input` rather than five
+   * hand-written 40px boxes.
+   */
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg/60 p-4" onClick={onClose} role="presentation">
-      <div role="dialog" aria-modal="true" aria-label={t("edit")} onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-lg rounded-2xl border border-border bg-surface p-4 shadow-island">
-        <h2 className="mb-3 text-base font-bold text-fg">{t("edit")}</h2>
-        <div className="space-y-3">
+    <Overlay onClose={onClose} label={t("edit")} size="md">
+      <h2 className="mb-3 text-base font-bold text-fg">{t("edit")}</h2>
+      <div className="space-y-3">
+        <label className="block">
+          <span className="mb-1 block text-xs font-medium text-fg-muted">{t("fieldTitle")}</span>
+          <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} />
+        </label>
+        <div className="grid grid-cols-2 gap-2">
           <label className="block">
-            <span className="mb-1 block text-xs font-medium text-fg-muted">{t("fieldTitle")}</span>
-            <input value={title} onChange={(e) => setTitle(e.target.value)}
-              className="h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-fg outline-none focus:border-accent" />
-          </label>
-          <div className="grid grid-cols-2 gap-2">
-            <label className="block">
-              <span className="mb-1 block text-xs font-medium text-fg-muted">{t("fieldDate")}</span>
-              <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
-                className="h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-fg outline-none focus:border-accent" />
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-xs font-medium text-fg-muted">{t("fieldTime")}</span>
-              <input type="time" value={time} onChange={(e) => setTime(e.target.value)}
-                className="h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-fg outline-none focus:border-accent" />
-            </label>
-          </div>
-          <label className="block">
-            <span className="mb-1 block text-xs font-medium text-fg-muted">{t("fieldTopic")}</span>
-            <input value={topic} onChange={(e) => setTopic(e.target.value)}
-              className="h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-fg outline-none focus:border-accent" />
+            <span className="mb-1 block text-xs font-medium text-fg-muted">{t("fieldDate")}</span>
+            <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs font-medium text-fg-muted">{t("fieldDescription")}</span>
-            <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3}
-              className="w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-fg outline-none focus:border-accent" />
+            <span className="mb-1 block text-xs font-medium text-fg-muted">{t("fieldTime")}</span>
+            <input className="input" type="time" value={time} onChange={(e) => setTime(e.target.value)} />
           </label>
         </div>
-        <div className="mt-3 flex justify-end gap-2">
-          <button type="button" onClick={onClose}
-            className="tap h-10 rounded-xl border border-border bg-surface px-4 text-sm font-medium text-fg hover:bg-border">
-            {t("cancel")}
-          </button>
-          <button type="button" onClick={save} disabled={title.trim() === ""}
-            className="tap h-10 rounded-xl bg-accent px-4 text-sm font-semibold text-on-accent disabled:opacity-50">
-            {t("save")}
-          </button>
-        </div>
+        <label className="block">
+          <span className="mb-1 block text-xs font-medium text-fg-muted">{t("fieldTopic")}</span>
+          <input className="input" value={topic} onChange={(e) => setTopic(e.target.value)} />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-xs font-medium text-fg-muted">{t("fieldDescription")}</span>
+          <textarea className="input min-h-[84px] py-2" value={description} rows={3}
+            onChange={(e) => setDescription(e.target.value)} />
+        </label>
       </div>
-    </div>
+      <div className="mt-3 flex justify-end gap-2">
+        <button type="button" onClick={onClose} className="btn border border-border font-medium text-fg">
+          {t("cancel")}
+        </button>
+        <button type="button" onClick={save} disabled={title.trim() === ""}
+          className="btn bg-accent font-semibold text-on-accent disabled:opacity-50">
+          {t("save")}
+        </button>
+      </div>
+    </Overlay>
   );
 }
 
@@ -1115,7 +1145,11 @@ function PostStage({ meeting, call, me, locale, onGoHold, onChanged, onBackToMee
         />
       ) : null}
 
-      <div role="tablist" aria-label={t("stage_post")} className="flex flex-wrap items-center gap-1 border-b border-border">
+      {/* THE TOOLBAR SHAPE, not an underlined tab strip (audit finding,
+          2026-09-02): every other surface switches sections with `btn btn-sm`
+          pills, and this row was the one place still drawing a hairline with
+          a 2px underline under the active word */}
+      <div role="tablist" aria-label={t("stage_post")} className="flex flex-wrap items-center gap-1">
         {tabs.map((entry) => (
           <button
             key={entry.key}
@@ -1123,8 +1157,8 @@ function PostStage({ meeting, call, me, locale, onGoHold, onChanged, onBackToMee
             role="tab"
             aria-selected={tab === entry.key}
             onClick={() => setTab(entry.key)}
-            className={`tap -mb-px h-10 border-b-2 px-3.5 text-xs font-medium transition-colors ${
-              tab === entry.key ? "border-accent text-accent" : "border-transparent text-fg-muted hover:text-fg"
+            className={`btn btn-sm font-medium ${
+              tab === entry.key ? "bg-accent text-on-accent" : "text-fg-muted hover:bg-surface-2 hover:text-fg"
             }`}
           >
             {entry.label}

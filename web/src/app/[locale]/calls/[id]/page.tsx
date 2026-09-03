@@ -17,7 +17,7 @@ import { RichTextEditor } from "@/components/RichTextEditor";
 import {
   IconArchive, IconAsk, IconChip, IconCopy, IconDownload, IconEye, IconFileText, IconFilter, IconGavel, IconGlobe, IconMic, IconOutline, IconParagraph, IconPencil, IconPeople3, IconPlus, IconPrint, IconRedact, IconRetry, IconRows, IconShare, IconSparkle, IconTag, IconTrash, IconUsers, IconWarn, IconZap,
 } from "@/components/icons";
-import { PageContainer, SectionMenu, SectionScroller } from "@/components/scaffold";
+import { PageContainer, SectionScroller } from "@/components/scaffold";
 import { SummaryBody, parseSummary } from "@/components/echo/SummaryBody";
 import { appendLaneItem, summaryLanes, type Lane } from "@/lib/summaryLanes";
 import { faDisplay } from "@/lib/faDisplay";
@@ -171,7 +171,6 @@ export default function CallDetailPage({
   const tStatus = useTranslations("status");
   const tCalls = useTranslations("calls");
   const tCommon = useTranslations("common");
-  const tEcho = useTranslations("echo");
   const locale = useLocale();
 
   const [call, setCall] = useState<Call | null>(null);
@@ -1195,53 +1194,34 @@ export default function CallDetailPage({
   return (
     <EchoAppShell
       menu={
-        <SectionMenu
-          navLabel={t("docSections")}
-          /* the pane title names the PLACE, not the record (user directive):
-             this page lives under «ضبط‌ها», and its own crumb carries the title */
-          heading={tEcho("section.records")}
-          activeSlug={section}
-          groups={[
-            {
-              key: "doc",
-              title: t("docSections"),
-              items: [
-                {
-                  slug: "summary",
-                  href: `/calls/${id}`,
-                  label: t("summary"),
-                  icon: <IconFileText />,
-                  preventNavigation: true,
-                  onSelect: () => setSection("summary"),
-                },
-                {
-                  slug: "transcript",
-                  href: `/calls/${id}`,
-                  label: t("transcript"),
-                  icon: <IconRows />,
-                  preventNavigation: true,
-                  onSelect: () => setSection("transcript"),
-                },
-                {
-                  slug: "actions",
-                  href: `/calls/${id}`,
-                  label: t("sectionActions"),
-                  icon: <IconZap />,
-                  preventNavigation: true,
-                  onSelect: () => setSection("actions"),
-                },
-                {
-                  slug: "notes",
-                  href: `/calls/${id}`,
-                  label: t("sectionNotes"),
-                  icon: <IconTag />,
-                  preventNavigation: true,
-                  onSelect: () => setSection("notes"),
-                },
-              ],
-            },
-          ]}
-        />
+        /* THE TOOLBAR SHAPE (audit finding, 2026-09-02). EchoAppShell stacks
+           its menu ABOVE the content now, and this page was still handing it
+           the old vertical SectionMenu — so the record opened with a pane
+           heading, a group label and a column of rows sitting on top of the
+           document, while every other surface shows one row of pills. Four
+           buttons, no heading, no group title; the section is picked in
+           place, which is why these are buttons and not links. */
+        <nav aria-label={t("docSections")} className="flex flex-wrap items-center gap-1">
+          {([
+            { slug: "summary", label: t("summary"), icon: <IconFileText width={14} height={14} /> },
+            { slug: "transcript", label: t("transcript"), icon: <IconRows width={14} height={14} /> },
+            { slug: "actions", label: t("sectionActions"), icon: <IconZap width={14} height={14} /> },
+            { slug: "notes", label: t("sectionNotes"), icon: <IconTag width={14} height={14} /> },
+          ] as const).map((item) => (
+            <button
+              key={item.slug}
+              type="button"
+              aria-current={section === item.slug ? "page" : undefined}
+              onClick={() => setSection(item.slug)}
+              className={`btn btn-sm gap-1.5 font-medium ${
+                section === item.slug ? "bg-accent text-on-accent" : "text-fg-muted hover:bg-surface-2 hover:text-fg"
+              }`}
+            >
+              {item.icon}
+              {item.label}
+            </button>
+          ))}
+        </nav>
       }
     >
       {/* ONE document card (user directive, 2026-08-24): header, player,

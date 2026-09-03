@@ -169,7 +169,10 @@ describe("the names B1 chose are rendered as chosen", () => {
     // 22 archived on this queue is completed-or-failed work, not an alarm
     const archived = cells[3]!;
     expect(archived.textContent).toBe("۲۲");
-    expect(archived.className).not.toMatch(/danger|warning/);
+    /* the same query as the positive test, pointed the other way — a cell's
+       own className is the theme's and never carries a tone, so asking IT
+       would pass for a wrong version too */
+    expect(archived.querySelector("[class*='warning'],[class*='danger']")).toBeNull();
   });
 
   it("marks retrying work only when there is some", async () => {
@@ -188,7 +191,11 @@ describe("the names B1 chose are rendered as chosen", () => {
     });
     render(<ServerManagementPage />);
     const row = (await screen.findByText("echo_summarize")).closest("tr")!;
-    expect([...row.querySelectorAll("td")][2]!.className).toMatch(/warning/);
+    /* the tone sits on the element that carries the figure, not on the cell:
+       the table is DataTable now (2026-09-02, the audit), whose cells are the
+       theme's and whose CONTENT is the page's — so the query asks the cell
+       for anything warning-toned inside it, which is what a person sees */
+    expect([...row.querySelectorAll("td")][2]!.querySelector("[class*='warning']")).not.toBeNull();
   });
 });
 

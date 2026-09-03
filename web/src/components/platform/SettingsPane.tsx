@@ -84,11 +84,15 @@ export function useSettingsGroups(): PaneGroup[] {
 /** the pane itself, for the pages that are not the settings route */
 export function SettingsPane({
   activeSlug,
-  width = "default",
+  /* SMALL by default (audit finding, 2026-09-02): every wearer of the
+     settings menu — Integrations and the four /management/* sections that
+     moved under it — sits in the same 1040 column as its siblings; a caller
+     that needs the wide column says so */
+  width = "small",
   children,
 }: {
   activeSlug: string;
-  width?: "default" | "wide";
+  width?: "small" | "default" | "wide";
   children: ReactNode;
 }) {
   const t = useTranslations("settings");

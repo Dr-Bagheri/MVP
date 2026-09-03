@@ -128,7 +128,10 @@ async function open(): Promise<void> {
 /** the side menu's entry — the section state is local, so this is the door */
 async function openSection(label: string): Promise<void> {
   await act(async () => {
-    fireEvent.click(screen.getByRole("link", { name: label }));
+    /* the section switcher is the toolbar's BUTTONS now (2026-09-02, the
+       audit): it was a vertical SectionMenu of links that prevented their
+       own navigation — a link that goes nowhere is a button wearing an href */
+    fireEvent.click(screen.getByRole("button", { name: label }));
   });
 }
 

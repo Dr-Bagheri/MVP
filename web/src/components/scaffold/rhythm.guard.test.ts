@@ -48,8 +48,11 @@ const RHYTHM = [
  * inside `PageContainer` and therefore never names a step.
  */
 const ALLOWED: Readonly<Record<string, string>> = {
-  "components/platform/Hub.tsx":
-    "the assistant is a full-height column with a sticky composer: it takes the gutters and the top, and owns its bottom because 64px under a sticky composer is dead space the conversation scrolls past every turn",
+  /* Hub.tsx LEFT this list on 2026-09-02: the assistant page renders it
+     inside <PageContainer width="small"> now, so it names no rhythm step of
+     its own. An allow-list entry for a file that no longer deviates reads as
+     coverage and is a hole — which is exactly what the assertion below
+     exists to catch, and did. */
   "app/[locale]/platform/page.tsx":
     "the operations console renders outside PlatformShell entirely — the vendor's room, not a product page — and still owes the product's gutters",
 };
@@ -69,7 +72,16 @@ function walk(dir: string, out: string[] = []): string[] {
 const files = walk(WEB).map((full) => ({
   rel: full.slice(WEB.length + 1).replace(/\\/g, "/"),
   full,
-  text: readFileSync(full, "utf8"),
+  /* COMMENTS STRIPPED before any pattern sees the text (2026-09-02). The
+     guard's first true fire after the Hub stopped drawing its own rhythm was
+     a COMMENT in Hub.tsx that mentioned `pb-page-bottom` while explaining
+     why the hub does not use it — the name matching itself, the same trap
+     the stacking guard fell into on its first run. A checker that reads
+     prose as code manufactures false positives, and one of those gets muted
+     within a week. */
+  text: readFileSync(full, "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, " ")
+    .replace(/^\s*\/\/.*$/gm, " "),
   inScaffold: full.startsWith(SCAFFOLD),
 }));
 

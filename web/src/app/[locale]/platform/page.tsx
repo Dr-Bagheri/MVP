@@ -456,16 +456,20 @@ export default function PlatformControlPage() {
         </section>
 
         {/* tabs */}
-        <nav className="mt-6 flex gap-1 border-b border-border" role="tablist" aria-label={t("title")}>
+        {/* THE TOOLBAR SHAPE (audit finding, 2026-09-02): the console switched
+            its three sections with an underlined tab strip on a hairline — a
+            control no other surface uses; every other surface switches with
+            the pill toolbar */}
+        <nav className="mt-6 flex flex-wrap items-center gap-1" role="tablist" aria-label={t("title")}>
           {(["organizations", "users", "audit"] as const).map((key) => (
             <button
               key={key}
               role="tab"
               aria-selected={tab === key}
-              className={`tap -mb-px rounded-t-lg border-b-2 px-4 py-2 text-sm font-semibold transition-colors ${
+              className={`btn btn-sm gap-1.5 font-medium ${
                 tab === key
-                  ? "border-accent text-fg"
-                  : "border-transparent text-fg-muted hover:text-fg"
+                  ? "bg-accent text-on-accent"
+                  : "text-fg-muted hover:bg-surface-2 hover:text-fg"
               }`}
               onClick={() => setTab(key)}
             >

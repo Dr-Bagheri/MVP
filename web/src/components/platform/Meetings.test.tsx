@@ -187,24 +187,32 @@ describe("Meetings", () => {
     render(<Meetings />);
     await waitFor(() => expect(screen.getByText("جلسهٔ الف")).toBeInTheDocument());
 
-    await userEvent.click(screen.getAllByRole("button", { name: "گزینه‌ها" })[0]!);
-    const menu = screen.getByText("انتقال به موضوع").parentElement!;
+    /* THE THEME'S KEBAB now (2026-09-02): the row menu is KebabMenu, so the
+       topics are a SUB flyout under «انتقال به موضوع» and every entry is a
+       Radix menuitem in a portal — `parentElement` scoping and button roles
+       both stop meaning anything. The flow is the one rowActions.menu.test
+       drives: open, click the sub trigger, pick from the flyout. */
+    const openTopics = async () => {
+      await userEvent.click(screen.getAllByRole("button", { name: "گزینه‌ها" })[0]!);
+      await userEvent.click(await screen.findByRole("menuitem", { name: /انتقال به موضوع/ }));
+    };
+    await openTopics();
     // every topic in the list, plus «بدون موضوع» as a real choice
-    expect(within(menu).getByText("بدون موضوع")).toBeInTheDocument();
-    expect(within(menu).getByText("فروش")).toBeInTheDocument();
+    expect(await screen.findByRole("menuitem", { name: "بدون موضوع" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "فروش" })).toBeInTheDocument();
 
     // its OWN topic is the checked one, and choosing it writes nothing
-    await userEvent.click(within(menu).getByText("محصول"));
+    await userEvent.click(screen.getByRole("menuitem", { name: "محصول" }));
     expect(updateSpy).not.toHaveBeenCalled();
 
-    await userEvent.click(screen.getAllByRole("button", { name: "گزینه‌ها" })[0]!);
-    await userEvent.click(within(screen.getByText("انتقال به موضوع").parentElement!).getByText("فروش"));
+    await openTopics();
+    await userEvent.click(await screen.findByRole("menuitem", { name: "فروش" }));
     expect(updateSpy).toHaveBeenCalledWith("m-a", { topic_id: "t-s" });
 
     // and «بدون موضوع» clears it — null, never the empty string
     updateSpy.mockClear();
-    await userEvent.click(screen.getAllByRole("button", { name: "گزینه‌ها" })[0]!);
-    await userEvent.click(within(screen.getByText("انتقال به موضوع").parentElement!).getByText("بدون موضوع"));
+    await openTopics();
+    await userEvent.click(await screen.findByRole("menuitem", { name: "بدون موضوع" }));
     expect(updateSpy).toHaveBeenCalledWith("m-a", { topic_id: null });
   });
 
@@ -220,13 +228,15 @@ describe("Meetings", () => {
     await waitFor(() => expect(screen.getByText("جلسهٔ الف")).toBeInTheDocument());
     await userEvent.click(screen.getByRole("button", { name: "گزینه‌ها" }));
 
-    const archive = screen.getByRole("button", { name: "بایگانی جلسه" });
-    const remove = screen.getByRole("button", { name: "حذف جلسه" });
+    /* menu ENTRIES are Radix menuitems now (KebabMenu, 2026-09-02); the
+       confirmation's own control below is still an ordinary button */
+    const archive = await screen.findByRole("menuitem", { name: "بایگانی جلسه" });
+    const remove = screen.getByRole("menuitem", { name: "حذف جلسه" });
     expect(archive.textContent).not.toBe(remove.textContent);
 
-    // and the confirmation agrees with the button that opened it
+    // and the confirmation agrees with the entry that opened it
     await userEvent.click(remove);
-    expect(screen.getByText(/حذف شود؟/)).toBeInTheDocument();
+    expect(await screen.findByText(/حذف شود؟/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "حذف جلسه" })).toBeInTheDocument();
   });
 
