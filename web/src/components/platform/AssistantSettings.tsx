@@ -1,11 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import { notify } from "@/lib/notify";
 import { clearSpeechCache } from "@/lib/voice";
 import { Card, Field } from "@/components/ui";
+import { Switch } from "@/components/Switch";
+import {
+  setVoicePref, subscribeVoicePrefs, voicePrefs, voicePrefsServer,
+} from "@/lib/voicePrefs";
 import { Skeleton } from "@/components/scaffold";
 
 /**
@@ -129,6 +133,7 @@ export function AssistantSettings() {
 
   return (
     <div className="space-y-5">
+      <VoiceSwitches />
       {/* db/0112 - the standing voice. The card is structure and renders with
           the page; what waits for the wire is the body (see PrefsState). */}
       <Card>
@@ -258,6 +263,74 @@ export function AssistantSettings() {
           </>
         )}
       </Card>
+    </div>
+  );
+}
+
+/**
+ * «شنیدن و گفتن» — the two switches that moved off the composer (user
+ * directive, 2026-09-03: "remove the items in side bar menu and put them into
+ * the setting in assistant section").
+ *
+ * The only per-DEVICE preferences on a screen where everything else is stored
+ * on the account, and that is the point rather than an inconsistency: "do not
+ * listen on this machine" is a fact about a machine — a shared meeting-room
+ * laptop, a desk with a dead microphone — and syncing it would carry one
+ * room's decision to every other. The hint says so, because a preference that
+ * silently fails to follow you to your phone is worse than one that says it
+ * will not.
+ *
+ * No skeleton and no wire: these answer from storage, so there is no moment
+ * where the card is waiting for anything.
+ */
+function VoiceSwitches() {
+  const t = useTranslations("settings");
+  const prefs = useSyncExternalStore(subscribeVoicePrefs, voicePrefs, voicePrefsServer);
+  return (
+    <Card>
+      <h2 className="h-section">{t("voiceSwitchesTitle")}</h2>
+      <p className="mt-1 text-sm leading-6 text-fg-muted">{t("voiceSwitchesHint")}</p>
+      <div className="mt-4 space-y-3">
+        <SwitchRow
+          label={t("earsLabel")}
+          hint={t("earsHint")}
+          checked={prefs.ears}
+          onChange={() => {
+            const next = !prefs.ears;
+            setVoicePref("ears", next);
+            notify(next ? t("earsOn") : t("earsOff"));
+          }}
+        />
+        <SwitchRow
+          /* the SWITCH reads "speaks its answers", not "silent" — a toggle
+             whose ON position means the assistant does LESS is one everybody
+             reads backwards once. The store keeps `silent` because that is
+             what the voice loop asks it; the screen asks the question the
+             way a person would. */
+          label={t("speakLabel")}
+          hint={t("speakHint")}
+          checked={!prefs.silent}
+          onChange={() => {
+            const speaking = prefs.silent;   // about to become true
+            setVoicePref("silent", !speaking);
+            notify(speaking ? t("silentOff") : t("silentOn"));
+          }}
+        />
+      </div>
+    </Card>
+  );
+}
+
+function SwitchRow({ label, hint, checked, onChange }: {
+  label: string; hint: string; checked: boolean; onChange: () => void;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4 rounded-xl border border-border p-3">
+      <span className="min-w-0">
+        <span className="block text-sm font-medium text-fg">{label}</span>
+        <span className="mt-0.5 block text-xs leading-6 text-fg-muted">{hint}</span>
+      </span>
+      <Switch checked={checked} onChange={onChange} label={label} />
     </div>
   );
 }

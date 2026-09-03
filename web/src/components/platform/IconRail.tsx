@@ -10,7 +10,7 @@ import { personName } from "@/lib/format";
 import { Avatar } from "@/components/Avatar";
 import { signOutThisDevice } from "@/lib/signOut";
 import { useLocale } from "next-intl";
-import { IconChevronEnd, IconChevronRight, IconOpen, IconSparkle } from "@/components/icons";
+import { IconChevronEnd, IconChevronRight, IconOpen, IconRobot } from "@/components/icons";
 import { NAV_PRIMARY, NAV_UTILITY, activeNavHref, type NavItem } from "./nav";
 import { EchoMark, NAV_ICON } from "./icons";
 
@@ -219,11 +219,27 @@ export function IconRail() {
         /* the rail's one primary action goes through `.btn` like every other
            primary in the product. It was the most prominent button on screen
            and the last one still choosing its own height and corner. */
-        className={`btn bg-primary text-on-primary shadow-accent hover:opacity-90 ${
+        /*
+          THE LABEL IS CENTRED IN THE BUTTON, and the icon sits beside it
+          (user directive, 2026-09-03: "make the text come in the center and
+          the icon beside it").
+          `.btn` centres the icon-and-text GROUP, which is the ordinary right
+          answer and is why every other button here uses it — but it means the
+          word itself sits off-centre by half the icon's width, which is
+          visible on the one full-width button in the product. So the icon is
+          taken out of the flow and the label centres across the whole box:
+          `relative` here, `absolute` on the glyph, and `start-3.5` rather
+          than `left` so it stays on the reading-start edge in both locales.
+        */
+        className={`btn relative bg-primary text-on-primary shadow-accent hover:opacity-90 ${
           compact ? "w-full px-0" : "w-full"
         }`}
       >
-        <IconSparkle width={16} height={16} />
+        <IconRobot
+          width={16}
+          height={16}
+          className={compact ? "" : "absolute start-3.5"}
+        />
         {compact ? null : t("assistant")}
       </Link>
 

@@ -96,6 +96,24 @@ export const IconUser = (p: SVGProps<SVGSVGElement>) => (
 export const IconSparkle = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><path d="M12 3.5 13.8 9l5.7 1.8-5.7 1.8L12 18.3l-1.8-5.7L4.5 10.8 10.2 9 12 3.5Z" /><path d="M19 16.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8.8-2.2Z" strokeWidth="1.3" /></svg>
 );
+/**
+ * THE ASSISTANT'S FACE (user directive, 2026-09-03: "choose a robot icon for
+ * the assistant").
+ *
+ * A head with an antenna, two eyes and a mouth line — drawn to the same
+ * 24-box, 1.8 stroke and rounded joins as every other glyph here, so it sits
+ * in a row beside them without looking imported. The sparkle it replaces said
+ * "something clever happens"; this says "somebody answers", which is the
+ * thing the button opens.
+ *
+ * The eyes are FILLED dots rather than stroked circles: at 16px a 1.8-stroke
+ * ring closes into a smudge, and two smudges read as a socket rather than a
+ * face. `strokeWidth` on them is irrelevant — they are fills — but the
+ * radius is what makes them survive the size the rail actually draws at.
+ */
+export const IconRobot = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><path d="M12 3v2.5" /><circle cx="12" cy="2.6" r="1" fill="currentColor" stroke="none" /><rect x="4" y="5.5" width="16" height="12" rx="3.5" /><circle cx="9" cy="10.5" r="1.15" fill="currentColor" stroke="none" /><circle cx="15" cy="10.5" r="1.15" fill="currentColor" stroke="none" /><path d="M9.5 14h5" /><path d="M2 10.5v3M22 10.5v3" /></svg>
+);
 export const IconChip = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><rect x="7" y="7" width="10" height="10" rx="1.5" /><path d="M9.5 3.5V7M14.5 3.5V7M9.5 17v3.5M14.5 17v3.5M3.5 9.5H7M3.5 14.5H7M17 9.5h3.5M17 14.5h3.5" /></svg>
 );
@@ -415,6 +433,7 @@ export const ICONS = {
   "search": IconSearch,
   "settings": IconSettings,
   "share": IconShare,
+  "robot": IconRobot,
   "sparkle": IconSparkle,
   "speaker": IconSpeaker,
   "tag": IconTag,

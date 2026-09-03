@@ -11,6 +11,9 @@ import { api } from "@/api/client";
 import type { AgentEvent } from "@/api/types";
 import { useRouter } from "@/i18n/routing";
 import { mentionedAgent } from "@/lib/agentMention";
+import {
+  subscribeVoicePrefs, voicePrefs, voicePrefsServer,
+} from "@/lib/voicePrefs";
 import { executeClientTool, SURFACE_TOOLS } from "@/lib/agentSurface";
 import {
   subscribeAssistantOpen,
@@ -374,49 +377,44 @@ export function AssistantSidebar() {
    * answered out loud. Listening is untouched either way — the toggle is
    * about the assistant's mouth, not its ears.
    */
-  const [silent, setSilent] = useState(false);
-  const silentRef = useRef(false);
   /**
-   * The EARS toggle (user directive, 2026-08-22): the twin of silent mode for
-   * the other direction — off means the assistant stops listening entirely
-   * (wake word and capture both down) until switched back on. Persisted;
-   * default ON.
+   * THE TWO VOICE SWITCHES, read from the shared store (2026-09-03).
+   *
+   * They were this component's own `useState` plus its own `localStorage`
+   * read, which was correct while the controls lived in this panel. The
+   * controls are on Settings·Assistant now, so a private copy here would mean
+   * a switch that moves and changes nothing until a reload — the calendar
+   * preference's defect, which took a rendered-artifact test to find.
+   *
+   * `useSyncExternalStore` rather than an effect: the refs below are read
+   * inside the voice loop's callbacks, which run outside React's render, and
+   * a subscription is the only thing that keeps them and the screen agreeing.
    */
-  const [ears, setEars] = useState(true);
-  const earsRef = useRef(true);
+  const prefs = useSyncExternalStore(subscribeVoicePrefs, voicePrefs, voicePrefsServer);
+  const silent = prefs.silent;
+  const ears = prefs.ears;
+  const silentRef = useRef(silent);
+  const earsRef = useRef(ears);
+  silentRef.current = silent;
+  earsRef.current = ears;
 
+  /*
+   * The ears switch has a SIDE EFFECT — the loop starts and stops with it —
+   * and that effect belongs to whoever is running the loop, not to whoever
+   * pressed the button. It is an effect on the value rather than a line in a
+   * click handler for exactly that reason: the button is on another screen.
+   */
+  const earsStarted = useRef<boolean | null>(null);
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem("neurai-voice-silent") === "1";
-      setSilent(stored);
-      silentRef.current = stored;
-      const earsStored = localStorage.getItem("neurai-voice-ears") !== "0";
-      setEars(earsStored);
-      earsRef.current = earsStored;
-    } catch { /* storage unavailable — voice stays on */ }
-  }, []);
+    /* skip the first run: the loop's own start-up already decides what to do
+       with a stored preference, and re-deciding it here would start a loop
+       the mount had deliberately left down */
+    if (earsStarted.current === null) { earsStarted.current = ears; return; }
+    if (earsStarted.current === ears) return;
+    earsStarted.current = ears;
+    if (ears) beginLoopRef.current(); else suspendLoop();
+  }, [ears]);
 
-  function toggleSilent() {
-    const next = !silentRef.current;
-    silentRef.current = next;
-    setSilent(next);
-    try { localStorage.setItem("neurai-voice-silent", next ? "1" : "0"); } catch { /* fine */ }
-    notify(next ? t("silentOn") : t("silentOff"));
-  }
-
-  function toggleEars() {
-    const next = !earsRef.current;
-    earsRef.current = next;
-    setEars(next);
-    try { localStorage.setItem("neurai-voice-ears", next ? "1" : "0"); } catch { /* fine */ }
-    if (next) {
-      beginLoopRef.current();
-      notify(t("earsOn"));
-    } else {
-      suspendLoop();
-      notify(t("earsOff"));
-    }
-  }
   const [toasts, setToasts] = useState<PlatformNotice[]>([]);
   const sessionId = useRef<string | undefined>(undefined);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -945,20 +943,11 @@ export function AssistantSidebar() {
   );
 
   const headerButton = "btn btn-icon text-fg-muted hover:bg-surface-2 hover:text-fg";
-  /* the same class, and deliberately so: the bottom row is the header's
-     controls MOVED, not a new family of them */
-  const composerButton = headerButton;
+  /* `composerButton` was an alias for the line above, for a row of three
+     buttons under the box. Two of them are on Settings·Assistant now and the
+     third is gone, so the alias is too — a second name for one class, with
+     nothing left to distinguish it, is the shape somebody re-diverges later. */
 
-  /**
-   * Drop an `@` into the box and put the cursor after it, so the next thing
-   * typed is a handle. It writes the token rather than opening a picker: the
-   * user asked to be able to "write in the chat @roya or @ava", and a menu
-   * that inserts what you could have typed is a second way to do one thing.
-   */
-  function mentionAgent(): void {
-    setInput((prev) => (prev === "" || prev.endsWith(" ") ? `${prev}@` : `${prev} @`));
-    inputRef.current?.focus();
-  }
 
   return (
     <>
@@ -1103,55 +1092,24 @@ export function AssistantSidebar() {
                 }}
               />
               {/*
-                THE BOTTOM ROW (user directive, 2026-09-03). Mic, speaker and
-                the mention control sit under the box they act on, in the
-                theme's plain icon button — NO FILL. The two voice toggles wore
-                `bg-accent-soft` wells when engaged, which on a dark panel
-                reads as two lit warnings; the OFF state is carried by
-                `<Icon off>`, the theme's own slashed glyph, and ON is simply
-                the icon.
+                THE CONTROLS LEFT THIS ROW (user directive, 2026-09-03:
+                "remove the items in side bar menu and put them into the
+                setting in assistant section, and remove @ completely").
+
+                Mic and speaker are PREFERENCES — «صدا و شنیدن» on
+                Settings·Assistant now — and they read the same store this
+                panel reads, so a switch there reaches the conversation on the
+                next paint rather than on the next reload.
+
+                The `@` button is gone and did NOT move: it wrote a character,
+                which is a thing anybody can type, and a button whose whole job
+                is to save one keystroke is chrome. Addressing an agent still
+                works — it is what makes them answer inline — and the Agents
+                screen's «پرسیدن» opens this composer with the mention already
+                in it, which is a better door than a button that only helps
+                somebody who already knew.
               */}
               <div className="mt-2 flex items-center gap-1">
-                <button
-                  type="button"
-                  className={composerButton}
-                  aria-label={t("earsLabel")}
-                  aria-pressed={!ears}
-                  title={t("earsLabel")}
-                  onClick={toggleEars}
-                >
-                  <Icon name="mic" size="md" off={!ears} />
-                </button>
-                <button
-                  type="button"
-                  className={composerButton}
-                  aria-label={t("silentLabel")}
-                  aria-pressed={silent}
-                  title={t("silentLabel")}
-                  onClick={toggleSilent}
-                >
-                  <Icon name="speaker" size="md" off={silent} />
-                </button>
-                {/*
-                  CALLING AN AGENT IN (user directive: "add @ as well for
-                  mentioning the agents into the chat so they can be called —
-                  the user can write in the chat @roya or @ava as well").
-                  The button WRITES the token; typing it by hand does the same
-                  thing, which is the point — it is a reminder the mechanism
-                  exists, not a second mechanism. The handles are the ones
-                  db/0163 seeds, and they are the same tokens an agent uses to
-                  hand work to another agent in a room, so one convention
-                  covers both directions.
-                */}
-                <button
-                  type="button"
-                  className={composerButton}
-                  aria-label={t("mentionLabel")}
-                  title={t("mentionLabel")}
-                  onClick={mentionAgent}
-                >
-                  <Icon name="at" size="md" />
-                </button>
                 <button
                   type="submit"
                   className="btn-primary btn-sm ms-auto"

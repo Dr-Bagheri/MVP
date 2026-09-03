@@ -1,4 +1,9 @@
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { act } from "react";
+import {
+  resetVoicePrefsForTest, setVoicePref, subscribeVoicePrefs, voicePrefs,
+} from "@/lib/voicePrefs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
@@ -107,18 +112,36 @@ describe("the notification switches are GONE — they live in Settings·Notifica
    * auto_meeting_prep, so a component that quietly rendered its old
    * switches again would find every fact it needs — and go red below.
    */
-  it("keeps the voice card and renders NO toggle of any kind", async () => {
+  it("keeps the voice card and renders no toggle EXCEPT the two device switches", async () => {
     render(<AssistantSettings />);
 
     // the control: this screen still renders, and its remaining card is whole
     expect(screen.getByRole("heading", { name: "لحن و رفتار دستیار" })).toBeInTheDocument();
     await loaded();
 
-    /* the absence, by STRUCTURE first: after the move this screen owns no
-       boolean control at all — a re-added toggle in any dress (checkbox,
-       switch) goes red here, whatever it is labelled */
+    /*
+     * THE STRUCTURAL HALF, NARROWED (2026-09-03) rather than deleted.
+     *
+     * It read "this screen owns no boolean control at all", which was the
+     * right shape while the claim was true: a notification row rebuilt under
+     * any label went red, whatever it was called. Then the composer's mic and
+     * speaker moved here by directive, and two legitimate switches arrived.
+     *
+     * Deleting the assertion would have been the easy fix and the wrong one —
+     * it is the half that catches a row rebuilt with NEW copy keys, which the
+     * name checks below cannot see. So it names what it permits instead: two
+     * switches, these two, and a THIRD of any kind is still a failure.
+     */
     expect(document.querySelectorAll('input[type="checkbox"]')).toHaveLength(0);
-    expect(screen.queryByRole("switch")).toBeNull();
+    const switches = screen.getAllByRole("switch");
+    /* a SET, not a sorted array: the order these render in is not part of the
+       claim, and the first version of this line pinned it — against
+       `Array.sort`'s code-point order over Persian labels, which is not the
+       order anybody would predict and not a fact worth asserting. The count
+       is the part with teeth. */
+    expect(switches).toHaveLength(2);
+    expect(new Set(switches.map((el) => el.getAttribute("aria-label"))))
+      .toEqual(new Set(["پاسخ با صدا", "شنیدن دستیار"]));
 
     // and by NAME, so a row rebuilt on the new copy keys is caught too
     expect(screen.queryByText("خلاصهٔ پس از تماس")).toBeNull();
@@ -192,5 +215,67 @@ describe("the card is frame; only its body waits for the wire (audit finding, 20
     expect(document.querySelectorAll(".animate-pulse")).toHaveLength(0);
     expect(screen.queryByText("این استقرار هنوز تنظیمات لحن دستیار را ذخیره نمی‌کند.")).toBeNull();
     expect(screen.queryByText("تنظیمات فعلی دستیار خوانده نشد.")).toBeNull();
+  });
+});
+
+describe("the two device switches, and the store they drive", () => {
+  /**
+   * THE DEFECT THIS IS WRITTEN AGAINST (2026-09-03).
+   *
+   * Mic and speaker moved off the assistant composer and onto this screen by
+   * directive. The panel that OBEYS them is somewhere else in the tree, so
+   * the only thing that makes these switches real is the shared store — and
+   * the failure mode is precisely the one this repo shipped once with the
+   * calendar preference: the control moves, the value is written to component
+   * state, and nothing anywhere reacts. It renders perfectly and does nothing.
+   *
+   * So the assertion is not "the switch flipped". It is "a subscriber that is
+   * not this component heard about it" — which is the sidebar's position, in
+   * the one relationship a test of either component alone cannot see.
+   */
+  beforeEach(() => {
+    localStorage.clear();
+    resetVoicePrefsForTest();
+  });
+
+  it("a click here reaches a subscriber that is not this screen", async () => {
+    const heard: boolean[] = [];
+    const stop = subscribeVoicePrefs(() => heard.push(voicePrefs().silent));
+
+    render(<AssistantSettings />);
+    await loaded();
+
+    const speak = screen.getByRole("switch", { name: "پاسخ با صدا" });
+    /* ON to begin with: silence is the stored exception, and a switch that
+       starts in the position nobody chose is its own bug */
+    expect(speak.getAttribute("aria-checked")).toBe("true");
+
+    await userEvent.click(speak);
+
+    expect(heard, "the store told a listener outside this component").toEqual([true]);
+    expect(voicePrefs().silent).toBe(true);
+    /* and the screen adopted the store's answer rather than keeping its own:
+       a projection that agrees with a local copy instead of the source is the
+       two-spellings problem wearing a checkmark */
+    expect(screen.getByRole("switch", { name: "پاسخ با صدا" }).getAttribute("aria-checked"))
+      .toBe("false");
+    stop();
+  });
+
+  it("adopts a change made from OUTSIDE — the direction a unit test cannot see", () => {
+    /*
+     * The other half, and the one the calendar preference failed. If this
+     * screen kept `useState` seeded from storage, everything above would still
+     * pass and this would not: a value changed elsewhere would leave the
+     * switch showing the old position until a reload.
+     */
+    render(<AssistantSettings />);
+    const before = screen.getByRole("switch", { name: "شنیدن دستیار" });
+    expect(before.getAttribute("aria-checked")).toBe("true");
+
+    act(() => { setVoicePref("ears", false); });
+
+    expect(screen.getByRole("switch", { name: "شنیدن دستیار" }).getAttribute("aria-checked"))
+      .toBe("false");
   });
 });
