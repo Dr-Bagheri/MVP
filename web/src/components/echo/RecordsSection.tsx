@@ -470,7 +470,7 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
               taggingId === call.id ? (
                 <span className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                   <input
-                    className="input h-8 min-h-0 w-44 py-0 text-xs"
+                    className="input-sm w-44"
                     autoFocus
                     placeholder={t("tagsHint")}
                     value={tagsDraft}
@@ -506,7 +506,7 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
                     {renamingId === call.id ? (
                       <span className="flex items-center gap-1.5">
                         <input
-                          className="input h-8 min-h-0 w-44 py-0 text-sm"
+                          className="input-sm w-44"
                           value={renameDraft}
                           autoFocus
                           onChange={(e) => setRenameDraft(e.target.value)}

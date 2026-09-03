@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Call, MeetingRecord } from "@/api/types";
@@ -203,6 +203,35 @@ describe("MeetingPage", () => {
 
     await userEvent.click(screen.getByRole("button", { name: /پس از جلسه/ }));
     expect(screen.getByText("هنوز رکوردی از این جلسه نیست.")).toBeInTheDocument();
+  });
+
+  it("names the MEETING'S host under the host badge — never whoever is looking", async () => {
+    /*
+     * THE BUG THIS PINS, live until 2026-09-03: the live stage's «اعضای جلسه»
+     * card rendered `me` — the signed-in viewer — with the «میزبان» badge, and
+     * added one to the count for them. So everybody who opened a colleague's
+     * meeting was shown as its host, and the two people in a two-person
+     * meeting each saw themselves listed and the other one missing.
+     *
+     * THE FIXTURE IS THE WHOLE TEST. The default `meeting()` host and the
+     * mocked viewer are BOTH "سینا", so an assertion that "سینا is on screen"
+     * passes against the bug and against the fix — indistinguishable, which is
+     * how it survived. The host is renamed here so the two can be told apart,
+     * and both halves are asserted: the host's name present, the viewer's
+     * absent. Verified red against the old row on both.
+     */
+    MEETING = meeting({ call_id: null, mode: "online", host_name: "مریم", invitees: ["رضا"] });
+    render(<MeetingPage id="m-1" />);
+    await waitFor(() => expect(screen.getByText("مشخصات")).toBeInTheDocument());
+    await userEvent.click(screen.getByRole("button", { name: /حین جلسه/ }));
+
+    const members = (await screen.findByRole("heading", { name: "اعضای جلسه" })).closest("section")!;
+    expect(within(members).getByText("مریم")).toBeInTheDocument();
+    expect(within(members).queryByText("سینا")).toBeNull();
+    /* the invitee is still listed, so this cannot pass by rendering nobody */
+    expect(within(members).getByText("رضا")).toBeInTheDocument();
+    /* and the count is the record's two, not three-with-the-reader */
+    expect(within(members).getByText("۲")).toBeInTheDocument();
   });
 
   /* WALKING IN IS THE START (user directive: the mid-meeting page should

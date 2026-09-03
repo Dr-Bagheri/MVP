@@ -1559,7 +1559,16 @@ export default function CallDetailPage({
                    date, no model) — the kebab-styled SelectMenu is the
                    platform's dropdown now */
                 <SelectMenu
-                  className="h-8 min-h-0 w-auto py-0 text-xs"
+                  /* 2026-09-03: `.input-sm`, the theme's compact field. It was
+                     `h-8 min-h-0 py-0 text-xs` — one of the exact shapes
+                     globals.css measured the token for. It matters HERE
+                     because this dropdown stands in the same flex row as the
+                     compare button, which is `btn btn-sm` at 34: the field was
+                     32 and the button 34, two heights in one toolbar, which is
+                     the complaint in miniature. `.input-sm` is the same token
+                     as `.btn-sm`, so they are level by construction. Only the
+                     width stays — it is this site's. */
+                  className="input-sm w-auto"
                   ariaLabel={t("versions")}
                   value={String(shownVersion ?? "")}
                   onChange={(next) => {
@@ -1635,7 +1644,11 @@ export default function CallDetailPage({
                       ribbon writes, SummaryBody can render */}
                   <div className="flex flex-wrap items-center gap-1.5">
                     <SelectMenu
-                      className="h-8 min-h-0 w-auto py-0 text-xs"
+                      /* 2026-09-03: `.input-sm` — the editor ribbon's size
+                         picker, the same `h-8 min-h-0 py-0 text-xs` the
+                         version dropdown wore. A ribbon is exactly the dense
+                         row the compact token was measured for. */
+                      className="input-sm w-auto"
                       ariaLabel={t("editorSize")}
                       value={String(editFontSize)}
                       onChange={(v) => setEditFontSize(Number(v))}
@@ -2098,7 +2111,17 @@ export default function CallDetailPage({
                           {ownsCall ? (
                             <span className="mt-2 block">
                               <SelectMenu
-                                className="h-8 min-h-0 w-full py-0 text-xs"
+                                /* 2026-09-03: the hand-set height goes, and it
+                                   goes to `.input` rather than `.input-sm` —
+                                   this is the one site in the file where the
+                                   compact token would be the WRONG token. The
+                                   text box directly above it in this same
+                                   popover is a plain `.input` (the 2026-09-02
+                                   audit put it there); a 34px select under a
+                                   40px field is still two heights in one small
+                                   panel, which is the defect this pass exists
+                                   to remove. A field matches its own sibling
+                                   first. `.input` already carries `w-full`. */
                                 ariaLabel={t("linkSpeaker")}
                                 value={speakers.find((s) => s.id === row.speaker_id)?.person_id ?? ""}
                                 onChange={(next) =>
@@ -2680,7 +2703,13 @@ export default function CallDetailPage({
                     </span>
                     <span className="min-w-0 flex-1">
                       <SelectMenu
-                        className="h-9 min-h-0 w-full py-0 text-sm"
+                        /* 2026-09-03: `.input-sm`. It was `h-9 min-h-0 py-0
+                           text-sm` — the other exact shape globals.css names.
+                           The compact token is right here for the reason the
+                           token's own comment gives: this is one row per
+                           speaker in a roster list, and a 44px control per row
+                           would be the bigger harm. */
+                        className="input-sm w-full"
                         ariaLabel={t("linkSpeaker")}
                         value={bulkDraft[speaker.id] ?? ""}
                         onChange={(next) =>

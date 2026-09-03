@@ -7,6 +7,7 @@ import { BffError } from "@/api/client";
 import { ConfirmDialog } from "@/components/rowActions";
 import { IconClose } from "@/components/icons";
 import { Chip } from "@/components/ui";
+import { Avatar } from "@/components/Avatar";
 import { formatDate, personName } from "@/lib/format";
 
 /**
@@ -161,10 +162,17 @@ export function MemberDetail({
 
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
         <div className="mb-4 flex items-center gap-3">
-          {/* initials ARE the avatar (avatar_url is a ruled absence, not a gap) */}
-          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-surface-2 text-base font-semibold text-fg">
-            {personName(user, locale).slice(0, 1)}
-          </span>
+          {/* 2026-09-03: the platform's avatar, not a fifth hand-drawn one —
+              `lg` because this person is the page's SUBJECT, which is the size
+              the component carries for exactly this place.
+              Two things change on screen and both are the point: the well was
+              `bg-surface-2` where the roster this panel opens from is
+              `bg-accent-soft` with a ring — the same person, two marks, one
+              click apart — and the initial was the one copy that never got
+              uppercased, so a Latin name read `a` here and `A` in the table.
+              (initials ARE the avatar: avatar_url is a ruled absence, not a
+              gap — the component takes a photo the day there is one.) */}
+          <Avatar name={personName(user, locale)} size="lg" />
           <div className="min-w-0">
             <p className="truncate text-base font-semibold text-fg">{personName(user, locale)}</p>
             {user.username ? (

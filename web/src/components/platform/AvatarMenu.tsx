@@ -5,6 +5,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/routing";
 import type { User } from "@/api/types";
 import { personName } from "@/lib/format";
+import { Avatar } from "@/components/Avatar";
 import { Select } from "@/components/Select";
 import {
   saveCalendarPreference,
@@ -95,18 +96,24 @@ export function AvatarMenu({ me, isPlatformRoot = false }: { me: User | null; is
     <div className="relative" ref={root}>
       <button
         type="button"
-        className="tap grid h-9 w-9 place-items-center overflow-hidden rounded-full border border-border-strong bg-surface-2 text-sm font-semibold text-fg"
+        /*
+         * 2026-09-03: the platform's avatar, not a fifth hand-drawn one.
+         *
+         * The BUTTON keeps what a button owns — the hit area, the menu's aria,
+         * the press — and stops drawing the circle. It had drifted furthest of
+         * the three: `bg-surface-2` with `text-fg` and a `border-border-strong`
+         * ring here, `bg-accent-soft` with `text-accent` and no border at the
+         * rail's foot, both 36px, both on screen at once, both this person.
+         * `.tap` is `relative` plus a 44px pseudo-element, so it still covers
+         * the mark it now wraps rather than draws; `flex` keeps the inline
+         * baseline gap out from under the circle.
+         */
+        className="tap flex rounded-full"
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
       >
-        {me?.avatar_url ? (
-          /* eslint-disable-next-line @next/next/no-img-element -- a data URL;
-             next/image would proxy an image the payload already carries */
-          <img src={me.avatar_url} alt="" className="h-full w-full object-cover" />
-        ) : (
-          name.trim().charAt(0) || "؟"
-        )}
+        <Avatar name={name} src={me?.avatar_url} size="md" />
         <span className="sr-only">{t("account")}</span>
       </button>
 

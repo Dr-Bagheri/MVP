@@ -50,6 +50,15 @@ const REMAINING: Record<string, number> = {
   "app/[locale]/workflows/runs/[id]/page.tsx": 1,
   "components/echo/Recorder.tsx": 1,
   "components/echo/SummariesSection.tsx": 1,
+  /* NOT A LOADING STATE, and listed rather than pattern-matched away
+     (2026-09-03). The live stage's members card renders its host row as
+     `hostName !== null ? … : null`, which is this check's shape — but the
+     meeting record is already in hand by then, and a null host means the
+     meeting HAS no resolvable host (the person's row is gone), which is a
+     real absence with no frame to draw. Telling that from a fetch-in-flight
+     by the shape of the ternary is exactly what a false-positive factory
+     does, so it stays on the list with its reason. */
+  "components/platform/MeetingPage.tsx": 1,
   "components/platform/AgentOverviewPanel.tsx": 2,
   // audit finding, 2026-09-02: IntegrationDetail.tsx LEFT this list — its one
   // entry made the WHOLE page wait on api.connectors() although the icon,

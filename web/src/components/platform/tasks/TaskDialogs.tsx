@@ -8,6 +8,7 @@ import type {
   TaskPriority, TaskTopicRecord,
 } from "@/api/types";
 import { Overlay } from "../Overlay";
+import { Avatar } from "@/components/Avatar";
 import { Select } from "@/components/Select";
 import { ConfirmDialog } from "@/components/rowActions";
 import { JalaliPicker } from "./JalaliPicker";
@@ -293,15 +294,12 @@ export function AssigneePicker({ selected, onToggle }: {
           title={t("removeAssignee", { name: personName(person, locale) })}
           className="btn btn-sm bg-accent-soft font-medium text-accent"
         >
-          {/* NOT A CONTROL: an initial in a circle is an AVATAR, aria-hidden,
-              sitting INSIDE the button — nothing to press. It used to be
-              carried as a worklist entry saying so; since 2026-09-03 the guard
-              asks whether a person can press the element, so an avatar no
-              longer raises the question and no longer needs an exception. This
-              file has no entries left. */}
-          <span className="grid h-5 w-5 place-items-center rounded-full bg-accent text-[10px] font-bold text-on-accent" aria-hidden>
-            {personName(person, locale).slice(0, 1)}
-          </span>
+          {/* 2026-09-03: the platform's avatar at its chip size, not a fifth
+              hand-drawn one — 20px is what an assignee pill holds, which is why
+              `xs` exists. It loses the filled accent disc on purpose: the
+              component's soft ground and hairline ring are the roster's, and a
+              filled accent circle reads as SELECTED rather than as a person. */}
+          <Avatar name={personName(person, locale)} size="xs" />
           {personName(person, locale)}
           <IconClose width={12} height={12} />
         </button>
@@ -325,7 +323,11 @@ export function AssigneePicker({ selected, onToggle }: {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={t("searchPerson")}
-            className="mb-1 h-9 w-full rounded-lg border border-border bg-surface px-2.5 text-xs text-fg outline-none placeholder:text-fg-subtle focus:border-accent"
+            /* 2026-09-03: the theme's compact field. It was the twin of the
+               checklist adder's hand-drawn box in TaskDetail — the same nine
+               classes, written twice — and `w-full` goes because `.input` owns
+               it. The margin stays: that is this popover's, not the field's. */
+            className="input-sm mb-1"
           />
           {people === null ? <p className="p-2 text-xs text-fg-muted">…</p>
             : people === "failed" ? <p className="p-2 text-xs text-fg-muted">{t("readFailed")}</p>
@@ -339,9 +341,10 @@ export function AssigneePicker({ selected, onToggle }: {
                           onClick={() => onToggle(person.id)}
                           className="tap flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-start hover:bg-surface-2"
                         >
-                          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-accent text-[11px] font-bold text-on-accent" aria-hidden>
-                            {personName(person, locale).slice(0, 1)}
-                          </span>
+                          {/* 2026-09-03: the platform's avatar — a menu row's
+                              28px, the same mark the task screen's comments and
+                              history now show for the same colleague. */}
+                          <Avatar name={personName(person, locale)} size="sm" />
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-xs font-medium text-fg">
                               {personName(person, locale)}

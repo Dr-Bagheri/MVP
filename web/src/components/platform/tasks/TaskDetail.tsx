@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
 import { Select } from "@/components/Select";
+import { Avatar } from "@/components/Avatar";
 import { api } from "@/api/client";
 import type {
   OrgPersonRecord, TaskColumnRecord, TaskDetailRecord, TaskLabelRecord,
@@ -166,6 +167,12 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
           {/* ── main ───────────────────────────────────────────────── */}
           <div className="min-h-0 space-y-4 p-5">
             {editing ? (
+              /* KEPT hand-drawn (2026-09-03): this is the page's TITLE wearing a
+                 field, standing in for the `h2 text-lg font-bold` two lines
+                 down — it is taller and larger than `.input` on purpose, where
+                 `.input-sm` is the answer for a field that wanted to be
+                 SHORTER. Adopting it would shrink the modal's subject below the
+                 heading it replaces. */
               <input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
@@ -247,7 +254,10 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
                   ))}
                 </ul>
               )}
-              <div className="mt-2 flex gap-2">
+              {/* `items-center`: the field and the button are two different
+                  heights (see the note on each), and with neither one stretching
+                  the row would hang them both from its top edge. */}
+              <div className="mt-2 flex items-center gap-2">
                 <input
                   value={item}
                   onChange={(e) => setItem(e.target.value)}
@@ -258,7 +268,13 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
                       .catch(() => setFailed(true));
                   }}
                   placeholder={t("newItemPlaceholder")}
-                  className="h-9 min-w-0 flex-1 rounded-lg border border-border bg-surface px-2.5 text-xs text-fg outline-none placeholder:text-fg-subtle focus:border-accent"
+                  /* 2026-09-03: the theme's compact field. This was h-9 /
+                     rounded-lg / px-2.5 with its own border, ground, placeholder
+                     colour and focus edge — a field re-answering `.input`
+                     question by question, which is why the platform had five
+                     field heights. Only the layout is left, because a flex
+                     child's width belongs to the row it sits in. */
+                  className="input-sm min-w-0 flex-1"
                 />
                 <button
                   type="button"
@@ -315,15 +331,15 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
                   <ul className="space-y-2">
                     {task.comments.map((entry) => (
                       <li key={entry.id} className="flex items-start gap-2.5">
-                        {/* NOT A CONTROL: an initial in a circle is an AVATAR —
-                            aria-hidden, nothing to press. It was once carried
-                            as a worklist entry saying exactly that; since
-                            2026-09-03 the guard asks whether a person can press
-                            the element, so an avatar no longer raises the
-                            question and no longer needs an exception. */}
-                        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-accent text-[11px] font-bold text-on-accent" aria-hidden>
-                          {nameOf(entry.created_by).slice(0, 1)}
-                        </span>
+                        {/* 2026-09-03: the platform's avatar, not a fifth
+                            hand-drawn one. It was a FILLED accent circle with a
+                            `.slice(0, 1)` initial — the same person rendered one
+                            way here and another in the roster, and the slice
+                            splits a surrogate pair. The component owns the
+                            ground, the ring, the uppercasing and that decision;
+                            `nameOf` stays the caller's, because which of a
+                            person's two names to show is a locale decision. */}
+                        <Avatar name={nameOf(entry.created_by)} size="sm" />
                         <span className="min-w-0 flex-1">
                           <span className="flex items-baseline gap-2">
                             <span className="text-xs font-semibold text-fg">{nameOf(entry.created_by)}</span>
@@ -381,9 +397,10 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
                   <li className="text-sm text-fg-subtle">{t("noHistory")}</li>
                 ) : task.events.map((entry) => (
                   <li key={entry.id} className="flex items-center gap-2.5">
-                    <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-accent text-[11px] font-bold text-on-accent" aria-hidden>
-                      {nameOf(entry.actor_id).slice(0, 1)}
-                    </span>
+                    {/* 2026-09-03: the platform's avatar. This tab drew its own
+                        twin of the comment list's mark, three lines apart in one
+                        file — which is the divergence at its smallest. */}
+                    <Avatar name={nameOf(entry.actor_id)} size="sm" />
                     <span className="min-w-0 flex-1 text-sm text-fg">
                       <span className="font-semibold">{nameOf(entry.actor_id)}</span>
                       {" "}

@@ -24,6 +24,7 @@ import { MemberDetail } from "@/components/platform/MemberDetail";
 import { Card, EmptyState } from "@/components/ui";
 import { ConfirmDialog } from "@/components/rowActions";
 import { DataTable } from "@/components/DataTable";
+import { Avatar } from "@/components/Avatar";
 import { IconKey, IconPencil, IconToggleOff, IconToggleOn, IconTrash } from "@/components/icons";
 import { personName } from "@/lib/format";
 import { SetMemberPassword } from "@/components/platform/SetMemberPassword";
@@ -386,16 +387,17 @@ export default function UsersPage() {
                 headClassName: "sr-only",
                 cell: (u) => (
                   <span className="flex items-center gap-2.5">
-                    <span
-                      /* accent-soft with a ring, not a solid accent disc: a
-                         list of eight bright green circles is eight accents
-                         on one screen, and the accent stops meaning anything
-                         (Lovable's reading of the same tokens, ported) */
-                      className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-accent-soft text-xs font-semibold text-fg ring-1 ring-border-strong"
-                      aria-hidden
-                    >
-                      {personName(u, locale).slice(0, 1).toUpperCase()}
-                    </span>
+                    {/* 2026-09-03: the platform's avatar, not a fifth
+                        hand-drawn one. This roster IS the look the component
+                        took — accent-soft with a ring, never a solid accent
+                        disc, because a list of eight bright green circles is
+                        eight accents on one screen and the accent stops
+                        meaning anything — so the picture is unchanged and the
+                        decision (which letter, uppercased once, a photo when
+                        there is one) stops being re-made here. The NAME stays
+                        the caller's: which of a person's two names to show is
+                        a locale question. */}
+                    <Avatar name={personName(u, locale)} size="md" />
                     <span className="block min-w-0 leading-tight">
                       <span className="block truncate font-medium text-fg">
                         {personName(u, locale)}

@@ -12,6 +12,7 @@ import { useCrumbTitle } from "@/components/platform/CrumbTitle";
 import { WorkflowTile } from "@/components/platform/WorkflowTile";
 import { PageContainer } from "@/components/scaffold";
 import { Switch } from "@/components/Switch";
+import { Avatar } from "@/components/Avatar";
 import { Card } from "@/components/ui";
 import { Pagination, usePaged } from "@/components/Pagination";
 import { ConfirmDialog, KebabMenu, type KebabItem } from "@/components/rowActions";
@@ -839,12 +840,20 @@ export default function WorkflowDetailPage({
               <dl className="my-8 grid gap-6 border-y border-border py-5 sm:grid-cols-3">
                 <Meta label={t("detailCreatedBy")}>
                   <span className="flex items-center gap-2">
-                    <span
-                      className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-accent-soft text-[10px] font-semibold text-accent"
-                      aria-hidden
-                    >
-                      {creator.slice(0, 1)}
-                    </span>
+                    {/* 2026-09-03: the platform's mark, not a sixteenth
+                        hand-drawn one. THE JUDGEMENT, said out loud because
+                        the component is documented as the PERSON mark and
+                        `creator` is an ORG name or the vendor's — never a
+                        person. It converts anyway because the defect here is
+                        the one Avatar owns: an initial taken from a NAME. This
+                        site spelled it `.slice(0, 1)`, which is one of the two
+                        exact spellings Avatar.tsx names as the drift — it takes
+                        one code UNIT (an org named with an emoji renders the
+                        replacement character) and it never uppercased, so an
+                        org called "acme" showed "a" where every other mark in
+                        the product shows "A". Reversible in one line if the
+                        person-only reading is preferred. */}
+                    <Avatar name={creator} size="xs" />
                     {creator}
                   </span>
                 </Meta>

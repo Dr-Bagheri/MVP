@@ -9,6 +9,7 @@ import type { Me, Person, User } from "@/api/types";
 import { EmptyState } from "@/components/ui";
 import { ConfirmDialog, IconAction, SelectMenu } from "@/components/rowActions";
 import { DataTable, StatusDot } from "@/components/DataTable";
+import { Avatar } from "@/components/Avatar";
 import {
   IconMicOff, IconMicPlus, IconPencil, IconPlus, IconTeam, IconTrash, IconUser,
 } from "@/components/icons";
@@ -683,9 +684,16 @@ export function SpeakersDirectory() {
             {shown.map((person) => (
               <div key={person.id} className="glass-tile group rounded-xl p-3">
                 <div className="flex items-start gap-3">
-                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-surface-2 text-sm font-semibold text-fg">
-                    {person.display_name.slice(0, 1)}
-                  </span>
+                  {/* 2026-09-03: the platform's avatar, not a fifth hand-drawn
+                      one. This card drew 40px and the chart below drew 28 —
+                      two marks for the same person, two views of one list, and
+                      40 is not a size the theme has a name for (the same
+                      sentence this file already carries about its 28px/32px
+                      buttons). `md` is 36: four pixels, in exchange for the
+                      directory agreeing with the roster and with itself.
+                      `display_name` and not `personName`: a directory Person
+                      has ONE name, so there is no locale choice to make. */}
+                  <Avatar name={person.display_name} size="md" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold text-fg">{person.display_name}</p>
                     <p className="truncate text-xs text-fg-muted">
@@ -757,9 +765,12 @@ export function SpeakersDirectory() {
                         key={person.id}
                         className="flex items-center gap-2 rounded-xl border border-border bg-surface-2/50 px-3 py-2"
                       >
-                        <span className="grid h-7 w-7 place-items-center rounded-full bg-surface-2 text-xs font-semibold text-fg">
-                          {person.display_name.slice(0, 1)}
-                        </span>
+                        {/* 2026-09-03: the platform's avatar at `sm` — 28px,
+                            the size this chip already drew, so the picture is
+                            unchanged and it gains `shrink-0`, which a mark in
+                            a flex row beside a name that can be long wanted
+                            anyway. */}
+                        <Avatar name={person.display_name} size="sm" />
                         <span className="text-sm text-fg">{person.display_name}</span>
                         <span className="text-xs text-fg-subtle">
                           {person.title ? tTitles(person.title) : ""}
@@ -796,8 +807,13 @@ export function SpeakersDirectory() {
               adding && canManage ? (
                 <tr className="border-b border-border bg-surface-2/40">
                   <td className="px-4 py-2.5">
+                    {/* 2026-09-03: `.input-sm`, the theme's compact field. It
+                        was `h-9 min-h-0 py-0 text-sm` — the four things that
+                        class exists to decide, restated on top of `.input`,
+                        because until now the theme had a compact BUTTON and no
+                        compact FIELD. Only the width is this site's. */}
                     <input
-                      className="input h-9 min-h-0 w-48 py-0 text-sm"
+                      className="input-sm w-48"
                       placeholder={t("namePlaceholder")}
                       value={name}
                       autoFocus
@@ -809,8 +825,13 @@ export function SpeakersDirectory() {
                     />
                   </td>
                   <td className="px-4 py-2.5">
+                    {/* 2026-09-03: `.input-sm`. SelectMenu's trigger IS
+                        `.input` (variant="input"), so this className was
+                        re-answering it from outside — the same four utilities
+                        as the fields either side of it, on a control the guard
+                        cannot see because a select is not pressable. */}
                     <SelectMenu
-                      className="h-9 min-h-0 w-40 py-0 text-xs"
+                      className="input-sm w-40"
                       ariaLabel={t("colTitle")}
                       value={title}
                       onChange={setTitle}
@@ -924,8 +945,10 @@ export function SpeakersDirectory() {
                 stopClick: true,
                 cell: (person) =>
                   editingId === person.id ? (
+                    /* 2026-09-03: `.input-sm` — the inline rename opens IN a
+                       row, which is the case that class was measured for */
                     <input
-                      className="input h-9 min-h-0 w-48 py-0 text-sm"
+                      className="input-sm w-48"
                       value={editName}
                       autoFocus
                       disabled={busy}
@@ -962,8 +985,10 @@ export function SpeakersDirectory() {
                 stopClick: true,
                 cell: (person) =>
                   canManage ? (
+                    /* 2026-09-03: `.input-sm` — the title picker sits in the
+                       row beside the name editor and must be level with it */
                     <SelectMenu
-                      className="h-9 min-h-0 w-40 py-0 text-xs"
+                      className="input-sm w-40"
                       ariaLabel={t("colTitle")}
                       value={person.title}
                       disabled={busy}
@@ -988,8 +1013,11 @@ export function SpeakersDirectory() {
                     stopClick: true,
                     cell: (person: Person) =>
                       editingTeamId === person.id ? (
+                        /* 2026-09-03: `.input-sm`. This one was `h-8` where
+                           the two above were `h-9` — the same inline editor,
+                           in the same table, at two heights */
                         <input
-                          className="input h-8 min-h-0 w-32 py-0 text-xs"
+                          className="input-sm w-32"
                           value={teamDraft}
                           autoFocus
                           maxLength={60}

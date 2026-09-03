@@ -86,14 +86,18 @@ const REMAINING: Record<string, number> = {
   // variant="round"), so converting only the three here would leave four
   // circles beside one 11px-cornered rectangle — the symptom, in one row
   "components/echo/Recorder.tsx": 3,
-  // the account AVATAR — 36px, round, `overflow-hidden` so a photo crops to a
-  // circle and the initial falls back inside the same well. It is the
-  // product's avatar, drawn identically in IconRail (the same person, the same
-  // shell) and in Management·Users; `.btn-icon` would square this one off at
-  // 28px and leave the other two round at 36, which is the complaint rather
-  // than the fix. Pressable because it opens the account menu, which is what
-  // puts it in front of this check at all.
-  "components/platform/AvatarMenu.tsx": 1,
+  /* THE ACCOUNT AVATAR LEFT THIS LIST ON 2026-09-03, and the entry was wrong
+     about the product while it sat here. It said the mark was "drawn
+     identically in IconRail (the same person, the same shell)"; it was not —
+     the menu's wore `bg-surface-2` with `text-fg` and a `border-border-strong`
+     ring, the rail's foot wore `bg-accent-soft` with `text-accent` and no
+     border, and both were on screen at the same time showing the same person.
+     The entry's reasoning was right and its premise was not: `.btn-icon` was
+     never the answer here, because the missing token was an AVATAR, not a
+     button. components/Avatar.tsx is that token; the button now keeps the hit
+     area, the aria and the press, and draws no circle at all, so this check
+     stops seeing it — correctly, since a mark that is not pressable was never
+     its business. */
   // the card's 16px TICK BOX — see the note below, which covers all five
   // copies of it. The board's other entry left on 2026-09-03: the column's tone
   // dot was a 10px pressable drawing its own circle, and it is now the same

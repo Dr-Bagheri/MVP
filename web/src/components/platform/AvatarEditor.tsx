@@ -5,6 +5,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { Me } from "@/api/types";
 import { personName } from "@/lib/format";
+import { Avatar } from "@/components/Avatar";
 
 /**
  * The profile photo, edited in place (user directive, 2026-08-16): no
@@ -84,23 +85,25 @@ export function AvatarEditor({ me, onSaved }: { me: Me; onSaved: (me: Me) => voi
     <div>
       <div className="flex items-center gap-4">
         <div className="relative">
-          {/* NOT A CONTROL, and it stays hand-drawn on purpose (2026-09-03,
-              recorded in control.guard.test.ts): this is the avatar itself —
-              a 64px circle holding either the photo or the initial. It shares
-              the shape a button has (fixed size, corner, centred contents),
-              which is why the guard sees it, and dressing it as one would put
-              a pressable-looking rectangle where the person's face goes. */}
-          <div className="grid h-16 w-16 place-items-center overflow-hidden rounded-full bg-accent-soft text-xl font-bold text-accent">
-            {me.avatar_url ? (
-              /* eslint-disable-next-line @next/next/no-img-element -- a data
-                 URL: next/image would proxy an image we already hold inline */
-              <img src={me.avatar_url} alt="" className="h-full w-full object-cover" />
-            ) : (
-              /* personName, not display_name: the initial must match the
-                 script the rest of the UI renders the name in */
-              personName(me, locale).trim().charAt(0)
-            )}
-          </div>
+          {/*
+            2026-09-03: the platform's avatar, not a fifth hand-drawn one.
+            This was a 64px circle, and the header of the very page it sits on
+            drew the SAME person at 56 — two sizes, neither of them a token,
+            eight pixels and one scroll apart. Both are `lg` (48) now, so the
+            page has one answer.
+
+            `personName`, not `display_name`, stays the caller's job: which of
+            a person's two names to show is a locale decision, and the
+            component is deliberately given the resolved string.
+
+            The one visible consequence, said out loud rather than discovered:
+            the camera badge below is `.btn-icon` (28px, the theme's only icon
+            size), so it now covers more of a 48px circle than it did of a 64.
+            That is a control decision belonging to whoever revisits the badge
+            — inventing a smaller icon button here is the exact defect this
+            pass exists to close.
+          */}
+          <Avatar name={personName(me, locale)} src={me.avatar_url} size="lg" />
           <button
             type="button"
             aria-label={t("photoChange")}
@@ -146,6 +149,14 @@ export function AvatarEditor({ me, onSaved }: { me: Me; onSaved: (me: Me) => voi
 
       {preview ? (
         <div className="mt-3 flex items-center gap-4 rounded-lg border border-border bg-surface-2 p-3">
+          {/* KEPT hand-drawn (2026-09-03), and it is not the same thing as the
+              mark above it: this is the crop being INSPECTED before it is
+              accepted, so `src` is never absent and the photo-or-initial
+              decision the Avatar owns can never arise here. It is deliberately
+              larger than the result, because the question this card asks is
+              "look at this closely" — shrinking it to `lg` for the sake of a
+              shared class would make the thing under review smaller than the
+              thing already saved. */}
           {/* eslint-disable-next-line @next/next/no-img-element -- same data-URL reasoning */}
           <img src={preview} alt="" className="h-20 w-20 rounded-full object-cover" />
           <div>

@@ -578,6 +578,31 @@
   }
 
   /*
+   * THE COMPACT FIELD, and it is here for the reason `.btn-sm` is: its absence
+   * was producing the mess.
+   *
+   * Measured 2026-09-03: twenty-five single-line fields re-answered `.input`'s
+   * height by hand — `input h-8 min-h-0 py-0 text-xs`, `input h-9 min-h-0 py-0
+   * text-sm`, `input h-12 text-lg` — because the theme shipped a compact
+   * BUTTON and no compact FIELD. An inline table editor cannot be 40px tall
+   * without changing the height of every row it opens in, so every screen that
+   * needed a smaller one invented it, exactly as they had with `.btn`.
+   *
+   * 34px, the same token as `.btn-sm`: a compact field and a compact button
+   * standing in one toolbar row must be level, and two numbers is how they
+   * stop being. The touch floor does NOT apply — this is the deliberate
+   * exception for a field inside a dense table, where a 44px row would be the
+   * bigger harm; a compact field is not for a phone.
+   */
+  .input-sm {
+    /* `text-xs` is the CAPTION role (11.5) and a real token — the first draft
+       of this line said `text-caption`, which the config does not define, so
+       it would have emitted no CSS at all and read as satisfied. That is the
+       inert-class trap this repo has already paid for once. */
+    @apply input h-control-sm min-h-control-sm px-2.5 py-0 text-xs;
+  }
+
+  /*
    * THE select template (user directive: one dropdown look for the whole
    * platform). The native chevron is replaced — browsers pin theirs flush
    * to the edge and ignore padding, which is exactly the "down symbol too

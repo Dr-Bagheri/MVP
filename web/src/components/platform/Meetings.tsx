@@ -68,7 +68,12 @@ function TopicNameBox({ initial, onCancel, onSubmit }: {
           if (e.key === "Escape") onCancel();
         }}
         placeholder={t("topicNamePlaceholder")}
-        className="input h-[34px] min-h-[34px] w-40 border-accent"
+        /* 2026-09-03: the theme's compact field. `h-[34px] min-h-[34px]` was
+           this same 34 written as an arbitrary value — including the override
+           of `.input`'s 44px touch floor, which is the deliberate exception
+           `.input-sm` now owns. The width and the accent edge stay: they are
+           this site's own (a 160px inline rename, focused). */
+        className="input-sm w-40 border-accent"
       />
       <button
         type="button"
@@ -685,7 +690,10 @@ export function AgendaEditor({ value, onChange }: {
             value={item.title}
             onChange={(e) => patch(i, { title: e.target.value })}
             aria-label={t("agendaTitlePlaceholder")}
-            className="input h-[34px] min-h-[34px] flex-1"
+            /* 2026-09-03: the theme's compact field. This row already spells its
+               other two controls `.btn-icon` and `.btn btn-sm w-[34px]`; the
+               field at its start was the one member still writing its own 34. */
+            className="input-sm flex-1"
           />
           {/* 2026-09-03: the stepper's − and + are the theme's icon button, not a
               twelfth invented size. They were a hand-drawn 24px square with a bare
@@ -750,7 +758,9 @@ export function AgendaEditor({ value, onChange }: {
               if (e.key === "Escape") { setTitle(""); setAdding(false); }
             }}
             placeholder={t("agendaTitlePlaceholder")}
-            className="input h-[34px] min-h-[34px] flex-1"
+            /* 2026-09-03: the theme's compact field — level with the `.btn-sm`
+               beside it, which is the pair `.input-sm` exists to keep level */
+            className="input-sm flex-1"
           />
           <button
             type="button"

@@ -332,7 +332,13 @@ export function TaskBoard() {
         {addingTopic || renamingTopic !== null ? (
           <span className="inline-flex items-center gap-1 rounded-md border border-accent bg-surface px-1.5">
             {/* ONE composer, two jobs: a new topic and a rename. Two boxes
-                would be two places for the same rules to be written down. */}
+                would be two places for the same rules to be written down.
+
+                NOT `.input-sm` (2026-09-03): this field draws no box because
+                the SPAN around it does — border, ground and corner belong to
+                the composer, which is one silhouette holding a field and a ✕.
+                A themed field here would put a second box inside the first,
+                and `.input`'s own `w-full` would push the ✕ out of it. */}
             <input
               autoFocus
               value={renamingTopic !== null && topicName === "" ? renamingTopic.name : topicName}
@@ -479,6 +485,18 @@ export function TaskBoard() {
                     ) : null}
                   </span>
                   {renaming === col.id ? (
+                    /* KEPT hand-drawn, and this is a measurement rather than a
+                       preference (2026-09-03). It is an in-place editor over a
+                       28px header row — the tone well and the trash either side
+                       of it are `.btn-icon`, 28 — and it carries the title's own
+                       `text-sm font-semibold` so the name does not change size
+                       when you click it. `.input-sm` COMPILES TO 44px (40 from
+                       md), not the 34 its name promises: `@apply input …` re-
+                       states `.input`'s min-height after the compact one, so the
+                       override never reaches the stylesheet. Converting today
+                       would grow this header by 12px on click and shrink the
+                       title to 11.5px. First candidate the day that token
+                       actually emits its own height. */
                     <input
                       autoFocus
                       defaultValue={col.name}
@@ -772,6 +790,10 @@ function AddColumnInline({ onAdded, onRefused }: {
   }
   return (
     <div className="w-[220px] shrink-0 rounded-2xl border border-accent bg-surface p-2">
+      {/* NOT `.input-sm` (2026-09-03): the CARD is the box — border, ground and
+          corner are the column-shaped panel this composer becomes — so a themed
+          field would draw a second one inside it. Same shape as the topic
+          composer above, deliberately. */}
       <input
         autoFocus
         value={name}

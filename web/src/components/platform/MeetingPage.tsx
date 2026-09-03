@@ -25,6 +25,7 @@ import {
   finish, recorderSnapshot, startRecording, subscribeRecorder,
 } from "@/lib/recordingEngine";
 import { uploadAudioFile } from "@/lib/uploadFile";
+import { Avatar } from "@/components/Avatar";
 import { digits, formatClock, formatDate, formatDuration, formatTime, personName, instantFromFields } from "@/lib/format";
 import { onRoomAudio } from "@/lib/roomAudio";
 
@@ -539,9 +540,18 @@ export function MeetingPage({ id }: { id: string }) {
         <PreStage meeting={meeting} onPatch={patch} locale={locale} />
       ) : null}
       {active === "hold" ? (
+        /* `me` is gone from here (2026-09-03): the live stage's only use of
+           the signed-in person was labelling them the meeting's HOST, which is
+           a fact about the record. A prop that nothing reads is the next
+           person's invitation to reach for it again.
+
+           NOTE the comment form. A braced JSX comment is a syntax error in a
+           ternary's expression slot — it belongs in a CHILDREN slot — so this
+           is a plain block comment. Two agents hit that within the hour, and
+           so did I; then this comment broke a second time because spelling the
+           braced form out loud put a comment terminator inside a comment. */
         <HoldStage
           meeting={meeting}
-          me={me}
           locale={locale}
           recordingLive={recordingLive}
         />
@@ -843,9 +853,12 @@ function PreStage({ meeting, onPatch, locale }: {
                   (user report, 2026-09-02). `me` here meant a colleague
                   opening somebody else's meeting saw their OWN name in the
                   host row, which is a confident lie about who ran it. */}
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-accent text-[11px] font-bold text-on-accent" aria-hidden>
-                {hostName.slice(0, 1)}
-              </span>
+              {/* 2026-09-03: the platform's avatar, not a fifth hand-drawn one.
+                  The accent FILL is deliberately not carried over — a filled
+                  accent circle reads as SELECTED rather than as a person, and
+                  hostness is already said by the «میزبان» pill at the end of
+                  this same row, in words, where a colour cannot be misread. */}
+              <Avatar name={hostName} size="sm" />
               <span className="min-w-0 flex-1 truncate font-medium">
                 {meeting.host_name === null ? t("unknownPerson") : hostName}
               </span>
@@ -855,9 +868,8 @@ function PreStage({ meeting, onPatch, locale }: {
             </li>
             {meeting.invitees.map((name) => (
               <li key={name} className="flex items-center gap-2 rounded-xl border border-border bg-surface-2/50 px-2.5 py-2 text-sm text-fg">
-                <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-surface-2 text-[11px] font-bold text-fg-muted" aria-hidden>
-                  {name.slice(0, 1)}
-                </span>
+                {/* 2026-09-03: the platform's avatar, not a fifth hand-drawn one */}
+                <Avatar name={name} size="sm" />
                 <span className="min-w-0 flex-1 truncate">{name}</span>
               </li>
             ))}
@@ -1004,13 +1016,20 @@ function EditMeetingDialog({ meeting, onPatch, onClose }: {
 
 /* ═══ برگزاری — the live room: engine in the background, whiteboard in
        front ═══════════════════════════════════════════════════════════════ */
-function HoldStage({ meeting, me, locale, recordingLive }: {
+function HoldStage({ meeting, locale, recordingLive }: {
   meeting: MeetingRecord;
-  me: Me | null;
   locale: string;
   recordingLive: boolean;
 }) {
   const t = useTranslations("meetings");
+  /* the host is a fact about the MEETING, read from the wire — never the
+     signed-in viewer (see the members card below) */
+  const hostName = meeting.host_name === null
+    ? null
+    : personName(
+        { display_name: meeting.host_name, display_name_en: meeting.host_name_en },
+        locale,
+      );
   const [noteDraft, setNoteDraft] = useState("");
   const [taskDraft, setTaskDraft] = useState("");
   /* every outcome goes to the NOTIFICATION bus (platform rule): a banner
@@ -1082,24 +1101,40 @@ function HoldStage({ meeting, me, locale, recordingLive }: {
           <header className="mb-2 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-fg">{t("membersTitle")}</h3>
             <span className="badge-num rounded-full bg-surface-2 px-2 text-[11px] text-fg-subtle">
-              {digits(meeting.invitees.length + (me !== null ? 1 : 0), locale)}
+              {digits(meeting.invitees.length + (hostName === null ? 0 : 1), locale)}
             </span>
           </header>
           <ul className="space-y-1.5">
-            {me !== null ? (
+            {hostName !== null ? (
               <li className="flex items-center gap-2 text-sm text-fg">
-                <span className="grid h-6 w-6 place-items-center rounded-full bg-accent text-[11px] font-bold text-on-accent" aria-hidden>
-                  {personName(me, locale).slice(0, 1)}
-                </span>
-                {personName(me, locale)}
+                {/*
+                 * THE HOST COMES FROM THE WIRE (2026-09-03). This row rendered
+                 * `me` — the signed-in VIEWER — under the «میزبان» badge, so
+                 * everyone who opened a colleague's meeting was shown as its
+                 * host, and the count added one for whoever was looking. The
+                 * badge is a claim about a ROLE, and a role is a fact about the
+                 * record, never about who is reading it.
+                 *
+                 * PreStage twenty lines up already resolved `meeting.host_name`
+                 * correctly, and Minutes.tsx carries a comment saying the name
+                 * comes from the wire "not from the signed-in" viewer. Two
+                 * siblings had the rule and this one had the bug — fixing one
+                 * instance does not fix its siblings.
+                 *
+                 * The avatar is the platform's, and at the list-row size: this
+                 * card and the دعوت‌شدگان card above it list the same people and
+                 * drew them at 24 and 28, which is "one is small, one is big" on
+                 * a single screen.
+                 */}
+                <Avatar name={hostName} size="sm" />
+                {hostName}
                 <span className="ms-auto rounded-md bg-surface-2 px-1.5 py-0.5 text-[10px] text-fg-subtle">{t("memberHost")}</span>
               </li>
             ) : null}
             {meeting.invitees.map((name) => (
               <li key={name} className="flex items-center gap-2 text-sm text-fg">
-                <span className="grid h-6 w-6 place-items-center rounded-full bg-surface-2 text-[11px] font-bold text-fg-muted" aria-hidden>
-                  {name.slice(0, 1)}
-                </span>
+                {/* 2026-09-03: the platform's avatar, not a fifth hand-drawn one */}
+                <Avatar name={name} size="sm" />
                 {name}
               </li>
             ))}

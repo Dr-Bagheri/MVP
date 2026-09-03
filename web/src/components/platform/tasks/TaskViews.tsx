@@ -161,6 +161,8 @@ export function TaskCalendar({ tasks, labels, onOpen, onToggleDone }: {
                       : cell.inMonth ? "border-border bg-surface"
                         : "border-transparent bg-surface-2/40"
                 }`}>
+                {/* a DATE, not a person: the round well says "today", so it is
+                    not an avatar however much it looks like one (2026-09-03) */}
                 <span className={`mb-1 text-xs tabular-nums ${
                   cell.today ? "grid h-5 w-5 place-items-center rounded-full bg-accent font-bold text-on-accent"
                     : cell.weekend ? "text-danger" : cell.inMonth ? "text-fg" : "text-fg-subtle"
@@ -189,6 +191,8 @@ export function TaskCalendar({ tasks, labels, onOpen, onToggleDone }: {
                 <span className={`block truncate text-[10px] ${cell.today ? "text-accent" : "text-fg-muted"}`}>
                   {cell.weekday}
                 </span>
+                {/* the week's own day NUMBER — the same round well as the month
+                    grid's, and the same not-a-person (2026-09-03) */}
                 <span className={`mx-auto mt-0.5 grid h-6 w-6 place-items-center rounded-full text-xs tabular-nums ${
                   cell.today ? "bg-accent font-bold text-on-accent" : cell.weekend ? "text-danger" : "text-fg"
                 }`}>

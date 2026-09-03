@@ -7,6 +7,7 @@ import { api } from "@/api/client";
 import type { Me } from "@/api/types";
 import { useEffect, useState } from "react";
 import { personName } from "@/lib/format";
+import { Avatar } from "@/components/Avatar";
 import { signOutThisDevice } from "@/lib/signOut";
 import { useLocale } from "next-intl";
 import { IconOpen, IconPlus } from "@/components/icons";
@@ -157,16 +158,15 @@ export function IconRail() {
             href="/profile"
             className="-m-1 flex min-w-0 flex-1 items-center gap-2.5 rounded-xl p-1 transition-colors hover:bg-surface-2"
           >
-            {/* the photo where there is one; the initial is the fallback */}
-            <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full bg-accent-soft text-sm font-bold text-accent">
-              {me.avatar_url ? (
-                // eslint-disable-next-line @next/next/no-img-element -- see
-                // the profile header: an un-listed host renders nothing
-                <img src={me.avatar_url} alt="" className="h-full w-full object-cover" />
-              ) : (
-                personName(me, locale).slice(0, 1)
-              )}
-            </span>
+            {/* 2026-09-03: the platform's avatar, not a fifth hand-drawn one.
+                `md` IS the 36px this drew by hand, so the picture is the same
+                size it was; what moves is the DECISION — photo when there is
+                one, first letter otherwise, cropped to the circle, uppercased
+                once. That decision was spelled `slice(0, 1)` here, `charAt(0)`
+                in the top bar's menu and `charAt(0)` again in the profile
+                header, over three different grounds, for the same person on
+                the same screen. */}
+            <Avatar name={personName(me, locale)} src={me.avatar_url} size="md" />
             <span className="min-w-0">
               <span className="block truncate text-sm font-semibold text-fg">
                 {personName(me, locale)}

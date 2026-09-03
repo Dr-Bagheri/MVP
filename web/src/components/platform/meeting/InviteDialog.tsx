@@ -140,6 +140,17 @@ export function InviteDialog({
                         : "border-transparent hover:border-border hover:bg-surface-2"
                     }`}
                   >
+                    {/* NOT `<Avatar>`, deliberately (2026-09-03 sweep). This
+                        well is the row's SELECTION control, not a person mark:
+                        pressing it swaps the initial for a tick, and `Avatar`
+                        has no prop for that. Converting only the unchosen half
+                        would be worse than either — `Avatar` carries a hairline
+                        ring and this does not, so the well would visibly change
+                        its edge on press. If the person mark and the tick are
+                        ever wanted as one thing, the fix is a prop on `Avatar`,
+                        not a fifth circle drawn here. Its 28px matches
+                        `size="sm"`, and the Skeleton above stands in at the
+                        same 28, so the list does not jump when people land. */}
                     <span
                       className={`grid h-7 w-7 shrink-0 place-items-center rounded-full text-[11px] font-bold ${
                         chosen ? "bg-accent text-on-accent" : "bg-surface-2 text-fg-muted"

@@ -439,6 +439,14 @@ export function TranscriptPanel({ callId, onSeek, locale }: {
           const tone = seg.speaker_id !== null ? toneOf.get(seg.speaker_id) ?? SPEAKER_TONES[0]! : "bg-surface-2 text-fg-muted";
           return (
             <li key={seg.id} className="flex items-start gap-2.5">
+              {/* NOT `<Avatar>`, deliberately (2026-09-03 sweep). The GROUND is
+                  the point here: `tone` gives each speaker their own colour from
+                  SPEAKER_TONES, which is how a reader tells voices apart while
+                  scanning a transcript. `Avatar` has one ground for everybody by
+                  design — adopting it would make every speaker's mark identical
+                  and delete the only thing this one does beyond showing a
+                  letter. Its fallback is «؟» too, the Persian mark, where
+                  `Avatar`'s is Latin "?". */}
               <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs font-bold ${tone}`} aria-hidden>
                 {(name ?? "؟").slice(0, 1)}
               </span>
