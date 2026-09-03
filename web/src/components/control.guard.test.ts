@@ -59,17 +59,15 @@ const SRC = join(process.cwd(), "src");
  * nobody can see.
  */
 const REMAINING: Record<string, number> = {
-  /* the assistant-consent SWITCH: a 24×44 track with a knob that slides
-     inside it, so the geometry is the control and there is no `.btn` shape
-     that holds a knob. Not this file's to settle — nine switches, two track
-     sizes, no shared component. */
-  "app/[locale]/profile/page.tsx": 1,
-  // the record-on-run SWITCH: a 44px-wide, 24px-tall track whose knob is
-  // absolutely positioned 2px inside it, and that inset IS the mechanism. The
-  // theme has no switch, so there is nothing here to adopt — `.btn` (38px, an
-  // 11px corner, a padded flex row) would delete the track and leave the knob
-  // measured against a box that no longer exists.
-  "app/[locale]/workflows/[handle]/page.tsx": 1,
+  /* FIVE ENTRIES LEFT THIS LIST ON 2026-09-03, and they were never five
+     defects — they were one missing token. Nine `role="switch"` toggles were
+     hand-drawn across the product in two track sizes, with two knob colours
+     and two ideas of what "on" looks like (`bg-accent` on six, `bg-success`
+     on the seventh — success means "this is healthy", not "this is on"). The
+     theme shipped `.btn`, `.btn-sm`, `.btn-icon`, `.input` and no switch, so
+     every screen that needed one drew it: the same shape as the finding that
+     started this whole pass, one control down. components/Switch.tsx is the
+     token; the entries went with the hand-drawing. */
   // a day CELL of the month grid, not a control with a label in it. The grid
   // sets the width — seven tracks in a 288px panel — where `.btn-icon` pins 28
   // and `.btn-sm` puts 13px either side of a two-digit number; and `.btn`
@@ -88,9 +86,6 @@ const REMAINING: Record<string, number> = {
   // variant="round"), so converting only the three here would leave four
   // circles beside one 11px-cornered rectangle — the symptom, in one row
   "components/echo/Recorder.tsx": 3,
-  // the record-on-use SWITCH, the same control one size down (36px by 20px,
-  // the track Hub's web-search switch draws too). A switch, not a button.
-  "components/platform/AgentOverviewPanel.tsx": 1,
   // the account AVATAR — 36px, round, `overflow-hidden` so a photo crops to a
   // circle and the initial falls back inside the same well. It is the
   // product's avatar, drawn identically in IconRail (the same person, the same
@@ -99,11 +94,6 @@ const REMAINING: Record<string, number> = {
   // than the fix. Pressable because it opens the account menu, which is what
   // puts it in front of this check at all.
   "components/platform/AvatarMenu.tsx": 1,
-  // a SWITCH, 44px by 24px — the settings-row track, spelled identically here,
-  // in SignInMethods and on the profile page. See the profile entry above.
-  "components/platform/NotificationsSettings.tsx": 1,
-  // a SWITCH, 44px by 24px — the same track as NotificationsSettings
-  "components/platform/SignInMethods.tsx": 1,
   // the card's 16px TICK BOX — see the note below, which covers all five
   // copies of it. The board's other entry left on 2026-09-03: the column's tone
   // dot was a 10px pressable drawing its own circle, and it is now the same

@@ -6,6 +6,7 @@ import { api } from "@/api/client";
 import type { AgentCard, AgentWorkflowLink } from "@/api/types";
 import { Link } from "@/i18n/routing";
 import { Icon } from "@/components/icons";
+import { Switch } from "@/components/Switch";
 import { AGENT_STARTER_HANDLES } from "@/lib/agentStarters";
 import { SEEDED_STARTERS, useWorkflowCopy } from "@/lib/workflowName";
 import { agentColorClasses, agentIconName, toolDescription, useAgentCopy } from "./agentAppearance";
@@ -308,23 +309,16 @@ export function AgentOverviewPanel({
               <span className="mt-1 block text-xs leading-5 text-fg-subtle">{t("knowledgeIntro")}</span>
               {recordAgents === null ? null : (
                 <span className="mt-2 flex items-center gap-2">
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={recordsOnUse}
-                    aria-label={t("recordOnUse")}
-                    onClick={() => void toggleRecordOnUse()}
-                    className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${
-                      recordsOnUse ? "bg-success" : "border border-border bg-surface-2"
-                    }`}
-                  >
-                    <span
-                      aria-hidden
-                      className={`absolute top-0.5 h-4 w-4 rounded-full bg-bg transition-all ${
-                        recordsOnUse ? "end-0.5" : "start-0.5"
-                      }`}
-                    />
-                  </button>
+                  {/* the theme's switch at its compact size (2026-09-03) —
+                      the 20x36 track this panel drew by hand is `size="sm"`
+                      now, and its bg-success/bg-bg pair joins every other
+                      switch on accent and a white knob */}
+                  <Switch
+                    size="sm"
+                    checked={recordsOnUse}
+                    label={t("recordOnUse")}
+                    onChange={() => void toggleRecordOnUse()}
+                  />
                   <span className="text-xs text-fg-muted">{t("recordOnUse")}</span>
                 </span>
               )}

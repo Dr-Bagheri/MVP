@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Select } from "@/components/Select";
+import { Switch } from "@/components/Switch";
 import { usePathname, useRouter } from "@/i18n/routing";
 import { api, BffError } from "@/api/client";
 import type { Me, ModelInfo } from "@/api/types";
@@ -550,28 +551,16 @@ export default function ProfilePage() {
                     nine of these and two track sizes (24×44 and 20×36), with
                     no shared Switch to settle it. That is a component to cut,
                     not a resize to make on one page. */}
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={me.assistant_context}
-                  aria-label={t("shareWithAssistant")}
-                  className={`tap relative h-6 w-11 shrink-0 rounded-full transition-colors ${
-                    me.assistant_context ? "bg-accent" : "border border-border bg-surface-2"
-                  }`}
-                  onClick={() => {
+                <Switch
+                  checked={me.assistant_context}
+                  label={t("shareWithAssistant")}
+                  onChange={() => {
                     void api
                       .updateProfile({ assistant_context: !me.assistant_context })
                       .then(adopt)
                       .catch(() => setError({ field: null, message: t("saveFailed") }));
                   }}
-                >
-                  <span
-                    className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${
-                      me.assistant_context ? "end-0.5" : "start-0.5"
-                    }`}
-                    aria-hidden
-                  />
-                </button>
+                />
               </FormRow>
               <FormRow label={t("exportTitle")} description={t("exportHint")}>
                 <ExportAccountData />

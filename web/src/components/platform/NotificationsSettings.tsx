@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
+import { Switch } from "@/components/Switch";
 import { api } from "@/api/client";
 import { notify } from "@/lib/notify";
 import { FormPanel, FormRow } from "@/components/scaffold";
@@ -201,24 +202,17 @@ function NotificationRow({
           {t(state === "absent" ? "notifUnavailable" : "notifUnreadable")}
         </span>
       ) : (
-        <button
+        /* the theme's switch (2026-09-03): nine of these were hand-drawn, in
+           two track sizes with two knob colours and two ideas of what "on"
+           looks like. One component, named sizes. */
+        <Switch
           id={id}
-          type="button"
-          role="switch"
-          aria-checked={state}
+          checked={state}
+          onChange={() => onToggle(!state)}
+          label={label}
           disabled={busy}
-          className={`tap relative ms-auto h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-60 ${
-            state ? "bg-accent" : "border border-border bg-surface-2"
-          }`}
-          onClick={() => onToggle(!state)}
-        >
-          <span
-            className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${
-              state ? "end-0.5" : "start-0.5"
-            }`}
-            aria-hidden
-          />
-        </button>
+          className="ms-auto"
+        />
       )}
     </FormRow>
   );

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
+import { Switch } from "@/components/Switch";
 import { api } from "@/api/client";
 import type { Me } from "@/api/types";
 import { notify } from "@/lib/notify";
@@ -63,24 +64,15 @@ export function SignInMethods() {
                 {t(enabled ? "active" : "off")}
               </Chip>
               {mayToggle ? (
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={enabled}
-                  aria-label={t("toggleLabel", { method: t(`method_${key}`) })}
+                /* the theme's switch (2026-09-03) — see components/Switch.tsx
+                   for why nine of these were hand-drawn */
+                <Switch
+                  checked={enabled}
+                  onChange={() => void toggle(key, !enabled)}
+                  label={t("toggleLabel", { method: t(`method_${key}`) })}
                   disabled={busy !== null}
-                  className={`tap relative h-6 w-11 shrink-0 rounded-full transition-colors ${
-                    enabled ? "bg-accent" : "bg-surface-2 border border-border"
-                  } ${busy === key ? "opacity-60" : ""}`}
-                  onClick={() => void toggle(key, !enabled)}
-                >
-                  <span
-                    className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${
-                      enabled ? "end-0.5" : "start-0.5"
-                    }`}
-                    aria-hidden
-                  />
-                </button>
+                  className={busy === key ? "opacity-60" : ""}
+                />
               ) : null}
             </div>
           );

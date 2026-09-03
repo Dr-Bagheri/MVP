@@ -11,6 +11,7 @@ import { PlatformShell } from "@/components/platform/PlatformShell";
 import { useCrumbTitle } from "@/components/platform/CrumbTitle";
 import { WorkflowTile } from "@/components/platform/WorkflowTile";
 import { PageContainer } from "@/components/scaffold";
+import { Switch } from "@/components/Switch";
 import { Card } from "@/components/ui";
 import { Pagination, usePaged } from "@/components/Pagination";
 import { ConfirmDialog, KebabMenu, type KebabItem } from "@/components/rowActions";
@@ -902,24 +903,18 @@ export default function WorkflowDetailPage({
                       {t("detailRecordHint")}
                     </span>
                   </span>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={recordsOnRun}
-                    aria-label={t("detailRecordTitle")}
+                  {/* the theme's switch (2026-09-03). It also settles two
+                      local answers: the track was `bg-success` where every
+                      other switch is `bg-accent` — success means "this is
+                      healthy", not "this is on" — and the knob was `bg-bg`,
+                      the opposite colour in dark theme to the white knob on
+                      the settings rows. */}
+                  <Switch
+                    checked={recordsOnRun}
+                    label={t("detailRecordTitle")}
                     disabled={saving}
-                    onClick={() => void toggleRecordOnRun()}
-                    className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
-                      recordsOnRun ? "bg-success" : "border border-border bg-surface-2"
-                    }`}
-                  >
-                    <span
-                      aria-hidden
-                      className={`absolute top-0.5 h-5 w-5 rounded-full bg-bg transition-all ${
-                        recordsOnRun ? "end-0.5" : "start-0.5"
-                      }`}
-                    />
-                  </button>
+                    onChange={() => void toggleRecordOnRun()}
+                  />
                 </div>
               ) : null}
 

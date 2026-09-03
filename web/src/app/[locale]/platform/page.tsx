@@ -1035,12 +1035,18 @@ export default function PlatformControlPage() {
                           { value: "disabled", label: t("disabled") },
                         ]}
                       />
+                      {/* NOT A SWITCH (2026-09-03): it wore `role="switch"`,
+                          which tells a screen reader there is a track with a
+                          knob — there is a labelled filter chip. A toggle
+                          button reports itself with `aria-pressed`, and the
+                          shape is the platform's filter chip (`btn btn-sm`,
+                          the meetings toolbar's), not a `rounded-full` pill on
+                          a button. */}
                       <button
                         type="button"
-                        role="switch"
-                        aria-checked={rootsOnly}
+                        aria-pressed={rootsOnly}
                         onClick={() => setRootsOnly((v) => !v)}
-                        className={`tap rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
+                        className={`btn btn-sm border font-semibold ${
                           rootsOnly ? "border-accent bg-accent-soft text-accent" : "border-border text-fg-muted"
                         }`}
                       >

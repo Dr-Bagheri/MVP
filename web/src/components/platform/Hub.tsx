@@ -1469,14 +1469,21 @@ export function Hub() {
                   onClick={() => setWebSearch((v) => !v)}
                 >
                   <span>{t("searchWeb")}</span>
+                  {/* the switch's LOOK, not the component: the whole ROW is
+                      the control here (a menu row that reports a state), so
+                      the track is decoration inside it and <Switch> would nest
+                      a button in a button. What it does adopt is the theme's
+                      answer — accent, and a white knob — where this drew
+                      `bg-success` with a `bg-bg` knob, which in dark theme is
+                      the opposite colour to every other switch (2026-09-03). */}
                   <span
                     aria-hidden
-                    className={`relative h-5 w-9 rounded-full transition-colors ${
-                      webSearch ? "bg-success" : "bg-surface-2 border border-border"
+                    className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${
+                      webSearch ? "bg-accent" : "bg-surface-2 border border-border"
                     }`}
                   >
                     <span
-                      className={`absolute top-0.5 h-4 w-4 rounded-full bg-bg transition-all ${
+                      className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${
                         webSearch ? "end-0.5" : "start-0.5"
                       }`}
                     />
