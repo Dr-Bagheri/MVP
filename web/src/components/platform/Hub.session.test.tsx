@@ -209,10 +209,20 @@ describe("Hub — session continuity", () => {
   it("searches Sources from the first character, without an instruction or Echo shortcut", async () => {
     render(<Hub />);
 
-    /* a PRESS, not a hover (2026-09-02): these are the platform's popover
-       now, and a menu that opens because a pointer passed over it is a menu
-       that opens by accident — with no keyboard equivalent at all */
-    await userEvent.click(screen.getByRole("button", { name: "منابع" }));
+    /*
+     * THE ROUTE CHANGED (user directive, 2026-09-03): «منابع» is a submenu of
+     * the composer's ⊕ now, and its "search meetings" row opens this panel.
+     * The visible «منابع» button under the field is gone — it was the label
+     * drawn twice, once in the menu and once beneath it.
+     *
+     * A PRESS at every step, not a hover (2026-09-02): these are the
+     * platform's own menus, and one that opens because a pointer passed over
+     * it is one that opens by accident, with no keyboard equivalent at all.
+     */
+    await userEvent.click(screen.getByRole("button", { name: "افزودن" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "منابع" }));
+    await userEvent.click(
+      await screen.findByRole("menuitem", { name: "جست‌وجو در تماس‌ها و جلسه‌ها…" }));
     const search = screen.getByPlaceholderText("جست‌وجو در تماس‌ها و جلسه‌ها…");
     fireEvent.change(search, { target: { value: "ا" } });
 

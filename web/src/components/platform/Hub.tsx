@@ -1322,60 +1322,87 @@ export function Hub() {
         }`}
       >
         {/*
-          MIC AND MENU ON ONE SIDE, SEND ON THE OTHER (user directive,
-          2026-09-03: "change the place for the create and source with the mic
-          and send button ... put the mic and a plus icon on the other side").
+          THE FIELD ON ITS OWN LINE, THE CONTROLS UNDER IT — and the controls
+          sit in FIXED PHYSICAL CORNERS (user directive, 2026-09-03: "put it in
+          right down corner in both fa and en version ... the plus and mic
+          together in left down corner").
 
-          They were all four crowded past the field — two icon buttons in the
-          reading-end corner and a second row of text buttons underneath. The
-          field now has a control cluster at its reading START (what you reach
-          for BEFORE typing: the microphone, and the menu of things to attach)
-          and the send key alone at its END (what you reach for after). DOM
-          order is the whole mechanism — the row follows the page's direction,
-          so this is right in both locales without a single side-named class.
+          `dir="ltr"` on the control row is the whole mechanism, and it is a
+          deliberate exception to this codebase's logical-properties rule. Every
+          other row here follows the page so it mirrors in English; this one
+          must NOT. A send key that swaps corners with the interface language is
+          a key that has to be found again after every switch — the same
+          argument the time picker settled a few hours earlier, where the panel
+          was pinned to match the `HH:mm` it edits.
+
+          So: mic and ⊕ at the physical left, send at the physical right, in
+          both locales. The TEXT inside the field is untouched — it follows the
+          page, as prose must.
         */}
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            className={`btn btn-icon shrink-0 ${
-              dictation.status === "listening"
-                ? "animate-pulse bg-accent-soft text-accent"
-                : "text-fg-muted hover:bg-surface-2 hover:text-fg"
-            }`}
-            title={dictation.status === "listening" ? t("voiceListening") : t("voice")}
-            aria-pressed={dictation.status === "listening"}
-            onClick={dictation.toggle}
-          >
-            <MicIcon width={16} height={16} />
-          </button>
-          <ComposerActions
-            connectorsLabel={t("connectors")}
-            manageLabel={t("manageConnectors")}
-            createLabel={t("create")}
-            sourcesLabel={t("sources")}
-            docLabel={t("createDoc")}
-            pdfLabel={t("createPdf")}
-            menuLabel={t("composerMenu")}
-            attachedCount={contextCalls.length}
-            onCreate={(kind) => { setCreateKind(kind); setCreateOpen(false); }}
-            onSources={() => { setSourcesOpen(true); setCreateOpen(false); }}
-            onManageConnectors={() => router.push("/settings/integrations")}
-          />
-          <input
-            ref={promptRef}
-            className="min-h-[38px] flex-1 bg-transparent text-sm text-fg outline-none placeholder:text-fg-muted focus-visible:ring-0 focus-visible:ring-offset-0"
-            placeholder={t("promptPlaceholder")}
-            aria-label={t("promptPlaceholder")}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                void send();
-              }
-              if (e.key === "Escape" && streaming) stop();
-            }}
-          />
+        <input
+          ref={promptRef}
+          className="min-h-[38px] w-full bg-transparent text-sm text-fg outline-none placeholder:text-fg-muted focus-visible:ring-0 focus-visible:ring-offset-0"
+          placeholder={t("promptPlaceholder")}
+          aria-label={t("promptPlaceholder")}
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              void send();
+            }
+            if (e.key === "Escape" && streaming) stop();
+          }}
+        />
+        <div className="mt-1.5 flex items-center justify-between" dir="ltr">
+          <span className="flex items-center gap-1">
+            <button
+              type="button"
+              className={`btn btn-icon shrink-0 ${
+                dictation.status === "listening"
+                  ? "animate-pulse bg-accent-soft text-accent"
+                  : "text-fg-muted hover:bg-surface-2 hover:text-fg"
+              }`}
+              title={dictation.status === "listening" ? t("voiceListening") : t("voice")}
+              aria-pressed={dictation.status === "listening"}
+              onClick={dictation.toggle}
+            >
+              <MicIcon width={16} height={16} />
+            </button>
+            <ComposerActions
+              connectorsLabel={t("connectors")}
+              manageLabel={t("manageConnectors")}
+              createLabel={t("create")}
+              sourcesLabel={t("sources")}
+              docLabel={t("createDoc")}
+              pdfLabel={t("createPdf")}
+              menuLabel={t("composerMenu")}
+              attachFileLabel={t("sourcesAttach")}
+              searchMeetingsLabel={t("sourcesSearch")}
+              webSearchLabel={t("sourcesWeb")}
+              attachedCount={contextCalls.length}
+              webSearch={webSearch}
+              onCreate={(kind) => { setCreateKind(kind); setCreateOpen(false); }}
+              /*
+                DEFERRED BY A TICK, and not for tidiness. Radix dismisses a
+                popover that opens during a menu item's `onSelect`: closing the
+                menu returns focus to its trigger, and the dismissable layer
+                stack reads that as a click outside the new panel. Opening on
+                the next task lets the menu finish closing first.
+                A `setTimeout(0)` in a click handler is usually a smell; here
+                it is the documented shape of "after this interaction", and the
+                alternative — `preventDefault` to keep the menu open — leaves
+                two panels stacked over each other.
+              */
+              onSources={() => {
+                setCreateOpen(false);
+                setTimeout(() => setSourcesOpen(true), 0);
+              }}
+              onAttachFile={() => fileRef.current?.click()}
+              onToggleWeb={() => setWebSearch((v) => !v)}
+              onManageConnectors={() => router.push("/settings/integrations")}
+            />
+          </span>
           {streaming ? (
             /* send morphs into STOP — one button, one place, per the donor's
                composer; Esc does the same from the keyboard */
@@ -1496,22 +1523,17 @@ export function Hub() {
             }}
             onClose={() => setSourcesOpen(false)}
             panelClass="w-[19rem] p-2"
-            button={
-              <button
-                type="button"
-                className={headerBtn}
-                aria-expanded={sourcesOpen}
-                aria-haspopup="menu"
-                onClick={() => setSourcesOpen((v) => !v)}
-              >
-                {t("sources")}
-                {contextCalls.length > 0 ? (
-                  <span className="rounded-full bg-accent-soft px-1.5 text-[10px] font-semibold text-accent">
-                    {contextCalls.length}
-                  </span>
-                ) : null}
-              </button>
-            }
+            /*
+              A ZERO-SIZE ANCHOR, not a button (2026-09-03). «منابع» lives in
+              the composer's ⊕ now; this panel is what its "search meetings"
+              row opens, and a visible trigger beside the field was the label
+              drawn twice — once in the menu and once underneath it, which is
+              what the screenshot showed.
+              The element stays because the panel has to hang off SOMETHING:
+              the same anchor pattern the right-click menu uses. `sr-only`
+              rather than `hidden`, so it keeps a box to position against.
+            */
+            button={<span className="sr-only" aria-hidden />}
           >
             <div>
                 <input
@@ -1728,8 +1750,9 @@ function HoverMenu({
  */
 function ComposerActions({
   connectorsLabel, manageLabel, createLabel, sourcesLabel,
-  docLabel, pdfLabel, menuLabel, attachedCount,
-  onCreate, onSources, onManageConnectors,
+  docLabel, pdfLabel, menuLabel, attachFileLabel, searchMeetingsLabel,
+  webSearchLabel, attachedCount, webSearch,
+  onCreate, onSources, onAttachFile, onToggleWeb, onManageConnectors,
 }: {
   connectorsLabel: string;
   manageLabel: string;
@@ -1738,9 +1761,15 @@ function ComposerActions({
   docLabel: string;
   pdfLabel: string;
   menuLabel: string;
+  attachFileLabel: string;
+  searchMeetingsLabel: string;
+  webSearchLabel: string;
   attachedCount: number;
+  webSearch: boolean;
   onCreate: (kind: "doc" | "pdf") => void;
   onSources: () => void;
+  onAttachFile: () => void;
+  onToggleWeb: () => void;
   onManageConnectors: () => void;
 }) {
   const [connectors, setConnectors] = useState<ConnectorStatus[] | "failed" | null>(null);
@@ -1753,7 +1782,10 @@ function ComposerActions({
     void api.connectors().then(setConnectors).catch(() => setConnectors("failed"));
   };
 
-  const item = "gap-1.5 px-2 py-1 text-xs";
+  /* small, and the same measurements the sidebar's composer menu settled:
+     three things beside a field, not a section */
+  const item = "gap-2 px-2 py-1 text-xs";
+  const panel = "min-w-0 p-0.5";
   return (
     <DropdownMenu onOpenChange={(next) => { if (next) load(); }}>
       <DropdownMenuTrigger asChild>
@@ -1766,31 +1798,77 @@ function ComposerActions({
           <PlusIcon width={16} height={16} />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent side="top" align="start" className="w-52 min-w-0 p-0.5">
+      {/*
+        EVERY ROW CARRIES ITS ICON (user directive, 2026-09-03: "all must have
+        icons as well"). A menu of three submenus is read by shape before it is
+        read by word — and these three answer genuinely different questions
+        (make something, attach something, reach something), so the glyph is
+        doing work rather than decorating.
+      */}
+      <DropdownMenuContent side="top" align="start" className={`w-52 ${panel}`}>
         <DropdownMenuSub>
           <DropdownMenuSubTrigger className={item}>
             <DocumentIcon width={13} height={13} />
             {createLabel}
           </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className="w-44 min-w-0 p-0.5">
-            <DropdownMenuItem className={item} onSelect={() => onCreate("doc")}>{docLabel}</DropdownMenuItem>
-            <DropdownMenuItem className={item} onSelect={() => onCreate("pdf")}>{pdfLabel}</DropdownMenuItem>
+          <DropdownMenuSubContent className={`w-44 ${panel}`}>
+            <DropdownMenuItem className={item} onSelect={() => onCreate("doc")}>
+              <Icon name="fileText" size="sm" />
+              {docLabel}
+            </DropdownMenuItem>
+            <DropdownMenuItem className={item} onSelect={() => onCreate("pdf")}>
+              <Icon name="download" size="sm" />
+              {pdfLabel}
+            </DropdownMenuItem>
           </DropdownMenuSubContent>
         </DropdownMenuSub>
 
-        <DropdownMenuItem className={item} onSelect={onSources}>
-          {sourcesLabel}
-          {attachedCount > 0 ? (
-            <span className="badge-num ms-auto rounded-full bg-accent-soft px-1.5 text-[10px] font-semibold text-accent">
-              {attachedCount}
-            </span>
-          ) : null}
-        </DropdownMenuItem>
+        {/*
+          SOURCES IS A SUBMENU NOW, not a row that opened a second panel. It
+          had stayed a plain item pointing at the old hover-panel, which left
+          «منابع» drawn twice — once in here and once as a leftover button
+          under the field. Its three ACTS are what belong in a menu; the
+          meeting SEARCH still opens the rich panel, because a search field
+          inside a dropdown is a worse place to type than the panel built for
+          it.
+        */}
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger className={item}>
+            <Icon name="tag" size="sm" />
+            {sourcesLabel}
+            {attachedCount > 0 ? (
+              <span className="badge-num ms-auto rounded-full bg-accent-soft px-1.5 text-[10px] font-semibold text-accent">
+                {attachedCount}
+              </span>
+            ) : null}
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent className={`w-56 ${panel}`}>
+            <DropdownMenuItem className={item} onSelect={onSources}>
+              <Icon name="search" size="sm" />
+              {searchMeetingsLabel}
+            </DropdownMenuItem>
+            <DropdownMenuItem className={item} onSelect={onAttachFile}>
+              <Icon name="fileText" size="sm" />
+              {attachFileLabel}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem className={item} onSelect={(e) => { e.preventDefault(); onToggleWeb(); }}>
+              <Icon name="globe" size="sm" />
+              {webSearchLabel}
+              {/* the STATE, not a switch: a toggle inside a menu row is two
+                  hit targets in one line, and the check says the same thing */}
+              {webSearch ? <Icon name="check" size="sm" className="ms-auto text-accent" /> : null}
+            </DropdownMenuItem>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
 
         <DropdownMenuSeparator />
         <DropdownMenuSub>
-          <DropdownMenuSubTrigger className={item}>{connectorsLabel}</DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className="w-56 min-w-0 p-0.5">
+          <DropdownMenuSubTrigger className={item}>
+            <Icon name="plug" size="sm" />
+            {connectorsLabel}
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent className={`w-56 ${panel}`}>
             {connectors === null ? (
               <div className="px-2 py-1"><SkeletonLines lines={2} /></div>
             ) : connectors === "failed" ? (
@@ -1809,7 +1887,10 @@ function ComposerActions({
               ))
             )}
             <DropdownMenuSeparator />
-            <DropdownMenuItem className={item} onSelect={onManageConnectors}>{manageLabel}</DropdownMenuItem>
+            <DropdownMenuItem className={item} onSelect={onManageConnectors}>
+              <Icon name="settings" size="sm" />
+              {manageLabel}
+            </DropdownMenuItem>
           </DropdownMenuSubContent>
         </DropdownMenuSub>
       </DropdownMenuContent>
