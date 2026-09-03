@@ -164,9 +164,15 @@ describe("the trail's own assumptions", () => {
        Dashboard — fix it"): Meetings, Tasks, the Assistant, Agents and
        Workflows each begin their own trail, as Echo and Management already
        did, and the console is a room of its own */
+    /* /integrations JOINED the set on 2026-09-03: it went back to the rail
+       (user directive, "under the agents"), and a rail entry begins its own
+       trail — leaving it parented to Settings would have been a crumb
+       offering a door back to a menu that no longer lists it, which the
+       Settings-parent check below now forbids outright. */
     expect(roots).toEqual([
-      "/", "/agents", "/assistant", "/echo", "/help", "/management",
-      "/meetings", "/platform", "/profile", "/settings", "/tasks", "/workflows",
+      "/", "/agents", "/assistant", "/echo", "/help", "/integrations",
+      "/management", "/meetings", "/platform", "/profile", "/settings",
+      "/tasks", "/workflows",
     ]);
     for (const pattern of Object.keys(TRAIL)) {
       const trail = trailFor(pattern.replace(/\[[^\]]+\]/g, "x"));

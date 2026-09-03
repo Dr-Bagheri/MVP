@@ -37,6 +37,44 @@ $names = [ordered]@{
   LIVEKIT_API_SECRET   = "echo_platform_livekit_api_secret"
 }
 
+# THE CONNECTORS, and the reason they are written down here rather than added
+# to the server by hand (incident, 2026-09-03).
+#
+# This script does not UPDATE core.env, it REPLACES it: the lines are built
+# from the maps in this file and redirected over the target with ">". So any
+# variable that is not in a map here does not merely go unmanaged - it is
+# DESTROYED the next time anyone runs the script for an unrelated reason.
+#
+# That is what happened. The Google OAuth pair, the connector encryption key
+# and the web URL were added to core.env by hand on 2026-08-27 and the
+# connector worked. On 2026-09-02 this script was run to ship LiveKit, and it
+# rewrote the file without them. Nothing failed loudly; the API kept serving,
+# and the only symptom was a user saying "the integrations cannot connect to
+# google right now, it was working before" - a whole feature switched off by a
+# deploy for a different feature.
+#
+# They are OPTIONAL rather than required because the store on a given operator
+# machine may genuinely not hold them, and refusing to deploy the database and
+# the transcriber because a connector key is absent would be the worse
+# failure. What is NOT optional is saying so: the run prints every optional
+# name it could not find, so "the connectors are unconfigured" is a sentence
+# on screen instead of an absence nobody can see.
+$optionalConnectors = [ordered]@{
+  echo_platform_google_oauth_client_id     = "echo_platform_google_oauth_client_id"
+  echo_platform_google_oauth_client_secret = "echo_platform_google_oauth_client_secret"
+  echo_platform_connector_encryption_key   = "echo_platform_connector_encryption_key"
+  echo_platform_microsoft_oauth_client_id     = "echo_platform_microsoft_oauth_client_id"
+  echo_platform_microsoft_oauth_client_secret = "echo_platform_microsoft_oauth_client_secret"
+}
+
+# NOT a secret, and not in the store: the address the OAuth redirect comes
+# back to. It lives here because core.env is the file that must hold it, and
+# because the incident above was half about a value that no store owns having
+# nowhere to be written down.
+$literals = [ordered]@{
+  echo_platform_web_url = "https://app.neurai.pt"
+}
+
 # OPTIONAL: a project on asymmetric signing keys (ES256, the Frankfurt
 # project) has no shared JWT secret at all - core verifies via JWKS derived
 # from SUPABASE_URL. The var ships only when the store actually holds one;
@@ -57,8 +95,21 @@ foreach ($k in $optional.Keys) {
   $v = (& $py $get $optional[$k] | Out-String).Trim()
   if (-not [string]::IsNullOrWhiteSpace($v)) { $lines += ($k + "=" + $v) }
 }
+$absentConnectors = @()
+foreach ($k in $optionalConnectors.Keys) {
+  $v = (& $py $get $optionalConnectors[$k] | Out-String).Trim()
+  if ([string]::IsNullOrWhiteSpace($v)) { $absentConnectors += $k }
+  else { $lines += ($k + "=" + $v) }
+}
+foreach ($k in $literals.Keys) { $lines += ($k + "=" + $literals[$k]) }
 if ($missing.Count -gt 0) {
   Write-Error ("Missing from the store: " + ($missing -join ", "))
+}
+# LOUD, not silent: an absent connector name means that provider cannot be
+# connected at all, and the whole point of the 2026-09-03 incident is that
+# nothing said so.
+if ($absentConnectors.Count -gt 0) {
+  Write-Warning ("NOT DEPLOYED - absent from this machine's store, so these providers will refuse to connect: " + ($absentConnectors -join ", "))
 }
 
 Write-Host ("Fetched " + ($lines.Count - 1) + " secrets (names only shown above). Writing to server...")
@@ -71,6 +122,14 @@ $content = ($lines -join "`n") + "`n"
 # The sed strips the BOM PowerShell's pipe prepends: systemd would read the
 # first variable as "﻿NODE_ENV", silently a different name (the
 # CLAUDE.md encoding rule, at the deploy seam this time).
-$content | & ssh -i $sshKey $server "sed '1s/^\xEF\xBB\xBF//' > /etc/neurai/core.env && chown root:neurai /etc/neurai/core.env && chmod 640 /etc/neurai/core.env && head -c 8 /etc/neurai/core.env | grep -q '^NODE_ENV' && echo OK: wrote /etc/neurai/core.env with `$(grep -c = /etc/neurai/core.env) entries, BOM-free"
+# It strips CARRIAGE RETURNS for the same reason (added 2026-09-03): the pipe
+# to a native process converts line endings, so the file arrived with a
+# trailing lone CR and bash reported "line 15: command not found" whenever
+# anything sourced it. No VALUE carried one this time - checked, and that is
+# the only reason it was cosmetic rather than an outage - but a CR on the end
+# of a value is invisible in every listing and would make an OAuth redirect
+# URI or a database URL fail to match while reading as correct. Same seam as
+# the BOM, one character along.
+$content | & ssh -i $sshKey $server "sed -e '1s/^\xEF\xBB\xBF//' -e 's/\r`$//' | grep -v '^`$' > /etc/neurai/core.env && chown root:neurai /etc/neurai/core.env && chmod 640 /etc/neurai/core.env && head -c 8 /etc/neurai/core.env | grep -q '^NODE_ENV' && echo OK: wrote /etc/neurai/core.env with `$(grep -c = /etc/neurai/core.env) entries, BOM-free"
 
 Write-Host "Done. The services on the server can now start."

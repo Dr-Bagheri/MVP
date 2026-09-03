@@ -72,7 +72,13 @@ export const TRAIL: Readonly<Record<string, TrailEntry>> = {
   /* under SETTINGS now — that is the menu the page wears (2026-09-02), and
      a trail that said Workflows while the toolbar said Settings is the
      redirect lesson again */
-  "/integrations": { label: "platform.integrations", parent: "/settings" },
+  /* A ROOT AGAIN (user directive, 2026-09-03): Integrations is a rail
+     destination beside Agents, so "Settings ›" is a door back to a menu that
+     no longer lists it — the crumb follows whichever menu claims the page,
+     and none does above it now. (trail.test.ts asserts exactly this: a page
+     may only claim Settings as its parent while the Settings registry
+     offers it.) */
+  "/integrations": { label: "platform.integrations" },
   /** one integration's detail (M47) — the leaf is the integration's own
    *  localized name, supplied by the page (entity), and the parent crumb IS
    *  Sana's "< All integrations" back link in the platform's one mechanism */

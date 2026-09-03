@@ -16,6 +16,17 @@ export interface NavItem {
   key: string;
   /** Also rendered in the mobile bottom bar. */
   inBar: boolean;
+  /**
+   * The path prefix that LIGHTS this entry, when that is not its href.
+   *
+   * Where a link goes and what it highlights are two different facts, and
+   * they came apart on 2026-09-03: Management's href moved to its first page
+   * (`/management/general`) to stop the section's redirect costing a round
+   * trip, and a prefix match on that href would have left the tile dark on
+   * every other Management page. `match: "/management"` says the territory
+   * out loud instead of inferring it from the destination.
+   */
+  match?: string;
 }
 
 /**
@@ -83,6 +94,15 @@ export const NAV_PRIMARY: readonly NavItem[] = [
      move from the registry rather than from a second hand-kept list. */
   { href: "/agents", key: "agents", inBar: false },
   /*
+   * INTEGRATIONS IS A RAIL DESTINATION AGAIN (user directive, 2026-09-03: "i
+   * need the integrations to come to the menu from the setting under the
+   * agents"). It sat in the Settings menu from 2026-09-02; what a connection
+   * IS turns out to belong beside the agents that use it rather than beside
+   * the org's configuration — an agent without its connections can do
+   * nothing, and the two were a menu apart.
+   */
+  { href: "/integrations", key: "integrations", inBar: false },
+  /*
    * ECHO IS OFF THE RAIL (user directive, 2026-09-02: "remove echo, we don't
    * need it any more — we need only its parts for future, keep the parts that
    * we need for later").
@@ -94,7 +114,25 @@ export const NAV_PRIMARY: readonly NavItem[] = [
    * navigation, and the reachability check is satisfied because the pages
    * still resolve for anyone holding a bookmark.
    */
-  { href: "/management", key: "management", inBar: true },
+  /*
+   * THE RAIL POINTS AT THE SECTION'S FIRST PAGE, not at the section (user
+   * report, 2026-09-03: "the management section when i go to it refresh the
+   * whole platform ... it feels different from other section like meetings").
+   *
+   * It did, and the cause was one line away: `/management/page.tsx` is a
+   * SERVER component whose whole body is `redirect({ href:
+   * "/management/general" })`. So pressing Management asked the server for a
+   * page, got a redirect back, and asked again — a round trip and a second
+   * load before anything rendered, where /meetings renders on the first ask.
+   * Settings never had the problem because its home is an optional
+   * catch-all (`[[...section]]`) that renders its first section directly.
+   *
+   * The redirect STAYS for anyone holding a bookmark to /management — what
+   * changes is that the ordinary path no longer walks through it. A link is
+   * a promise, and one that costs a round trip is a slower promise than the
+   * one beside it.
+   */
+  { href: "/management/general", key: "management", inBar: true, match: "/management" },
 ];
 
 /**
@@ -154,8 +192,14 @@ export function activeNavHref(pathname: string): string | undefined {
   )
     ? "/settings"
     : pathname;
+  /* an entry is lit by its TERRITORY (`match`) and navigates to its `href` —
+     the two are the same for every entry but Management, whose href is its
+     first page so that pressing it does not walk through a server redirect */
   const candidates = [...NAV_PRIMARY, ...NAV_UTILITY]
-    .map((n) => n.href)
-    .filter((href) => (href === "/" ? effective === "/" : effective.startsWith(href)));
+    .filter((n) => {
+      const territory = n.match ?? n.href;
+      return territory === "/" ? effective === "/" : effective.startsWith(territory);
+    })
+    .map((n) => n.href);
   return candidates.sort((a, b) => b.length - a.length)[0];
 }

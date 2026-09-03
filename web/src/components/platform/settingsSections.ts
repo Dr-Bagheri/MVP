@@ -35,11 +35,15 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
      sign-in methods from the settings"). The page still resolves at its own
      address — what a menu offers and what the router serves are different
      questions, and only the first one was asked, exactly as with Skills. */
-  /* CONNECTIONS (user directive, 2026-09-02: "put the integrations into the
-     settings"). The page keeps its address — one home per feature, more
-     than one door to it — and the rail entry goes, because a surface that
-     lives in a menu does not also need a tile beside the apps. */
-  { slug: "integrations", group: "connections", href: "/integrations", labelFrom: "platform" },
+  /* INTEGRATIONS LEFT THIS MENU (user directive, 2026-09-03: "i need the
+     integrations to come to the menu from the setting under the agents").
+     [SUPERSEDES the 2026-09-02 directive that put it here. Left visible
+     rather than deleted: the reason it came — a connection is org
+     configuration — is a real argument, and the record of a decision
+     changing is worth more than a file that reads as though it was always
+     this way. What decided it the other way is that an agent without its
+     connections can do nothing, so the two belong within one glance.]
+     Its page keeps its address; only the door moved. */
   /* the assistant's own configuration — the pages keep their addresses.
      SKILLS LEFT THIS MENU (user directive, same round). Its page still
      resolves at /management/skills, exactly as every other row this menu

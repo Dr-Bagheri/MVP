@@ -52,27 +52,59 @@ describe("platform nav", () => {
 describe("activeNavHref", () => {
   it("folds the cross-homed Settings surfaces into /settings", () => {
     expect(activeNavHref("/management/models")).toBe("/settings");
-    /* Integrations is cross-homed the OTHER way round (user directive,
-       2026-09-02): a top-level page that now lives in Settings' menu and no
-       longer has a rail tile of its own. Standing on it must light Settings,
-       or the person is on a page the rail says they are not on. */
-    expect(activeNavHref("/integrations")).toBe("/settings");
+    /* Integrations went BACK to the rail (user directive, 2026-09-03: "i
+       need the integrations to come to the menu from the setting under the
+       agents"), so it stops being cross-homed and lights itself. The
+       assertion is kept rather than deleted, pointed the other way: it is
+       the half of the move that is invisible unless something says which
+       tile a person on that page is standing under.
+       [SUPERSEDES the 2026-09-02 entry, which read: a top-level page that
+       now lives in Settings' menu and no longer has a rail tile of its own.] */
+    expect(activeNavHref("/integrations")).toBe("/integrations");
   });
 
   it("controls: a real Management page and a real Settings page are untouched", () => {
-    expect(activeNavHref("/management/users")).toBe("/management");
-    expect(activeNavHref("/management")).toBe("/management");
+    /*
+     * The value returned is the entry's DESTINATION, which the rail compares
+     * against its own href — and Management's destination stopped being
+     * `/management` on 2026-09-03. Its page is a server `redirect()` to
+     * General, so pressing the tile asked the server, got a redirect, and
+     * asked again: a round trip and a second load where /meetings renders on
+     * the first ask, which is the "it reloads the whole platform" the user
+     * reported. The tile points at the first page now and declares
+     * `/management` as its TERRITORY, so every page below still lights it.
+     */
+    expect(activeNavHref("/management/users")).toBe("/management/general");
+    /* the bookmark still resolves, and still lights the tile */
+    expect(activeNavHref("/management")).toBe("/management/general");
     expect(activeNavHref("/settings/security")).toBe("/settings");
     /* Skills LEFT the Settings menu in the same round, so it stops being
        Settings' territory and goes back to lighting Management — the half of
        the change that is invisible unless it is asserted. */
-    expect(activeNavHref("/management/skills")).toBe("/management");
+    expect(activeNavHref("/management/skills")).toBe("/management/general");
   });
 
   it("prefix discipline holds: /management/modelsomething is NOT Settings", () => {
     /* startsWith on the bare string would fold this too — the boundary is
        exact-or-slash, so a future sibling route cannot inherit the fold */
-    expect(activeNavHref("/management/modelsomething")).toBe("/management");
+    expect(activeNavHref("/management/modelsomething")).toBe("/management/general");
+  });
+
+  it("a section's territory is wider than the page it navigates to", () => {
+    /*
+     * The property the `match` field exists for, asserted rather than assumed:
+     * Management's href is one page inside it, so a naive prefix match on the
+     * href would leave the tile DARK everywhere except General — the person
+     * standing on Users would be told they are nowhere.
+     */
+    const management = NAV_PRIMARY.find((n) => n.key === "management")!;
+    expect(management.href).toBe("/management/general");
+    expect(management.match).toBe("/management");
+    for (const page of ["/management", "/management/users", "/management/server", "/management/speakers"]) {
+      expect(activeNavHref(page), `${page} must light Management`).toBe("/management/general");
+    }
+    /* and the control: territory does not leak to a neighbour */
+    expect(activeNavHref("/meetings")).toBe("/meetings");
   });
 
   it("the hub matches exactly, never by prefix", () => {
