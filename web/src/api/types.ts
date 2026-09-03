@@ -229,6 +229,16 @@ export interface Me extends User {
    * when migrated; ABSENT before db/0073) but no control reads or writes it.
    */
   autonomy?: "watch" | "assist" | "act";
+  /**
+   * db/0169 — may this person's agents (Roya, Ava) search the open web.
+   *
+   * ABSENT on a deployment without the column, `false` when the person has not
+   * turned it on. Two different nothings, kept apart because the settings
+   * screen renders them differently: "not available here" versus an off
+   * switch somebody can turn on. Core distinguishes them deliberately; folding
+   * them here with `?? false` would throw that away at the last step.
+   */
+  agents_web?: boolean;
   /** db/0112 - Settings-Assistant; absent as a group until migrated. */
   assistant_reply_language?: string | null;
   /* 0128: the spoken voice per language — "female" | "male" */
@@ -852,6 +862,16 @@ export type AgentEvent =
    * conversation the server is now persisting.
    */
   | { type: "session"; id: string; created: boolean }
+  /**
+   * db/0169 — a COLLEAGUE spoke in this thread.
+   *
+   * Echo can call Roya or Ava mid-answer; their reply arrives whole rather
+   * than as deltas, and it belongs to them. Its own event, not `text_delta`,
+   * because a delta has no author: folding a colleague's paragraph into
+   * Echo's would make the thread claim Echo wrote it, which is precisely what
+   * the avatar beside a message is there to settle.
+   */
+  | { type: "agent_message"; author: string; name: string; text: string; failed: boolean }
   | { type: "done"; runId: string; failed: boolean; error?: string };
 
 /** A persisted conversation. */
@@ -903,6 +923,19 @@ export interface AgentMessage {
   streaming?: boolean;
   /** run ended with failed:true, or the stream died without `done` */
   failed?: boolean;
+  /**
+   * db/0169 — WHICH assistant wrote this turn.
+   *
+   * An agent handle (`roya`, `ava`) when Echo called a colleague in, and
+   * absent for Echo itself. Absent is the ordinary case and the correct
+   * reading of every message written before authorship existed: the assistant
+   * wrote them, and the assistant is what is now called Echo.
+   *
+   * The NAME is not on the message. It is resolved from the roster at render
+   * time, so a renamed agent renames everywhere at once rather than leaving
+   * old turns wearing the old name — the same reason `personName` exists.
+   */
+  author?: string | null;
   /**
    * CLIENT-ONLY (never on the wire): the Create chip active when this answer
    * was requested. The toolbar turns it into the promised deliverable —

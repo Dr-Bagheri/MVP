@@ -94,6 +94,16 @@ export function AssistantSettings() {
   const [voiceFa, setVoiceFa] = useState<string>("female");
   const [voiceEn, setVoiceEn] = useState<string>("female");
   const [prefs, setPrefs] = useState<PrefsState>("pending");
+  /**
+   * db/0169 — may this person's agents search the open web.
+   *
+   * THREE states, not two. `undefined` means the deployment predates the
+   * column, and it renders as "not available here" rather than as an off
+   * switch: a toggle that saves nothing is the defect this repo has shipped
+   * twice, and the wire deliberately distinguishes absent from false so the
+   * screen can tell them apart.
+   */
+  const [agentsWeb, setAgentsWeb] = useState<boolean | undefined>(undefined);
 
   useEffect(() => {
     void api.me().then((me) => {
@@ -105,6 +115,7 @@ export function AssistantSettings() {
         setSavedInstructions(me.assistant_instructions ?? "");
         setVoiceFa(me.assistant_voice_fa ?? "female");
         setVoiceEn(me.assistant_voice_en ?? "female");
+        setAgentsWeb(me.agents_web);
       } else {
         /* audit finding, 2026-09-02: a wire without the group used to leave
            the same nothing as a wire still in flight — say which it is */
@@ -122,6 +133,9 @@ export function AssistantSettings() {
       setSavedInstructions(me.assistant_instructions ?? "");
       setVoiceFa(me.assistant_voice_fa ?? "female");
       setVoiceEn(me.assistant_voice_en ?? "female");
+      /* adopt the SERVER's answer, never the click: if core normalised it,
+         that is the value, and the switch shows what is actually in force */
+      setAgentsWeb(me.agents_web);
       /* cached short phrases wear the voice they were spoken in — a saved
          gender change must reach the very next ack, not outlive it */
       clearSpeechCache();
@@ -134,6 +148,11 @@ export function AssistantSettings() {
   return (
     <div className="space-y-5">
       <VoiceSwitches />
+      <AgentsWebCard
+        state={prefs}
+        value={agentsWeb}
+        onChange={(next) => void savePrefs({ agents_web: next })}
+      />
       {/* db/0112 - the standing voice. The card is structure and renders with
           the page; what waits for the wire is the body (see PrefsState). */}
       <Card>
@@ -332,5 +351,59 @@ function SwitchRow({ label, hint, checked, onChange }: {
       </span>
       <Switch checked={checked} onChange={onChange} label={label} />
     </div>
+  );
+}
+
+/**
+ * «دسترسی عامل‌ها به وب» (user directive, 2026-09-03: "they must have option of
+ * even using the internet if needed that can be turn on in the setting in
+ * assistant section, agents web access").
+ *
+ * DEFAULT OFF, and the person's own. Reaching the open web is the one thing
+ * these agents do that spends money outside the building and reads text nobody
+ * in the organization wrote, so it is opt-in — and it is the individual's
+ * opt-in rather than an admin default, because the person who pays attention
+ * to an answer is the one who should decide how it was found.
+ *
+ * The switch is ANDed with each agent's own `web` flag on the server: either
+ * off is off. That is not visible here on purpose — a settings screen
+ * explaining a boolean conjunction is a settings screen nobody reads — but it
+ * is why turning this on may still leave one colleague offline, and the hint
+ * says "may" rather than "will".
+ *
+ * THREE STATES. `undefined` is a deployment without the column, and it renders
+ * as an absence with a reason rather than as an off switch: a toggle that
+ * saves nothing is the exact defect this repo has now shipped twice.
+ */
+function AgentsWebCard({ state, value, onChange }: {
+  state: PrefsState;
+  value: boolean | undefined;
+  onChange: (next: boolean) => void;
+}) {
+  const t = useTranslations("settings");
+  return (
+    <Card>
+      <h2 className="h-section">{t("agentsWebTitle")}</h2>
+      <p className="mt-1 text-sm leading-6 text-fg-muted">{t("agentsWebHint")}</p>
+      <div className="mt-4">
+        {state === "pending" ? (
+          <Skeleton className="h-14 w-full rounded-xl" />
+        ) : value === undefined ? (
+          /* named, not hidden: a person who was told this setting exists and
+             finds nothing would look for it forever */
+          <p className="text-sm text-fg-muted">{t("agentsWebUnavailable")}</p>
+        ) : (
+          <div className="flex items-start justify-between gap-4 rounded-xl border border-border p-3">
+            <span className="min-w-0">
+              <span className="block text-sm font-medium text-fg">{t("agentsWebLabel")}</span>
+              <span className="mt-0.5 block text-xs leading-6 text-fg-muted">
+                {t("agentsWebRowHint")}
+              </span>
+            </span>
+            <Switch checked={value} onChange={() => onChange(!value)} label={t("agentsWebLabel")} />
+          </div>
+        )}
+      </div>
+    </Card>
   );
 }

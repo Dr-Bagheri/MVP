@@ -2,6 +2,7 @@
 
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
+import { AgentAvatar, AgentName } from "./AgentAvatar";
 import { api } from "@/api/client";
 import type { AgentMessage } from "@/api/types";
 import { deliverDoc, deliverPdf } from "@/lib/deliver";
@@ -160,6 +161,22 @@ const MessageRow = memo(function MessageRow({
             className={`message-arrives ${isUser ? "flex justify-end" : "flex justify-start"}`}
           >
             <div className={isUser ? "max-w-[85%]" : "w-full"}>
+              {/*
+                WHOSE TURN THIS IS (db/0169). Only when it is NOT Echo's:
+                Echo is the voice of the surface you are in, and a face beside
+                every one of its paragraphs would make the ordinary case
+                noisier to buy a consistency nobody asked for. The mark
+                appears exactly when it answers a question the reader would
+                otherwise have — somebody else is speaking.
+              */}
+              {!isUser && m.author ? (
+                <div className="mb-1 flex items-center gap-1.5">
+                  <AgentAvatar handle={m.author} size="sm" />
+                  <span className="text-xs font-semibold text-fg-muted">
+                    <AgentName handle={m.author} />
+                  </span>
+                </div>
+              ) : null}
               {/*
                 THE ANSWER HAS NO BOX (user directive, 2026-08-27: "lose the
                 text box in the ai assistant, just the text").

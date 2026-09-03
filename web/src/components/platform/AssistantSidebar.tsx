@@ -11,6 +11,7 @@ import { api } from "@/api/client";
 import type { AgentEvent, ConnectorStatus } from "@/api/types";
 import { useRouter } from "@/i18n/routing";
 import { mentionedAgent } from "@/lib/agentMention";
+import { AgentAvatar, AgentName } from "./AgentAvatar";
 import { liveConversation, setLiveConversation } from "@/lib/liveConversation";
 import {
   subscribeVoicePrefs, voicePrefs, voicePrefsServer,
@@ -116,6 +117,8 @@ interface SidebarMessage {
   /** the server's own refusal sentence, when it gave one — a 400's message
       is actionable ("no model selected…"); a bare "did not finish" is not */
   failedDetail?: string;
+  /** db/0169 — a colleague's handle when Echo called one in; absent = Echo */
+  author?: string;
 }
 
 /** the person's own choice, remembered per browser */
@@ -641,6 +644,11 @@ export function AssistantSidebar() {
         role: m.role,
         content: m.content,
         chips: m.tool_calls.map((c) => c.name).filter((n): n is string => typeof n === "string"),
+        /* db/0169 — the RELOAD path. Without this a colleague's turn keeps its
+           avatar only until the page is refreshed, and then quietly becomes
+           Echo's: the stream would be honest and the record would not, which
+           is the worse half to get wrong. */
+        ...(m.author ? { author: m.author } : {}),
       })));
     } catch {
       notify(t("failed"), "warn");
@@ -896,6 +904,26 @@ export function AssistantSidebar() {
 
   async function handleEvent(event: AgentEvent, replyId: string) {
     switch (event.type) {
+      case "agent_message":
+        /* A COLLEAGUE SPOKE (db/0169). Inserted BEFORE Echo's streaming reply
+           rather than appended: Echo is still writing, and its conclusion
+           refers to what the colleague just said, so appending at the end
+           would put the answer before the evidence. */
+        setMessages((prev) => {
+          const idx = prev.findIndex((m) => m.id === replyId);
+          const turn: SidebarMessage = {
+            id: `${replyId}-${event.author}-${prev.length}`,
+            role: "assistant",
+            content: event.text,
+            chips: [],
+            author: event.author,
+            ...(event.failed ? { failed: true } : {}),
+          };
+          return idx === -1
+            ? [...prev, turn]
+            : [...prev.slice(0, idx), turn, ...prev.slice(idx)];
+        });
+        break;
       case "session":
         sessionId.current = event.id;
         /* THE HANDOFF POINT. The session event is the first frame of a lazily
@@ -1063,6 +1091,15 @@ export function AssistantSidebar() {
               ) : (
                 messages.map((m) => (
                   <div key={m.id} className={m.role === "user" ? "flex justify-end" : ""}>
+                    {/* whose turn — only when it is not Echo's (db/0169) */}
+                    {m.role === "assistant" && m.author ? (
+                      <div className="mb-1 flex items-center gap-1.5">
+                        <AgentAvatar handle={m.author} size="sm" />
+                        <span className="text-group-label font-semibold text-fg-muted">
+                          <AgentName handle={m.author} />
+                        </span>
+                      </div>
+                    ) : null}
                     <div
                       className={
                         m.role === "user"

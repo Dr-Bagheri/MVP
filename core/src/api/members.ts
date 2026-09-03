@@ -20,7 +20,7 @@ import {
   type CalendarPreference, type MemberRole, type UserStatus,
 } from "./vocabulary.ts";
 import {
-  hasAssistantPrefs, hasAutonomyColumn, hasProfileContext, PINNED_AUTONOMY,
+  hasAgentsWeb, hasAssistantPrefs, hasAutonomyColumn, hasProfileContext, PINNED_AUTONOMY,
 } from "../db/capabilities.ts";
 import { assertUuid, type Db, type SqlTx } from "../db/identity.ts";
 import type { Identity } from "../agent/types.ts";
@@ -196,6 +196,15 @@ export interface MeRecord extends MemberRecord {
   job_title?: string | null;
   about?: string | null;
   assistant_context?: boolean;
+  /**
+   * db/0169 — may this person's agents search the open web.
+   *
+   * ABSENT means the deployment predates the column; `false` means the person
+   * has not turned it on. Two different nothings, kept apart on purpose: the
+   * settings screen can say "not available here" instead of showing a switch
+   * that saves and does nothing.
+   */
+  agents_web?: boolean;
 }
 
 /**
@@ -464,11 +473,23 @@ export function createMembersRepo(db: Db) {
         /* 0128: the spoken voice, per language — 'female' | 'male' */
         assistant_voice_fa?: string | undefined;
         assistant_voice_en?: string | undefined;
+        /** db/0169 — may this person's agents search the open web. */
+        agents_web?: boolean | undefined;
       },
     ): Promise<MeRecord> {
       if (!(await hasAssistantPrefs(db))) {
         throw new ValidationError(
           "assistant preferences are not available on this deployment yet (db/0112 pending)",
+          { code: "not_migrated" });
+      }
+      /* db/0169's column is younger than the rest of this screen, so it gets
+         its own probe. Refusing the FIELD is the honest answer; letting the
+         statement run would 42703 and take every other preference with it,
+         which reads to the person as "saving is broken" rather than as "that
+         one switch is not here yet". */
+      if (patch.agents_web !== undefined && !(await hasAgentsWeb(db))) {
+        throw new ValidationError(
+          "agent web access is not available on this deployment yet (db/0169 pending)",
           { code: "not_migrated" });
       }
       const language = patch.assistant_reply_language;
@@ -498,7 +519,8 @@ export function createMembersRepo(db: Db) {
         && patch.record_on_workflows === undefined
         && patch.record_on_agents === undefined
         && patch.assistant_voice_fa === undefined
-        && patch.assistant_voice_en === undefined) {
+        && patch.assistant_voice_en === undefined
+        && patch.agents_web === undefined) {
         throw new ValidationError("nothing to update", { code: "nothing_to_update" });
       }
       await db.withIdentity(identity, (tx: SqlTx) =>
@@ -513,7 +535,12 @@ export function createMembersRepo(db: Db) {
                   assistant_voice_fa       = case when $14 then $15::text else assistant_voice_fa end,
                   assistant_voice_en       = case when $16 then $17::text else assistant_voice_en end,
                   record_on_workflows      = case when $18 then $19::text[] else record_on_workflows end,
-                  record_on_agents         = case when $20 then $21::text[] else record_on_agents end
+                  record_on_agents         = case when $20 then $21::text[] else record_on_agents end,
+                  /* db/0169. Guarded by the capability probe below rather
+                     than by a second migration check: a deployment without
+                     the column would 42703 the WHOLE statement, taking every
+                     other preference on this screen with it. */
+                  agents_web               = case when $22 then $23::boolean else agents_web end
             where id = $1`,
           [identity.userId,
             language !== undefined, language ?? null,
@@ -536,6 +563,7 @@ export function createMembersRepo(db: Db) {
             patch.record_on_agents === undefined
               ? null
               : [...new Set(patch.record_on_agents.filter((h) => typeof h === "string"))].slice(0, 100),
+            patch.agents_web !== undefined, patch.agents_web ?? null,
           ]));
       /*
        * TURNING DRAFTING ON RE-BASELINES THE MAILBOX.
@@ -573,6 +601,7 @@ export function createMembersRepo(db: Db) {
       const withAutonomy = await hasAutonomyColumn(db);
       const withAssistant = await hasAssistantPrefs(db);
       const withProfileCtx = await hasProfileContext(db);
+      const withAgentsWeb = await hasAgentsWeb(db);
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<Record<string, unknown>>(
           // The org join is LEFT for the same reason resolveIdentity's is: an
@@ -595,6 +624,7 @@ export function createMembersRepo(db: Db) {
                     ? "u.assistant_reply_language, u.assistant_reply_length, u.assistant_instructions, u.post_call_brief, u.auto_draft_replies, u.auto_meeting_prep, u.assistant_voice_fa, u.assistant_voice_en, u.record_on_workflows, u.record_on_agents,"
                     : ""}
                   ${withProfileCtx ? "u.job_title, u.about, u.assistant_context," : ""}
+                  ${withAgentsWeb ? "u.agents_web," : ""}
                   o.name as org_name
              from echo.app_user u
              left join echo.org o on o.id = u.org_id
@@ -650,6 +680,12 @@ export function createMembersRepo(db: Db) {
               assistant_context: Boolean(row.assistant_context),
             }
           : {}),
+        /* db/0169. Absent on a deployment without the column, which is a
+           different fact from `false` and is why this is not coalesced:
+           `undefined` reaches the settings screen as "this deployment has no
+           such switch", and the screen says so rather than drawing an
+           off toggle nobody can turn on. */
+        ...(withAgentsWeb ? { agents_web: Boolean(row.agents_web) } : {}),
       };
     },
 

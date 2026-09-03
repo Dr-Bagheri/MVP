@@ -1857,6 +1857,11 @@
     "trendWindow": "{delta} in the last {days} days"
   },
   "settings": {
+    "agentsWebHint": "Roya and Ava read only this organization's own data by default. Turn this on and they may search the web when they need to.",
+    "agentsWebLabel": "Let the agents search the web",
+    "agentsWebRowHint": "This is your setting for your own helpers; each agent also has its own, so one of them may stay offline.",
+    "agentsWebTitle": "Agent web access",
+    "agentsWebUnavailable": "This is not available on this deployment yet.",
     "assistantSaveFailed": "Not saved.",
     "assistantSaved": "Saved.",
     "customInstructions": "Standing instructions (up to 2000 characters)",

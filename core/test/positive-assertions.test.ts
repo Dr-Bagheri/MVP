@@ -17,9 +17,22 @@
 import { describe, expect, it, vi } from "vitest";
 
 const runPiMock = vi.fn();
-vi.mock("../src/agent/pi.ts", () => ({
+/*
+ * The REAL `Type`, spread in from pi-ai (2026-09-03).
+ *
+ * `platform-tools.ts` and `delegation.ts` build their schemas at module load,
+ * so a `Type: {}` stub throws "Type.String is not a function" before a single
+ * test runs — and what that produces is a SUITE THAT WILL NOT LOAD, which
+ * reads as the file being broken rather than as its mock being one line short.
+ *
+ * Imported INSIDE the factory because `vi.mock` is hoisted above every import
+ * in the file: a top-level `Type` is not initialised when the factory runs
+ * ("Cannot access __vi_import_1__ before initialization"). Only `runPi` needs
+ * to be fake here; everything else is the genuine module.
+ */
+vi.mock("../src/agent/pi.ts", async () => ({
+  ...await import("@earendil-works/pi-ai"),
   runPi: (...args: unknown[]) => runPiMock(...args),
-  Type: {},
 }));
 
 const { createAgentRuntime } = await import("../src/agent/runtime.ts");

@@ -102,6 +102,18 @@ export interface MessageRecord {
    * for part of it.
    */
   truncated: boolean;
+  /**
+   * db/0169 — WHICH assistant wrote this turn.
+   *
+   * An agent handle (`roya`, `ava`) when a colleague was called into the
+   * thread, and NULL for Echo itself. Deliberately not folded into `role`:
+   * role is what the MODEL is shown and this is what the READER is shown, and
+   * the enum has already been protected from this once (0164).
+   *
+   * NULL on a human turn too, and that is not a gap — a user's message has no
+   * assistant author, and the renderer keys off `role` first.
+   */
+  author: string | null;
   created_at: string;
 }
 
@@ -130,7 +142,7 @@ export interface RegenerationReplay {
  * least loud, which is more than the bug it was added to catch managed.
  */
 export const THREAD_QUERY = `
-  select m.id, m.seq, m.role, m.content, m.tool_calls, m.agent_run_id, m.created_at,
+  select m.id, m.seq, m.role, m.content, m.tool_calls, m.agent_run_id, m.author, m.created_at,
          coalesce(m.truncated, echo.run_is_truncated(r.status, r.started_at)) as truncated
     from echo.agent_message m
     left join echo.agent_run r on r.id = m.agent_run_id
@@ -138,7 +150,7 @@ export const THREAD_QUERY = `
 `;
 
 const SESSION_COLUMNS = `id, title, last_message_at, archived_at, created_at`;
-const MESSAGE_COLUMNS = `id, seq, role, content, tool_calls, agent_run_id, created_at`;
+const MESSAGE_COLUMNS = `id, seq, role, content, tool_calls, agent_run_id, author, created_at`;
 
 /** Long enough to tell two conversations apart, short enough for a sidebar. */
 const TITLE_MAX = 80;
@@ -171,6 +183,7 @@ const toMessage = (row: Record<string, unknown>): MessageRecord => ({
   tool_calls: Array.isArray(row.tool_calls) ? row.tool_calls : [],
   agent_run_id: (row.agent_run_id as string | null) ?? null,
   truncated: row.truncated === true,
+  author: (row.author as string | null) ?? null,
   created_at: iso(row.created_at),
 });
 
@@ -388,20 +401,23 @@ export function createSessionsRepo(db: Db) {
         content: string;
         toolCalls?: unknown[] | undefined;
         agentRunId?: string | null | undefined;
+        /** db/0169: which assistant wrote it. Undefined = Echo itself. */
+        author?: string | null | undefined;
       },
     ): Promise<MessageRecord> {
       const id = assertUuid(message.sessionId, "session id");
       const rows = await db.withIdentity(identity, (tx: SqlTx) =>
         tx.unsafe<Record<string, unknown>>(
           `insert into echo.agent_message
-             (session_id, org_id, seq, role, content, tool_calls, agent_run_id)
+             (session_id, org_id, seq, role, content, tool_calls, agent_run_id, author)
            select $1, $2,
                   coalesce((select max(seq) + 1 from echo.agent_message where session_id = $1), 0),
-                  $3::echo.agent_message_role, $4, ${JSONB_PARAM(5)}, $6::uuid
+                  $3::echo.agent_message_role, $4, ${JSONB_PARAM(5)}, $6::uuid, $7::text
            returning ${MESSAGE_COLUMNS}`,
           [
             id, identity.orgId, message.role, message.content,
             toJsonb(message.toolCalls ?? []), message.agentRunId ?? null,
+            message.author ?? null,
           ],
         ),
       );
@@ -554,7 +570,11 @@ export function createSessionsRepo(db: Db) {
         );
         if (!meta[0]) throw new NotFoundError("conversation not found");
         const rows = await tx.unsafe<Record<string, unknown>>(
-          `select id, seq, role, content, tool_calls, agent_run_id, truncated, created_at
+          /* db/0170 widened the definer's signature so a shared conversation
+             attributes a colleague's turn to the colleague. Selecting `author`
+             here before that migration is a 42703 — a definer's RETURNS TABLE
+             is a contract, not a suggestion (0152). */
+          `select id, seq, role, content, tool_calls, agent_run_id, truncated, author, created_at
              from echo.shared_session_thread($1)`,
           [id],
         );

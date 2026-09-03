@@ -178,8 +178,18 @@ describe("the card is frame; only its body waits for the wire (audit finding, 20
      * bar at `.input`'s own height. The count goes red the day a field is
      * added without extending the reserved space — the way a skeleton
      * silently becomes the wrong size.
+     *
+     * SCOPED TO THIS CARD (2026-09-03). It queried the whole document, so the
+     * number was a fact about the SCREEN rather than about the reservation it
+     * is asserting — and it went red the moment a sibling card arrived with a
+     * skeleton of its own, which is a true statement about a page and no
+     * statement at all about whether this card reserves the right space. The
+     * count trap: raising it to 11 would have kept the test passing and
+     * quietly stopped it meaning anything.
      */
-    expect(document.querySelectorAll(".animate-pulse")).toHaveLength(5 * 2);
+    const voiceCard = screen.getByRole("heading", { name: "لحن و رفتار دستیار" })
+      .closest("div.card")!;
+    expect(voiceCard.querySelectorAll(".animate-pulse")).toHaveLength(5 * 2);
   });
 
   it("absent: a wire without the group renders the honest sentence, not defaults wearing controls", async () => {

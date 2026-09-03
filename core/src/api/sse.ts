@@ -50,6 +50,22 @@ export type SseEvent =
    */
   | { type: "client_tool_call"; id: string; tool: string; label: string;
       args: unknown; effect: "ui" | "write"; requires_consent: boolean }
+  /**
+   * db/0169 — a COLLEAGUE has spoken in this thread.
+   *
+   * Echo can call Roya or Ava mid-answer (delegation.ts); their reply is a
+   * whole message rather than a stream of deltas, and it belongs to THEM. So
+   * it is its own event and not `text_delta`: a delta has no author, and
+   * folding a colleague's paragraph into Echo's would make the thread say
+   * Echo wrote it — which is the one thing an avatar beside a message is
+   * supposed to settle.
+   *
+   * `author` is the agent's handle and `name` is what to draw. Both travel,
+   * because the handle is the identity (and what gets persisted) while the
+   * name is what a reader sees, and a client resolving one from the other
+   * would be a second copy of the roster.
+   */
+  | { type: "agent_message"; author: string; name: string; text: string; failed: boolean }
   | { type: "done"; runId: string; failed: boolean; error?: string };
 
 /** Minimal sink so this is testable without a live socket. */

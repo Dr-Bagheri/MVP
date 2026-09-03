@@ -190,6 +190,11 @@ export async function hasAutonomyColumn(db: Db): Promise<boolean> {
   return hasColumn(db, "app_user", "autonomy");
 }
 
+/** db/0169 — the person's own switch over their agents' web access. */
+export async function hasAgentsWeb(db: Db): Promise<boolean> {
+  return hasColumn(db, "app_user", "agents_web");
+}
+
 export async function hasAutonomyCeiling(db: Db): Promise<boolean> {
   return hasColumn(db, "org", "autonomy_ceiling");
 }

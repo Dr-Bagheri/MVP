@@ -17,6 +17,7 @@ import type { DomainTool } from "../agent/tools.ts";
 import type { Db } from "../db/identity.ts";
 import type { Identity, Skill } from "../agent/types.ts";
 import { createClientTools } from "../agent/client-tools.ts";
+import { createDelegationTools } from "../agent/delegation.ts";
 
 export interface AskRequest {
   identity: Identity;
@@ -69,7 +70,29 @@ export interface AskRequest {
    * because `ask` resolves when the STREAM closes, and the turn must be
    * recorded before that resolution is observed.
    */
-  onTurn?: ((turn: { runId: string; text: string; toolCalls: unknown[]; failed: boolean }) => Promise<void>) | undefined;
+  onTurn?: ((turn: {
+    runId: string; text: string; toolCalls: unknown[]; failed: boolean;
+    /** db/0169: which assistant wrote it. Absent = Echo itself. */
+    author?: string | undefined;
+  }) => Promise<void>) | undefined;
+  /**
+   * db/0169 — may the colleagues Echo calls in search the open web.
+   *
+   * The PERSON's switch (`app_user.agents_web`), which is ANDed with each
+   * agent's own `web` flag inside delegation.ts. Two switches rather than one
+   * because they answer different questions: the agent's says "is this a
+   * web-using persona", the person's says "do I want my helpers spending
+   * outside the building today".
+   */
+  agentsWeb?: boolean | undefined;
+  /**
+   * Set when the person PICKED an agent for this turn (the agents screen's
+   * «پرسیدن», or `@roya` in the message). Two consequences, both deliberate:
+   * the turn is persisted under that handle so the thread shows their avatar,
+   * and they get no delegation tools — a colleague somebody asked directly
+   * does not get to convene the others.
+   */
+  agentHandle?: string | undefined;
 }
 
 export interface AssistantDeps<TDeps> {
@@ -189,6 +212,61 @@ export function createAssistant<TDeps>(config: AssistantDeps<TDeps>) {
         locale: request.locale,
       });
 
+      /**
+       * ECHO'S COLLEAGUES (db/0169). `ask_roya` / `ask_ava` join the tool set
+       * for THIS turn, closed over this stream so a colleague's answer lands
+       * in the thread as it happens rather than at the end.
+       *
+       * Only when a turn belongs to Echo: a run that already IS an agent
+       * (`request.agentHandle`, set when somebody picked Roya from the agents
+       * screen) gets none of these, which is guard 1 of three — no onward
+       * delegation, as an absence rather than as a check.
+       *
+       * `delegateTurns` collects what was said so the turns can be PERSISTED
+       * after the run, in the order they were spoken. They are appended
+       * before Echo's own turn, because that is the order they happened in
+       * and a thread that reorders itself on reload is a thread nobody trusts.
+       */
+      const delegateTurns: { author: string; text: string; failed: boolean }[] = [];
+      const delegationTools = request.agentHandle
+        ? []
+        : await createDelegationTools({
+          db: config.db,
+          identity: request.identity,
+          web: request.agentsWeb === true,
+          locale: request.locale,
+          onTurn: (turn) => {
+            delegateTurns.push({ author: turn.author, text: turn.text, failed: turn.failed });
+            stream.send({
+              type: "agent_message",
+              author: turn.author,
+              name: turn.name,
+              text: turn.text,
+              failed: turn.failed,
+            });
+          },
+          runNested: async (nested) => runtime.run({
+            identity: request.identity,
+            kind: "assistant",
+            /* the agent's OWN instructions, resolved server-side from the
+               database — never anything the browser sent (M30) */
+            systemInstructions: nested.instructions,
+            agentModel: nested.model,
+            callerModel: request.model,
+            input: nested.question,
+            tools: nested.tools as never,
+            /* NO client tools and NO write tools: guard 2. What an output can
+               REACH decides what its author may hold, and a delegate's output
+               is read by Echo before anybody acts on it. */
+            clientTools: [] as never,
+            deps: config.deps as never,
+            callId: null,
+            web: nested.web,
+            signal: request.signal,
+            apiKey: config.apiKey,
+          }),
+        });
+
       try {
         const result = await runtime.run({
           identity: request.identity,
@@ -201,7 +279,7 @@ export function createAssistant<TDeps>(config: AssistantDeps<TDeps>) {
           provenance: request.provenance,
           callerModel: request.model,
           input: request.question,
-          tools: config.tools,
+          tools: [...config.tools, ...delegationTools] as never,
           clientTools: clientTools as never,
           deps: config.deps,
           callId: request.callId ?? null,
@@ -287,8 +365,28 @@ export function createAssistant<TDeps>(config: AssistantDeps<TDeps>) {
          */
         if (request.onTurn) {
           try {
+            /*
+             * The colleagues first, in the order they spoke, then Echo.
+             *
+             * That is the order the reader watched them arrive in, and a
+             * thread that reorders itself on reload is a thread nobody
+             * trusts — the live stream showed Roya answering BEFORE Echo's
+             * conclusion, because that is what happened.
+             *
+             * A failed delegate turn is persisted too: "Ava could not answer"
+             * is part of the record of how this question went, and dropping
+             * it would leave Echo's conclusion referring to a colleague the
+             * thread never shows being asked.
+             */
+            for (const turn of delegateTurns) {
+              await request.onTurn({
+                runId: result.runId, text: turn.text, toolCalls: [],
+                failed: turn.failed, author: turn.author,
+              });
+            }
             await request.onTurn({
               runId: result.runId, text: answer, toolCalls, failed: result.failed,
+              ...(request.agentHandle ? { author: request.agentHandle } : {}),
             });
           } catch {
             // Swallowed deliberately: see above. The run is in agent_run.

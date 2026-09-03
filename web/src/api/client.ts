@@ -2159,6 +2159,8 @@ export const api = {
     post_call_brief?: boolean;
     /** db/0115 — the person's own "draft replies to my new mail" switch. */
     auto_draft_replies?: boolean;
+    /** db/0169 — may this person's agents (Roya, Ava) search the open web. */
+    agents_web?: boolean;
     auto_meeting_prep?: boolean;
     /* db/0142 — the whole set, not a delta: the server stores what it is
        sent, deduped and bounded */
@@ -2346,6 +2348,8 @@ export const api = {
         id: string; role: "user" | "assistant" | "tool"; content: string;
         tool_calls: { id?: string; name?: string }[];
         agent_run_id: string | null; truncated: boolean;
+        /** db/0169 — a colleague's handle, or null for Echo */
+        author?: string | null;
       }[];
     }>(`/api/assistant/sessions/${sessionId}/messages`);
     /*
@@ -2368,6 +2372,7 @@ export const api = {
       proposal: null,
       run_id: m.agent_run_id ?? undefined,
       truncated: m.truncated,
+      author: m.author ?? null,
     }));
   },
 

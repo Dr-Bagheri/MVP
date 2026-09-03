@@ -8,7 +8,21 @@ import { createHmac } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 
 const runPiMock = vi.fn();
-vi.mock("../src/agent/pi.ts", () => ({
+/*
+ * The REAL `Type`, spread in from pi-ai (2026-09-03).
+ *
+ * `platform-tools.ts` and `delegation.ts` build their schemas at module load,
+ * so a `Type: {}` stub throws "Type.String is not a function" before a single
+ * test runs — and what that produces is a SUITE THAT WILL NOT LOAD, which
+ * reads as the file being broken rather than as its mock being one line short.
+ *
+ * Imported INSIDE the factory because `vi.mock` is hoisted above every import
+ * in the file: a top-level `Type` is not initialised when the factory runs
+ * ("Cannot access __vi_import_1__ before initialization"). Only `runPi` needs
+ * to be fake here; everything else is the genuine module.
+ */
+vi.mock("../src/agent/pi.ts", async () => ({
+  ...await import("@earendil-works/pi-ai"),
   runPi: (...args: unknown[]) => runPiMock(...args),
   // The ask route now validates an explicit body.model against the catalogue
   // (choose-by-name wall). The barred entry is here ON PURPOSE: the refusal
@@ -17,7 +31,6 @@ vi.mock("../src/agent/pi.ts", () => ({
     { id: "google/gemini-3.6-flash", name: "Gemini 3.6 Flash", reasoning: true },
     { id: "anthropic/claude-opus-5", name: "Claude Opus 5", reasoning: false },
   ],
-  Type: {},
 }));
 
 const { buildServer } = await import("../src/api/server.ts");

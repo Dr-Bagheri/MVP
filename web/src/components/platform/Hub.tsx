@@ -699,6 +699,33 @@ export function Hub() {
             prev.map((m) => (m.id === replyId ? { ...m, content: m.content + event.delta } : m)),
           );
           break;
+        case "agent_message":
+          /**
+           * A COLLEAGUE SPOKE (db/0169). It goes in BEFORE Echo's streaming
+           * reply, not after — Echo is still writing into `replyId`, and its
+           * conclusion refers to what the colleague just said, so a thread
+           * that appended this at the end would read backwards.
+           *
+           * Its own message with its own `author`, never merged into Echo's
+           * bubble: the whole point of the avatar is that the reader can tell
+           * whose sentence they are reading, and a merged paragraph makes
+           * that unanswerable.
+           */
+          setMessages((prev) => {
+            const idx = prev.findIndex((m) => m.id === replyId);
+            const turn: AgentMessage = {
+              id: `${replyId}-${event.author}-${prev.length}`,
+              role: "assistant",
+              content: event.text,
+              tool_calls: [],
+              proposal: null,
+              author: event.author,
+              ...(event.failed ? { failed: true } : {}),
+            };
+            if (idx === -1) return [...prev, turn];
+            return [...prev.slice(0, idx), turn, ...prev.slice(idx)];
+          });
+          break;
         case "tool_call":
           setMessages((prev) =>
             prev.map((m) =>
