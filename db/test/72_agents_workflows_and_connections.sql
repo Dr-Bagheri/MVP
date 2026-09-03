@@ -12,9 +12,12 @@ select set_config('echo.actor_id', '02000000-0000-4000-8000-000000000002', true)
 
 -- The seeded system agents/workflows are product configuration visible to an
 -- active member, while their trusted instruction bodies remain server-only.
+-- 0163 retired the eight job-shaped agents for two named ones. The subject
+-- moved; the RULE under test did not — a shipped agent is product
+-- configuration an active member can read.
 select t.ok(
-  exists (select 1 from echo.assistant_agent where handle = 'sales' and level = 'system'),
-  'an active member can select the seeded sales agent');
+  exists (select 1 from echo.assistant_agent where handle = 'roya' and level = 'system'),
+  'an active member can select a seeded system agent (0163: roya)');
 select t.ok(
   exists (select 1 from echo.workflow_template where slug = 'prepare-meetings'),
   'an active member can select the seeded meeting workflow');
@@ -63,7 +66,7 @@ reset role;
 set local role echo_agent;
 select set_config('echo.actor_id', '02000000-0000-4000-8000-000000000002', true);
 select t.denied(
-  $$select instructions from echo.assistant_agent where handle = 'sales'$$,
+  $$select instructions from echo.assistant_agent where handle = 'roya'$$,
   'echo_agent has no grant to saved agent instructions');
 select t.denied(
   $$select encrypted_payload from echo.connector_secret

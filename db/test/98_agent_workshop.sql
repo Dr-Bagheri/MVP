@@ -82,22 +82,39 @@ select t.ok(
 -- the agent is shared across every org; which workflows it carries is each
 -- org's own row, scoped by org_id on both write and read
 select set_config('echo.actor_id', '01000000-0000-4000-8000-000000000001', true); -- alice (admin)
+-- 0163: the handle moved from 'meetings' to 'roya' when the eight job-shaped
+-- agents were retired for two named ones. What is under test is the org-scoped
+-- membership row, not which agent it points at.
 insert into echo.agent_workflow (agent_id, workflow_id, org_id)
 select a.id, '98000000-0000-4000-8000-0000000000f1', '0a000000-0000-4000-8000-00000000000a'
-  from echo.assistant_agent a where a.level = 'system' and a.handle = 'meetings';
+  from echo.assistant_agent a where a.level = 'system' and a.handle = 'roya';
 select t.ok(
   exists (select 1 from echo.agent_workflow aw
            join echo.assistant_agent a on a.id = aw.agent_id
-          where a.handle = 'meetings'
+          where a.handle = 'roya'
             and aw.org_id = '0a000000-0000-4000-8000-00000000000a'),
   '0124: an admin arranges the org''s workflows onto a shipped system agent');
 
 select set_config('echo.actor_id', '02000000-0000-4000-8000-000000000002', true); -- bob (member)
+/*
+ * 0163 moved the handle, and the way this test FAILED is worth keeping.
+ *
+ * It named `handle = 'mail'`, an agent that migration deleted. An
+ * `insert … select` over zero rows does not raise — it inserts nothing,
+ * successfully — so `t.denied` reported "the statement was allowed and must
+ * not be" about a wall that was working perfectly. The refusal test had lost
+ * its SUBJECT, and said the opposite of what had happened.
+ *
+ * That is the vacuum in its most misleading direction: a positive check with
+ * no subject passes quietly, while a REFUSAL check with no subject fails
+ * loudly and blames the wall. Both are the same defect, and this one at least
+ * announces itself.
+ */
 select t.denied(
   $$insert into echo.agent_workflow (agent_id, workflow_id, org_id)
     select a.id, '98000000-0000-4000-8000-0000000000f1',
            '0a000000-0000-4000-8000-00000000000a'
-      from echo.assistant_agent a where a.level = 'system' and a.handle = 'mail'$$,
+      from echo.assistant_agent a where a.level = 'system' and a.handle = 'roya'$$,
   '0124: a member cannot arrange a system agent — same wall as the org agent');
 
 -- ─── the ATTACH/DETACH the product actually issues (0134) ──────────────
@@ -117,14 +134,14 @@ select set_config('echo.actor_id', '01000000-0000-4000-8000-000000000001', true)
 insert into echo.agent_workflow (agent_id, workflow_id, org_id, enabled)
 select a.id, w.id, w.org_id, true
   from echo.assistant_agent a, echo.workflow w
- where a.level = 'system' and a.handle = 'meetings'
+ where a.level = 'system' and a.handle = 'roya'   -- 0163 moved the handle
    and w.id = '98000000-0000-4000-8000-0000000000f1'
 on conflict (agent_id, workflow_id) do update set enabled = true;
 
 select t.ok(
   exists (select 1 from echo.agent_workflow aw
            join echo.assistant_agent a on a.id = aw.agent_id
-          where a.handle = 'meetings' and aw.enabled),
+          where a.handle = 'roya' and aw.enabled),
   '0134: the attach the PRODUCT issues (on conflict do update) is granted');
 
 -- the same statement twice: a re-attach must revive the kept row rather than
@@ -132,19 +149,19 @@ select t.ok(
 insert into echo.agent_workflow (agent_id, workflow_id, org_id, enabled)
 select a.id, w.id, w.org_id, true
   from echo.assistant_agent a, echo.workflow w
- where a.level = 'system' and a.handle = 'meetings'
+ where a.level = 'system' and a.handle = 'roya'
    and w.id = '98000000-0000-4000-8000-0000000000f1'
 on conflict (agent_id, workflow_id) do update set enabled = true;
 
 update echo.agent_workflow set enabled = false
  where workflow_id = '98000000-0000-4000-8000-0000000000f1'
    and agent_id in (select id from echo.assistant_agent
-                     where level = 'system' and handle = 'meetings');
+                     where level = 'system' and handle = 'roya');
 
 select t.ok(
   exists (select 1 from echo.agent_workflow aw
            join echo.assistant_agent a on a.id = aw.agent_id
-          where a.handle = 'meetings' and not aw.enabled),
+          where a.handle = 'roya' and not aw.enabled),
   '0134: the detach the PRODUCT issues is granted, and keeps the row');
 
 -- the wall did not widen with the grant: the column list is `enabled` alone,
@@ -167,7 +184,7 @@ select t.writes_nothing(
   $$update echo.agent_workflow set enabled = true
      where workflow_id = '98000000-0000-4000-8000-0000000000f1'
        and agent_id in (select id from echo.assistant_agent
-                         where level = 'system' and handle = 'meetings')$$,
+                         where level = 'system' and handle = 'roya')$$,
   '0134: a member cannot flip a system agent''s arrangement');
 reset role;
 set local role echo_app;

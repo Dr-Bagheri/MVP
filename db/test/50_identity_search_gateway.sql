@@ -50,13 +50,21 @@ select t.ok(
 --     produced is a separate row with its own ladder, and this delete
 --     cannot reach it (asserted in 0148: nothing cascades from meeting).
 --
+--   · agent_room_member (0164): who is in an agent room. Taking an agent OUT
+--     of a conversation is the ordinary act — the whole point of a room is
+--     that you call somebody in and, sometimes, ask them to step out. The
+--     MESSAGES are not deletable by anybody: what was said in a room stays
+--     said, and the agent that said it holds INSERT and nothing else.
+--
 -- Task ROWS themselves stay undeletable by every app role: archived_at is
--- the only way off the board.
+-- the only way off the board — and since 0162, echo.delete_task, which is a
+-- DOOR rather than a grant and so never appears in this list.
 -- ONE list, read twice. It was written out twice until 0160, and the second
 -- copy is the one that goes stale: adding a table here turned the first check
 -- green and left the second red, in a file whose whole job is to be exact.
 create temp table argued_deletes (name text) on commit drop;
 insert into argued_deletes (name) values
+  ('agent_room_member'),
   ('call_note'), ('meeting'), ('meeting_attachment'), ('meeting_item'),
   ('task_assignee'), ('task_checklist_item'), ('task_label'), ('task_label_link');
 
@@ -65,7 +73,7 @@ select t.ok(
      from information_schema.role_table_grants
     where grantee = 'echo_app' and privilege_type = 'DELETE' and table_schema = 'echo')
    = (select array_agg(name order by name) from argued_deletes),
-  'core/''s own role deletes exactly the argued list: a note author''s own note (0079), a task''s checklist lines and its assignee rows (0144), a label and a card''s wearing of one (0147), a meeting''s attached document (0159), a meeting''s decisions and action items (0160) — every other product row is echo_purge''s alone');
+  'core/''s own role deletes exactly the argued list: a note author''s own note (0079), a task''s checklist lines and its assignee rows (0144), a label and a card''s wearing of one (0147), a meeting''s attached document (0159), a meeting''s decisions and action items (0160), an agent''s membership of a room (0164) — every other product row is echo_purge''s alone');
 -- Scoped to the application roles: the schema owner also appears as a grantee
 -- of everything on a managed platform, and a superuser was never inside this
 -- wall to begin with — core/ simply never connects as one.
