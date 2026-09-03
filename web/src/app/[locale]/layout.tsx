@@ -7,7 +7,7 @@ import { getMessages, setRequestLocale } from "next-intl/server";
 import { notFound } from "next/navigation";
 import { routing, dirFor } from "@/i18n/routing";
 import { CrumbTitleProvider } from "@/components/platform/CrumbTitle";
-import { PresenceDock } from "@/components/platform/PresenceDock";
+import { AssistantSidebar } from "@/components/platform/AssistantSidebar";
 import { FloatingRecorder } from "@/components/echo/FloatingRecorder";
 import { TourOverlay } from "@/components/platform/TourOverlay";
 import { themeBootScript } from "@/lib/theme";
@@ -90,9 +90,18 @@ export default async function LocaleLayout({
           */}
           <CrumbTitleProvider>{children}</CrumbTitleProvider>
           {/* M34: the agent's presence — every route, one continuous thread.
-              Renders nothing for signed-out visitors and on the hub (the hub
-              IS the maximized presence). */}
-          <PresenceDock />
+              Renders nothing for signed-out visitors, and nothing on the
+              surfaces that render outside the platform shell (auth, the guest
+              join page, the vendor console).
+
+              MOUNTED HERE, NOT IN THE SHELL, and that is load-bearing rather
+              than habit: `PlatformShell` is rendered by each PAGE, so an
+              assistant inside it would be torn down and rebuilt on every
+              navigation — the thread, the stream and the voice loop with it.
+              This layout is the one thing above every page that never
+              remounts. The shell makes room for the column by reading the
+              width the sidebar publishes (`--assistant-rail`). */}
+          <AssistantSidebar />
           {/* the mini recorder (2026-08-22; docked 2026-08-23): a live take
               stays visible and controllable on every page except the
               recorder's own — portalled into the top bar's slot beside the

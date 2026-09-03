@@ -92,7 +92,7 @@ export function SettingsPane({
   children,
 }: {
   activeSlug: string;
-  width?: "small" | "default" | "wide";
+  width?: "small" | "normal";
   children: ReactNode;
 }) {
   const t = useTranslations("settings");

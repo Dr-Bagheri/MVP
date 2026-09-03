@@ -191,7 +191,6 @@ const config: Config = {
       maxWidth: {
         "content-small": rem(SCAFFOLD.contentMaxWidthSmall),
         content: rem(SCAFFOLD.contentMaxWidth),
-        "content-wide": rem(SCAFFOLD.contentMaxWidthWide),
       },
       height: {
         control: rem(SCAFFOLD.controlHeight),

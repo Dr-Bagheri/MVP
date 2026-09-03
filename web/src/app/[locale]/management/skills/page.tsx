@@ -8,7 +8,7 @@ import { api, BffError } from "@/api/client";
 import { useRefreshEpoch } from "@/lib/refreshBus";
 import type { AuthoredSkill, ModelInfo, Skill, User } from "@/api/types";
 import { SettingsPane } from "@/components/platform/SettingsPane";
-import { FormPanel, FormRow, PageHeader, PanelFooter, Section, SkeletonCards } from "@/components/scaffold";
+import { FormPanel, FormRow, PageHeader, PanelFooter, Section, Skeleton, SkeletonCards } from "@/components/scaffold";
 import { Card, Chip } from "@/components/ui";
 
 /**
@@ -310,24 +310,44 @@ function SkillsPageContent() {
               </select>
             </FormRow>
             <FormRow label={t("tools")} description={t("toolsHint")}>
-              <div className="flex flex-wrap gap-2">
-                {vocabulary.map((tool) => {
-                  const on = draft.tools.includes(tool);
-                  return (
-                    <button
-                      key={tool}
-                      type="button"
-                      aria-pressed={on}
-                      className={`chip ltr ${on ? "bg-accent-soft text-accent" : "bg-surface-2 text-fg-muted"}`}
-                      onClick={() =>
-                        set("tools", on ? draft.tools.filter((x) => x !== tool) : [...draft.tools, tool])
-                      }
-                    >
-                      {tool}
-                    </button>
-                  );
-                })}
-              </div>
+              {/* 2026-09-03: the frame before the data — the last of this
+                  page's []-means-nothing conflations, and the one the two
+                  card grids' fix left behind (rule 9: fixing one instance
+                  does not fix its siblings). `vocabulary` arrives with the
+                  same `load()` the grids wait on, and the editor can be open
+                  before it lands — `?new=1` waits on IDENTITY, a different
+                  fetch — so this row rendered as an empty box under the label
+                  «ابزارها»: not "the vocabulary has not arrived" but "this
+                  prompt may use no tools", which is a claim about the product
+                  and false. Seven placeholders because seven tools ship (four
+                  domain + three write, both registries derived in core's
+                  availableTools), widths varied the way the real names are. */}
+              {answer === "pending" ? (
+                <div className="flex flex-wrap gap-2" aria-busy="true">
+                  {["w-32", "w-24", "w-20", "w-28", "w-36", "w-32", "w-28"].map((w, i) => (
+                    <Skeleton key={i} className={`h-5 ${w} rounded-full`} />
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {vocabulary.map((tool) => {
+                    const on = draft.tools.includes(tool);
+                    return (
+                      <button
+                        key={tool}
+                        type="button"
+                        aria-pressed={on}
+                        className={`chip ltr ${on ? "bg-accent-soft text-accent" : "bg-surface-2 text-fg-muted"}`}
+                        onClick={() =>
+                          set("tools", on ? draft.tools.filter((x) => x !== tool) : [...draft.tools, tool])
+                        }
+                      >
+                        {tool}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </FormRow>
             <FormRow label={t("starterQuestions")} description={t("starterHint")} htmlFor="sk-starters">
               <textarea

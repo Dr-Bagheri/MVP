@@ -144,6 +144,19 @@ describe("the card is frame; only its body waits for the wire (audit finding, 20
     // and neither of the two sentences is shown for a state nobody knows yet
     expect(screen.queryByText("این استقرار هنوز تنظیمات لحن دستیار را ذخیره نمی‌کند.")).toBeNull();
     expect(screen.queryByText("تنظیمات فعلی دستیار خوانده نشد.")).toBeNull();
+
+    /*
+     * 2026-09-03: the SIZE of what is reserved, not merely its presence.
+     * The placeholder was three blocks of SkeletonLines — bars where fields
+     * land — so the card still grew by roughly 76px when the answer arrived,
+     * which is the jump the whole rule exists to remove. It is one
+     * FieldSkeleton per field now: five fields (reply language, reply length,
+     * the two voices, the instructions box), each a label bar plus a control
+     * bar at `.input`'s own height. The count goes red the day a field is
+     * added without extending the reserved space — the way a skeleton
+     * silently becomes the wrong size.
+     */
+    expect(document.querySelectorAll(".animate-pulse")).toHaveLength(5 * 2);
   });
 
   it("absent: a wire without the group renders the honest sentence, not defaults wearing controls", async () => {
@@ -171,7 +184,12 @@ describe("the card is frame; only its body waits for the wire (audit finding, 20
     await loaded();
 
     expect(skeleton()).toBeNull();
+    /* the five fields the placeholder above reserves ten bars for: four
+       selects and the standing-instructions box. Asserted here so that count
+       is anchored to something real rather than to itself. */
     expect(screen.getAllByRole("combobox")).toHaveLength(4);
+    expect(screen.getAllByRole("textbox")).toHaveLength(1);
+    expect(document.querySelectorAll(".animate-pulse")).toHaveLength(0);
     expect(screen.queryByText("این استقرار هنوز تنظیمات لحن دستیار را ذخیره نمی‌کند.")).toBeNull();
     expect(screen.queryByText("تنظیمات فعلی دستیار خوانده نشد.")).toBeNull();
   });

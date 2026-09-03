@@ -83,6 +83,8 @@ export default function UsersPage() {
      never flips back: a refetch through the epoch keeps the rows on screen,
      the skeleton is for the first paint only. */
   const [loaded, setLoaded] = useState(false);
+  /** the read came back REFUSED — a different answer from "nobody is here" */
+  const [failed, setFailed] = useState(false);
   /**
    * Counts come from `GET /v1/admin/members/stats`, NOT from the rows.
    *
@@ -117,6 +119,17 @@ export default function UsersPage() {
   const load = useCallback(async () => {
     try {
       setRows(await api.members({ sort: "default" }));
+      setFailed(false);
+    } catch {
+      /*
+       * A REFUSED READ IS NOT AN EMPTY ORGANISATION (2026-09-03). The catch
+       * did not exist, so a dropped or refused request left `rows` at [] and
+       * the table said there was nobody — an admin being told their org is
+       * empty because the network hiccuped, which is the wrong KIND of
+       * nothing (rule 12: name which one). It also escaped every `void
+       * load()` call site as an unhandled rejection.
+       */
+      setFailed(true);
     } finally {
       /* audit finding, 2026-09-02: both branches end the loading state — a
          failure is an answer too, and a skeleton left standing after the
@@ -323,7 +336,11 @@ export default function UsersPage() {
             hideHeader
             rows={listed}
             loading={!loaded}
-            empty={<EmptyState text={t("noMatches")} />}
+            /* `noMatches` named a search this screen has not had since
+               2026-08-26, so an org whose members are all pending read as a
+               failed lookup; and a FAILED read gets its own sentence rather
+               than borrowing the empty one */
+            empty={<EmptyState text={t(failed ? "membersLoadFailed" : "noMembers")} />}
             rowKey={(u) => u.id}
             onRowClick={(u) => setDetailId(u.id)}
             menuItems={(u) => [

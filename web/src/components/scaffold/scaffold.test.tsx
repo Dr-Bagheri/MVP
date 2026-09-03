@@ -114,12 +114,18 @@ describe("the Tailwind theme derives from the scaffold constants", () => {
      * nothing, and a page asking for the small column silently gets the full
      * viewport — the `text-on-accent` failure, one layer up.
      */
+    /* TWO columns since 2026-09-03, not three: `big`/`wide` left with the
+       page sizes (the widest was no bound at all, which is not a size). The
+       ordering is still the assertion — a small column that is not smaller
+       than the normal one is the token-that-emits-nothing failure, one layer
+       up, and it would read as satisfied in every source. */
     expect(SCAFFOLD.contentMaxWidthSmall).toBeLessThan(SCAFFOLD.contentMaxWidth);
-    expect(SCAFFOLD.contentMaxWidth).toBeLessThan(SCAFFOLD.contentMaxWidthWide);
     const maxWidth = theme.maxWidth as Record<string, string>;
     expect(maxWidth["content-small"]).toBe(`${SCAFFOLD.contentMaxWidthSmall / 16}rem`);
     expect(maxWidth.content).toBe(`${SCAFFOLD.contentMaxWidth / 16}rem`);
-    expect(maxWidth["content-wide"]).toBe(`${SCAFFOLD.contentMaxWidthWide / 16}rem`);
+    /* and the retired one is GONE, asserted rather than assumed: a token left
+       behind is a third size waiting for someone to pick it */
+    expect(maxWidth["content-wide"]).toBeUndefined();
   });
 
   it("keeps the menu heading and the page title on one line", () => {
@@ -142,7 +148,6 @@ describe("the Tailwind theme derives from the scaffold constants", () => {
     expect(theme.width.menu).toBe(rem(SCAFFOLD.menuWidth));
     expect(theme.width.rail).toBe(rem(SCAFFOLD.railWidth));
     expect(theme.maxWidth.content).toBe(rem(SCAFFOLD.contentMaxWidth));
-    expect(theme.maxWidth["content-wide"]).toBe(rem(SCAFFOLD.contentMaxWidthWide));
     expect(theme.height.control).toBe(rem(SCAFFOLD.controlHeight));
     expect(theme.minHeight.control).toBe(rem(SCAFFOLD.controlHeight));
     expect(theme.height.topbar).toBe(rem(SCAFFOLD.topBarHeight));

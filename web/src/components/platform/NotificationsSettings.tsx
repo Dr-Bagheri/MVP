@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { Switch } from "@/components/Switch";
 import { api } from "@/api/client";
 import { notify } from "@/lib/notify";
-import { FormPanel, FormRow } from "@/components/scaffold";
+import { FormPanel, FormRow, Skeleton } from "@/components/scaffold";
 
 /**
  * Settings·Notifications (user directive, 2026-08-28: "add this setting with
@@ -33,7 +33,9 @@ import { FormPanel, FormRow } from "@/components/scaffold";
 
 /**
  * One row's truth, four ways — the kinds of nothing kept apart (rule 12):
- * `null`         = still loading (no control, no claim);
+ * `null`         = still loading — a skeleton the switch's size holds the
+ *                  control's place, so the row makes no claim and does not
+ *                  move when the answer lands (see NotificationRow);
  * `"absent"`     = the deployment cannot store this yet (capability-gated
  *                  column or feature not migrated) — the honest reason
  *                  renders where the switch would be;
@@ -197,7 +199,20 @@ function NotificationRow({
      directions (row's end in fa RTL and en LTR alike). */
   return (
     <FormRow label={label} description={description} htmlFor={id}>
-      {state === null ? null : typeof state !== "boolean" ? (
+      {state === null ? (
+        /* 2026-09-03: the frame before the data — loading and "this row has
+           no switch" were one picture. The label and its sentence rendered
+           at once and the control cell stayed EMPTY until api.me() answered,
+           which is exactly what the two non-boolean states look like: a row
+           with no control. So a reader could not tell "still asking" from
+           "not available on this deployment", and the switch then dropped in
+           and pushed the row's own hairline down.
+           The bar is the switch's own geometry (44×24, fully round — TRACK.md
+           in Switch.tsx), so nothing moves when the answer arrives, and it
+           carries `aria-hidden` from Skeleton: a placeholder must not be
+           announced as a control that does not exist yet. */
+        <Skeleton className="ms-auto h-6 w-11 rounded-full" />
+      ) : typeof state !== "boolean" ? (
         <span className="ms-auto text-detail text-fg-muted">
           {t(state === "absent" ? "notifUnavailable" : "notifUnreadable")}
         </span>

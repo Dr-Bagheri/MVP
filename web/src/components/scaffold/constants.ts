@@ -71,7 +71,8 @@ export const SCAFFOLD = {
    */
   contentMaxWidthSmall: 1040,
   contentMaxWidth: 1240,
-  contentMaxWidthWide: 1600,
+  /* contentMaxWidthWide (1600) LEFT on 2026-09-03 with the `big`/`wide`
+     page sizes. A token nothing asks for is a size waiting to be picked. */
   /**
    * THE CONTROL FAMILY, one number each and all in the same unit.
    *

@@ -44,7 +44,29 @@ const REMAINING: Record<string, number> = {
   // audit finding, 2026-09-02: connectors/page.tsx left the worklist — its one
   // vanish-while-loading slot renders a Card of SkeletonLines now (entry at 0
   // is deleted, not zeroed: a zero row reads as coverage and is a hole)
+  /* NOT A LOADING STATE, examined and left (2026-09-03, the Management and
+     Settings sweep). The one match is `measuredAt`'s `at === null ? null :`,
+     and the branch above it is `loading ? <Skeleton/>` — so by the time this
+     ternary is reached the read has ANSWERED, and a null `measured_at` means
+     the metric was never measured, which the card already says out loud with
+     its own "—". There is no frame to draw for a timestamp that does not
+     exist. Listed with its reason rather than pattern-matched away: telling
+     a real absence from a fetch in flight by the shape of the ternary is
+     what a false-positive factory does. */
   "app/[locale]/management/server/page.tsx": 1,
+  /* NOT A LOADING STATE, and stays at 1 rather than being written around
+     (2026-09-03, the management/settings sweep). The members roster's one
+     match is `detailId === null ? null : rows.find(…)` — the flag for the
+     member-detail panel, whose row is already in hand from the table. A
+     dialog nobody opened genuinely renders nothing, and there is no frame to
+     draw for it. The list itself was framed on 2026-09-02: the DataTable
+     renders unconditionally with `loading={!loaded}`, so the skeleton rows
+     stand in the real table until the answer arrives and «عضوی با این نام
+     پیدا نشد» appears only after it (gate.test.tsx holds the fetch open and
+     measures exactly that). The ternary could be spelled without `=== null`
+     and the entry would drop to zero — that is the version to refuse: it
+     would satisfy the checker by changing the code the checker reads, which
+     is the fix that reads as satisfied and moves nothing. */
   "app/[locale]/management/users/page.tsx": 1,
   "app/[locale]/workflows/[handle]/page.tsx": 2,
   "app/[locale]/workflows/runs/[id]/page.tsx": 1,
@@ -65,7 +87,11 @@ const REMAINING: Record<string, number> = {
   // name and description come from the catalogue; the header renders at once
   // now and the body holds two Cards of SkeletonLines while the wire answers
   "components/platform/Integrations.tsx": 2,
-  "components/platform/NotificationsSettings.tsx": 1,
+  // 2026-09-03: NotificationsSettings.tsx LEFT this list — its one entry was
+  // the switch cell, which rendered EMPTY until me() answered and so looked
+  // identical to the two states that legitimately have no switch ("absent",
+  // "unreadable"); a Skeleton the switch's own size holds the place now
+  // (entry deleted, not zeroed: a zero row reads as coverage and is a hole)
   "components/platform/TopBar.tsx": 1,
   "components/platform/WorkflowRunDialog.tsx": 1,
   "components/platform/dashboard/miniWidgets.tsx": 5,

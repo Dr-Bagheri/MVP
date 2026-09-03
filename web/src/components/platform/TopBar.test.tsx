@@ -22,20 +22,32 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe("TopBar presence ring", () => {
-  it("registers ONE interactive host that is itself the single ring", () => {
+describe("TopBar assistant slot", () => {
+  it("registers ONE host for the assistant's trigger", () => {
     const { container, unmount } = render(<TopBar me={null} />);
     const header = container.querySelector("[data-platform-topbar]");
     const host = container.querySelector<HTMLElement>("#neurai-topbar-presence");
 
     expect(header).not.toBeNull();
-    expect(host).toHaveClass("pointer-events-auto");
-    expect(host).toHaveClass("rounded-full");
-    expect(host).toHaveClass("border-border-strong"); // the ONE line circle
     expect(getPresenceAnchorSnapshot()).toBe(host);
 
     unmount();
     expect(getPresenceAnchorSnapshot()).toBeNull();
+  });
+
+  it("hides that slot from md up — the sidebar's own rail carries the door there", () => {
+    /*
+     * The one-door rule, at the half of it this file owns (2026-09-03).
+     *
+     * `AssistantSidebar` writes one trigger and places it twice: inside its
+     * collapsed rail, which exists only at `md` and up, and in this slot. If
+     * this slot ever stopped being `md:hidden`, both would be on screen
+     * together at desktop widths — two ways into one room, which is exactly
+     * what the orb's removal was meant to end.
+     */
+    const { container } = render(<TopBar me={null} />);
+    const host = container.querySelector<HTMLElement>("#neurai-topbar-presence")!;
+    expect(host).toHaveClass("md:hidden");
   });
 
   it("offers the mini recorder its slot beside the clock (user directive, 2026-08-23)", () => {
@@ -50,13 +62,17 @@ describe("TopBar presence ring", () => {
     expect(getRecorderAnchorSnapshot()).toBeNull();
   });
 
-  it("the glass sphere is GONE — no curve bulge, no optical layers (user redesign, 2026-08-22)", () => {
+  it("the ORB's ring is gone — the slot draws nothing of its own (2026-09-03)", () => {
     const { container } = render(<TopBar me={null} />);
     expect(container.querySelector("[data-presence-curve]")).toBeNull();
     const host = container.querySelector<HTMLElement>("#neurai-topbar-presence")!;
-    // the host is a single EMPTY ring the dock portals into — extra glass
-    // layers would be the old design creeping back
+    /* the slot is an empty box the sidebar portals a button into. It used to
+       be a 68px circle floating over the bar's centre column — a drawing that
+       existed for the orb, and whose return would be the old design creeping
+       back one class at a time. */
     expect(host.children).toHaveLength(0);
+    expect(host.className).not.toContain("rounded-full");
+    expect(host.className).not.toContain("absolute");
     expect(host.className).not.toContain("backdrop-blur");
   });
 });

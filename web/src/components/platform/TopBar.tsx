@@ -112,11 +112,13 @@ export function TopBar({
       className="relative z-30 h-topbar shrink-0 overflow-visible"
       data-platform-topbar
     >
-      {/* Three real columns reserve the centre for the assistant. This keeps
-          the orb ring from becoming an invisible layer over breadcrumbs
-          or the controls at the other end of the bar. */}
-      <div className="relative z-20 grid h-topbar grid-cols-[minmax(0,1fr)_72px_minmax(0,1fr)] items-center border-b border-border bg-surface px-3 md:grid-cols-[minmax(0,1fr)_84px_minmax(0,1fr)] md:px-4">
-        <div className="flex min-w-0 items-center gap-2">
+      {/* TWO PARTS, not three. The bar was a grid whose CENTRE column existed
+          only to reserve 72/84px for the orb's ring — an empty, aria-hidden
+          cell holding a place for a control that no longer exists. With the
+          orb gone the reservation is a hole in the middle of the bar, so the
+          trail takes the free space and the controls sit at the end. */}
+      <div className="relative z-20 flex h-topbar items-center gap-2 border-b border-border bg-surface px-3 md:px-4">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
           {/* The avatar LEFT this bar (user directive, 2026-09-02): the
               person and their way out live at the foot of the rail, where
               the reference puts them, and two doors to one profile is two
@@ -127,8 +129,6 @@ export function TopBar({
               able to truncate rather than push the controls off the bar. */}
           <Breadcrumbs />
         </div>
-
-        <div aria-hidden />
 
         <div className="flex min-w-0 items-center justify-end gap-2">
           {/* Conversations moved UNDER the hub's prompt box (user directive,
@@ -146,6 +146,29 @@ export function TopBar({
             className="flex min-w-0 items-center empty:hidden"
           />
           <Clock />
+
+          {/*
+            THE ASSISTANT'S DOOR, BELOW md ONLY (2026-09-03).
+
+            This slot used to be the orb's cradle: a 68px ring floating over the
+            bar's centre column, which the dock portalled a WebGL orb into. The
+            orb and its drag-to-pin are gone, and the assistant is a column at
+            the inline-end edge now — so at `md` and up the collapsed sidebar is
+            on screen and carries its own trigger, and this slot is hidden.
+            Below `md` there is no rail, so this is where the one door lives.
+
+            `md:hidden` and the rail's presence are exclusive by construction:
+            a person never sees two ways into the same room, and there is one
+            button implementation for both places (AssistantSidebar's
+            `trigger`). Empty and invisible if the sidebar is silent on this
+            route.
+          */}
+          <div
+            ref={setPresenceAnchorRef}
+            id="neurai-topbar-presence"
+            data-presence-cradle
+            className="flex items-center empty:hidden md:hidden"
+          />
 
           {/*
             GLOBAL SEARCH IS BACK IN THE BAR (user directive, 2026-08-31,
@@ -244,29 +267,6 @@ export function TopBar({
         </div>
       </div>
 
-      {/* PresenceDock portals the ONE production assistant button here.
-          The design is DELIBERATELY one thin circle around a small orb
-          (user directive, 2026-08-22: "just one line circle … make the orb
-          and the particles small and fit 65% of it on the top menu") —
-          no glass sphere, no curved bulge, no highlight layers. 65% of
-          the ring sits within the bar (`h-topbar`); the rest floats below.
-
-          The offsets are DERIVED from that rule, not chosen: top = bar −
-          0.65·ring, so 62 − 39 = 23 for the 60px ring and 62 − 44.2 ≈ 18
-          for the 68px one. They were 17/12, which is the same rule solved
-          for a 56px bar — the bar's real height until this pass, and the
-          reason these two numbers had to move with it. */}
-      <div
-        ref={setPresenceAnchorRef}
-        id="neurai-topbar-presence"
-        data-presence-cradle
-        /* empty:invisible — when the orb is pinned elsewhere (2026-08-25
-           drag-to-pin) nothing portals in here, and an empty ring would be
-           exactly the "trace" the directive removes; invisible keeps the
-           element (the anchor registration and the drop target) without
-           the visual */
-        className="pointer-events-auto absolute left-1/2 top-[23px] z-30 h-[60px] w-[60px] -translate-x-1/2 rounded-full border border-border-strong bg-surface empty:invisible md:top-[18px] md:h-[68px] md:w-[68px]"
-      />
     </header>
   );
 }

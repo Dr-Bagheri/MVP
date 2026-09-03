@@ -107,7 +107,10 @@ export default function EchoPage({
     >
       {/* ONE width for every section (user directive, 2026-08-25: Records
           rendered wider than Summaries) — the narrow column is the rule */}
-      <PageContainer width="default">
+      {/* 2026-09-03: the platform has two page sizes and `small` is the
+          default — this page said "default" when that meant 1240, and the
+          word now means the reading column every other surface uses. */}
+      <PageContainer>
         <PageHeader title={tEcho(`section.${slug}`)} subtitle={tEcho(`desc.${slug}`)} />
         {slug === "new-meeting" ? (
           <NewMeetingSection onFinished={() => setRecordsEpoch((n) => n + 1)} />

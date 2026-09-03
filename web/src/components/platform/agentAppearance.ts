@@ -95,17 +95,25 @@ export function toolDescription(copy: Record<string, unknown>, name: string): st
  */
 import { useTranslations } from "next-intl";
 
+/*
+ * TWO AGENTS, NOT EIGHT (user directive, 2026-09-03, db/0163). The eight that
+ * were here — meetings, mail, prep, sales, interview, manager, recorder,
+ * commitments — were JOBS rather than colleagues: near-identical read tools,
+ * prompts differing mainly in which caution they recite, and no name a person
+ * could say. Nobody asks what the meetings agent thought; they ask somebody.
+ *
+ * رؤیا ACTS (drafts the reply, prepares the brief, makes the task) and آوا
+ * READS (what changed, what is slipping, what a week of meetings said). The
+ * split is by VERB, which is the user's choice among the three offered.
+ *
+ * The names come through the CATALOGUE and not off the wire, for the reason
+ * seededCopy.guard.test.ts exists: the database holds one spelling, and a
+ * name served straight from it renders Persian to an English reader and
+ * nothing goes red — the resolver falls back to the stored string on purpose.
+ */
 const SYSTEM_AGENT_KEYS: Readonly<Record<string, string>> = {
-  meetings: "sys_meetings",
-  mail: "sys_mail",
-  prep: "sys_prep",
-  /* the 2026-08-28 second wave (db/0129) */
-  sales: "sys_sales",
-  interview: "sys_interview",
-  manager: "sys_manager",
-  /* the 2026-08-29 wave (db/0139): the recording itself as a subject */
-  recorder: "sys_recorder",
-  commitments: "sys_commitments",
+  roya: "sys_roya",
+  ava: "sys_ava",
 };
 
 export function useAgentCopy(): (agent: {

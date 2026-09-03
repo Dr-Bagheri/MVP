@@ -4,10 +4,13 @@
  * user").
  *
  * One module-scoped bus: anything on the platform that wants to inform the
- * person calls notify(); the PresenceDock renders the toast stack anchored
- * above the orb, and the top-bar bell keeps the recent history. No provider,
- * no context — a notice is fire-and-forget, and the two consumers must not
- * depend on mounting order.
+ * person calls notify(); the AssistantSidebar renders the toast stack (beside
+ * itself, never over it), and the top-bar bell keeps the recent history. No
+ * provider, no context — a notice is fire-and-forget, and the two consumers
+ * must not depend on mounting order.
+ *
+ * The orb the stack used to pop from left on 2026-09-03 with the rest of the
+ * dock's chrome; the notices did not move, only what they are anchored to.
  */
 
 export interface PlatformNotice {

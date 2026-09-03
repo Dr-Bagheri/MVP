@@ -74,7 +74,7 @@ export function TwoPane({
    * table (Audit Logs asks for it), and the TOOLBAR keeps its own default
    * column regardless — see below.
    */
-  width?: "small" | "default" | "wide" | "full";
+  width?: "small" | "normal";
   children: ReactNode;
 }) {
   const pathname = usePathname();

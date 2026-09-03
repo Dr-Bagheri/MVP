@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { ManagementPane } from "@/components/platform/ManagementPane";
-import { SkeletonCards } from "@/components/scaffold";
+import { Skeleton } from "@/components/scaffold";
 
 /**
  * MANAGEMENT · SPEAKERS — the voice-print directory, at its own Management
@@ -21,9 +21,44 @@ import { SkeletonCards } from "@/components/scaffold";
  * chart library, and the platform's loading rule is a frame in the shape of
  * the content, never a blank or a wheel.
  */
+
+/**
+ * The placeholder is the shape of what ARRIVES (2026-09-03).
+ *
+ * It was `SkeletonCards`, which draws a two-column grid of tall bordered
+ * cards — and what lands here is the directory's default view: a
+ * single-column stack of `.table-cards` rows. So the page moved twice, once
+ * when the chunk resolved and again when the rows replaced a grid that was
+ * never coming, which is the exact jump a skeleton exists to prevent. A
+ * placeholder in the wrong shape reserves space and still lies about it.
+ *
+ * The numbers are the table's own, not decoration: `rounded-xl` is the 16px
+ * the scaffold names for list rows and `.table-cards` paints, `space-y-2` is
+ * that table's 8px row gap, and `px-3 py-3` around an `h-4` bar is the cell
+ * padding DataTable's own skeleton rows use — so the bands stand where the
+ * rows will, at the height the rows will have.
+ */
+function DirectoryFrame() {
+  return (
+    <div className="space-y-2" aria-hidden>
+      {Array.from({ length: 5 }, (_, i) => (
+        <div
+          key={i}
+          className="flex items-center gap-4 rounded-xl border border-border bg-surface px-3 py-3"
+        >
+          {/* the first cell wide, the rest narrower — a row of equal bars
+              reads as a rendering fault rather than as a table on its way */}
+          <Skeleton className="h-4 w-40" />
+          <Skeleton className="h-4 w-24" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 const SpeakersDirectory = dynamic(
   () => import("@/components/echo/SpeakersDirectory").then((m) => m.SpeakersDirectory),
-  { ssr: false, loading: () => <SkeletonCards count={4} height="h-16" /> },
+  { ssr: false, loading: () => <DirectoryFrame /> },
 );
 
 export default function ManagementSpeakersPage() {

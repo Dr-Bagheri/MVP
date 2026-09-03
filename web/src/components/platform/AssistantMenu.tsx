@@ -16,7 +16,7 @@ import { useAssistantConversation } from "./AssistantConversationState";
  */
 export function AssistantMenu({
   activeSlug,
-  width = "default",
+  width = "small",
 }: {
   activeSlug: "new" | "hub" | "history" | "workflows" | "integrations" | "agents";
   /** the column the toolbar sits in — the SAME column as the content under
@@ -24,7 +24,7 @@ export function AssistantMenu({
       toolbar was the default one, so the buttons began ~100px outside the
       column the composer began in — the split TwoPane had already removed
       for Management and Settings) */
-  width?: "small" | "default";
+  width?: "small" | "normal";
 }) {
   const router = useRouter();
   const t = useTranslations("platform");

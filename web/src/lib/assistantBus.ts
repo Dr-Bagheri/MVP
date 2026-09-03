@@ -1,12 +1,13 @@
 /**
- * One-way door into the presence dock (user directive, 2026-08-21: the
+ * One-way door into the assistant sidebar (user directive, 2026-08-21: the
  * side-docked AssistantPane leaves every page — so a surface that wants
- * "open the assistant on THIS conversation" asks the dock, it does not
+ * "open the assistant on THIS conversation" asks the sidebar, it does not
  * render a rival).
  *
  * Same shape as the notify bus: module-scoped, fire-and-forget, no
- * mounting-order dependency. The dock subscribes; anyone may call.
+ * mounting-order dependency. The sidebar subscribes; anyone may call.
  */
+import type { IconName } from "@/components/icons";
 
 export interface AssistantOpenRequest {
   /** adopt and load this stored conversation; omitted = just open */
@@ -27,6 +28,48 @@ export function openAssistant(request: AssistantOpenRequest = {}): void {
 export function subscribeAssistantOpen(listener: Listener): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
+}
+
+/**
+ * THE SIDEBAR IS A ROOM, NOT A TEXT BOX (user directive, 2026-09-03: "agents
+ * post into it — when an agent drafts a reply or preps a meeting, that appears
+ * in the sidebar as a message from that agent").
+ *
+ * The agents themselves (Roya, who acts; Ava, who reads and reports) land in a
+ * later change. What this channel is for is the half that cannot be added
+ * later without touching every render site: a message in that thread may come
+ * from somebody other than "the assistant", and it has to say who.
+ *
+ * Deliberately its own channel rather than a second meaning for
+ * `openAssistant`: a post must be able to arrive while the sidebar is
+ * COLLAPSED and become an unread count, and a channel whose only verb is
+ * "open" cannot express that.
+ */
+export interface AssistantAuthor {
+  /** the agent's own name, already in the reader's language */
+  name: string;
+  /** their face — a glyph from the platform's one icon registry, never an
+      emoji and never a second drawing (the agentAppearance rule) */
+  icon?: IconName;
+}
+
+export interface AssistantPost {
+  content: string;
+  /** omitted = the assistant itself, which is what every message was until
+      now — an absent author is a real value here, not a missing one */
+  author?: AssistantAuthor;
+}
+
+type PostListener = (post: AssistantPost) => void;
+const postListeners = new Set<PostListener>();
+
+export function postToAssistant(post: AssistantPost): void {
+  for (const listener of postListeners) listener(post);
+}
+
+export function subscribeAssistantPost(listener: PostListener): () => void {
+  postListeners.add(listener);
+  return () => postListeners.delete(listener);
 }
 
 /**

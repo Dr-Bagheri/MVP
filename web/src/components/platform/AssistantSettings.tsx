@@ -6,7 +6,7 @@ import { api } from "@/api/client";
 import { notify } from "@/lib/notify";
 import { clearSpeechCache } from "@/lib/voice";
 import { Card, Field } from "@/components/ui";
-import { SkeletonLines } from "@/components/scaffold";
+import { Skeleton } from "@/components/scaffold";
 
 /**
  * Settings·Assistant (user directive, 2026-08-21): the assistant's voice,
@@ -45,6 +45,38 @@ import { SkeletonLines } from "@/components/scaffold";
  *  - `ready`      = the form, adopting the server's answer
  */
 type PrefsState = "pending" | "absent" | "unreadable" | "ready";
+
+/**
+ * One `Field`'s reserved space, 2026-09-03.
+ *
+ * The card already refused to wait for the wire (the finding above), but what
+ * stood in the form's place was three blocks of `SkeletonLines` — two 16px
+ * bars where a field is a 20px label, a 6px gap and a 40px control (44 below
+ * md, `.input`'s touch floor). Roughly 76px short across the five fields, so
+ * the card still grew when the answer landed: the reserved space was a promise
+ * about the size of the thing, and a promise that is wrong moves the layout
+ * anyway — the exact caveat on SkeletonLines' own `lines` prop.
+ *
+ * So the placeholder is built from `Field`'s geometry rather than from a
+ * generic paragraph: `h-5` is the label's line box, `mt-1.5` is its own
+ * `mb-1.5`, and the control bar wears `.input`'s two heights and its corner.
+ */
+function FieldSkeleton({
+  className = "",
+  /** the control's height — `.input`'s 44/40 by default, the textarea's
+      `min-h-24` where the standing instructions land */
+  control = "h-11 md:h-10",
+}: {
+  className?: string;
+  control?: string;
+}) {
+  return (
+    <div className={className}>
+      <Skeleton className="h-5 w-24" />
+      <Skeleton className={`mt-1.5 w-full rounded-md ${control}`} />
+    </div>
+  );
+}
 
 export function AssistantSettings() {
   const t = useTranslations("settings");
@@ -112,14 +144,14 @@ export function AssistantSettings() {
              box), so the card does not grow when the answer lands */
           <div className="mt-4" aria-busy="true">
             <div className="grid gap-4 sm:grid-cols-2">
-              <SkeletonLines lines={2} />
-              <SkeletonLines lines={2} />
+              <FieldSkeleton />
+              <FieldSkeleton />
             </div>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <SkeletonLines lines={2} />
-              <SkeletonLines lines={2} />
+              <FieldSkeleton />
+              <FieldSkeleton />
             </div>
-            <SkeletonLines lines={4} className="mt-4" />
+            <FieldSkeleton className="mt-4" control="h-24" />
           </div>
         ) : prefs !== "ready" ? (
           <p className="mt-4 text-detail text-fg-muted">

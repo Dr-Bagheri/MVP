@@ -6,7 +6,7 @@ import { api } from "@/api/client";
 import { notify } from "@/lib/notify";
 import type { Org, User } from "@/api/types";
 import { ConfirmDialog } from "@/components/rowActions";
-import { FormPanel, FormRow, PanelFooter } from "@/components/scaffold";
+import { FormPanel, FormRow, PanelFooter, Skeleton } from "@/components/scaffold";
 
 /**
  * The organization's own settings — name, public face, interface locale
@@ -95,9 +95,23 @@ export function OrgFields() {
   const tCommon = useTranslations("common");
 
   const [me, setMe] = useState<User | null>(null);
+  /* NOT `me !== null`: a refused or failed identity read leaves `me` null for
+     good, and a frame that waited on it would wait for ever. What is being
+     waited for is the ANSWER, and "there is nobody" is one. */
+  const [meAnswered, setMeAnswered] = useState(false);
   /** the logo removal awaiting the platform's are-you-sure (dialog at the foot) */
   const [confirmLogoRemove, setConfirmLogoRemove] = useState(false);
   const [org, setOrg] = useState<Org | null>(null);
+  /*
+   * Has the org row answered — and did it answer with a row (2026-09-03)?
+   *
+   * A boolean would fold two states together again: `api.org()` carried no
+   * `.catch` at all, so a failed read left `org` null and the form's
+   * `if (!org) return null` rendered NOTHING, for ever, with no sentence
+   * anywhere saying why. That is the same shape as the loading defect one
+   * step further on — the frame is missing and so is the reason.
+   */
+  const [orgAnswer, setOrgAnswer] = useState<"pending" | "ok" | "failed">("pending");
   const [name, setName] = useState("");
   const [locale, setLocale] = useState("");
   /* db/0102 — the organisation's public face. Held as strings because a
@@ -123,17 +137,20 @@ export function OrgFields() {
   const isAdmin = me?.role === "admin" || me?.role === "owner";
 
   useEffect(() => {
-    void api.me().then(setMe);
-    void api.org().then((row) => {
-      setOrg(row);
-      setName(row.name);
-      setLocale(row.locale);
-      setPublicEmail(row.public_email ?? "");
-      setDescription(row.description ?? "");
-      setWebsiteUrl(row.website_url ?? "");
-      setLocation(row.location ?? "");
-      setHasLogo(row.has_logo === true);
-    });
+    void api.me().then(setMe).catch(() => setMe(null)).finally(() => setMeAnswered(true));
+    void api.org()
+      .then((row) => {
+        setOrg(row);
+        setName(row.name);
+        setLocale(row.locale);
+        setPublicEmail(row.public_email ?? "");
+        setDescription(row.description ?? "");
+        setWebsiteUrl(row.website_url ?? "");
+        setLocation(row.location ?? "");
+        setHasLogo(row.has_logo === true);
+        setOrgAnswer("ok");
+      })
+      .catch(() => setOrgAnswer("failed"));
   }, []);
 
   /**
@@ -238,7 +255,75 @@ export function OrgFields() {
     }
   };
 
-  if (!org) return null;
+  /*
+   * THE FRAME BEFORE THE DATA (user directive, 2026-09-03: "the skeleton
+   * should apply for all sub pages in management and settings as well").
+   *
+   * `if (!org) return null` stood here, and it is the shape the platform's
+   * loading rule was written against: the page's heading rendered from the
+   * catalogue, then a gap, then a seven-row panel dropped in and pushed
+   * everything below it down. Worse than the movement, "still asking" and
+   * "this organization has nothing to show" were the same picture — and a
+   * failed read was that picture for ever.
+   *
+   * A failure gets the sentence rather than the frame: a panel of empty boxes
+   * under a heading invites someone to type into fields that will not save.
+   */
+  if (orgAnswer === "failed") {
+    return <p className="text-sm leading-7 text-fg-muted">{t("orgUnreadable")}</p>;
+  }
+
+  /*
+   * Waiting on BOTH reads, and the second one is not fussiness: the panel has
+   * two shapes and `me` decides which. Rendering the editable one first would
+   * show a member seven live inputs and then take them away — a claim about
+   * their permissions, made before the answer, in the direction that flatters.
+   *
+   * The placeholder draws the ADMIN shape, which is the branch this screen
+   * exists for; a member's shorter panel settles upward once. The labels do
+   * NOT wait — they come from the message catalogue and never depended on the
+   * network — so what stands in for each field is a bar in `.input`'s own
+   * 40px, and the footer keeps the panel's bottom edge where it will be.
+   */
+  if (org === null || !meAnswered) {
+    /* one element, reused: the fields are identical boxes, and naming the
+       geometry once is the same argument as `.input` owning the height */
+    const field = <Skeleton className="h-10 w-full" />;
+    return (
+      <FormPanel>
+        <FormRow label={tAdmin("orgName")}>{field}</FormRow>
+        <FormRow label={t("orgLogo")}>
+          {/* the logo row is not a field: a 48px square and a button beside
+              it, so a 40px bar here would reserve the wrong space and move
+              the rows under it when the real control lands. Its HINT is not
+              drawn as a bar — it is catalogue text about what the button
+              accepts, true before any request and after every one, and the
+              rule is that only what is being fetched waits. */}
+          <span className="flex flex-col gap-2">
+            <span className="flex items-center gap-3">
+              <Skeleton className="h-12 w-12 rounded-lg" />
+              <Skeleton className="h-8 w-28" />
+            </span>
+            <span className="text-[11px] leading-5 text-fg-subtle">{t("orgLogoHint")}</span>
+          </span>
+        </FormRow>
+        <FormRow label={t("orgEmail")}>{field}</FormRow>
+        <FormRow label={t("orgDescription")}>{field}</FormRow>
+        <FormRow label={t("orgWebsite")}>{field}</FormRow>
+        <FormRow label={t("orgLocation")}>{field}</FormRow>
+        {/* the locale picker is `input w-auto` — a bar the field's full width
+            would reserve a control twice the size of the one arriving */}
+        <FormRow label={t("orgLocale")}><Skeleton className="h-10 w-40" /></FormRow>
+        <PanelFooter>
+          {/* disabled, and it stays disabled the instant the row lands —
+              nothing has changed yet, so the control does not flicker */}
+          <button className="btn-primary" disabled>
+            {t("orgSave")}
+          </button>
+        </PanelFooter>
+      </FormPanel>
+    );
+  }
 
   /*
    * A member sees the values and no controls. The READ is open to any active

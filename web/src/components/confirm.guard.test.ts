@@ -92,7 +92,7 @@ const LOCAL_DESTRUCTIVE: Readonly<Record<string, string>> = {
  */
 const ALLOWED: Readonly<Record<string, string>> = {
   "lib/agentSurface.ts":
-    "the assistant's client tools: every write-effect call is gated by the in-thread consent card before the runtime is allowed to invoke it (PresenceDock's askConsent), and a modal on top of a card the person already answered would be the same question twice",
+    "the assistant's client tools: every write-effect call is gated by the in-thread consent card before the runtime is allowed to invoke it (AssistantSidebar's askConsent), and a modal on top of a card the person already answered would be the same question twice",
   "lib/recordingEngine.ts":
     "the stop-and-delete path, reachable only from the Recorder's own ConfirmDialog — the engine performs a decision the dialog has already taken",
 };

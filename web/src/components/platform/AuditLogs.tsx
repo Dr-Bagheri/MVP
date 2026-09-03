@@ -7,7 +7,6 @@ import type { BffError } from "@/api/client";
 import { AUDIT_SOURCES } from "@echo/core/vocabulary";
 import type { AuditCursor, AuditEntry, AuditSource, User } from "@/api/types";
 import { Pagination, usePaged } from "@/components/Pagination";
-import { Skeleton } from "@/components/scaffold";
 import { DataTable } from "@/components/DataTable";
 import { Card, Chip, EmptyState } from "@/components/ui";
 import { digits, formatDate, formatTime } from "@/lib/format";
@@ -369,24 +368,26 @@ export function AuditLogs() {
         </Card>
       ) : null}
 
-      {loading ? (
-        /* the table's own frame with skeleton rows, not a sentence where the
-           table goes — the platform's loading rule */
-        <Card className="!p-0">
-          <div className="divide-y divide-border">
-            {Array.from({ length: 6 }, (_, i) => (
-              <div key={i} className="flex items-center gap-4 px-4 py-3.5">
-                <Skeleton className="h-4 w-24" />
-                <Skeleton className="h-4 w-28" />
-                <Skeleton className="h-4 w-32" />
-                <Skeleton className="h-4 flex-1" />
-              </div>
-            ))}
-          </div>
-        </Card>
-      ) : entries.length === 0 && !failed ? (
-        <EmptyState text={source ? t("emptyFiltered") : t("empty")} />
-      ) : entries.length > 0 ? (
+      {/*
+        2026-09-03: the frame before the data, and it is the TABLE's frame.
+        The loading state was a hand-rolled Card of six four-bar rows standing
+        in for an unboxed five-column table — the right idea drawn at the wrong
+        size, so the page moved twice: once when the placeholder appeared and
+        again when a differently-shaped table replaced it. `loading` on
+        DataTable draws the real header, the real column widths and the real
+        borders with skeleton cells inside them, which is the whole point of
+        the prop existing.
+
+        It also puts the empty sentence where it belongs: DataTable renders
+        `empty` only once `loading` is false, so «هنوز رویدادی ثبت نشده است» —
+        a claim that nothing has EVER happened in this organization — can no
+        longer appear while nobody has looked yet.
+
+        A FAILED read with nothing to show gets neither: the banner above
+        already says what happened, and an empty-record sentence beneath it
+        would be a second, contradictory answer to the same question.
+      */}
+      {failed && entries.length === 0 ? null : (
         <>
           {/*
             The theme's ONE table (user directive, 2026-08-28: "fix the
@@ -399,6 +400,12 @@ export function AuditLogs() {
           */}
           <DataTable
             rows={visible}
+            loading={loading}
+            /* six, matching the placeholder this replaced and roughly a
+               screenful — the reserved space is a promise about the size of
+               what is coming */
+            loadingRows={6}
+            empty={<EmptyState text={source ? t("emptyFiltered") : t("empty")} />}
             rowKey={entryKey}
             columns={[
               {
@@ -484,24 +491,35 @@ export function AuditLogs() {
               },
             ]}
           />
-          <Pagination page={page} pageCount={pageCount} onPage={setPage} />
+          {/* Both of these are ANSWERS, so neither renders before one arrives.
+              «به ابتدای سوابق رسیدید» is a statement the SERVER makes — that
+              there is nothing older — and it is the last thing that should be
+              said over a feed nobody has read yet; the pager's numbers would
+              likewise be describing rows that do not exist. This is the same
+              rule as the empty sentence above, and the reason the skeleton
+              stands in for the rows and not for these. */}
+          {!loading && entries.length > 0 ? (
+            <>
+              <Pagination page={page} pageCount={pageCount} onPage={setPage} />
 
-          <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
-            {cursor ? (
-              <button
-                className="btn-secondary h-10 min-h-0 px-4 text-sm"
-                disabled={paging}
-                onClick={() => void loadMore()}
-              >
-                {paging ? t("loading") : t("loadMore")}
-              </button>
-            ) : (
-              /* the end is a FACT the server states, and the numbers cannot */
-              <p className="text-xs text-fg-muted">{t("atEnd")}</p>
-            )}
-          </div>
+              <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
+                {cursor ? (
+                  <button
+                    className="btn-secondary h-10 min-h-0 px-4 text-sm"
+                    disabled={paging}
+                    onClick={() => void loadMore()}
+                  >
+                    {paging ? t("loading") : t("loadMore")}
+                  </button>
+                ) : (
+                  /* the end is a FACT the server states, and the numbers cannot */
+                  <p className="text-xs text-fg-muted">{t("atEnd")}</p>
+                )}
+              </div>
+            </>
+          ) : null}
         </>
-      ) : null}
+      )}
     </div>
   );
 }

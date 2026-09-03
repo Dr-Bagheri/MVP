@@ -2,10 +2,17 @@ import { render, waitFor } from "@testing-library/react";
 import dynamic from "next/dynamic";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 /*
- * The `AuroraOrb.tsx` re-export barrel is gone: `PresenceDock` now loads the
- * renderer through `next/dynamic`, and a static re-export beside it is a
- * second, non-splitting door into three.js. The name stays as the local
- * alias because that is what the dock still calls it on screen.
+ * THE ORB IS UNMOUNTED, NOT DELETED (user directive, 2026-09-03: "we are going
+ * to remove the orb FOR NOW"). Nothing in the product imports `EchoEOrb` since
+ * the assistant became a docked sidebar, so three.js is in no route's bundle —
+ * and this file is what keeps the part retrievable rather than merely present:
+ * it compiles the renderer, mounts it, and asserts its contract, so the day it
+ * is asked for back it is known to work rather than hoped to.
+ *
+ * The `AuroraOrb.tsx` re-export barrel is gone (a static re-export beside a
+ * dynamic import was a second, non-splitting door into three.js). The name
+ * stays as the local alias because that is what the product called it on
+ * screen.
  */
 import { EchoEOrb as AuroraOrb, createOrbParticleGeometry } from "./EchoEOrb";
 import { computeRms } from "@/lib/useAudioLevel";
@@ -52,21 +59,20 @@ describe("AuroraOrb", () => {
   });
 
   /**
-   * The dynamic boundary `PresenceDock` now loads the orb through.
+   * The dynamic boundary the orb was loaded through, kept alive with it.
    *
    * three.js is 560 KB and was in every route's first-load set because the
-   * dock is statically imported by the root layout; it is a `next/dynamic`
-   * import now. The failure that change can produce is a SILENT one — a wrong
-   * module path or a renamed export makes the dock render nothing where the
-   * orb used to be, on the routes where it is the product's only visible
-   * presence, and no other test in this directory would notice.
+   * dock was statically imported by the root layout; the fix was this
+   * `next/dynamic` import, and the failure it can produce is a SILENT one — a
+   * wrong module path or a renamed export renders nothing where the orb should
+   * be, and no other test in this directory would notice.
    *
    * `tsc` catches a misspelled export name; this catches the rest of the
-   * mechanism — that the lazy module resolves and mounts a real canvas. It is
-   * NOT a substitute for seeing the orb in a signed-in browser: the dock gates
-   * the orb on `member`, so that check needs a live session and is owed.
+   * mechanism — that the lazy module resolves and mounts a real canvas. That
+   * is the shape the orb has to come back in whenever it comes back, so the
+   * assertion outlives the consumer that motivated it.
    */
-  it("survives the next/dynamic boundary the dock loads it through", async () => {
+  it("survives the next/dynamic boundary it is loaded through", async () => {
     const Lazy = dynamic(() => import("./EchoEOrb").then((m) => m.EchoEOrb), { ssr: false });
     const { container } = render(<Lazy state="listening" level={0.5} />);
 

@@ -27,25 +27,33 @@ import type { ReactNode } from "react";
  *             which is how three widths became three guesses.
  */
 export function PageContainer({
-  width = "default",
+  width = "small",
   fill = false,
   className = "",
   children,
 }: {
   /**
-   * THE PLATFORM'S THREE PAGE SIZES (user directive, 2026-09-02).
+   * THE PLATFORM'S TWO PAGE SIZES (user directive, 2026-09-03: "change all
+   * normal page mode pages to small page design and all big page mode to
+   * normal mode page design, and basically remove the big page design").
    *
-   *   small   a reading-and-editing surface — a meeting's plan, a profile
-   *   normal  a list surface — meetings, settings, management (the default)
-   *   big     a workspace — the task board, where the content IS the width
-   *           and a bound would cut off a column
+   *   small   1040 — the default, and now what almost every page is: a
+   *           reading-and-editing column that keeps a line of text short
+   *           enough to read and a form's label near its field
+   *   normal  1240 — a list or board surface wide enough to need it. The
+   *           task board is the one page that asks.
    *
-   * `default`, `wide` and `full` are the older spellings, kept as aliases so
-   * a rename does not become a sweep of every call site: `default` = normal,
-   * `full` = big, and `wide` is the one middle bound (1600) that no page
-   * currently asks for.
+   * BIG IS GONE, and with it `full` (unbounded) and `wide` (1600). Three
+   * sizes meant three answers to "how wide is a page", and the widest of
+   * them was a page with no bound at all — which is not a size, it is the
+   * absence of one, and it read as a different product beside its
+   * neighbours. [SUPERSEDES the 2026-09-02 three-size directive.]
+   *
+   * The DEFAULT moved rather than every call site being edited: a page that
+   * says nothing about its width is the common case, and it is the one the
+   * directive is about.
    */
-  width?: "small" | "normal" | "big" | "default" | "wide" | "full";
+  width?: "small" | "normal";
   /** for the rare caller that has to trim the rhythm — a surface split into
       two containers must not pay the top padding twice */
   className?: string;
@@ -67,14 +75,7 @@ export function PageContainer({
   fill?: boolean;
   children: ReactNode;
 }) {
-  const max =
-    width === "small"
-      ? "max-w-content-small"
-      : width === "wide"
-        ? "max-w-content-wide"
-        : width === "big" || width === "full"
-          ? "max-w-none"
-          : "max-w-content";
+  const max = width === "normal" ? "max-w-content" : "max-w-content-small";
   /*
    * THE PAGE'S RHYTHM, from the theme (user directives: 2026-08-26 "add a
    * margin from the top, just a little, for all pages, and add this to the

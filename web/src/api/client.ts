@@ -218,7 +218,7 @@ function cachedRead<T>(key: string, fetcher: () => Promise<T>): Promise<T> {
  *
  * `me()` was cached from the day the cache existed, so its ~25 callers
  * collapse to a single request. `identityState()` asked the SAME endpoint
- * with a raw `bff()` call, and `PresenceDock` calls it from a mount effect on
+ * with a raw `bff()` call, and the assistant calls it from a mount effect on
  * every route — so the hottest read in the product was fetched twice on every
  * page load. Giving `identityState` a cache key of its own would not have
  * fixed that: two keys over one endpoint is still two requests. The fix is

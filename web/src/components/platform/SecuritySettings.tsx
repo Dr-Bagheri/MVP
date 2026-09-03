@@ -31,7 +31,16 @@ import { signOutThisDevice } from "@/lib/signOut";
 export function SecuritySettings() {
   const t = useTranslations("security");
   const locale = useLocale();
-  const [sessions, setSessions] = useState<AuthSessionRow[] | null>(null);
+  /*
+   * The caller's own devices, in three answers (2026-09-03).
+   *
+   * `null` = still asking, and the table renders its frame with skeleton rows.
+   * `"unreadable"` = asked, and the read failed — which USED to be spelled
+   * `[]`, so a failed request rendered «نشستی ثبت نشده است»: a sentence that
+   * cannot be true, since the person reading it is signed in on the device
+   * they are reading it on. An empty array now means only what it says.
+   */
+  const [sessions, setSessions] = useState<AuthSessionRow[] | null | "unreadable">(null);
   /** the handle of the session THIS request rode — the "this device" chip */
   const [current, setCurrent] = useState<string | null>(null);
   /** the session a right-click chose to end; the popup is the consent */
@@ -52,7 +61,8 @@ export function SecuritySettings() {
   useEffect(() => {
     void api.mySessions()
       .then((answer) => { setSessions(answer.sessions); setCurrent(answer.current); })
-      .catch(() => setSessions([]));
+      /* a failure is an answer, just not one about this person's devices */
+      .catch(() => setSessions("unreadable"));
   }, []);
 
   useEffect(() => {
@@ -263,7 +273,12 @@ export function SecuritySettings() {
       <div>
         <h2 className="h-section">{t("sessionsTitle")}</h2>
         <p className="mt-1 text-sm leading-6 text-fg-muted">{t("sessionsHint")}</p>
-        {sessions !== null && sessions.length === 0 ? (
+        {sessions === "unreadable" ? (
+          /* 2026-09-03: the third nothing, named. "We could not read your
+             sessions" and "you have none" were one sentence, and only one of
+             them can ever be true here. */
+          <p className="mt-3 text-sm text-fg-muted">{t("sessionsUnreadable")}</p>
+        ) : sessions !== null && sessions.length === 0 ? (
           <p className="mt-3 text-sm text-fg-muted">{t("sessionsEmpty")}</p>
         ) : (
           /* the records table's own dress: the table lives in a Card (M42)
@@ -272,7 +287,7 @@ export function SecuritySettings() {
           <div className="mt-3">
             <DataTable
               loading={sessions === null}
-              rows={sessions ?? []}
+              rows={Array.isArray(sessions) ? sessions : []}
               rowKey={(session) => session.handle}
               /* the records table's own gesture: every action in the
                  right-click menu. Ending THIS device is deliberately not

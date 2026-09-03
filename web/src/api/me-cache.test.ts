@@ -4,8 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  * `/api/me` is fetched ONCE per page load.
  *
  * The defect this pins: `me()` was cached and `identityState()` was not, and
- * both ask the same endpoint — `PresenceDock` calls `identityState()` from a
- * mount effect on every route, so the hottest read in the product went out
+ * both ask the same endpoint — `AssistantSidebar` calls `identityState()` from
+ * a mount effect on every route, so the hottest read in the product went out
  * twice on every navigation. Giving `identityState` its own cache key would
  * have made the second request *collapse with itself* and left the pair
  * costing two round trips, which is why the assertion here counts REQUESTS to

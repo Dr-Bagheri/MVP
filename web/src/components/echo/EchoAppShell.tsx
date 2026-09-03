@@ -13,9 +13,10 @@ import { PageContainer } from "@/components/scaffold";
  *
  * The DOCKED AssistantPane this shell used to own is gone (user directive,
  * 2026-08-21: the side-docked assistant — end-side in en, start-side in fa —
- * leaves every page). The PresenceDock orb is the assistant everywhere now:
- * one home, voice-woken, Ctrl+E. The pane component itself survives only as
- * the conversation READER on /conversations, which is a different job.
+ * leaves every page). `AssistantSidebar` is the assistant everywhere now: one
+ * column at the inline-end edge, collapsed until asked for, voice-woken,
+ * Ctrl+E. The pane component itself survives only as the conversation READER
+ * on /conversations, which is a different job.
  */
 export function EchoAppShell({
   children,

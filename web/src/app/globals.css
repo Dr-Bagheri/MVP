@@ -42,6 +42,17 @@
  */
 @layer base {
   :root {
+    /*
+     * THE SPACE THE ASSISTANT SIDEBAR OCCUPIES at the inline-end, published by
+     * `AssistantSidebar` and consumed by `PlatformShell`'s
+     * `md:pe-[var(--assistant-rail)]`.
+     *
+     * Declared here so the default is a STATED zero rather than an invalid
+     * reference: a page rendered before the sidebar's effect has run must be
+     * indented by nothing, and an undefined variable in a padding shorthand is
+     * a value nobody chose.
+     */
+    --assistant-rail: 0px;
     /* DARK — the reference product's own dark palette (user directive,
        2026-08-31: "i want our to get this theme so get all of it and
        correct ours"). A deep blue-grey ground with a GREEN primary; every

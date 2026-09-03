@@ -49,6 +49,29 @@ const RETIRED: Record<string, string> = {
   "customer-support": "db/0065's first wave; archived",
   hr: "db/0065's first wave; archived",
   "product-information": "db/0065's first wave; archived",
+  /*
+   * THE SECOND RETIREMENT (db/0163, user directive 2026-09-03): eight
+   * job-shaped agents deleted and replaced by two named ones, رؤیا who acts
+   * and آوا who reads. They were seven near-identical read-tool sets whose
+   * prompts differed mainly in which profession's caution they recited, and
+   * no name a person could say.
+   *
+   * DELETED rather than archived, which is why they are here rather than
+   * simply absent: the seeding INSERTs are still in 0124/0129/0139 and this
+   * check reads migration TEXT, so it will keep finding them for as long as
+   * those files exist. That is the guard being right — a migration's seed is
+   * a permanent fact about the chain — and an entry below is a person saying
+   * the row is gone from the database, which no amount of reading SQL can
+   * tell you. 0163's own self-check is the half that verifies it.
+   */
+  meetings: "db/0163 deleted it; replaced by roya + ava",
+  mail: "db/0163 deleted it; replaced by roya + ava",
+  prep: "db/0163 deleted it; replaced by roya + ava",
+  sales: "db/0163 deleted it; replaced by roya + ava",
+  interview: "db/0163 deleted it; replaced by roya + ava",
+  manager: "db/0163 deleted it; replaced by roya + ava",
+  recorder: "db/0163 deleted it; replaced by roya + ava",
+  commitments: "db/0163 deleted it; replaced by roya + ava",
 };
 
 function seededSystemHandles(): string[] {
@@ -117,12 +140,16 @@ describe("shipped agents localize", () => {
      */
     const seeded = seededSystemHandles();
     const mapped = mappedHandles();
-    // the parse reaches BOTH waves: 0065's first agents and this week's
-    expect(seeded).toContain("meetings");
-    expect(seeded).toContain("recorder");
-    expect(seeded).toContain("legal");        // 0065, retired — proves the reach
-    expect(mapped.get("recorder")).toBe("sys_recorder");
-    expect(mapped.get("meetings")).toBe("sys_meetings");
+    /* the parse reaches EVERY wave — 0065's first agents, the 0124/0129/0139
+       middle set, and 0163's two. The middle set is asserted here precisely
+       BECAUSE it is retired: a seed is a permanent fact about the chain, so a
+       parse that stopped finding it would be broken rather than up to date. */
+    expect(seeded).toContain("meetings");     // 0124, retired by 0163
+    expect(seeded).toContain("recorder");     // 0139, retired by 0163
+    expect(seeded).toContain("legal");        // 0065, archived — proves the reach
+    expect(seeded).toContain("roya");         // 0163, live
+    expect(mapped.get("roya")).toBe("sys_roya");
+    expect(mapped.get("ava")).toBe("sys_ava");
 
     // the question it must answer NO to: a handle nobody mapped is caught
     const staged = [...seeded, "an-agent-nobody-localized"];

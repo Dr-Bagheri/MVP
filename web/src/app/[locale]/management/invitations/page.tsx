@@ -10,7 +10,7 @@ import { ManagementPane } from "@/components/platform/ManagementPane";
 import { ConfirmDialog } from "@/components/rowActions";
 import { PageHeader } from "@/components/scaffold";
 import { DataTable } from "@/components/DataTable";
-import { Card, Chip } from "@/components/ui";
+import { Card, Chip, EmptyState } from "@/components/ui";
 import { formatDate } from "@/lib/format";
 
 /**
@@ -43,6 +43,8 @@ export default function InvitationsPage() {
      in its own frame. A refresh through the epoch keeps the rows on screen —
      the skeleton is for the first paint, never for a refetch. */
   const [loaded, setLoaded] = useState(false);
+  /** the read came back REFUSED — not the same as nothing outstanding */
+  const [listFailed, setListFailed] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<Role>("member");
   const [minted, setMinted] = useState<MintedInvitation | null>(null);
@@ -62,8 +64,15 @@ export default function InvitationsPage() {
     if (!isAdmin) return;
     void api
       .invitations()
-      .then(setInvitations)
-      .catch(() => undefined)
+      .then((rows) => { setInvitations(rows); setListFailed(false); })
+      /*
+       * A REFUSED READ IS NOT "NO OUTSTANDING INVITATIONS" (2026-09-03). The
+       * catch swallowed the failure and the list said there were none — and
+       * here the false empty is ACTIONABLE and wrong: the admin issues a
+       * duplicate, meets D23's one-live-per-email refusal, and has no way to
+       * know why. The two nothings get two sentences.
+       */
+      .catch(() => setListFailed(true))
       .finally(() => setLoaded(true));
   }, [isAdmin, invitationsEpoch]);
 
@@ -238,7 +247,7 @@ export default function InvitationsPage() {
             rows={open}
             loading={!loaded}
             rowKey={(inv) => inv.id}
-            empty={<p className="text-sm text-fg-muted">{t("noInvitations")}</p>}
+            empty={<EmptyState text={t(listFailed ? "invitationsLoadFailed" : "noInvitations")} />}
             menuItems={(inv) => [{
               key: "revoke",
               label: t("inviteRevoke"),

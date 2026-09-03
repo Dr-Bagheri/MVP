@@ -96,6 +96,54 @@ describe("each toggle moves exactly its own stored fact", () => {
   });
 });
 
+describe("the frame stands before the answers (2026-09-03)", () => {
+  /*
+   * The fetches are held OPEN here on purpose. An assertion that also holds
+   * once the data lands passes during loading and stops looking — the
+   * temporal vacuum — so the in-flight state has to be the one measured, and
+   * the only way to measure it is to make sure it never ends.
+   */
+  /** the platform's Skeleton, identified by the class it exists to draw: it
+      carries no test id, and a suite for one screen does not get to add one
+      to a shared component. The COUNT is the discriminating part — four rows,
+      four placeholders, never one page-wide spinner standing in for all of
+      them. */
+  const placeholders = () => document.querySelectorAll(".animate-pulse");
+
+  const LABELS = [
+    "خلاصهٔ پس از تماس",
+    "گزارش هفتگی",
+    "پیش‌نویس خودکار پاسخ ایمیل",
+    "آماده‌سازی پیش از جلسه",
+  ];
+
+  it("pending: every row is on screen with a placeholder where its switch will be", () => {
+    me.mockReturnValue(new Promise(() => undefined)); // never answers
+    weeklyDigest.mockReturnValue(new Promise(() => undefined));
+    render(<NotificationsSettings />);
+
+    // the frame is structure and structure is known before the network
+    for (const label of LABELS) expect(screen.getByText(label)).toBeInTheDocument();
+
+    // and nothing claims an answer nobody has: no switch, and NEITHER of the
+    // sentences that mean "this row genuinely has no switch" — which is what
+    // an empty control cell used to be indistinguishable from
+    expect(screen.queryByRole("switch")).toBeNull();
+    expect(screen.queryByText("این تنظیم هنوز روی این استقرار فعال نیست.")).toBeNull();
+    expect(screen.queryByText("وضعیت فعلی این تنظیم خوانده نشد.")).toBeNull();
+
+    expect(placeholders()).toHaveLength(4);
+  });
+
+  it("ready: the negative control — the placeholders are gone once the answers land", async () => {
+    render(<NotificationsSettings />);
+    await waitFor(() => expect(screen.getAllByRole("switch")).toHaveLength(4));
+    /* without this the test above is satisfied by a component that renders
+       skeletons forever, which is the same bug wearing a nicer coat */
+    expect(placeholders()).toHaveLength(0);
+  });
+});
+
 describe("the kinds of nothing", () => {
   it("a deployment without the auto-draft column gets the reason, not a switch", async () => {
     const { auto_draft_replies: _dropped, ...withoutColumn } = ME;

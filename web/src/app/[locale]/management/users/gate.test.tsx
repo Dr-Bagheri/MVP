@@ -122,12 +122,36 @@ describe("Management · Users — loading is not empty", () => {
 
     // anchored on the request being OPEN — never on a duration
     await waitFor(() => expect(members).toHaveBeenCalled());
-    expect(screen.queryByText("عضوی با این نام پیدا نشد.")).toBeNull();
+    expect(screen.queryByText("هنوز عضوی در این سازمان نیست.")).toBeNull();
     expect(screen.getByRole("table")).toBeTruthy();
 
+    /* the sentence changed on 2026-09-03: `noMatches` («عضوی با این نام پیدا
+       نشد») named a SEARCH this screen has not had since 2026-08-26, so an
+       org whose members were all pending read as a failed lookup. A refused
+       read now has a sentence of its own too — see the failure case below. */
     answer([]);
-    await screen.findByText("عضوی با این نام پیدا نشد.");
+    await screen.findByText("هنوز عضوی در این سازمان نیست.");
     // the frame yields to the sentence: a table under "nobody matches" is two answers
     expect(screen.queryByRole("table")).toBeNull();
+  });
+
+  it("says the read FAILED rather than that the organization is empty", async () => {
+    /*
+     * THE THIRD NOTHING (2026-09-03). `load()` had a `finally` and no
+     * `catch`, so a refused or dropped request left `rows` at [] and the
+     * table told an admin their organization has nobody in it — the wrong
+     * kind of nothing, and the one that cannot be acted on. It also escaped
+     * every `void load()` as an unhandled rejection.
+     *
+     * The two sentences must be DIFFERENT, which is the whole assertion:
+     * against the old code the empty sentence renders here too, so a test
+     * that only checked "some sentence appears" would pass against the bug.
+     */
+    members.mockRejectedValue(new Error("refused"));
+    me.mockResolvedValue(admin);
+    render(<UsersPage />);
+
+    await screen.findByText("فهرست اعضا بارگیری نشد — دوباره تلاش کنید.");
+    expect(screen.queryByText("هنوز عضوی در این سازمان نیست.")).toBeNull();
   });
 });

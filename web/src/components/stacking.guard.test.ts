@@ -3,8 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 /**
- * **The modal layer is the top of the platform, and the assistant dock is
- * not.**
+ * **The modal layer is the top of the platform, and the assistant is not.**
  *
  * User report, 2026-09-02: "the orb is coming on top of the pop up window on
  * the side." Both were `z-50`. A tie between two PORTALS is decided by DOM
@@ -16,20 +15,26 @@ import { join } from "node:path";
  *
  *   z-50   the modal layer — `components/ui/dialog.tsx`, every dialog and
  *          side panel in the product
- *   z-40   the assistant dock: its orb, its panel, its announcements
- *   z-30   the dock's drag cradle
+ *   z-40   the assistant's announcements
+ *   z-30   the assistant sidebar itself
+ *
+ * The FILE this watches changed on 2026-09-03: the orb, its holder and its
+ * floating panel were replaced by `AssistantSidebar.tsx`, which is the same
+ * assistant wearing a docked column. The rule did not change and neither did
+ * the reason — a dialog is the thing you are answering, and the assistant is
+ * chrome beside it.
  *
  * This file checks the half that a person actually gets wrong: nothing the
- * DOCK draws may reach the modal layer. It does not try to police z-index
+ * SIDEBAR draws may reach the modal layer. It does not try to police z-index
  * across the whole tree — a check that flags every high number in the
  * codebase is the false-positive factory that gets muted in a week.
  */
 
 const SRC = join(process.cwd(), "src");
-const DOCK = join(SRC, "components/platform/PresenceDock.tsx");
+const SIDEBAR = join(SRC, "components/platform/AssistantSidebar.tsx");
 const DIALOG = join(SRC, "components/ui/dialog.tsx");
 /* every surface that wears role="dialog" outside the ui/ primitive — a
-   fixed panel at the dock's level is the exact tie this guard exists for,
+   fixed panel at the sidebar's level is the exact tie this guard exists for,
    and MemberDetail was one until 2026-09-02 */
 const OTHER_MODALS = [join(SRC, "components/platform/MemberDetail.tsx")];
 
@@ -55,17 +60,17 @@ function levels(file: string): number[] {
 }
 
 describe("the stacking ladder", () => {
-  it("puts the modal layer above everything the assistant dock draws", () => {
-    const dock = levels(DOCK);
+  it("puts the modal layer above everything the assistant sidebar draws", () => {
+    const sidebar = levels(SIDEBAR);
     const modal = levels(DIALOG);
 
     /* the check must have a subject: a regex that matched nothing would make
        both sides empty and every assertion below vacuously true */
-    expect(dock.length).toBeGreaterThan(0);
+    expect(sidebar.length).toBeGreaterThan(0);
     expect(modal.length).toBeGreaterThan(0);
 
     const top = Math.min(...modal);
-    expect(Math.max(...dock)).toBeLessThan(top);
+    expect(Math.max(...sidebar)).toBeLessThan(top);
 
     /* and every other modal surface sits AT the modal layer, not under it */
     for (const file of OTHER_MODALS) {
@@ -75,9 +80,9 @@ describe("the stacking ladder", () => {
     }
   });
 
-  it("can answer NO — a dock level at the modal's height is reported", () => {
+  it("can answer NO — a sidebar level at the modal's height is reported", () => {
     /*
-     * The negative control. "The dock is below the modal" passes trivially if
+     * The negative control. "The sidebar is below the modal" passes trivially if
      * the levels were misread as, say, all zeros, so the same comparison is
      * run against a staged value that SHOULD fail. Without this the check
      * cannot distinguish a real ladder from a broken parser.

@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { GatewayKey, User } from "@/api/types";
+import { notify } from "@/lib/notify";
 import { SettingsPane } from "@/components/platform/SettingsPane";
 // audit finding, 2026-09-02: the keys slot rendered NOTHING until identity
 // arrived — the loading rule wants the frame first and the content waiting in it
@@ -34,10 +35,25 @@ import { KeysCard } from "./_components/KeysCard";
 export default function ConnectorsPage() {
   const t = useTranslations("connectors");
   const g = useTranslations("gateway");
+  const tCommon = useTranslations("common");
 
   const [me, setMe] = useState<User | null>(null);
   const [keys, setKeys] = useState<GatewayKey[]>([]);
   const [members, setMembers] = useState<User[]>([]);
+  /*
+   * 2026-09-03: the frame before the data — loading and empty were one
+   * picture. `keys` starts as [] and KeysCard reads that as «هنوز کلیدی
+   * ساخته نشده است», so an admin opening this page was told their
+   * organization has no integrations BEFORE the gateway had answered, and
+   * the table then dropped in underneath the sentence it had just
+   * contradicted.
+   *
+   * Three answers rather than a boolean, because the empty array has a
+   * THIRD source: a read that FAILED also leaves [] behind, and "no keys
+   * yet" is not what happened (rule 12 — name which nothing). `ok` is the
+   * only state in which this page may make a claim about the org.
+   */
+  const [gateway, setGateway] = useState<"pending" | "ok" | "failed">("pending");
 
   /*
    * Managing keys is admin-only, enforced by RLS (db/0013's api_key_admin)
@@ -54,9 +70,24 @@ export default function ConnectorsPage() {
   // OWNER out of their own gateway (caught while removing the catalogue)
   const isAdmin = me?.role === "admin" || me?.role === "owner";
 
-  const refreshGateway = useCallback(async () => {
-    setKeys(await api.gatewayKeys());
-  }, []);
+  /**
+   * Re-read after a mint or a revoke. NOT the first read (that one is the
+   * effect below): the card is already up by then, and collapsing it back to
+   * a skeleton after a successful act would take the rows away at exactly the
+   * moment somebody is checking that their act landed.
+   *
+   * 2026-09-03: it also has a catch now. `void refreshGateway()` on a
+   * rejecting promise was an unhandled rejection, and swallowing it silently
+   * would leave the last-known rows on screen with nothing saying they are
+   * stale — the act itself succeeded, so the toast is about the re-read.
+   */
+  async function refreshGateway(): Promise<void> {
+    try {
+      setKeys(await api.gatewayKeys());
+    } catch {
+      notify(tCommon("actionFailed"), "warn");
+    }
+  }
 
   useEffect(() => {
     void api.me().then(setMe);
@@ -64,10 +95,29 @@ export default function ConnectorsPage() {
 
   useEffect(() => {
     if (!isAdmin) return;
-    void refreshGateway();
-    // Acts-as is a member id on the wire; the name comes from the member list.
-    void api.members().then(setMembers);
-  }, [isAdmin, refreshGateway]);
+    let live = true;
+    /*
+     * ONE answer for the two reads the card needs (2026-09-03). Acts-as is a
+     * member id on the wire and the NAME comes from the member list, so a
+     * keys-first render would print «این شناسه در فهرست اعضا نیست» beside a
+     * perfectly ordinary colleague — a claim about the org built out of a
+     * list nobody had finished reading. The card waits for both, and then
+     * everything in it is true at once.
+     */
+    void Promise.all([api.gatewayKeys(), api.members()])
+      .then(([keyRows, memberRows]) => {
+        if (!live) return;
+        setKeys(keyRows);
+        setMembers(memberRows);
+        setGateway("ok");
+      })
+      .catch(() => {
+        if (live) setGateway("failed");
+      });
+    return () => {
+      live = false;
+    };
+  }, [isAdmin]);
 
   return (
     <SettingsPane activeSlug="connectors">
@@ -82,7 +132,7 @@ export default function ConnectorsPage() {
         <p className="text-sm leading-7 text-fg-muted">{g("intro")}</p>
       </Card>
 
-      {me === null ? (
+      {me === null || (isAdmin && gateway === "pending") ? (
         /*
          * audit finding, 2026-09-02: this slot was `null` until api.me()
          * resolved, so the page was the intro card and then a gap, and the
@@ -93,18 +143,16 @@ export default function ConnectorsPage() {
          * the refusal card is a heading and a sentence; the keys card is a
          * heading, a button row and a table, so the space is a floor, not a
          * guess at the table.
+         *
+         * 2026-09-03: the same frame now covers the GATEWAY read as well, so
+         * there is one skeleton from the first paint until the card can be
+         * true, rather than a skeleton, then a card claiming the org has no
+         * keys, then a table. Two waits, one picture.
          */
         <Card className="mb-4">
           <SkeletonLines lines={3} />
         </Card>
-      ) : isAdmin ? (
-        <KeysCard
-          keys={keys}
-          members={members}
-          meId={me.id}
-          onChanged={() => void refreshGateway()}
-        />
-      ) : (
+      ) : !isAdmin ? (
         /*
          * Not an empty list. A member who saw "no keys" would read it as "this
          * org has no integrations" — a claim about the org built out of a fact
@@ -115,6 +163,27 @@ export default function ConnectorsPage() {
           <h2 className="h-section">{g("adminOnly")}</h2>
           <p className="mt-1 text-sm leading-7 text-fg-muted">{g("adminOnlyNote")}</p>
         </Card>
+      ) : gateway === "failed" ? (
+        /*
+         * The third nothing, said as itself. The card keeps its NAME — the
+         * reader still knows which section could not be read — and the
+         * platform's generic sentence carries the rest. It is deliberately
+         * the generic one: a dedicated «کلیدها خوانده نشد» would be better
+         * copy, and it would mean editing the locale catalogues, which are
+         * not this file's to change; a borrowed sentence about the wrong
+         * subject would be worse than either.
+         */
+        <Card className="mb-4">
+          <h2 className="h-section">{g("keys")}</h2>
+          <p className="mt-1 text-sm leading-7 text-fg-muted">{tCommon("actionFailed")}</p>
+        </Card>
+      ) : (
+        <KeysCard
+          keys={keys}
+          members={members}
+          meId={me.id}
+          onChanged={() => void refreshGateway()}
+        />
       )}
 
       {/*

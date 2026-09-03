@@ -15,7 +15,8 @@ import { TopBar } from "./TopBar";
  * mobile bottom bar. Apps render into `children`; the shell draws nothing
  * inside that slot.
  *
- * **M22's law, and the reason this component does not own an assistant:**
+ * **M22's law, and the reason this component still does not OWN the
+ * assistant:**
  *
  *   > the app must be reachable on load, at every width, without dismissing
  *   > anything.
@@ -26,13 +27,23 @@ import { TopBar } from "./TopBar";
  * (main went full width, nothing overflowed) while the app became unreachable
  * behind an opaque layer. Both states passed every box measurement.
  *
- * So the assistant is not the shell's to mount. PresenceDock stays global and
- * owns voice, conversation, notifications and the one accessible trigger.
- * The top bar exposes only an optional visual anchor for that trigger; without
- * the shell it falls back to its fixed corner. No pane opens on load.
+ * So the assistant is still not mounted here. `AssistantSidebar` is mounted by
+ * the locale layout — which never remounts, where this shell is rendered by
+ * each page — and owns voice, conversation, notifications and the one
+ * accessible trigger.
  *
- * Keeping ownership outside the shell preserves that distinction and prevents
- * a visual placement change from repeating the 40px/opaque-overlay failure.
+ * WHAT THE SHELL DOES OWE IT (2026-09-03) is ROOM. The sidebar is fixed to the
+ * inline-end edge and publishes the width it occupies as `--assistant-rail` on
+ * the document root; the padding below is the page column stepping aside by
+ * exactly that much, so the content is NARROWER rather than covered. Only from
+ * `md` up: below that the sidebar occupies no inline space at all, and its open
+ * state is an overlay the person asked for.
+ *
+ * A custom property rather than a store because the shell needs no state of its
+ * own to make room — one writer, one reader, and no re-render of the page tree
+ * when the sidebar is toggled. It defaults to `0px` in globals.css, so a page
+ * rendered before the sidebar has answered is never indented for a column that
+ * is not there.
  */
 export function PlatformShell({ children }: { children: ReactNode }) {
   /*
@@ -129,7 +140,11 @@ export function PlatformShell({ children }: { children: ReactNode }) {
      * it, and the only thing above every page is the layout.
      */
     <>
-      <div className="flex h-dvh bg-bg text-fg">
+      {/* the inline-END padding is the space the assistant sidebar occupies —
+          see the header. It lands on the row, so the LAST flex child (the
+          content column) shrinks; the rail is at the inline-start and is
+          untouched. */}
+      <div className="flex h-dvh bg-bg text-fg md:pe-[var(--assistant-rail)]">
         <IconRail />
         <div className="flex min-w-0 flex-1 flex-col">
           {/* the whole person, not an initial: the avatar menu's identity

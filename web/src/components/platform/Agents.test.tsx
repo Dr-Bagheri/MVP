@@ -35,7 +35,7 @@ let ROLE = "member";
 const AGENTS: AgentCard[] = [
   {
     /* the name is deliberately NOT the catalogue's: it must never render */
-    id: "a-sys", handle: "meetings", name: "wire-name-never-shown",
+    id: "a-sys", handle: "roya", name: "wire-name-never-shown",
     description: "wire-desc-never-shown", level: "system",
     icon: "sparkles", color: "violet", model: null,
     tools: ["search_transcripts"], web: false,
@@ -65,14 +65,17 @@ describe("the agent cards", () => {
 
   it("a card is a door to the assistant, with the agent in the query", async () => {
     await act(async () => { mount(); });
-    const card = screen.getByRole("link", { name: "گفت‌وگو با دستیار جلسه‌ها" });
-    expect(card.getAttribute("href")).toBe("/assistant?agent=meetings");
+    const card = screen.getByRole("link", { name: "گفت‌وگو با رؤیا" });
+    expect(card.getAttribute("href")).toBe("/assistant?agent=roya");
   });
 
   it("localizes a SHIPPED agent's copy and leaves an authored one as written", async () => {
     await act(async () => { mount(); });
     /* the catalogue's name renders and the wire's never does */
-    expect(screen.getByText("دستیار جلسه‌ها")).toBeTruthy();
+    /* db/0163: the eight job-shaped agents are gone and رؤیا is the shipped
+       one this fixture stands for — the RULE is unchanged (the catalogue's
+       name renders and the wire's never does), only its subject */
+    expect(screen.getByText("رؤیا")).toBeTruthy();
     expect(screen.queryByText("wire-name-never-shown")).toBeNull();
     /* the org agent's own words, untouched — the other half of the rule */
     expect(screen.getByText("Growth helper")).toBeTruthy();
