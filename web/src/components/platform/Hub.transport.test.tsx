@@ -1,6 +1,30 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgentEvent } from "@/api/types";
+/**
+ * THE HANDOFF IS MOCKED AWAY IN THIS FILE, and the reason is a real race
+ * rather than tidiness.
+ *
+ * `lib/liveConversation` is module state: whichever surface is showing a
+ * conversation publishes its id so the other picks it up. These tests drive
+ * streams that are still in flight when a case ends — which is the point of a
+ * file about streams DYING — so a previous test's `session` event lands after
+ * the next test's `beforeEach`, and the next Hub mounts continuing a
+ * conversation nobody in that test started. It appeared exactly that way:
+ * `expected 'sess-live-1' to be undefined` on the first ask of a test that had
+ * not asked anything yet.
+ *
+ * Clearing it in `beforeEach` does not close the race — the late write happens
+ * after. The subject here is what a dead stream does to the SESSION REF, and
+ * the handoff is noise standing in front of it, so it answers "nothing handed
+ * over". Its own behaviour is asserted in lib/liveConversation.test.ts.
+ */
+vi.mock("@/lib/liveConversation", () => ({
+  liveConversation: () => null,
+  setLiveConversation: () => {},
+  subscribeLiveConversation: () => () => {},
+  resetLiveConversationForTest: () => {},
+}));
 
 /**
  * **A stream that ends without `done` died in transport — it is never a

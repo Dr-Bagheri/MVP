@@ -18,6 +18,7 @@ import { MailDraftCard } from "./MailDraftCard";
 import { useAssistantConversation } from "./AssistantConversationState";
 import { DocumentIcon, MicIcon, PlusIcon, SendIcon } from "./icons";
 import { mentionedAgent } from "@/lib/agentMention";
+import { liveConversation, setLiveConversation } from "@/lib/liveConversation";
 import { SURFACE_TOOLS } from "@/lib/agentSurface";
 import { startRecording } from "@/lib/recordingEngine";
 
@@ -518,6 +519,9 @@ export function Hub() {
     setHeldThreadId(id);
     setFeedback(verdicts);
     sessionId.current = id;
+    /* the other direction of the handoff: leave this page and the sidebar
+       picks up where this left off */
+    setLiveConversation(id);
     setStarted(true);
     void api.shareState(id).then(setShared).catch(() => setShared(false));
   }, [setStarted]);
@@ -526,19 +530,36 @@ export function Hub() {
     resetVersionRef.current = resetVersion;
   }, [resetVersion]);
 
+  /**
+   * CONTINUE WHAT THE SIDEBAR WAS SAYING (user directive, 2026-09-03: "if we
+   * go to the assistant page it will be continue there").
+   *
+   * `?c=` still wins — a link to a specific conversation is a more explicit
+   * statement than "whatever was open" — and this only fills the gap where
+   * nothing was named: arriving at /assistant from the rail while a
+   * conversation is live in the sidebar.
+   *
+   * The read is ONCE, on mount, not a subscription. This page owns the
+   * conversation while somebody is on it; re-adopting mid-session would let a
+   * background write yank the thread out from under a reader.
+   */
+  const handedOver = useRef<string | null | undefined>(undefined);
+  if (handedOver.current === undefined) handedOver.current = liveConversation();
+  const continueId = resumeId ?? handedOver.current;
+
   useEffect(() => {
-    if (!resumeId) return;
+    if (!continueId) return;
     /* a freshly opened thread shows its LATEST turn — re-pin here, not in
        adoptThread: adoptThread also runs after every `done`, where re-pinning
        would yank a reader who scrolled up mid-answer */
     pinnedRef.current = true;
     let cancelled = false;
-    void adoptThread(resumeId).then(() => {
+    void adoptThread(continueId).then(() => {
       if (cancelled) return;
       /* a resumed conversation shows its drafts again: the card is the only
          place the reply can be sent from inside the product, so coming back
          to the thread has to bring it back too */
-      void refreshDrafts(resumeId);
+      void refreshDrafts(continueId);
     }).catch(() => {
       /* audit finding, 2026-09-02: the skeleton stands for a request IN
          FLIGHT, never for a refusal — a fetch that fails settles too, or the
@@ -546,12 +567,12 @@ export function Hub() {
          this flag existed (the idle hub); the refusal has no sentence of its
          own on this screen yet, and that gap is named here rather than hidden
          behind a skeleton that never ends. */
-      if (!cancelled) setHeldThreadId(resumeId);
+      if (!cancelled) setHeldThreadId(continueId);
     });
     return () => {
       cancelled = true;
     };
-  }, [resumeId, adoptThread, refreshDrafts]);
+  }, [continueId, adoptThread, refreshDrafts]);
 
   useEffect(() => {
     if (resetVersion === 0 || appliedResetVersionRef.current === resetVersion) return;
@@ -561,6 +582,10 @@ export function Hub() {
     abortRef.current?.abort();
     abortRef.current = null;
     sessionId.current = undefined;
+    /* and the handoff, or the sidebar would pick up the conversation this
+       button just cleared — a "new conversation" that follows you back into
+       the platform as the old one */
+    setLiveConversation(null);
     pinnedRef.current = true;
     setMessages([]);
     setHeldThreadId(null);
@@ -664,6 +689,10 @@ export function Hub() {
       switch (event.type) {
         case "session":
           sessionId.current = event.id;
+          /* the earliest moment a lazily created conversation has an id —
+             published here so walking off this page carries it to the sidebar
+             rather than leaving the thread behind */
+          setLiveConversation(event.id);
           break;
         case "text_delta":
           setMessages((prev) =>

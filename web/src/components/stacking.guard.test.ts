@@ -15,8 +15,19 @@ import { join } from "node:path";
  *
  *   z-50   the modal layer — `components/ui/dialog.tsx`, every dialog and
  *          side panel in the product
- *   z-40   the assistant's announcements
+ *   z-40   the TOP BAR and everything hanging off it, and the assistant's
+ *          announcements (both transient, and the announcements are
+ *          pointer-events-none, so the tie costs nothing)
  *   z-30   the assistant sidebar itself
+ *
+ * The top bar joined the ladder on 2026-09-03, from a user report: "the
+ * notification go behind the assistant menu bar." The bell's panel was z-50
+ * and the sidebar z-30, so the two numbers on the two elements said the panel
+ * wins — and it lost. **A z-index only competes inside its own stacking
+ * context**: `<header className="relative z-30">` trapped the panel's 50, and
+ * what actually met the sidebar was 30 against 30, a tie document order hands
+ * to whoever comes later. The number that had to move was the HEADER's, which
+ * is not the element anybody would inspect.
  *
  * The FILE this watches changed on 2026-09-03: the orb, its holder and its
  * floating panel were replaced by `AssistantSidebar.tsx`, which is the same
@@ -37,6 +48,7 @@ const DIALOG = join(SRC, "components/ui/dialog.tsx");
    fixed panel at the sidebar's level is the exact tie this guard exists for,
    and MemberDetail was one until 2026-09-02 */
 const OTHER_MODALS = [join(SRC, "components/platform/MemberDetail.tsx")];
+const TOPBAR = join(SRC, "components/platform/TopBar.tsx");
 
 /**
  * Every `z-<n>` / `z-[<n>]` Tailwind class in a file, COMMENTS STRIPPED.
@@ -78,6 +90,24 @@ describe("the stacking ladder", () => {
       expect(lv.length).toBeGreaterThan(0);
       expect(Math.min(...lv)).toBeGreaterThanOrEqual(top);
     }
+  });
+
+  it("puts the top bar's own stacking context above the sidebar", () => {
+    /*
+     * The bar is a CONTEXT, not just a layer: everything it opens — the bell,
+     * the avatar menu, the locale picker — is trapped inside whatever number
+     * this file gives it, however high those panels set themselves. So the
+     * assertion is about the header's own level and nothing inside it.
+     */
+    const bar = levels(TOPBAR);
+    expect(bar.length, "the top bar declares a stacking level").toBeGreaterThan(0);
+    const sidebar = levels(SIDEBAR);
+    expect(Math.max(...sidebar), "sidebar is read").toBeGreaterThan(0);
+
+    /* above the docked column ... */
+    expect(Math.max(...bar)).toBeGreaterThan(Math.min(...sidebar));
+    /* ... and still under the modal layer, which must cover both */
+    expect(Math.max(...bar)).toBeLessThan(Math.min(...levels(DIALOG)));
   });
 
   it("can answer NO — a sidebar level at the modal's height is reported", () => {

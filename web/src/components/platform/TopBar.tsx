@@ -109,7 +109,21 @@ export function TopBar({
        point of the token: the blueprint's number reaches the shell, and a
        future change to it lands here without a hand edit. */
     <header
-      className="relative z-30 h-topbar shrink-0 overflow-visible"
+      /*
+        z-40, ABOVE THE ASSISTANT COLUMN (user report, 2026-09-03: "the
+        notification go behind the assistant menu bar, make it come always on
+        top of it").
+        The bell's own panel is z-50 and the sidebar is z-30, so the two
+        numbers on the two elements said the panel wins — and it lost, because
+        a z-index only competes inside its own stacking context. This header
+        is `relative z-30`, which traps the panel's 50; what actually met the
+        sidebar was 30 against 30, a tie that document order hands to whoever
+        comes later, which is the sidebar.
+        So the number that had to move is THIS one, not the panel's. 40 keeps
+        the bar and everything hanging off it above the docked column and below
+        the z-50 modal layer, which must still cover both.
+      */
+      className="relative z-40 h-topbar shrink-0 overflow-visible"
       data-platform-topbar
     >
       {/* TWO PARTS, not three. The bar was a grid whose CENTRE column existed

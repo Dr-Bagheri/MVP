@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { AgentCard } from "@/api/types";
-import { Card, EmptyState, Field } from "@/components/ui";
+import { Field } from "@/components/ui";
 import { Overlay } from "@/components/platform/Overlay";
 import { Select } from "@/components/Select";
 import { Switch } from "@/components/Switch";
@@ -59,8 +59,15 @@ export function Agents() {
   const askIn = (handle: string) =>
     router.push(`/assistant?ask=${encodeURIComponent(`@${handle} `)}`);
 
-  const system = rows.filter((a) => a.level === "system");
-  const own = rows.filter((a) => a.level !== "system");
+  /* the pair the product ships first, then anything this organization made.
+     Not alphabetical: Roya and Ava are the answer to "who can I ask", and a
+     custom agent named «آبان» sorting above them would bury it. With the
+     headings gone this ordering is the ONLY thing left saying which is which
+     at list level — the rest is on the card. */
+  const ordered = [
+    ...rows.filter((a) => a.level === "system"),
+    ...rows.filter((a) => a.level !== "system"),
+  ];
 
   return (
     <PageContainer>
@@ -74,56 +81,34 @@ export function Agents() {
       </div>
 
       {/*
-        THE FRAME COMES FIRST. Both sections render their heading whatever the
-        network is doing, and the skeleton sits INSIDE them — so the layout
-        does not jump when the rows land, and "loading" never looks like
-        "there are no agents", which on this screen would be a lie about the
-        product rather than about the request.
-      */}
-      <div className="mt-4 space-y-6">
-        <section>
-          <h2 className="text-sm font-semibold text-fg">{t("shipped")}</h2>
-          {agents === null
-            ? <SkeletonCards count={2} className="mt-2 grid gap-3 sm:grid-cols-2" height="h-28" />
-            : agents === "failed"
-              ? <p className="mt-2 text-sm text-fg-muted">{t("readFailed")}</p>
-              : (
-                <div className="mt-2 grid gap-3 sm:grid-cols-2">
-                  {system.map((agent) => (
-                    <AgentTile key={agent.id} agent={agent} copy={copy}
-                      onAsk={() => askIn(agent.handle)}
-                      onEdit={agent.editable ? () => setEditing(agent) : undefined} />
-                  ))}
-                </div>
-              )}
-        </section>
+        ONE GRID, NO HEADINGS (user directive, 2026-09-03: "remove the text
+        that separate the agent, platform agent and your agent").
 
-        <section>
-          <h2 className="text-sm font-semibold text-fg">{t("yours")}</h2>
-          {agents === null
-            ? <SkeletonCards count={1} className="mt-2 grid gap-3 sm:grid-cols-2" height="h-28" />
-            : agents === "failed"
-              ? <p className="mt-2 text-sm text-fg-muted">{t("readFailed")}</p>
-              : own.length === 0
-                ? (
-                  <div className="mt-2">
-                    <EmptyState text={t("noneYet")} action={
-                      <button type="button" className="btn btn-sm border border-border bg-surface text-fg"
-                        onClick={() => setEditing("new")}>{t("newAgent")}</button>
-                    } />
-                  </div>
-                )
-                : (
-                  <div className="mt-2 grid gap-3 sm:grid-cols-2">
-                    {own.map((agent) => (
-                      <AgentTile key={agent.id} agent={agent} copy={copy}
-                        onAsk={() => askIn(agent.handle)}
-                        onEdit={agent.editable ? () => setEditing(agent) : undefined} />
-                    ))}
-                  </div>
-                )}
-        </section>
-      </div>
+        Two labelled sections over two and four cards was a table of contents
+        for a list you can see all of at once. The distinction they carried is
+        real and did not go with them — it moved ONTO the card, where a
+        platform agent wears the accent ring and a home-made one wears a plain
+        one. That is the better place for it anyway: a heading tells you which
+        group you are in only while you are reading the heading; the mark is on
+        the thing itself.
+
+        The frame still comes first — the grid renders with skeletons in it, so
+        the layout does not jump when the roster lands and "loading" never
+        draws the same picture as "you have no agents".
+      */}
+      {agents === "failed"
+        ? <p className="mt-4 text-sm text-fg-muted">{t("readFailed")}</p>
+        : (
+          <div className="mt-4 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+            {agents === null
+              ? <SkeletonCards count={3} className="contents" height="h-[4.5rem]" />
+              : ordered.map((agent) => (
+                <AgentTile key={agent.id} agent={agent} copy={copy}
+                  onAsk={() => askIn(agent.handle)}
+                  onEdit={agent.editable ? () => setEditing(agent) : undefined} />
+              ))}
+          </div>
+        )}
 
       {editing === null ? null : (
         <AgentEditor agent={editing === "new" ? null : editing}
@@ -134,6 +119,26 @@ export function Agents() {
   );
 }
 
+/**
+ * One agent, at list size.
+ *
+ * SMALLER (user directive, 2026-09-03: "their place and size that they fill be
+ * fitting will be smaller and their logo is different"). The old card was a
+ * two-line description, a handle chip and two buttons — a profile page for
+ * something you scan. It is a row now: mark, name, one line, and the actions
+ * appear on hover or focus, which is the pattern the task board and the
+ * meetings list already use.
+ *
+ * THE MARK CARRIES WHAT THE HEADINGS CARRIED. A platform agent is drawn in the
+ * accent with a ring; one this organization made is drawn plain. That is the
+ * whole of "their logo is different" and it is doing real work — with the two
+ * section titles gone it is the only per-card statement of which is which, so
+ * it is asserted rather than left to look right.
+ *
+ * The handle is still on the row and still `@`-prefixed: it is how you call
+ * them, and a person who reads it here can type it in the assistant without
+ * being told how.
+ */
 function AgentTile({ agent, copy, onAsk, onEdit }: {
   agent: AgentCard;
   copy: (a: AgentCard) => { name: string; description: string };
@@ -142,34 +147,41 @@ function AgentTile({ agent, copy, onAsk, onEdit }: {
 }) {
   const t = useTranslations("agents");
   const { name, description } = copy(agent);
+  const shipped = agent.level === "system";
   return (
-    <Card>
-      <div className="flex items-start gap-3">
-        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${agentColorClasses(agent.color)}`}>
-          <Icon name={agentIconName(agent.icon)} size="sm" />
+    <div className="tile-row group flex items-center gap-2.5 p-2.5">
+      <span
+        data-agent-mark={shipped ? "platform" : "own"}
+        className={`grid h-8 w-8 shrink-0 place-items-center rounded-xl ${
+          shipped
+            ? `ring-1 ring-inset ring-accent/40 ${agentColorClasses(agent.color)}`
+            : "bg-surface-2 text-fg-muted"
+        }`}
+      >
+        <Icon name={agentIconName(agent.icon)} size="sm" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="flex items-baseline gap-1.5">
+          <span className="truncate text-sm font-semibold text-fg">{name}</span>
+          <code className="shrink-0 text-xs text-fg-subtle">@{agent.handle}</code>
         </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <h3 className="truncate text-sm font-semibold text-fg">{name}</h3>
-            {/* the handle IS the way to call them, so it is on the card rather
-                than in a tooltip: a person who reads «@roya» here can type it
-                in the assistant without being told how */}
-            <code className="shrink-0 rounded-md bg-surface-2 px-1.5 py-0.5 text-xs text-fg-muted">@{agent.handle}</code>
-          </div>
-          <p className="mt-1 line-clamp-2 text-sm text-fg-muted">{description}</p>
-          <div className="mt-2.5 flex items-center gap-2">
-            <button type="button" className="btn btn-sm bg-accent text-on-accent" onClick={onAsk}>
-              {t("ask")}
-            </button>
-            {onEdit ? (
-              <button type="button" className="btn btn-sm border border-border bg-surface text-fg" onClick={onEdit}>
-                {t("edit")}
-              </button>
-            ) : null}
-          </div>
-        </div>
-      </div>
-    </Card>
+        <span className="mt-0.5 block truncate text-xs text-fg-muted">{description}</span>
+      </span>
+      {/* the actions do not take room until they are wanted — `opacity` rather
+          than `hidden`, so the row does not change width when the pointer
+          crosses it, and `focus-within` so a keyboard reaches them */}
+      <span className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+        {onEdit ? (
+          <button type="button" className="btn btn-icon border border-border bg-surface text-fg-muted hover:text-fg"
+            onClick={onEdit} aria-label={t("edit")} title={t("edit")}>
+            <Icon name="pencil" size="sm" />
+          </button>
+        ) : null}
+        <button type="button" className="btn btn-sm bg-accent text-on-accent" onClick={onAsk}>
+          {t("ask")}
+        </button>
+      </span>
+    </div>
   );
 }
 

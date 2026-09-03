@@ -8,9 +8,10 @@ import { createPortal } from "react-dom";
 import { useLocale, useTranslations } from "next-intl";
 import { usePathname } from "next/navigation";
 import { api } from "@/api/client";
-import type { AgentEvent } from "@/api/types";
+import type { AgentEvent, ConnectorStatus } from "@/api/types";
 import { useRouter } from "@/i18n/routing";
 import { mentionedAgent } from "@/lib/agentMention";
+import { liveConversation, setLiveConversation } from "@/lib/liveConversation";
 import {
   subscribeVoicePrefs, voicePrefs, voicePrefsServer,
 } from "@/lib/voicePrefs";
@@ -21,6 +22,11 @@ import {
 } from "@/lib/assistantBus";
 import { notify, subscribeNotify, type PlatformNotice } from "@/lib/notify";
 import { Icon } from "@/components/icons";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
+  DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { speak, speakQueued, stopSpeaking, subscribeSpeechPlayback } from "@/lib/voice";
 import { startVoiceLoop, voiceLoopSupported, type VoiceLoopHandle } from "@/lib/voiceLoop";
 import { recorderControls } from "@/components/echo/recorderControls";
@@ -340,6 +346,10 @@ export function AssistantSidebar() {
     abortRef.current?.abort();
     setMessages([]);
     sessionId.current = undefined;
+    /* and the handoff is cleared too — otherwise opening the assistant page
+       after "new conversation" would resume the one just left behind, which
+       is the exact opposite of what the button says */
+    setLiveConversation(null);
     notify(t("newConversationStarted"));
   }
 
@@ -522,6 +532,32 @@ export function AssistantSidebar() {
   const visible = member && !sidebarIsSilentOn(pathname);
 
   /**
+   * COMING BACK FROM THE ASSISTANT PAGE (user directive, 2026-09-03: "all that
+   * we were talked about should automatically come to the ai assistant side
+   * bar and anywhere it navigates it will follow").
+   *
+   * The panel is SILENT on /assistant, so while somebody is on that page this
+   * component is mounted and drawing nothing while the page advances the
+   * conversation. Walking back into the platform must not show them the
+   * conversation as it stood before they left.
+   *
+   * Keyed on the pathname rather than on the store, and only when the id
+   * DIFFERS from the one already held: a subscription would re-load the thread
+   * every time the page emitted a session event, mid-answer, on a panel nobody
+   * is looking at.
+   */
+  useEffect(() => {
+    if (!visible) return;
+    const handed = liveConversation();
+    if (handed === null || handed === sessionId.current) return;
+    void loadSession(handed);
+    // `loadSession` is stable for this component's life; re-running on its
+    // identity would reload the thread on every render
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, pathname]);
+
+
+  /**
    * THE WIDTH THIS COLUMN OCCUPIES, published for the page to step aside by.
    *
    * It went away and came back the same day, and the round trip is the useful
@@ -594,6 +630,9 @@ export function AssistantSidebar() {
    */
   async function loadSession(id: string) {
     sessionId.current = id;
+    /* whichever surface is showing a thread says so, so the other one can pick
+       it up when the person walks over (see lib/liveConversation.ts) */
+    setLiveConversation(id);
     setLoadingThread(true);
     try {
       const thread = await api.agentMessages(id);
@@ -859,6 +898,12 @@ export function AssistantSidebar() {
     switch (event.type) {
       case "session":
         sessionId.current = event.id;
+        /* THE HANDOFF POINT. The session event is the first frame of a lazily
+           created conversation, so this is the earliest moment there is an id
+           to hand over — earlier than the first token, which is what makes
+           "ask here, then open the assistant page" continue rather than
+           restart. */
+        setLiveConversation(event.id);
         break;
       case "text_delta":
         replyTextRef.current += event.delta;
@@ -989,18 +1034,16 @@ export function AssistantSidebar() {
                   icons read as lit warnings rather than as a state — and they
                   belong beside the thing they act on, which is the composer.
                   The header keeps what NAMES the room and what closes it. */}
+              {/* THE PLUS LEFT THE HEADER (user directive, 2026-09-03: "from
+                  top of the side menu of the assistant remove the plus and put
+                  it under the box like the claude"). Starting a conversation is
+                  something you do while looking at the box you are about to
+                  type in, not something you reach to the far corner for — and
+                  the header is now only what NAMES the room and what closes
+                  it. */}
               <button
                 type="button"
                 className={`${headerButton} ms-auto`}
-                aria-label={t("newConversation")}
-                title={t("newConversation")}
-                onClick={freshConversation}
-              >
-                <Icon name="plus" size="md" />
-              </button>
-              <button
-                type="button"
-                className={headerButton}
                 aria-label={t("close")}
                 title={t("close")}
                 onClick={collapseSidebar}
@@ -1076,47 +1119,68 @@ export function AssistantSidebar() {
               <div ref={endRef} />
             </div>
 
+            {/*
+              THE COMPOSER, AS ONE BOX (user directive, 2026-09-03: "make the
+              prompt box that it have on the side menu for assistant to look
+              like the here in claude with a little enter icon at the end for
+              sending ... and add a dropdown menu to it that opens upward and
+              in it new conversation and connectors").
+
+              The box is the frame — border, corner, focus ring — and the
+              textarea inside it is bare. That is the whole trick: `.input`
+              draws a box, so a textarea with `.input` plus a row of buttons
+              underneath is TWO boxes stacked, which is what this looked like
+              and why it did not read as one control.
+
+              The menu opens UPWARD because the composer sits at the foot of a
+              full-height column; a panel dropped below it opens into the
+              viewport edge. `side="top"` on the primitive rather than a
+              hand-placed panel — the same reason every other menu here went to
+              Radix.
+            */}
             <form
               className="border-t border-border p-2"
               onSubmit={(e) => { e.preventDefault(); send(); }}
             >
-              <textarea
-                ref={inputRef}
-                rows={1}
-                className="input w-full resize-none py-2.5"
-                placeholder={t("placeholder")}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
-                }}
-              />
-              {/*
-                THE CONTROLS LEFT THIS ROW (user directive, 2026-09-03:
-                "remove the items in side bar menu and put them into the
-                setting in assistant section, and remove @ completely").
-
-                Mic and speaker are PREFERENCES — «صدا و شنیدن» on
-                Settings·Assistant now — and they read the same store this
-                panel reads, so a switch there reaches the conversation on the
-                next paint rather than on the next reload.
-
-                The `@` button is gone and did NOT move: it wrote a character,
-                which is a thing anybody can type, and a button whose whole job
-                is to save one keystroke is chrome. Addressing an agent still
-                works — it is what makes them answer inline — and the Agents
-                screen's «پرسیدن» opens this composer with the mention already
-                in it, which is a better door than a button that only helps
-                somebody who already knew.
-              */}
-              <div className="mt-2 flex items-center gap-1">
-                <button
-                  type="submit"
-                  className="btn-primary btn-sm ms-auto"
-                  disabled={streaming || input.trim() === ""}
-                >
-                  {streaming ? "…" : t("send")}
-                </button>
+              <div className="rounded-2xl border border-border bg-field px-2.5 py-2 transition-colors focus-within:border-accent">
+                <textarea
+                  ref={inputRef}
+                  rows={1}
+                  className="max-h-40 w-full resize-none bg-transparent text-detail leading-6 text-fg outline-none placeholder:text-fg-subtle"
+                  placeholder={t("placeholder")}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
+                  }}
+                />
+                <div className="mt-1.5 flex items-center gap-1">
+                  <ComposerMenu
+                    onNewConversation={freshConversation}
+                    label={t("composerMenu")}
+                    newLabel={t("newConversation")}
+                    connectorsLabel={t("connectors")}
+                    manageLabel={t("manageConnectors")}
+                  />
+                  {/*
+                    THE SEND KEY, at the end of the box. An icon rather than the
+                    word: the label was «بفرست» in a row of glyphs, and the
+                    return arrow is what the keyboard shortcut it duplicates
+                    actually looks like — so the button and the Enter key stop
+                    being two unrelated facts a person has to learn separately.
+                  */}
+                  <button
+                    type="submit"
+                    className="btn btn-icon ms-auto bg-accent text-on-accent disabled:opacity-40"
+                    disabled={streaming || input.trim() === ""}
+                    aria-label={t("send")}
+                    title={t("send")}
+                  >
+                    {streaming
+                      ? <span className="text-detail" aria-hidden>…</span>
+                      : <Icon name="enter" size="sm" />}
+                  </button>
+                </div>
               </div>
             </form>
           </>
@@ -1184,5 +1248,106 @@ export function AssistantSidebar() {
         ? createPortal(trigger(""), topbarPresenceHost)
         : trigger("fixed bottom-4 end-4 z-30 border border-border bg-surface shadow-lg")}
     </>
+  );
+}
+
+/**
+ * THE COMPOSER'S OWN MENU (user directive, 2026-09-03: "add a dropdown menu to
+ * it that opens upward and in it new conversation and connectors. inside
+ * connectors must be the option for our ai to use other platforms and apis").
+ *
+ * Two entries, and they are two different KINDS of thing on purpose:
+ *
+ *   · «گفت‌وگوی تازه» acts — it is the plus that used to sit in the header,
+ *     moved to where a person is already looking when they decide to start
+ *     over, which is the box they are about to type in;
+ *   · «اتصال‌ها» is a SUBMENU listing what this assistant can reach outside
+ *     the platform. Every row says what it IS — connected, expired, never
+ *     set up — rather than offering a switch, because connecting is a consent
+ *     flow with a provider's own screen in the middle of it and a toggle here
+ *     would be a control that reads as wired and opens a redirect.
+ *
+ * The list is READ, never invented: `api.connectors()` is the same call the
+ * Integrations screen makes. A hand-written list of providers here would be a
+ * second claim about what the product supports, and the first thing to rot the
+ * day one is added.
+ *
+ * `side="top"` — the composer is at the foot of a full-height column, so a
+ * panel dropped below it opens into the viewport edge.
+ */
+function ComposerMenu({ onNewConversation, label, newLabel, connectorsLabel, manageLabel }: {
+  onNewConversation: () => void;
+  label: string;
+  newLabel: string;
+  connectorsLabel: string;
+  manageLabel: string;
+}) {
+  const router = useRouter();
+  const [connectors, setConnectors] = useState<ConnectorStatus[] | "failed" | null>(null);
+
+  /* read when the menu is OPENED, not on mount: this component renders on
+     every page in the platform, and a connectors request per navigation for a
+     menu nobody opened is a request nobody asked for */
+  const load = () => {
+    if (connectors !== null) return;
+    void api.connectors()
+      .then((rows) => setConnectors(rows))
+      .catch(() => setConnectors("failed"));
+  };
+
+  return (
+    <DropdownMenu onOpenChange={(next) => { if (next) load(); }}>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className="btn btn-icon text-fg-muted hover:bg-surface-2 hover:text-fg"
+          aria-label={label}
+          title={label}
+        >
+          <Icon name="plus" size="sm" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side="top" align="start" className="w-56">
+        <DropdownMenuItem onSelect={() => onNewConversation()}>
+          <Icon name="plus" size="sm" />
+          {newLabel}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <Icon name="plug" size="sm" />
+            {connectorsLabel}
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent className="w-64">
+            {connectors === null ? (
+              <div className="px-2 py-1.5"><SkeletonLines lines={2} /></div>
+            ) : connectors === "failed" ? (
+              <DropdownMenuItem disabled>{connectorsLabel}</DropdownMenuItem>
+            ) : (
+              connectors.map((row) => (
+                <DropdownMenuItem
+                  key={row.provider}
+                  onSelect={() => router.push("/settings/integrations")}
+                >
+                  <span className="flex min-w-0 flex-1 items-center gap-2">
+                    <span
+                      className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                        row.status === "connected" ? "bg-accent" : "bg-fg-subtle"
+                      }`}
+                      aria-hidden
+                    />
+                    <span className="truncate">{row.account_label ?? row.provider}</span>
+                  </span>
+                </DropdownMenuItem>
+              ))
+            )}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => router.push("/settings/integrations")}>
+              {manageLabel}
+            </DropdownMenuItem>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

@@ -114,6 +114,21 @@ export const IconSparkle = (p: SVGProps<SVGSVGElement>) => (
 export const IconRobot = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><path d="M12 3v2.5" /><circle cx="12" cy="2.6" r="1" fill="currentColor" stroke="none" /><rect x="4" y="5.5" width="16" height="12" rx="3.5" /><circle cx="9" cy="10.5" r="1.15" fill="currentColor" stroke="none" /><circle cx="15" cy="10.5" r="1.15" fill="currentColor" stroke="none" /><path d="M9.5 14h5" /><path d="M2 10.5v3M22 10.5v3" /></svg>
 );
+/**
+ * THE RETURN KEY, as the send button's face (user directive, 2026-09-03:
+ * "with a little enter icon at the end for sending").
+ *
+ * The arrow that turns down and back — the glyph printed on the key it stands
+ * for, so the button and the Enter shortcut stop being two unrelated facts a
+ * person has to learn separately.
+ *
+ * It is NOT mirrored in RTL, deliberately: this is a picture of a physical
+ * key, and the key does not change shape on a Persian keyboard. Flipping it
+ * would draw a return arrow that no keyboard has.
+ */
+export const IconEnter = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><path d="M20 6v5a3 3 0 0 1-3 3H5" /><path d="M8.5 10.5 5 14l3.5 3.5" /></svg>
+);
 export const IconChip = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><rect x="7" y="7" width="10" height="10" rx="1.5" /><path d="M9.5 3.5V7M14.5 3.5V7M9.5 17v3.5M14.5 17v3.5M3.5 9.5H7M3.5 14.5H7M17 9.5h3.5M17 14.5h3.5" /></svg>
 );
@@ -433,6 +448,7 @@ export const ICONS = {
   "search": IconSearch,
   "settings": IconSettings,
   "share": IconShare,
+  "enter": IconEnter,
   "robot": IconRobot,
   "sparkle": IconSparkle,
   "speaker": IconSpeaker,
