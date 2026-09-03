@@ -97,6 +97,10 @@ vi.mock("@/api/client", () => ({
     sessionFeedback: async () => ({}),
     shareState: async () => false,
     agentSessions: async () => [],
+    /* the composer's ⊕ reads the connector list when it OPENS (2026-09-03).
+       An absent method throws inside a promise, and the failure surfaces as
+       whatever died next — here, a menu item that "could not be found". */
+    connectors: async () => [],
     mailDrafts: async () => [],
   },
 }));

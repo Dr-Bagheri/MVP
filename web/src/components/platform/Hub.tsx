@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api, BffError } from "@/api/client";
-import type { AgentEvent, AgentMessage, ConnectorProvider, MailDraft, SearchHit, Skill, WorkflowCard } from "@/api/types";
+import type { AgentEvent, AgentMessage, ConnectorProvider, ConnectorStatus, MailDraft, SearchHit, Skill, WorkflowCard } from "@/api/types";
 import { useRouter } from "@/i18n/routing";
 import { useSearchParams } from "next/navigation";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -16,10 +16,19 @@ import { useSkillStarters } from "@/lib/skillName";
 import { ConversationThread } from "./ConversationThread";
 import { MailDraftCard } from "./MailDraftCard";
 import { useAssistantConversation } from "./AssistantConversationState";
-import { DocumentIcon, MicIcon, PlusIcon, SendIcon } from "./icons";
+/* SendIcon left with the paper plane (2026-09-03): the send key wears the
+   RETURN glyph now, which is the key it duplicates. */
+import { DocumentIcon, MicIcon, PlusIcon } from "./icons";
 import { mentionedAgent } from "@/lib/agentMention";
 import { liveConversation, setLiveConversation } from "@/lib/liveConversation";
 import { SURFACE_TOOLS } from "@/lib/agentSurface";
+import { handleClientToolCall } from "@/lib/clientToolRunner";
+import { Icon } from "@/components/icons";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
+  DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { startRecording } from "@/lib/recordingEngine";
 
 type CreateKind = "doc" | "pdf";
@@ -120,7 +129,12 @@ export function Hub() {
    * reference hub): every entry is a REAL destination or a real act — the
    * no-dead-buttons law binds a menu item exactly as it binds a button.
    */
-  const [createOpen, setCreateOpen] = useState(false);
+  /* `createOpen` is written and never read since the ⊕ took over the create
+     menu (2026-09-03) — the setter stays because the kebab and the sources
+     panel still close each other, and a dangling `true` would be a menu that
+     nothing can reopen. The value being unread is the honest signal that the
+     old trigger is gone. */
+  const [, setCreateOpen] = useState(false);
   /** A document format is a visible, removable part of the request — never
    * hidden text placed into the editor on the person's behalf. */
   const [createKind, setCreateKind] = useState<CreateKind | null>(null);
@@ -698,6 +712,31 @@ export function Hub() {
           setMessages((prev) =>
             prev.map((m) => (m.id === replyId ? { ...m, content: m.content + event.delta } : m)),
           );
+          break;
+        case "client_tool_call":
+          /*
+           * THE HANDLER THIS PAGE NEVER HAD (user report, 2026-09-03: "echo
+           * stuck in thinking mode").
+           *
+           * It advertised `SURFACE_TOOLS` — see the comment on that line,
+           * which tells the story of the LAST time this seam broke — and had
+           * no case for the event those tools produce. So the model was told
+           * it could start a recording, called `start_recording`, and the
+           * browser dropped the event while the server waited for the answer
+           * it had asked for. The run hung until the 120-second client-tool
+           * timeout, which on screen is a spinner that never stops.
+           *
+           * Half a seam closed reads exactly like a whole one: the earlier fix
+           * taught this page to ADVERTISE and never taught it to PERFORM.
+           */
+          await handleClientToolCall(event, {
+            /* no consent card on this surface yet, so write-effect tools are
+               NOT offered a silent yes — `askConsent` is absent, which the
+               runner reads as "this surface cannot ask", and the server's own
+               `requires_consent` still governs what it sends */
+            push: router.push,
+            switchLocale: (next) => router.replace("/assistant", { locale: next }),
+          });
           break;
         case "agent_message":
           /**
@@ -1282,7 +1321,46 @@ export function Hub() {
           idle ? "mx-auto mt-auto" : "sticky bottom-0 mx-auto"
         }`}
       >
-        <div className="flex items-center gap-2">
+        {/*
+          MIC AND MENU ON ONE SIDE, SEND ON THE OTHER (user directive,
+          2026-09-03: "change the place for the create and source with the mic
+          and send button ... put the mic and a plus icon on the other side").
+
+          They were all four crowded past the field — two icon buttons in the
+          reading-end corner and a second row of text buttons underneath. The
+          field now has a control cluster at its reading START (what you reach
+          for BEFORE typing: the microphone, and the menu of things to attach)
+          and the send key alone at its END (what you reach for after). DOM
+          order is the whole mechanism — the row follows the page's direction,
+          so this is right in both locales without a single side-named class.
+        */}
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            className={`btn btn-icon shrink-0 ${
+              dictation.status === "listening"
+                ? "animate-pulse bg-accent-soft text-accent"
+                : "text-fg-muted hover:bg-surface-2 hover:text-fg"
+            }`}
+            title={dictation.status === "listening" ? t("voiceListening") : t("voice")}
+            aria-pressed={dictation.status === "listening"}
+            onClick={dictation.toggle}
+          >
+            <MicIcon width={16} height={16} />
+          </button>
+          <ComposerActions
+            connectorsLabel={t("connectors")}
+            manageLabel={t("manageConnectors")}
+            createLabel={t("create")}
+            sourcesLabel={t("sources")}
+            docLabel={t("createDoc")}
+            pdfLabel={t("createPdf")}
+            menuLabel={t("composerMenu")}
+            attachedCount={contextCalls.length}
+            onCreate={(kind) => { setCreateKind(kind); setCreateOpen(false); }}
+            onSources={() => { setSourcesOpen(true); setCreateOpen(false); }}
+            onManageConnectors={() => router.push("/settings/integrations")}
+          />
           <input
             ref={promptRef}
             className="min-h-[38px] flex-1 bg-transparent text-sm text-fg outline-none placeholder:text-fg-muted focus-visible:ring-0 focus-visible:ring-offset-0"
@@ -1298,33 +1376,12 @@ export function Hub() {
               if (e.key === "Escape" && streaming) stop();
             }}
           />
-          {/* THE THEME'S CONTROL GEOMETRY on all three composer buttons (audit
-              finding, 2026-09-02): they were hand-rolled 38px squares wearing
-              the 16px TILE radius (`rounded-xl`) beside a product whose every
-              button is the 11px `rounded-md` — and they slipped past the
-              control guard only because `grid place-items-center` is the grid
-              spelling of `flex items-center`. `.btn` owns height, corner,
-              centring and the disabled fade now; `w-[38px] px-0` makes it the
-              square, and the state classes stay. */}
-          <button
-            type="button"
-            className={`btn w-[38px] shrink-0 px-0 ${
-              dictation.status === "listening"
-                ? "animate-pulse bg-accent-soft text-accent"
-                : "text-fg-muted hover:bg-surface-2 hover:text-fg"
-            }`}
-            title={dictation.status === "listening" ? t("voiceListening") : t("voice")}
-            aria-pressed={dictation.status === "listening"}
-            onClick={dictation.toggle}
-          >
-            <MicIcon width={18} height={18} />
-          </button>
           {streaming ? (
             /* send morphs into STOP — one button, one place, per the donor's
                composer; Esc does the same from the keyboard */
             <button
               type="button"
-              className="btn w-[38px] shrink-0 px-0 bg-surface-2 text-fg"
+              className="btn btn-icon shrink-0 bg-surface-2 text-fg"
               title={t("stop")}
               onClick={stop}
             >
@@ -1333,12 +1390,20 @@ export function Hub() {
           ) : (
             <button
               type="button"
-              className="btn w-[38px] shrink-0 px-0 bg-accent text-on-accent"
+              /* NO FILL (user directive, 2026-09-03). A solid accent square in
+                 a composer whose one other accent is the workspace's primary
+                 action makes neither of them mean "this is the main thing" —
+                 the same call the sidebar's send key took. `disabled:opacity`
+                 is what says the box is empty. */
+              className="btn btn-icon shrink-0 text-fg-muted hover:bg-surface-2 hover:text-fg disabled:opacity-40 disabled:hover:bg-transparent"
               title={t("send")}
               disabled={input.trim() === ""}
               onClick={() => void send()}
             >
-              <SendIcon width={18} height={18} />
+              {/* the RETURN key's own glyph, not a paper plane: the button and
+                  the Enter shortcut it duplicates stop being two unrelated
+                  facts a person has to learn separately */}
+              <Icon name="enter" size="sm" />
             </button>
           )}
         </div>
@@ -1416,60 +1481,10 @@ export function Hub() {
                 ×
               </button>
             </span>
-          ) : (
-            <HoverMenu
-              open={createOpen}
-              onOpen={() => {
-                setCreateOpen(true);
-                setSourcesOpen(false);
-              }}
-              onClose={() => setCreateOpen(false)}
-              panelClass="w-[19rem] p-2"
-              button={
-                <button
-                  type="button"
-                  className={headerBtn}
-                  aria-expanded={createOpen}
-                  aria-haspopup="menu"
-                  onClick={() => setCreateOpen((v) => !v)}
-                >
-                  <PlusIcon width={14} height={14} />
-                  {t("create")}
-                </button>
-              }
-            >
-              <div role="menu" aria-label={t("create")} className="space-y-1.5">
-                {([
-                  { key: "doc", title: t("createDoc"), description: t("createDocDescription") },
-                  { key: "pdf", title: t("createPdf"), description: t("createPdfDescription") },
-                ] as const).map((item) => (
-                  <button
-                    key={item.key}
-                    type="button"
-                    role="menuitem"
-                    /* the PANEL radius on a row inside a panel (audit
-                       finding, 2026-09-02): `rounded-2xl` is the card/dialog
-                       radius, and the rows were rounder than the menu holding
-                       them */
-                    className="tap flex w-full items-center justify-start gap-3 rounded-lg bg-surface-2 px-3 py-2.5 text-start transition-colors hover:bg-accent-soft"
-                    onClick={() => {
-                      setCreateKind(item.key);
-                      setCreateOpen(false);
-                      requestAnimationFrame(() => promptRef.current?.focus());
-                    }}
-                  >
-                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-surface text-fg-muted">
-                      <DocumentIcon width={19} height={19} />
-                    </span>
-                    <span className="min-w-0 text-start">
-                      <span className="block text-sm font-semibold text-fg">{item.title}</span>
-                      <span className="mt-0.5 block text-xs leading-5 text-fg-muted">{item.description}</span>
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </HoverMenu>
-          )}
+          ) : null}
+          {/* the CREATE menu's own trigger is gone (2026-09-03): the composer's
+              ⊕ opens it now, so a second button beside the field would be two
+              doors to one room. The chip above still shows the chosen format. */}
 
           {/* SOURCES — attach real context: search meetings, add a text file.
               What the reference fakes as toggles, this menu does as acts. */}
@@ -1688,3 +1703,116 @@ function HoverMenu({
   );
 }
 
+
+/**
+ * THE COMPOSER'S ⊕ (user directive, 2026-09-03: "in the plus make a kebab menu
+ * with connectors, create and source in it, make the text of the kebab menu
+ * small and the size of their icon and tabs as small as possible").
+ *
+ * Three text buttons under the field became one glyph beside it. What they
+ * were — «ساخت», «منابع» — are the same acts; what changed is that a composer
+ * whose job is a sentence stopped carrying a second toolbar underneath it.
+ *
+ * «اتصال‌ها» joins them because it belongs to the same question. Create,
+ * sources and connectors are all "what should this answer be built from", and
+ * the third one was only ever reachable from a settings page.
+ *
+ * SMALL, deliberately: `text-xs` rows, `w-52`, tight padding. It is a list of
+ * three things beside a field, not a section — the sidebar's own composer menu
+ * settled the same measurements a few hours earlier, and two menus doing one
+ * job at two sizes is the drift this file has been paying off all day.
+ *
+ * The connector list is READ (`api.connectors()`), never a hand-written list
+ * of providers — that would be a second claim about what the product supports,
+ * and the first thing to rot the day one is added.
+ */
+function ComposerActions({
+  connectorsLabel, manageLabel, createLabel, sourcesLabel,
+  docLabel, pdfLabel, menuLabel, attachedCount,
+  onCreate, onSources, onManageConnectors,
+}: {
+  connectorsLabel: string;
+  manageLabel: string;
+  createLabel: string;
+  sourcesLabel: string;
+  docLabel: string;
+  pdfLabel: string;
+  menuLabel: string;
+  attachedCount: number;
+  onCreate: (kind: "doc" | "pdf") => void;
+  onSources: () => void;
+  onManageConnectors: () => void;
+}) {
+  const [connectors, setConnectors] = useState<ConnectorStatus[] | "failed" | null>(null);
+
+  /* read when the menu OPENS, not on mount: this composer renders on every
+     visit to the assistant, and a connectors request per visit for a menu
+     nobody opened is a request nobody asked for */
+  const load = () => {
+    if (connectors !== null) return;
+    void api.connectors().then(setConnectors).catch(() => setConnectors("failed"));
+  };
+
+  const item = "gap-1.5 px-2 py-1 text-xs";
+  return (
+    <DropdownMenu onOpenChange={(next) => { if (next) load(); }}>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className="btn btn-icon shrink-0 text-fg-muted hover:bg-surface-2 hover:text-fg"
+          aria-label={menuLabel}
+          title={menuLabel}
+        >
+          <PlusIcon width={16} height={16} />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side="top" align="start" className="w-52 min-w-0 p-0.5">
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger className={item}>
+            <DocumentIcon width={13} height={13} />
+            {createLabel}
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent className="w-44 min-w-0 p-0.5">
+            <DropdownMenuItem className={item} onSelect={() => onCreate("doc")}>{docLabel}</DropdownMenuItem>
+            <DropdownMenuItem className={item} onSelect={() => onCreate("pdf")}>{pdfLabel}</DropdownMenuItem>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+
+        <DropdownMenuItem className={item} onSelect={onSources}>
+          {sourcesLabel}
+          {attachedCount > 0 ? (
+            <span className="badge-num ms-auto rounded-full bg-accent-soft px-1.5 text-[10px] font-semibold text-accent">
+              {attachedCount}
+            </span>
+          ) : null}
+        </DropdownMenuItem>
+
+        <DropdownMenuSeparator />
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger className={item}>{connectorsLabel}</DropdownMenuSubTrigger>
+          <DropdownMenuSubContent className="w-56 min-w-0 p-0.5">
+            {connectors === null ? (
+              <div className="px-2 py-1"><SkeletonLines lines={2} /></div>
+            ) : connectors === "failed" ? (
+              <DropdownMenuItem className={item} disabled>{connectorsLabel}</DropdownMenuItem>
+            ) : (
+              connectors.map((row) => (
+                <DropdownMenuItem key={row.provider} className={item} onSelect={onManageConnectors}>
+                  <span
+                    className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                      row.status === "connected" ? "bg-accent" : "bg-fg-subtle"
+                    }`}
+                    aria-hidden
+                  />
+                  <span className="truncate">{row.account_label ?? row.provider}</span>
+                </DropdownMenuItem>
+              ))
+            )}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem className={item} onSelect={onManageConnectors}>{manageLabel}</DropdownMenuItem>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}

@@ -16,7 +16,8 @@ import { liveConversation, setLiveConversation } from "@/lib/liveConversation";
 import {
   subscribeVoicePrefs, voicePrefs, voicePrefsServer,
 } from "@/lib/voicePrefs";
-import { executeClientTool, SURFACE_TOOLS } from "@/lib/agentSurface";
+import { SURFACE_TOOLS } from "@/lib/agentSurface";
+import { handleClientToolCall } from "@/lib/clientToolRunner";
 import {
   subscribeAssistantOpen,
   subscribeRecordingLive,
@@ -944,36 +945,36 @@ export function AssistantSidebar() {
             prev.map((m) => (m.id === replyId ? { ...m, chips: [...m.chips, event.label] } : m)));
         }
         break;
-      case "client_tool_call": {
-        // consent BEFORE execution for write-effect calls; the loop blocks here
-        // deliberately — the server is waiting on this very answer
-        const allowed = event.requires_consent ? await askConsent(event.label) : true;
-        setConsent(null);
-        if (!allowed) {
-          await api.deliverToolResult(event.id, false, "the user declined").catch(() => undefined);
-          break;
-        }
-        const result = await executeClientTool(event.tool, event.args, {
+      case "client_tool_call":
+        /*
+         * ONE handler, shared with the assistant page (lib/clientToolRunner).
+         * It was this file's alone, and the page advertised the same tools
+         * with no handler at all — the model called one, nothing answered,
+         * and the run hung until the 120-second timeout. A copy here would
+         * have been the second place for that to happen.
+         *
+         * NO toast for the assistant's own actions (user directive,
+         * 2026-08-22): the conversation already shows the tool chip and the
+         * model narrates the outcome — a popup on top was the same fact a
+         * third time. Toasts remain for everything ELSE on the platform.
+         */
+        await handleClientToolCall(event, {
+          askConsent: async (label) => {
+            const allowed = await askConsent(label);
+            setConsent(null);
+            return allowed;
+          },
           push: router.push,
           // the top bar's own switch mechanism: same route, other locale
           switchLocale: (next) => router.replace(
             pathname.replace(/^\/(fa|en)(?=\/|$)/, "") || "/",
             { locale: next },
           ),
+          // starting/resuming a recording SHUTS the voice for this reply — and
+          // cuts anything already being said (user rule, 2026-08-21)
+          onRecordingStarted: () => { muteReplyRef.current = true; stopSpeaking(); },
         });
-        // NO toast for the assistant's own actions (user directive,
-        // 2026-08-22): the conversation already shows the tool chip and the
-        // model narrates the outcome — a popup on top was the same fact a
-        // third time. Toasts remain for everything ELSE on the platform.
-        // starting/resuming a recording SHUTS the voice for this reply — and
-        // cuts anything already being said (user rule, 2026-08-21)
-        if (result.ok && (event.tool === "start_recording" || event.tool === "resume_recording")) {
-          muteReplyRef.current = true;
-          stopSpeaking();
-        }
-        await api.deliverToolResult(event.id, result.ok, result.detail).catch(() => undefined);
         break;
-      }
       case "done":
         if (event.failed) {
           setMessages((prev) =>

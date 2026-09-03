@@ -78,6 +78,10 @@ vi.mock("@/api/client", () => ({
     sessionFeedback: async () => ({}),
     shareState: async () => false,
     agentSessions: async () => [],
+    /* the composer's ⊕ reads the connector list when it OPENS (2026-09-03).
+       An absent method throws inside a promise, and the failure surfaces as
+       whatever died next — here, a menu item that "could not be found". */
+    connectors: async () => [],
     mailDrafts: async () => [],
   },
 }));
@@ -89,7 +93,22 @@ async function ask(text: string) {
   const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")!.set!;
   setter.call(box, text);
   box.dispatchEvent(new Event("input", { bubbles: true }));
-  const send = document.querySelector("button.bg-accent") as HTMLButtonElement;
+  /*
+   * BY ITS TITLE, not by a style class (2026-09-03 — the sibling trap, caught
+   * by the send key losing its fill).
+   *
+   * `button.bg-accent` was "the first accent-coloured button in the document",
+   * which is a fact about the STYLESHEET and not about the send control. The
+   * day the button stopped being filled, four suites failed with
+   * `Cannot read properties of null` — a null selector reported as a crash,
+   * naming nothing about what actually changed.
+   *
+   * Hub.session.test.tsx had already learned this and written it down. Its
+   * three siblings kept the old selector, because fixing one instance is not
+   * fixing its siblings — which is exactly the rule that file's comment was
+   * recording.
+   */
+  const send = screen.getByTitle("ارسال") as HTMLButtonElement;
   await waitFor(() => expect(send.disabled).toBe(false));
   send.click();
 }

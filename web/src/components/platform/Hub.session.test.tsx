@@ -116,6 +116,10 @@ vi.mock("@/api/client", () => ({
     sessionFeedback: async () => ({}),
     shareState: async () => false,
     agentSessions: async () => [],
+    /* the composer's ⊕ reads the connector list when it OPENS (2026-09-03).
+       An absent method throws inside a promise, and the failure surfaces as
+       whatever died next — here, a menu item that "could not be found". */
+    connectors: async () => [],
     /* the thread reads its own drafts on every run and resume */
     mailDrafts: async () => [],
   },
@@ -220,8 +224,17 @@ describe("Hub — session continuity", () => {
   it("selects Doc without putting an instruction inside the composer", async () => {
     render(<Hub />);
 
-    await userEvent.click(screen.getByRole("button", { name: "ساختن" }));
-    const doc = screen.getByRole("menuitem", { name: /^سند/ });
+    /*
+     * THE ROUTE CHANGED (user directive, 2026-09-03): «ساختن» and «منابع»
+     * were two text buttons under the field and are now items inside the
+     * composer's ⊕. So the walk is one step longer — open the menu, then its
+     * create submenu — and the assertions below are untouched, because what
+     * they are about (a format becomes a chip, and nothing is written into
+     * the composer) did not change.
+     */
+    await userEvent.click(screen.getByRole("button", { name: "افزودن" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "ساختن" }));
+    const doc = await screen.findByRole("menuitem", { name: /^سند/ });
     expect(doc).toBeTruthy();
     expect(screen.getByRole("menuitem", { name: /^PDF/ })).toBeTruthy();
     expect(screen.queryByText("ضبط تماس")).toBeNull();
