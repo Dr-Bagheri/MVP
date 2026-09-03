@@ -23,6 +23,28 @@ import {
   finish, pause, recorderSnapshot, resume, startRecording, subscribeRecorder,
 } from "@/lib/recordingEngine";
 import { rowsFor, type TileSize } from "@/lib/dashboardLayout";
+
+/**
+ * TWO MEETINGS PER PANEL, on both of them (user directive, 2026-09-03: "for
+ * upcoming section in the dashboard just add the last two upcoming as well as
+ * the section for latest meetings — these two boxes on the dashboard just have
+ * the option to show the latest two").
+ *
+ * `latest` was already two, from a directive a day earlier; `ahead` read
+ * `rowsFor(size)` and drew up to six. So the two panels that sit one above the
+ * other, in the same row shape by design, disagreed about how long a list of
+ * meetings is — which reads as one of them being broken.
+ *
+ * ONE constant rather than two literals, for the reason those panels exist as
+ * a pair: the next person to change the number will change it where they are
+ * looking, and the other panel is the one they are not.
+ *
+ * It is NOT `rowsFor`: that ladder answers "how much room does this tile
+ * have", and this answers "how many meetings is a glance worth". A large tile
+ * showing six upcoming meetings is a list, and the door to the full list is
+ * already in the panel's header.
+ */
+const MEETING_ROWS = 2;
 import type {
   AgentCard, Call, ConnectorItem, ConnectorStatus, MeetingRecord,
 } from "@/api/types";
@@ -744,7 +766,11 @@ export function StatsWidget() {
  * with the door to the full list. The empty state is the reference's own
  * copy; a failed read never wears it.
  */
-export function UpcomingWidget({ size }: { size: TileSize }) {
+/* `size` is gone from the signature (2026-09-03): this panel shows two
+   meetings at every tier now, so the prop was a parameter the body no longer
+   read — and a widget that accepts a size it ignores is a promise the board
+   cannot keep. */
+export function UpcomingWidget() {
   const t = useTranslations("dashboard");
   /* the MODE and the STAGE are the meetings surface's words — one
      vocabulary for one thing, wherever it is read */
@@ -766,7 +792,7 @@ export function UpcomingWidget({ size }: { size: TileSize }) {
   const now = Date.now();
   const ahead = meetings
     .filter((m) => new Date(m.scheduled_at).getTime() >= now && m.call_id === null)
-    .slice(0, rowsFor(size));
+    .slice(0, MEETING_ROWS);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -867,9 +893,7 @@ export function LatestMeetingsWidget() {
   const latest = [...meetings]
     .filter((m) => m.call_id !== null || new Date(m.scheduled_at).getTime() < now)
     .sort((a, b) => b.scheduled_at.localeCompare(a.scheduled_at))
-    /* TWO (user directive, 2026-09-02: "make the last meetings two option
-       the box in dashboard as well, it set to one now") */
-    .slice(0, 2);
+    .slice(0, MEETING_ROWS);
 
   return (
     <div className="flex h-full min-h-0 flex-col">

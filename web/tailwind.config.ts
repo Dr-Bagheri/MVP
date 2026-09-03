@@ -24,6 +24,27 @@ const config: Config = {
   content: ["./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
+      /**
+       * WHAT A BARE `border` DRAWS (user report, 2026-09-03: "remove the outer
+       * highlight of it the white").
+       *
+       * `colors.border` below makes `border-border` work, and every class this
+       * codebase writes by hand uses that. The shadcn primitives in
+       * `components/ui/` do not — they write `border` with no colour, which is
+       * `borderColor.DEFAULT`, which Tailwind leaves at gray-200. So every
+       * dropdown, dialog and popover the library brought with it drew a
+       * rgb(229,231,235) edge: invisible on a light page and a white outline
+       * around a near-black panel in dark.
+       *
+       * It is the `text-on-accent` and `accent-foreground` shape a third time,
+       * and the same lesson: a class the LIBRARY writes was authored against a
+       * config we do not have. Fixed at the default rather than by adding
+       * `border-border` to each primitive — six files today, and the seventh
+       * arrives with the next `shadcn add`.
+       */
+      borderColor: {
+        DEFAULT: "rgb(var(--border) / <alpha-value>)",
+      },
       colors: {
         bg: "rgb(var(--bg) / <alpha-value>)",
         surface: "rgb(var(--surface) / <alpha-value>)",

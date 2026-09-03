@@ -1155,23 +1155,27 @@ export function AssistantSidebar() {
                   }}
                 />
                 <div className="mt-1.5 flex items-center gap-1">
-                  <ComposerMenu
-                    onNewConversation={freshConversation}
-                    label={t("composerMenu")}
-                    newLabel={t("newConversation")}
-                    connectorsLabel={t("connectors")}
-                    manageLabel={t("manageConnectors")}
-                  />
                   {/*
-                    THE SEND KEY, at the end of the box. An icon rather than the
-                    word: the label was «بفرست» in a row of glyphs, and the
-                    return arrow is what the keyboard shortcut it duplicates
-                    actually looks like — so the button and the Enter key stop
-                    being two unrelated facts a person has to learn separately.
+                    SWAPPED (user directive, 2026-09-03: "change the place of
+                    the plus and the enter icon"). The send key is at the
+                    reading-START of the row and the menu at its end — which
+                    is the other way round from where they began, and the way
+                    round a person reaches: the thing you press on almost every
+                    turn sits where the eye lands first, and the thing you open
+                    occasionally sits out at the edge.
                   */}
                   <button
                     type="submit"
-                    className="btn btn-icon ms-auto bg-accent text-on-accent disabled:opacity-40"
+                    /*
+                      NO FILL (same directive). It was `bg-accent
+                      text-on-accent` — a solid green square at the foot of a
+                      panel whose one other green thing is the workspace's
+                      primary action. Two filled accents on one screen make
+                      neither of them mean "this is the main thing". The glyph
+                      carries it, and `disabled:opacity-40` is what says the
+                      box is empty.
+                    */
+                    className="btn btn-icon text-fg-muted hover:bg-surface-2 hover:text-fg disabled:opacity-40 disabled:hover:bg-transparent"
                     disabled={streaming || input.trim() === ""}
                     aria-label={t("send")}
                     title={t("send")}
@@ -1180,6 +1184,14 @@ export function AssistantSidebar() {
                       ? <span className="text-detail" aria-hidden>…</span>
                       : <Icon name="enter" size="sm" />}
                   </button>
+                  <ComposerMenu
+                    className="ms-auto"
+                    onNewConversation={freshConversation}
+                    label={t("composerMenu")}
+                    newLabel={t("newConversation")}
+                    connectorsLabel={t("connectors")}
+                    manageLabel={t("manageConnectors")}
+                  />
                 </div>
               </div>
             </form>
@@ -1275,12 +1287,15 @@ export function AssistantSidebar() {
  * `side="top"` — the composer is at the foot of a full-height column, so a
  * panel dropped below it opens into the viewport edge.
  */
-function ComposerMenu({ onNewConversation, label, newLabel, connectorsLabel, manageLabel }: {
+function ComposerMenu({
+  onNewConversation, label, newLabel, connectorsLabel, manageLabel, className = "",
+}: {
   onNewConversation: () => void;
   label: string;
   newLabel: string;
   connectorsLabel: string;
   manageLabel: string;
+  className?: string;
 }) {
   const router = useRouter();
   const [connectors, setConnectors] = useState<ConnectorStatus[] | "failed" | null>(null);
@@ -1300,14 +1315,29 @@ function ComposerMenu({ onNewConversation, label, newLabel, connectorsLabel, man
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className="btn btn-icon text-fg-muted hover:bg-surface-2 hover:text-fg"
+          className={`btn btn-icon text-fg-muted hover:bg-surface-2 hover:text-fg ${className}`}
           aria-label={label}
           title={label}
         >
           <Icon name="plus" size="sm" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent side="top" align="start" className="w-56">
+      {/*
+        SMALLER, in both senses (user directive, 2026-09-03: "make the drop
+        down of the plus small both in text and size").
+        224px of panel with 13px rows, for two entries, on a column that is
+        itself a third of the screen — the menu was reading as a section rather
+        than as a choice. `min-w-0 w-44` and `text-xs` rows bring it down to
+        the size of what it holds. The rows are re-styled HERE and not in
+        `ui/dropdown-menu.tsx`: that primitive is the product's every menu, and
+        one composer's menu is not a reason to shrink the member row on the
+        management screen.
+      */}
+      <DropdownMenuContent
+        side="top"
+        align="start"
+        className="w-44 min-w-0 p-0.5 [&_[role=menuitem]]:gap-1.5 [&_[role=menuitem]]:px-2 [&_[role=menuitem]]:py-1 [&_[role=menuitem]]:text-xs"
+      >
         <DropdownMenuItem onSelect={() => onNewConversation()}>
           <Icon name="plus" size="sm" />
           {newLabel}
@@ -1318,7 +1348,7 @@ function ComposerMenu({ onNewConversation, label, newLabel, connectorsLabel, man
             <Icon name="plug" size="sm" />
             {connectorsLabel}
           </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className="w-64">
+          <DropdownMenuSubContent className="w-52 min-w-0 p-0.5 [&_[role=menuitem]]:px-2 [&_[role=menuitem]]:py-1 [&_[role=menuitem]]:text-xs">
             {connectors === null ? (
               <div className="px-2 py-1.5"><SkeletonLines lines={2} /></div>
             ) : connectors === "failed" ? (

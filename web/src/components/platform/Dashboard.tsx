@@ -257,7 +257,7 @@ export function Dashboard() {
     switch (key) {
       case "stats": return <StatsWidget />;
       case "week": return <WeekWidget />;
-      case "upcoming": return <UpcomingWidget size={size} />;
+      case "upcoming": return <UpcomingWidget />;
       case "latest": return <LatestMeetingsWidget />;
       case "records": return <RecordsMiniWidget size={size} />;
       case "calendar": return <CalendarWidget />;

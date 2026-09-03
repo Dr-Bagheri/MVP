@@ -306,15 +306,42 @@ describe("جلسات پیش‌رو (the product's own upcoming)", () => {
       meetingRow({ id: "m-b", title: "جلسهٔ گذشته", scheduled_at: "2020-01-01T09:00:00.000Z" }),
       meetingRow({ id: "m-c", title: "برگزارشدهٔ زودهنگام", scheduled_at: "2099-06-01T09:00:00.000Z", call_id: "c-1" }),
     ];
-    await act(async () => { render(<UpcomingWidget size="column" />); });
+    await act(async () => { render(<UpcomingWidget />); });
     expect(screen.getByText("جلسهٔ آینده")).toBeTruthy();
     expect(screen.queryByText("جلسهٔ گذشته")).toBeNull();
     expect(screen.queryByText("برگزارشدهٔ زودهنگام")).toBeNull();
   });
 
+  it("shows the next TWO and no more — the same length as the panel beneath it", async () => {
+    /*
+     * User directive, 2026-09-03: "for upcoming section in the dashboard just
+     * add the last two upcoming as well as the section for latest meetings."
+     *
+     * This panel read `rowsFor(size)` and drew up to six while «آخرین جلسات»
+     * directly below it drew two — two panels in the same row shape, one above
+     * the other, disagreeing about how long a list of meetings is.
+     *
+     * Five rows in the fixture, not three: a cap of two has to be visibly a
+     * CAP, and a fixture of three would also pass against a tier that happened
+     * to allow three.
+     */
+    MEETINGS = async () => Array.from({ length: 5 }, (_, i) => meetingRow({
+      id: `m-${i}`, title: `جلسهٔ ${i}`,
+      scheduled_at: `209${i}-01-01T09:00:00.000Z`,
+    }));
+    await act(async () => { render(<UpcomingWidget />); });
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+    /* and it is the NEAREST two, not the first two the wire happened to send:
+       a cap that keeps the wrong end is a different bug wearing this one's
+       assertion */
+    expect(screen.getByText("جلسهٔ 0")).toBeTruthy();
+    expect(screen.getByText("جلسهٔ 1")).toBeTruthy();
+    expect(screen.queryByText("جلسهٔ 4")).toBeNull();
+  });
+
   it("a failed read never wears the empty state's face", async () => {
     MEETINGS = async () => { throw new Error("down"); };
-    await act(async () => { render(<UpcomingWidget size="column" />); });
+    await act(async () => { render(<UpcomingWidget />); });
     expect(screen.queryByText("جلسه‌ای در پیش نداری.")).toBeNull();
   });
 });

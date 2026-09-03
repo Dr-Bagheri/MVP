@@ -235,12 +235,32 @@ export function IconRail() {
           compact ? "w-full px-0" : "w-full"
         }`}
       >
-        <IconRobot
-          width={16}
-          height={16}
-          className={compact ? "" : "absolute start-3.5"}
-        />
-        {compact ? null : t("assistant")}
+        {compact ? <IconRobot width={16} height={16} /> : (
+          /*
+            THE ICON RIDES WITH THE TEXT, and the TEXT is what gets centred
+            (user directive, 2026-09-03: "put the robot icon near the text but
+            the text must be the center, don't calculate the icon and text for
+            putting them in center").
+            Two things were wrong with the previous pass. `.btn` centres the
+            icon-and-text GROUP, so the word sat off-centre by half a glyph;
+            pinning the icon to `start-3.5` fixed the word and left the icon
+            stranded at the edge, a whole button-width from what it labels.
+            This span hugs the TEXT and is what the flex centres, so the word
+            is exactly on the middle. The glyph is positioned against that
+            span — `end-full` puts it immediately outside the span's
+            reading-start edge — so it sits beside the word and contributes
+            nothing to where the word lands. That is the directive's second
+            clause said in CSS: the icon is not in the calculation.
+          */
+          <span className="relative">
+            <IconRobot
+              width={16}
+              height={16}
+              className="absolute end-full top-1/2 me-1.5 -translate-y-1/2"
+            />
+            {t("assistant")}
+          </span>
+        )}
       </Link>
 
       {/* ── the destinations ─────────────────────────────────────────── */}

@@ -67,6 +67,27 @@ describe("the shadcn colour bridge", () => {
     ).toEqual([]);
   });
 
+  it("gives a bare `border` the theme's own colour", () => {
+    /*
+     * User report, 2026-09-03: "remove the outer highlight of it the white."
+     * The composer's menu drew a rgb(229,231,235) edge around a near-black
+     * panel — Tailwind's gray-200, which is what `borderColor.DEFAULT` is
+     * until something says otherwise.
+     *
+     * This file already catches a `*-foreground` class with no entry. It did
+     * not catch this, because the failing class was `border` with no colour at
+     * all: the components ask for the DEFAULT, and a default is not a name a
+     * scan for names can find. Six ui/ files write it today and the seventh
+     * arrives with the next `shadcn add`, so the assertion is on the config
+     * rather than on the files.
+     */
+    const config = readFileSync(join(process.cwd(), "tailwind.config.ts"), "utf8");
+    const block = /borderColor:\s*\{[^}]*DEFAULT:\s*"([^"]+)"/.exec(config);
+    expect(block, "tailwind.config.ts sets borderColor.DEFAULT").not.toBeNull();
+    expect(block![1], "it points at the theme's --border token")
+      .toContain("var(--border)");
+  });
+
   it("THE CONTROL: an unregistered name is actually detected", () => {
     /* proves the check can fail. Without this the test above passes for a
        config that registers nothing, as long as the regex finds nothing. */
