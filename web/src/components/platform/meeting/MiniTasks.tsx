@@ -76,7 +76,14 @@ export function MeetingTasksBoard({ callId, callTitle }: {
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") add(); }}
           placeholder={t("newMeetingTaskPlaceholder")}
-          className="h-10 min-w-0 flex-1 rounded-xl border border-border bg-surface px-3 text-sm text-fg outline-none placeholder:text-fg-subtle focus:border-accent"
+          /* 2026-09-03: `.input`, the one field spelling. This was a file-local
+             recipe — the card's white ground, a 12px corner, a 40px box that never
+             reaches the 44px floor below md — beside a `.btn` it is meant to pair
+             with. Meetings.tsx settled this for the create dialog on 2026-09-02 and
+             the ruling is the same here: a second spelling is what stops matching
+             the first. `outline-none` goes too — focus is restyled by globals,
+             never removed, and this line was removing it. */
+          className="input min-w-0 flex-1"
         />
         <button type="button" onClick={add} disabled={draft.trim() === "" || firstColumn === undefined}
           className="btn bg-accent font-semibold text-on-accent disabled:opacity-50">
@@ -108,6 +115,15 @@ export function MeetingTasksBoard({ callId, callTitle }: {
                         type="button"
                         aria-label={tTasks("markDone")}
                         onClick={(e) => { e.preventDefault(); toggleDone(task, !task.done); }}
+                        /* 2026-09-03: KEPT as drawn, and recorded in control.guard's
+                           worklist as such. A 16px TICK BOX is not a button — it is
+                           the platform's one checkbox size (TaskBoard, TaskViews,
+                           TaskDetail and ItemsPanel spell it identically), and
+                           `.btn-icon` would make it a 28px square on a 14px line.
+                           No `.tap` either, unlike ItemsPanel's twin: this box sits
+                           INSIDE the card's <Link>, and a 44px halo centred on it
+                           would reach across the title, so pressing the title would
+                           tick the task instead of opening it. */
                         className={`mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded border ${
                           task.done ? "border-accent bg-accent text-on-accent" : "border-border"
                         }`}

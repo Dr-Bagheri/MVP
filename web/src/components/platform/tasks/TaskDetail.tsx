@@ -205,6 +205,15 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
                 <ul className="space-y-1">
                   {task.checklist.map((line) => (
                     <li key={line.id} className="group flex items-center gap-2">
+                      {/* KEPT, and this file's one worklist entry in
+                          control.guard.test.ts (2026-09-03): a CHECKBOX, not a
+                          button. 16px is the box a tick lives in, and the
+                          platform draws the identical one in five places (the
+                          board card, the list row, the meeting's items panel
+                          and mini-tasks). `.btn-icon` is 28px, which beside a
+                          14px line stops reading as a checkbox — and converting
+                          one of five would create the divergence the guard
+                          exists to close. */}
                       <button
                         type="button"
                         aria-label={line.label}
@@ -306,13 +315,12 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
                   <ul className="space-y-2">
                     {task.comments.map((entry) => (
                       <li key={entry.id} className="flex items-start gap-2.5">
-                        {/* NOT A CONTROL, and it is deliberately left as it is
-                            (2026-09-03): an initial in a circle is an AVATAR —
-                            aria-hidden, nothing to press — that only shares the
-                            control guard's shape. It is one of this file's two
-                            standing worklist entries; dressing it as a button
-                            would be a wrong conversion, which is worse than an
-                            honest entry. The other is the history row below. */}
+                        {/* NOT A CONTROL: an initial in a circle is an AVATAR —
+                            aria-hidden, nothing to press. It was once carried
+                            as a worklist entry saying exactly that; since
+                            2026-09-03 the guard asks whether a person can press
+                            the element, so an avatar no longer raises the
+                            question and no longer needs an exception. */}
                         <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-accent text-[11px] font-bold text-on-accent" aria-hidden>
                           {nameOf(entry.created_by).slice(0, 1)}
                         </span>

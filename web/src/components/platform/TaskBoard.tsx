@@ -422,18 +422,40 @@ export function TaskBoard() {
               className="flex w-[300px] shrink-0 flex-col self-stretch rounded-2xl border border-border bg-surface p-2.5 shadow-card min-h-[70vh]"
               aria-label={seededName(col.name)}
             >
+              {/* 2026-09-03: `gap-1`, not `gap-2` — the tone trigger beside it
+                  became the theme's 28px well and carries 9px of inset of its
+                  own, so the OLD 8px gap would have read as 17. The pair is a
+                  relationship, not two numbers. */}
               <header className="flex items-center justify-between gap-1 px-1 py-1">
-                <span className="flex min-w-0 items-center gap-2">
+                <span className="flex min-w-0 items-center gap-1">
                   <span className="relative">
+                    {/* 2026-09-03: the theme's icon control — and the PICTURE is
+                        unchanged: the 10px tone dot moved INSIDE a `.btn-icon`
+                        well instead of being the button itself. It is the same
+                        widget as the swatches in the menu it opens — those are
+                        already `btn btn-icon` with a coloured square inside, so
+                        "a pressable that shows a colour" now has one spelling
+                        in this file rather than two. What actually
+                        changes is the target: a 10px box with no `.tap` becomes
+                        28px with a 44px hit area below md, and the header was
+                        already that tall — the trash at its other end is a
+                        `.btn-icon`. The menu's offset moves with it (top-5 →
+                        top-8) or it would open across the button it belongs
+                        to. */}
                     <button
                       type="button"
                       aria-label={t("columnColor")}
                       title={t("columnColor")}
                       onClick={() => setToneMenu((cur) => (cur === col.id ? null : col.id))}
-                      className={`block h-2.5 w-2.5 rounded-full ${TONE_DOT[col.tone] ?? TONE_DOT.grey!}`}
-                    />
+                      className="btn btn-icon hover:bg-surface-2"
+                    >
+                      <span
+                        className={`block h-2.5 w-2.5 rounded-full ${TONE_DOT[col.tone] ?? TONE_DOT.grey!}`}
+                        aria-hidden
+                      />
+                    </button>
                     {toneMenu === col.id ? (
-                      <span className="absolute top-5 z-40 flex w-40 flex-wrap gap-1 rounded-xl border border-border bg-surface p-2 shadow-island">
+                      <span className="absolute top-8 z-40 flex w-40 flex-wrap gap-1 rounded-xl border border-border bg-surface p-2 shadow-island">
                         {LABEL_COLORS.map((tone) => (
                           <button
                             key={tone}
@@ -653,6 +675,14 @@ function Card({ task, labels, onOpen, onToggleDone }: {
       onKeyDown={(e) => { if (e.key === "Enter") onOpen(); }}
     >
       <div className="flex items-start gap-2">
+        {/* KEPT, and recorded in control.guard.test.ts's worklist (2026-09-03):
+            this is a CHECKBOX, not a button — 16px is the box a tick lives in,
+            and the platform draws the same one in five places (the checklist
+            and the list row here, the meeting's items panel and mini-tasks).
+            `.btn-icon` is 28px, which beside a 14px line of text stops reading
+            as a checkbox, and converting one of the five would create the
+            divergence this guard exists to close. If they ever move, they move
+            together — as a checkbox, not as five buttons. */}
         <button
           type="button"
           aria-label={t("markDone")}

@@ -154,22 +154,31 @@ export function UnfinishedTakes() {
               {note.kind === "saved" ? t("recoverySaved") : t("recoveryFailed")}
             </p>
           ) : null}
+          {/* 2026-09-03: three buttons in one row that were drawn three
+              different ways — two `.btn` variants pushed to 40px by hand, and
+              a third with no `.btn` at all (`tap h-10 rounded-lg`), so the
+              quiet one wore an 8px corner beside two 11px ones. All three are
+              the theme's control now: `.btn` answers the box, the tone stays
+              on the element, and the danger action keeps its quiet ghost
+              treatment (`btn text-danger hover:bg-danger/10` — the same shape
+              TaskDialogs uses for a destructive choice that is not the
+              default). `.btn` composes `.tap`, so the hit area rides along. */}
           <div className="mt-3 flex flex-wrap gap-3">
             <button
-              className="btn-primary h-10 px-4"
+              className="btn-primary"
               disabled={busy !== null}
               onClick={() => void saveRecovery(group)}
             >
               {busy === group.callId ? t("recoverySaving") : t("recoverySave")}
             </button>
             <button
-              className="btn-secondary h-10 px-4"
+              className="btn-secondary"
               onClick={() => void downloadRecovery(group)}
             >
               {t("recoveryDownload")}
             </button>
             <button
-              className="tap h-10 rounded-lg px-4 text-sm text-danger hover:bg-danger/10"
+              className="btn font-medium text-danger hover:bg-danger/10"
               onClick={() => {
                 if (armedDiscard === group.callId) void discardRecovery(group);
                 else setArmedDiscard(group.callId);
@@ -201,7 +210,12 @@ export function UnfinishedTakes() {
                 </span>
                 <Link
                   href={`/echo/record?resume=${call.id}`}
-                  className="btn-primary inline-flex h-9 items-center px-4 text-sm"
+                  /* 2026-09-03: `.btn` is already inline-flex, already centres
+                     its content and already sets the padding and the type —
+                     four utilities restating it left this row's button 36px
+                     while the recovery card's above it was 40, for one control
+                     with one job */
+                  className="btn-primary"
                 >
                   {t("resumeAction")}
                 </Link>

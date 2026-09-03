@@ -538,6 +538,18 @@ export default function ProfilePage() {
           <Section title={t("assistantDataTitle")} divided>
             <FormPanel>
               <FormRow label={t("shareWithAssistant")} description={t("shareWithAssistantHint")}>
+                {/* 2026-09-03, control sweep: this stays hand-drawn, on
+                    purpose. It is a SWITCH, not a button — the 24×44 track and
+                    the 20px knob that slides between `start-0.5` and `end-0.5`
+                    inside it are not decoration on a control, they ARE the
+                    control, and `.btn`'s 38px box with centred content has
+                    nowhere to put the knob. It is also not an invented shape:
+                    the same track is written in NotificationsSettings and
+                    SignInMethods letter for letter. The real finding here is
+                    one nobody can fix from inside this file — the platform has
+                    nine of these and two track sizes (24×44 and 20×36), with
+                    no shared Switch to settle it. That is a component to cut,
+                    not a resize to make on one page. */}
                 <button
                   type="button"
                   role="switch"

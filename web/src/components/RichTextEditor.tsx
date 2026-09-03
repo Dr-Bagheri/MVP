@@ -130,7 +130,16 @@ function Btn({ label, onClick, children }: {
          toolbar click must format the selection, not destroy it */
       onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}
-      className="tap inline-flex h-8 min-w-8 items-center justify-center rounded-md px-1.5 text-xs text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
+      /* 2026-09-03: the theme's control, not a twelfth invented size. This
+         drew its own 32px box — the platform has no 32px control, so the one
+         ribbon in the product sat between the 38px buttons on the card around
+         it and the 34px section pills above it. (The corner was already the
+         theme's: `rounded-md` is 11px in this config, not Tailwind's 6.)
+         `.btn` owns height, padding, weight and centring, and already
+         composes `.tap`; `min-w-8` went with them, because `.btn`'s px-15
+         alone is wider than 32. Only the TONE is stated: a ghost toolbar
+         button that fills on hover. */
+      className="btn text-fg-muted hover:bg-surface-2 hover:text-fg"
     >
       {children}
     </button>
@@ -172,8 +181,16 @@ export function RichTextEditor({
     <div className="rounded-xl border border-border-strong focus-within:border-accent">
       {/* ── the Word-style ribbon ─────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-1 border-b border-border px-2 py-1.5">
+        {/* 2026-09-03: the style picker's height moved WITH the buttons. It
+            wore `h-8 min-h-0 py-0 text-xs`, which was not a size either —
+            it was a hand-cut copy of the old 32px button beside it, and
+            leaving it while the buttons became `.btn` would have put a
+            mismatch INTO the ribbon that this pass exists to take out of it.
+            Its trigger is a field, so it takes `.input`'s own height (40, 44
+            below md) — the button/field pair the theme measured. Only the
+            WIDTH is stated, because a picker in a wrapping row needs one. */}
         <SelectMenu
-          className="h-8 min-h-0 w-32 py-0 text-xs"
+          className="w-32"
           ariaLabel={t("editorStyle")}
           value=""
           onChange={(v) => exec("formatBlock", v === "h" ? "<h3>" : "<p>")}

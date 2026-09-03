@@ -1849,13 +1849,26 @@ export default function CallDetailPage({
             {rows.length > 0 && !showTranscriptEn && speakers.length > 1 ? (
               <div className="mt-3 space-y-2">
                 <div className="flex flex-wrap items-center gap-2">
+                  {/* 2026-09-03: the theme's control, not a twelfth invented
+                      size. These were 28px `rounded-full` lozenges standing in
+                      the SAME flex row as the bulk-link button below, which is
+                      already `btn btn-sm` at 34 — two heights, one row, which
+                      is the whole complaint in miniature. `.btn-sm` is the
+                      size globals.css measured FOR segmented filters like
+                      these. Only the tone stays: the pressed state keeps its
+                      accent-soft wash, and the `font-semibold` that used to
+                      mark it is gone because `.btn` gives BOTH states that
+                      weight — the pressed one is told apart by colour now,
+                      exactly as the section pills above this card are. They
+                      also gain `.tap`'s 44px hit area below md, which a
+                      hand-drawn 28px pill never had. */}
                   <button
                     type="button"
                     aria-pressed={speakerFilter === null}
                     onClick={() => setSpeakerFilter(null)}
-                    className={`h-7 rounded-full px-2.5 text-xs transition-colors ${
+                    className={`btn btn-sm ${
                       speakerFilter === null
-                        ? "bg-accent-soft font-semibold text-accent"
+                        ? "bg-accent-soft text-accent"
                         : "bg-surface-2 text-fg-muted hover:text-fg"
                     }`}
                   >
@@ -1869,9 +1882,9 @@ export default function CallDetailPage({
                       onClick={() =>
                         setSpeakerFilter((prev) => (prev === sp.id ? null : sp.id))
                       }
-                      className={`h-7 rounded-full px-2.5 text-xs transition-colors ${
+                      className={`btn btn-sm ${
                         speakerFilter === sp.id
-                          ? "bg-accent-soft font-semibold text-accent"
+                          ? "bg-accent-soft text-accent"
                           : "bg-surface-2 text-fg-muted hover:text-fg"
                       }`}
                     >

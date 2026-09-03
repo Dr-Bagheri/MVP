@@ -586,7 +586,29 @@ export function SelectMenu({
         /* the TRANSPORT face: one circle among circles. It carries no
            caption — the row is a transport, not a form, and the chosen
            device is read from the panel's check (and from the accessible
-           name, which names value as well as field) */
+           name, which names value as well as field).
+           ─────────────────────────────────────────────────────────────────
+           HAND-ROLLED ON PURPOSE — and this paragraph lives OUT HERE now.
+           2026-09-03: it used to sit INSIDE the button's own opening tag,
+           where it said "the control guard counts this one". It did not.
+           control.guard.test.ts reads a tag for 1400 characters and then
+           gives up, and ~700 characters of this reasoning pushed the
+           className past that cap: the scanner stopped part-way through the
+           template literal, found no closing backtick, therefore no class
+           attribute at all — so the one control in this file the guard could
+           not see was the one whose comment claimed it was counted. The
+           explanation was what made itself untrue. Moved out; the guard now
+           counts it and the worklist carries it, which is the honest shape.
+           WHY IT STAYS: this is not a button that happens to be round, it is
+           a MEMBER OF THE RECORD TRANSPORT — 40px circles around a 64px
+           record button (Recorder.tsx, and the dashboard's mini transport),
+           with the gear beside it wearing the same `h-10 w-10 rounded-full`
+           through `triggerClassName`. `.btn` is a 38px 11px-cornered
+           rectangle and `.btn-icon` a 28px square; converting this line
+           alone would put one rectangle in a row of circles, which is the
+           "ten different developers" symptom inside a single row on the
+           product's centrepiece. Redrawing that transport is a decision with
+           the user, not a class-string edit. */
         <PopoverTrigger asChild>
           <button
             type="button"
@@ -600,15 +622,9 @@ export function SelectMenu({
               e.stopPropagation();
               guardHoverTap(e);
             }}
-            /* the control guard counts this one and its entry says why it
-               stays: this is not a button that happens to be round, it is a
-               MEMBER OF THE RECORD TRANSPORT — 40px circles around a 64px
-               record button, and Recorder.tsx's own entry rules the same way
-               about the three beside it. Converting this line alone would put
-               one 8px-cornered rectangle in a row of circles, which is the
-               "ten different developers" symptom inside a single row on the
-               product's centrepiece. Redrawing that transport is a decision
-               with the user, not a class-string edit. */
+            /* geometry reasoned about above the PopoverTrigger — deliberately
+               NOT in here, because prose inside an opening tag is what blinded
+               the check to this control in the first place */
             className={`tap grid h-10 w-10 shrink-0 place-items-center rounded-full border transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
               open
                 ? "border-accent bg-accent-soft text-accent"
@@ -626,7 +642,22 @@ export function SelectMenu({
            captioned below, never crowding the button.
            The trigger wraps the BUTTON, not the column: it is the anchor as
            well as the trigger, and anchoring to the column would push the
-           panel down past the caption. */
+           panel down past the caption.
+           ─────────────────────────────────────────────────────────────────
+           HAND-ROLLED ON PURPOSE, 2026-09-03, and the worklist carries it:
+           the geometry IS the thing here. This is a TILE — its height is a
+           clamp() that tracks the viewport (44px→56px) and its width is the
+           column's, so a caption can sit under it and the whole row can
+           breathe on a wide screen. `.btn` is 38px and fixed at every width;
+           taking it would freeze the row and leave the caption hanging off a
+           button that no longer matches the glyph inside it. `.btn-sm` and
+           `.btn-icon` are smaller still.
+           One thing found while ruling on it, reported rather than acted on:
+           `variant="tile"` has NO production caller — the only `<SelectMenu
+           variant="tile">` in the tree is in rowActions.menu.test.tsx. The
+           face is exercised by its own test and by nothing else, which is a
+           producer-with-no-consumer question for whoever owns this
+           component, not something a conversion pass should answer. */
         <div className="flex w-[clamp(3.5rem,5.5vw,4.5rem)] flex-col items-center gap-1.5">
           <PopoverTrigger asChild>
             <button
@@ -738,21 +769,31 @@ export function SelectMenu({
               </span>
               <span className="min-w-0 flex-1 truncate">{o.label}</span>
             </button>
+            {/* 2026-09-03, left hand-rolled ON PURPOSE. `.btn btn-icon` would
+                take it to 28px AND compose `.tap`, which throws a 44px hit
+                area around a control that is `opacity-0` until hover — i.e.
+                invisible on every touch device, where there is no hover — and
+                what it does is DELETE. A 24px invisible destructive target
+                inside a 32px row is already a trap; a 44px one would swallow
+                the row underneath it. That is a bug to fix by making the
+                control reachable, not by making it bigger while it is
+                invisible.
+                CORRECTION, same day: this note used to add that "the control
+                guard cannot see it either way — a bare `rounded` is not one of
+                the corners it reads". That was true of the old check and false
+                by the time it was written: the rewritten CORNER pattern reads
+                the bare form and carries a `bareCorner` case asserting it
+                counts. Corrected rather than deleted, because a caveat about
+                an instrument is exactly the kind nobody re-measures.
+                It also moved OUT of the opening tag, which is not cosmetic:
+                the tag was 1333 characters against the scanner's 1400-char
+                cap, and the round trigger above already went invisible by
+                crossing it. Reasoning about a control belongs beside the
+                control, not inside its tag. */}
             {o.onRemove ? (
               <button
                 type="button"
                 aria-label={`${o.label} ✕`}
-                /* 2026-09-03, left hand-rolled ON PURPOSE, and the control
-                   guard cannot see it either way (a bare `rounded` is not one
-                   of the corners it reads — worth knowing when this file's
-                   count reads as one). `.btn btn-icon` would take it to 28px
-                   AND compose `.tap`, which throws a 44px hit area around a
-                   control that is `opacity-0` until hover — i.e. invisible on
-                   every touch device, where there is no hover — and what it
-                   does is DELETE. A 24px invisible destructive target inside a
-                   32px row is already a trap; a 44px one would swallow the row
-                   underneath it. That is a bug to fix by making the control
-                   reachable, not by making it bigger while it is invisible. */
                 className="me-1.5 grid h-6 w-6 shrink-0 place-items-center rounded text-[10px] text-fg-muted opacity-0 transition-opacity hover:bg-danger/10 hover:text-danger focus-visible:opacity-100 group-hover/opt:opacity-100"
                 onClick={(e) => {
                   e.stopPropagation();

@@ -171,7 +171,14 @@ export function ItemsPanel({ meetingId, callId, onSeek, locale }: {
             role="tab"
             aria-selected={kind === k}
             onClick={() => { setKind(k); setEditing(null); }}
-            className={`tap h-8 rounded-lg px-3 text-xs font-medium transition-colors ${
+            /* 2026-09-03: `.btn btn-sm` is the platform's segmented tab — globals
+               names that case by name when it records the measurement (h34 / 8px),
+               and the meeting page's own tab row, the task detail's and the
+               platform console's all wear it. These five had invented a 32px /
+               10px one instead, so the tab strip inside the meeting disagreed with
+               the tab strip ABOVE it on the same screen. The active/idle classes
+               stay: they belong to the element, not to its geometry. */
+            className={`btn btn-sm font-medium ${
               kind === k ? "bg-surface text-fg shadow-card" : "text-fg-muted hover:text-fg"
             }`}
           >
@@ -213,6 +220,12 @@ export function ItemsPanel({ meetingId, callId, onSeek, locale }: {
                   aria-checked={row.done}
                   aria-label={t("itemDone")}
                   onClick={() => void toggleDone(row)}
+                  /* 2026-09-03: KEPT as drawn, and recorded in control.guard's
+                     worklist as such. This is a TICK BOX, not a button: 16px is
+                     the platform's one checkbox size, spelled identically in
+                     TaskBoard, TaskViews, TaskDetail and MiniTasks, and `.btn-icon`
+                     would put a 28px square beside a 14px line of text. `.tap`
+                     stays, because that is what gives the 16px box a 44px reach. */
                   className={`tap mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded border transition-colors ${
                     row.done ? "border-accent bg-accent text-on-accent" : "border-border-strong"
                   }`}

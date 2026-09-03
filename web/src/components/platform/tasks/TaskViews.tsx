@@ -241,6 +241,13 @@ export function TaskRow({ task, labels, column, onOpen, onToggleDone }: {
       /* `tile-row`: a list line, not a card — see globals.css */
       className="tile tile-row flex cursor-pointer items-center gap-3 p-3.5 transition-colors hover:border-border-strong"
     >
+      {/* KEPT, and this file's one worklist entry in control.guard.test.ts
+          (2026-09-03): a CHECKBOX, not a button. 16px is the box a tick lives
+          in, and the platform draws the identical one in five places (the board
+          card, the task screen's checklist, the meeting's items panel and
+          mini-tasks). `.btn-icon` is 28px, which beside a 14px line stops
+          reading as a checkbox — and converting one of five would create the
+          divergence the guard exists to close. */}
       <button
         type="button"
         aria-label={t("markDone")}

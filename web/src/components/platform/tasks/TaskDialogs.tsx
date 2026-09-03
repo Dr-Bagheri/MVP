@@ -182,14 +182,20 @@ function LabelEditor({ label, onClose, onSaved }: {
               aria-label={tone}
               aria-pressed={color === tone}
               onClick={() => setColor(tone)}
-              /* KEPT as it is (2026-09-03), and recorded in the control
-                 guard's worklist: this is a colour SWATCH — a 32px well whose
-                 whole content is the colour, selected by a ring on the well
-                 itself. `.btn`'s label padding and control height describe a
-                 button with words in it; a swatch grid dressed that way stops
-                 reading as a palette. A wrong conversion is worse than an
-                 honest entry. */
-              className={`tap grid h-8 w-8 place-items-center rounded-lg border ${
+              /* 2026-09-03: `.btn btn-icon`. This was carried as a keep whose
+                 stated reason was `.btn`'s label padding and control height —
+                 true of `.btn`, and not of `.btn-icon`, which is px-0 and 28px
+                 square because "an icon-only control" is the case it was
+                 measured for. What settles it is the twin: THE SAME EIGHT
+                 COLOURS, the same 16px swatch inside, render in the column's
+                 tone menu (TaskBoard) as `btn btn-icon` — so one palette in one
+                 feature was drawn 32px/12px here and 28px/8px there, which is
+                 the user's sentence about ten developers, in one product's one
+                 palette. `.tap` goes because `.btn` composes it; `border` is
+                 written out because `.btn` draws none, and `border-accent` on a
+                 borderless button paints NOTHING (this repo shipped that once).
+                 The swatch inside is untouched — the picture never changed. */
+              className={`btn btn-icon border ${
                 color === tone ? "border-accent" : "border-transparent"
               }`}
             >
@@ -287,10 +293,12 @@ export function AssigneePicker({ selected, onToggle }: {
           title={t("removeAssignee", { name: personName(person, locale) })}
           className="btn btn-sm bg-accent-soft font-medium text-accent"
         >
-          {/* NOT A CONTROL (2026-09-03): an initial in a circle is an AVATAR,
-              aria-hidden, sitting INSIDE the button — it only shares the
-              control guard's shape. It and the one in the people list below
-              are two of this file's three standing worklist entries. */}
+          {/* NOT A CONTROL: an initial in a circle is an AVATAR, aria-hidden,
+              sitting INSIDE the button — nothing to press. It used to be
+              carried as a worklist entry saying so; since 2026-09-03 the guard
+              asks whether a person can press the element, so an avatar no
+              longer raises the question and no longer needs an exception. This
+              file has no entries left. */}
           <span className="grid h-5 w-5 place-items-center rounded-full bg-accent text-[10px] font-bold text-on-accent" aria-hidden>
             {personName(person, locale).slice(0, 1)}
           </span>

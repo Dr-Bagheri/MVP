@@ -687,12 +687,18 @@ export function AgendaEditor({ value, onChange }: {
             aria-label={t("agendaTitlePlaceholder")}
             className="input h-[34px] min-h-[34px] flex-1"
           />
+          {/* 2026-09-03: the stepper's − and + are the theme's icon button, not a
+              twelfth invented size. They were a hand-drawn 24px square with a bare
+              `rounded` (4px), which is a THIRD control shape inside one agenda row —
+              beside the 34px trash at its end and the 34px field at its start. The
+              well grows 26px → 30px and sits nearer its neighbours for it. `.btn`
+              composes `.tap`, so the local one goes with the geometry. */}
           <span className="flex shrink-0 items-center gap-0.5 rounded-md border border-border bg-field px-1">
             <button
               type="button"
               aria-label={t("agendaLess")}
               onClick={() => patch(i, { minutes: Math.max(0, (item.minutes ?? 0) - STEP) || null })}
-              className="tap grid h-6 w-6 place-items-center rounded text-fg-subtle hover:text-fg"
+              className="btn btn-icon text-fg-subtle hover:text-fg"
             >
               −
             </button>
@@ -705,7 +711,7 @@ export function AgendaEditor({ value, onChange }: {
               type="button"
               aria-label={t("agendaMore")}
               onClick={() => patch(i, { minutes: (item.minutes ?? 0) + STEP })}
-              className="tap grid h-6 w-6 place-items-center rounded text-fg-subtle hover:text-fg"
+              className="btn btn-icon text-fg-subtle hover:text-fg"
             >
               +
             </button>
@@ -716,11 +722,12 @@ export function AgendaEditor({ value, onChange }: {
               is already `.btn btn-sm` — and the platform spells this exact
               square `btn btn-sm w-[34px] px-0` in three other files
               (Pagination's steps, the audio bar's play key, the assignee
-              adder). Invisible to control.guard, and worth recording next to
-              its three known blind spellings: `h-[34px]` is an ARBITRARY
-              value and the `h-\d` pattern cannot read one, so every control
-              sized in brackets is uncounted. `.btn` composes `.tap`, so the
-              local one goes with it. */}
+              adder). It was invisible to control.guard when this was written —
+              `h-[34px]` is an arbitrary value and the pattern of the day read
+              only `h-<number>` — but that hole is CLOSED: the height pattern
+              takes a bracketed value now and the guard's own control asserts
+              it on `h-[38px]`, so do not read this note as a live blind spot.
+              `.btn` composes `.tap`, so the local one goes with it. */}
           <button
             type="button"
             aria-label={t("removeAgendaItem", { title: item.title })}

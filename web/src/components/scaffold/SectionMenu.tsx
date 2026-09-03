@@ -84,8 +84,22 @@ export interface MenuGroup {
    TRAIL_PAD reserves the label's room for however many slots are used. */
 const TRAIL_AT = ["end-1.5", "end-9"] as const;
 const TRAIL_PAD = ["", "pe-9", "pe-[4.1rem]"] as const;
+/* 2026-09-03: the theme's icon button, not a twelfth invented size. This was
+   ALREADY 28px square and already centred — only the CORNER differed
+   (`rounded-md` is radius.control, 11px; the theme's icon button is 8px) —
+   which is DateTimeFields' month-arrow finding arriving in a second file: a
+   control one class away from the theme, invisible until something counted it.
+   `transition-opacity` leaves with the geometry: `.btn`'s `transition-all` is
+   what this row wanted anyway, since the background and colour hover jumped
+   while only the opacity eased. `.tap` was already here and `.btn` composes
+   it, so the 44px hit area below md is unchanged.
+   Worth knowing when this file's worklist entry reads as zero:
+   control.guard.test.ts cannot see this one either way, because the geometry
+   lives in a CONST rather than on the tag it lands on. That is a hole in the
+   check, not a licence — the same class written inline would have been a
+   finding, and the string being hoisted does not make it a different control. */
 const TRAILING_CLASS =
-  "tap absolute top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-md text-fg-muted opacity-70 transition-opacity hover:bg-surface-2 hover:text-fg hover:opacity-100";
+  "btn btn-icon absolute top-1/2 -translate-y-1/2 text-fg-muted opacity-70 hover:bg-surface-2 hover:text-fg hover:opacity-100";
 
 export function SectionMenu({
   navLabel,
@@ -299,7 +313,13 @@ export function MenuLayout({ menu, children }: { menu: ReactNode; children: Reac
           <div className="scroll-quiet relative h-full md:min-h-0 md:overflow-y-auto">
             <button
               type="button"
-              className="tap absolute end-2 top-2 z-10 hidden h-7 w-7 items-center justify-center rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg md:flex"
+              /* 2026-09-03: `.btn btn-icon` — the same 28px square it already
+                 was, now wearing the icon button's 8px corner instead of the
+                 control's 11, like every other ⋯/✕/chevron in the product.
+                 `hidden … md:flex` still decides the display: utilities beat
+                 @layer components, so `.btn`'s inline-flex never gets a say
+                 below md, where this control is not rendered at all. */
+              className="btn btn-icon absolute end-2 top-2 z-10 hidden text-fg-muted hover:bg-surface-2 hover:text-fg md:flex"
               aria-label={t("closeMenu")}
               title={t("closeMenu")}
               onClick={() => setAndStore(true)}

@@ -242,11 +242,20 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
       {/* tag filter chips — only when tags exist to filter by */}
       {allTags.length > 0 ? (
         <div className="flex flex-wrap items-center gap-2">
+          {/* 2026-09-03: the theme's compact control, not a twelfth invented
+              size. This pair drew a 28px FULL-ROUND pill — the shape `.btn`
+              stopped being on 2026-09-02 ("NOT A PILL", and most of why our
+              screens did not look like the reference at identical colours) —
+              and the identical class string sits twice more on the call
+              detail page, which is what a copied shape looks like from
+              outside. `btn btn-sm` answers height, corner and type size once;
+              only the tones stay local, which is the same split every other
+              filter row in the product uses (SpeakersDirectory, Meetings). */}
           <button
             type="button"
             aria-pressed={tagFilter === null}
             onClick={() => setTagFilter(null)}
-            className={`h-7 rounded-full px-2.5 text-xs transition-colors ${
+            className={`btn btn-sm font-medium ${
               tagFilter === null
                 ? "bg-accent-soft font-semibold text-accent"
                 : "bg-surface-2 text-fg-muted hover:text-fg"
@@ -260,7 +269,10 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
               type="button"
               aria-pressed={tagFilter === tag}
               onClick={() => setTagFilter((prev) => (prev === tag ? null : tag))}
-              className={`h-7 rounded-full px-2.5 text-xs transition-colors ${
+              /* 2026-09-03: same control as the «همهٔ برچسب‌ها» chip above it,
+                 and now literally the same class — a filter row whose two
+                 halves are drawn separately is one edit away from disagreeing */
+              className={`btn btn-sm font-medium ${
                 tagFilter === tag
                   ? "bg-accent-soft font-semibold text-accent"
                   : "bg-surface-2 text-fg-muted hover:text-fg"
@@ -278,15 +290,19 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
           <span className="text-fg">
             {t("selectedCount", { n: digits(selected.size, locale) })}
           </span>
+          {/* 2026-09-03: `h-8 min-h-0 px-3 text-xs` was three utilities
+              re-answering the one question `.btn-sm` exists to answer — the
+              compact control the bulk bar wanted before it had a name. Same
+              measurements, one word (34px / 8px corner / 12.5px semibold). */}
           <button
-            className="btn-secondary h-8 min-h-0 px-3 text-xs"
+            className="btn-secondary btn-sm"
             disabled={busy}
             onClick={() => void bulk((id) => api.setArchived(id, view === "live"))}
           >
             {view === "live" ? t("archive") : t("unarchive")}
           </button>
           <button
-            className="btn-danger h-8 min-h-0 px-3 text-xs"
+            className="btn-danger btn-sm"
             disabled={busy}
             onClick={() => setConfirmBulk(true)}
           >
@@ -315,7 +331,12 @@ export function RecordsSection({ view = "live" }: { view?: "live" | "archive" })
             {...(view === "live"
               ? {
                   action: (
-                    <Link href="/echo" className="btn-primary h-10 min-h-0 px-5 text-sm">
+                    /* 2026-09-03: `.btn` already IS the full-size control —
+                       h-10/px-5 made the empty state's call to action 2px
+                       taller and 5px wider than the same button everywhere
+                       else, which is the drift at its least visible: nothing
+                       looks wrong until you put the two screens side by side */
+                    <Link href="/echo" className="btn-primary">
                       {t("emptyAction")}
                     </Link>
                   ),
