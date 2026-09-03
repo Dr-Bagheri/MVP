@@ -74,14 +74,23 @@ import {
  * metric improved while the app became unreachable behind an opaque layer.
  * Both states passed every measurement.
  *
- * So the rule here is narrow: DEFAULT CLOSED, and when closed nothing is
- * drawn at all. Open, it is the MENU's width (248px, read from SCAFFOLD) and
- * it lies OVER the page rather than pushing it — the first version reserved a
- * gutter and re-flowed every screen when the assistant opened, which the user
- * asked to be undone: a column that re-lays-out the work you are reading, to
- * make room for a question about it, has the trade backwards.
+ * So the rule here has two halves, and they were settled one at a time.
  *
- * Below `md` the open state is a full-width overlay, under a top bar that
+ * IT IS A FIXTURE. The assistant sits in the same place on every screen, like
+ * the rail on the opposite edge: shut, a narrow strip carrying its own mark;
+ * open, the MENU's width (248px, read from SCAFFOLD). For an hour it removed
+ * itself from the tree when shut, which the user corrected — "i want it to be
+ * in a fixed position in the platform everywhere". A control that is somewhere
+ * when you need it and nowhere when you do not is a control you have to look
+ * for.
+ *
+ * IT DOES NOT PUSH. The first version had the shell reserve a gutter and
+ * re-flow every screen when the assistant opened; a column that re-lays-out
+ * the work you are reading, to make room for a question about it, has the
+ * trade backwards. It lies over the page instead.
+ *
+ * Below `md` the strip is not drawn — 48px across a phone's inline edge buys
+ * nothing — and the open state is a full-width overlay, under a top bar that
  * stays visible so a person can still see where they are.
  */
 
@@ -122,6 +131,14 @@ const SIDEBAR_KEY = "neurai-assistant-sidebar";
  *     means CLOSED: nothing is drawn, and the top bar's button is the door.
  */
 const PANEL_W = `${SCAFFOLD.menuWidth / 16}rem`; // 248px, the menu's own
+/* CLOSED IS A PLACE, NOT AN ABSENCE (user correction, 2026-09-03: "i didnt
+   mean closed means nothing is drawn, i want it to be in a fixed position in
+   the platform everywhere"). The assistant is a permanent fixture of the
+   shell, like the rail on the opposite edge: always there, in the same place,
+   on every screen. Shut, it is a narrow strip carrying its own mark; open, it
+   is the menu's width. What it never does is push the page — that half of the
+   earlier correction stands. */
+const RAIL_W = "3rem"; // 48px, the strip that is always on screen
 
 /**
  * The top of the column: the top bar's own height, read from the blueprint
@@ -834,11 +851,11 @@ export function AssistantSidebar() {
 
   return (
     <>
-      {/* CLOSED MEANS NOTHING IS DRAWN (2026-09-03): the element itself is
-          conditional, not just its contents. An empty <aside> left in the tree
-          is a fixed, bordered box over the page's inline edge — invisible in a
-          class list and perfectly visible on screen. */}
-      {open ? (
+      {/* ALWAYS ON SCREEN (user correction, 2026-09-03). For an hour this was
+          `{open ? … : null}` — closed meant the element left the tree — and
+          that was a misreading: the assistant is a fixed part of the platform,
+          in the same place on every page, and what "close" does is narrow it
+          to its strip rather than remove it. */}
       <aside
         aria-label={t("title")}
         data-assistant-sidebar
@@ -847,13 +864,15 @@ export function AssistantSidebar() {
            in Persian, which is the opposite side from the rail in both. Written
            logically on purpose: `right-0` would put the assistant on top of the
            menu for every Persian reader and look correct in English. */
-        style={{ top: SIDEBAR_TOP, "--assistant-w": PANEL_W } as CSSProperties}
-        /* CLOSED MEANS CLOSED (2026-09-03): the collapsed 48px rail is gone,
-           so nothing is drawn and nothing is reserved when the assistant is
-           shut. `shadow-xl` because it floats over the page now rather than
-           sitting in a column of its own — an overlay with no edge reads as
-           part of what it covers. */
-        className="fixed bottom-0 end-0 z-30 flex w-full flex-col border-s border-border bg-surface shadow-xl md:w-[var(--assistant-w)]"
+        style={{ top: SIDEBAR_TOP, "--assistant-w": open ? PANEL_W : RAIL_W } as CSSProperties}
+        /* Below md a SHUT assistant would put a 48px strip across a phone's
+           inline edge for no gain, so the strip is a desktop fixture and the
+           open state is a full-width overlay there. `shadow-xl` because it
+           lies OVER the page rather than in a column of its own — an overlay
+           with no edge reads as part of what it covers. */
+        className={`fixed bottom-0 end-0 z-30 flex-col border-s border-border bg-surface shadow-xl md:flex md:w-[var(--assistant-w)] ${
+          open ? "flex w-full" : "hidden"
+        }`}
       >
         {open ? (
           <>
@@ -999,9 +1018,12 @@ export function AssistantSidebar() {
               </button>
             </form>
           </>
-        ) : null}
+        ) : (
+          /* SHUT: the mark alone, and it is the door. A strip with a second
+             control would be a menu, and the room it opens already has one. */
+          <div className="flex flex-col items-center gap-2 py-3">{trigger("")}</div>
+        )}
       </aside>
-      ) : null}
 
       {/*
         THE TOASTS. Positioned inside a transparent, pointer-transparent frame

@@ -87,19 +87,31 @@ async function mount() {
 }
 
 describe("the assistant sidebar floats, and is shut until asked for", () => {
-  it("draws NOTHING on first visit", async () => {
+  it("is THERE when shut — a strip, not an absence — and holds no conversation", async () => {
     /*
-     * 2026-09-03: what "closed" means changed, and so did what this asserts.
-     * The first version collapsed to a 48px rail and had the shell reserve a
-     * column for it; the user asked for a fixed panel at the MENU's width that
-     * does not push the page, with a way to shut it. So closed is now
-     * literally nothing on screen — no rail, no reserved gutter — and the
-     * page's own control is the thing that must still be there.
+     * WHAT "CLOSED" MEANS, settled in two corrections on one day.
+     *
+     * The first version collapsed to a rail AND had the shell reserve a column
+     * for it, so opening re-flowed the page: the user asked for the pushing to
+     * stop. I then removed the element entirely when shut, and that was the
+     * over-correction — "i didnt mean closed means nothing is drawn, i want it
+     * to be in a fixed position in the platform everywhere". So the assistant
+     * is always on screen and always in the same place; closed narrows it to a
+     * strip. Both halves are asserted here, because each alone would pass
+     * against the version the other was written for.
      */
     const { container } = await mount();
-    expect(container.querySelector("[data-assistant-sidebar]")).toBeNull();
+    const aside = container.querySelector<HTMLElement>("[data-assistant-sidebar]")!;
+    expect(aside).not.toBeNull();
+    expect(aside.dataset.open).toBe("false");
+    expect(aside.style.getPropertyValue("--assistant-w")).toBe("3rem");
+
+    /* shut is a PLACE, not a conversation: no composer, nothing to read */
     expect(container.querySelector("textarea")).toBeNull();
-    expect(screen.getByRole("button", { name: "صفحه" })).toBeInTheDocument();
+
+    /* and the page is still its own — the strip sits beside it, never over it */
+    const pageControl = screen.getByRole("button", { name: "صفحه" });
+    expect(aside.contains(pageControl)).toBe(false);
   });
 
   it("opens on the ONE door — the control that makes the test above mean something", async () => {
@@ -137,8 +149,11 @@ describe("the assistant sidebar floats, and is shut until asked for", () => {
      * hand-written 56 drifted from a top bar that grew to 62.
      */
     const { container } = await mount();
-    await userEvent.click(document.querySelector<HTMLElement>("[data-assistant-door]")!);
     const aside = container.querySelector<HTMLElement>("[data-assistant-sidebar]")!;
+    /* the CONTROL that makes the width assertion mean something: shut and open
+       must differ, or a broken read of the style would satisfy either */
+    expect(aside.style.getPropertyValue("--assistant-w")).toBe("3rem");
+    await userEvent.click(document.querySelector<HTMLElement>("[data-assistant-door]")!);
     expect(aside.style.getPropertyValue("--assistant-w"))
       .toBe(`${SCAFFOLD.menuWidth / 16}rem`);
   });

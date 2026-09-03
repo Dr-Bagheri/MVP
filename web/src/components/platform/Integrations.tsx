@@ -5,8 +5,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { ConnectorProvider, ConnectorStatus, Me } from "@/api/types";
 import { useRouter } from "@/i18n/routing";
-import { SettingsPane } from "./SettingsPane";
-import { Section } from "@/components/scaffold";
+import { PageContainer, Section } from "@/components/scaffold";
 import { DataTable, StatusDot, type Column } from "@/components/DataTable";
 import { EmptyState } from "@/components/ui";
 import { ConfirmDialog } from "@/components/rowActions";
@@ -271,16 +270,19 @@ export function Integrations() {
 
   return (
     /*
-     * SETTINGS' TOOLBAR (user directive, 2026-09-02: "in settings in
-     * integrations the menu of top that we made disappear, fix it").
+     * NO SUB-MENU (user directive, 2026-09-03: "remove the top sub menu for
+     * integrations, it's [the] management sub menu and we don't need it").
      *
-     * Integrations became a Settings section in this round and the page never
-     * learned it — so the one screen in that menu with no way back to its
-     * siblings was the screen the menu had just been extended to include. The
-     * pane is the top toolbar now, so wearing it costs nothing and every
-     * sibling stays one press away.
+     * It wore `SettingsPane` from 2026-09-02, when Integrations lived in the
+     * Settings menu and needed a way back to its siblings. It is a RAIL
+     * destination again since this morning — it sits beside Agents — so the
+     * toolbar was showing a menu the page no longer belongs to: eight
+     * Settings sections above a screen that is not one of them.
+     *
+     * A page reached from the rail has the rail as its way back. Its own
+     * container now, at the platform's default width.
      */
-    <SettingsPane activeSlug="integrations">
+    <PageContainer>
 
           <Section>
             {/* audit finding, 2026-09-02: `Section` sets its title in
@@ -527,7 +529,7 @@ export function Integrations() {
           onCancel={() => setBriefing(null)}
         />
       ) : null}
-    </SettingsPane>
+    </PageContainer>
   );
 }
 
