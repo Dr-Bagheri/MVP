@@ -6,6 +6,27 @@ import { Check, ChevronRight, Circle } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
+/*
+ * ONE ANIMATION FOR EVERY OVERLAY: it fades in, and that is all (user
+ * directive, 2026-09-03: "the pop window appears with this animation that it
+ * comes from side, change the animation to just slowly appears").
+ *
+ * shadcn ships each surface with a directional slide — `slide-in-from-top-2`
+ * and its three siblings, chosen by the side the primitive resolved to. On a
+ * menu anchored to a composer at the foot of a column that means it flies UP
+ * into place, and on a dialog it means the box arrives from somewhere. Motion
+ * that carries no information is motion that has to be read.
+ *
+ * What stays is the fade and a very slight zoom — 98%, not shadcn's 95% —
+ * because a panel that appears with no transition at all reads as a repaint
+ * rather than as something opening. `duration-150` is the whole of "slowly":
+ * long enough to see, short enough that nobody waits for it.
+ *
+ * The slide classes are removed rather than overridden. An override would sit
+ * in the same class list as the thing it cancels, and the next `shadcn add`
+ * would bring the original back beside it with no conflict anyone could see.
+ */
+
 const DropdownMenu = DropdownMenuPrimitive.Root
 
 const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger
@@ -47,7 +68,7 @@ const DropdownMenuSubContent = React.forwardRef<
   <DropdownMenuPrimitive.SubContent
     ref={ref}
     className={cn(
-      "z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-lg data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 origin-[--radix-dropdown-menu-content-transform-origin]",
+      "z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-lg data-[state=open]:animate-in data-[state=open]:duration-150 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-98 data-[state=open]:zoom-in-98 origin-[--radix-dropdown-menu-content-transform-origin]",
       className
     )}
     {...props}
@@ -66,7 +87,7 @@ const DropdownMenuContent = React.forwardRef<
       sideOffset={sideOffset}
       className={cn(
         "z-50 max-h-[var(--radix-dropdown-menu-content-available-height)] min-w-[8rem] overflow-y-auto overflow-x-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md",
-        "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 origin-[--radix-dropdown-menu-content-transform-origin]",
+        "data-[state=open]:animate-in data-[state=open]:duration-150 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-98 data-[state=open]:zoom-in-98 origin-[--radix-dropdown-menu-content-transform-origin]",
         className
       )}
       {...props}

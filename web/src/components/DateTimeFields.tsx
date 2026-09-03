@@ -218,13 +218,24 @@ export function TimeField({ value, onChange, id }: {
 
       </PopoverTrigger>
       <PopoverContent align="start" className="w-auto rounded-xl border-border bg-surface p-2 shadow-island">
-        {/* HOUR ON THE RIGHT, MINUTES ON THE LEFT, in both locales (user
-            directive, 2026-09-02: "hour must be at the right side always").
-            A flex row follows the page's direction, so in English the
-            columns swapped sides and the same picker read back-to-front
-            depending on language. `dir="rtl"` pins the layout; the digits
-            inside stay the locale's own. */}
-        <div className="flex w-40 gap-1" dir="rtl">
+        {/*
+          HOUR FIRST, MINUTES SECOND — and "first" here means LEFT, in both
+          locales (user directive, 2026-09-03: "hour should be the first and
+          min should be second").
+          [SUPERSEDES the 2026-09-02 directive "hour must be at the right side
+          always", left visible because it is the reason this row carries an
+          explicit `dir` at all rather than following the page.]
+          The reason the newer one is right: the VALUE this picker edits is
+          `HH:mm` and renders `dir="ltr"` on the button above — hour on the
+          left, always, because a clock time is an LTR number even in Persian.
+          Pinning the panel to RTL put the hour column on the opposite side
+          from the hour digits it sets, so the control and its own value read
+          in opposite directions. `ltr` here is not a language choice; it is
+          the panel agreeing with the number.
+          The digits inside each column stay the locale's own — that is
+          `digits()`'s job and it is unaffected by this.
+        */}
+        <div className="flex w-40 gap-1" dir="ltr">
           {column(t("hourLabel"), HOURS, hour, (h) => set(h, minute))}
           <span className="w-px bg-border" aria-hidden />
           {column(t("minuteLabel"), MINUTES, minute, (m) => set(hour, m))}

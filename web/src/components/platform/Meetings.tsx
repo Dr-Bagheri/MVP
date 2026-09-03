@@ -57,7 +57,25 @@ function TopicNameBox({ initial, onCancel, onSubmit }: {
   const t = useTranslations("meetings");
   const [name, setName] = useState(initial);
   return (
-    <span className="flex items-center gap-1">
+    /*
+      THE TASK BOARD'S COMPOSER, not a second one (user directive,
+      2026-09-03: "the plus in the second sub menu on top open up in different
+      shapes in meetings page and in task page, make them the same with tasks
+      pages plus as base line").
+
+      Two toolbars that do the same thing in the same place had grown two
+      silhouettes: this one was a bordered field with a ✓ and a ✕ beside it,
+      the board's is ONE bordered span holding a bare field and a ✕. The
+      board's is the baseline by the user's word, and it is also the better
+      shape — a field with its own box inside a row of chips reads as a third
+      control, and the ✓ duplicates the Enter key that already submits.
+
+      So: the SPAN owns the border, ground and corner; the input draws no box
+      (a themed field here would put a second box inside the first, and
+      `.input`'s `w-full` would push the ✕ out of it); Enter commits and
+      Escape cancels, which is what the ✕ also does.
+    */
+    <span className="inline-flex items-center gap-1 rounded-md border border-accent bg-surface px-1.5">
       <input
         autoFocus
         value={name}
@@ -68,26 +86,12 @@ function TopicNameBox({ initial, onCancel, onSubmit }: {
           if (e.key === "Escape") onCancel();
         }}
         placeholder={t("topicNamePlaceholder")}
-        /* 2026-09-03: the theme's compact field. `h-[34px] min-h-[34px]` was
-           this same 34 written as an arbitrary value — including the override
-           of `.input`'s 44px touch floor, which is the deliberate exception
-           `.input-sm` now owns. The width and the accent edge stay: they are
-           this site's own (a 160px inline rename, focused). */
-        className="input-sm w-40 border-accent"
+        className="h-[30px] w-36 bg-transparent text-xs text-fg outline-none placeholder:text-fg-subtle"
       />
       <button
         type="button"
-        disabled={name.trim() === ""}
-        onClick={() => onSubmit(name.trim())}
-        className="btn btn-icon bg-accent text-on-accent"
-        aria-label={t("save")}
-      >
-        <IconCheck width={12} height={12} />
-      </button>
-      <button
-        type="button"
         onClick={onCancel}
-        className="btn btn-icon border border-border text-fg-muted hover:text-fg"
+        className="btn btn-icon text-fg-muted hover:text-fg"
         aria-label={t("cancel")}
       >
         <IconClose width={12} height={12} />

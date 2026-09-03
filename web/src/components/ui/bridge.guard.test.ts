@@ -88,6 +88,47 @@ describe("the shadcn colour bridge", () => {
       .toContain("var(--border)");
   });
 
+  it("no overlay slides in from a side", () => {
+    /*
+     * User directive, 2026-09-03: "the pop window appears with this animation
+     * that it comes from side, change the animation to just slowly appears."
+     *
+     * shadcn ships a directional slide on every surface, and the next
+     * `shadcn add` will bring one back with it — which is exactly the shape
+     * the border-colour finding had: a class the LIBRARY writes, authored
+     * against a config we do not have, arriving with a component nobody
+     * re-reads.
+     *
+     * The classes are REMOVED rather than overridden, so this checks for their
+     * absence in the CLASS LISTS and tolerates the word in a comment — the
+     * files explain why the slide is gone, and a check that could not tell an
+     * explanation from a regression would make the explanation unwritable.
+     */
+    const offenders: string[] = [];
+    for (const entry of readdirSync(UI)) {
+      if (!entry.endsWith(".tsx")) continue;
+      const text = readFileSync(join(UI, entry), "utf8")
+        /* comments out, class lists left — block comments first, then line */
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/^\s*\/\/.*$/gm, "");
+      if (/slide-(?:in|out)-(?:from|to)-/.test(text)) offenders.push(entry);
+    }
+    expect(offenders, "these still slide — fade only").toEqual([]);
+  });
+
+  it("the overlays still animate AT ALL — the control", () => {
+    /*
+     * Without this, deleting every animation class would satisfy the check
+     * above perfectly. A panel that appears with no transition reads as a
+     * repaint rather than as something opening, so the fade is the property
+     * being kept and its presence is the half worth asserting.
+     */
+    const fading = readdirSync(UI)
+      .filter((e) => e.endsWith(".tsx"))
+      .filter((e) => /data-\[state=open\]:fade-in/.test(readFileSync(join(UI, e), "utf8")));
+    expect(fading.length, "overlays that fade in").toBeGreaterThan(2);
+  });
+
   it("THE CONTROL: an unregistered name is actually detected", () => {
     /* proves the check can fail. Without this the test above passes for a
        config that registers nothing, as long as the regex finds nothing. */
