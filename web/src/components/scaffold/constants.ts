@@ -155,6 +155,18 @@ export const SCAFFOLD = {
   },
 
   /** Shape. Radii are GLOBAL theme values (one scale, no per-page radii). */
+  /**
+   * WHERE A FIELD'S TEXT BEGINS — `.input`'s own horizontal padding.
+   *
+   * Measured off the reference at 13px and written into `.input` as
+   * `px-[13px]`. It lives here as well because a LABEL above a control has to
+   * start at the same place its text does (user directive, 2026-09-03: "the
+   * title on top of them is a little behind the start point of the dropdown,
+   * keep a little ahead"), and two places needing one number is exactly when
+   * the number stops being a literal.
+   */
+  fieldTextInset: 13,
+
   radius: {
     /* ARAMEET ADOPTION (2026-08-31): the reference's shapes, measured off
        its running app — buttons and inputs ~11px, cards 20px. One scale,

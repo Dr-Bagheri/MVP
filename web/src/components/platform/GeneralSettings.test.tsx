@@ -70,13 +70,27 @@ describe("the workspace card, and what left with it", () => {
 });
 
 describe("the theme control", () => {
-  /** the theme select, told from the calendar and timezone ones by its own
-      accessible name rather than by its position in the document */
-  const themeSelect = () => screen.getByRole("combobox", { name: "پوسته" });
+  /**
+   * The theme control, told from the calendar and timezone ones by its own
+   * accessible name rather than by its position in the document.
+   *
+   * It is a BUTTON, not a `<select>` (2026-09-03): the platform's dropdowns
+   * are the themed `Select` everywhere now, because a native one draws the
+   * browser's own panel in the browser's own colours — a white list under a
+   * dark control. `aria-haspopup="listbox"` is what it is; `combobox` was what
+   * the old element was.
+   */
+  const themeSelect = () => screen.getByRole("button", { name: "پوسته" });
+  /** open it and read the choices it offers */
+  const themeOptions = async () => {
+    await userEvent.click(themeSelect());
+    return [...document.querySelectorAll('[role="option"]')]
+      .map((o) => o.getAttribute("data-value"));
+  };
 
   it("offers exactly the two values the store can hold", async () => {
     render(<GeneralSettings />);
-    const options = [...themeSelect().querySelectorAll("option")].map((o) => o.value);
+    const options = await themeOptions();
     /*
      * The store is `"light" | "dark"`; there is no `system`. An option the
      * store cannot hold would not fail — a select whose value matches no
@@ -89,7 +103,8 @@ describe("the theme control", () => {
 
   it("writes the one store the pre-paint script reads", async () => {
     render(<GeneralSettings />);
-    await userEvent.selectOptions(themeSelect(), "light");
+    await userEvent.click(themeSelect());
+    await userEvent.click(await screen.findByRole("option", { name: "روشن" }));
 
     /*
      * The KEY comes from the producer. A literal here would agree with a
@@ -103,7 +118,8 @@ describe("the theme control", () => {
 
   it("follows a change made from OUTSIDE it — one state, not a private copy", async () => {
     render(<GeneralSettings />);
-    expect((themeSelect() as HTMLSelectElement).value).toBe(DEFAULT_THEME);
+    /* the TRIGGER shows the current value — that is what a person reads */
+    expect(themeSelect().textContent).toContain(DEFAULT_THEME === "dark" ? "تیره" : "روشن");
 
     /*
      * **The discriminating assertion.** This is the avatar menu writing the
@@ -113,9 +129,9 @@ describe("the theme control", () => {
      * which is the whole mechanism of the two-stores incident.
      */
     act(() => storeTheme("light"));
-    await waitFor(() => expect((themeSelect() as HTMLSelectElement).value).toBe("light"));
+    await waitFor(() => expect(themeSelect().textContent).toContain("روشن"));
 
     act(() => storeTheme("dark"));
-    await waitFor(() => expect((themeSelect() as HTMLSelectElement).value).toBe("dark"));
+    await waitFor(() => expect(themeSelect().textContent).toContain("تیره"));
   });
 });

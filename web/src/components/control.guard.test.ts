@@ -148,11 +148,51 @@ function sources(dir: string, out: string[] = []): string[] {
   return out;
 }
 
-/** Comments stripped, newlines KEPT so nothing downstream miscounts a line. */
+/**
+ * Comments stripped, newlines KEPT so nothing downstream miscounts a line.
+ *
+ * STRING-AWARE, and it has to be (2026-09-03). The regex version stripped a
+ * block comment wherever its opener appeared, INCLUDING inside a string — and
+ * `accept="audio/*,video/mp4,video/webm"` in MeetingPage.tsx contains one. The
+ * stripper opened a comment inside that attribute and blanked everything down
+ * to the next closer several hundred lines below, taking the tag's own `>` with
+ * it. The scanner then ran off the end of the file looking for that `>`.
+ *
+ * Nothing went red. The guard simply scanned a corrupted copy of that file and
+ * reported on what it could still see — which is the naive-text-transform
+ * family exactly, the same shape as an encoding sweep that skips its own
+ * dotfiles. The fix is the same too: know what you are inside of before you
+ * decide what a character means.
+ */
 function codeOnly(text: string): string {
-  return text
-    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))
-    .replace(/^\s*\/\/.*$/gm, " ");
+  let out = "";
+  let i = 0;
+  let quote: string | null = null;
+  while (i < text.length) {
+    const ch = text[i]!;
+    const next = text[i + 1];
+    if (quote !== null) {
+      if (ch === "\\") { out += text.slice(i, i + 2); i += 2; continue; }
+      if (ch === quote) quote = null;
+      out += ch; i += 1; continue;
+    }
+    if (ch === '"' || ch === "'" || ch === "`") { quote = ch; out += ch; i += 1; continue; }
+    if (ch === "/" && next === "*") {
+      // blanked, newlines kept, so every line number downstream still holds
+      const end = text.indexOf("*/", i + 2);
+      const stop = end === -1 ? text.length : end + 2;
+      out += text.slice(i, stop).replace(/[^\n]/g, " ");
+      i = stop; continue;
+    }
+    if (ch === "/" && next === "/") {
+      const nl = text.indexOf("\n", i);
+      const stop = nl === -1 ? text.length : nl;
+      out += " ".repeat(stop - i);
+      i = stop; continue;
+    }
+    out += ch; i += 1;
+  }
+  return out;
 }
 
 /**
@@ -164,6 +204,16 @@ function codeOnly(text: string): string {
  * the controls that have a conditional state. This tracks quote and brace
  * depth and stops at the `>` that actually closes the tag.
  */
+/**
+ * The scan window, and the record of what it could not see whole.
+ *
+ * The cap bounds a scan over the whole component tree; hitting it is a fact
+ * about the INSTRUMENT, and a tag returned short reads exactly like a tag with
+ * no geometry on it. That is not a hypothetical — see the test below.
+ */
+const TAG_SCAN_LIMIT = 20_000;
+const truncatedTags: string[] = [];
+
 function openingTags(code: string): [name: string, tag: string][] {
   const out: [string, string][] = [];
   for (const m of code.matchAll(/<([A-Za-z][A-Za-z0-9]*)\b/g)) {
@@ -171,7 +221,7 @@ function openingTags(code: string): [name: string, tag: string][] {
     let depth = 0;
     let quote: string | null = null;
     const buf: string[] = [];
-    while (i < code.length && buf.length < 1400) {
+    while (i < code.length && buf.length < TAG_SCAN_LIMIT) {
       const ch = code[i]!;
       if (quote !== null) {
         if (ch === quote && code[i - 1] !== "\\") quote = null;
@@ -183,6 +233,7 @@ function openingTags(code: string): [name: string, tag: string][] {
       else if (ch === ">" && depth === 0) break;
       buf.push(ch); i += 1;
     }
+    if (buf.length >= TAG_SCAN_LIMIT) truncatedTags.push(m[1]!);
     out.push([m[1]!, buf.join("")]);
   }
   return out;
@@ -306,6 +357,26 @@ describe("controls share one shape", () => {
     for (const [name, code] of Object.entries(ignored)) {
       expect(handRolled(code), `${name} must NOT count`).toBe(0);
     }
+  });
+
+  it("saw WHOLE tags — a truncated one is not a clean one", () => {
+    /*
+     * The instrument's own honesty check, and it exists because this guard
+     * lied once (2026-09-03).
+     *
+     * `openingTags` bounds each tag at TAG_SCAN_LIMIT characters. A tag that
+     * hits the cap is returned WITHOUT its className — which reads exactly
+     * like a tag that has no geometry on it. A comment written between the
+     * attributes of Select.tsx's option row pushed that tag past the window,
+     * and the guard reported the file as no longer hand-rolling anything. The
+     * obvious response was to lower the recorded count, which would have baked
+     * the blindness in permanently.
+     *
+     * It runs after the scans above, so `truncatedTags` holds whatever this
+     * run could not see whole.
+     */
+    expect(truncatedTags, "tags too long to scan — the verdict above excluded them")
+      .toEqual([]);
   });
 
   it("reads a tag whose attributes contain a comparison, rather than stopping at it", () => {

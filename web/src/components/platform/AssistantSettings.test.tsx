@@ -60,7 +60,18 @@ const { AssistantSettings } = await import("./AssistantSettings");
 /** the form is on screen — anchored on a node that exists ONLY after the
     wire answered with the group, never on the frame */
 async function loaded() {
-  await waitFor(() => expect(document.querySelector('option[value="fa"]')).not.toBeNull());
+  /*
+   * Anchored on the form's own DROPDOWNS, not on a native `option[value=fa]`
+   * — the platform's selects are the themed control now and render no options
+   * until they are opened.
+   *
+   * It is still a post-data anchor, which is the property that matters: the
+   * pending state draws FieldSkeleton bars and no listbox at all, so this
+   * cannot pass while the skeleton is up (the temporal vacuum this file's own
+   * header warns about).
+   */
+  await waitFor(() =>
+    expect(document.querySelectorAll('[aria-haspopup="listbox"]').length).toBe(4));
 }
 
 const skeleton = () => document.querySelector("[aria-busy='true']");
@@ -73,6 +84,20 @@ beforeEach(() => {
   me.mockResolvedValue(ME);
   weeklyDigest.mockResolvedValue({ available: true, enabled: false });
 });
+
+/**
+ * THE DROPDOWNS ARE BUTTONS NOW (2026-09-03).
+ *
+ * The platform's dropdowns are the themed `Select` everywhere — a native
+ * `<select>` draws the browser's own panel in the browser's own colours,
+ * which in dark theme is a white list under a dark control. So `combobox`,
+ * which was the native element's role, is `button` with
+ * `aria-haspopup="listbox"`.
+ *
+ * The queries below keep asking the same questions; only the role changed.
+ */
+const dropdowns = () =>
+  document.querySelectorAll('[aria-haspopup="listbox"]');
 
 describe("the autonomy dial is GONE — assist is pinned, and not shown", () => {
   it("renders the voice card, and NO watch/act control anywhere", async () => {
@@ -163,7 +188,7 @@ describe("the card is frame; only its body waits for the wire (audit finding, 20
 
     expect(screen.getByRole("heading", { name: "لحن و رفتار دستیار" })).toBeInTheDocument();
     expect(skeleton()).not.toBeNull();
-    expect(screen.queryByRole("combobox")).toBeNull();
+    expect(dropdowns()).toHaveLength(0);
     // and neither of the two sentences is shown for a state nobody knows yet
     expect(screen.queryByText("این استقرار هنوز تنظیمات لحن دستیار را ذخیره نمی‌کند.")).toBeNull();
     expect(screen.queryByText("تنظیمات فعلی دستیار خوانده نشد.")).toBeNull();
@@ -199,7 +224,7 @@ describe("the card is frame; only its body waits for the wire (audit finding, 20
     render(<AssistantSettings />);
 
     expect(await screen.findByText("این استقرار هنوز تنظیمات لحن دستیار را ذخیره نمی‌کند.")).toBeInTheDocument();
-    expect(screen.queryByRole("combobox")).toBeNull();
+    expect(dropdowns()).toHaveLength(0);
     expect(skeleton()).toBeNull();
   });
 
@@ -208,7 +233,7 @@ describe("the card is frame; only its body waits for the wire (audit finding, 20
     render(<AssistantSettings />);
 
     expect(await screen.findByText("تنظیمات فعلی دستیار خوانده نشد.")).toBeInTheDocument();
-    expect(screen.queryByRole("combobox")).toBeNull();
+    expect(dropdowns()).toHaveLength(0);
     expect(skeleton()).toBeNull();
   });
 
@@ -220,7 +245,7 @@ describe("the card is frame; only its body waits for the wire (audit finding, 20
     /* the five fields the placeholder above reserves ten bars for: four
        selects and the standing-instructions box. Asserted here so that count
        is anchored to something real rather than to itself. */
-    expect(screen.getAllByRole("combobox")).toHaveLength(4);
+    expect(dropdowns()).toHaveLength(4);
     expect(screen.getAllByRole("textbox")).toHaveLength(1);
     expect(document.querySelectorAll(".animate-pulse")).toHaveLength(0);
     expect(screen.queryByText("این استقرار هنوز تنظیمات لحن دستیار را ذخیره نمی‌کند.")).toBeNull();

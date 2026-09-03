@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { Card, Field } from "@/components/ui";
+import { Select } from "@/components/Select";
 import { saveCalendarPreference, saveTimezonePreference } from "@/lib/preferences";
 import { useCalendarPreference, useTimezonePreference } from "@/lib/usePreferences";
 import { storeTheme, type Theme } from "@/lib/theme";
@@ -71,16 +72,24 @@ export function GeneralSettings() {
             {/* the card's own heading is the visible label — a second
                 «پوسته» above the box would be the same word twice */}
             <span className="sr-only">{t("theme")}</span>
-            {/* audit finding, 2026-09-02: bare `.input` — the class owns the
-                height and the type size */}
-            <select
-              className="input"
+            {/* THE PLATFORM'S ONE DROPDOWN (user directive, 2026-09-03: "the
+                dropdown I accepted to be the default in the whole platform was
+                the way the meeting page dropdowns are").
+                A native `<select>` wearing `.input` matches the field's box and
+                nothing else: the browser draws the panel, in the browser's own
+                colours, with the browser's own row heights — which in dark
+                theme is a white list under a dark control. `Select` is the
+                themed one the meeting page already uses, and using it here is
+                what makes the platform have A dropdown rather than two. */}
+            <Select
+              ariaLabel={t("theme")}
               value={theme}
-              onChange={(changeEvent) => storeTheme(changeEvent.target.value as Theme)}
-            >
-              <option value="dark">{t("themeDark")}</option>
-              <option value="light">{t("themeLight")}</option>
-            </select>
+              onChange={(next) => storeTheme(next as Theme)}
+              options={[
+                { value: "dark", label: t("themeDark") },
+                { value: "light", label: t("themeLight") },
+              ]}
+            />
           </label>
         </div>
       </Card>
@@ -93,35 +102,33 @@ export function GeneralSettings() {
           {/* audit finding, 2026-09-02: the theme's `Field`, not a third
               spelling of a form label */}
           <Field label={tAvatar("calendar")}>
-            <select
-              className="input"
+            <Select
               value={calendar}
-              onChange={(changeEvent) => {
+              onChange={(next) => {
                 setSaveFailed(false);
-                void saveCalendarPreference(changeEvent.target.value as CalendarPreference)
+                void saveCalendarPreference(next as CalendarPreference)
                   .catch(() => setSaveFailed(true));
               }}
-            >
-              <option value="auto">{tAvatar("calendarAuto")}</option>
-              <option value="jalali">{tAvatar("calendarJalali")}</option>
-              <option value="gregorian">{tAvatar("calendarGregorian")}</option>
-            </select>
+              options={[
+                { value: "auto", label: tAvatar("calendarAuto") },
+                { value: "jalali", label: tAvatar("calendarJalali") },
+                { value: "gregorian", label: tAvatar("calendarGregorian") },
+              ]}
+            />
           </Field>
           <Field label={tAvatar("timezone")}>
-            <select
-              className="input"
+            <Select
               value={timezone}
-              onChange={(changeEvent) => {
+              onChange={(next) => {
                 setSaveFailed(false);
-                void saveTimezonePreference(changeEvent.target.value)
+                void saveTimezonePreference(next)
                   .catch(() => setSaveFailed(true));
               }}
-            >
-              <option value="auto">{tAvatar("timezoneAuto")}</option>
-              {TIMEZONES.map((zone) => (
-                <option key={zone} value={zone}>{zone}</option>
-              ))}
-            </select>
+              options={[
+                { value: "auto", label: tAvatar("timezoneAuto") },
+                ...TIMEZONES.map((zone) => ({ value: zone, label: zone })),
+              ]}
+            />
           </Field>
         </div>
         {/* the control still shows the OLD value, which is true — this says

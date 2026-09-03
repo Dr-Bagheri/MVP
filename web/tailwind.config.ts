@@ -201,6 +201,19 @@ const config: Config = {
         "page-inline-md": rem(SCAFFOLD.page.inlineMd),
         "page-bottom": rem(SCAFFOLD.page.bottom),
         "page-menu": rem(SCAFFOLD.page.menuTop),
+        /**
+         * WHERE A FIELD'S TEXT BEGINS (2026-09-03).
+         *
+         * `.input` pads its contents by 13px, so a label sitting flush to the
+         * control's outer edge starts 13px before the first character under
+         * it, and the column reads as two edges instead of one. `ps-field-text`
+         * lines a label up with the text it names.
+         *
+         * It is the SAME NUMBER, not a matching one: written as a literal here
+         * it would drift the day the field's padding moves, which is the whole
+         * family of bug this config exists to prevent.
+         */
+        "field-text": `${SCAFFOLD.fieldTextInset}px`,
       },
       padding: {
         /* the assistant's resting strip — see SCAFFOLD.assistantRail */

@@ -43,8 +43,20 @@ select t.ok((select count(*) from echo.call) = 1,
   'erin sees only her own org');
 select t.ok((select count(*) from echo.transcript_segment) = 0,
   'and none of org A''s transcripts');
-select t.ok((select count(*) from echo.app_user) = 1,
+-- THE PROPERTY, NOT THE CENSUS (2026-09-03). This read `count(*) = 1`, and
+-- db/0171 gave every organisation two provisioned agent seats — so a check
+-- about a WALL failed because a fixture gained rows, which is the count trap
+-- this repo has now paid for four times. What it means is that erin sees
+-- nobody from org A; that is what it asks now, and it cannot be broken by
+-- anybody adding a member anywhere.
+select t.ok(
+  not exists (select 1 from echo.app_user
+               where org_id = '0a000000-0000-4000-8000-00000000000a'),
   'the member directory does not cross org boundaries');
+-- and the positive half, so "sees nothing" cannot pass by seeing nothing at all
+select t.ok(
+  exists (select 1 from echo.app_user where id = '05000000-0000-4000-8000-000000000005'),
+  'erin still sees herself — the read is not simply empty');
 
 -- --- dan: registered, not yet accepted (M15) ------------------------------
 select set_config('echo.actor_id', '04000000-0000-4000-8000-000000000004', true);

@@ -1916,7 +1916,7 @@
     "orgLogo": "Logo",
     "orgLogoChoose": "Choose image",
     "orgLogoFailed": "That image was not saved. Choose a PNG, JPEG or WebP file under 512KB.",
-    "orgLogoHint": "A PNG, JPEG or WebP image, up to 512KB. Choosing a file saves it straight away.",
+    "orgLogoHint": "A PNG, JPEG or WebP image, up to 512KB.",
     "orgLogoRemove": "Remove",
     "orgLogoRemoveBody": "The image is deleted and every place the platform shows the organization falls back to its initial. Getting it back means uploading the file again.",
     "orgLogoRemoveTitle": "Remove the organization logo?",

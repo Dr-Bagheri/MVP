@@ -142,7 +142,19 @@ export function Field({
   return (
     <div className="block">
       <label className="block">
-        <span className="mb-1.5 block text-sm font-medium text-fg">{label}</span>
+        {/*
+          THE LABEL SITS OVER THE FIELD'S TEXT, not over its border (user
+          directive, 2026-09-03: "the title on top of them is a little behind
+          the start point of the dropdown, keep a little ahead").
+          `.input` pads its contents by 13px, so a label flush to the control's
+          outer edge starts 13px BEFORE the first character under it — the
+          column reads as two edges rather than one. The inset is the field's
+          own padding, so the two line up by construction and stay lined up if
+          that number ever moves.
+          A theme rule, applied here because `Field` is where a label goes
+          above a control everywhere in the platform.
+        */}
+        <span className="mb-1.5 block ps-field-text text-sm font-medium text-fg">{label}</span>
         {describedChild}
       </label>
       {hint ? (

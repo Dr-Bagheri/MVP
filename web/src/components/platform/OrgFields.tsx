@@ -6,6 +6,7 @@ import { api } from "@/api/client";
 import { notify } from "@/lib/notify";
 import type { Org, User } from "@/api/types";
 import { ConfirmDialog } from "@/components/rowActions";
+import { Icon } from "@/components/icons";
 import { FormPanel, FormRow, PanelFooter, Skeleton } from "@/components/scaffold";
 
 /**
@@ -397,22 +398,50 @@ export function OrgFields() {
               if (file) void pickLogo(file);
             }}
           />
-          <button
-            type="button"
-            className="btn btn-sm border border-border font-medium text-fg"
-            disabled={busy || logoBusy}
-            onClick={() => logoInput.current?.click()}
-          >
-            {hasLogo ? t("orgLogoReplace") : t("orgLogoChoose")}
-          </button>
+          {/*
+            ICONS, NOT WORDS (user directive, 2026-09-03: "remove the text for
+            delete the image and just add the delete icon and for change also
+            just put a change icon").
+            Two labelled buttons beside a picture of the thing they act on were
+            saying what the picture already says. The words survive as `title`
+            and `aria-label`, so nothing is lost to a screen reader or to a
+            hover — what goes is the second telling.
+            NO icon while there is no logo: «انتخاب تصویر» is the first thing
+            somebody does here and a bare glyph would be a puzzle. A control
+            whose meaning comes from the image beside it needs the image to
+            exist first.
+          */}
           {hasLogo ? (
             <button
               type="button"
-              className="btn btn-sm font-medium text-danger hover:bg-danger/10"
+              className="btn btn-icon border border-border text-fg-muted hover:text-fg"
+              disabled={busy || logoBusy}
+              onClick={() => logoInput.current?.click()}
+              aria-label={t("orgLogoReplace")}
+              title={t("orgLogoReplace")}
+            >
+              <Icon name="retry" size="sm" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="btn btn-sm border border-border font-medium text-fg"
+              disabled={busy || logoBusy}
+              onClick={() => logoInput.current?.click()}
+            >
+              {t("orgLogoChoose")}
+            </button>
+          )}
+          {hasLogo ? (
+            <button
+              type="button"
+              className="btn btn-icon text-danger hover:bg-danger/10"
               disabled={busy || logoBusy}
               onClick={() => setConfirmLogoRemove(true)}
+              aria-label={t("orgLogoRemove")}
+              title={t("orgLogoRemove")}
             >
-              {t("orgLogoRemove")}
+              <Icon name="trash" size="sm" />
             </button>
           ) : null}
         </span>

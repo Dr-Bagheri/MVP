@@ -6,6 +6,7 @@ import { api } from "@/api/client";
 import { notify } from "@/lib/notify";
 import { clearSpeechCache } from "@/lib/voice";
 import { Card, Field } from "@/components/ui";
+import { Select } from "@/components/Select";
 import { Switch } from "@/components/Switch";
 import {
   setVoicePref, subscribeVoicePrefs, voicePrefs, voicePrefsServer,
@@ -191,32 +192,32 @@ export function AssistantSettings() {
                 hit area .input carries */}
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <Field label={t("replyLanguage")}>
-                <select
-                  className="input"
+                <Select
                   value={replyLanguage}
-                  onChange={(e) => {
-                    setReplyLanguage(e.target.value);
-                    void savePrefs({ assistant_reply_language: e.target.value === "" ? null : e.target.value });
+                  onChange={(next) => {
+                    setReplyLanguage(next);
+                    void savePrefs({ assistant_reply_language: next === "" ? null : next });
                   }}
-                >
-                  <option value="">{t("replyAuto")}</option>
-                  <option value="fa">فارسی</option>
-                  <option value="en">English</option>
-                </select>
+                  options={[
+                    { value: "", label: t("replyAuto") },
+                    { value: "fa", label: "فارسی" },
+                    { value: "en", label: "English" },
+                  ]}
+                />
               </Field>
               <Field label={t("replyLength")}>
-                <select
-                  className="input"
+                <Select
                   value={replyLength}
-                  onChange={(e) => {
-                    setReplyLength(e.target.value);
-                    void savePrefs({ assistant_reply_length: e.target.value === "" ? null : e.target.value });
+                  onChange={(next) => {
+                    setReplyLength(next);
+                    void savePrefs({ assistant_reply_length: next === "" ? null : next });
                   }}
-                >
-                  <option value="">{t("replyAuto")}</option>
-                  <option value="short">{t("replyShort")}</option>
-                  <option value="detailed">{t("replyDetailed")}</option>
-                </select>
+                  options={[
+                    { value: "", label: t("replyAuto") },
+                    { value: "short", label: t("replyShort") },
+                    { value: "detailed", label: t("replyDetailed") },
+                  ]}
+                />
               </Field>
             </div>
             {/* 0128 (user directive, 2026-08-28): the gender of the SPOKEN
@@ -225,30 +226,30 @@ export function AssistantSettings() {
                 something the person did not say */}
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <Field label={t("voiceFa")}>
-                <select
-                  className="input"
+                <Select
                   value={voiceFa}
-                  onChange={(e) => {
-                    setVoiceFa(e.target.value);
-                    void savePrefs({ assistant_voice_fa: e.target.value });
+                  onChange={(next) => {
+                    setVoiceFa(next);
+                    void savePrefs({ assistant_voice_fa: next });
                   }}
-                >
-                  <option value="female">{t("voiceFemale")}</option>
-                  <option value="male">{t("voiceMale")}</option>
-                </select>
+                  options={[
+                    { value: "female", label: t("voiceFemale") },
+                    { value: "male", label: t("voiceMale") },
+                  ]}
+                />
               </Field>
               <Field label={t("voiceEn")}>
-                <select
-                  className="input"
+                <Select
                   value={voiceEn}
-                  onChange={(e) => {
-                    setVoiceEn(e.target.value);
-                    void savePrefs({ assistant_voice_en: e.target.value });
+                  onChange={(next) => {
+                    setVoiceEn(next);
+                    void savePrefs({ assistant_voice_en: next });
                   }}
-                >
-                  <option value="female">{t("voiceFemale")}</option>
-                  <option value="male">{t("voiceMale")}</option>
-                </select>
+                  options={[
+                    { value: "female", label: t("voiceFemale") },
+                    { value: "male", label: t("voiceMale") },
+                  ]}
+                />
               </Field>
             </div>
             <div className="mt-4">

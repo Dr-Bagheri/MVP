@@ -137,10 +137,20 @@ export function Select({
           className="max-h-60 overflow-y-auto whitespace-nowrap outline-none"
         >
           {options.map((option, index) => (
+            /* `data-value` carries the VALUE where a test can read it. A native
+               `<option>` had it and the themed row did not, so a check about
+               "which values can this control produce" had to read the LABEL —
+               a fact about the catalogue, not about the store.
+               The note is HERE rather than inside the tag: written between the
+               attributes it pushed this opening tag past control.guard's
+               1400-character scan window, and the guard reported the row as no
+               longer hand-rolling geometry — a clean number produced by having
+               stopped looking. */
             <li
               key={option.value}
               id={`${listId}-${index}`}
               role="option"
+              data-value={option.value}
               aria-selected={option.value === value}
               onMouseEnter={() => setCursor(index)}
               onClick={() => choose(index)}
