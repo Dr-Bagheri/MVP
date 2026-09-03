@@ -114,7 +114,12 @@ export function WorkflowRunDialog({
             type="button"
             aria-label={t("runClose")}
             title={t("runClose")}
-            className="tap -me-1 -mt-1 grid h-7 w-7 shrink-0 place-items-center rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg"
+            /* 2026-09-03: the theme's icon button, not a hand-rolled square.
+               The SIZE was already 28; the CORNER was `rounded-md` (11px)
+               where `.btn-icon` is 8, so this ✕ sat rounder than the one in
+               the builder next door. `.btn` composes `.tap`, the transition
+               and the disabled face — only the colours stay behind. */
+            className="btn btn-icon -me-1 -mt-1 shrink-0 text-fg-muted hover:bg-surface-2 hover:text-fg"
             onClick={onClose}
           >
             <IconClose width={14} height={14} />
@@ -136,16 +141,24 @@ export function WorkflowRunDialog({
                   <button
                     key={entry}
                     type="button"
-                    className="btn-secondary h-9 min-h-0 px-3 text-xs"
+                    /* 2026-09-03: `.btn-sm` is the theme's compact control.
+                       `h-9 min-h-0 px-3 text-xs` was a 36px twelfth size
+                       written on top of a class that already answers the
+                       question — the shape `.btn-sm` exists to end. */
+                    className="btn-secondary btn-sm"
                     onClick={() => void connect(entry)}
                   >
                     {t("connect", { provider: t(entry) })}
                   </button>
                 ) : (
-                  <span
-                    key={entry}
-                    className="inline-flex h-9 items-center rounded-full border border-border px-3 text-xs text-fg-subtle"
-                  >
+                  /* 2026-09-03: a SENTENCE, not a control — the same audit
+                     finding Integrations.tsx closed on 2026-09-02. This wore a
+                     36px bordered pill sized to the Connect button beside it,
+                     so a claim about the PRODUCT read on screen as a disabled
+                     button somebody had failed to enable. Copy has no height
+                     and no corner, and nothing to mistake for something to
+                     press. */
+                  <span key={entry} className="self-center text-xs text-fg-subtle">
                     {t("notConfigured", { provider: t(entry) })}
                   </span>
                 );
@@ -161,7 +174,13 @@ export function WorkflowRunDialog({
                     key={connection.provider}
                     type="button"
                     aria-pressed={provider === connection.provider}
-                    className={`tap h-8 rounded-full border px-3 text-xs ${
+                    /* 2026-09-03: a segmented control, so it takes the shape
+                       TopBar's fa/en pair takes — `.btn btn-sm` with the state
+                       supplying its own border. It was a 32px lozenge, and
+                       `rounded-full` on a button is the one shape the theme
+                       names as the reason our screens did not look like the
+                       reference at identical colours. */
+                    className={`btn btn-sm border font-medium ${
                       provider === connection.provider
                         ? "border-accent bg-accent-soft text-accent"
                         : "border-border text-fg-muted hover:text-fg"

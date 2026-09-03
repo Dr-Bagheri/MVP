@@ -72,21 +72,39 @@ export function TaskCalendar({ tasks, labels, onOpen, onToggleDone }: {
       {/* ── the calendar's own top bar ────────────────────────────────── */}
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-1.5">
+          {/* 2026-09-03: the theme's controls, not a twelfth invented size —
+              and character for character the [امروز] [‹ ›] row Meetings.tsx
+              already wears. The two surfaces render the SAME toolbar over the
+              same month grid, so a difference between them is one a person
+              finds by switching tabs. `.btn`/`.btn-sm` draw no border of their
+              own, so `border border-border` stays; `.tap` goes because `.btn`
+              composes it. */}
           <button type="button" onClick={() => setOffset(0)}
-            className="tap h-8 rounded-lg border border-border bg-surface px-3 text-xs font-medium text-fg hover:border-border-strong">
+            className="btn btn-sm border border-border text-fg hover:border-border-strong">
             {t("today")}
           </button>
           <button type="button" aria-label={t("prev")} onClick={() => setOffset((v) => v - 1)}
-            className="tap grid h-8 w-8 place-items-center rounded-lg border border-border text-fg-muted hover:text-fg">
+            className="btn btn-icon border border-border text-fg-muted hover:text-fg">
             <IconChevronRight width={12} height={12} className="rotate-180 rtl:rotate-0" />
           </button>
           <span className="px-1 text-sm font-semibold text-fg">{label}</span>
           <button type="button" aria-label={t("next")} onClick={() => setOffset((v) => v + 1)}
-            className="tap grid h-8 w-8 place-items-center rounded-lg border border-border text-fg-muted hover:text-fg">
+            className="btn btn-icon border border-border text-fg-muted hover:text-fg">
             <IconChevronRight width={12} height={12} className="rtl:rotate-180" />
           </button>
         </div>
         <div className="flex items-center gap-0.5 rounded-xl border border-border bg-surface p-1" role="tablist">
+          {/* 2026-09-03: `.btn-sm` IS the segmented tab — globals.css says so
+              by name ("its segmented tabs and toolbar buttons" is what the
+              34px/8px size was measured off). This group sat at the other end
+              of the row I just converted, in its own h-8/12px shape, and the
+              guard could not see it: no centring class, so it never counted.
+              Converting only what a check can see is how a file ends up
+              half-converted and looking it. The state classes are untouched —
+              they are the element's, not the geometry's — and
+              `transition-colors` goes because `.btn` already transitions, and
+              two utilities from one property group are settled by stylesheet
+              order rather than by the order they are written. */}
           {(["month", "week", "day"] as const).map((option) => (
             <button
               key={option}
@@ -94,7 +112,7 @@ export function TaskCalendar({ tasks, labels, onOpen, onToggleDone }: {
               role="tab"
               aria-selected={scale === option}
               onClick={() => { setScale(option); setOffset(0); }}
-              className={`tap h-8 rounded-lg px-3 text-xs font-medium transition-colors ${
+              className={`btn btn-sm font-medium ${
                 scale === option ? "bg-accent text-on-accent" : "text-fg-muted hover:text-fg"
               }`}
             >

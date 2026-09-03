@@ -96,7 +96,23 @@ export function NotificationBell() {
         aria-label={t("bellLabel")}
         aria-expanded={open}
         title={t("bellLabel")}
-        className="tap relative grid h-9 w-9 place-items-center rounded-lg border border-border bg-surface text-fg-muted transition-colors hover:border-accent hover:text-accent"
+        /* 2026-09-03: the theme's icon button, not a twelfth invented size.
+           This was a 36px square with the 12px MENU corner, standing in the
+           bar's end cluster between a theme toggle that is `.btn btn-icon`
+           (28 on a side, 8px corner) and a clock and locale pair that are
+           `.btn btn-sm` (34, 8px) — one row, three shapes, and the bell was
+           the only member of it that had invented its own. It escaped the
+           control guard for months because `grid place-items-center` is the
+           grid spelling of `flex items-center` and the guard read only the
+           flex one.
+           `.btn` owns the height, the corner, the centring, `.tap` and the
+           transition; `border border-border` is written out because `.btn`
+           draws none — which is also what keeps `hover:border-accent` from
+           being a class that reads as satisfied and paints nothing.
+           `relative` stays explicit: the unread badge is positioned against
+           this box, and letting it inherit that from `.tap` would make the
+           badge depend on the internals of a hit-area utility. */
+        className="btn btn-icon relative border border-border bg-surface text-fg-muted hover:border-accent hover:text-accent"
         onClick={() => {
           /* the OPENING edge only — see the fetch effect above. Computed
              here rather than inside the updater: an updater runs twice under
@@ -106,7 +122,11 @@ export function NotificationBell() {
           if (next) setOpened((n) => n + 1);
         }}
       >
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        {/* 16, the size the sun/moon toggle immediately beside it draws at:
+            the box is 28 now, and two icon buttons standing in one cluster
+            with the same box and different glyph weights is the same
+            complaint one level down. */}
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
           <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
           <path d="M13.7 21a2 2 0 0 1-3.4 0" />
         </svg>

@@ -76,6 +76,20 @@ export function pageWindow(page: number, pageCount: number): (number | "gap")[] 
   return out;
 }
 
+/**
+ * The step arrows, written ONCE (2026-09-03: the theme's control, not a
+ * twelfth invented size — they were `h-9 rounded-lg` by hand, 36px with a
+ * 12px corner, in a product whose compact control is 34px with an 8px one).
+ *
+ * `.btn` brings the centring, the type, the transition, the 44px tap area and
+ * the disabled face; all that is left to say is that this one is SQUARE at
+ * `.btn-sm`'s own height, which is what `w-[34px] px-0` says. The two arrows
+ * are one control pointing opposite ways, so they read from one string — the
+ * second copy is the one that drifts, which is the argument this file's own
+ * header makes about the pager itself.
+ */
+const STEP_CLASS = "btn btn-sm w-[34px] px-0 text-fg-muted hover:bg-surface-2 hover:text-fg";
+
 export function Pagination({
   page,
   pageCount,
@@ -102,7 +116,7 @@ export function Pagination({
     >
       <button
         type="button"
-        className="tap grid h-9 min-w-9 place-items-center rounded-lg px-2 text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg disabled:pointer-events-none disabled:opacity-40"
+        className={STEP_CLASS}
         aria-label={t("previousPage")}
         disabled={page <= 1}
         onClick={step(page - 1)}
@@ -121,9 +135,16 @@ export function Pagination({
             type="button"
             aria-label={t("goToPage", { page: digits(entry, locale) })}
             aria-current={entry === page ? "page" : undefined}
-            className={`tap grid h-9 min-w-9 place-items-center rounded-lg px-2 text-sm tabular-nums transition-colors ${
+            /* 2026-09-03: the same theme control as the arrows beside it.
+               `min-w-[34px]` — not a width — is all the number adds: it squares
+               a single digit at `.btn-sm`'s own height while «۱۰» stays free to
+               be wider. `font-semibold` and the type size left with the
+               geometry; `.btn` already says both, and restating them is how one
+               row of buttons ends up in two weights. `tabular-nums` stays: that
+               is about the DIGITS lining up, not about the box. */
+            className={`btn btn-sm min-w-[34px] tabular-nums ${
               entry === page
-                ? "bg-accent-soft font-semibold text-accent"
+                ? "bg-accent-soft text-accent"
                 : "text-fg-muted hover:bg-surface-2 hover:text-fg"
             }`}
             onClick={step(entry)}
@@ -135,7 +156,7 @@ export function Pagination({
 
       <button
         type="button"
-        className="tap grid h-9 min-w-9 place-items-center rounded-lg px-2 text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg disabled:pointer-events-none disabled:opacity-40"
+        className={STEP_CLASS}
         aria-label={t("nextPage")}
         disabled={page >= pageCount}
         onClick={step(page + 1)}

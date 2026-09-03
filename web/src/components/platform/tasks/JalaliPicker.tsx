@@ -46,7 +46,12 @@ export function JalaliPicker({ value, onPick, onClose }: {
         onPick(d.toISOString());
         onClose();
       }}
-      className="tap h-8 rounded-lg border border-border bg-surface px-3 text-xs font-medium text-fg hover:border-border-strong"
+      /* 2026-09-03: the theme's compact control. This row and the meeting
+         form's preset row (components/DateTimeFields.tsx) offer the same
+         presets in the same shaped panel and were written twice — 32px/12px
+         corner/11.5px solid here, 32px/12px/11px muted there. Both are
+         `.btn-sm` now; `.btn` draws no border, so the outline is explicit. */
+      className="btn btn-sm border border-border bg-surface font-medium text-fg hover:border-border-strong"
     >
       {label}
     </button>
@@ -61,14 +66,18 @@ export function JalaliPicker({ value, onPick, onClose }: {
         {preset(t("dueNone"), null)}
       </div>
 
+      {/* 2026-09-03: an icon-only control is `.btn btn-icon` — these were
+          already 28px and centred, only the corner differed. The meeting
+          form's picker carries the identical pair; they are now the identical
+          line, which is the point of having a named size at all. */}
       <div className="mb-1.5 flex items-center justify-between">
         <button type="button" aria-label={t("prevMonth")} onClick={() => setOffset((v) => v - 1)}
-          className="tap grid h-7 w-7 place-items-center rounded-lg text-fg-muted hover:text-fg">
+          className="btn btn-icon text-fg-muted hover:text-fg">
           <IconChevronRight width={12} height={12} className="rotate-180 rtl:rotate-0" />
         </button>
         <span className="text-sm font-semibold text-fg">{grid.title}</span>
         <button type="button" aria-label={t("nextMonth")} onClick={() => setOffset((v) => v + 1)}
-          className="tap grid h-7 w-7 place-items-center rounded-lg text-fg-muted hover:text-fg">
+          className="btn btn-icon text-fg-muted hover:text-fg">
           <IconChevronRight width={12} height={12} className="rtl:rotate-180" />
         </button>
       </div>
@@ -83,6 +92,15 @@ export function JalaliPicker({ value, onPick, onClose }: {
           const selected = selectedKey !== null && cell.key === selectedKey;
           return (
             <li key={cell.key}>
+              {/* NOT a `.btn`, recorded with its reason in
+                  control.guard.test.ts: a day is a CELL of the month grid, not
+                  a control with a label in it. `w-full` is the grid's own
+                  seven-track width — `.btn-icon` would pin 28px and `.btn-sm`
+                  would add 13px of inline padding either side of a two-digit
+                  number — and this grid says which day is CHOSEN, and which is
+                  TODAY, with `font-bold` against the rest; `.btn`'s own
+                  `font-semibold` would close most of that gap on all
+                  forty-two cells at once. */}
               <button
                 type="button"
                 onClick={() => { onPick(dayIso(cell.key)); onClose(); }}

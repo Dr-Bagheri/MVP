@@ -81,7 +81,14 @@ export function LabelRow({ labels, selected, onToggle, onChanged }: {
               type="button"
               aria-pressed={on}
               onClick={() => onToggle(label.id)}
-              className={`tap flex h-8 items-center gap-1.5 rounded-s-lg px-2.5 text-xs font-medium transition-colors ${
+              /* 2026-09-03: `.btn btn-sm` with the fused edge flattened. The
+                 pair was 32px beside a `.btn btn-sm` new-label button at 34,
+                 and the guard could not see either half — its corner pattern
+                 reads `rounded-lg`, not the logical `rounded-s-lg` these were
+                 written with. The one-sided corner is the only geometry left
+                 stated here, because a chip welded to a pencil is one
+                 silhouette and the theme has no name for half of it. */
+              className={`btn btn-sm rounded-e-none ${
                 on ? TONE_CHIP[label.color] ?? TONE_CHIP.grey! : "bg-surface-2/60 text-fg-muted hover:text-fg"
               }`}
             >
@@ -93,7 +100,7 @@ export function LabelRow({ labels, selected, onToggle, onChanged }: {
               type="button"
               aria-label={t("editLabel")}
               onClick={() => setEditing(label)}
-              className="tap grid h-8 w-7 place-items-center rounded-e-lg bg-surface-2/60 text-fg-subtle hover:text-fg"
+              className="btn btn-sm w-7 rounded-s-none px-0 bg-surface-2/60 text-fg-subtle hover:text-fg"
             >
               <IconPencil width={12} height={12} />
             </button>
@@ -146,7 +153,12 @@ function LabelEditor({ label, onClose, onSaved }: {
     <Overlay onClose={onClose} label={label === null ? t("newLabel") : t("editLabel")}>
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-base font-bold text-fg">{label === null ? t("newLabel") : t("editLabel")}</h2>
-        <button type="button" aria-label={t("close")} onClick={onClose} className="text-fg-subtle hover:text-fg">
+        {/* 2026-09-03: the theme's icon button. This one had no box at all
+            while the new-task dialog's close next door had a 36px one — the
+            same affordance in the same file in two shapes, and a bare icon
+            also carries no `.tap`, so its hit area was the glyph. */}
+        <button type="button" aria-label={t("close")} onClick={onClose}
+          className="btn btn-icon text-fg-subtle hover:bg-surface-2 hover:text-fg">
           <IconClose width={14} height={14} />
         </button>
       </div>
@@ -170,6 +182,13 @@ function LabelEditor({ label, onClose, onSaved }: {
               aria-label={tone}
               aria-pressed={color === tone}
               onClick={() => setColor(tone)}
+              /* KEPT as it is (2026-09-03), and recorded in the control
+                 guard's worklist: this is a colour SWATCH — a 32px well whose
+                 whole content is the colour, selected by a ring on the well
+                 itself. `.btn`'s label padding and control height describe a
+                 button with words in it; a swatch grid dressed that way stops
+                 reading as a palette. A wrong conversion is worse than an
+                 honest entry. */
               className={`tap grid h-8 w-8 place-items-center rounded-lg border ${
                 color === tone ? "border-accent" : "border-transparent"
               }`}
@@ -190,13 +209,18 @@ function LabelEditor({ label, onClose, onSaved }: {
             {t("deleteLabel")}
           </button>
         ) : <span />}
+        {/* 2026-09-03: the footer pair takes `.btn`. They were 40px/14px
+            beside the delete button on the same row, which is `.btn` at
+            38px/11px — three controls in one footer, two shapes. `.btn`
+            owns the disabled face, so `disabled:opacity-50` leaves with the
+            geometry; the border is written out because `.btn` draws none. */}
         <span className="flex gap-2">
           <button type="button" onClick={onClose}
-            className="tap h-10 rounded-xl border border-border bg-surface px-4 text-sm font-medium text-fg hover:bg-border">
+            className="btn border border-border bg-surface text-fg hover:bg-border">
             {t("cancel")}
           </button>
           <button type="button" onClick={save} disabled={name.trim() === "" || busy}
-            className="tap h-10 rounded-xl bg-accent px-4 text-sm font-semibold text-on-accent disabled:opacity-50">
+            className="btn bg-accent text-on-accent">
             {t("save")}
           </button>
         </span>
@@ -263,6 +287,10 @@ export function AssigneePicker({ selected, onToggle }: {
           title={t("removeAssignee", { name: personName(person, locale) })}
           className="btn btn-sm bg-accent-soft font-medium text-accent"
         >
+          {/* NOT A CONTROL (2026-09-03): an initial in a circle is an AVATAR,
+              aria-hidden, sitting INSIDE the button — it only shares the
+              control guard's shape. It and the one in the people list below
+              are two of this file's three standing worklist entries. */}
           <span className="grid h-5 w-5 place-items-center rounded-full bg-accent text-[10px] font-bold text-on-accent" aria-hidden>
             {personName(person, locale).slice(0, 1)}
           </span>
@@ -274,7 +302,11 @@ export function AssigneePicker({ selected, onToggle }: {
         type="button"
         aria-label={t("addAssignee")}
         onClick={() => setOpen((v) => !v)}
-        className="tap grid h-8 w-8 place-items-center rounded-full border border-dashed border-border text-fg-muted hover:text-fg"
+        /* 2026-09-03: the theme's compact control, square by width, so it is
+           exactly the height of the assignee chips it stands in a row with
+           (those are `.btn btn-sm`). The dashed edge stays — that is what
+           says "add another"; only the invented 32px circle went. */
+        className="btn btn-sm w-[34px] px-0 border border-dashed border-border text-fg-muted hover:text-fg"
       >
         <IconPlus width={12} height={12} />
       </button>
@@ -415,8 +447,11 @@ export function NewTaskDialog({ columns, topics, labels, defaultColumnId, defaul
           <h2 className="text-base font-bold text-fg">{t("newTask")}</h2>
           <p className="mt-0.5 text-xs text-fg-muted">{t("newTaskSubtitle")}</p>
         </div>
+        {/* 2026-09-03: `.btn btn-icon`, the one icon-only shape in the theme
+            — the same control the task screen's close and every kebab in the
+            product already render. */}
         <button type="button" aria-label={t("close")} onClick={onClose}
-          className="tap grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-border text-fg-subtle hover:text-fg">
+          className="btn btn-icon shrink-0 border border-border text-fg-subtle hover:text-fg">
           <IconClose width={14} height={14} />
         </button>
       </div>
@@ -474,7 +509,12 @@ export function NewTaskDialog({ columns, topics, labels, defaultColumnId, defaul
                 role="radio"
                 aria-checked={columnId === column.id}
                 onClick={() => setColumnId(column.id)}
-                className={`tap h-9 rounded-xl border px-3 text-xs font-medium transition-colors ${
+                /* 2026-09-03: `.btn btn-sm` + an explicit border. The guard
+                   never saw this row (a height and a corner, no centring
+                   word) while it saw the priority row directly below, which
+                   is the same control — converting one and not the other
+                   would have put two shapes in one form. */
+                className={`btn btn-sm border ${
                   columnId === column.id
                     ? "border-accent bg-accent-soft text-accent"
                     : "border-border bg-surface text-fg-muted hover:text-fg"
@@ -496,7 +536,12 @@ export function NewTaskDialog({ columns, topics, labels, defaultColumnId, defaul
                 role="radio"
                 aria-checked={priority === level}
                 onClick={() => setPriority(level)}
-                className={`tap flex h-9 items-center gap-1.5 rounded-xl border px-3 text-xs font-medium transition-colors ${
+                /* 2026-09-03: the same `.btn btn-sm` the task screen's rail
+                   now uses for this very choice — one product, one priority
+                   button. The border is written out because `.btn` draws
+                   none, and `border-warning` on a borderless button would
+                   paint nothing. */
+                className={`btn btn-sm border ${
                   priority === level
                     ? "border-warning bg-warning/10 text-warning"
                     : "border-border bg-surface text-fg-muted hover:text-fg"
@@ -525,8 +570,12 @@ export function NewTaskDialog({ columns, topics, labels, defaultColumnId, defaul
       </div>
 
       <div className="mt-3 flex items-center justify-between">
+        {/* 2026-09-03: `.btn` — it stood at 40px/14px beside the create
+            button on the same row, which was already `.btn` at 38px/11px.
+            Two buttons in one footer, two shapes, was the directive in
+            miniature. */}
         <button type="button" onClick={onClose}
-          className="tap h-10 rounded-xl border border-border bg-surface px-4 text-sm font-medium text-fg hover:bg-border">
+          className="btn border border-border bg-surface text-fg hover:bg-border">
           {t("cancel")}
         </button>
         <button type="button" onClick={submit} disabled={title.trim() === "" || busy || columnId === ""}

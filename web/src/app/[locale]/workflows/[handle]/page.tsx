@@ -802,9 +802,17 @@ export default function WorkflowDetailPage({
                          claim about who may install is not one to make
                          about an unknown caller. */
                       me === null ? null : isAdmin ? (
+                        /* 2026-09-03: the theme's control, not a twelfth
+                           invented size. `h-9 min-h-0 px-4 text-sm` was a
+                           hand-rolled geometry wearing the very class that
+                           exists to prevent one — and `disabled:opacity-60`
+                           was a second answer to a question `.btn` already
+                           answers (`disabled:opacity-50` with pointer events
+                           off). This guard cannot see either, because the
+                           class it re-answers is present. */
                         <button
                           type="button"
-                          className="btn-primary h-9 min-h-0 px-4 text-sm disabled:opacity-60"
+                          className="btn-primary"
                           disabled={installing}
                           onClick={() => void installThisStarter()}
                         >
@@ -938,9 +946,14 @@ export default function WorkflowDetailPage({
                       template's prose stays prose.
                     */}
                     {isAdmin && manageId ? (
+                      /* 2026-09-03: the theme's compact control. This was the
+                         same `h-9 min-h-0` size restated on top of `.btn` as
+                         the install button above it — two hand-rolled shapes
+                         in one page, both invisible to the control guard for
+                         the same reason (the class they re-answer is there). */
                       <button
                         type="button"
-                        className="btn-secondary h-9 min-h-0 px-3 text-xs"
+                        className="btn-secondary btn-sm"
                         onClick={() => setEditing(true)}
                       >
                         {t("editSteps")}

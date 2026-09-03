@@ -137,7 +137,13 @@ export function MeetingAssistant({ callId, title }: { callId: string; title: str
                 key={question}
                 type="button"
                 onClick={() => send(question)}
-                className="tap h-9 rounded-xl border border-border bg-surface px-3 text-xs text-fg hover:border-border-strong"
+                /* 2026-09-03: the theme's control, not a twelfth invented size.
+                   These were a 36px/16px-corner shape of their own, sitting
+                   under a `btn btn-sm` new-chat button in this same component —
+                   two idioms for the same press, eight lines apart. `.btn`
+                   composes `.tap`, so nothing is lost below md, and `.btn-sm`
+                   owns the text size the `text-xs` was re-stating. */
+                className="btn btn-sm border border-border bg-surface font-medium text-fg hover:border-border-strong"
               >
                 {question}
               </button>
@@ -160,7 +166,15 @@ export function MeetingAssistant({ callId, title }: { callId: string; title: str
           aria-label={t("assistantSend")}
           disabled={draft.trim() === "" || busy}
           onClick={() => send(draft)}
-          className="tap grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-accent text-on-accent disabled:opacity-50"
+          /* 2026-09-03: the theme's control, not a twelfth invented size. A
+             40px/16px-corner square by hand, where the meeting page's own two
+             composers — the same 14px glyph on the same accent — are
+             `btn … px-3`. `px-3` around a 14px icon is what makes a `.btn` a
+             square, with no height or corner re-stated on top of it; `.btn`
+             already carries `disabled:opacity-50` (and pointer-events-none
+             with it), so the copy that stood here was the theme repeated back
+             at itself. */
+          className="btn shrink-0 bg-accent px-3 text-on-accent"
         >
           <IconSend width={14} height={14} />
         </button>

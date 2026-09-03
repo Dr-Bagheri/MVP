@@ -91,8 +91,13 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
         {/* ── top bar ─────────────────────────────────────────────────── */}
         <div className="flex items-center justify-between gap-2 border-b border-border p-3">
           <div className="flex items-center gap-1.5">
+            {/* 2026-09-03: the theme's icon button, not a twelfth invented
+                size. It is the same control as the kebab standing beside it
+                — rowActions renders `.btn btn-icon` — so a 36px square with
+                a 14px corner next to a 28px one with an 8px corner was the
+                user's "one is small, one is big" in two adjacent elements. */}
             <button type="button" aria-label={t("close")} onClick={onClose}
-              className="tap grid h-9 w-9 place-items-center rounded-xl text-fg-subtle hover:bg-surface-2 hover:text-fg">
+              className="btn btn-icon text-fg-subtle hover:bg-surface-2 hover:text-fg">
               <IconClose width={14} height={14} />
             </button>
             {/* THE THEME'S KEBAB, not a hand-rolled popover (audit finding,
@@ -133,8 +138,14 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
                 <span className="max-w-[280px] truncate">{task.call_title ?? t("recordGone")}</span>
               </Link>
             ) : null}
+            {/* 2026-09-03: `.btn btn-sm`, the theme's compact control — the
+                same shape as the meeting chip it stands next to. `border` is
+                written out because `.btn` draws none, and `border-accent` on
+                a borderless button paints NOTHING (this repo shipped that
+                once, the markup reading as fixed while the pixels got
+                worse); the colours stay the element's own. */}
             <button type="button" onClick={() => patch({ done: !task.done })}
-              className={`tap flex h-9 items-center gap-1.5 rounded-xl border px-3 text-xs font-medium transition-colors ${
+              className={`btn btn-sm border ${
                 task.done
                   ? "border-accent bg-accent-soft text-accent"
                   : "border-border bg-surface text-fg-muted hover:text-fg"
@@ -249,7 +260,13 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
                       .then(() => { setItem(""); onChanged(); })
                       .catch(() => setFailed(true));
                   }}
-                  className="tap grid h-9 w-9 place-items-center rounded-lg bg-accent text-on-accent disabled:opacity-50"
+                  /* 2026-09-03: the theme's height and corner, square by
+                     width — the sanctioned spelling for an icon button that
+                     has to be wider than `.btn-icon`'s 28px, since this one
+                     stands at the end of a field row. `.btn` owns the
+                     disabled face, so the old `disabled:opacity-50` goes
+                     with the geometry. */
+                  className="btn w-[38px] px-0 bg-accent text-on-accent"
                 >
                   <IconPlus width={12} height={12} />
                 </button>
@@ -266,7 +283,13 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
                   role="tab"
                   aria-selected={tab === key}
                   onClick={() => setTab(key)}
-                  className={`tap h-8 flex-1 rounded-lg text-xs font-medium transition-colors ${
+                  /* 2026-09-03: `.btn btn-sm` is the measured segmented tab
+                     (globals names it as that case by name) — this pair had
+                     invented a 32px/10px one instead. The guard could not
+                     see it: no `items-center` in the string, so it read as
+                     spacing. Converted with its neighbours because leaving
+                     it would put two compact shapes on one screen. */
+                  className={`btn btn-sm flex-1 ${
                     tab === key ? "bg-surface text-fg shadow-card" : "text-fg-muted hover:text-fg"
                   }`}
                 >
@@ -283,6 +306,13 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
                   <ul className="space-y-2">
                     {task.comments.map((entry) => (
                       <li key={entry.id} className="flex items-start gap-2.5">
+                        {/* NOT A CONTROL, and it is deliberately left as it is
+                            (2026-09-03): an initial in a circle is an AVATAR —
+                            aria-hidden, nothing to press — that only shares the
+                            control guard's shape. It is one of this file's two
+                            standing worklist entries; dressing it as a button
+                            would be a wrong conversion, which is worse than an
+                            honest entry. The other is the history row below. */}
                         <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-accent text-[11px] font-bold text-on-accent" aria-hidden>
                           {nameOf(entry.created_by).slice(0, 1)}
                         </span>
@@ -326,7 +356,11 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
                           .then(() => { setComment(""); onChanged(); })
                           .catch(() => setFailed(true));
                       }}
-                      className="tap h-8 rounded-lg bg-accent px-3 text-xs font-semibold text-on-accent disabled:opacity-50"
+                      /* 2026-09-03: the theme's compact control. Another one
+                         the guard is blind to (a height and a corner, no
+                         centring word) — converted anyway, because a shape
+                         is not less invented for being unmeasurable. */
+                      className="btn btn-sm bg-accent text-on-accent"
                     >
                       {t("postComment")}
                     </button>
@@ -402,9 +436,13 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
                     type="button"
                     aria-pressed={task.priority === level}
                     onClick={() => patch({ priority: level })}
-                    className={`tap flex h-7 items-center gap-1 rounded-lg px-2 text-[11px] transition-colors ${
+                    /* 2026-09-03: `.btn btn-sm` — the same control the new-task
+                       dialog offers for the same choice, which is the point:
+                       one product, one priority button. It keeps its
+                       borderless rail face; only the geometry left. */
+                    className={`btn btn-sm ${
                       task.priority === level
-                        ? "bg-warning/10 font-semibold text-warning"
+                        ? "bg-warning/10 text-warning"
                         : "text-fg-muted hover:text-fg"
                     }`}
                   >

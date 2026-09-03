@@ -164,15 +164,32 @@ export function MailDraftCard({
           <span className="text-xs text-fg-subtle">
             {decided ? t("decidedNote") : canSend ? t("editNote") : t("cannotSendNote")}
           </span>
+          {/*
+            2026-09-03: all three controls in this footer are the theme's
+            compact size now. Every one of them had written its own geometry
+            — `h-9 min-h-0 px-3 text-xs`, `h-9 min-h-0 gap-1.5 px-4 text-sm`,
+            and a bare `tap h-9 rounded-lg` — and the first two wrote it ON
+            TOP of `.btn-secondary` / `.btn-primary`, which is a hand-rolled
+            control wearing the very class that exists to prevent one. Two
+            things follow from that: the row stood at 36px where the
+            platform's compact control is 34, and control.guard could not see
+            any of it (no centring class to match, and the ones that had a
+            `btn-` word are skipped by name), so this footer would have gone
+            on being a twelfth size indefinitely.
+            The state classes stay exactly as they were — `text-fg-muted
+            hover:text-danger` is what discard LOOKS like, not how big it is
+            — and discard keeps `.btn`'s bare face: no `.btn-ghost`, whose
+            `hover:text-fg` would fight the danger tone at equal specificity.
+          */}
           {decided ? null : !canSend ? (
-            <Link href="/integrations" className="btn-secondary h-9 min-h-0 px-3 text-xs">
+            <Link href="/integrations" className="btn-secondary btn-sm">
               {t("connectToSend")}
             </Link>
           ) : (
             <span className="flex items-center gap-2">
               <button
                 type="button"
-                className="tap h-9 min-h-0 rounded-lg px-3 text-xs text-fg-muted hover:text-danger"
+                className="btn btn-sm text-fg-muted hover:text-danger"
                 disabled={busy !== null}
                 onClick={() => setConfirmDiscard(true)}
               >
@@ -180,7 +197,7 @@ export function MailDraftCard({
               </button>
               <button
                 type="button"
-                className="btn-primary h-9 min-h-0 gap-1.5 px-4 text-sm"
+                className="btn-primary btn-sm"
                 disabled={busy !== null}
                 onClick={() => void act("send")}
               >

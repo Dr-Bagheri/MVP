@@ -84,6 +84,12 @@ export function AvatarEditor({ me, onSaved }: { me: Me; onSaved: (me: Me) => voi
     <div>
       <div className="flex items-center gap-4">
         <div className="relative">
+          {/* NOT A CONTROL, and it stays hand-drawn on purpose (2026-09-03,
+              recorded in control.guard.test.ts): this is the avatar itself —
+              a 64px circle holding either the photo or the initial. It shares
+              the shape a button has (fixed size, corner, centred contents),
+              which is why the guard sees it, and dressing it as one would put
+              a pressable-looking rectangle where the person's face goes. */}
           <div className="grid h-16 w-16 place-items-center overflow-hidden rounded-full bg-accent-soft text-xl font-bold text-accent">
             {me.avatar_url ? (
               /* eslint-disable-next-line @next/next/no-img-element -- a data
@@ -98,7 +104,14 @@ export function AvatarEditor({ me, onSaved }: { me: Me; onSaved: (me: Me) => voi
           <button
             type="button"
             aria-label={t("photoChange")}
-            className="absolute -bottom-0.5 -end-0.5 grid h-7 w-7 place-items-center rounded-full border border-border bg-surface text-fg-muted shadow-sm transition-colors hover:text-fg"
+            /* 2026-09-03: this one IS a control — the camera badge a person
+               presses — and it was already the theme's icon button written out
+               by hand (28px, centred), so it wears `.btn btn-icon` and picks up
+               the platform's corner, cursor and disabled handling with it.
+               `.btn` draws no border, hence the explicit one; `absolute` is a
+               utility and beats `.tap`'s `relative`, so the badge still sits on
+               the circle's edge. */
+            className="btn btn-icon absolute -bottom-0.5 -end-0.5 border border-border bg-surface text-fg-muted shadow-sm hover:text-fg"
             onClick={() => fileRef.current?.click()}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -137,10 +150,16 @@ export function AvatarEditor({ me, onSaved }: { me: Me; onSaved: (me: Me) => voi
           <img src={preview} alt="" className="h-20 w-20 rounded-full object-cover" />
           <div>
             <p className="text-sm text-fg">{t("photoPreviewTitle")}</p>
+            {/* 2026-09-03: `.btn-sm` is the theme's compact control (34px,
+                measured off the reference), so the accept/cancel pair stops
+                re-answering the height, the corner and the type size that
+                `.btn` already answers. A size restated on top of `.btn` is the
+                same invented shape as one written from scratch — it just reads
+                as compliant, because the class is right there. */}
             <div className="mt-2 flex gap-2">
               <button
                 type="button"
-                className="btn-primary h-9 min-h-0 px-3 text-xs"
+                className="btn-primary btn-sm"
                 disabled={busy}
                 onClick={() => void save(preview)}
               >
@@ -148,7 +167,7 @@ export function AvatarEditor({ me, onSaved }: { me: Me; onSaved: (me: Me) => voi
               </button>
               <button
                 type="button"
-                className="btn-secondary h-9 min-h-0 px-3 text-xs"
+                className="btn-secondary btn-sm"
                 disabled={busy}
                 onClick={() => setPreview(null)}
               >

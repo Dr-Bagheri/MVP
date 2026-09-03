@@ -11,6 +11,14 @@ import { Icon, type IconName } from "@/components/icons";
  * those answers start disagreeing — the list would go on showing a paper plane
  * for a template whose own page had moved to an envelope, and nothing would
  * look broken on either screen.
+ *
+ * NOT A CONTROL, which is why control.guard carries this file with a reason
+ * rather than a conversion (2026-09-03). It shares a button's shape — a fixed
+ * box, a corner, centred contents — and shares nothing else: it is an
+ * `aria-hidden` span, it has no handler, and the thing that IS pressable is
+ * the card or the header it sits inside. Dressing an identity mark as `.btn`
+ * would put a button's face on 96px of decoration and offer a press that
+ * goes nowhere.
  */
 
 /**

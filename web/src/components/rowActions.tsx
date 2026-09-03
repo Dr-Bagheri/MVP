@@ -600,6 +600,15 @@ export function SelectMenu({
               e.stopPropagation();
               guardHoverTap(e);
             }}
+            /* the control guard counts this one and its entry says why it
+               stays: this is not a button that happens to be round, it is a
+               MEMBER OF THE RECORD TRANSPORT — 40px circles around a 64px
+               record button, and Recorder.tsx's own entry rules the same way
+               about the three beside it. Converting this line alone would put
+               one 8px-cornered rectangle in a row of circles, which is the
+               "ten different developers" symptom inside a single row on the
+               product's centrepiece. Redrawing that transport is a decision
+               with the user, not a class-string edit. */
             className={`tap grid h-10 w-10 shrink-0 place-items-center rounded-full border transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
               open
                 ? "border-accent bg-accent-soft text-accent"
@@ -733,6 +742,17 @@ export function SelectMenu({
               <button
                 type="button"
                 aria-label={`${o.label} ✕`}
+                /* 2026-09-03, left hand-rolled ON PURPOSE, and the control
+                   guard cannot see it either way (a bare `rounded` is not one
+                   of the corners it reads — worth knowing when this file's
+                   count reads as one). `.btn btn-icon` would take it to 28px
+                   AND compose `.tap`, which throws a 44px hit area around a
+                   control that is `opacity-0` until hover — i.e. invisible on
+                   every touch device, where there is no hover — and what it
+                   does is DELETE. A 24px invisible destructive target inside a
+                   32px row is already a trap; a 44px one would swallow the row
+                   underneath it. That is a bug to fix by making the control
+                   reachable, not by making it bigger while it is invisible. */
                 className="me-1.5 grid h-6 w-6 shrink-0 place-items-center rounded text-[10px] text-fg-muted opacity-0 transition-opacity hover:bg-danger/10 hover:text-danger focus-visible:opacity-100 group-hover/opt:opacity-100"
                 onClick={(e) => {
                   e.stopPropagation();

@@ -162,13 +162,18 @@ export function TaskBoard() {
     void patchTask(id, { column_id: columnId, position: -Date.now() });
   };
 
+  /* 2026-09-03: the theme's compact control, not a twelfth invented size —
+     and character for character the toolbar chip Meetings.tsx already wears,
+     which is the point: two boards showing the same row of filters must not
+     disagree about how a filter looks. The h-9/rounded-xl/px-3.5 it replaces
+     was one of the eleven shapes the directive was describing. */
   const chip = (active: boolean, label: string, onClick: () => void) => (
     <button
       key={label}
       type="button"
       aria-pressed={active}
       onClick={onClick}
-      className={`tap flex h-9 items-center gap-1.5 rounded-xl px-3.5 text-xs font-medium transition-colors ${
+      className={`btn btn-sm gap-1.5 font-medium ${
         active ? "bg-accent text-on-accent" : "text-fg-muted hover:bg-surface-2 hover:text-fg"
       }`}
     >
@@ -190,11 +195,15 @@ export function TaskBoard() {
           {PRIORITY_ORDER.map((level) =>
             chip(priority === level, t(`priority_${level}`), () => setPriority(level)))}
           <span className="mx-1 h-5 w-px bg-border" aria-hidden />
+          {/* 2026-09-03: the same compact control as the chips beside them —
+              these two were the same 36px box with a border added, which is
+              a STATE (this filter is on), never a second geometry. `.btn` and
+              `.btn-sm` draw no border of their own, so `border` stays. */}
           <button
             type="button"
             aria-pressed={mineOnly}
             onClick={() => setMineOnly((v) => !v)}
-            className={`tap flex h-9 items-center gap-1.5 rounded-xl border px-3 text-xs font-medium transition-colors ${
+            className={`btn btn-sm gap-1.5 border font-medium ${
               mineOnly ? "border-accent bg-accent-soft text-accent" : "border-border bg-surface text-fg-muted hover:text-fg"
             }`}
           >
@@ -205,7 +214,7 @@ export function TaskBoard() {
             type="button"
             aria-pressed={dueToday}
             onClick={() => setDueToday((v) => !v)}
-            className={`tap flex h-9 items-center gap-1.5 rounded-xl border px-3 text-xs font-medium transition-colors ${
+            className={`btn btn-sm gap-1.5 border font-medium ${
               dueToday ? "border-accent bg-accent-soft text-accent" : "border-border bg-surface text-fg-muted hover:text-fg"
             }`}
           >
@@ -218,11 +227,17 @@ export function TaskBoard() {
       {/* ── the topic row ────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-1.5">
 
+        {/* 2026-09-03: the theme's control. This row and the toolbar row above
+            it are the same kind of chip and were TWO different boxes — h-9 /
+            rounded-xl up there, h-8 / rounded-lg down here — eight pixels
+            apart on one screen, which is the directive in miniature. The
+            topic chip between them already wore `.btn btn-sm`; now its two
+            neighbours match it instead of it standing out. */}
         <button
           type="button"
           aria-pressed={topic === "all"}
           onClick={() => setTopic("all")}
-          className={`tap flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs ${
+          className={`btn btn-sm gap-1.5 border font-medium ${
             topic === "all" ? "border-accent bg-accent-soft font-semibold text-accent" : "border-border text-fg-muted hover:text-fg"
           }`}
         >
@@ -290,7 +305,9 @@ export function TaskBoard() {
           type="button"
           aria-pressed={topic === "none"}
           onClick={() => setTopic((cur) => (cur === "none" ? "all" : "none"))}
-          className={`tap flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs ${
+          /* 2026-09-03: the theme's control, matching «همه تسک‌ها» at the
+             other end of the same strip */
+          className={`btn btn-sm gap-1.5 border font-medium ${
             topic === "none" ? "border-accent bg-accent-soft font-semibold text-accent" : "border-border text-fg-muted hover:text-fg"
           }`}
         >
@@ -338,7 +355,13 @@ export function TaskBoard() {
               type="button"
               aria-label={t("cancel")}
               onClick={() => { setTopicName(""); setAddingTopic(false); setRenamingTopic(null); }}
-              className="tap grid h-6 w-6 place-items-center rounded text-fg-muted hover:text-fg"
+              /* 2026-09-03: the theme's icon control. The guard could not see
+                 this one — it spelled its corner as a bare `rounded`, and the
+                 pattern reads `rounded-md|lg|xl|2xl|full` — but a 24px
+                 hand-rolled square is the same invention as the 28px ones
+                 above it, and converting only what a check can count is how a
+                 file ends up half-converted and looking it. */
+              className="btn btn-icon text-fg-muted hover:text-fg"
             >
               <IconClose width={12} height={12} />
             </button>
@@ -420,7 +443,12 @@ export function TaskBoard() {
                               setToneMenu(null);
                               void api.updateTaskColumn(col.id, { tone }).then(load).catch(refusal);
                             }}
-                            className="tap grid h-7 w-7 place-items-center rounded-lg hover:bg-surface-2"
+                            /* 2026-09-03: the theme's icon control. The 16px
+                               swatch INSIDE it is the picture and stays as
+                               it is — what changed is the 28px box a person
+                               presses, which is `.btn-icon` and was h-7/
+                               rounded-lg spelled by hand. */
+                            className="btn btn-icon hover:bg-surface-2"
                           >
                             <span className={`h-4 w-4 rounded-md ${TONE_DOT[tone] ?? TONE_DOT.grey!}`} />
                           </button>
@@ -462,7 +490,9 @@ export function TaskBoard() {
                     aria-label={t("archiveColumn", { name: seededName(col.name) })}
                     title={t("archiveColumn", { name: seededName(col.name) })}
                     onClick={() => setCondemnedColumn(col)}
-                    className="tap grid h-7 w-7 place-items-center rounded-md text-fg-subtle hover:text-danger"
+                    /* 2026-09-03: the theme's icon control — an icon-only
+                       button is exactly what `.btn-icon` is measured for */
+                    className="btn btn-icon text-fg-subtle hover:text-danger"
                   >
                     <IconTrash width={12} height={12} />
                   </button>
@@ -485,7 +515,12 @@ export function TaskBoard() {
                 <button
                   type="button"
                   onClick={() => setCreating(col.id)}
-                  className="tap flex h-9 w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border text-xs text-fg-muted hover:border-border-strong hover:text-fg"
+                  /* 2026-09-03: the theme's control. This is Meetings.tsx's
+                     dashed whole-width "add" row verbatim — the two boards
+                     invite you to add a thing in the same words and, until
+                     now, in two different boxes. The dashed border is the
+                     invitation and stays; `.btn`/`.btn-sm` draw none. */
+                  className="btn btn-sm w-full justify-center gap-1.5 border border-dashed border-border font-medium text-fg-muted hover:border-border-strong hover:text-fg"
                 >
                   <IconPlus width={12} height={12} />
                   {t("addCard")}
@@ -718,13 +753,18 @@ function AddColumnInline({ onAdded, onRefused }: {
         placeholder={t("columnNamePlaceholder")}
         className="h-8 w-full bg-transparent text-sm text-fg outline-none placeholder:text-fg-subtle"
       />
+      {/* 2026-09-03: the theme's compact control on both. These two were a
+          TWELFTH shape — h-7 / rounded-lg / 11px — and the guard walked past
+          them only because neither spelled a centring class; a dialog footer
+          is the case `.btn-sm` was measured for. `disabled:opacity-50` goes
+          with them: `.btn` already carries the disabled treatment. */}
       <div className="mt-1.5 flex justify-end gap-1.5">
         <button type="button" onClick={() => { setName(""); setOpen(false); }}
-          className="tap h-7 rounded-lg px-2 text-[11px] text-fg-muted hover:text-fg">
+          className="btn btn-sm text-fg-muted hover:text-fg">
           {t("cancel")}
         </button>
         <button type="button" onClick={add} disabled={name.trim() === ""}
-          className="tap h-7 rounded-lg bg-accent px-2.5 text-[11px] font-semibold text-on-accent disabled:opacity-50">
+          className="btn btn-sm bg-accent text-on-accent">
           {t("add")}
         </button>
       </div>

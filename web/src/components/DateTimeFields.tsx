@@ -56,7 +56,15 @@ export function DateField({ value, onChange, id }: {
     <button
       type="button"
       onClick={() => pick(relative(days))}
-      className="tap h-8 rounded-lg border border-border px-2.5 text-[11px] text-fg-muted hover:border-border-strong hover:text-fg"
+      /* 2026-09-03: the theme's compact control, not a twelfth invented size.
+         This chip and the one doing the identical job in the board's picker
+         (tasks/JalaliPicker.tsx) were two spellings of one thing — 32px/12px
+         corner/11px muted here, 32px/12px/11.5px solid there — which is the
+         "ten different developers" complaint inside two panels that offer the
+         same four presets. Both are `.btn-sm` now, in the spelling
+         EchoSectionMenu already used. `.btn` draws NO border, so the outline
+         that made this read as a chip is asked for explicitly. */
+      className="btn btn-sm border border-border font-medium text-fg-muted hover:border-border-strong hover:text-fg"
     >
       {label}
     </button>
@@ -69,7 +77,13 @@ export function DateField({ value, onChange, id }: {
         type="button"
         id={id}
         aria-haspopup="dialog"
-        className="input flex h-10 w-full items-center justify-between gap-2 text-start"
+        /* `h-10` came off here on 2026-09-03. `.input` is 44px below md and 40
+           from md up, deliberately: it renders no `.tap` pseudo-element, so an
+           input's VISUAL height IS its hit area. A restated `h-10` pinned 40 at
+           every width — which put this field under the 44px ruling on a phone
+           AND four pixels shorter than the title box in the same dialog, where
+           the title box is a bare `.input`. */
+        className="input flex w-full items-center justify-between gap-2 text-start"
       >
         <span className="truncate text-fg">
           {value === "" ? t("pickDate") : formatDate(`${value}T00:00:00`, locale)}
@@ -85,14 +99,19 @@ export function DateField({ value, onChange, id }: {
             {preset(t("dateTomorrow"), 1)}
             {preset(t("dateNextWeek"), 7)}
           </div>
+          {/* 2026-09-03: an icon-only control is `.btn btn-icon`. These two
+              were already the theme's 28px square and already centred — only
+              the corner differed (12px against the icon button's 8) — which is
+              the AvatarEditor camera-badge finding again: a control one class
+              away from the theme, invisible until something counted it. */}
           <div className="mb-1 flex items-center justify-between">
             <button type="button" aria-label={t("prevMonth")} onClick={() => setOffset((v) => v - 1)}
-              className="tap grid h-7 w-7 place-items-center rounded-lg text-fg-muted hover:text-fg">
+              className="btn btn-icon text-fg-muted hover:text-fg">
               <IconChevronRight width={12} height={12} className="rotate-180 rtl:rotate-0" />
             </button>
             <span className="text-xs font-semibold text-fg">{grid.title}</span>
             <button type="button" aria-label={t("nextMonth")} onClick={() => setOffset((v) => v + 1)}
-              className="tap grid h-7 w-7 place-items-center rounded-lg text-fg-muted hover:text-fg">
+              className="btn btn-icon text-fg-muted hover:text-fg">
               <IconChevronRight width={12} height={12} className="rtl:rotate-180" />
             </button>
           </div>
@@ -107,6 +126,14 @@ export function DateField({ value, onChange, id }: {
                  two disagreeing about which day was pressed */
               const iso = new Date(cell.key).toISOString().slice(0, 10);
               return (
+                /* NOT a `.btn`, and the reason is recorded in
+                   control.guard.test.ts rather than pattern-matched away: a day
+                   is a CELL of the month grid, not a control with a label in
+                   it. The grid sets its width — seven tracks in a 288px panel —
+                   where `.btn-icon` pins 28px and `.btn-sm` puts 13px of inline
+                   padding either side of a two-digit number; and this grid says
+                   which day is CHOSEN with weight, which `.btn`'s own
+                   `font-semibold` would flatten across all forty-two at once. */
                 <button
                   key={cell.key}
                   type="button"
@@ -177,7 +204,9 @@ export function TimeField({ value, onChange, id }: {
         type="button"
         id={id}
         aria-haspopup="dialog"
-        className="input flex h-10 w-full items-center justify-between gap-2 text-start"
+        /* the date field's line, verbatim: `.input` owns this height, and
+           restating it cost the 44px hit area below md (2026-09-03). */
+        className="input flex w-full items-center justify-between gap-2 text-start"
       >
         {/* the CLOCK reads in the page's digits; the value underneath stays
             ASCII `HH:mm`, which is what the form submits */}

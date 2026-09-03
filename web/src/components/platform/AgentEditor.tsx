@@ -260,7 +260,11 @@ export function AgentEditor({
   return (
     <div>
       <div className="flex flex-wrap items-center gap-3">
-        <button type="button" className="tap h-8 rounded-full border border-border px-3 text-xs text-fg-muted hover:border-border-strong hover:text-fg" onClick={onClose}>
+        {/* 2026-09-03: the theme's compact control, not a twelfth invented
+            size — this was a hand-rolled 32px pill. `.btn` composes `.tap`
+            and draws NO border, so the edge is stated explicitly rather than
+            inherited. */}
+        <button type="button" className="btn btn-sm border border-border text-fg-muted hover:border-border-strong hover:text-fg" onClick={onClose}>
           {t("backToAgents")}
         </button>
         <h2 className="text-lg font-semibold text-fg">
@@ -296,13 +300,21 @@ export function AgentEditor({
             role="tab"
             aria-selected={step === candidate}
             aria-current={step === candidate ? "step" : undefined}
-            className={`tap flex h-9 items-center gap-2 rounded-full border px-4 text-sm transition-colors ${
+            /* 2026-09-03: `.btn btn-sm` — a segmented tab is the control
+               `.btn-sm` was measured off the reference for, and it is what
+               the task screen's own tabs wear. The `border` is explicit
+               because `.btn` draws none, and without it the active
+               `border-accent` would paint nothing at all. */
+            className={`btn btn-sm border ${
               step === candidate
                 ? "border-accent bg-accent-soft text-accent"
                 : "border-border text-fg-muted hover:border-border-strong hover:text-fg"
             }`}
             onClick={() => setStep(candidate)}
           >
+            {/* NOT a control: the step's ORDINAL, an aria-hidden number
+                inside the tab. It keeps its fixed 20px circle so the digits
+                line up down the row — a `.chip` grows with its digit. */}
             <span className="grid h-5 w-5 place-items-center rounded-full bg-surface-2 text-xs" aria-hidden>
               {index + 1}
             </span>
@@ -335,7 +347,15 @@ export function AgentEditor({
                           type="button"
                           aria-label={choice}
                           aria-pressed={active}
-                          className={`tap grid h-10 w-10 place-items-center rounded-xl border transition-colors ${
+                          /* 2026-09-03: `btn w-[38px] px-0` — the theme's
+                             recipe for a square icon button wider than the
+                             28px `.btn-icon`, so the picker takes the
+                             platform's control height and 11px corner
+                             instead of an invented 40/12. Its twin, the
+                             colour row below, moves with it: converting one
+                             of two matched rows is the symptom, not the
+                             fix. */
+                          className={`btn w-[38px] px-0 border ${
                             active ? "border-accent bg-accent-soft text-accent" : "border-border text-fg-muted hover:border-border-strong"
                           }`}
                           onClick={() => setIcon(choice)}
@@ -358,7 +378,14 @@ export function AgentEditor({
                           type="button"
                           aria-label={typeof label === "string" ? label : choice}
                           aria-pressed={active}
-                          className={`tap grid h-10 w-10 place-items-center rounded-xl border transition-colors ${
+                          /* 2026-09-03: the icon row's twin, same shape. This
+                             one is a button FRAME around a swatch, not a well
+                             whose whole content is the colour (the label
+                             editor's palette, which stays hand-rolled for
+                             exactly that reason) — the colour lives in the
+                             24px span inside, and the box around it is the
+                             press. */
+                          className={`btn w-[38px] px-0 border ${
                             active ? "border-accent" : "border-border hover:border-border-strong"
                           }`}
                           onClick={() => setColor(choice)}
@@ -371,7 +398,12 @@ export function AgentEditor({
                 </fieldset>
               </div>
               <label className="mt-4 block text-sm font-medium text-fg" htmlFor="agent-description">{t("description")}</label>
-              <input id="agent-description" className="input mt-1 h-10 w-full" value={description} onChange={(event) => setDescription(event.target.value)} />
+              {/* 2026-09-03: `h-10` stripped off `.input` here and on the
+                  model select. It restated the theme's desktop field height
+                  and, being a HARD height, beat `.input`'s `min-h-[44px]`
+                  below md — a field shrunk under the 44px hit-area ruling by
+                  a class that looked like it was agreeing with the theme. */}
+              <input id="agent-description" className="input mt-1 w-full" value={description} onChange={(event) => setDescription(event.target.value)} />
               <label className="mt-4 block text-sm font-medium text-fg" htmlFor="agent-instructions">{t("instructions")}</label>
               <textarea
                 id="agent-instructions"
@@ -386,7 +418,7 @@ export function AgentEditor({
               <label className="mt-4 block text-sm font-medium text-fg" htmlFor="agent-model">{t("model")}</label>
               <select
                 id="agent-model"
-                className="input mt-1 h-10 w-full max-w-sm"
+                className="input mt-1 w-full max-w-sm"
                 value={model ?? ""}
                 onChange={(event) => setModel(event.target.value === "" ? null : event.target.value)}
               >
@@ -399,6 +431,10 @@ export function AgentEditor({
             </div>
           ) : (
             <div className="flex items-start gap-5">
+              {/* NOT a control: the agent's identity mark — an aria-hidden
+                  64px well carrying its colour and icon, the same idiom the
+                  overview panel and the assistant header render. Giving a
+                  face a button's shape offers a press that goes nowhere. */}
               <span className={`grid h-16 w-16 shrink-0 place-items-center rounded-2xl ${agentColorClasses(agent!.color)}`} aria-hidden>
                 <Icon name={agentIconName(agent!.icon)} size="xl" />
               </span>
@@ -566,9 +602,18 @@ export function AgentEditor({
 
       {error ? <p role="alert" className="mt-3 text-sm text-danger">{error}</p> : null}
 
+      {/* 2026-09-03: all three footer buttons carried `h-9 min-h-0 px-4
+          text-sm` ON TOP of `.btn-primary`/`.btn-secondary` — a hand-rolled
+          control wearing the very class that exists to prevent one, and
+          invisible to the guard precisely BECAUSE the class it re-answers is
+          present. The theme's 38px/11px/13px is what every other footer in
+          the product uses; these three sat 2px shorter than the Save button
+          on the meeting and task dialogs. Stripping the overrides also gives
+          the save its disabled treatment, which it had the attribute for and
+          no appearance of. */}
       <div className="mt-4 flex items-center gap-2">
         {stepIndex > 0 ? (
-          <button type="button" className="btn-secondary h-9 min-h-0 px-4 text-sm" onClick={() => setStep(STEPS[stepIndex - 1]!)}>
+          <button type="button" className="btn-secondary" onClick={() => setStep(STEPS[stepIndex - 1]!)}>
             {t("back")}
           </button>
         ) : null}
@@ -577,7 +622,7 @@ export function AgentEditor({
         {(step === "workflows" ? canArrange : editable) && (agent !== null || step === "visibility") ? (
           <button
             type="button"
-            className={`h-9 min-h-0 px-4 text-sm ${step === "visibility" ? "btn-primary" : "btn-secondary"}`}
+            className={step === "visibility" ? "btn-primary" : "btn-secondary"}
             disabled={saving || (agent === null && !createReady)}
             onClick={() => void save()}
           >
@@ -585,7 +630,7 @@ export function AgentEditor({
           </button>
         ) : null}
         {stepIndex < STEPS.length - 1 ? (
-          <button type="button" className="btn-primary h-9 min-h-0 px-4 text-sm" onClick={() => setStep(STEPS[stepIndex + 1]!)}>
+          <button type="button" className="btn-primary" onClick={() => setStep(STEPS[stepIndex + 1]!)}>
             {t("continue")}
           </button>
         ) : null}

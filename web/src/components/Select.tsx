@@ -87,7 +87,16 @@ export function Select({
               setOpen(true);
             }
           }}
-          className={`input flex h-10 w-full items-center justify-between gap-2 text-start disabled:opacity-60 ${className}`}
+          /* 2026-09-03: `h-10` left. It was a height written ON TOP of `.input`
+             — the class whose whole job is to answer that question — and it
+             answered it differently below md, where `.input` is 44 by the
+             standing hit-area ruling and this said 40. Nothing moves (a
+             min-height outranks a height, so the ruling was winning anyway),
+             which is the point: it was a fourth spelling of a number the theme
+             already owns, and it is why this trigger and the one in
+             rowActions' SelectMenu — the platform's other dropdown face —
+             did not read as the same control. */
+          className={`input flex w-full items-center justify-between gap-2 text-start disabled:opacity-60 ${className}`}
         >
           <span className={`flex min-w-0 items-center gap-2 truncate ${selected ? "text-fg" : "text-fg-subtle"}`}>
             {selected?.dot !== undefined ? (
@@ -135,6 +144,15 @@ export function Select({
               aria-selected={option.value === value}
               onMouseEnter={() => setCursor(index)}
               onClick={() => choose(index)}
+              /* NOT a `.btn`, and the control guard carries the same reason
+                 with its entry for this file: a listbox option is a MENU ROW.
+                 `.btn` centres its contents and wears a button's padding and
+                 corner — dressed that way a row of start-aligned labels with a
+                 leading colour dot stops reading as a list to choose from and
+                 starts reading as a column of buttons. The platform's menu-row
+                 idiom lives in rowActions (`ENTRY_CLASS`, and SelectMenu's own
+                 options); that the two panels do not yet spell it identically
+                 is a real finding, and a bigger change than a class swap. */
               className={`tap flex h-9 cursor-pointer items-center gap-2 rounded-lg px-2.5 text-xs ${
                 index === cursor ? "bg-surface-2" : ""
               } ${option.value === value ? "font-semibold text-accent" : "text-fg"}`}

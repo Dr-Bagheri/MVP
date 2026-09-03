@@ -710,11 +710,22 @@ export function AgendaEditor({ value, onChange }: {
               +
             </button>
           </span>
+          {/* 2026-09-03: the theme's control, not a twelfth invented size.
+              This was a hand-drawn 34px square with the INPUT's 11px corner,
+              standing at the end of a row whose other button («افزودن بند»)
+              is already `.btn btn-sm` — and the platform spells this exact
+              square `btn btn-sm w-[34px] px-0` in three other files
+              (Pagination's steps, the audio bar's play key, the assignee
+              adder). Invisible to control.guard, and worth recording next to
+              its three known blind spellings: `h-[34px]` is an ARBITRARY
+              value and the `h-\d` pattern cannot read one, so every control
+              sized in brackets is uncounted. `.btn` composes `.tap`, so the
+              local one goes with it. */}
           <button
             type="button"
             aria-label={t("removeAgendaItem", { title: item.title })}
             onClick={() => onChange(value.filter((_, j) => j !== i))}
-            className="tap grid h-[34px] w-8 shrink-0 place-items-center rounded-md text-fg-subtle hover:text-danger"
+            className="btn btn-sm w-[34px] shrink-0 px-0 text-fg-subtle hover:text-danger"
           >
             <IconTrash width={12} height={12} />
           </button>

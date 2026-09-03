@@ -283,6 +283,10 @@ export function AgentOverviewPanel({
       className="mx-auto mb-3 w-full max-w-content rounded-3xl border border-border bg-surface/80 text-start shadow-sm"
     >
       <div className="flex items-center gap-4 p-4">
+        {/* NOT a control: the agent's identity mark, an aria-hidden 48px well
+            carrying its colour and icon. What is pressable on this row is the
+            collapse button at its end; dressing a face as a button offers a
+            press that goes nowhere. */}
         <span className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl ${agentColorClasses(agent.color)}`} aria-hidden>
           <Icon name={agentIconName(agent.icon)} size="xl" />
         </span>
@@ -327,9 +331,14 @@ export function AgentOverviewPanel({
             </>
           )}
         </span>
+        {/* 2026-09-03: `.btn btn-sm` — the theme's compact control. This was
+            a hand-rolled 32px pill, the same one the agent editor's back
+            button wore two files away; the guard could not see either,
+            because neither spells a centring class. `.btn` composes `.tap`
+            and draws no border, so the edge is explicit. */}
         <button
           type="button"
-          className="tap h-8 shrink-0 rounded-full border border-border px-3 text-xs text-fg-muted hover:border-border-strong hover:text-fg"
+          className="btn btn-sm shrink-0 border border-border text-fg-muted hover:border-border-strong hover:text-fg"
           aria-expanded={!collapsed}
           onClick={() => setCollapsed((current) => !current)}
         >

@@ -383,9 +383,18 @@ export function OrgFields() {
       </FormRow>
 
       <FormRow label={t("orgLocale")} htmlFor="org-locale">
+        {/* 2026-09-03: `.input` owns the height, and this was the last copy of
+            the exact class string the profile page's three selects were fixed
+            for on 2026-09-02 — `min-h-0 h-11 … md:h-control` pins 38px from md
+            up, beside the six 40px `.input` boxes in this same panel. One form,
+            two field heights, and the odd one out is the only control on it
+            that is not a text box. Only the WIDTH stays local: a locale picker
+            sized to its content is a choice about this field, not a re-answer
+            of a promise `.input` already makes (MemberDetail's `input w-32`
+            carries the same line). */}
         <select
           id="org-locale"
-          className="input min-h-0 h-11 w-auto py-0 md:h-control"
+          className="input w-auto"
           value={locale}
           disabled={busy}
           onChange={(event) => setLocale(event.target.value)}

@@ -433,7 +433,12 @@ export function WorkflowBuilder({
             type="button"
             aria-label={t("toolsLabel")}
             aria-pressed={none}
-            className={`tap ms-auto h-7 rounded-full border px-3 text-[11px] ${
+            /* 2026-09-03: the theme's compact control. Every toggle in this
+               editor was a 28px `rounded-full` lozenge — the one shape
+               globals.css names as the reason our screens did not match the
+               reference at identical colours — and the state classes are all
+               that a `.btn btn-sm` needs to keep. */
+            className={`btn btn-sm ms-auto border font-medium ${
               none ? "border-accent bg-accent-soft text-accent" : "border-border text-fg-muted"}`}
             onClick={() => patchStep(index, "tools", none ? "read" : "none")}
           >
@@ -549,7 +554,8 @@ export function WorkflowBuilder({
                      accessible name is "Off" tells a screen reader nothing */
                   aria-label={t("webLabel")}
                   aria-pressed={step.web === true}
-                  className={`tap ms-auto h-7 rounded-full border px-3 text-[11px] ${
+                  /* 2026-09-03: `.btn btn-sm`, the theme's compact control */
+                  className={`btn btn-sm ms-auto border font-medium ${
                     step.web === true
                       ? "border-accent bg-accent-soft text-accent"
                       : "border-border text-fg-muted"}`}
@@ -712,7 +718,12 @@ export function WorkflowBuilder({
         type="button"
         aria-label={t("addStepAt", { position: digits(at + 1, locale) })}
         title={t("addStep")}
-        className="tap grid h-7 w-7 place-items-center rounded-full border border-border bg-surface text-fg-muted transition-colors hover:border-accent hover:text-accent"
+        /* 2026-09-03: the theme's 28px icon button. The size was already
+           right; the CIRCLE was the invention — and a `+` on a connector line
+           is still unmistakably a `+` on a connector line at an 8px corner.
+           `.btn` draws no border of its own, so the outline this control is
+           made of is stated explicitly. */
+        className="btn btn-icon border border-border bg-surface text-fg-muted hover:border-accent hover:text-accent"
         onClick={() => insertStep(at)}
       >
         <IconPlus width={12} height={12} />
@@ -744,7 +755,8 @@ export function WorkflowBuilder({
             type="button"
             aria-label={t("close")}
             title={t("close")}
-            className="tap grid h-7 w-7 shrink-0 place-items-center rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg"
+            /* 2026-09-03: `.btn btn-icon` — the same ✕ the run dialog wears */
+            className="btn btn-icon shrink-0 text-fg-muted hover:bg-surface-2 hover:text-fg"
             onClick={onClose}
           >
             <IconClose width={14} height={14} />
@@ -831,7 +843,8 @@ export function WorkflowBuilder({
                 <span className="text-sm font-medium text-fg">{t(`trigger_${chosenTrigger}`)}</span>
                 <button
                   type="button"
-                  className="tap ms-auto h-7 rounded-full border border-border px-3 text-[11px] text-fg-muted hover:text-fg"
+                  /* 2026-09-03: `.btn btn-sm`, the theme's compact control */
+                  className="btn btn-sm ms-auto border border-border font-medium text-fg-muted hover:text-fg"
                   onClick={() => setPicking(true)}
                 >
                   {t("triggerChange")}
@@ -866,7 +879,8 @@ export function WorkflowBuilder({
                   type="button"
                   aria-label={t("enabledLabel")}
                   aria-pressed={enabled}
-                  className={`tap ms-auto h-7 rounded-full border px-3 text-[11px] ${
+                  /* 2026-09-03: `.btn btn-sm`, the theme's compact control */
+                  className={`btn btn-sm ms-auto border font-medium ${
                     enabled
                       ? "border-accent bg-accent-soft text-accent"
                       : "border-border text-fg-muted"}`}
@@ -900,7 +914,10 @@ export function WorkflowBuilder({
               <p className="text-xs leading-5 text-fg-muted">{t("stepsEmpty")}</p>
               <button
                 type="button"
-                className="btn-secondary mt-3 h-9 min-h-0 px-3 text-xs"
+                /* 2026-09-03: `h-9 min-h-0 px-3 text-xs` re-answered the
+                   question `.btn` already answers, in a size nothing else in
+                   the product uses. `.btn-sm` is the theme's compact one. */
+                className="btn-secondary btn-sm mt-3"
                 onClick={() => insertStep(0)}
               >
                 {t("addStep")}
@@ -917,6 +934,13 @@ export function WorkflowBuilder({
                   {connector(index)}
                   <div className="rounded-xl border border-border bg-surface-2/40 p-3">
                     <div className="flex flex-wrap items-center gap-2">
+                      {/* NOT a control, and it must not be dressed as one
+                          (control.guard worklist, 2026-09-03): this is the
+                          step's ORDINAL — the number on the card, which
+                          nobody presses. It keeps its fixed 24px circle
+                          because the ordinals have to line up down the
+                          column, and a `.chip` would grow with the digit and
+                          shift the row the moment a workflow reached ۱۰. */}
                       <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-surface text-[11px] text-fg-subtle">
                         {digits(index + 1, locale)}
                       </span>
@@ -938,12 +962,20 @@ export function WorkflowBuilder({
                           }))}
                         />
                       </div>
+                      {/* 2026-09-03: the puzzle's three moves are `.btn
+                          btn-icon` now — the theme's 28px icon button, the
+                          same one the row actions and the ✕ above wear. The
+                          `disabled:opacity-30` goes with the geometry: `.btn`
+                          owns the disabled face (opacity-50, pointer-events
+                          off), and an arrow that dims further than every
+                          other disabled control in the product is one more
+                          invented shape. */}
                       <div className="ms-auto flex items-center gap-1">
                         <button
                           type="button"
                           aria-label={`${t("moveUp")} — ${step.id}`}
                           disabled={index === 0}
-                          className="tap grid h-7 w-7 place-items-center rounded-md text-fg-muted hover:bg-surface hover:text-fg disabled:opacity-30"
+                          className="btn btn-icon text-fg-muted hover:bg-surface hover:text-fg"
                           onClick={() => moveStep(index, -1)}
                         >
                           <IconArrowUp width={14} height={14} />
@@ -952,7 +984,7 @@ export function WorkflowBuilder({
                           type="button"
                           aria-label={`${t("moveDown")} — ${step.id}`}
                           disabled={index === steps.length - 1}
-                          className="tap grid h-7 w-7 place-items-center rounded-md text-fg-muted hover:bg-surface hover:text-fg disabled:opacity-30"
+                          className="btn btn-icon text-fg-muted hover:bg-surface hover:text-fg"
                           onClick={() => moveStep(index, 1)}
                         >
                           <IconArrowDown width={14} height={14} />
@@ -960,7 +992,7 @@ export function WorkflowBuilder({
                         <button
                           type="button"
                           aria-label={`${t("removeStep")} — ${step.id}`}
-                          className="tap grid h-7 w-7 place-items-center rounded-md text-fg-muted hover:bg-danger/10 hover:text-danger"
+                          className="btn btn-icon text-fg-muted hover:bg-danger/10 hover:text-danger"
                           onClick={() => removeStep(index)}
                         >
                           <IconTrash width={14} height={14} />
@@ -993,13 +1025,17 @@ export function WorkflowBuilder({
               {refusal}
             </p>
           ) : null}
+          {/* 2026-09-03: a dialog footer is where `.btn-sm` lives. Both of
+              these carried `h-9 min-h-0` — a 36px size invented on top of a
+              class that already has one, which is how one modal ends up
+              disagreeing with the next about how tall a Save is. */}
           <div className="flex items-center justify-end gap-2">
-            <button type="button" className="btn-ghost h-9 min-h-0 px-3 text-sm" onClick={onClose}>
+            <button type="button" className="btn-ghost btn-sm" onClick={onClose}>
               {t("close")}
             </button>
             <button
               type="button"
-              className="btn-primary h-9 min-h-0 px-4 text-sm"
+              className="btn-primary btn-sm"
               disabled={busy}
               onClick={() => void save()}
             >

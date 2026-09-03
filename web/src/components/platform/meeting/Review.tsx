@@ -286,11 +286,24 @@ export function AudioBar({ callId, seekTo, locale, durationMs = null }: {
       className="flex items-center gap-3 rounded-2xl border border-border bg-surface px-3 py-2 shadow-card"
       dir="ltr"
     >
+      {/*
+        2026-09-03: the theme's control, not a twelfth invented size. This was
+        a 40px ROUND button sitting an inch from the ×speed key on its own row
+        — and that key is a `.btn btn-sm`, 34px with an 8px corner. Two
+        transport keys, one bar, two shapes, which is the "ten different
+        developers" complaint at its smallest possible scale.
+        It takes `.btn-sm`'s height rather than `.btn-icon`'s 28 so it matches
+        the key it shares the row with, and is squared by a WIDTH — the
+        spelling TaskDialogs already uses — instead of a fresh height. The
+        product's other player (calls/[id]) closed the identical finding a day
+        earlier on its own play/stop pair; this is the second instance of it.
+        `tap` goes with the geometry it was propping up: `.btn` composes it.
+      */}
       <button
         type="button"
         aria-label={playing ? t("audioPause") : t("audioPlay")}
         onClick={toggle}
-        className="tap grid h-10 w-10 shrink-0 place-items-center rounded-full bg-accent text-on-accent"
+        className="btn btn-sm w-[34px] shrink-0 px-0 bg-accent text-on-accent"
       >
         {playing ? <IconPause width={14} height={14} /> : <IconPlay width={14} height={14} />}
       </button>

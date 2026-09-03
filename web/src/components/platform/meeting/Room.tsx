@@ -132,6 +132,13 @@ export function MeetingRoom({ meetingId }: { meetingId: string }) {
   if (ticket === null) {
     return (
       <div className="grid min-h-[420px] flex-1 place-items-center bg-fg/95 p-6 text-center">
+        {/* NOT A CONTROL, and it keeps its own geometry deliberately (audit,
+            2026-09-03): this is the well the room waits inside while the
+            ticket is minted — a span, aria-hidden, nothing to press. It only
+            matches the guard because "fixed height + corner + centred box" is
+            also the shape of every icon well in the product. Dressing it as a
+            `.btn` would put a button in front of a person that answers to
+            nothing, which is worse than an entry on the worklist. */}
         <span className="grid h-14 w-14 place-items-center rounded-2xl bg-bg/10 text-bg" aria-hidden>
           <IconVideo width={24} height={24} />
         </span>
@@ -169,7 +176,10 @@ export function MeetingRoom({ meetingId }: { meetingId: string }) {
               .then(() => setCopied(true))
               .catch(() => undefined);
           }}
-          className="tap flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-border px-2.5 text-[11px] font-medium text-fg hover:bg-surface-2"
+          /* 2026-09-03: the theme's compact control. The 11px type went with
+             the invented geometry — `.btn-sm` is 12.5, and a button sized to
+             match the caption beside it is a button pretending to be prose. */
+          className="btn btn-sm shrink-0 gap-1.5 border border-border font-medium text-fg hover:bg-surface-2"
         >
           <IconCopy width={12} height={12} />
           {copied ? t("copied") : t("copyRoom")}

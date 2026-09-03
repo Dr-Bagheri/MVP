@@ -671,7 +671,11 @@ export function Recorder({ onFinished, meeting: meetingProp }: {
     return (
       <Card>
         <p className="text-sm text-fg-muted">{t("resumeGone")}</p>
-        <Link href="/echo/records" className="btn-secondary mt-4 inline-flex px-4">
+        {/* 2026-09-03: `.btn` is already inline-flex and already carries the
+            reference's 15px padding — `px-4` was a sixteenth pixel this file
+            picked on its own, and the redundant display class is what made it
+            look deliberate. */}
+        <Link href="/echo/records" className="btn-secondary mt-4">
           {t("resumeBackToCalls")}
         </Link>
       </Card>
@@ -848,6 +852,22 @@ export function Recorder({ onFinished, meeting: meetingProp }: {
             begin, white circle with a stop square while a take rolls, and
             pressing stop ASKS — save it or delete it — because those are
             two answers, not a confirmation.
+
+            WHY THESE FIVE KEEP THEIR OWN GEOMETRY (2026-09-03, and it is a
+            worklist entry in control.guard.test.ts, not an oversight): the
+            row is a purpose-drawn transport — 40px round satellites around a
+            64px round record button — and it is a SET. Only three of its
+            members answer to this file: the settings kebab hands its shape
+            down as `triggerClassName`, and the mic and source pickers wear
+            `SelectMenu variant="round"`, whose identical 40px round trigger
+            lives in rowActions.tsx. So converting the three here would leave
+            four round controls beside one 8px-cornered rectangle: the exact
+            "ten different developers" symptom, in one row, on the product's
+            centrepiece. Redrawing the transport is a design decision with the
+            user, not a class-string edit — and the record button in
+            particular is an instrument (it wears the Echo mark and the take's
+            state, at a size the theme has no name for), not a labelled
+            button.
           */}
           <div className="mt-4 flex items-center justify-center gap-3" dir="ltr">
             {/* the guided lessons ring these two anchors by name (the
@@ -1076,7 +1096,12 @@ export function Recorder({ onFinished, meeting: meetingProp }: {
             <input
               id="rec-title"
               dir="auto"
-              className="input mt-2 h-9 min-h-0 py-0 text-sm"
+              /* 2026-09-03: `.input` answers the height, the padding and the
+                 type size once. Four utilities re-answering it here is the
+                 same drift one class down — the shape the connectors dropdown
+                 was carrying (h-11 min-h-0 py-0 text-sm) the day it turned out
+                 to be the one field on its page that did not match. */
+              className="input mt-2"
               placeholder={t("titlePlaceholder")}
               value={title}
               disabled={live || phase === "finishing"}
@@ -1104,7 +1129,12 @@ export function Recorder({ onFinished, meeting: meetingProp }: {
                   type="button"
                   title={t("markButton")}
                   aria-label={t("markButton")}
-                  className="tap grid h-7 w-7 place-items-center rounded-md text-fg-muted hover:bg-surface-2 hover:text-fg"
+                  /* 2026-09-03: the theme's icon button, not a twelfth invented
+                     size. This was already 28px and centred — every measurement
+                     `.btn-icon` makes — written out by hand, so the only thing
+                     that actually changes is that the corner now matches every
+                     other icon button in the platform. `.btn` composes `.tap`. */
+                  className="btn btn-icon text-fg-muted hover:bg-surface-2 hover:text-fg"
                   onClick={() => { addChapterMark(s.recordedMs); notify(t("marked")); }}
                 >
                   <IconClock width={16} height={16} />
@@ -1140,7 +1170,15 @@ export function Recorder({ onFinished, meeting: meetingProp }: {
                         ? named.display_name
                         : t("speakerNamed", { n: digits(label, locale) })}
                       onClick={() => openNaming(label)}
-                      className={`tap flex h-8 items-center gap-1.5 rounded-full border bg-surface-2 ps-1 pe-2.5 text-xs font-semibold transition-colors hover:bg-surface ${
+                      /* 2026-09-03: `.chip` — the theme's badge shape, which a
+                         pressable one wears too (the hub's suggestion chips and
+                         the skills page's tool toggles are both buttons in it).
+                         The height stops being a number this file chose and
+                         becomes what the 24px circle plus the chip's own
+                         padding comes to, which is the same 32px it was.
+                         `.tap` stays: 32px is under the 44px mobile floor and
+                         `.chip` carries no hit area of its own. */
+                      className={`tap chip border bg-surface-2 ps-1 pe-2.5 font-semibold transition-colors hover:bg-surface ${
                         SPEAKER_TONE[i % SPEAKER_TONE.length]
                       }`}
                     >
@@ -1174,11 +1212,11 @@ export function Recorder({ onFinished, meeting: meetingProp }: {
               <audio ref={previewEl} controls src={s.previews[0].url} className="w-full" />
             </div>
           ) : null}
-          <Link href="/echo/records" className="btn-secondary inline-flex">
+          <Link href="/echo/records" className="btn-secondary">
             {t("goToCalls")}
           </Link>
           <button
-            className="btn-primary ms-3 inline-flex"
+            className="btn-primary ms-3"
             onClick={() => {
               resetRecorder();
               setTitle("");

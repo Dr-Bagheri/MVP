@@ -266,7 +266,13 @@ export function Whiteboard({ meetingId }: { meetingId: string }) {
       aria-label={label}
       title={label}
       onClick={() => setTool(key)}
-      className={`tap grid h-9 w-9 place-items-center rounded-lg text-sm transition-colors ${
+      /* 2026-09-03: the theme's icon-only control, not a twelfth invented
+         size. `.btn btn-icon` already carries the 28px square, the 8px
+         corner, the centring and `.tap`'s 44px touch target below md — the
+         pressed state is all this button owes on top of it. The glyph size
+         is the one thing still stated: 12.5px is calibrated for WORDS, and
+         these are marks. */
+      className={`btn btn-icon text-sm ${
         tool === key ? "bg-accent-soft text-accent" : "text-fg-muted hover:text-fg"
       }`}
     >
@@ -313,29 +319,40 @@ export function Whiteboard({ meetingId }: { meetingId: string }) {
             aria-pressed={color === c}
             aria-label={t("wbColor")}
             onClick={() => setColor(c)}
-            className={`tap grid h-9 w-7 place-items-center ${color === c ? "opacity-100" : "opacity-60 hover:opacity-100"}`}
+            /* 2026-09-03: the same control as the tools beside it. This one
+               the guard could never see — it hand-rolled a height and a
+               centred box but no corner of its own, because its corner is
+               the DOT's. It is converted anyway: a 36px swatch standing in
+               one row with 28px tools is exactly the drift this pass is
+               here to remove, and the guard's silence is not a verdict. */
+            className={`btn btn-icon ${color === c ? "opacity-100" : "opacity-60 hover:opacity-100"}`}
           >
             <span className="h-4 w-4 rounded-full border border-border" style={{ backgroundColor: c }} />
           </button>
         ))}
       </div>
 
-      {/* ── undo / zoom cluster, bottom corner ───────────────────────── */}
+      {/* ── undo / zoom cluster, bottom corner ───────────────────────────
+          2026-09-03: five more `.btn btn-icon` — this cluster had invented a
+          32px box beside the toolbar's 36px one, two sizes for the same kind
+          of press within one component. Redo's own `disabled:opacity-40` is
+          gone with them: `.btn` dims AND blocks the pointer on a disabled
+          control, and one shape has to mean one disabled treatment too. */}
       <div className="absolute bottom-3 start-3 flex items-center gap-0.5 rounded-xl border border-border bg-surface p-1 shadow-card">
         <button type="button" aria-label={t("wbUndo")} title={t("wbUndo")} onClick={undo}
-          className="tap grid h-8 w-8 place-items-center rounded-lg text-fg-muted hover:text-fg">↶</button>
+          className="btn btn-icon text-sm text-fg-muted hover:text-fg">↶</button>
         <button type="button" aria-label={t("wbRedo")} title={t("wbRedo")} onClick={redo}
           disabled={redoStack.length === 0}
-          className="tap grid h-8 w-8 place-items-center rounded-lg text-fg-muted hover:text-fg disabled:opacity-40">↷</button>
+          className="btn btn-icon text-sm text-fg-muted hover:text-fg">↷</button>
         <span className="mx-0.5 h-4 w-px bg-border" aria-hidden />
         <button type="button" aria-label={t("wbZoomOut")} title={t("wbZoomOut")} onClick={() => zoomBy(1 / 1.2)}
-          className="tap grid h-8 w-8 place-items-center rounded-lg text-fg-muted hover:text-fg">−</button>
+          className="btn btn-icon text-sm text-fg-muted hover:text-fg">−</button>
         <span className="badge-num min-w-11 text-center text-[11px] text-fg-muted">{Math.round(view.zoom * 100)}%</span>
         <button type="button" aria-label={t("wbZoomIn")} title={t("wbZoomIn")} onClick={() => zoomBy(1.2)}
-          className="tap grid h-8 w-8 place-items-center rounded-lg text-fg-muted hover:text-fg">+</button>
+          className="btn btn-icon text-sm text-fg-muted hover:text-fg">+</button>
         <span className="mx-0.5 h-4 w-px bg-border" aria-hidden />
         <button type="button" aria-label={t("wbClear")} title={t("wbClear")} onClick={clear}
-          className="tap grid h-8 w-8 place-items-center rounded-lg text-fg-muted hover:text-danger">🗑</button>
+          className="btn btn-icon text-sm text-fg-muted hover:text-danger">🗑</button>
       </div>
       {textAt !== null ? (
         <ConfirmDialog

@@ -51,7 +51,12 @@ export function MeetingStage({ meeting, recordingLive }: {
       type="button"
       aria-pressed={mode === key}
       onClick={() => setMode(key)}
-      className={`tap flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-medium transition-colors ${
+      /* 2026-09-03: the theme's compact control. A segmented tab is what
+         `.btn-sm` was measured off in the first place (the reference's own
+         tabs: 34px, 8px corner, 12.5 semibold), so these chips had invented
+         a shape the theme was already carrying — the same spelling Echo's
+         section menu uses, which is the point of it being one class. */
+      className={`btn btn-sm gap-1.5 font-medium ${
         mode === key ? "bg-accent text-on-accent" : "text-fg-muted hover:text-fg"
       }`}
     >
@@ -102,7 +107,11 @@ export function MeetingStage({ meeting, recordingLive }: {
               if (document.fullscreenElement === null) void box.requestFullscreen?.().catch(() => undefined);
               else void document.exitFullscreen?.().catch(() => undefined);
             }}
-            className="tap grid h-8 w-8 place-items-center rounded-lg border border-border text-fg-muted hover:text-fg"
+            /* 2026-09-03: an icon-only control is `.btn btn-icon`, like the
+               attachment row's trash and the items panel's. `.btn` draws no
+               border of its own, so the outline this grip had is stated
+               rather than assumed. */
+            className="btn btn-icon border border-border text-fg-muted hover:text-fg"
           >
             <IconResize width={12} height={12} />
           </button>
@@ -124,7 +133,11 @@ export function MeetingStage({ meeting, recordingLive }: {
             <button
               type="button"
               onClick={() => pdfInput.current?.click()}
-              className="tap flex h-9 items-center gap-1.5 rounded-xl border border-border px-3 text-xs font-medium text-fg hover:bg-border"
+              /* 2026-09-03: a toolbar control, so `.btn btn-sm` — this one
+                 had a THIRD geometry (36px, 16px corner) inside a component
+                 already carrying two, which is the user's ten-developers
+                 complaint inside a single file. */
+              className="btn btn-sm gap-1.5 border border-border font-medium text-fg hover:bg-border"
             >
               <IconUpload width={12} height={12} />
               {t("loadPdf")}

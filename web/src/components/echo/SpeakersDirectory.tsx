@@ -430,8 +430,21 @@ export function SpeakersDirectory() {
           <span className="text-xs font-medium text-fg">{t("voiceScriptTitle")}</span>
           {/* both languages ALWAYS offered, small — reading one of them is
               enough to save */}
+          {/*
+            2026-09-03: this is a fa/en segmented pair, and the platform has
+            exactly one — TopBar renders the same two letters as `.btn btn-sm`
+            with a border carrying the active state. It was a 28px pair fused
+            inside an `overflow-hidden` group; counted, this file drew its
+            buttons at 28 and at 32, and neither is a size the theme has a
+            name for. The group's shared border becomes each button's own,
+            which is what lets them be the theme's control instead of two
+            corner-less halves of a box; `role="group"` and its label stay,
+            because that part was never the problem.
+            `.btn` also gives `disabled` a face: these gate on the take being
+            underway and, until now, looked identical either way.
+          */}
           <span
-            className="flex overflow-hidden rounded-lg border border-border"
+            className="flex items-center gap-1"
             role="group"
             aria-label={t("voiceScriptTitle")}
           >
@@ -441,10 +454,10 @@ export function SpeakersDirectory() {
                 type="button"
                 disabled={enroll.phase !== "ready"}
                 aria-pressed={enroll.lang === l}
-                className={`h-7 px-2.5 text-xs transition-colors ${
+                className={`btn btn-sm border font-medium ${
                   enroll.lang === l
-                    ? "bg-accent-soft font-semibold text-accent"
-                    : "bg-surface text-fg-muted hover:text-fg"
+                    ? "border-accent bg-accent-soft font-semibold text-accent"
+                    : "border-border text-fg-muted hover:text-fg"
                 }`}
                 onClick={() => setEnroll((prev) => (prev ? { ...prev, lang: l } : prev))}
               >
@@ -463,9 +476,12 @@ export function SpeakersDirectory() {
         <div className="flex flex-wrap items-center gap-3 text-xs">
           {enroll.phase === "ready" ? (
             <>
+              {/* 2026-09-03: `.btn-sm` — the size was restated on top of
+                  `.btn-primary`, so the guard could not see it and the panel
+                  had two control heights of its own */}
               <button
                 type="button"
-                className="btn-primary h-8 min-h-0 px-3 text-xs"
+                className="btn-primary btn-sm"
                 onClick={() => void startEnrollRecording(person)}
               >
                 {t("voiceStart")}
@@ -488,7 +504,7 @@ export function SpeakersDirectory() {
               </span>
               <button
                 type="button"
-                className="btn-primary h-8 min-h-0 px-3 text-xs"
+                className="btn-primary btn-sm"
                 disabled={enroll.seconds < MIN_ENROLL_SECONDS}
                 title={
                   enroll.seconds < MIN_ENROLL_SECONDS
@@ -522,9 +538,15 @@ export function SpeakersDirectory() {
       {view === "table" && selected.size > 0 ? (
         <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-surface px-4 py-2 text-sm">
           <span className="text-fg">{t("selectedCount", { n: String(selected.size) })}</span>
+          {/* 2026-09-03: `.btn-sm`, the theme's compact control. Both of these
+              carried `h-8 min-h-0 px-3 text-xs` ON TOP of the class that
+              exists to decide exactly those four things — a hand-rolled
+              control wearing `.btn`'s own name, which is why the control
+              guard never counted them: it skips any string containing `btn`,
+              so re-answering `.btn` is the one way to hand-roll invisibly. */}
           {voiceReady ? (
             <button
-              className="btn-secondary h-8 min-h-0 px-3 text-xs"
+              className="btn-secondary btn-sm"
               disabled={busy}
               onClick={() => setConfirmVoiceBulk(true)}
             >
@@ -532,7 +554,7 @@ export function SpeakersDirectory() {
             </button>
           ) : null}
           <button
-            className="btn-danger h-8 min-h-0 px-3 text-xs"
+            className="btn-danger btn-sm"
             disabled={busy}
             onClick={() => setConfirmBulk(true)}
           >
@@ -552,10 +574,20 @@ export function SpeakersDirectory() {
 
       {/* the directory's own controls (2026-08-25): three readings of one
           list, and the team filter the labels make possible */}
+      {/*
+        2026-09-03: ONE FAMILY IN ONE ROW. This row held three shapes — a 32px
+        bordered segment group, a 28px `rounded-full` filter pill and a 32px
+        bordered ＋ — and they sit inches apart, which is the directive at its
+        smallest legible scale. All three wear the theme's compact control
+        now, in the spelling Meetings.tsx and TaskBoard.tsx already use for
+        the same toolbar: view chips, a hairline, filter chips. Two boards and
+        a directory rendering the same row must not disagree about what a
+        filter looks like.
+      */}
       {people !== null && (people.length > 0 || canManage) ? (
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1">
           <span
-            className={`flex overflow-hidden rounded-lg border border-border ${
+            className={`flex flex-wrap items-center gap-1 ${
               people.length === 0 ? "hidden" : ""
             }`}
             role="group"
@@ -566,10 +598,10 @@ export function SpeakersDirectory() {
                 key={v}
                 type="button"
                 aria-pressed={view === v}
-                className={`h-8 px-2.5 text-xs transition-colors ${
+                className={`btn btn-sm gap-1.5 font-medium ${
                   view === v
-                    ? "bg-accent-soft font-semibold text-accent"
-                    : "bg-surface text-fg-muted hover:text-fg"
+                    ? "bg-accent text-on-accent"
+                    : "text-fg-muted hover:bg-surface-2 hover:text-fg"
                 }`}
                 onClick={() => {
                   setView(v);
@@ -584,23 +616,29 @@ export function SpeakersDirectory() {
             ))}
           </span>
           {teamsAvailable && teams.length > 0 ? (
-            <span className="flex flex-wrap items-center gap-1.5">
-              {[null, ...teams].map((team) => (
-                <button
-                  key={team ?? "__all"}
-                  type="button"
-                  aria-pressed={teamFilter === team}
-                  className={`h-7 rounded-full px-2.5 text-xs transition-colors ${
-                    teamFilter === team
-                      ? "bg-accent-soft font-semibold text-accent"
-                      : "bg-surface-2 text-fg-muted hover:text-fg"
-                  }`}
-                  onClick={() => setTeamFilter(teamFilter === team ? null : team)}
-                >
-                  {team === null ? t("allTeams") : team === "" ? t("noTeam") : team}
-                </button>
-              ))}
-            </span>
+            <>
+              {/* Meetings.tsx's own separator: the row carries two questions
+                  (which reading, which team) and a hairline says so without
+                  giving the second group a second shape */}
+              <span className="mx-1 h-5 w-px bg-border" aria-hidden />
+              <span className="flex flex-wrap items-center gap-1">
+                {[null, ...teams].map((team) => (
+                  <button
+                    key={team ?? "__all"}
+                    type="button"
+                    aria-pressed={teamFilter === team}
+                    className={`btn btn-sm gap-1.5 font-medium ${
+                      teamFilter === team
+                        ? "bg-accent text-on-accent"
+                        : "text-fg-muted hover:bg-surface-2 hover:text-fg"
+                    }`}
+                    onClick={() => setTeamFilter(teamFilter === team ? null : team)}
+                  >
+                    {team === null ? t("allTeams") : team === "" ? t("noTeam") : team}
+                  </button>
+                ))}
+              </span>
+            </>
           ) : null}
           {/* the ＋ sits WITH the table's own controls (user directive,
               2026-08-26: "the plus for the add must be on the table") and
@@ -608,7 +646,14 @@ export function SpeakersDirectory() {
           {canManage && (view === "table" || people.length === 0) ? (
             <button
               type="button"
-              className="tap ms-auto inline-flex h-8 items-center gap-1.5 rounded-lg border border-border px-2.5 text-xs text-fg-muted transition-colors hover:border-accent hover:text-fg"
+              /* 2026-09-03: the theme's compact control. It was 32px with a
+                 12px corner beside the chips it shares this row with; `.btn`
+                 composes `.tap`, so the hit-area class goes with the
+                 geometry. `.btn`/`.btn-sm` draw no border, so the quiet
+                 bordered face this button has always had stays explicit —
+                 and it stays quiet: making the ＋ a solid accent button is a
+                 decision about emphasis, not about shape. */
+              className="btn btn-sm ms-auto border border-border text-fg-muted hover:border-accent hover:text-fg"
               aria-expanded={adding}
               onClick={() => {
                 setAdding(true);
@@ -779,8 +824,11 @@ export function SpeakersDirectory() {
                   {voiceReady ? <td className="px-4 py-2.5" /> : null}
                   <td className="px-4 py-2.5">
                     <span className="flex items-center gap-3 text-xs">
+                      {/* 2026-09-03: `.btn-sm`, the theme's compact control —
+                          the restated `h-8 min-h-0 px-3 text-xs` made this
+                          the fifth hand-drawn height in one file */}
                       <button
-                        className="btn-primary h-8 min-h-0 px-3 text-xs"
+                        className="btn-primary btn-sm"
                         disabled={busy || !name.trim()}
                         onClick={() => void add()}
                       >
