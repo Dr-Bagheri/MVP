@@ -100,7 +100,8 @@ export default async function LocaleLayout({
               navigation — the thread, the stream and the voice loop with it.
               This layout is the one thing above every page that never
               remounts. The shell makes room for the column by reading the
-              width the sidebar publishes (`--assistant-rail`). */}
+              width the sidebar used to publish. It publishes nothing now — the panel
+                  floats over the page (2026-09-03). */}
           <AssistantSidebar />
           {/* the mini recorder (2026-08-22; docked 2026-08-23): a live take
               stays visible and controllable on every page except the

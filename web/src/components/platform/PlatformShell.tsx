@@ -32,12 +32,12 @@ import { TopBar } from "./TopBar";
  * each page — and owns voice, conversation, notifications and the one
  * accessible trigger.
  *
- * WHAT THE SHELL DOES OWE IT (2026-09-03) is ROOM. The sidebar is fixed to the
- * inline-end edge and publishes the width it occupies as `--assistant-rail` on
- * the document root; the padding below is the page column stepping aside by
- * exactly that much, so the content is NARROWER rather than covered. Only from
- * `md` up: below that the sidebar occupies no inline space at all, and its open
- * state is an overlay the person asked for.
+ * WHAT THE SHELL OWES IT (2026-09-03): NOTHING. The sidebar is fixed to the
+ * inline-end edge and floats over the page. The first version had the shell
+ * pad its inline-end by the panel's width, so opening the assistant re-flowed
+ * every screen underneath it; the user asked for the opposite, and the shell
+ * knows nothing about the sidebar now — which is also one fewer pair of
+ * numbers that can drift apart.
  *
  * A custom property rather than a store because the shell needs no state of its
  * own to make room — one writer, one reader, and no re-render of the page tree
@@ -144,7 +144,12 @@ export function PlatformShell({ children }: { children: ReactNode }) {
           see the header. It lands on the row, so the LAST flex child (the
           content column) shrinks; the rail is at the inline-start and is
           untouched. */}
-      <div className="flex h-dvh bg-bg text-fg md:pe-[var(--assistant-rail)]">
+      {/* NO GUTTER FOR THE ASSISTANT (2026-09-03). This padded the shell's
+          inline-end by the sidebar's width, so opening the assistant re-flowed
+          every page under it. The user asked for a fixed column that floats
+          over instead — so the shell knows nothing about it now, which is also
+          one fewer thing to keep in step. */}
+      <div className="flex h-dvh bg-bg text-fg">
         <IconRail />
         <div className="flex min-w-0 flex-1 flex-col">
           {/* the whole person, not an initial: the avatar menu's identity

@@ -13,11 +13,8 @@ import { useRouter } from "@/i18n/routing";
 import { executeClientTool, SURFACE_TOOLS } from "@/lib/agentSurface";
 import {
   subscribeAssistantOpen,
-  subscribeAssistantPost,
   subscribeRecordingLive,
-  type AssistantAuthor,
 } from "@/lib/assistantBus";
-import { digits } from "@/lib/format";
 import { notify, subscribeNotify, type PlatformNotice } from "@/lib/notify";
 import { Icon } from "@/components/icons";
 import { speak, speakQueued, stopSpeaking, subscribeSpeechPlayback } from "@/lib/voice";
@@ -71,35 +68,30 @@ import {
  * and no chance of landing on the menu's side. It runs from under the top bar
  * to the foot of the window.
  *
- * IT DOES NOT COVER THE PAGE. The one time this platform put an assistant pane
- * in the shell it squeezed the content to 40px at 375; the fix made it a
- * `fixed inset-0` overlay that defaulted to OPEN, so every box metric improved
- * while the app became unreachable behind an opaque layer. Both states passed
- * every measurement. So: collapsed on first visit, and from `md` up the shell
- * leaves real space for it rather than having it laid over the content — the
- * width below is published as `--assistant-rail` and `PlatformShell` pads its
- * content column by exactly that. Below `md` the collapsed state renders
- * NOTHING inline and the open state is a full-width overlay the person asked
- * for, under a top bar that stays visible so they can still see where they are.
+ * IT FLOATS, AND IT IS CLOSED UNTIL ASKED FOR. The one time this platform put
+ * an assistant pane in the shell it squeezed the content to 40px at 375; the
+ * fix made it a `fixed inset-0` overlay that defaulted to OPEN, so every box
+ * metric improved while the app became unreachable behind an opaque layer.
+ * Both states passed every measurement.
+ *
+ * So the rule here is narrow: DEFAULT CLOSED, and when closed nothing is
+ * drawn at all. Open, it is the MENU's width (248px, read from SCAFFOLD) and
+ * it lies OVER the page rather than pushing it — the first version reserved a
+ * gutter and re-flowed every screen when the assistant opened, which the user
+ * asked to be undone: a column that re-lays-out the work you are reading, to
+ * make room for a question about it, has the trade backwards.
+ *
+ * Below `md` the open state is a full-width overlay, under a top bar that
+ * stays visible so a person can still see where they are.
  */
 
 /** who is speaking, when it is not the assistant itself */
-export type MessageAuthor = AssistantAuthor;
 
 interface SidebarMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
   chips: string[];
-  /**
-   * Present = an AGENT wrote this, and the thread says whose voice it is.
-   * Absent = the assistant, which is every message the dock ever held.
-   *
-   * Carried now rather than when the agents land, because adding an author to
-   * a message shape later means touching every place a message is built and
-   * every place one is drawn — and the half that gets missed is the drawing.
-   */
-  author?: MessageAuthor;
   failed?: boolean;
   /** the server's own refusal sentence, when it gave one — a 400's message
       is actionable ("no model selected…"); a bare "did not finish" is not */
@@ -110,19 +102,26 @@ interface SidebarMessage {
 const SIDEBAR_KEY = "neurai-assistant-sidebar";
 
 /**
- * ONE VALUE FOR THE WIDTH, TWO CONSUMERS.
+ * THE MENU'S WIDTH, AND IT OVERLAYS (user directive, 2026-09-03: "make it the
+ * same size of the menu that we have and in the platform not to push
+ * everything and a fixed position with option to make it go close").
  *
- * These strings are both the width the panel is DRAWN at (through
- * `md:w-[var(--assistant-w)]`, the Resizable idiom) and the width the shell
- * LEAVES for it (through `--assistant-rail` on the document root). Two
- * literals is how the space reserved and the space occupied come to disagree,
- * which on screen is either a gap or a column sitting under a panel.
+ * Three corrections to what shipped this morning, and each was a real
+ * complaint:
  *
- * In rem, deliberately: the root font-size is fluid here, so a panel written
- * in px would keep one width while every control inside it scaled.
+ *   · 22.5rem (360px) was a width this platform has no other example of. The
+ *     menu is 248 and the panel is 248 now — read from SCAFFOLD rather than
+ *     typed, so the two cannot drift the way a literal 56 drifted from the top
+ *     bar's 62.
+ *   · it PUSHED. The shell padded its inline-end by the panel's width, so
+ *     opening the assistant re-laid-out every page under it. A column that
+ *     re-flows the work you are reading to make room for a question about it
+ *     is the wrong trade; it floats over now, and `--assistant-rail` is gone
+ *     with the padding.
+ *   · the collapsed 48px rail was a second width and a permanent strip. Closed
+ *     means CLOSED: nothing is drawn, and the top bar's button is the door.
  */
-const RAIL_W = "3rem"; // collapsed — 48px at the 16px baseline
-const PANEL_W = "22.5rem"; // open — 360px
+const PANEL_W = `${SCAFFOLD.menuWidth / 16}rem`; // 248px, the menu's own
 
 /**
  * The top of the column: the top bar's own height, read from the blueprint
@@ -185,9 +184,6 @@ export function AssistantSidebar() {
   const openRef = useRef(false);
   openRef.current = open;
   /** messages that arrived while it was collapsed — the badge on the rail */
-  const [unread, setUnread] = useState(0);
-  const unreadRef = useRef(0);
-  unreadRef.current = unread;
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<SidebarMessage[]>([]);
   /** a STORED conversation being fetched — its own state, because "loading"
@@ -219,20 +215,19 @@ export function AssistantSidebar() {
    * opens for itself.
    */
   function reveal(): void {
-    setUnread(0);
     setOpen(true);
     persistOpen(true);
   }
 
   /**
-   * The person opening it themselves: a FRESH thread — unless a reply is
-   * mid-stream, or something is waiting to be read. That second clause is the
-   * one worth stating: an agent's message posted while the sidebar was
-   * collapsed is the entire reason the badge is on the rail, and clearing the
-   * thread on open would delete exactly what was pressed for.
+   * The person opening it themselves: a FRESH thread, unless a reply is
+   * mid-stream. (A second clause used to protect an agent's message posted
+   * while the panel was shut — agents do not post here any more, so the
+   * clause went with the badge it existed for rather than being left as a
+   * condition that can never be false.)
    */
   function openSidebar(): void {
-    if (!streamingRef.current && unreadRef.current === 0) {
+    if (!streamingRef.current) {
       setMessages([]);
       sessionId.current = undefined;
     }
@@ -255,7 +250,6 @@ export function AssistantSidebar() {
   function shutter(): void {
     abortRef.current?.abort();
     setMessages([]);
-    setUnread(0);
     sessionId.current = undefined;
     setOpen(false);
   }
@@ -425,27 +419,20 @@ export function AssistantSidebar() {
     });
   }, []);
 
-  /**
-   * AN AGENT POSTS INTO THE ROOM. The message joins the thread with its
-   * author, and when the sidebar is collapsed it also raises the count on the
-   * rail — which is the only thing that makes a collapsed room worth having:
-   * a message nobody is told about is a message nobody reads.
+  /*
+   * AGENTS NO LONGER POST HERE (user directive, 2026-09-03: "i dont want them
+   * to come to the AI assistant like a window or options anymore, remove
+   * these ... when they [are] called they need to feel alive and chat
+   * separate from the ai assistant itself").
+   *
+   * A subscription lived here that appended an agent's message to this thread
+   * with its name and face on it. It went with the unread badge it fed: this
+   * panel is the ASSISTANT's conversation, and an agent speaking inside it
+   * made the agent a feature of the assistant rather than somebody with a
+   * room of their own. `assistantBus`'s post channel went with the last of
+   * its callers — a producer with no consumer is a defect its own author
+   * cannot see.
    */
-  useEffect(() => {
-    return subscribeAssistantPost((post) => {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `g-${Date.now()}-${prev.length}`,
-          role: "assistant",
-          content: post.content,
-          chips: [],
-          author: post.author,
-        },
-      ]);
-      if (!openRef.current) setUnread((n) => n + 1);
-    });
-  }, []);
 
   /** Ctrl+E — the agent from anywhere (user directive; was Ctrl+K) */
   useEffect(() => {
@@ -465,21 +452,18 @@ export function AssistantSidebar() {
   }, [messages]);
 
   /**
-   * THE SPACE THE SHELL LEAVES, published as a custom property on the document
-   * root and consumed by `PlatformShell`'s `md:pe-[var(--assistant-rail)]`.
+   * Whether the assistant belongs on this screen at all: a member, on a
+   * surface where the platform shell renders.
    *
-   * A CSS variable rather than a React store because the shell needs no state
-   * of its own to make room: one writer, one reader, and the page column
-   * narrows without the whole tree re-rendering. It is set to `0px` whenever
-   * the sidebar is not on screen — including on unmount, or the shell would
-   * hold a gutter open for a column that has gone.
+   * THE GUTTER THAT USED TO RIDE WITH IT IS GONE (2026-09-03). An effect here
+   * published the panel's width as `--assistant-rail`, and PlatformShell
+   * padded its inline-end by it, so opening the assistant re-flowed every page
+   * underneath. The user asked for the opposite — a fixed column that floats
+   * over — so one writer and one reader went, and the `:root` default in
+   * globals.css with them: a variable nobody writes is a value waiting to be
+   * read by mistake.
    */
   const visible = member && !sidebarIsSilentOn(pathname);
-  useEffect(() => {
-    const root = document.documentElement;
-    root.style.setProperty("--assistant-rail", visible ? (open ? PANEL_W : RAIL_W) : "0px");
-    return () => { root.style.setProperty("--assistant-rail", "0px"); };
-  }, [visible, open]);
 
   /**
    * The RECORDING rule (user, 2026-08-21): a rolling take owns the room. The
@@ -822,11 +806,9 @@ export function AssistantSidebar() {
   /**
    * THE ONE DOOR, IN ONE PLACE AT A TIME.
    *
-   * The same button is written once and placed twice, and the two placements
-   * are mutually exclusive by CSS rather than by a media-query hook: at `md`
-   * and up the collapsed rail is on screen and carries it, below `md` there is
-   * no rail and the top bar carries it. A person never sees two ways into the
-   * same room, and there is one implementation to keep correct.
+   * ONE button, in ONE place: the top bar, at every width. It was written
+   * once and placed twice while a collapsed rail existed to carry it from md
+   * up; the rail went on 2026-09-03 and the second placement went with it.
    *
    * It stays a toggle while open (`aria-expanded`) — pressing it again
    * collapses, which is also what the header's ✕ does.
@@ -834,6 +816,10 @@ export function AssistantSidebar() {
   const trigger = (extra: string) => (
     <button
       type="button"
+      /* a stable handle for the ONE door: its accessible name is prose and
+         shares words with the panel's own controls, so a test matching on the
+         name finds two the moment the panel is open */
+      data-assistant-door
       className={`btn btn-icon relative text-fg-muted hover:bg-surface-2 hover:text-fg ${extra}`}
       aria-label={t("openLabel")}
       aria-expanded={open}
@@ -841,19 +827,6 @@ export function AssistantSidebar() {
       onClick={() => (open ? collapseSidebar() : openSidebar())}
     >
       <Icon name="sparkle" size="md" />
-      {unread > 0 ? (
-        <span
-          /* digits with the LANGUAGE (the platform's axis rule) — a Persian
-             screen counting in Latin numerals is the same crack as an English
-             date on a Persian page */
-          /* `end-0`, not a negative logical inset: `end-*` is the one logical
-             offset this pass measured in a browser, and a class that emits
-             nothing is the failure that reads as satisfied */
-          className="absolute end-0 -top-1 min-w-4 rounded-full bg-accent px-1 text-group-label font-semibold leading-4 text-on-accent"
-        >
-          {digits(unread, locale)}
-        </span>
-      ) : null}
     </button>
   );
 
@@ -861,6 +834,11 @@ export function AssistantSidebar() {
 
   return (
     <>
+      {/* CLOSED MEANS NOTHING IS DRAWN (2026-09-03): the element itself is
+          conditional, not just its contents. An empty <aside> left in the tree
+          is a fixed, bordered box over the page's inline edge — invisible in a
+          class list and perfectly visible on screen. */}
+      {open ? (
       <aside
         aria-label={t("title")}
         data-assistant-sidebar
@@ -869,10 +847,13 @@ export function AssistantSidebar() {
            in Persian, which is the opposite side from the rail in both. Written
            logically on purpose: `right-0` would put the assistant on top of the
            menu for every Persian reader and look correct in English. */
-        style={{ top: SIDEBAR_TOP, "--assistant-w": open ? PANEL_W : RAIL_W } as CSSProperties}
-        className={`fixed bottom-0 end-0 z-30 w-full flex-col border-s border-border bg-surface md:w-[var(--assistant-w)] ${
-          open ? "flex" : "hidden md:flex"
-        }`}
+        style={{ top: SIDEBAR_TOP, "--assistant-w": PANEL_W } as CSSProperties}
+        /* CLOSED MEANS CLOSED (2026-09-03): the collapsed 48px rail is gone,
+           so nothing is drawn and nothing is reserved when the assistant is
+           shut. `shadow-xl` because it floats over the page now rather than
+           sitting in a column of its own — an overlay with no edge reads as
+           part of what it covers. */
+        className="fixed bottom-0 end-0 z-30 flex w-full flex-col border-s border-border bg-surface shadow-xl md:w-[var(--assistant-w)]"
       >
         {open ? (
           <>
@@ -945,24 +926,6 @@ export function AssistantSidebar() {
                           : "text-detail leading-6 text-fg"
                       }
                     >
-                      {/* WHO IS SPEAKING, when it is not the assistant. Drawn
-                          only when an author is present — an absent author is
-                          the assistant itself, and labelling every one of its
-                          messages with its own name would be a byline on a
-                          monologue. */}
-                      {m.author ? (
-                        <span className="mb-1 flex items-center gap-1.5">
-                          <span
-                            className="grid h-5 w-5 place-items-center rounded-full bg-accent-soft text-accent"
-                            aria-hidden
-                          >
-                            <Icon name={m.author.icon ?? "sparkle"} size="xs" />
-                          </span>
-                          <span className="text-group-label font-semibold text-fg-muted">
-                            {m.author.name}
-                          </span>
-                        </span>
-                      ) : null}
                       {m.content}
                       {m.chips.length > 0 ? (
                         <span className="mt-1 flex flex-wrap gap-1">
@@ -1036,20 +999,19 @@ export function AssistantSidebar() {
               </button>
             </form>
           </>
-        ) : (
-          /* COLLAPSED: the mark, and whatever is waiting to be read. Nothing
-             else — a rail that grows a second control is a menu, and the room
-             it opens already has one. */
-          <div className="flex flex-col items-center gap-2 py-3">{trigger("")}</div>
-        )}
+        ) : null}
       </aside>
+      ) : null}
 
       {/*
         THE TOASTS. Positioned inside a transparent, pointer-transparent frame
-        that carries the SAME `md:pe-[var(--assistant-rail)]` the shell uses, so
-        a notice lands beside the sidebar rather than on top of it — an absolute
-        child is placed against its container's padding box, so one class moves
-        the whole stack.
+        that used to carry the shell's own `--assistant-rail` padding so a
+        notice landed beside the sidebar. There is no gutter to step around any
+        more (the panel floats over), so the frame is plain — and the toasts
+        sit at the same inline-end, which is where the panel is when it is
+        open. That overlap is accepted rather than unnoticed: a notice is a
+        few seconds and the panel is a place, and moving the stack to the
+        opposite edge would put it under the menu instead.
 
         z-40, NOT z-50 (user report, 2026-09-02: "the orb is coming on top of
         the pop up window on the side"). The modal layer is z-50 —
@@ -1059,7 +1021,7 @@ export function AssistantSidebar() {
         everything here sits at 40 or below. `stacking.guard.test.ts` keeps it.
       */}
       {toasts.length > 0 ? (
-        <div className="pointer-events-none fixed inset-0 z-40 md:pe-[var(--assistant-rail)]">
+        <div className="pointer-events-none fixed inset-0 z-40">
           <div className="absolute end-4 top-16 flex w-[min(88vw,20rem)] flex-col items-end gap-1.5 md:end-6">
             {toasts.map((notice) => (
               <p
@@ -1079,7 +1041,24 @@ export function AssistantSidebar() {
       ) : null}
 
       {/* the other half of the one door — see `trigger` */}
-      {topbarPresenceHost ? createPortal(trigger("md:hidden"), topbarPresenceHost) : null}
+      {/*
+        THE ONE DOOR, AT EVERY WIDTH (2026-09-03).
+        
+        It was `md:hidden`, because the collapsed 48px rail carried the button
+        from md up. The rail went — closed means nothing is drawn — so without
+        dropping that class the assistant had no way to open on a desktop at
+        all: a door that exists only on a phone.
+        
+        And it FALLS BACK. The button is portalled into the top bar, which is a
+        different component's element; when that host is absent the portal
+        renders nothing, and with the rail gone there would be no way in at
+        all. A door whose existence depends on another component being mounted
+        is a door that can vanish, so the fallback is a plain fixed button at
+        the same inline-end. Never both: the portal wins when it exists.
+      */}
+      {topbarPresenceHost
+        ? createPortal(trigger(""), topbarPresenceHost)
+        : trigger("fixed bottom-4 end-4 z-30 border border-border bg-surface shadow-lg")}
     </>
   );
 }

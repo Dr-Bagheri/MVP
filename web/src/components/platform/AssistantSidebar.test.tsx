@@ -1,7 +1,8 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { act } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 vi.mock("next/navigation", () => ({ usePathname: () => "/fa/meetings" }));
 vi.mock("@/i18n/routing", () => ({
@@ -35,7 +36,6 @@ vi.mock("@/lib/voice", () => ({
   subscribeSpeechPlayback: () => () => undefined,
 }));
 
-import { postToAssistant } from "@/lib/assistantBus";
 import { AssistantSidebar } from "./AssistantSidebar";
 import { SCAFFOLD } from "@/components/scaffold/constants";
 
@@ -64,7 +64,6 @@ import { SCAFFOLD } from "@/components/scaffold/constants";
  */
 
 const TOP = `${SCAFFOLD.topBarHeight / 16}rem`;
-const railVar = () => document.documentElement.style.getPropertyValue("--assistant-rail");
 
 /** the page behind the assistant — a real control to look for */
 function Page() {
@@ -73,7 +72,6 @@ function Page() {
 
 beforeEach(() => {
   localStorage.clear();
-  document.documentElement.style.removeProperty("--assistant-rail");
 });
 afterEach(() => {
   vi.clearAllMocks();
@@ -81,120 +79,92 @@ afterEach(() => {
 
 async function mount() {
   const view = render(<><Page /><AssistantSidebar /></>);
-  // the identity read gates everything; nothing renders until it answers
-  await waitFor(() => expect(document.querySelector("[data-assistant-sidebar]")).not.toBeNull());
+  /* the identity read gates everything, and a CLOSED sidebar renders nothing —
+     so the thing to wait for is the DOOR, which is portalled into the top bar
+     as soon as the component knows the person is a member */
+  await waitFor(() => expect(document.querySelector("[data-assistant-door]")).not.toBeNull());
   return view;
 }
 
-describe("the assistant sidebar does not cover the page", () => {
-  it("is COLLAPSED on first visit, and what it draws is beside the page rather than over it", async () => {
-    const { container } = await mount();
-    const aside = container.querySelector<HTMLElement>("[data-assistant-sidebar]")!;
-
-    expect(aside.dataset.open).toBe("false");
-    /* no thread, no composer: the room is shut */
-    expect(container.querySelector("textarea")).toBeNull();
-
-    /* the page's own control is present and is NOT inside the assistant */
-    const pageControl = screen.getByRole("button", { name: "صفحه" });
-    expect(aside.contains(pageControl)).toBe(false);
-
-    /* below md it renders NOTHING — the 375 half of the hit test, answered by
-       construction rather than by a measurement jsdom cannot take */
-    expect(aside.className).toContain("hidden");
-    expect(aside.className).toContain("md:flex");
-
-    /* and it is not a full-screen layer at any width: it begins under the top
-       bar, at the bar's own height, and ends at the foot of the window */
-    expect(aside.className).not.toContain("inset-0");
-    expect(aside.style.top).toBe(TOP);
-
-    /* the shell is told to leave exactly the width that is drawn — this is the
-       difference between "the content is narrower" and "the content is
-       covered", and it is the number PlatformShell pads by */
-    expect(railVar()).toBe("3rem");
-  });
-
-  it("opens on the ONE door, and only then takes the room — the control", async () => {
+describe("the assistant sidebar floats, and is shut until asked for", () => {
+  it("draws NOTHING on first visit", async () => {
     /*
-     * Without this the test above cannot be trusted: "nothing is covered"
-     * passes just as well against a component that never renders anything at
-     * all. This is the same assertions' other side.
+     * 2026-09-03: what "closed" means changed, and so did what this asserts.
+     * The first version collapsed to a 48px rail and had the shell reserve a
+     * column for it; the user asked for a fixed panel at the MENU's width that
+     * does not push the page, with a way to shut it. So closed is now
+     * literally nothing on screen — no rail, no reserved gutter — and the
+     * page's own control is the thing that must still be there.
      */
     const { container } = await mount();
-    await userEvent.click(screen.getByRole("button", { name: /دستیار/ }));
+    expect(container.querySelector("[data-assistant-sidebar]")).toBeNull();
+    expect(container.querySelector("textarea")).toBeNull();
+    expect(screen.getByRole("button", { name: "صفحه" })).toBeInTheDocument();
+  });
+
+  it("opens on the ONE door — the control that makes the test above mean something", async () => {
+    /*
+     * "Nothing is covered" passes just as well against a component that never
+     * renders at all, which is exactly what the assertion above would be
+     * without this. It also guards the trap this change nearly shipped: the
+     * door used to live on the collapsed rail from md up, so removing the rail
+     * without moving the button would have left the assistant unopenable on a
+     * desktop — a door that exists only on a phone.
+     */
+    const { container } = await mount();
+    await userEvent.click(document.querySelector<HTMLElement>("[data-assistant-door]")!);
 
     const aside = container.querySelector<HTMLElement>("[data-assistant-sidebar]")!;
     expect(aside.dataset.open).toBe("true");
     expect(container.querySelector("textarea")).not.toBeNull();
-    expect(railVar()).toBe("22.5rem");
-    /* still under the top bar even when open: below md this is a full-width
-       overlay, and a person must be able to see where they are while it is up */
+
+    /* the page is still THERE and still outside it — floating over is not the
+       same as replacing */
+    const pageControl = screen.getByRole("button", { name: "صفحه" });
+    expect(aside.contains(pageControl)).toBe(false);
+
+    /* under the top bar, never a full-screen layer: a person must be able to
+       see where they are while it is up */
     expect(aside.style.top).toBe(TOP);
     expect(aside.className).not.toContain("inset-0");
+  });
+
+  it("is the MENU's width, taken from the blueprint rather than typed", async () => {
+    /*
+     * The user asked for "the same size of the menu that we have". Asserted
+     * against SCAFFOLD rather than against a string, because a literal here
+     * would agree with the menu on the day it was written and drift the way a
+     * hand-written 56 drifted from a top bar that grew to 62.
+     */
+    const { container } = await mount();
+    await userEvent.click(document.querySelector<HTMLElement>("[data-assistant-door]")!);
+    const aside = container.querySelector<HTMLElement>("[data-assistant-sidebar]")!;
+    expect(aside.style.getPropertyValue("--assistant-w"))
+      .toBe(`${SCAFFOLD.menuWidth / 16}rem`);
+  });
+
+  it("reserves NO column — the shell is not pushed", () => {
+    /*
+     * The regression this exists for, and it is a source check on purpose:
+     * the first version had the sidebar publish `--assistant-rail` and
+     * PlatformShell pad its inline-end by it, so opening the assistant
+     * re-flowed every page underneath. Both halves are gone; either coming
+     * back is the defect, and neither is visible in a rendered jsdom tree.
+     */
+    const shell = readFileSync(
+      resolve(process.cwd(), "src/components/platform/PlatformShell.tsx"), "utf8",
+    ).replace(/\/\*[\s\S]*?\*\//g, " ");
+    expect(shell).not.toContain("--assistant-rail");
+
+    const sidebar = readFileSync(
+      resolve(process.cwd(), "src/components/platform/AssistantSidebar.tsx"), "utf8",
+    ).replace(/\/\*[\s\S]*?\*\//g, " ");
+    expect(sidebar).not.toContain("setProperty(\"--assistant-rail\"");
   });
 
   it("remembers the choice, and the remembered choice is the one that opens it", async () => {
     localStorage.setItem("neurai-assistant-sidebar", "1");
     const { container } = await mount();
     await waitFor(() => expect(container.querySelector("textarea")).not.toBeNull());
-    expect(railVar()).toBe("22.5rem");
-  });
-});
-
-describe("the sidebar is a room, not a text box", () => {
-  it("carries a message from an agent, with that agent's name on it", async () => {
-    const { container } = await mount();
-    await userEvent.click(screen.getByRole("button", { name: /دستیار/ }));
-
-    act(() => {
-      postToAssistant({ content: "پیش‌نویس پاسخ آماده است.", author: { name: "رویا", icon: "mail" } });
-    });
-
-    expect(await screen.findByText("پیش‌نویس پاسخ آماده است.")).toBeInTheDocument();
-    expect(screen.getByText("رویا")).toBeInTheDocument();
-    expect(container.querySelector('[data-icon="mail"]')).not.toBeNull();
-  });
-
-  it("says nothing about the author when there is none — the control", async () => {
-    /*
-     * The discriminating half. "The agent's name renders" passes against a
-     * component that renders a byline on everything, which would put a label on
-     * the assistant's own messages — a byline on a monologue.
-     */
-    await mount();
-    await userEvent.click(screen.getByRole("button", { name: /دستیار/ }));
-
-    act(() => { postToAssistant({ content: "بدون نویسنده" }); });
-
-    expect(await screen.findByText("بدون نویسنده")).toBeInTheDocument();
-    expect(screen.queryByText("رویا")).toBeNull();
-    /* the assistant's own messages carry no mark of their own either — the
-       author well is drawn only when an author is present */
-    expect(document.querySelectorAll('[data-icon="sparkle"]').length).toBe(0);
-  });
-
-  it("counts what arrived while it was shut, and opening READS it rather than clearing it", async () => {
-    /*
-     * The defect this pins: opening the sidebar starts a fresh thread, which is
-     * the 2026-08-26 ruling ("nothing should remain here as a history"). Applied
-     * without exception it deletes exactly what the badge was advertising — the
-     * person presses a "2", and the two messages are gone before they render.
-     */
-    await mount();
-
-    act(() => {
-      postToAssistant({ content: "جلسهٔ ۱۰:۳۰ آماده است.", author: { name: "آوا" } });
-      postToAssistant({ content: "پیش‌نویس دوم", author: { name: "رویا" } });
-    });
-
-    /* the count, in the reader's own digits */
-    expect(await screen.findByText("۲")).toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole("button", { name: /دستیار/ }));
-    expect(screen.getByText("جلسهٔ ۱۰:۳۰ آماده است.")).toBeInTheDocument();
-    expect(screen.getByText("پیش‌نویس دوم")).toBeInTheDocument();
-    /* and the badge is spent once it has been read */
-    expect(screen.queryByText("۲")).toBeNull();
   });
 });

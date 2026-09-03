@@ -7,7 +7,6 @@
  * Same shape as the notify bus: module-scoped, fire-and-forget, no
  * mounting-order dependency. The sidebar subscribes; anyone may call.
  */
-import type { IconName } from "@/components/icons";
 
 export interface AssistantOpenRequest {
   /** adopt and load this stored conversation; omitted = just open */
@@ -30,47 +29,15 @@ export function subscribeAssistantOpen(listener: Listener): () => void {
   return () => listeners.delete(listener);
 }
 
-/**
- * THE SIDEBAR IS A ROOM, NOT A TEXT BOX (user directive, 2026-09-03: "agents
- * post into it — when an agent drafts a reply or preps a meeting, that appears
- * in the sidebar as a message from that agent").
- *
- * The agents themselves (Roya, who acts; Ava, who reads and reports) land in a
- * later change. What this channel is for is the half that cannot be added
- * later without touching every render site: a message in that thread may come
- * from somebody other than "the assistant", and it has to say who.
- *
- * Deliberately its own channel rather than a second meaning for
- * `openAssistant`: a post must be able to arrive while the sidebar is
- * COLLAPSED and become an unread count, and a channel whose only verb is
- * "open" cannot express that.
+/*
+ * THE POST CHANNEL LEFT ON 2026-09-03 (user directive): agents no longer
+ * speak inside the assistant's thread, so `AssistantAuthor`, `AssistantPost`,
+ * `postToAssistant` and `subscribeAssistantPost` went with their only
+ * consumer. Removed rather than kept "for when the agents land": a producer
+ * with no consumer is a defect its author cannot see, and this repo has
+ * shipped that at feature scale once already.
  */
-export interface AssistantAuthor {
-  /** the agent's own name, already in the reader's language */
-  name: string;
-  /** their face — a glyph from the platform's one icon registry, never an
-      emoji and never a second drawing (the agentAppearance rule) */
-  icon?: IconName;
-}
 
-export interface AssistantPost {
-  content: string;
-  /** omitted = the assistant itself, which is what every message was until
-      now — an absent author is a real value here, not a missing one */
-  author?: AssistantAuthor;
-}
-
-type PostListener = (post: AssistantPost) => void;
-const postListeners = new Set<PostListener>();
-
-export function postToAssistant(post: AssistantPost): void {
-  for (const listener of postListeners) listener(post);
-}
-
-export function subscribeAssistantPost(listener: PostListener): () => void {
-  postListeners.add(listener);
-  return () => postListeners.delete(listener);
-}
 
 /**
  * The recorder tells the assistant when a take is LIVE (user rule,

@@ -182,11 +182,12 @@ describe("the shell scroll belongs to the shell", () => {
     /* class-string pins, jsdom's honest ceiling — the computed behaviour was
        measured on the live render when this landed.
 
-       2026-09-03: the root gained `md:pe-[var(--assistant-rail)]`, the space
-       the assistant sidebar occupies at the inline-end. So the pin is the
-       SUBSTRING it was always about — `flex h-dvh bg-bg text-fg` still opens
-       the class list — rather than the whole quoted attribute, which pinned
-       the absence of every future utility along with it. */
+       2026-09-03: the root briefly gained `md:pe-[var(--assistant-rail)]` for
+       the assistant's column, and lost it again the same day when the sidebar
+       was made to float rather than push. The pin stays the SUBSTRING it was
+       always about — `flex h-dvh bg-bg text-fg` still opens the class list —
+       rather than the whole quoted attribute, which pinned the absence of
+       every future utility along with it. */
     const shell = files.find((f) => f.rel === "components/platform/PlatformShell.tsx")!;
     expect(shell.text).toContain('"flex h-dvh bg-bg text-fg');
     expect(shell.text).toContain("min-h-0 flex-1 overflow-y-auto");
