@@ -101,6 +101,15 @@ export interface DataTableProps<T> {
    */
   pageSize?: number | null;
   className?: string;
+  /**
+   * Draw no visible header row (user directive, 2026-09-02: the users,
+   * speakers and models lists "like the meeting table, with no header").
+   * The <thead> stays in the DOM as sr-only — a screen reader still gets the
+   * column names, and a person gets rows that read like the meetings list,
+   * where the first thing under the toolbar is a record rather than a
+   * caption for records.
+   */
+  hideHeader?: boolean;
 }
 
 export function DataTable<T>({
@@ -121,6 +130,7 @@ export function DataTable<T>({
   rowDetail,
   pageSize = PAGE_SIZE,
   className = "",
+  hideHeader = false,
 }: DataTableProps<T>) {
   const t = useTranslations("table");
   const [menu, setMenu] = useState<{ x: number; y: number; key: string } | null>(null);
@@ -166,7 +176,7 @@ export function DataTable<T>({
             table in the product changed by editing one class rather than
             fifteen screens (user directive, 2026-09-02) */}
         <table className="table-cards w-full min-w-max">
-          <thead>
+          <thead className={hideHeader ? "sr-only" : undefined}>
             <tr>
               {selecting ? (
                 <th className="w-10 px-3 py-3">

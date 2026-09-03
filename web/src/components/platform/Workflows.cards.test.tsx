@@ -254,29 +254,25 @@ describe("the workflows list", () => {
     }];
     await act(async () => { render(<Workflows />); });
 
-    /*
-     * ONE LIST NOW (2026-09-02): the library is no longer a section under its
-     * own heading — a library row is a row wearing the «کتابخانه» chip, in
-     * the same list as the templates and the authored ones. So "on the
-     * shelf" means "linked, with the chip" and "off the shelf" means "linked
-     * once, WITHOUT the chip" — which is the stronger assertion, because it
-     * also proves the installed one did not lose its row.
-     */
-    const rowOf = (href: string) => {
-      const links = screen.getAllByRole("link").filter((l) => l.getAttribute("href") === href);
-      expect(links).toHaveLength(1);
-      return links[0]!;
-    };
-    /* NOT installed → in the list, wearing the library chip */
-    expect(within(rowOf("/workflows/wf-starter-followups")).getByText("کتابخانه")).toBeTruthy();
-    /* installed → in the list exactly once, as the authored row, NOT as a
-       library row (the chip is what tells the two apart) */
-    expect(within(rowOf("/workflows/wf-starter-autotag")).queryByText("کتابخانه")).toBeNull();
+    const section = screen.getByText("کتابخانهٔ گردش‌کارها").closest("section")!;
+    const hrefs = within(section).getAllByRole("link")
+      .map((link) => link.getAttribute("href"));
+    /* NOT installed → on the shelf, linking to its own page */
+    expect(hrefs).toContain("/workflows/wf-starter-followups");
+    /* installed → OFF the shelf (its card above is the real thing)… */
+    expect(hrefs).not.toContain("/workflows/wf-starter-autotag");
+    /* …while the page as a whole still links it exactly once, as the
+       authored card — hidden from the shelf, not from the page */
+    expect(
+      screen.getAllByRole("link")
+        .map((link) => link.getAttribute("href"))
+        .filter((href) => href === "/workflows/wf-starter-autotag"),
+    ).toHaveLength(1);
     /* the shelf shrank by exactly the installed one */
-    expect(screen.getAllByText("کتابخانه"))
+    expect(within(section).getAllByRole("link"))
       .toHaveLength(Object.keys(STARTER_WORKFLOWS).length - 1);
-    /* and a shelf row carries the LOCALIZED name — the same
-       `useWorkflowCopy` path the agent panel and the installed rows use */
-    expect(within(rowOf("/workflows/wf-starter-followups")).getByText("پیگیری جلسه‌ها")).toBeTruthy();
+    /* and a shelf card carries the LOCALIZED name — the same
+       `useWorkflowCopy` path the agent panel and the installed cards use */
+    expect(within(section).getByText("پیگیری جلسه‌ها")).toBeTruthy();
   });
 });

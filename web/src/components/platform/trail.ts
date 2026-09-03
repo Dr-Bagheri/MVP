@@ -54,13 +54,25 @@ export const TRAIL: Readonly<Record<string, TrailEntry>> = {
    * whose destination is a different page, which is the /calls lesson.
    */
   "/": { label: "platform.dashboard" },
-  "/assistant": { label: "platform.assistant", parent: "/" },
-  "/tasks": { label: "platform.tasks", parent: "/" },
-  "/meetings": { label: "platform.meetings", parent: "/" },
+  /*
+   * EVERY RAIL ENTRY IS A ROOT (user directive, 2026-09-02: "fix the address
+   * bar … the first is the name of the section they are in; for most of them
+   * it is Dashboard — fix it"). Meetings, Tasks, the Assistant, Agents and
+   * Workflows each had `parent: "/"`, so every one of their pages opened its
+   * trail with «داشبورد /» — a hierarchy the rail contradicts, exactly the
+   * argument that already made Echo, Management and Settings roots. The
+   * dashboard is a room of its own, not the parent of the others.
+   */
+  "/assistant": { label: "platform.assistant" },
+  "/tasks": { label: "platform.tasks" },
+  "/meetings": { label: "platform.meetings" },
   "/meetings/[id]": { entity: true, parent: "/meetings" },
 
   /* the connected accounts a workflow runs on, beside the workflows */
-  "/integrations": { label: "platform.integrations", parent: "/workflows" },
+  /* under SETTINGS now — that is the menu the page wears (2026-09-02), and
+     a trail that said Workflows while the toolbar said Settings is the
+     redirect lesson again */
+  "/integrations": { label: "platform.integrations", parent: "/settings" },
   /** one integration's detail (M47) — the leaf is the integration's own
    *  localized name, supplied by the page (entity), and the parent crumb IS
    *  Sana's "< All integrations" back link in the platform's one mechanism */
@@ -118,6 +130,9 @@ export const TRAIL: Readonly<Record<string, TrailEntry>> = {
   "/management/models": { label: "management.section.models", parent: "/settings" },
   "/management/connectors": { label: "management.section.connectors", parent: "/settings" },
   "/management/server": { label: "management.section.server", parent: "/settings" },
+  /* Speakers moved INTO Management (2026-09-02) and keeps the label it had
+     under Echo — the word is the same, only the room changed */
+  "/management/speakers": { label: "echo.section.speakers", parent: "/management" },
   "/management/[section]": { labelPrefix: "management.section", parent: "/management" },
 
   /* roots, like /echo and /management (user directive, 2026-08-28: "still
@@ -127,9 +142,11 @@ export const TRAIL: Readonly<Record<string, TrailEntry>> = {
   "/settings": { label: "platform.settings" },
   "/settings/[section]": { labelPrefix: "settings.section", parent: "/settings" },
 
-  "/conversations": { label: "conversations.title", parent: "/" },
-  "/agents": { label: "platform.agents", parent: "/" },
-  "/workflows": { label: "platform.workflows", parent: "/" },
+  /* the assistant's own history — its section is the Assistant, not the
+     dashboard */
+  "/conversations": { label: "conversations.title", parent: "/assistant" },
+  "/agents": { label: "platform.agents" },
+  "/workflows": { label: "platform.workflows" },
   /** M41 P1 — one run's ledger; the leaf is the workflow's name (entity). */
   "/workflows/runs/[id]": { entity: true, parent: "/workflows" },
   /**
@@ -140,7 +157,7 @@ export const TRAIL: Readonly<Record<string, TrailEntry>> = {
    */
   "/workflows/[handle]": { entity: true, parent: "/workflows" },
   /** M32's separate metadata-only operator console. */
-  "/platform": { label: "platformRoot.title", parent: "/" },
+  "/platform": { label: "platformRoot.title" },
   "/profile": { label: "profile.title" },
   "/help": { label: "platform.help" },
   /** Help's guide sections (2026-08-16) — same anatomy as Settings/Echo. */

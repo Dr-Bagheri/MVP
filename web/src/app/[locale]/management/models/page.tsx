@@ -154,7 +154,7 @@ export default function ModelsPage() {
           </p>
           <button
             type="button"
-            className="btn-secondary h-9 min-h-0 gap-1.5 px-3 text-sm"
+            className="btn btn-sm gap-1.5 border border-border font-medium text-fg"
             disabled={busy}
             onClick={() => { setSearch(""); setAdding(true); }}
           >
@@ -163,7 +163,9 @@ export default function ModelsPage() {
           </button>
         </div>
 
-        <div className="rounded-lg border border-border bg-surface">
+        {/* NO OUTER BOX (user directive, 2026-09-02: the same rows as users
+            and speakers — the meetings list's shape, no header, no box) */}
+        <div>
           {active.length === 0 ? (
             /* the honest empty state: an empty allow-list is NO CURATION,
                which core reads as every model the platform offers. Saying
@@ -171,6 +173,7 @@ export default function ModelsPage() {
             <EmptyState text={t("modelsNoCuration")} />
           ) : (
             <DataTable
+              hideHeader
               rows={active}
               rowKey={(model) => model.id}
               columns={columns}

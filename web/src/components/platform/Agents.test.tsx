@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen, within } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgentCard } from "@/api/types";
 
@@ -79,28 +79,17 @@ describe("the agent cards", () => {
   });
 
   it("offers Edit only where the wall would let the save land", async () => {
-    /*
-     * The edit affordance is a FOOTER BUTTON now (2026-09-02, the reference's
-     * card): a kebab holding one item was a button wearing a hat. The rule it
-     * carries is unchanged — offered only where the wall would let the save
-     * land — so the assertions moved from a menu's label to the button, and
-     * are scoped to the CARD: a page-wide "there is an edit button" could not
-     * tell the org card's from the system card's.
-     */
-    const cardOf = (name: string) => screen.getByText(name).closest("article")!;
     await act(async () => { mount(); });
-    /* member: neither the system card nor the org card offers Edit */
-    expect(screen.queryByRole("button", { name: "ویرایش" })).toBeNull();
+    /* member: the system card has no menu, and neither does the org card */
+    expect(screen.queryByRole("button", { name: /گزینه‌های/ })).toBeNull();
 
     cleanup();
     ROLE = "admin";
     await act(async () => { mount(); });
-    /* admin: the ORG card gains Edit; the system card still has none —
+    /* admin: the ORG card gains its menu; the system card still has none —
        core's PATCH refuses level system, and a form whose save can only 404
        is worse than no form */
-    expect(within(cardOf("Growth helper")).getByRole("button", { name: "ویرایش" })).toBeTruthy();
-    expect(within(cardOf("دستیار جلسه‌ها")).queryByRole("button", { name: "ویرایش" })).toBeNull();
-    /* and «گفتگو» is on EVERY card — talking to an agent needs no wall */
-    expect(screen.getAllByRole("link", { name: /Growth helper|دستیار جلسه‌ها/ }).length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByRole("button", { name: "گزینه‌های Growth helper" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "گزینه‌های دستیار جلسه‌ها" })).toBeNull();
   });
 });

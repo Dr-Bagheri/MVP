@@ -275,7 +275,12 @@ export default function UsersPage() {
             belong stacked under the roster of people who already accepted
             one. */}
 
-        <Card>
+        {/* NO OUTER BOX (user directive, 2026-09-02: "remove the outside
+            table, make it like the meeting table"). The rows are cards of
+            their own — a card of cards is the box-in-a-box the meetings list
+            never had, and the reference draws its members straight on the
+            page. */}
+        <div>
 
           {/* NO SELECTION, NO BULK BAR (user directive, 2026-09-02: "remove the
               check boxes of the users table"). The reference has none: every
@@ -291,6 +296,7 @@ export default function UsersPage() {
                action icons in the row, every action in the right-click
                menu, the quiet dot for the ordinary good state */
             <DataTable
+              hideHeader
               rows={listed}
               rowKey={(u) => u.id}
               onRowClick={(u) => setDetailId(u.id)}
@@ -400,7 +406,7 @@ export default function UsersPage() {
               ]}
             />
           )}
-        </Card>
+        </div>
 
         {/*
           REJECTING A PENDING MEMBER is the owner's true delete (tombstone),

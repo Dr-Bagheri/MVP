@@ -33,9 +33,6 @@ const RecordsSection = dynamic(
 const SummariesSection = dynamic(
   () => import("@/components/echo/SummariesSection").then((m) => m.SummariesSection),
 );
-const SpeakersDirectory = dynamic(
-  () => import("@/components/echo/SpeakersDirectory").then((m) => m.SpeakersDirectory),
-);
 
 /**
  * **Echo on the platform anatomy** (Part 5, user directive): the same
@@ -86,7 +83,11 @@ export default function EchoPage({
 
   useEffect(() => {
     if (isLegacyCalls) router.replace("/echo/records");
-  }, [isLegacyCalls, router]);
+    /* SPEAKERS LIVES IN MANAGEMENT NOW (2026-09-02) — the page followed the
+       menu entry there. This address redirects so a bookmark still lands;
+       it renders nothing of its own any more. */
+    if (slug === "speakers") router.replace("/management/speakers");
+  }, [isLegacyCalls, slug, router]);
 
   /**
    * Bumped when a recording/upload finishes so an already-mounted records
@@ -99,17 +100,10 @@ export default function EchoPage({
     <EchoAppShell
       /*
        * Summaries stays reachable by URL but has no row of its own — the menu
-       * highlights its parent place.
-       *
-       * SPEAKERS renders with NO Echo toolbar at all: it moved into
-       * Management (user directive, 2026-09-02), and a page that still opened
-       * the menu it left would be advertising the door it came out of. The
-       * page keeps its address so nothing bookmarked breaks; only the menu
-       * around it changed.
+       * highlights its parent place. (Speakers used to render here with the
+       * menu suppressed; it redirects to Management now, see above.)
        */
-      menu={slug === "speakers" ? undefined : (
-        <EchoSectionMenu activeSlug={slug === "summaries" ? "records" : slug} />
-      )}
+      menu={<EchoSectionMenu activeSlug={slug === "summaries" ? "records" : slug} />}
     >
       {/* ONE width for every section (user directive, 2026-08-25: Records
           rendered wider than Summaries) — the narrow column is the rule */}
@@ -121,7 +115,6 @@ export default function EchoPage({
         {slug === "records" ? <RecordsSection key={recordsEpoch} /> : null}
         {slug === "summaries" ? <SummariesSection /> : null}
         {slug === "archive" ? <RecordsSection view="archive" /> : null}
-        {slug === "speakers" ? <SpeakersDirectory /> : null}
       </PageContainer>
     </EchoAppShell>
   );

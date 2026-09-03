@@ -282,7 +282,7 @@ export function Integrations() {
      */
     <SettingsPane activeSlug="integrations">
 
-          <Section title={t("connectedTitle")} description={t("connectedHint")}>
+          <Section title={t("connectedTitle")}>
             {connectors !== null && allRows.length === 0 ? (
               <EmptyState text={t("noneConnected")} />
             ) : (
@@ -343,10 +343,15 @@ export function Integrations() {
             )}
           </Section>
 
-          <Section title={t("availableTitle")} description={t("availableHint")} divided>
+          <Section title={t("availableTitle")} divided>
             {/* one row of four from xl up (the offer IS four Google sources) —
                 compact, Sana-shaped (user directive, 2026-08-28) */}
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {/* TWO PER ROW, not four (user directive, 2026-09-02: "change the
+                style of the integration to a small page as well, make the big
+                buttons smaller so it fits"): the section is the small column
+                now, and four 44-high cards across 1040px were each too narrow
+                for their own sentence */}
+            <div className="grid gap-3 sm:grid-cols-2">
               {INTEGRATIONS.map((entry) => {
                 const state = connectors?.find((row) => row.provider === entry.provider);
                 const action = connectors === null ? null : tileAction(entry, state);
@@ -371,7 +376,7 @@ export function Integrations() {
                        first round's "look like the workflow big buttons"
                        verbatim copy is deliberately superseded: kinship now
                        lives in the recipe, not the measurements. */
-                    className={`group flex min-h-44 flex-col rounded-2xl border border-border bg-surface p-5 ${open ? "cursor-pointer transition-colors hover:border-border-strong hover:bg-surface-2" : ""}`}
+                    className={`group flex flex-col rounded-2xl border border-border bg-surface p-4 ${open ? "cursor-pointer transition-colors hover:border-border-strong hover:bg-surface-2" : ""}`}
                     {...(open
                       ? {
                           role: "button",
@@ -402,7 +407,7 @@ export function Integrations() {
                     >
                       <Icon name={entry.icon} size="lg" />
                     </span>
-                    <h2 className="mt-4 text-base font-semibold text-fg group-hover:text-accent">
+                    <h2 className="mt-3 text-pane-title font-semibold text-fg group-hover:text-accent">
                       {copy[entry.key].name}
                     </h2>
                     <p className="text-xs text-fg-muted">
@@ -535,13 +540,13 @@ function TileControl({
   if (action.kind === "connected") return <StatusDot label={labels.connected} />;
   if (action.kind === "enableDrafts" || action.kind === "reconnectDrive") {
     return (
-      <button type="button" className="btn-secondary h-9 min-h-0 px-3 text-xs" onClick={onConnect}>
+      <button type="button" className="btn btn-sm border border-border font-medium text-fg" onClick={onConnect}>
         {action.kind === "enableDrafts" ? labels.enableDrafts : labels.reconnectDrive}
       </button>
     );
   }
   return (
-    <button type="button" className="btn-secondary h-9 min-h-0 px-3 text-xs" onClick={onBrief}>
+    <button type="button" className="btn btn-sm border border-border font-medium text-fg" onClick={onBrief}>
       {action.kind === "connect" ? labels.connect : labels.reconnect}
     </button>
   );

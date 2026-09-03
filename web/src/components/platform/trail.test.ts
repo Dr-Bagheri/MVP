@@ -158,7 +158,15 @@ describe("the trail's own assumptions", () => {
       .filter(([, entry]) => entry.parent === undefined)
       .map(([pattern]) => pattern)
       .sort();
-    expect(roots).toEqual(["/", "/echo", "/help", "/management", "/profile", "/settings"]);
+    /* every RAIL entry is a root now (user directive, 2026-09-02: "the first
+       is the name of the section they are in; for most of them it is
+       Dashboard — fix it"): Meetings, Tasks, the Assistant, Agents and
+       Workflows each begin their own trail, as Echo and Management already
+       did, and the console is a room of its own */
+    expect(roots).toEqual([
+      "/", "/agents", "/assistant", "/echo", "/help", "/management",
+      "/meetings", "/platform", "/profile", "/settings", "/tasks", "/workflows",
+    ]);
     for (const pattern of Object.keys(TRAIL)) {
       const trail = trailFor(pattern.replace(/\[[^\]]+\]/g, "x"));
       expect(trail.length, `${pattern} produced no trail`).toBeGreaterThan(0);

@@ -118,15 +118,7 @@ export function OrgFields() {
   const [logoVersion, setLogoVersion] = useState(0);
   const [logoBusy, setLogoBusy] = useState(false);
   const logoInput = useRef<HTMLInputElement | null>(null);
-  /** 0088 glossary, edited as one term per line. Rendered ONLY when the
-      wire carries the column — a textarea for a column that does not
-      exist would read as wired and save nothing. */
-  const [glossaryDraft, setGlossaryDraft] = useState("");
   const [busy, setBusy] = useState(false);
-
-  const glossaryReady = org !== null && "glossary" in org;
-  const parseGlossary = (raw: string): string[] =>
-    [...new Set(raw.split(/\r?\n|[,،]/).map((t) => t.trim()).filter((t) => t !== ""))].slice(0, 200);
 
   const isAdmin = me?.role === "admin" || me?.role === "owner";
 
@@ -141,7 +133,6 @@ export function OrgFields() {
       setWebsiteUrl(row.website_url ?? "");
       setLocation(row.location ?? "");
       setHasLogo(row.has_logo === true);
-      setGlossaryDraft((row.glossary ?? []).join("\n"));
     });
   }, []);
 
@@ -175,13 +166,6 @@ export function OrgFields() {
         (next as Record<string, unknown>)[key] = trimmed === "" ? null : trimmed;
       }
     }
-    if (glossaryReady) {
-      const terms = parseGlossary(glossaryDraft);
-      const saved = org.glossary ?? [];
-      if (terms.length !== saved.length || terms.some((t, i) => t !== saved[i])) {
-        next.glossary = terms;
-      }
-    }
     return next;
   };
 
@@ -206,7 +190,6 @@ export function OrgFields() {
       setWebsiteUrl(updated.website_url ?? "");
       setLocation(updated.location ?? "");
       setHasLogo(updated.has_logo === true);
-      setGlossaryDraft((updated.glossary ?? []).join("\n"));
       notify(t("orgSaved"));
     } catch {
       notify(t("orgSaveFailed"), "warn");
@@ -300,7 +283,8 @@ export function OrgFields() {
           grew an image path; the address input is gone rather than kept
           beside the picker, because two ways to set one logo is two states
           that will eventually disagree about which one is showing. */}
-      <FormRow label={t("orgLogo")} description={t("orgLogoHint")} htmlFor="org-logo">
+      <FormRow label={t("orgLogo")} htmlFor="org-logo">
+        <span className="flex flex-col gap-2">
         <span className="flex flex-wrap items-center gap-3">
           {hasLogo ? (
             /* eslint-disable-next-line @next/next/no-img-element -- the
@@ -330,7 +314,7 @@ export function OrgFields() {
           />
           <button
             type="button"
-            className="btn-secondary h-9 min-h-0 px-3 text-sm"
+            className="btn btn-sm border border-border font-medium text-fg"
             disabled={busy || logoBusy}
             onClick={() => logoInput.current?.click()}
           >
@@ -339,7 +323,7 @@ export function OrgFields() {
           {hasLogo ? (
             <button
               type="button"
-              className="btn-ghost h-9 min-h-0 px-3 text-sm text-danger"
+              className="btn btn-sm font-medium text-danger hover:bg-danger/10"
               disabled={busy || logoBusy}
               onClick={() => setConfirmLogoRemove(true)}
             >
@@ -347,9 +331,14 @@ export function OrgFields() {
             </button>
           ) : null}
         </span>
+        {/* the hint sits UNDER the control, not under the label (user
+            directive, 2026-09-02): it describes the file the button
+            accepts, so it belongs beside the button that accepts it */}
+        <span className="text-[11px] leading-5 text-fg-subtle">{t("orgLogoHint")}</span>
+        </span>
       </FormRow>
 
-      <FormRow label={t("orgEmail")} description={t("orgEmailHint")} htmlFor="org-email">
+      <FormRow label={t("orgEmail")} htmlFor="org-email">
         <input
           id="org-email"
           className="input"
@@ -393,7 +382,7 @@ export function OrgFields() {
         />
       </FormRow>
 
-      <FormRow label={t("orgLocale")} description={t("orgLocaleHint")} htmlFor="org-locale">
+      <FormRow label={t("orgLocale")} htmlFor="org-locale">
         <select
           id="org-locale"
           className="input min-h-0 h-11 w-auto py-0 md:h-control"
@@ -412,21 +401,11 @@ export function OrgFields() {
         </select>
       </FormRow>
 
-      {glossaryReady ? (
-        <FormRow
-          label={t("orgGlossary")}
-          description={t("orgGlossaryHint")}
-          htmlFor="org-glossary"
-        >
-          <textarea
-            id="org-glossary"
-            className="input min-h-28 py-2 leading-6"
-            value={glossaryDraft}
-            disabled={busy}
-            onChange={(event) => setGlossaryDraft(event.target.value)}
-          />
-        </FormRow>
-      ) : null}
+      {/* THE GLOSSARY ROW LEFT THIS FORM (user directive, 2026-09-02: "remove
+          Recognition glossary"). The column and its api stay — the term
+          list still shapes transcription — but the surface for editing it is
+          gone until it has a home of its own. Its state left with it: a
+          draft nothing renders is a writer with no reader. */}
 
       <PanelFooter>
         {/* save outcomes ride the notification system now (orb toast +

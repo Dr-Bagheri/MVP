@@ -81,9 +81,12 @@ export default function PrivilegesPage() {
     <ManagementPane activeSlug="privileges">
       <PageHeader title={t("section.privileges")} subtitle={t("desc.privileges")} />
 
-      <Card className="mb-4">
-        <p className="text-sm leading-6 text-fg-muted">{t("privilegeScope")}</p>
-      </Card>
+      {/* THE SCOPE NOTE LEFT THE SCREEN (user directive, 2026-09-02: "remove
+          the first box"). The sentence — every switch narrows, nothing here
+          widens, the database decides visibility — is still true and still
+          the rule; it lives in this file's header and in db/0101 rather than
+          as a card above the switches. A screen that opens with a paragraph
+          about what it cannot do buries the switches it is for. */}
 
       {/*
         * The ADMIN half is the owner's alone to see (user directive,

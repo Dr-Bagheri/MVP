@@ -6,7 +6,7 @@ import { api } from "@/api/client";
 import { notify } from "@/lib/notify";
 import { useRefreshEpoch } from "@/lib/refreshBus";
 import type { Me, Person, User } from "@/api/types";
-import { Card, EmptyState } from "@/components/ui";
+import { EmptyState } from "@/components/ui";
 import { ConfirmDialog, IconAction, SelectMenu } from "@/components/rowActions";
 import { DataTable, StatusDot } from "@/components/DataTable";
 import {
@@ -623,7 +623,10 @@ export function SpeakersDirectory() {
         </div>
       ) : null}
 
-      <Card className="!p-0">
+      {/* NO OUTER BOX (user directive, 2026-09-02: "make it look like the
+          meetings table, with no header and outer box"). The rows are cards
+          of their own; a card around cards is a box in a box. */}
+      <div>
         {people !== null && people.length === 0 && !adding ? (
           <div className="p-4">
             <EmptyState text={t("empty")} />
@@ -727,6 +730,7 @@ export function SpeakersDirectory() {
           </div>
         ) : (
           <DataTable<Person>
+            hideHeader
             loading={people === null}
             rows={shown}
             rowKey={(person) => person.id}
@@ -999,7 +1003,7 @@ export function SpeakersDirectory() {
             ]}
           />
         )}
-      </Card>
+      </div>
 
       {confirmBulk ? (
         <ConfirmDialog

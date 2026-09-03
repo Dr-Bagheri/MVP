@@ -7,10 +7,11 @@ import { useRefreshEpoch } from "@/lib/refreshBus";
 import type { AgentCard, User } from "@/api/types";
 import { Link } from "@/i18n/routing";
 import { PlatformShell } from "./PlatformShell";
-import { PageContainer, SkeletonCards } from "@/components/scaffold";
+import { PageContainer, PageHeader, Section, SkeletonCards } from "@/components/scaffold";
 import { Card } from "@/components/ui";
-import { Icon, IconPencil, IconPlus } from "@/components/icons";
+import { Icon, IconPencil } from "@/components/icons";
 import { AgentEditor } from "./AgentEditor";
+import { KebabMenu } from "@/components/rowActions";
 import { useAgentCopy } from "./agentAppearance";
 import { agentColorClasses, agentIconName } from "./agentAppearance";
 
@@ -76,39 +77,22 @@ export function Agents() {
             />
           ) : (
             <>
-              {/*
-                THE REFERENCE'S AGENT CARD (user directive, 2026-09-02:
-                "redesign the whole platform like the tasks and meetings pages
-                with same structure, buttons, fonts, tables"). What was here:
-                a borderless 144px block with an 80px mark, a page title and
-                subtitle above it, and a section heading over the only list
-                on the page — three headings before the first agent. What is
-                here: no headings (the breadcrumb has the name), the create
-                button on the page's top row like every other list, and a
-                bordered 20px card with a 40px mark, the name at 14, two lines
-                of description, and the two things a person does with an
-                agent as buttons in its footer — talk to it, or edit it. The
-                kebab that held a single "edit" item is gone; a menu with one
-                entry is a button wearing a hat. Shape ported from Lovable's
-                build of the same brief.
-              */}
-              <div className="flex flex-wrap items-center justify-end gap-3">
-                <button
-                  type="button"
-                  className="btn gap-1.5 bg-accent font-semibold text-on-accent"
-                  onClick={() => setEditing(null)}
-                >
-                  <IconPlus width={14} height={14} />
-                  {t("create")}
-                </button>
-              </div>
-              <div className="mt-4">
+              <PageHeader
+                title={t("title")}
+                subtitle={t("subtitle")}
+                actions={
+                  <button type="button" className="btn bg-accent font-semibold text-on-accent" onClick={() => setEditing(null)}>
+                    + {t("create")}
+                  </button>
+                }
+              />
+              <Section title={t("myAgents")}>
                 {agents === null ? (
-                  <SkeletonCards count={4} className="grid gap-3 md:grid-cols-2" height="h-44" />
+                  <SkeletonCards count={4} className="grid gap-4 lg:grid-cols-2" height="h-36" />
                 ) : agents.length === 0 ? (
                   <Card><p className="text-sm text-fg-muted">{t("empty")}</p></Card>
                 ) : (
-                  <div className="grid gap-3 md:grid-cols-2">
+                  <div className="grid gap-4 lg:grid-cols-2">
                     {agents.map((agent) => {
                       const copy = agentCopy(agent);
                       /* the affordance mirrors the wall: yours, or the org's
@@ -117,46 +101,48 @@ export function Agents() {
                       const editable = agent.level === "user"
                         || (agent.level === "org" && isAdmin);
                       return (
-                        <article
+                        <div
                           key={agent.id}
-                          className="tile flex flex-col p-5 transition-colors hover:border-border-strong"
+                          className="relative flex min-h-36 items-start gap-3 rounded-2xl border border-transparent p-3 transition-colors hover:border-border hover:bg-surface"
                         >
-                          <div className="flex items-center gap-3">
-                            <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${agentColorClasses(agent.color)}`} aria-hidden>
-                              <Icon name={agentIconName(agent.icon)} size="lg" />
+                          <Link
+                            href={{ pathname: "/assistant", query: { agent: agent.handle } }}
+                            className="group flex min-w-0 flex-1 items-start gap-5 text-start"
+                            aria-label={t("openWith", { name: copy.name })}
+                          >
+                            <span className={`grid h-20 w-20 shrink-0 place-items-center rounded-3xl ${agentColorClasses(agent.color)}`} aria-hidden>
+                              <Icon name={agentIconName(agent.icon)} size="hero" />
                             </span>
-                            <h3 className="min-w-0 truncate text-pane-title font-semibold text-fg">{copy.name}</h3>
-                          </div>
-                          <p className="mt-3 line-clamp-2 text-[12.5px] leading-6 text-fg-muted">{copy.description}</p>
-                          {/* the level chip stays gone (2026-08-29): it named where an
-                              agent came from, a fact about our catalogue rather than
-                              about what the agent does */}
-                          <p className="mt-2 text-[11px] text-fg-subtle">{t("toolCount", { count: agent.tools.length })}</p>
-                          <div className="mt-4 flex gap-2">
-                            <Link
-                              href={{ pathname: "/assistant", query: { agent: agent.handle } }}
-                              className="btn btn-sm bg-accent font-medium text-on-accent"
-                              aria-label={t("openWith", { name: copy.name })}
-                            >
-                              {t("talk")}
-                            </Link>
-                            {editable ? (
-                              <button
-                                type="button"
-                                className="btn btn-sm border border-border font-medium text-fg-muted hover:text-fg"
-                                onClick={() => setEditing(agent)}
-                              >
-                                <IconPencil width={12} height={12} />
-                                {t("edit")}
-                              </button>
-                            ) : null}
-                          </div>
-                        </article>
+                            <span className="min-w-0 pt-1">
+                              <span className="block text-base font-semibold text-fg group-hover:text-accent">{copy.name}</span>
+                              <span className="mt-2 block text-sm leading-6 text-fg-muted">{copy.description}</span>
+                              <span className="mt-3 flex items-center gap-2">
+                                {/* the level chip is gone (user directive, 2026-08-29): it named where
+    an agent came from, which is a fact about our catalogue rather than
+    about what the agent does — and every shipped one said the same word */}
+                                <span className="text-xs text-fg-subtle">{t("toolCount", { count: agent.tools.length })}</span>
+                              </span>
+                            </span>
+                          </Link>
+                          {editable ? (
+                            <span className="shrink-0">
+                              <KebabMenu
+                                label={t("cardMenu", { name: copy.name })}
+                                items={[{
+                                  key: "edit",
+                                  label: t("edit"),
+                                  icon: <IconPencil width={14} height={14} />,
+                                  onSelect: () => setEditing(agent),
+                                }]}
+                              />
+                            </span>
+                          ) : null}
+                        </div>
                       );
                     })}
                   </div>
                 )}
-              </div>
+              </Section>
             </>
           )}
         </PageContainer>

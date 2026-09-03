@@ -105,7 +105,11 @@ export function ManagementPane({
           ...group,
           items: [
             ...group.items,
-            { slug: "speakers", href: "/echo/speakers", label: tEcho("section.speakers") },
+            /* its OWN Management address now (2026-09-02): the entry moved
+               here but the page had stayed under Echo's shell, so this
+               button led out of the room it sat in — Echo breadcrumb, no
+               Management toolbar. /echo/speakers redirects. */
+            { slug: "speakers", href: "/management/speakers", label: tEcho("section.speakers") },
           ],
         }
       : group,
