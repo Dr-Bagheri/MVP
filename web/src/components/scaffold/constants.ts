@@ -107,6 +107,24 @@ export const SCAFFOLD = {
    * the strip at this width and PlatformShell pads by it.
    */
   assistantRail: 48,
+  /**
+   * THE ASSISTANT PANEL IS 30% OF THE SCREEN (user directive, 2026-09-03:
+   * "give 30% of the screen to the ai assistant side bar and make it always
+   * be in fix position there for all pages in all stages except in the AI
+   * assistant page").
+   *
+   * A PERCENTAGE, not a pixel count, which is why it is the one entry in this
+   * file that is not a number of pixels: every other width here answers "how
+   * big should this be", and this one answers "how much of the screen is the
+   * assistant's". Written as px it would be 30% of exactly one monitor.
+   *
+   * The floor is not a hedge — below about 20rem the composer, its control
+   * row and a readable answer stop fitting at the same time, and 30% of a
+   * 1024px laptop is 307px. So: 30% of the viewport, never so narrow that the
+   * thing occupying it stops working.
+   */
+  assistantPanelPct: 30,
+  assistantPanelMin: 320,
 
   /** the field at md and up */
   fieldHeight: 40,

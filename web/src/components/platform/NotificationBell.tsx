@@ -5,7 +5,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { AgentCardItem } from "@/api/types";
 import { useRouter } from "@/i18n/routing";
-import { formatDate } from "@/lib/format";
+import { formatDate, personName } from "@/lib/format";
 import { clearNotifications, notifyHistory, subscribeNotify, type PlatformNotice } from "@/lib/notify";
 
 /**
@@ -85,6 +85,18 @@ export function NotificationBell() {
       setCards((prev) => prev.map((c) => (c.id === card.id ? { ...c, read: true } : c)));
       void api.markCardRead(card.id).catch(() => undefined);
     }
+    /*
+     * A MESSAGE HAS NOWHERE TO GO (0167). Every other card points at the
+     * conversation that produced it; a colleague's message has no
+     * conversation — its whole content is on the row, and it is already on
+     * screen. Marking it read and closing the panel is the complete action.
+     *
+     * Navigating anyway would be worse than useless: it would take somebody
+     * who just read a one-line message to a list of assistant threads that
+     * has nothing to do with it, which reads as a broken link rather than as
+     * a deliberate no-op.
+     */
+    if (card.kind === "member_message") { setOpen(false); return; }
     setOpen(false);
     router.push("/conversations");
   }
@@ -164,8 +176,19 @@ export function NotificationBell() {
                       onClick={() => openCard(card)}
                     >
                       {!card.read ? <span className="me-1.5 inline-block h-1.5 w-1.5 rounded-full bg-accent align-middle" aria-hidden /> : null}
-                      <span className={card.read ? "text-fg-muted" : ""}>{card.title}</span>
+                      {/* A MESSAGE SHOWS ITS TEXT, not its title (0167): its
+                          title is empty by construction — a person sends words,
+                          not a heading — so rendering `title` here would draw a
+                          dated blank row and call it a notification. */}
+                      <span className={card.read ? "text-fg-muted" : ""}>
+                        {card.kind === "member_message" ? card.body : card.title}
+                      </span>
                       <span className="mt-0.5 block text-[10px] text-fg-subtle">
+                        {/* who it came from, before when: a message is read as
+                            "Sara said" and a digest as "last Monday" */}
+                        {card.kind === "member_message" && card.from_name !== null
+                          ? `${personName({ display_name: card.from_name, display_name_en: card.from_name_en }, locale)} · `
+                          : ""}
                         {formatDate(card.created_at, locale)}
                       </span>
                     </button>

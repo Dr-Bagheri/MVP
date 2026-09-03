@@ -10,6 +10,7 @@ import { usePathname } from "next/navigation";
 import { api } from "@/api/client";
 import type { AgentEvent } from "@/api/types";
 import { useRouter } from "@/i18n/routing";
+import { mentionedAgent } from "@/lib/agentMention";
 import { executeClientTool, SURFACE_TOOLS } from "@/lib/agentSurface";
 import {
   subscribeAssistantOpen,
@@ -20,6 +21,7 @@ import { Icon } from "@/components/icons";
 import { speak, speakQueued, stopSpeaking, subscribeSpeechPlayback } from "@/lib/voice";
 import { startVoiceLoop, voiceLoopSupported, type VoiceLoopHandle } from "@/lib/voiceLoop";
 import { recorderControls } from "@/components/echo/recorderControls";
+import { recorderSnapshot } from "@/lib/recordingEngine";
 import { SkeletonLines } from "@/components/scaffold/Skeleton";
 /* the constants module, not the scaffold barrel: this component is imported by
    the root layout, and the barrel would drag SectionMenu/Resizable into every
@@ -118,10 +120,13 @@ const SIDEBAR_KEY = "neurai-assistant-sidebar";
  * Three corrections to what shipped this morning, and each was a real
  * complaint:
  *
- *   · 22.5rem (360px) was a width this platform has no other example of. The
- *     menu is 248 and the panel is 248 now — read from SCAFFOLD rather than
- *     typed, so the two cannot drift the way a literal 56 drifted from the top
- *     bar's 62.
+ *   · 22.5rem (360px) was a width this platform has no other example of. It
+ *     matched the menu at 248 for a day; the user then ruled the panel a SHARE
+ *     of the screen rather than a twin of the menu (2026-09-03, "give 30% of
+ *     the screen to the ai assistant side bar"), which is a different kind of
+ *     answer: the menu is as wide as its longest label, and the assistant is
+ *     as wide as the room a conversation deserves. Both come from SCAFFOLD, so
+ *     neither is a literal that can drift.
  *   · it PUSHED. The shell padded its inline-end by the panel's width, so
  *     opening the assistant re-laid-out every page under it. A column that
  *     re-flows the work you are reading to make room for a question about it
@@ -130,7 +135,8 @@ const SIDEBAR_KEY = "neurai-assistant-sidebar";
  *   · the collapsed 48px rail was a second width and a permanent strip. Closed
  *     means CLOSED: nothing is drawn, and the top bar's button is the door.
  */
-const PANEL_W = `${SCAFFOLD.menuWidth / 16}rem`; // 248px, the menu's own
+const PANEL_W =
+  `max(${SCAFFOLD.assistantPanelMin / 16}rem, ${SCAFFOLD.assistantPanelPct}vw)`;
 /* CLOSED IS A PLACE, NOT AN ABSENCE (user correction, 2026-09-03: "i didnt
    mean closed means nothing is drawn, i want it to be in a fixed position in
    the platform everywhere"). The assistant is a permanent fixture of the
@@ -223,6 +229,28 @@ export function AssistantSidebar() {
   openRef.current = open;
   /** messages that arrived while it was collapsed — the badge on the rail */
   const [input, setInput] = useState("");
+  /**
+   * THE ROSTER, for `@handle` — read once, rendered nowhere.
+   *
+   * The agents deliberately have no picker on this surface any more (user
+   * directive, 2026-09-03: "i dont want them to come to the AI assistant like
+   * a window or options anymore"). They are called by NAME, in the message,
+   * which means this component still needs to know which names are names.
+   *
+   * A failure is silent and leaves the list empty, which degrades to the
+   * ordinary assistant answering — the mention is still in the text, so the
+   * answer is on-topic; what is lost is which persona wrote it. That is the
+   * right forfeit here (M21: degrade what was inferred), and it is why
+   * `mentionedAgent` returns null for an empty roster rather than guessing.
+   */
+  const [handles, setHandles] = useState<string[]>([]);
+  useEffect(() => {
+    let alive = true;
+    void api.agents()
+      .then((rows) => { if (alive) setHandles(rows.map((a) => a.handle)); })
+      .catch(() => { /* no roster: mentions stay plain text, see above */ });
+    return () => { alive = false; };
+  }, []);
   const [messages, setMessages] = useState<SidebarMessage[]>([]);
   /** a STORED conversation being fetched — its own state, because "loading"
       and "this conversation is empty" are different sentences and the empty
@@ -708,9 +736,41 @@ export function AssistantSidebar() {
     abortRef.current = controller;
     try {
       const model = await ensureModel();
+      /* `@roya` routes the turn to Roya. The mention stays IN the question —
+         "what do you think, @ava?" reads differently to its answerer than
+         "what do you think?", and the one being addressed is exactly who
+         should see that they were. */
+      const mention = mentionedAgent(trimmed, handles);
+      /**
+       * PRESENT IN THE MEETING (user directive, 2026-09-03: "in the meetings
+       * they also are present in the background and even if they asked
+       * question mid conversation about something in the ai assistant panel
+       * they must answer").
+       *
+       * A meeting in progress has no record to search — no call row, no
+       * transcript, nothing the read tools can reach — so an assistant asked
+       * "what did she just say about the deadline" had, quite literally,
+       * nothing to answer from and said so politely. The live captions are
+       * the only place that sentence exists yet.
+       *
+       * Read from the engine's snapshot at SEND time rather than subscribed
+       * to: this component does not render a word of it, and subscribing
+       * would re-render the whole panel on every caption token for the sake
+       * of a string used once.
+       *
+       * Only while the light is on. `finals` survives in the snapshot after a
+       * take ends, and sending it afterwards would attach a stale meeting to
+       * an unrelated question — the record is the source once there is one.
+       */
+      const engine = recorderSnapshot();
+      const live = engine.phase === "recording" || engine.phase === "paused"
+        ? (engine.captions?.finals ?? "").trim()
+        : "";
       const stream = api.ask(trimmed, { page: pathname, callIds: [] }, sessionId.current, {
         model,
         locale,
+        ...(mention === null ? {} : { agent: mention.handle }),
+        ...(live === "" ? {} : { liveText: live }),
         clientTools: [...SURFACE_TOOLS],
         surface: { route: pathname.replace(/^\/(fa|en)(?=\/|$)/, "") || "/" },
         signal: controller.signal,

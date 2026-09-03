@@ -48,6 +48,10 @@ export async function POST(request: Request) {
        failure, and the route still reproduced it when the wire grew. */
     client_tools?: string[];
     context?: { route?: string; entity?: { kind?: string; id?: string } };
+    /* 0167 — the meeting-in-progress channel. Declared AND forwarded, which
+       is two edits in this file and the reason askForward.guard.test.ts now
+       checks that they always come in pairs. */
+    live_text?: string;
   };
 
   try {
@@ -66,6 +70,7 @@ export async function POST(request: Request) {
       locale: body.locale,
       client_tools: body.client_tools,
       context: body.context,
+      live_text: body.live_text,
     });
     return new Response(upstream.body, {
       headers: {

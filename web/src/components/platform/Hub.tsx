@@ -17,6 +17,7 @@ import { ConversationThread } from "./ConversationThread";
 import { MailDraftCard } from "./MailDraftCard";
 import { useAssistantConversation } from "./AssistantConversationState";
 import { DocumentIcon, MicIcon, PlusIcon, SendIcon } from "./icons";
+import { mentionedAgent } from "@/lib/agentMention";
 import { SURFACE_TOOLS } from "@/lib/agentSurface";
 import { startRecording } from "@/lib/recordingEngine";
 
@@ -92,6 +93,10 @@ export function Hub() {
      it, and the card must not offer a button that fails at the provider */
   const [canSend, setCanSend] = useState<Record<string, boolean>>({});
   const [input, setInput] = useState("");
+  /* the handles `@…` can name. Read once and rendered nowhere — the agents
+     have no picker on this surface by directive, so the only thing this list
+     does is tell a mention from an ordinary at-sign. */
+  const [agentHandles, setAgentHandles] = useState<string[]>([]);
   const [streaming, setStreaming] = useState(false);
   const [feedback, setFeedback] = useState<Record<string, string>>({});
   const [shared, setShared] = useState(false);
@@ -193,6 +198,38 @@ export function Hub() {
   const promptSlug = params.get("prompt");
   const agentHandle = params.get("agent");
   const workflowSlug = params.get("workflow");
+  /**
+   * `?ask=` PREFILLS THE BOX — it does not send.
+   *
+   * The Agents screen's "Ask" arrives here with `@roya ` already typed, which
+   * is a different thing from `?agent=roya`: that pins the whole conversation
+   * to one persona, and this leaves the person to write their question with
+   * the mention in it, per turn, the way the user described the feature
+   * ("they can come to any assistant conversation and they answer inline").
+   *
+   * Deliberately not auto-run. A prefilled composer that submits itself is a
+   * link that spends a model call, and the one thing the person coming from
+   * that screen has not done yet is say what they want.
+   */
+  const prefill = params.get("ask");
+  /* once, and only into an EMPTY box: a person who arrived, started typing and
+     then hit a re-render must not have their sentence replaced by the link
+     that brought them here */
+  const prefillDone = useRef(false);
+  useEffect(() => {
+    if (prefill === null || prefillDone.current) return;
+    prefillDone.current = true;
+    setInput((prev) => (prev === "" ? prefill : prev));
+  }, [prefill]);
+  useEffect(() => {
+    let alive = true;
+    void api.agents()
+      .then((rows) => { if (alive) setAgentHandles(rows.map((a) => a.handle)); })
+      .catch(() => { /* no roster: an @handle stays plain text and the
+                        ordinary assistant answers, which is the right
+                        forfeit — the mention is still in the question */ });
+    return () => { alive = false; };
+  }, []);
 
   /*
    * WHICH workflows this person wants recorded when they run them (db/0142).
@@ -854,7 +891,10 @@ export function Hub() {
         api.ask(question, { page: "hub", callIds: contextCalls.map((c) => c.id) }, sessionId.current, {
           model: model || undefined,
           skill: skill || undefined,
-          agent: agentHandle || undefined,
+          /* `?agent=` pins the conversation; an `@handle` in THIS message
+             routes just this turn — and the message wins, because it is the
+             more recent and more specific thing the person said */
+          agent: mentionedAgent(question, agentHandles)?.handle ?? agentHandle ?? undefined,
           workflow: workflowSlug || undefined,
           connectorProvider,
           sourceId: sourceId || undefined,

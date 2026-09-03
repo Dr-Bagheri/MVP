@@ -17,7 +17,7 @@ vi.mock("../src/agent/pi.ts", async () => {
   return { Type, catalogue: () => [], runPi: vi.fn(), resolveModel: vi.fn(), reasoningFor: vi.fn() };
 });
 
-const { createDomainTools } = await import("../src/agent/domain-tools.ts");
+const { createDomainTools, DOMAIN_TOOL_NAMES } = await import("../src/agent/domain-tools.ts");
 import { ToolDenied } from "../src/agent/tools.ts";
 import { createDb, type SqlClient, type SqlTx } from "../src/db/identity.ts";
 import type { Identity } from "../src/agent/types.ts";
@@ -55,12 +55,32 @@ const callRow = (id: string, title: string) => ({
 });
 
 describe("the tools exist and are the ones the system skill declares", () => {
-  it("implements exactly the four names db/0015 seeds", () => {
+  it("implements every name db/0015 seeds — the set may grow, this floor may not", () => {
     // The intersection of these with the skill's `tools` array WAS empty, so
-    // the summarizer ran with no tools and nothing said so.
-    expect(tools.map((t) => t.name).sort()).toEqual(
-      ["get_call", "list_related_calls", "read_window", "search_transcripts"],
-    );
+    // the summarizer ran with no tools and nothing said so. That is what this
+    // asserts, and it is a CONTAINMENT rather than an equality now: 0167 added
+    // `list_members`, which the seeded skill does not declare and does not
+    // need — the runtime intersects, so an extra implemented tool reaches
+    // nobody who did not ask for it.
+    //
+    // Equality was the right assertion while the two lists were the same list.
+    // Keeping it would have made every new tool a red in a test about a
+    // four-year-old seed, which is how a check gets edited into agreement
+    // instead of read.
+    const implemented = new Set(tools.map((t) => t.name));
+    for (const declared of DOMAIN_TOOL_NAMES) {
+      expect(implemented.has(declared), declared).toBe(true);
+    }
+    // and the control: this cannot pass by containing everything
+    expect(implemented.has("definitely_not_a_tool")).toBe(false);
+  });
+
+  it("the members tool is here, and it is a READ", () => {
+    /* user directive, 2026-09-03: "they must have the ability to know all
+       members and their roles". Named explicitly rather than left to the
+       containment above — a tool nothing asserts is a tool that can quietly
+       stop being registered. */
+    expect(tools.map((t) => t.name)).toContain("list_members");
   });
 
   it("declares parameters pi can serialise", () => {

@@ -50,12 +50,6 @@ select t.ok(
 --     produced is a separate row with its own ladder, and this delete
 --     cannot reach it (asserted in 0148: nothing cascades from meeting).
 --
---   · agent_room_member (0164): who is in an agent room. Taking an agent OUT
---     of a conversation is the ordinary act — the whole point of a room is
---     that you call somebody in and, sometimes, ask them to step out. The
---     MESSAGES are not deletable by anybody: what was said in a room stays
---     said, and the agent that said it holds INSERT and nothing else.
---
 -- Task ROWS themselves stay undeletable by every app role: archived_at is
 -- the only way off the board — and since 0162, echo.delete_task, which is a
 -- DOOR rather than a grant and so never appears in this list.
@@ -64,7 +58,10 @@ select t.ok(
 -- green and left the second red, in a file whose whole job is to be exact.
 create temp table argued_deletes (name text) on commit drop;
 insert into argued_deletes (name) values
-  ('agent_room_member'),
+  -- agent_room_member was here from 0164 until 0166 dropped the rooms
+  -- (the agents answer inline in the assistant thread instead). It is
+  -- mentioned only so the next reader of the git history is not left
+  -- wondering whether an entry went missing by accident.
   ('call_note'), ('meeting'), ('meeting_attachment'), ('meeting_item'),
   ('task_assignee'), ('task_checklist_item'), ('task_label'), ('task_label_link');
 

@@ -1,8 +1,10 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
+import { mentionedAgent } from "@/lib/agentMention";
+import { recorderSnapshot } from "@/lib/recordingEngine";
 import { IconAgent, IconCopy, IconRetry, IconSend } from "@/components/icons";
 
 /**
@@ -24,6 +26,17 @@ export function MeetingAssistant({ callId, title }: { callId: string; title: str
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
   const sessionId = useRef<string | undefined>(undefined);
+  /* the handles `@…` can name here. Same roster, same silence on failure as
+     the sidebar's: without it a mention stays plain text and the ordinary
+     assistant answers, which is on-topic and merely unattributed. */
+  const [handles, setHandles] = useState<string[]>([]);
+  useEffect(() => {
+    let alive = true;
+    void api.agents()
+      .then((rows) => { if (alive) setHandles(rows.map((a) => a.handle)); })
+      .catch(() => { /* see above */ });
+    return () => { alive = false; };
+  }, []);
 
   const suggestions = [
     t("askWhatWas"), t("askDecisions"), t("askTasks"), t("askRisks"),
@@ -37,11 +50,26 @@ export function MeetingAssistant({ callId, title }: { callId: string; title: str
     setTurns((prev) => [...prev, { role: "user", text: question }, { role: "assistant", text: "" }]);
     void (async () => {
       try {
+        /* the same two channels the sidebar carries, because this panel is
+           the platform's assistant pointed at one meeting and not a second
+           assistant: `@ava` must mean here what it means everywhere, and a
+           question asked while the room is still talking must reach the words
+           that have been said. */
+        const mention = mentionedAgent(question, handles);
+        const engine = recorderSnapshot();
+        const live = engine.phase === "recording" || engine.phase === "paused"
+          ? (engine.captions?.finals ?? "").trim()
+          : "";
         for await (const event of api.ask(
           question,
           { page: "meeting", callIds: [callId] },
           sessionId.current,
-          { locale, surface: { route: "/meetings", entity: { kind: "call", id: callId } } },
+          {
+            locale,
+            surface: { route: "/meetings", entity: { kind: "call", id: callId } },
+            ...(mention === null ? {} : { agent: mention.handle }),
+            ...(live === "" ? {} : { liveText: live }),
+          },
         )) {
           if (event.type === "session") sessionId.current = event.id;
           if (event.type === "text_delta") {

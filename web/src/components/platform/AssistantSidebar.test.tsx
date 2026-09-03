@@ -15,6 +15,11 @@ vi.mock("@/api/client", () => ({
     agentMessages: async () => [],
     deliverToolResult: async () => undefined,
     ask: () => (async function* () { /* nothing asked in this file */ })(),
+    /* the roster `@handle` resolves against (0166). It is read on mount and
+       rendered nowhere, so this file needs it only to exist — but it needs to
+       EXIST: an absent method threw inside a promise, and four assertions
+       about the panel's geometry failed reporting nothing about geometry. */
+    agents: async () => [],
   },
 }));
 vi.mock("@/lib/agentSurface", () => ({
@@ -141,11 +146,18 @@ describe("the assistant sidebar floats, and is shut until asked for", () => {
     expect(aside.className).not.toContain("inset-0");
   });
 
-  it("is the MENU's width, taken from the blueprint rather than typed", async () => {
+  it("is a SHARE of the screen, taken from the blueprint rather than typed", async () => {
     /*
-     * The user asked for "the same size of the menu that we have". Asserted
-     * against SCAFFOLD rather than against a string, because a literal here
-     * would agree with the menu on the day it was written and drift the way a
+     * It was the menu's width for a day ("the same size of the menu that we
+     * have"), and the user then ruled it a share instead: "give 30% of the
+     * screen to the ai assistant side bar" (2026-09-03). That is a different
+     * kind of answer and worth the distinction — a menu is as wide as its
+     * longest label, and the assistant is as wide as the room a conversation
+     * deserves — so the number it reads has moved to its own entry in SCAFFOLD
+     * rather than borrowing the menu's.
+     *
+     * Still asserted against the blueprint and not against a string: a literal
+     * here would agree on the day it was written and drift the way a
      * hand-written 56 drifted from a top bar that grew to 62.
      */
     const { container } = await mount();
@@ -155,7 +167,11 @@ describe("the assistant sidebar floats, and is shut until asked for", () => {
     expect(aside.style.getPropertyValue("--assistant-w")).toBe("3rem");
     await userEvent.click(document.querySelector<HTMLElement>("[data-assistant-door]")!);
     expect(aside.style.getPropertyValue("--assistant-w"))
-      .toBe(`${SCAFFOLD.menuWidth / 16}rem`);
+      .toBe(`max(${SCAFFOLD.assistantPanelMin / 16}rem, ${SCAFFOLD.assistantPanelPct}vw)`);
+    /* and the floor is a floor, not decoration: 30% of a 1024px laptop is
+       307px, and below about 20rem the composer, its control row and a
+       readable answer stop fitting at once */
+    expect(SCAFFOLD.assistantPanelMin).toBeGreaterThanOrEqual(320);
   });
 
   it("reserves the page's column, and NEVER the row's — the top bar reaches the corner", () => {

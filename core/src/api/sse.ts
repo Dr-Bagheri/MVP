@@ -61,16 +61,18 @@ export interface SseSink {
 /**
  * The FRAMING, for any named event.
  *
- * `formatSse` below is the assistant's typed door onto this. The rooms
- * surface (db/0164) has its own vocabulary — a room's events are turns and
- * who is taking one, not deltas — and deliberately does not join the union
- * above: widening the assistant's contract to carry a second surface's events
- * is the same mistake 0164 refused when it declined to widen
- * `agent_message_role`. What the two DO share is the wire format, so a fix to
- * the framing lands in one place rather than in whichever copy someone
- * remembers.
+ * `formatSse` below is the assistant's typed door onto this, and since 0166
+ * dropped the rooms it is the only door: this function had a second caller
+ * with its own event vocabulary, and when that surface went the export stayed
+ * behind as a producer with one consumer in the same file.
+ *
+ * It is NOT exported any more for that reason. Kept as a separate function
+ * rather than folded into `formatSse` because the framing and the union are
+ * different facts — one is how any named event goes onto the wire, the other
+ * is which events this stream may carry — and a future second surface will
+ * want the first without inheriting the second.
  */
-export function formatEvent(event: { type: string }): string {
+function formatEvent(event: { type: string }): string {
   // `event:` lets EventSource listeners subscribe by name; `data:` carries
   // the same discriminated union the reducer switches on.
   return `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`;

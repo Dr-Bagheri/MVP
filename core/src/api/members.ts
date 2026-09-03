@@ -14,7 +14,7 @@
  * and the acceptance gate is exactly the thing that must not have two doors.
  */
 import { record } from "./admin-actions.ts";
-import { ConflictError, NotFoundError, ValidationError } from "./errors.ts";
+import { ConflictError, NotActivatedError, NotFoundError, ValidationError } from "./errors.ts";
 import {
   CALENDAR_PREFERENCES, iso, isoOrNull, MEMBER_ROLES, TIMEZONE_AUTO, USER_STATUSES,
   type CalendarPreference, type MemberRole, type UserStatus,
@@ -941,6 +941,52 @@ export function createMembersRepo(db: Db) {
      * screen to act on, and burying it under an alphabetical list of active
      * members is how someone waits a week for approval.
      */
+    /**
+     * One member sends another a message (db/0167).
+     *
+     * The whole body of this is a call to the door, deliberately: the door
+     * decides who the sender is, refuses a stranger, a suspended colleague and
+     * another org with one sentence, and bounds the text. Re-checking any of
+     * that here would be a second spelling of the rule that could disagree
+     * with the first — and the one a reviewer would trust is the one in
+     * TypeScript, which is not the one the database enforces.
+     *
+     * The refusals it can raise are the door's two codes and nothing else:
+     * 42501 is "you are not in a position to send anything" and 22023 is
+     * "that recipient or that text is not acceptable". They are mapped to
+     * different HTTP answers because they are different facts about the
+     * request, and collapsing them is how "your session expired" comes to
+     * read as "no such person".
+     */
+    async sendMessage(identity: Identity, to: string, body: string): Promise<{ id: string }> {
+      const text = body.trim();
+      if (text === "" || text.length > 2000) {
+        throw new ValidationError("a message must be 1-2000 characters", {
+          code: "message_invalid",
+        });
+      }
+      return db.withIdentity(identity, async (tx: SqlTx) => {
+        const rows = await tx.unsafe<{ send_member_message: string }>(
+          `select echo.send_member_message($1::uuid, $2::text)`, [to, text],
+        );
+        const id = rows[0]?.send_member_message;
+        if (!id) throw new Error("send_member_message returned no id");
+        return { id };
+      }).catch((cause) => {
+        const code = (cause as { code?: string }).code;
+        if (code === "22023") {
+          /* the door answers identically for "not in your org", "suspended"
+             and "no such id" — on purpose, so this is not an oracle. The api
+             says the same, rather than helpfully guessing which it was. */
+          throw new ValidationError("that message cannot be delivered", {
+            code: "message_undeliverable",
+          });
+        }
+        if (code === "42501") throw new NotActivatedError("you may not send messages");
+        throw cause;
+      });
+    },
+
     async list(identity: Identity, options: MemberQuery = {}): Promise<MemberRecord[]> {
       /**
        * Sort is a closed set mapped to SQL here, never a column name from the

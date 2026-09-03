@@ -30,6 +30,7 @@ export const SURFACE_TOOLS: readonly string[] = [
   "restore_record",
   "delete_conversation",
   "add_speaker_person",
+  "send_member_message",
 ];
 
 /** Routes the agent may navigate to — the same set a human can click to. */
@@ -71,6 +72,43 @@ async function resolveMember(handle: string): Promise<
   if (exact.length === 1) return { ok: true, id: exact[0]!.id };
   if (rows.length === 0) return { ok: false, detail: "no member matched that name" };
   return { ok: false, detail: `${rows.length} members matched — ask the user which one, by username` };
+}
+
+/**
+ * The same question, asked where an ORDINARY member can ask it (0167).
+ *
+ * `resolveMember` above reads `/v1/admin/members`, which an admin may do and
+ * a member may not — right for the two tools that change somebody's role or
+ * status, since only an admin can perform those anyway. Messaging a colleague
+ * is every member's, so it resolves through the org directory instead: same
+ * people, no admin gate, and the fields a person actually types.
+ *
+ * Using the admin list here would have made this feature work perfectly for
+ * whoever built it and fail with a 403 for everyone else — the shape that is
+ * invisible from the developer's own account.
+ */
+async function resolveColleague(handle: string): Promise<
+  { ok: true; id: string; name: string } | { ok: false; detail: string }
+> {
+  const { api } = await import("@/api/client");
+  const rows = await api.orgPeople();
+  const lowered = handle.trim().toLowerCase();
+  const matches = (row: { display_name: string; display_name_en: string | null }) =>
+    row.display_name.toLowerCase() === lowered
+    || (row.display_name_en ?? "").toLowerCase() === lowered;
+  const exact = rows.filter(matches);
+  if (exact.length === 1) return { ok: true, id: exact[0]!.id, name: exact[0]!.display_name };
+  const loose = rows.filter((row) =>
+    row.display_name.toLowerCase().includes(lowered)
+    || (row.display_name_en ?? "").toLowerCase().includes(lowered));
+  if (loose.length === 1) return { ok: true, id: loose[0]!.id, name: loose[0]!.display_name };
+  if (loose.length === 0) return { ok: false, detail: "no colleague matched that name" };
+  return {
+    ok: false,
+    /* names them, because "3 matched" leaves the model with nothing to ask
+       about and it will guess one */
+    detail: `several colleagues matched: ${loose.slice(0, 5).map((r) => r.display_name).join("، ")} — ask the user which`,
+  };
 }
 
 /** a refused api write reads as the SERVER's sentence, not a crash */
@@ -230,6 +268,35 @@ export async function executeClientTool(
         return { ok: true, detail: `the role is now ${role}` };
       } catch (cause) {
         return { ok: false, detail: refusalDetail(cause, "the role change was refused") };
+      }
+    }
+    case "send_member_message": {
+      /*
+       * The message is sent from HERE, under the person's own session, so the
+       * database stamps them as the sender (db/0167 takes the sender from the
+       * actor, never from an argument). The consent card has already been
+       * answered by the time this runs — `effect: "write"` in core's registry
+       * is what puts it there — so reaching this line means a person read the
+       * exact text and said yes.
+       */
+      const handle = typeof a.member === "string" ? a.member.trim() : "";
+      const message = typeof a.message === "string" ? a.message.trim() : "";
+      if (!handle) return { ok: false, detail: "a recipient is required" };
+      if (!message) return { ok: false, detail: "a message is required" };
+      if (message.length > 2000) {
+        return { ok: false, detail: "a message must be 2000 characters or fewer" };
+      }
+      const who = await resolveColleague(handle);
+      if (!who.ok) return { ok: false, detail: who.detail };
+      try {
+        const { api } = await import("@/api/client");
+        await api.sendMemberMessage(who.id, message);
+        /* names the recipient back: the model asked for a handle and a person
+           approved a sentence, and "sent" without a name is how a message goes
+           to the wrong Sara without anybody noticing */
+        return { ok: true, detail: `the message was sent to ${who.name}` };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the message was not sent") };
       }
     }
     case "rename_record": {

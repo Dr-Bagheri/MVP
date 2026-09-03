@@ -55,9 +55,6 @@ import type {
   Org,
   Role,
   /* db/0164 — the rooms, inherited from core through types.ts */
-  RoomEvent,
-  RoomMessageRecord,
-  RoomRecord,
   SearchHit,
   ServerHealth,
   Skill,
@@ -1348,59 +1345,34 @@ export const api = {
     return agents;
   },
 
-  // ---- the rooms (db/0164) ------------------------------------------------
-  /**
-   * A room is a conversation with more than two voices — a person and the
-   * agents they called in — and it is ITS OWNER'S: 0164's read policy says
-   * so, which is why there is no scope parameter here to get wrong.
-   */
-  async rooms(opts?: { archived?: boolean }): Promise<RoomRecord[]> {
-    const { rooms } = await bff<{ rooms: RoomRecord[] }>(
-      `/api/rooms?archived=${opts?.archived === true}`);
-    return rooms;
-  },
-  /** Open one. Handles, not ids: the producer resolves them through the agent
-      store, which owns the system < org < user collapse. */
-  async openRoom(input: { title: string; agents: string[] }): Promise<RoomRecord> {
-    return bff<RoomRecord>("/api/rooms", {
+  /** Make a new agent — org-wide or just mine (M47; core validates the tools
+      against its own registry, so an invented tool name is a 400 and not a
+      silently tool-free agent). */
+  async createAgent(input: {
+    level: "org" | "user"; name: string; instructions: string;
+    description?: string; model?: string | null; tools?: string[];
+    icon?: string; color?: string; web?: boolean;
+  }): Promise<AgentCard> {
+    return bff<AgentCard>("/api/agents", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ title: input.title, agents: input.agents }),
+      body: JSON.stringify(input),
     });
   },
-  /** The room, who is in it, and what was said — the screen's one read. */
-  async room(id: string): Promise<{ room: RoomRecord; messages: RoomMessageRecord[] }> {
-    return bff<{ room: RoomRecord; messages: RoomMessageRecord[] }>(
-      `/api/rooms/${encodeURIComponent(id)}`);
-  },
-  /** Rename, or file away. */
-  async updateRoom(id: string, patch: { title?: string; archived?: boolean }): Promise<RoomRecord> {
-    return bff<RoomRecord>(`/api/rooms/${encodeURIComponent(id)}`, {
+  /** Edit one. RLS is the wall: a row the caller may not write answers the
+      same not-found as a row that is not there. */
+  async updateAgent(id: string, patch: {
+    name?: string; description?: string; instructions?: string;
+    model?: string | null; tools?: string[]; icon?: string; color?: string;
+    web?: boolean; enabled?: boolean;
+  }): Promise<AgentCard> {
+    return bff<AgentCard>(`/api/agents/${encodeURIComponent(id)}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(patch),
     });
   },
-  /**
-   * The person speaks, and the room answers — SSE, TURN by turn.
-   *
-   * The first frame is the person's OWN message, echoed back from the row
-   * that was written before the stream opened; the screen adopts it rather
-   * than keeping a local copy, so what is on screen is what is in the
-   * database. `locale` rides because the room answers in the interface
-   * language, exactly as the assistant does.
-   */
-  async *sayInRoom(
-    id: string,
-    body: string,
-    opts?: { locale?: string; signal?: AbortSignal },
-  ): AsyncGenerator<RoomEvent> {
-    yield* streamEvents<RoomEvent>(
-      `/api/rooms/${encodeURIComponent(id)}/messages`,
-      { body, ...(opts?.locale ? { locale: opts.locale } : {}) },
-      opts?.signal,
-    );
-  },
+
   // ---- the task board (0144) ---------------------------------------------
   async taskBoard(opts?: { archived?: boolean }): Promise<{
     columns: TaskColumnRecord[]; topics: TaskTopicRecord[]; tasks: TaskCardRecord[];
@@ -1498,6 +1470,19 @@ export const api = {
       { method: on ? "PUT" : "DELETE" });
   },
   /** the org's people for pickers — names and role, never emails */
+  /**
+   * Send a colleague a message (db/0167). It lands in their notifications,
+   * from the signed-in person — the database stamps the sender, so this cannot
+   * put somebody else's name on it however the call is made.
+   */
+  async sendMemberMessage(to: string, body: string): Promise<{ id: string }> {
+    return bff<{ id: string }>("/api/members/message", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ to, body }),
+    });
+  },
+
   async orgPeople(): Promise<OrgPersonRecord[]> {
     return bff("/api/org/people");
   },
@@ -2471,6 +2456,14 @@ export const api = {
       clientTools?: string[];
       /** M34: where the user is — route + optional entity, IDs only. */
       surface?: { route: string; entity?: { kind: string; id: string } };
+      /**
+       * What is being said in the room RIGHT NOW (0167). Only the meeting
+       * surface sends it, and only while a meeting is running: a meeting in
+       * progress has no call row and no transcript, so this is the only thing
+       * a mid-meeting question can be answered from. The server fences it as
+       * untrusted speech — it is a microphone's output, not a user's sentence.
+       */
+      liveText?: string;
     },
   ): AsyncGenerator<AgentEvent> {
     /* **LIVE** — the real stream, through the BFF's SSE passthrough. The
@@ -2500,6 +2493,7 @@ export const api = {
           ...(opts?.locale ? { locale: opts.locale } : {}),
           ...(opts?.clientTools?.length ? { client_tools: opts.clientTools } : {}),
           ...(opts?.surface ? { context: opts.surface } : {}),
+          ...(opts?.liveText ? { live_text: opts.liveText } : {}),
         },
         opts?.signal,
       );

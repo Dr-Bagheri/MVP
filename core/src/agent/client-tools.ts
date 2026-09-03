@@ -283,6 +283,39 @@ export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
     }, ["member", "role"]),
     effect: "write",
   },
+  {
+    /**
+     * SEND A COLLEAGUE A MESSAGE (user directive, 2026-09-03: "if they asked
+     * to give messages to some one else in the platform they can").
+     *
+     * A CLIENT tool, not a server one, and that is the whole design. The
+     * message is written by db/0167's definer door, which stamps the sender
+     * from the session's actor — so routing it through the browser means the
+     * sender is the person who approved it, established by the database rather
+     * than asserted by a prompt. A server-side tool would have the model's run
+     * as the actor, and "Roya says X" would arrive wearing your name with
+     * nothing in the system able to tell the difference.
+     *
+     * `effect: "write"` earns it a consent card before anything is sent, which
+     * is the user's own ruling for this pair: auto for reads, approval for
+     * writes. A message to a colleague is the most outward-facing write this
+     * surface has — it reaches another person's attention and cannot be taken
+     * back — so it is exactly the wrong one to make an exception for.
+     */
+    name: "send_member_message",
+    label: { fa: "فرستادن پیام به همکار", en: "Sending a colleague a message" },
+    description:
+      "Send a short message to another member of this organization. It arrives "
+      + "in their notifications, from the user — not from you. Identify the "
+      + "recipient by username, display name or email; use list_members first "
+      + "if you are not certain who is meant. The user is asked to approve the "
+      + "exact text before it is sent, so write the message you mean to send.",
+    parameters: obj({
+      member: str("Username, display name or email of the recipient."),
+      message: str("The message, in the user's own voice. Up to 2000 characters."),
+    }, ["member", "message"]),
+    effect: "write",
+  },
 ] as const;
 
 export const CLIENT_TOOL_NAMES: readonly string[] = CLIENT_TOOLS.map((t) => t.name);

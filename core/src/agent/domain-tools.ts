@@ -30,6 +30,7 @@ import { Type } from "./pi.ts";
 import { ToolDenied, type DomainTool } from "./tools.ts";
 import { createCallsRepo } from "../api/calls.ts";
 import { createTranscriptsRepo } from "../api/transcripts.ts";
+import { createMembersRepo } from "../api/members.ts";
 import { NotFoundError } from "../api/errors.ts";
 import type { Db } from "../db/identity.ts";
 
@@ -41,6 +42,7 @@ export interface ToolDeps {
 const MAX_SEARCH_HITS = 8;
 const MAX_WINDOW_SEGMENTS = 120;
 const MAX_RELATED_CALLS = 10;
+const MAX_MEMBERS = 200;
 
 /**
  * A repo's NotFoundError means "you cannot see this" — which for a tool is a
@@ -184,11 +186,75 @@ export function createDomainTools(): DomainTool<ToolDeps, never>[] {
     },
   };
 
+
+  /**
+   * WHO IS IN THIS ORGANIZATION (user directive, 2026-09-03: "they must have
+   * the ability to know all members and their roles").
+   *
+   * A read, so it runs unprompted — the user's own ruling for this pair is
+   * "auto for reads, approval for writes", and asking permission to look up a
+   * colleague's name would make every ordinary request a negotiation.
+   *
+   * Bounded the way every tool in this file is bounded: `createMembersRepo`
+   * is the repo the members screen itself calls, with THIS caller's identity,
+   * so an agent sees exactly the colleagues its user can see and the same
+   * fields — RLS answers, not a second query written for a model.
+   *
+   * Email is included and that is a deliberate call rather than an oversight:
+   * it is on the members screen, it is how a person is addressed, and an
+   * assistant that can say "Sara" but not reach her is the half-feature this
+   * directive exists to close. What is NOT here is anything the screen does
+   * not show either.
+   */
+  const listMembers: DomainTool<ToolDeps, { search?: string; role?: string }> = {
+    name: "list_members",
+    label: "اعضای سازمان",
+    description:
+      "The people in this organization and their roles — id, name, username, "
+      + "email, role (owner/admin/member) and status. Use it to answer "
+      + "questions about who does what, and to find the id of the person a "
+      + "message should go to. It returns only colleagues the user can see.",
+    parameters: Type.Object({
+      search: Type.Optional(Type.String({
+        description: "Filter by name, username or email. Omit for everyone.",
+      })),
+      role: Type.Optional(Type.String({
+        description: "Filter to one role: owner, admin or member.",
+      })),
+    }),
+    async run({ identity, deps }, args) {
+      const rows = await createMembersRepo(deps.db).list(identity, {
+        search: args.search, role: args.role,
+      });
+      /* Projected, not passed through. The repo's record grows fields for the
+         screen's sake (last_seen_at, avatar_url, job_title…) and a tool that
+         spreads the row would silently start feeding every one of them to a
+         model the day somebody adds one. Naming the fields is the guard. */
+      const members = rows.slice(0, MAX_MEMBERS).map((m) => ({
+        id: m.id,
+        name: m.display_name,
+        name_en: m.display_name_en,
+        username: m.username,
+        email: m.email,
+        role: m.role,
+        status: m.status,
+      }));
+      return {
+        members,
+        count: members.length,
+        /* the honest kind of nothing: "nobody matched" is a finding, and
+           truncation is a fact about this answer rather than about the org */
+        truncated: rows.length > members.length,
+      };
+    },
+  };
+
   return [
     searchTranscripts as DomainTool<ToolDeps, never>,
     readWindow as DomainTool<ToolDeps, never>,
     getCall as DomainTool<ToolDeps, never>,
     listRelatedCalls as DomainTool<ToolDeps, never>,
+    listMembers as DomainTool<ToolDeps, never>,
   ];
 }
 

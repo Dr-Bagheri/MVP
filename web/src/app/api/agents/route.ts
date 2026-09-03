@@ -2,19 +2,29 @@ import { coreFetch, errorResponse } from "@/server/core";
 import type { AgentCard } from "@/api/types";
 
 /**
- * The agents a person may call into a room (db/0164's picker reads this).
+ * The agents this person can call — and, since 0166, the door to make one.
  *
- * THE POST WENT WITH THE EDITOR (2026-09-03). Creating an agent was the
- * browse-and-edit surface's door, and that surface is gone: the product now
- * calls agents into rooms rather than configuring them. Core still serves
- * `POST /v1/agents` and `PATCH /v1/agents/:id`; nothing in this app reaches
- * them, and leaving a BFF handler in front of a door with no room behind it
- * is exactly the shape the webhook removal found — a whole feature written,
- * reviewed, and never registered.
+ * The POST left with the room picker on 2026-09-03 and came back the same day
+ * with the workshop: core has served `POST /v1/agents` and `PATCH
+ * /v1/agents/:id` since M47, and for one day nothing in this app reached them
+ * — the producer-with-no-consumer shape, recorded in this file's own comment
+ * while it was true. The Agents screen is the consumer now.
  */
 export async function GET() {
   try {
     return Response.json(await coreFetch<{ agents: AgentCard[] }>("/v1/agents"));
+  } catch (error) {
+    return errorResponse(error);
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    return Response.json(await coreFetch<AgentCard>("/v1/agents", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(await request.json()),
+    }));
   } catch (error) {
     return errorResponse(error);
   }

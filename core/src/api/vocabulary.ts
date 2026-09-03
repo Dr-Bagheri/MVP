@@ -302,6 +302,11 @@ export const EXECUTABLE_STEP_KINDS = [
  */
 export const AGENT_CARD_KINDS = [
   "post_call_brief", "weekly_digest", "workflow_result", "mail_draft", "meeting_prep",
+  /* 0167 — the one kind with a human sender. Every other card here is
+     something the platform made for you; this one is something a colleague
+     sent, and that difference is why it carries its own text instead of
+     pointing at a conversation. */
+  "member_message",
 ] as const;
 export type AgentCardKind = (typeof AGENT_CARD_KINDS)[number];
 

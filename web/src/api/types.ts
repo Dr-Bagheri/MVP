@@ -33,22 +33,6 @@ export type {
   TaskLabelRecord, TaskLabelColor, TaskEventRecord, TaskEventKind, OrgPersonRecord,
 } from "@echo/core/wire";
 export type { PlatformAuditEntry, PlatformOrganization, PlatformOverview, PlatformPage, PlatformUser };
-/*
- * db/0164 — the rooms, INHERITED from the producer rather than described here.
- *
- * `RoomEvent` is the one that matters: it is a stream vocabulary the thread
- * switches on, and the last hand-written stream union in this file invented
- * four members of `CallStatus` that had never existed. A room's turn events
- * are `message | working | turn_failed | bounded | done` because core/'s
- * rooms.ts says so, and a rename there is a compile error here instead of a
- * frame the reducer silently drops.
- *
- * Only what this app consumes is re-exported. `RoomSubjectKind` stays in
- * core's wire — it travels inside `RoomRecord` either way, and a name
- * re-exported here that nothing imports is the producer-with-no-consumer
- * shape at its smallest.
- */
-export type { RoomRecord, RoomMessageRecord, RoomAgentCard, RoomEvent } from "@echo/core/wire";
 
 // ---- org & people (M2, M15) -------------------------------------------------
 
@@ -828,6 +812,14 @@ export interface AgentCardItem {
   session_id: string | null;
   created_at: string;
   read: boolean;
+  /** 0167: the message text, for `member_message`. "" for every other kind —
+      their content lives in the conversation `session_id` names. */
+  body: string;
+  /** who sent it, or null when the PLATFORM did (a digest has no sender).
+      Null also covers a sender whose account has been tombstoned: the message
+      survives, the name does not. */
+  from_name: string | null;
+  from_name_en: string | null;
 }
 
 export type AgentEvent =

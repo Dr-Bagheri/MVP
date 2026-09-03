@@ -68,6 +68,18 @@ const REMAINING: Record<string, number> = {
      would satisfy the checker by changing the code the checker reads, which
      is the fix that reads as satisfied and moves nothing. */
   "app/[locale]/management/users/page.tsx": 1,
+  /* NEITHER IS A LOADING STATE (2026-09-03, the agents rebuild). Both matches
+     are exactly the two categories this file's header names: `editing === null
+     ? null :` is the editor dialog's open flag, and `failed === null ? null :`
+     is the refusal line under the form. A dialog nobody opened and an error
+     that has not happened both genuinely render nothing, and neither has a
+     frame to draw.
+     The screen's REAL loading state is framed and is not in this count: both
+     sections render their heading unconditionally with SkeletonCards inside,
+     so the layout does not move when the roster lands and "loading" never
+     draws the same picture as "you have no agents" — which on this screen
+     would be a claim about the product rather than about the request. */
+  "components/platform/Agents.tsx": 2,
   "app/[locale]/workflows/[handle]/page.tsx": 2,
   "app/[locale]/workflows/runs/[id]/page.tsx": 1,
   "components/echo/Recorder.tsx": 1,

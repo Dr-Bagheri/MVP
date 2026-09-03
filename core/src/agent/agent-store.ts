@@ -27,10 +27,47 @@ export interface AgentCard {
   tools: string[];
   /** M47: this agent's asks may search the web (:online, same model) */
   web: boolean;
+  /**
+   * The agent's own prompt — for the agents the caller may EDIT, and null for
+   * the two the product ships.
+   *
+   * It was withheld from every card ("trusted configuration, deliberately
+   * never sent on the browser wire") and that was right about Roya and Ava and
+   * wrong about an agent somebody wrote themselves: a form that cannot show
+   * you the text you typed cannot let you change one line of it, and PATCH has
+   * accepted `instructions` since M47 with no way for a screen to fill the
+   * field. A producer with no consumer, in the direction that is invisible
+   * from the producer's side.
+   *
+   * So: null for `system`, present for `org` and `user`. Not a permission
+   * check — `editable` below is that, and the two are different facts. A
+   * member can SEE an org agent's prompt (it is what answers them, and the one
+   * thing they might reasonably want to read) and still not be allowed to
+   * change it.
+   */
+  instructions: string | null;
+  /**
+   * Whether THIS caller may change it. Derived from the row's level and the
+   * caller's role rather than sent as a guess: `system` is nobody's, `org` is
+   * an admin's, `user` is its owner's. The server refuses regardless — this
+   * is so the screen does not offer a button that answers 404.
+   */
+  editable: boolean;
 }
 
-export interface ResolvedAssistantAgent extends AgentCard {
-  /** Trusted configuration; deliberately never sent on the browser wire. */
+/**
+ * The row as the runtime uses it: everything the card carries EXCEPT the two
+ * fields that only exist on the wire.
+ *
+ * `instructions` is always a string here (an agent with no prompt cannot run)
+ * and `editable` is a fact about a CALLER, which a row does not have — the
+ * Omit is what keeps the difference from being a shrug: the card's
+ * `string | null` would otherwise force every runtime read to handle a null
+ * that the database's `not null` says cannot happen.
+ */
+export interface ResolvedAssistantAgent
+  extends Omit<AgentCard, "instructions" | "editable"> {
+  /** Trusted configuration; reaches the browser only for an editable agent. */
   instructions: string;
   sourceScope: Record<string, unknown>;
 }
@@ -81,9 +118,16 @@ function rowToAgent(row: AgentRow): ResolvedAssistantAgent {
   };
 }
 
-function publicCard(agent: ResolvedAssistantAgent): AgentCard {
-  const { instructions: _instructions, sourceScope: _sourceScope, ...card } = agent;
-  return card;
+function publicCard(agent: ResolvedAssistantAgent, identity: Identity): AgentCard {
+  const { instructions, sourceScope: _sourceScope, ...card } = agent;
+  const isAdmin = identity.role === "admin" || identity.role === "owner";
+  return {
+    ...card,
+    /* the system pair's prompts are product configuration, identical for every
+       org, and not a thing any screen has a reason to render */
+    instructions: agent.level === "system" ? null : instructions,
+    editable: agent.level === "org" ? isAdmin : agent.level === "user",
+  };
 }
 
 /** Later, more-specific rows overwrite their handle's lower-level row. */
@@ -107,7 +151,7 @@ async function visible(db: Db, identity: Identity): Promise<AgentRow[]> {
 
 export async function listAssistantAgents(db: Db, identity: Identity): Promise<AgentCard[]> {
   return [...resolve(await visible(db, identity)).values()]
-    .map(publicCard)
+    .map((agent) => publicCard(agent, identity))
     .sort((a, b) => a.name.localeCompare(b.name, "fa"));
 }
 
@@ -173,7 +217,7 @@ export async function createAssistantAgent(
   ));
   const row = rows[0];
   if (!row) throw new Error("assistant agent insert returned no row");
-  return publicCard(rowToAgent(row));
+  return publicCard(rowToAgent(row), identity);
 }
 
 
@@ -225,7 +269,7 @@ export async function updateAssistantAgent(
   ));
   const row = rows[0];
   if (!row) throw new ValidationError("no such agent");
-  return publicCard(rowToAgent(row));
+  return publicCard(rowToAgent(row), identity);
 }
 
 /** The workflows an agent carries (M47) — id + name, for the overview panel. */

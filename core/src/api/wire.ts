@@ -57,17 +57,6 @@ export type {
 } from "./tasks.ts";
 export type { MeetingRecord, MeetingAgendaItem, MeetingMode, MeetingSignature } from "./meetings.ts";
 export type { ConnectorStatus, ConnectorItem, ConnectorProvider, ConnectorSourceKind } from "./connectors.ts";
-/*
- * db/0164 — the rooms. Published for the same reason as everything above it,
- * and with one extra: `RoomEvent` is a WIRE VOCABULARY the browser switches
- * on, and the last time a consumer hand-wrote a stream's event union it
- * invented four members that had never existed. The room's own header says
- * why this union is not the assistant's — so a copy of it in the client would
- * be a third spelling of a contract that already has exactly one.
- */
-export type {
-  RoomRecord, RoomMessageRecord, RoomAgentCard, RoomEvent, RoomSubjectKind,
-} from "./rooms.ts";
 export type {
   PlatformAuditEntry, PlatformOrganization, PlatformOverview, PlatformPage, PlatformUser,
 } from "./platform.ts";

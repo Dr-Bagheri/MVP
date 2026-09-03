@@ -117,11 +117,6 @@ const REQUIRED_ROUTES: [method: string, path: string, why: string][] = [
   // to each other. Listed with the build rather than after it: a room surface
   // nobody can tell "not built" from "wrong path" is the exact question this
   // file exists to answer, and this one has five doors to get wrong.
-  ["GET", "/v1/rooms", "db/0164 — the caller's rooms; a room is its OWNER's, so this list is RLS's answer and not a filter"],
-  ["POST", "/v1/rooms", "db/0164 — open a room and put the agents in it, in one transaction: a room with no agents can never answer"],
-  ["GET", "/v1/rooms/:id", "db/0164 — the room, its roster and what was said"],
-  ["POST", "/v1/rooms/:id/messages", "db/0164 — the person speaks; this drives the exchange and streams the turns as they land"],
-  ["PATCH", "/v1/rooms/:id", "db/0164 — rename or file away; both are the owner's"],
 ];
 
 /**
@@ -131,8 +126,6 @@ const REQUIRED_ROUTES: [method: string, path: string, why: string][] = [
  */
 const KNOWN_ABSENT: [what: string, why: string][] = [
   ["GET /v1/admin/org", "deliberate: it would return the same row and columns as GET /v1/org, and a second read of one row is a second thing that can disagree with the first. The admin screen reads /v1/org and writes PATCH /v1/admin/org"],
-  ["POST|DELETE /v1/rooms/:id/agents", "db/0164 says inviting an agent mid-conversation is the product, and the schema is ready for it (membership is a row, and echo_app holds INSERT and DELETE on it). The route is not built: the roster is fixed at open() until a surface asks somebody to change it, and a door with no screen behind it is a producer with no consumer"],
-  ["a room's approval card", "the room's agents carry READ tools only. The write tools emit proposals, and a proposal needs a card to be decided on; a proposal nobody can approve is worse than an agent that says what it would do. When the room grows the card, createWriteTools() joins rooms.ts and this entry goes"],
   // avatar_url LEFT the absent list 2026-08-16 (user directive): the upload
   // path exists — PATCH /v1/me accepts a capped data:image URL — so the
   // condition the old entry set ("it returns alongside an upload design") is

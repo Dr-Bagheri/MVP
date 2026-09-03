@@ -39,7 +39,7 @@ function fakeDb(rowsFor: (sql: string, params?: unknown[]) => unknown[]) {
 }
 
 describe("saved-agent resolution", () => {
-  it("selects the most-specific row while never exposing instructions on cards", async () => {
+  it("selects the most-specific row, and shows a prompt only where it is the caller's to edit", async () => {
     const { db } = fakeDb(() => [
       row(),
       row({ id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", level: "org", name: "Sales team", instructions: "ORG ONLY" }),
@@ -50,8 +50,28 @@ describe("saved-agent resolution", () => {
     const cards = await listAssistantAgents(db, IDENTITY);
     expect(cards).toHaveLength(2);
     expect(cards.find((agent) => agent.handle === "sales")?.name).toBe("My sales");
-    // A card is browser data. Prompt text must never cross this boundary.
-    expect(cards.some((agent) => "instructions" in agent)).toBe(false);
+    /*
+     * 0166: the rule NARROWED, and the narrowing is the assertion.
+     *
+     * It used to be "prompt text never crosses this boundary", which was right
+     * about the two agents the product ships and wrong about an agent somebody
+     * wrote themselves: PATCH has accepted `instructions` since M47 and no
+     * screen could fill the field, because the read never returned it. A form
+     * that cannot show you your own text cannot let you change a line of it.
+     *
+     * So the boundary moved from "never" to "not the system's". Both halves
+     * are asserted here — a rule that only checks the permissive side would be
+     * satisfied by returning every prompt to everyone.
+     */
+    const own = cards.find((agent) => agent.handle === "sales");
+    expect(own?.instructions).toBe("PERSONAL ONLY");
+    expect(own?.editable).toBe(true);
+    /* the half that was the whole rule: what the product ships is nobody's to
+       read or change, and a card that carried it would be the old bug with a
+       new field name */
+    const shipped = cards.find((agent) => agent.handle === "legal");
+    expect(shipped?.instructions).toBeNull();
+    expect(shipped?.editable).toBe(false);
 
     const resolved = await resolveAssistantAgent(db, IDENTITY, "sales");
     expect(resolved?.instructions).toBe("PERSONAL ONLY");
@@ -66,7 +86,14 @@ describe("saved-agent resolution", () => {
     });
     expect(agent.tools).toEqual([]);
     expect(agent.handle).toBe("agent-created");
-    expect("instructions" in agent).toBe(false);
+    /* the creator gets the prompt back — this is the read that fills the edit
+       form, and returning it empty is how "save" would blank a persona
+       somebody had just written. It is the ROW's text, not the argument's:
+       this fake answers every insert with a canned row, so asserting the input
+       here would be asserting that the code echoes what it was given, which is
+       the one thing a create must not do. */
+    expect(agent.instructions).toBe(created.instructions);
+    expect(agent.editable).toBe(true);
 
     const insert = log.find((entry) => entry.sql.includes("insert into echo.assistant_agent"));
     expect(insert?.params?.[2]).toBe(IDENTITY.userId);
