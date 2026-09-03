@@ -432,7 +432,22 @@
   }
   .tap::after {
     content: "";
-    @apply absolute left-1/2 top-1/2 h-11 w-11 -translate-x-1/2 -translate-y-1/2;
+    /*
+     * 44 PHYSICAL PIXELS, spelled as px on purpose (2026-09-03).
+     *
+     * This was `h-11 w-11`, which is Tailwind's 2.75rem — 44px at a root of
+     * 16, and this product's root font-size is FLUID (16 lands at 1440 by
+     * design). At 375, where the ruling actually applies, the root is 14 and
+     * the hit area computed to 38.5px. So the platform's 44px hit-area rule
+     * had been quietly breached on every button on every phone since the
+     * fluid root landed — the class was present, the rule was written down in
+     * three places, and the only thing that disagreed was the computed value.
+     *
+     * A hit-area floor is an ABSOLUTE, not a proportion: a finger does not
+     * get bigger when the type does. Found by measuring at 375 while checking
+     * a change to the control family, not by reading anything.
+     */
+    @apply absolute left-1/2 top-1/2 h-[44px] w-[44px] -translate-x-1/2 -translate-y-1/2;
   }
   @screen md {
     .tap::after {
@@ -529,11 +544,16 @@
    * semibold (its segmented tabs and toolbar buttons), and the square icon
    * button is 28 on a side with the same 8px corner.
    */
+  /* ONE UNIT ACROSS THE FAMILY (2026-09-03). These two were literal px while
+     `.btn` read its height from the token in rem, so below 1440 — where the
+     root font-size is under 16 — the regular button shrank and the compact one
+     did not, until the small control was the taller of the two. Measured, not
+     reasoned: 38/34 at 1440, 36.8/34 at 1280. */
   .btn-sm {
-    @apply h-[34px] min-h-[34px] rounded-[8px] px-[13px] text-[0.78125rem];
+    @apply h-control-sm min-h-control-sm rounded-[8px] px-[13px] text-[0.78125rem];
   }
   .btn-icon {
-    @apply h-7 min-h-[1.75rem] w-7 rounded-[8px] px-0;
+    @apply h-control-icon min-h-control-icon w-control-icon rounded-[8px] px-0;
   }
 
   /*
@@ -546,9 +566,15 @@
     /* the reference's field: h40, padding-inline 13, 11px corner, and the
        RECESSED surface rather than the card's white — an input that shares
        its container's background has to be found by its border alone */
+    /* THE TOUCH FLOOR STAYS PX, and the rest of the family is rem. Making it
+       `min-h-field-touch` (rem) was measured at 375 and gave 38.5px — a
+       breach of the 44 ruling, introduced by the same edit that fixed the
+       proportions. A hit-area floor is an ABSOLUTE: 44 means 44 physical
+       pixels on a finger, not 44 scaled by a type ramp. `.tap`'s own ::after
+       is `h-11 w-11` for exactly this reason and was already right. */
     @apply min-h-[44px] w-full rounded-md border border-border bg-field px-[13px]
            text-detail leading-tight text-fg transition-colors duration-150
-           placeholder:text-fg-subtle focus:border-accent md:min-h-[40px];
+           placeholder:text-fg-subtle focus:border-accent md:min-h-field;
   }
 
   /*

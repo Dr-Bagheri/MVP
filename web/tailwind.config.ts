@@ -184,6 +184,9 @@ const config: Config = {
       width: {
         menu: rem(SCAFFOLD.menuWidth),
         rail: rem(SCAFFOLD.railWidth),
+        /* the icon button is SQUARE, so its width is the same token as its
+           height — two literals is how a square stops being one */
+        "control-icon": rem(SCAFFOLD.controlHeightIcon),
       },
       maxWidth: {
         "content-small": rem(SCAFFOLD.contentMaxWidthSmall),
@@ -192,10 +195,16 @@ const config: Config = {
       },
       height: {
         control: rem(SCAFFOLD.controlHeight),
+        "control-sm": rem(SCAFFOLD.controlHeightSm),
+        "control-icon": rem(SCAFFOLD.controlHeightIcon),
+        field: rem(SCAFFOLD.fieldHeight),
         topbar: rem(SCAFFOLD.topBarHeight),
       },
       minHeight: {
         control: rem(SCAFFOLD.controlHeight),
+        "control-sm": rem(SCAFFOLD.controlHeightSm),
+        "control-icon": rem(SCAFFOLD.controlHeightIcon),
+        field: rem(SCAFFOLD.fieldHeight),
       },
       boxShadow: {
         /* the reference's depth scale, theme-aware via the CSS tokens */

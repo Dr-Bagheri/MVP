@@ -72,8 +72,41 @@ export const SCAFFOLD = {
   contentMaxWidthSmall: 1040,
   contentMaxWidth: 1240,
   contentMaxWidthWide: 1600,
-  /** Inputs and buttons share it (desktop; below md the 44px hit-area rules). */
+  /**
+   * THE CONTROL FAMILY, one number each and all in the same unit.
+   *
+   * Measured 2026-09-03, in a browser, at two widths — which is the only way
+   * this was ever going to surface. `.btn` and `.btn-icon` took their height
+   * from these tokens (rem, so they ride the fluid root font-size), while
+   * `.btn-sm` and `.input` had been written as literal px. At 1440, where the
+   * root is exactly 16, all four measured right — 38 / 34 / 28 / 40 — and the
+   * family looked correct. Below 1440 the two rem controls shrank and the two
+   * px ones did not: at 1280 the gap between a button and a COMPACT button had
+   * closed from 4px to 2.8, and narrower still it inverts, so the small
+   * control is the taller one. On a 1280 laptop — which is most of them.
+   *
+   * Nothing could see it. The classes were present, the tests were green, the
+   * source read as correct, and every measurement anyone had taken was at the
+   * baseline width where the two units agree. The whole family is one unit
+   * now, so the proportions hold at every width instead of at one.
+   */
   controlHeight: 38,
+  /** the compact control — segmented tabs, toolbar buttons */
+  controlHeightSm: 34,
+  /** the square icon button */
+  controlHeightIcon: 28,
+  /** the field at md and up */
+  fieldHeight: 40,
+  /**
+   * The touch floor below md — and the one number in this block that is NOT
+   * emitted as a rem token. It was, for about ten minutes on 2026-09-03, and
+   * measuring at 375 gave 38.5px: a breach of the 44px ruling introduced by
+   * the very edit that fixed the family's proportions. A hit-area floor is an
+   * ABSOLUTE — 44 means 44 physical pixels under a finger, not 44 scaled by a
+   * type ramp — which is why `.tap`'s own ::after is a literal `h-11 w-11`.
+   * Kept here as the number's home; globals.css spells it px on purpose.
+   */
+  fieldHeightTouch: 44,
 
   /** Typography — the nine roles. Sizes in px. */
   fontSize: {
