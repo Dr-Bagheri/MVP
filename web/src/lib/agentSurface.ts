@@ -9,6 +9,8 @@
  * the model reads and relays, never a throw and never a silent no-op.
  */
 import { recorderControls } from "@/components/echo/recorderControls";
+import { announceChange } from "@/lib/refreshBus";
+import { liveConversation } from "@/lib/liveConversation";
 
 /** What this web surface advertises on every ask. One list, one truth. */
 export const SURFACE_TOOLS: readonly string[] = [
@@ -34,6 +36,26 @@ export const SURFACE_TOOLS: readonly string[] = [
   "create_meeting",
   "create_task",
   "open_meeting",
+
+  /* ── M49: everything a person can do ─────────────────────────────────
+     Each has an executor below and a spec in core's registry; the seam test
+     compares the three, so a name added here and nowhere else fails rather
+     than being advertised to a model that then calls into nothing. */
+  "complete_task",
+  "assign_task",
+  "update_task",
+  "comment_on_task",
+  "add_task_checklist_item",
+  "archive_task",
+  "update_meeting",
+  "add_meeting_item",
+  "approve_minutes",
+  "archive_meeting",
+  "add_record_note",
+  "tag_record",
+  "invite_member",
+  "run_workflow",
+  "rename_conversation",
 ];
 
 /** Routes the agent may navigate to — the same set a human can click to. */
@@ -327,6 +349,271 @@ export async function executeClientTool(
         return { ok: false, detail: refusalDetail(cause, "the meeting was not created") };
       }
     }
+    /*
+     * ── M49: EVERYTHING A PERSON CAN DO ──────────────────────────────────
+     *
+     * Each of these performs the action through the SAME api method the
+     * person's own click uses, in their browser, under their session — so the
+     * server sees a request it cannot tell from a human one, and RLS answers
+     * it exactly as it would for them. That is why these are here and not on
+     * the server: an agent-side tool would run as `echo_agent`, which holds
+     * none of these grants and would need a wall moved to get them.
+     *
+     * Every one returns a SENTENCE on failure, never a thrown error. A tool
+     * that throws tells the model "something went wrong"; a tool that says
+     * "that task no longer exists" tells it what to do next.
+     */
+    case "complete_task": {
+      const id = typeof a.task_id === "string" ? a.task_id : "";
+      if (!id) return { ok: false, detail: "which task?" };
+      try {
+        const { api } = await import("@/api/client");
+        const done = a.done !== false;
+        await api.updateTask(id, { done });
+        /* no refresh topic for tasks or meetings — those pages fetch on
+           navigation, so a change made here shows on the next visit. Naming
+           the gap rather than inventing a topic nothing subscribes to. */
+        return { ok: true, detail: done ? "task completed" : "task reopened" };
+      } catch {
+        return { ok: false, detail: "that task could not be changed" };
+      }
+    }
+    case "assign_task": {
+      const id = typeof a.task_id === "string" ? a.task_id : "";
+      const who = typeof a.user_id === "string" ? a.user_id : "";
+      if (!id || !who) return { ok: false, detail: "a task and a colleague are both needed" };
+      try {
+        const { api } = await import("@/api/client");
+        await api.setTaskAssignee(id, who, a.assigned !== false);
+        /* no refresh topic for tasks or meetings — those pages fetch on
+           navigation, so a change made here shows on the next visit. Naming
+           the gap rather than inventing a topic nothing subscribes to. */
+        return { ok: true, detail: a.assigned === false ? "unassigned" : "assigned" };
+      } catch {
+        return { ok: false, detail: "that assignment could not be made" };
+      }
+    }
+    case "update_task": {
+      const id = typeof a.task_id === "string" ? a.task_id : "";
+      if (!id) return { ok: false, detail: "which task?" };
+      /*
+       * ONLY WHAT WAS SENT. The api patch leaves an omitted field alone, so
+       * building the object from present keys is what keeps "change the
+       * deadline" from blanking the description — the omit-vs-null contract
+       * this repo settled on the profile form.
+       */
+      const patch: Record<string, unknown> = {};
+      if (typeof a.title === "string" && a.title.trim()) patch.title = a.title.trim().slice(0, 300);
+      if (typeof a.description === "string") patch.description = a.description.slice(0, 8000);
+      if (typeof a.priority === "string") patch.priority = a.priority;
+      if (typeof a.due === "string" && a.due.trim()) patch.due_at = a.due.trim();
+      if (Object.keys(patch).length === 0) return { ok: false, detail: "nothing to change" };
+      try {
+        const { api } = await import("@/api/client");
+        await api.updateTask(id, patch as never);
+        /* no refresh topic for tasks or meetings — those pages fetch on
+           navigation, so a change made here shows on the next visit. Naming
+           the gap rather than inventing a topic nothing subscribes to. */
+        return { ok: true, detail: "task updated" };
+      } catch {
+        return { ok: false, detail: "that task could not be updated" };
+      }
+    }
+    case "comment_on_task": {
+      const id = typeof a.task_id === "string" ? a.task_id : "";
+      const body = typeof a.body === "string" ? a.body.trim().slice(0, 4000) : "";
+      if (!id || !body) return { ok: false, detail: "a task and something to say" };
+      try {
+        const { api } = await import("@/api/client");
+        await api.addTaskComment(id, body);
+        /* no refresh topic for tasks or meetings — those pages fetch on
+           navigation, so a change made here shows on the next visit. Naming
+           the gap rather than inventing a topic nothing subscribes to. */
+        return { ok: true, detail: "comment added" };
+      } catch {
+        return { ok: false, detail: "that comment could not be added" };
+      }
+    }
+    case "add_task_checklist_item": {
+      const id = typeof a.task_id === "string" ? a.task_id : "";
+      const label = typeof a.label === "string" ? a.label.trim().slice(0, 500) : "";
+      if (!id || !label) return { ok: false, detail: "a task and an item" };
+      try {
+        const { api } = await import("@/api/client");
+        await api.addTaskChecklistItem(id, label);
+        /* no refresh topic for tasks or meetings — those pages fetch on
+           navigation, so a change made here shows on the next visit. Naming
+           the gap rather than inventing a topic nothing subscribes to. */
+        return { ok: true, detail: "added to the checklist" };
+      } catch {
+        return { ok: false, detail: "that item could not be added" };
+      }
+    }
+    case "archive_task": {
+      const id = typeof a.task_id === "string" ? a.task_id : "";
+      if (!id) return { ok: false, detail: "which task?" };
+      try {
+        const { api } = await import("@/api/client");
+        await api.updateTask(id, { archived: a.archived !== false });
+        /* no refresh topic for tasks or meetings — those pages fetch on
+           navigation, so a change made here shows on the next visit. Naming
+           the gap rather than inventing a topic nothing subscribes to. */
+        return { ok: true, detail: a.archived === false ? "task restored" : "task archived" };
+      } catch {
+        return { ok: false, detail: "that task could not be archived" };
+      }
+    }
+
+    case "update_meeting": {
+      const id = typeof a.meeting_id === "string" ? a.meeting_id : "";
+      if (!id) return { ok: false, detail: "which meeting?" };
+      const patch: Record<string, unknown> = {};
+      if (typeof a.title === "string" && a.title.trim()) patch.title = a.title.trim().slice(0, 300);
+      if (typeof a.when === "string" && a.when.trim()) patch.scheduled_at = a.when.trim();
+      if (typeof a.location === "string") patch.location = a.location.slice(0, 300);
+      if (typeof a.description === "string") patch.description = a.description.slice(0, 8000);
+      if (Object.keys(patch).length === 0) return { ok: false, detail: "nothing to change" };
+      try {
+        const { api } = await import("@/api/client");
+        await api.updateMeeting(id, patch);
+        /* no refresh topic for tasks or meetings — those pages fetch on
+           navigation, so a change made here shows on the next visit. Naming
+           the gap rather than inventing a topic nothing subscribes to. */
+        return { ok: true, detail: "meeting updated" };
+      } catch {
+        /* the closed-minutes refusal arrives here as a 4xx. Named rather than
+           generic: a frozen record is a rule somebody should hear about, not a
+           failure they should retry. */
+        return { ok: false, detail: "that meeting could not be changed — its minutes may be closed" };
+      }
+    }
+    case "add_meeting_item": {
+      const id = typeof a.meeting_id === "string" ? a.meeting_id : "";
+      const body = typeof a.body === "string" ? a.body.trim().slice(0, 2000) : "";
+      const kind = typeof a.kind === "string" ? a.kind : "";
+      if (!id || !body || !kind) return { ok: false, detail: "a meeting, a kind and a body" };
+      try {
+        const { api } = await import("@/api/client");
+        await api.addMeetingItem(id, {
+          kind: kind as never,
+          body,
+          ...(typeof a.owner === "string" && a.owner.trim() ? { owner: a.owner.trim() } : {}),
+        });
+        /* no refresh topic for tasks or meetings — those pages fetch on
+           navigation, so a change made here shows on the next visit. Naming
+           the gap rather than inventing a topic nothing subscribes to. */
+        return { ok: true, detail: "added to the meeting" };
+      } catch {
+        return { ok: false, detail: "that item could not be added" };
+      }
+    }
+    case "approve_minutes": {
+      const id = typeof a.meeting_id === "string" ? a.meeting_id : "";
+      if (!id) return { ok: false, detail: "which meeting?" };
+      try {
+        const { api } = await import("@/api/client");
+        await api.updateMeeting(id, { minutes_approved: true });
+        /* no refresh topic for tasks or meetings — those pages fetch on
+           navigation, so a change made here shows on the next visit. Naming
+           the gap rather than inventing a topic nothing subscribes to. */
+        return { ok: true, detail: "minutes approved" };
+      } catch {
+        return { ok: false, detail: "those minutes could not be approved" };
+      }
+    }
+    case "archive_meeting": {
+      const id = typeof a.meeting_id === "string" ? a.meeting_id : "";
+      if (!id) return { ok: false, detail: "which meeting?" };
+      try {
+        const { api } = await import("@/api/client");
+        await api.updateMeeting(id, { archived: a.archived !== false });
+        /* no refresh topic for tasks or meetings — those pages fetch on
+           navigation, so a change made here shows on the next visit. Naming
+           the gap rather than inventing a topic nothing subscribes to. */
+        return { ok: true, detail: a.archived === false ? "meeting restored" : "meeting archived" };
+      } catch {
+        return { ok: false, detail: "that meeting could not be archived" };
+      }
+    }
+
+    case "add_record_note": {
+      const id = typeof a.record_id === "string" ? a.record_id : "";
+      const body = typeof a.body === "string" ? a.body.trim().slice(0, 4000) : "";
+      if (!id || !body) return { ok: false, detail: "a record and a note" };
+      try {
+        const { api } = await import("@/api/client");
+        await api.addCallNote(id, {
+          kind: "note",
+          body,
+          ...(typeof a.at_ms === "number" && Number.isFinite(a.at_ms)
+            ? { at_ms: Math.max(0, Math.round(a.at_ms)) } : {}),
+        });
+        announceChange("calls");
+        return { ok: true, detail: "note added" };
+      } catch {
+        return { ok: false, detail: "that note could not be added" };
+      }
+    }
+    case "tag_record": {
+      const id = typeof a.record_id === "string" ? a.record_id : "";
+      const tags = Array.isArray(a.tags)
+        ? a.tags.filter((t): t is string => typeof t === "string").map((t) => t.trim()).filter(Boolean)
+        : null;
+      if (!id || tags === null) return { ok: false, detail: "a record and a list of tags" };
+      try {
+        const { api } = await import("@/api/client");
+        await api.setCallTags(id, tags.slice(0, 30));
+        announceChange("calls");
+        return { ok: true, detail: "tags set" };
+      } catch {
+        return { ok: false, detail: "those tags could not be set" };
+      }
+    }
+
+    case "invite_member": {
+      const email = typeof a.email === "string" ? a.email.trim() : "";
+      if (!email.includes("@")) return { ok: false, detail: "a real email address is needed" };
+      try {
+        const { api } = await import("@/api/client");
+        await api.createInvitation(email, a.role === "admin" ? "admin" : "member");
+        announceChange("invitations");
+        return { ok: true, detail: "invitation sent" };
+      } catch {
+        /* the admin-only refusal lands here. The model is told WHAT stopped it
+           so it can say so, rather than reporting a generic failure the person
+           would try again. */
+        return { ok: false, detail: "that invitation was refused — inviting people is an admin's to do" };
+      }
+    }
+
+    case "run_workflow": {
+      const ref = typeof a.workflow === "string" ? a.workflow.trim() : "";
+      if (!ref) return { ok: false, detail: "which workflow?" };
+      try {
+        const { api } = await import("@/api/client");
+        const run = await api.runWorkflow(ref);
+        announceChange("workflows");
+        return { ok: true, detail: `workflow started (${run.status})` };
+      } catch {
+        return { ok: false, detail: "that workflow could not be started" };
+      }
+    }
+
+    case "rename_conversation": {
+      const title = typeof a.title === "string" ? a.title.trim().slice(0, 200) : "";
+      const session = liveConversation();
+      if (!title) return { ok: false, detail: "a title is needed" };
+      if (session === null) return { ok: false, detail: "this conversation has not been saved yet" };
+      try {
+        const { api } = await import("@/api/client");
+        await api.renameSession(session, title);
+        announceChange("sessions");
+        return { ok: true, detail: "conversation renamed" };
+      } catch {
+        return { ok: false, detail: "that conversation could not be renamed" };
+      }
+    }
+
     case "create_task": {
       const title = typeof a.title === "string" ? a.title.trim().slice(0, 200) : "";
       if (!title) return { ok: false, detail: "a task needs a title" };

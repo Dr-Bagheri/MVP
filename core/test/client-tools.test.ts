@@ -4,6 +4,8 @@
  * broker resolves ONLY for the asker, a silent surface is a loud forfeit,
  * and watch mode offers nothing at all.
  */
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -132,7 +134,18 @@ describe("the registry", () => {
   });
 
   it("stays under the ask route's advertisement cap — a cap below the registry silently drops tools", () => {
-    // server.ts slices advertised names at 32; growth past it must fail HERE
-    expect(CLIENT_TOOLS.length).toBeLessThanOrEqual(32);
+    /*
+     * The cap is DERIVED from the registry now (M49) rather than typed as 32,
+     * so this asserts the DERIVATION rather than a number that has to be kept
+     * in step by hand. It fired once, correctly, when the registry grew past
+     * the literal — and the honest fix for "a number somebody must remember to
+     * raise" is to stop having one.
+     */
+    const route = readFileSync(
+      join(process.cwd(), "src", "api", "server.ts"), "utf8",
+    ).replace(/\/\*[\s\S]*?\*\//g, " ");
+    expect(route, "the advertisement cap is a literal again").toContain(
+      ".slice(0, CLIENT_TOOL_NAMES.length)",
+    );
   });
 });

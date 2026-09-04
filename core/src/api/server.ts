@@ -4170,9 +4170,23 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       ? (body.client_tools as unknown[])
           .filter((name): name is string => typeof name === "string")
           .filter((name) => CLIENT_TOOL_NAMES.includes(name))
-          // cap ABOVE the registry size: a cap below it would silently drop
-          // advertised tools — the "advertisement lied" class
-          .slice(0, 32)
+          /*
+           * The cap is DERIVED from the registry, not typed beside it.
+           *
+           * It was the literal 32, chosen when the registry held 22, with a
+           * comment explaining that a cap below the registry silently drops
+           * advertised tools. M49 took the registry past it, and the guard in
+           * client-tools.test.ts fired — the comment had been right and the
+           * number had stopped being.
+           *
+           * A number that must be manually kept above another number is a fact
+           * with no mechanism, which is the shape this repo removes rather than
+           * updates. The cap is still a cap: it bounds what a REQUEST may
+           * advertise, and a request naming more tools than exist is naming
+           * names that are not in the registry, which the filter above has
+           * already dropped.
+           */
+          .slice(0, CLIENT_TOOL_NAMES.length)
       : [];
     /*
      * M34: situational context — WHERE the user is. Routes and IDs only,

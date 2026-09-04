@@ -49,6 +49,12 @@ const str = (description?: string): Record<string, unknown> =>
   ({ type: "string", ...(description ? { description } : {}) });
 const strEnum = (values: readonly string[], description?: string): Record<string, unknown> =>
   ({ type: "string", enum: [...values], ...(description ? { description } : {}) });
+const bool = (description?: string): Record<string, unknown> =>
+  ({ type: "boolean", ...(description ? { description } : {}) });
+const num = (description?: string): Record<string, unknown> =>
+  ({ type: "number", ...(description ? { description } : {}) });
+const arr = (description?: string): Record<string, unknown> =>
+  ({ type: "array", items: { type: "string" }, ...(description ? { description } : {}) });
 const obj = (
   properties: Record<string, unknown>,
   required: string[] = [],
@@ -378,6 +384,226 @@ export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
       description: str("Anything the person doing it needs. Optional."),
       due: str("ISO 8601 deadline. Optional."),
     }, ["title"]),
+    effect: "write",
+  },
+  /*
+   * ── EVERYTHING A PERSON CAN DO (M49, user directive 2026-09-04) ────────
+   *
+   * "Anything that a human can do on this platform, these 3 must do."
+   *
+   * WHY THESE ARE CLIENT TOOLS and not server ones, which is the whole
+   * architectural answer to that directive:
+   *
+   * A server-side tool runs as `echo_agent`, a deliberately narrow role that
+   * holds no DELETE anywhere, cannot write a task or a meeting, and cannot
+   * change a member's role. Giving it those grants would move a wall that
+   * three standing tests exist to hold. A CLIENT tool runs in the browser, as
+   * the signed-in person, through the same BFF route their own click uses —
+   * so the agent's reach is exactly the reach of whoever asked, which is M3's
+   * sentence ("the agent borrows the caller's authority and never more")
+   * expressed as a code path rather than as a promise.
+   *
+   * The honest cost, said out loud: a client tool needs a browser. An
+   * unattended run — a workflow at 3am, the mail poller — is offered none of
+   * these, so what an agent can do while nobody is watching stays smaller
+   * than what it can do in a conversation. That is a real limit, not an
+   * oversight, and closing it means minting definer doors one at a time with
+   * a reason each, not widening a role.
+   *
+   * `effect: "write"` on everything that changes data: the surface decides
+   * whether to ask first, and the server's own `requires_consent` still
+   * governs what it sends.
+   */
+
+  // ── tasks ────────────────────────────────────────────────────────────
+  {
+    name: "complete_task",
+    label: { fa: "بستن تسک", en: "Completing a task" },
+    description:
+      "Mark a task done, or reopen one. Use the id from list_tasks or get_task.",
+    parameters: obj({
+      task_id: str("The task's id."),
+      done: bool("true to complete it, false to reopen. Defaults to true."),
+    }, ["task_id"]),
+    effect: "write",
+  },
+  {
+    name: "assign_task",
+    label: { fa: "واگذاری تسک", en: "Assigning a task" },
+    description:
+      "Give a task to a colleague, or take them off it. `user_id` comes from "
+      + "list_members or list_colleagues — never guess one from a name.",
+    parameters: obj({
+      task_id: str("The task's id."),
+      user_id: str("The colleague's id."),
+      assigned: bool("false to remove them. Defaults to true."),
+    }, ["task_id", "user_id"]),
+    effect: "write",
+  },
+  {
+    name: "update_task",
+    label: { fa: "ویرایش تسک", en: "Updating a task" },
+    description:
+      "Change a task's title, description, priority or deadline. Send only "
+      + "the fields being changed; anything omitted is left alone.",
+    parameters: obj({
+      task_id: str("The task's id."),
+      title: str("A new title."),
+      description: str("A new description."),
+      priority: strEnum(["low", "medium", "high", "critical"], "How urgent it is."),
+      due: str("ISO 8601 deadline."),
+    }, ["task_id"]),
+    effect: "write",
+  },
+  {
+    name: "comment_on_task",
+    label: { fa: "یادداشت روی تسک", en: "Commenting on a task" },
+    description:
+      "Add a comment to a task. Comments are append-only — nobody can edit or "
+      + "delete one afterwards, including you, so write it as a record.",
+    parameters: obj({
+      task_id: str("The task's id."),
+      body: str("What to say."),
+    }, ["task_id", "body"]),
+    effect: "write",
+  },
+  {
+    name: "add_task_checklist_item",
+    label: { fa: "افزودن به چک‌لیست", en: "Adding a checklist item" },
+    description: "Add one line to a task's checklist.",
+    parameters: obj({
+      task_id: str("The task's id."),
+      label: str("The item."),
+    }, ["task_id", "label"]),
+    effect: "write",
+  },
+  {
+    name: "archive_task",
+    label: { fa: "بایگانی تسک", en: "Archiving a task" },
+    description:
+      "Move a task off the board without deleting it. Prefer this to deleting: "
+      + "an archived task can be found again and a deleted one cannot.",
+    parameters: obj({
+      task_id: str("The task's id."),
+      archived: bool("false to bring it back. Defaults to true."),
+    }, ["task_id"]),
+    effect: "write",
+  },
+
+  // ── meetings ─────────────────────────────────────────────────────────
+  {
+    name: "update_meeting",
+    label: { fa: "ویرایش جلسه", en: "Updating a meeting" },
+    description:
+      "Change a meeting's title, time, location or description. Send only what "
+      + "is changing. A meeting whose minutes are CLOSED refuses every change "
+      + "except archiving — that is the record of record and it is frozen.",
+    parameters: obj({
+      meeting_id: str("The meeting's id."),
+      title: str("A new title."),
+      when: str("ISO 8601 start time."),
+      location: str("Where it is held."),
+      description: str("What it is about."),
+    }, ["meeting_id"]),
+    effect: "write",
+  },
+  {
+    name: "add_meeting_item",
+    label: { fa: "افزودن مورد به جلسه", en: "Adding a meeting item" },
+    description:
+      "Record a decision, an action, a question or a risk against a meeting. "
+      + "This is how a conversation becomes something somebody can act on.",
+    parameters: obj({
+      meeting_id: str("The meeting's id."),
+      kind: strEnum(["decision", "action", "question", "risk", "entity"], "What kind of item."),
+      body: str("The item itself, in one or two sentences."),
+      owner: str("Who it belongs to, by name. Optional."),
+    }, ["meeting_id", "kind", "body"]),
+    effect: "write",
+  },
+  {
+    name: "approve_minutes",
+    label: { fa: "تأیید صورت‌جلسه", en: "Approving minutes" },
+    description:
+      "Approve a meeting's minutes. A person is agreeing that the record is "
+      + "right, so do this only when they have said so — never to tidy up.",
+    parameters: obj({ meeting_id: str("The meeting's id.") }, ["meeting_id"]),
+    effect: "write",
+  },
+  {
+    name: "archive_meeting",
+    label: { fa: "بایگانی جلسه", en: "Archiving a meeting" },
+    description: "Move a meeting out of the active list. It is not deleted.",
+    parameters: obj({
+      meeting_id: str("The meeting's id."),
+      archived: bool("false to bring it back. Defaults to true."),
+    }, ["meeting_id"]),
+    effect: "write",
+  },
+
+  // ── the record ───────────────────────────────────────────────────────
+  {
+    name: "add_record_note",
+    label: { fa: "یادداشت روی رونوشت", en: "Adding a note" },
+    description:
+      "Attach a note to a record — a correction, a piece of context, something "
+      + "the transcript does not say. Notes are append-only.",
+    parameters: obj({
+      record_id: str("The record's id."),
+      body: str("The note."),
+      at_ms: num("Where in the recording it belongs, in milliseconds. Optional."),
+    }, ["record_id", "body"]),
+    effect: "write",
+  },
+  {
+    name: "tag_record",
+    label: { fa: "برچسب رونوشت", en: "Tagging a record" },
+    description:
+      "Replace a record's tags. Send the WHOLE list you want it to end up "
+      + "with — this does not add to what is there.",
+    parameters: obj({
+      record_id: str("The record's id."),
+      tags: arr("The complete set of tags."),
+    }, ["record_id", "tags"]),
+    effect: "write",
+  },
+
+  // ── people ───────────────────────────────────────────────────────────
+  {
+    name: "invite_member",
+    label: { fa: "دعوت همکار", en: "Inviting a colleague" },
+    description:
+      "Invite somebody to this organisation by email. Admin only — the server "
+      + "refuses otherwise, and an owner is needed to invite another admin.",
+    parameters: obj({
+      email: str("Their email address."),
+      role: strEnum(["member", "admin"], "What they join as. Defaults to member."),
+    }, ["email"]),
+    effect: "write",
+  },
+
+  // ── workflows ────────────────────────────────────────────────────────
+  {
+    name: "run_workflow",
+    label: { fa: "اجرای گردش‌کار", en: "Running a workflow" },
+    description:
+      "Start one of this organisation's workflows by its slug or handle. Use "
+      + "list_workflows first — a workflow that does not exist is a refusal, "
+      + "not a no-op.",
+    parameters: obj({
+      workflow: str("The workflow's slug or handle."),
+    }, ["workflow"]),
+    effect: "write",
+  },
+
+  // ── conversations ────────────────────────────────────────────────────
+  {
+    name: "rename_conversation",
+    label: { fa: "تغییر نام گفت‌وگو", en: "Renaming this conversation" },
+    description:
+      "Give this conversation a title. Useful when a thread has drifted from "
+      + "the question it was named after.",
+    parameters: obj({ title: str("The new title.") }, ["title"]),
     effect: "write",
   },
   {
