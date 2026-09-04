@@ -33,12 +33,14 @@ vi.mock("@/components/platform/PlatformShell", () => ({
   PlatformShell: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 
+/** every route the page's own router was asked to go to */
+const pushed: string[] = [];
 vi.mock("@/i18n/routing", () => ({
   Link: ({ href, children, ...props }: { href: string; children: React.ReactNode }) => (
     <a href={href} {...props}>{children}</a>
   ),
   usePathname: () => "/assistant",
-  useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
+  useRouter: () => ({ replace: vi.fn(), push: (to: string) => { pushed.push(to); } }),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -108,6 +110,7 @@ describe("one conversation, two windows onto it", () => {
   beforeEach(() => {
     queue = []; wake = null; ended = false; aborted = false;
     persisted.length = 0;
+    pushed.length = 0;
   });
 
   it("keeps answering after the surface that asked is gone, and the next surface has it", async () => {
@@ -145,6 +148,32 @@ describe("one conversation, two windows onto it", () => {
     render(<Hub />);
     await screen.findByText("نیمهٔ دوم");
     expect(screen.getByText("سؤال یک")).toBeTruthy();
+  });
+
+  it("the page keeps the hands while it is the surface on screen", async () => {
+    /*
+     * The assistant page renders the sidebar too, and the sidebar returns null
+     * there — but a component that renders nothing still runs its effects, and
+     * effects run parent-last, so a HIDDEN panel would register after the page
+     * and take the hands out of its window. A consent request would then be
+     * answered by a component that renders nothing: a promise nobody can
+     * resolve, and a run that hangs until the 120-second timeout.
+     *
+     * Asserted through the ONE observable difference: a client tool performed
+     * by the page navigates through the page's router. A hidden claimant would
+     * leave this at zero and look exactly like a tool that was never called.
+     */
+    render(<Hub />);
+    await ask("برو به جلسات");
+    push({ type: "session", id: "sess-1", created: true });
+    push({
+      type: "client_tool_call", id: "ct-1", tool: "navigate", label: "رفتن",
+      args: { path: "/meetings" }, effect: "ui", requires_consent: false,
+    });
+    push({ type: "done", runId: "r-1", failed: false });
+    end();
+    await waitFor(() => expect(assistantSnapshot().streaming).toBe(false));
+    await waitFor(() => expect(pushed).toContain("/meetings"));
   });
 
   it("the second surface sees the SAME conversation, not a copy of the words", async () => {

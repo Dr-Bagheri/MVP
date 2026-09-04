@@ -4,7 +4,33 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-vi.mock("next/navigation", () => ({ usePathname: () => "/fa/meetings" }));
+/* mutable, so one case can put the panel on a surface it must stay off. The
+   default is what every other test in this file assumed. */
+const pathname = vi.fn(() => "/fa/meetings");
+vi.mock("next/navigation", () => ({ usePathname: () => pathname() }));
+
+/**
+ * Every surface that asked the store for the run's hands.
+ *
+ * Wrapped rather than observed through an outcome, and the reason is worth
+ * keeping: this began as its own file asserting that a hidden panel performed
+ * no client tool. It passed alone and failed beside a sibling suite — the
+ * store is module state and vitest gives two files the same instance, so
+ * ANOTHER file's visible sidebar had registered into the store this one was
+ * inspecting. The subject is "did mounting THIS panel claim the hands", and
+ * only a file that owns every mount of it can ask that. Hence: here.
+ */
+const claims: unknown[] = [];
+vi.mock("@/lib/assistantSession", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/assistantSession")>();
+  return {
+    ...actual,
+    registerAssistantSurface: (surface: Parameters<typeof actual.registerAssistantSurface>[0]) => {
+      claims.push(surface);
+      return actual.registerAssistantSurface(surface);
+    },
+  };
+});
 vi.mock("@/i18n/routing", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }));
@@ -214,5 +240,41 @@ describe("the assistant sidebar floats, and is shut until asked for", () => {
     localStorage.setItem("neurai-assistant-sidebar", "1");
     const { container } = await mount();
     await waitFor(() => expect(container.querySelector("textarea")).not.toBeNull());
+  });
+
+  it("does not claim the run's hands on a surface it is not on", async () => {
+    /*
+     * The panel returns null on /assistant — the page IS the assistant there.
+     * But a component that renders nothing still runs its effects, and React
+     * runs effects parent-last: the shell's hidden panel would register AFTER
+     * the page it wraps and take the hands out of its window.
+     *
+     * That is not cosmetic. `askConsent` on a hidden panel sets state that
+     * renders no card, so the promise the tool runner awaits never settles and
+     * the run hangs until the 120-second timeout — "stuck in thinking mode",
+     * by a new road.
+     */
+    pathname.mockReturnValue("/fa/assistant");
+    claims.length = 0;
+    render(<AssistantSidebar />);
+    /* the identity read is async and `visible` is false until it lands, so an
+       immediate assertion would be measuring a panel that had not finished
+       mounting rather than one that decided to stay out */
+    await new Promise((resolve) => { setTimeout(resolve, 30); });
+    expect(document.querySelector("[data-assistant-door]"), "hidden on /assistant").toBeNull();
+    expect(claims, "a panel nobody can see must not answer for the run").toEqual([]);
+  });
+
+  it("THE CONTROL: on a surface it IS on, it takes them", async () => {
+    /*
+     * Without this, the case above passes against a panel that never registers
+     * at all — and a sidebar that can never perform a client tool is a worse
+     * bug than the one being prevented. Only a case that SHOULD claim them can
+     * tell "correctly silent" from "wired to nothing".
+     */
+    pathname.mockReturnValue("/fa/meetings");
+    claims.length = 0;
+    await mount();
+    await waitFor(() => expect(claims.length).toBeGreaterThan(0));
   });
 });

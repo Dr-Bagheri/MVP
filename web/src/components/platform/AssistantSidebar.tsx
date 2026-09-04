@@ -898,7 +898,25 @@ export function AssistantSidebar() {
    * finished after walking back into the platform performs its tools here,
    * which is the correct answer to "whose browser is this".
    */
-  useEffect(() => registerAssistantSurface({
+  useEffect(() => {
+    /*
+     * ONLY WHILE IT IS ON SCREEN, and this guard is load-bearing.
+     *
+     * The panel returns null on the assistant's own surfaces — but a
+     * component that renders nothing still runs its effects, and effects run
+     * parent-last, so the HIDDEN sidebar would have registered AFTER the
+     * assistant page and taken the hands out of its window. A consent request
+     * would then be answered by `setConsent` on a component that renders
+     * nothing: a promise nobody can resolve, and a run that hangs until the
+     * 120-second client-tool timeout — the "stuck in thinking mode" report,
+     * arriving by a new road.
+     *
+     * The voice half is the same argument, less dangerously: the panel's
+     * speech belongs to the panel, and answering aloud from a surface with no
+     * assistant on it is a room talking to itself.
+     */
+    if (!visible) return;
+    return registerAssistantSurface({
     onDelta: (delta) => {
       replyTextRef.current += delta;
       speakNewSentences(false);
@@ -931,7 +949,8 @@ export function AssistantSidebar() {
         // cuts anything already being said (user rule, 2026-08-21)
         onRecordingStarted: () => { muteReplyRef.current = true; stopSpeaking(); },
       }),
-  }), [askConsent, router, pathname, speakNewSentences]);
+    });
+  }, [visible, askConsent, router, pathname, speakNewSentences]);
 
   if (!visible) return null;
 
