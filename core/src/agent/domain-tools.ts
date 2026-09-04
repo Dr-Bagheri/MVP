@@ -211,31 +211,48 @@ export function createDomainTools(): DomainTool<ToolDeps, never>[] {
     label: "اعضای سازمان",
     description:
       "The people in this organization and their roles — id, name, username, "
-      + "email, role (owner/admin/member) and status. Use it to answer "
-      + "questions about who does what, and to find the id of the person a "
-      + "message should go to. It returns only colleagues the user can see.",
+      + "role (owner/admin/member) and status. Use it to answer questions about "
+      + "who does what, and to find the id of the person a message should go "
+      + "to. It returns only colleagues the user can see. It does NOT return "
+      + "email addresses.",
     parameters: Type.Object({
       search: Type.Optional(Type.String({
-        description: "Filter by name, username or email. Omit for everyone.",
+        description: "Filter by name or username. Omit for everyone.",
       })),
       role: Type.Optional(Type.String({
         description: "Filter to one role: owner, admin or member.",
       })),
     }),
     async run({ identity, deps }, args) {
-      const rows = await createMembersRepo(deps.db).list(identity, {
+      const rows = await createMembersRepo(deps.db).roster(identity, {
         search: args.search, role: args.role,
       });
       /* Projected, not passed through. The repo's record grows fields for the
          screen's sake (last_seen_at, avatar_url, job_title…) and a tool that
          spreads the row would silently start feeding every one of them to a
          model the day somebody adds one. Naming the fields is the guard. */
+      /*
+       * NO EMAIL (2026-09-04). `email` is the one column `30_agent_wall`
+       * names by hand — the agent may not read it, deliberately, because a
+       * directory an agent can read is a mailing list an agent can read.
+       *
+       * This tool selected it anyway, through `MEMBER_COLUMNS`, so every
+       * agent run that called it died on `permission denied for column
+       * email` — a tool seeded into both shipped agents by 0168 and unable
+       * to execute for either of them. The projection was already the guard
+       * ("naming the fields is the guard", below); it just named one field
+       * too many.
+       *
+       * The repo read is narrowed too, not only the projection: leaving
+       * `email` in the SELECT and dropping it here would still be a query
+       * the wall refuses, and the tool would keep failing for a reason the
+       * output no longer showed.
+       */
       const members = rows.slice(0, MAX_MEMBERS).map((m) => ({
         id: m.id,
         name: m.display_name,
         name_en: m.display_name_en,
         username: m.username,
-        email: m.email,
         role: m.role,
         status: m.status,
       }));

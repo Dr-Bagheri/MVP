@@ -67,13 +67,53 @@ select t.denied(
   $$update echo.call_note set body = 'ویرایش' where id = '79000000-0000-4000-8000-000000000001'$$,
   'notes are append-only — no update grant exists');
 
--- ── the agent role sees nothing here (deliberate, on record in 0079) ──────
+-- ── THE DECISION 0079 DEFERRED, TAKEN (0176) ─────────────────────────────
+--
+-- 0079 wrote: "the AGENT has no grants on this table for now. Whether the
+-- summarizer may read a call's notes is a real product decision (notes could
+-- steer or contaminate a summary) — deliberately not smuggled in with the
+-- table. When wanted, it is one grant + one policy, decided on record."
+--
+-- It is wanted (user directive, 2026-09-04: the agents must be able to do
+-- anything a person can), and this is the record. What makes it safe is that
+-- the concern was never really about the GRANT:
+--
+--   · A note is content the ASKING PERSON can already read, and RLS gives the
+--     agent exactly the caller's view — `call_note_read` is unchanged, so the
+--     agent sees a note if and only if the person who asked would.
+--   · The contamination path 0079 named is the SUMMARIZER, an unattended run.
+--     It is closed by the TOOLSET, not by the grant: the worker builds its
+--     runs with `createDomainTools()` and no platform tools at all, so no
+--     summarizer has a way to ask for a note. That is asserted in core's
+--     suite, where the toolset lives; a grant cannot express "except in this
+--     kind of run" and pretending otherwise would be the wrong altitude.
+--
+-- So: the read is open, the write is not, and the summarizer still cannot see
+-- a note because nothing offers it one.
 reset role;
 set local role echo_agent;
 select set_config('echo.actor_id', '02000000-0000-4000-8000-000000000002', true);
+select t.ok(
+  (select count(*) from echo.call_note) >= 0,
+  'the agent may READ notes — 0079 deferred this and 0176 decided it');
+
+-- and RLS still decides WHICH notes: the grant did not widen the view, it
+-- opened the table. Without this the line above passes identically against a
+-- policy that shows the agent every org's notes.
+select t.ok(
+  not exists (
+    select 1 from echo.call_note n
+     where n.org_id <> '01000000-0000-4000-8000-000000000001'
+  ),
+  'a note from another organization is still invisible to the agent');
+
+-- the half that must stay shut: reading is not writing.
 select t.denied(
-  $$select count(*) from echo.call_note$$,
-  'the agent has no read on notes — whether the summarizer may see them is a decision not yet taken');
+  $$insert into echo.call_note (call_id, org_id, author_id, kind, body)
+    values ('c2000000-0000-4000-8000-000000000002',
+            '01000000-0000-4000-8000-000000000001',
+            '02000000-0000-4000-8000-000000000002', 'note', 'ساخته‌شده توسط عامل')$$,
+  'the agent may read a note and may never write one');
 
 reset role;
 -- sweep the seeds (B3's count trap)

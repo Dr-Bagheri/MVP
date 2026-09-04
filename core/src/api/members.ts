@@ -218,6 +218,16 @@ export interface MeRecord extends MemberRecord {
  * in this string. It fired within minutes of being armed: db/'s migration
  * landed while I was writing the check that watches for it.
  */
+/** What an agent may know about a colleague — no address, by design. */
+export interface AgentMemberRecord {
+  id: string;
+  display_name: string;
+  display_name_en: string | null;
+  username: string | null;
+  role: string;
+  status: string;
+}
+
 export const MEMBER_COLUMNS = `
   id, email, display_name, display_name_en, username, avatar_url,
   role, status, accepted_at, last_seen_at, created_at
@@ -1020,6 +1030,56 @@ export function createMembersRepo(db: Db) {
         }
         if (code === "42501") throw new NotActivatedError("you may not send messages");
         throw cause;
+      });
+    },
+
+    /**
+     * The roster an AGENT may read (2026-09-04).
+     *
+     * `list()` selects `MEMBER_COLUMNS`, which carries `email`, `accepted_at`,
+     * `last_seen_at` and `created_at` — none of them granted to `echo_agent`,
+     * and `email` denied by name in the standing wall test. So `list_members`,
+     * seeded into both shipped agents by 0168, could not execute for either of
+     * them: every call died on `permission denied for column email`.
+     *
+     * A SECOND QUERY rather than a flag on the first, deliberately. A
+     * `withEmail: boolean` would put the wall inside a caller's argument,
+     * where the safe value is whatever somebody remembered to pass; here the
+     * column simply is not in the statement, and the agent's own grant is the
+     * backstop if this method is ever called from the wrong place.
+     *
+     * The search predicate loses its email clause with the column. That is a
+     * real narrowing and the tool's description says so: an agent cannot find
+     * a colleague by their address, which is the correct amount of directory
+     * for something that also drafts mail.
+     */
+    async roster(
+      identity: Identity,
+      options: { search?: string | undefined; role?: string | undefined } = {},
+    ): Promise<AgentMemberRecord[]> {
+      const pattern = options.search === undefined || options.search.trim() === ""
+        ? null
+        : `%${options.search.trim().replace(/[\\%_]/g, "\\$&")}%`;
+      return db.withIdentity(identity, async (tx: SqlTx) => {
+        const rows = await tx.unsafe<Record<string, unknown>>(
+          `select id, display_name, display_name_en, username, role, status
+             from echo.app_user u
+            where ($1::text is null
+                   or u.display_name ilike $1 escape '\\'
+                   or coalesce(u.display_name_en, '') ilike $1 escape '\\'
+                   or coalesce(u.username, '') ilike $1 escape '\\')
+              and ($2::echo.member_role is null or u.role = $2::echo.member_role)
+            order by u.display_name`,
+          [pattern, options.role ?? null],
+        );
+        return rows.map((r) => ({
+          id: String(r.id),
+          display_name: String(r.display_name ?? ""),
+          display_name_en: (r.display_name_en as string | null) ?? null,
+          username: (r.username as string | null) ?? null,
+          role: String(r.role ?? "member"),
+          status: String(r.status ?? "active"),
+        }));
       });
     },
 

@@ -20,6 +20,7 @@ import { toJsonb, JSONB_PARAM } from "../db/jsonb.ts";
 import { assertUuid, type Db, type SqlTx } from "../db/identity.ts";
 import { DOMAIN_TOOL_NAMES } from "../agent/domain-tools.ts";
 import { createWriteTools } from "../agent/write-tools.ts";
+import { toolsFor } from "../agent/platform-tools.ts";
 import type { Identity } from "../agent/types.ts";
 
 /**
@@ -36,7 +37,30 @@ import type { Identity } from "../agent/types.ts";
 let cachedTools: readonly string[] | undefined;
 export function availableTools(): readonly string[] {
   if (!cachedTools) {
-    cachedTools = [...DOMAIN_TOOL_NAMES, ...createWriteTools().map((t) => t.name)];
+    /*
+     * THE PLATFORM READS BELONG HERE TOO (2026-09-04).
+     *
+     * This list is what `POST /v1/agents` validates a stored tool array
+     * against, and it held seven names — the four domain reads plus the three
+     * write proposals. So an organisation could not author an agent that
+     * declares `list_meetings` or `list_tasks`: the tool existed, the run
+     * offered it, and the form refused to say its name.
+     *
+     * Worse, db/0168 wrote `list_members` directly into both shipped agents'
+     * rows — a value this very validator would have rejected had anybody sent
+     * it through the door. A vocabulary narrower than the implementation is
+     * the wiring seam one layer up, and it fails in the direction that looks
+     * like a typo.
+     *
+     * Derived from the producers, never hand-enumerated: a guard's coverage
+     * list is itself a seam, and this repo has already watched one drift with
+     * a hole exactly where the break came.
+     */
+    cachedTools = [
+      ...DOMAIN_TOOL_NAMES,
+      ...createWriteTools().map((t) => t.name),
+      ...toolsFor("all").map((t) => t.name),
+    ];
   }
   return cachedTools;
 }

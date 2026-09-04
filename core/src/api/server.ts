@@ -41,6 +41,7 @@ import { createModelsRepo, firstServable, type ModelsRepo } from "./models.ts";
 import { createPlatformRepo, type PlatformRepo } from "./platform.ts";
 import { createTranscriptsRepo, type TranscriptsRepo } from "./transcripts.ts";
 import { createDomainTools } from "../agent/domain-tools.ts";
+import { toolsFor } from "../agent/platform-tools.ts";
 import { createAgentRunStore } from "../agent/run-store.ts";
 import { createAgentRuntime } from "../agent/runtime.ts";
 import { findProposal, recordDecision } from "../agent/proposals.ts";
@@ -206,8 +207,32 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
    * people's code, and it was in my own option handling within an hour of my
    * writing that sentence to the steward.
    */
+  /*
+   * THE PLATFORM READS WERE NEVER WIRED IN (found 2026-09-04, rule 13½ at
+   * feature scale).
+   *
+   * `platform-tools.ts` implements seventeen of them — list meetings, get a
+   * meeting, list tasks, get a task, list colleagues, member stats, a
+   * record's notes. Its own header says "Echo carries EVERYTHING". Echo
+   * carried none of them: `createPlatformTools()` had exactly two callers,
+   * both inside `delegation.ts`, so the only way to reach a single one was
+   * for Echo to ask Roya or Ava — which is precisely the behaviour the user
+   * asked to stop ("i dont want echo to call them each time").
+   *
+   * That is the second producer-with-no-consumer at this scale in this repo;
+   * the webhook dispatcher was the first, written and line-reviewed and never
+   * registered as a queue handler. `test/queue-handlers.test.ts` exists
+   * because of that one. `test/tool-registry.test.ts` exists because of this.
+   *
+   * `toolsFor("all")` rather than a specialism: the split between analyst and
+   * operator is about which colleague to ASK, and Echo is not asking anyone.
+   */
   const domainTools = options.tools === undefined
-    ? ([...createDomainTools(), ...createWriteTools()] as unknown as DomainTool<TDeps, never>[])
+    ? ([
+      ...createDomainTools(),
+      ...createWriteTools(),
+      ...toolsFor("all"),
+    ] as unknown as DomainTool<TDeps, never>[])
     : options.tools;
   // agentToolsDb, not the raw db: every DB call a tool makes runs on
   // echo_agent (M3's "the agent borrows the caller's authority and never
