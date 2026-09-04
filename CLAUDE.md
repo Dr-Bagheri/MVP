@@ -3542,3 +3542,73 @@ sessions) for the cross-session narrative.
   colour — which is the assertion the broken version would have failed and
   "the accent class is in the string" would not.
   core 1356 tests · web 1038 tests + gate + sweep · db unchanged (190).
+- 2026-09-05 (later — LEAVING A ROOM STICKS, A PROJECT CAN BE DELETED, AND
+  THE SITE GETS ITS FIRST HONEST DRAFT; db 0191): a user report that had been
+  filed twice, four smaller corrections, and the marketing site.
+  **THE ROOM.** "When I remove the room the chat box didn't get empty; after I
+  refreshed the page it got empty." The fix I shipped that morning DID clear
+  the box — and the auto-select effect put the room straight back, because
+  `leaveRoom` sets `current` to null while `channels` is still the STALE array
+  that contains it. One frame later the effect found the deleted room at index
+  0 and selected it again; a reload "fixed" it because the list arrives without
+  it. A `dismissed` ref now suppresses auto-select until the reader picks a
+  room, and the empty box says WHICH nothing it is («اتاقی انتخاب نشده است»),
+  because "no messages in this room" is a claim about a room and there is no
+  room. **My test could not see any of it**: it set `CHANNELS = []` BEFORE
+  pressing delete — pre-emptying the list, which is the one state where the
+  race cannot happen. Minted: **a fixture that removes the race is a fixture
+  that removes the test** — the setup must be the state the person was in, not
+  the state that makes the assertion easy. Rewritten to leave the list stale,
+  it fails against the old code and passes against the new, and a third case
+  (choosing a room brings it back) is the control that a version which simply
+  stopped selecting rooms would fail.
+  **A PROJECT CAN BE DELETED (0191)**, and the migration is the whole feature:
+  `echo_app` held `select, insert, update` on echo.project and nothing else, so
+  a delete button would have been refused by the GRANT — for everybody, which
+  is the refusal `t.writes_nothing` exists to tell apart from a policy refusing
+  one caller. Worse, 0181 pointed the task category and the chat channel at a
+  project with `on delete cascade`, and `echo.task.topic_id` references that
+  category with NO `on delete` clause at all — so NO ACTION. The chain
+  RAISES for any project with a card on it: the button would have worked on an
+  empty project and 500'd on every project anybody had used. **0188's lesson
+  arriving from the other direction, and invisible in review because each
+  constraint reads as deliberate on its own.** Both cascades became
+  column-specific `set null (project_id)`: deleting a project deletes the
+  PROJECT — the board keeps its folder, the room keeps every message, and only
+  the membership goes with it. The closed DELETE allow-list fired on the new
+  grant, exactly as designed, and `project` is argued in both halves of the one
+  list. Its db test caught its own vacuum too: the first version selected the
+  org's first `task_column` and the fixture seeds none, so the card never
+  existed and «the card is still on the board» failed for a reason that had
+  nothing to do with the migration — it seeds its own column now and asserts
+  the subject exists BEFORE the delete.
+  **THE PROJECTS BOARD** took the task board's column character for character
+  (300px, the 2xl corner, the surface ground, the card shadow, the 70vh floor
+  — it had been 288px on a tinted ground with no floor, so columns changed
+  height as projects moved), and «پروژهٔ جدید» left the toolbar for a dashed
+  «افزودن پروژه» row inside each column, the board's own add-card control. That
+  move created a dead end the test caught: with zero projects the empty state
+  replaced the board, so an admin had no way to make the FIRST project on the
+  default view. The kanban renders its columns even with nothing in them now —
+  a board with no cards still has its columns, which is what a board is.
+  Also: the new-task date picker opens UPWARD (`bottom-full`), because the
+  field sits low in the dialog and six weeks of calendar ran past its edge.
+  **THE WEBSITE.** Redesigned in Lovable against what the platform IS now: the
+  live neurai.pt still says «calls become knowledge, meetings become memory» —
+  a claim about RECORDING — on the retired violet brand, with the centre
+  "Enter the Platform" button the user asked to remove. The new one is
+  agent-shaped («دستیارهایی که کار می‌کنند، نه ابزارهایی که منتظر می‌مانند»),
+  on the product's own green, with the login as a quiet top-bar link and no
+  call to action anywhere else. **Its palette had drifted and only a conversion
+  showed it**: Lovable rendered the tokens as oklch, and `--brand` computes to
+  **#00A850** rather than the product's **#0FA85D** — a 15-point channel delta
+  that reads as correct in the source, since the brief listed the right hex.
+  The CSS-layer failure again, one layer out from the morning's mic. Four more
+  found by reading rather than looking: the login link is `href="#login"` on a
+  header carrying `id="login"` (the one door on the page scrolls to itself),
+  `CHAIN_LIMIT: 03` when the cap shipped that day is 4, `@Arman`/`@Dena` when
+  our agents are roya/ava/echo, and two figures that rot every release with no
+  date attached. The figures were verified rather than trusted (1356 + 1038 =
+  2,394; 190 migrations on disk). Lovable's free workspace ran out of credits
+  before the fixes could be sent, so they are applied by hand at the port.
+  db 191 migrations · core 1357 tests · web 1042 tests + gate + sweep.
