@@ -545,10 +545,11 @@ export default function ProfilePage({
           button already said. Full width and alone now, because it is the
           last thing on the page and nothing else competes for the press.
 
-          It ends THIS session on THIS device, and the hint still says so: a
-          sign-out that read as "everywhere" would be a promise this flow does
-          not make. The tone stays the soft danger wash rather than a solid
-          `btn-danger` — signing out is reversible by signing back in.
+          The line under it went on the same directive (2026-09-04). It said
+          the sign-out closes this session on this device only — true, and a
+          caveat about a button nobody had asked a question about. The tone
+          stays the soft danger wash rather than a solid `btn-danger`:
+          signing out is reversible by signing back in.
         */}
         <Section divided>
           <button
@@ -558,7 +559,6 @@ export default function ProfilePage({
           >
             {tPlatform("signOut")}
           </button>
-          <p className="mt-2 text-xs text-fg-muted">{t("signOutHint")}</p>
         </Section>
         </>
       ) : null}

@@ -174,7 +174,20 @@ export function Section({
        divider */
     <section
       hidden={hidden}
-      className={`py-6 first-of-type:pt-0 ${divided ? "border-t border-border" : ""}`}
+      /*
+       * `first-of-type:pt-0` removes the top padding from the first section
+       * on a page, so it does not sit a rhythm step below a page header that
+       * already carries one. But a DIVIDED section draws a hairline above
+       * itself, and with the padding gone that rule lands flush against its
+       * own heading (user report, 2026-09-04: "the divider is too close to
+       * the section above it" — on the agent page, whose first section is
+       * both first and divided).
+       *
+       * A rule with nothing under it is not a separator, it is an underline
+       * on the thing above. So the exemption applies only where there is no
+       * rule to give room to.
+       */
+      className={`py-6 ${divided ? "border-t border-border" : "first-of-type:pt-0"}`}
     >
       {/* audit finding, 2026-09-02: this h2 wore `text-xl`, and the re-pitched
           scale points `xl` at rem(SCAFFOLD.fontSize.pageTitle) = 16 — so every

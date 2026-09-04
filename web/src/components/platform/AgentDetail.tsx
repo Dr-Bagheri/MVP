@@ -210,10 +210,12 @@ export function AgentDetail({ handle }: { handle: string }) {
         that answer is: everything it can look at, and then, at the end, what it
         can change.
       */}
+      {/* NO INTRO LINE (user directive, 2026-09-04). It counted the tools
+          and then said the reach equals the reader's own — a sentence that
+          restates the page under it and carries a number that has to be
+          right forever. The groups below say what it can do, and each one
+          carries its own count. */}
       <Section title={t("detailTools")} divided>
-        <p className="mb-5 max-w-prose text-sm leading-6 text-fg-muted">
-          {t("detailToolsIntro", { count: digits(tools.length, locale) })}
-        </p>
         <div className="grid gap-4 lg:grid-cols-2">
           {groups.map((group) => (
             <section key={group.key} className="rounded-xl border border-border bg-surface p-4">
@@ -246,19 +248,28 @@ export function AgentDetail({ handle }: { handle: string }) {
         </div>
       </Section>
 
-      {/* ── the words it was given ──────────────────────────────────────── */}
-      <Section title={t("detailPrompt")} divided>
-        {agent.instructions === null ? (
-          /* withheld for the two the product ships — their prompt is product
-             configuration, and saying so is better than an empty panel that
-             looks like a prompt nobody wrote */
-          <p className="text-sm text-fg-muted">{t("detailPromptShipped")}</p>
-        ) : (
+      {/*
+        ── THE WORDS IT WAS GIVEN ────────────────────────────────────────
+
+        The standing instruction an agent carries into every answer — the
+        sentences that make one assistant brief and another thorough. For an
+        agent this organization wrote, it is the thing that MAKES it, and
+        reading it is how somebody decides whether to trust its answers.
+
+        For the three the product ships it is product configuration and the
+        wire sends null, so this panel could only ever say "it is
+        configuration" — a heading over an apology (user directive,
+        2026-09-04: "explain what Instructions is; if it does not serve any
+        purpose remove it too"). It serves a purpose exactly where there is
+        something to read, so that is where it renders now.
+      */}
+      {agent.instructions === null ? null : (
+        <Section title={t("detailPrompt")} divided>
           <p className="whitespace-pre-wrap rounded-xl bg-surface-2 p-4 text-sm leading-7 text-fg">
             {agent.instructions}
           </p>
-        )}
-      </Section>
+        </Section>
+      )}
     </PageContainer>
   );
 }

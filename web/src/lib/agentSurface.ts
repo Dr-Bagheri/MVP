@@ -57,6 +57,47 @@ export const SURFACE_TOOLS: readonly string[] = [
   "run_workflow",
   "rename_conversation",
   "invite_to_meeting",
+
+  /* ── M50: the rest of what a person can do (user directive) ─────────
+     Reads the browser already had, and writes that went through screens
+     no tool could reach. Every one runs on the person's own session, so
+     the reach grew and the authority did not. */
+  "whoami_surface",
+  "list_conversations",
+  "read_conversation",
+  "archive_conversation",
+  "share_conversation",
+  "list_workflows",
+  "list_workflow_runs",
+  "set_workflow_enabled",
+  "install_workflow_starter",
+  "list_skills",
+  "list_agents",
+  "list_invitations",
+  "revoke_invitation",
+  "list_connectors",
+  "list_notifications",
+  "mark_notification_read",
+  "list_task_columns",
+  "create_task_column",
+  "create_task_label",
+  "set_task_label",
+  "create_task_topic",
+  "update_task_checklist_item",
+  "update_meeting_item",
+  "extract_meeting_items",
+  "create_meeting_topic",
+  "set_meeting_join_code",
+  "resummarize_record",
+  "translate_record",
+  "retry_record",
+  "rename_speaker",
+  "link_speaker",
+  "create_person",
+  "rename_member",
+  "list_allowed_models",
+  "set_model_allowed",
+  "set_role_permission",
 ];
 
 /** Routes the agent may navigate to — the same set a human can click to. */
@@ -139,6 +180,12 @@ async function resolveColleague(handle: string): Promise<
     detail: `several colleagues matched: ${loose.slice(0, 5).map((r) => r.display_name).join("، ")} — ask the user which`,
   };
 }
+
+/* the label palette, mirrored from the board's own (TaskDialogs.LABEL_COLORS)
+   so a model cannot invent a colour the theme has no answer for */
+const TASK_LABEL_COLOURS = [
+  "grey", "blue", "green", "amber", "red", "purple", "teal", "pink",
+] as const;
 
 /** a refused api write reads as the SERVER's sentence, not a crash */
 function refusalDetail(cause: unknown, fallback: string): string {
@@ -471,6 +518,536 @@ export async function executeClientTool(
         return { ok: true, detail: a.archived === false ? "task restored" : "task archived" };
       } catch {
         return { ok: false, detail: "that task could not be archived" };
+      }
+    }
+
+    /* ── M50 ─────────────────────────────────────────────────────────── */
+
+    case "whoami_surface": {
+      /* the SCREEN, not the person — `whoami` on the server answers who they
+         are; this answers where they are standing, which is the half a
+         browser is the only thing that knows */
+      return {
+        ok: true,
+        detail: JSON.stringify({
+          path: window.location.pathname,
+          title: document.title,
+        }),
+      };
+    }
+
+    case "list_conversations": {
+      try {
+        const { api } = await import("@/api/client");
+        const rows = await api.agentSessions(a.archived === true);
+        return { ok: true, detail: JSON.stringify(rows.slice(0, 40)) };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the conversations could not be read") };
+      }
+    }
+
+    case "read_conversation": {
+      /* validate BEFORE resolving: an empty handle should not reach the
+         network, and a resolver asked to find "" can only answer wrongly */
+      const asked = typeof a.conversation === "string" ? a.conversation.trim() : "";
+      if (!asked) return { ok: false, detail: "a conversation is required" };
+      const who = await resolveConversation(asked);
+      if (!who.ok) return { ok: false, detail: who.detail };
+      try {
+        const { api } = await import("@/api/client");
+        return { ok: true, detail: JSON.stringify(await api.agentMessages(who.id)) };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "that conversation could not be read") };
+      }
+    }
+
+    case "archive_conversation": {
+      /* validate BEFORE resolving: an empty handle should not reach the
+         network, and a resolver asked to find "" can only answer wrongly */
+      const asked = typeof a.conversation === "string" ? a.conversation.trim() : "";
+      if (!asked) return { ok: false, detail: "a conversation is required" };
+      const who = await resolveConversation(asked);
+      if (!who.ok) return { ok: false, detail: who.detail };
+      const on = a.archived !== false;
+      try {
+        const { api } = await import("@/api/client");
+        await api.archiveSession(who.id, on);
+        return { ok: true, detail: on ? "archived" : "restored" };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "that conversation could not be archived") };
+      }
+    }
+
+    case "share_conversation": {
+      /* validate BEFORE resolving: an empty handle should not reach the
+         network, and a resolver asked to find "" can only answer wrongly */
+      const asked = typeof a.conversation === "string" ? a.conversation.trim() : "";
+      if (!asked) return { ok: false, detail: "a conversation is required" };
+      const who = await resolveConversation(asked);
+      if (!who.ok) return { ok: false, detail: who.detail };
+      const on = a.shared !== false;
+      try {
+        const { api } = await import("@/api/client");
+        await api.setShared(who.id, on);
+        return { ok: true, detail: on ? "shared with the organization" : "no longer shared" };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "sharing could not be changed") };
+      }
+    }
+
+    case "list_workflows": {
+      try {
+        const { api } = await import("@/api/client");
+        return { ok: true, detail: JSON.stringify(await api.workflows()) };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the workflows could not be read") };
+      }
+    }
+
+    case "list_workflow_runs": {
+      try {
+        const { api } = await import("@/api/client");
+        return { ok: true, detail: JSON.stringify((await api.workflowRuns()).slice(0, 30)) };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the runs could not be read") };
+      }
+    }
+
+    case "set_workflow_enabled": {
+      const handle = String(a.workflow ?? "").trim().toLowerCase();
+      if (!handle || typeof a.enabled !== "boolean") {
+        return { ok: false, detail: "a workflow and enabled are required" };
+      }
+      try {
+        const { api } = await import("@/api/client");
+        const rows = await api.authoredWorkflows();
+        const hit = rows.find((row) => row.id === handle || row.name.toLowerCase() === handle);
+        if (!hit) return { ok: false, detail: "no workflow of this organization matched that name" };
+        await api.patchWorkflow(hit.id, { enabled: a.enabled });
+        return { ok: true, detail: a.enabled ? "switched on" : "switched off" };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the workflow could not be changed") };
+      }
+    }
+
+    case "install_workflow_starter": {
+      const handle = String(a.starter ?? "").trim().toLowerCase();
+      if (!handle) return { ok: false, detail: "a starter is required" };
+      try {
+        const { api } = await import("@/api/client");
+        const rows = await api.workflowStarters();
+        const hit = rows.find((row) => row.key === handle || row.name.toLowerCase() === handle);
+        if (!hit) return { ok: false, detail: "no shipped workflow matched that name" };
+        await api.installStarter(hit.key);
+        return { ok: true, detail: `installed ${hit.name}` };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the workflow could not be installed") };
+      }
+    }
+
+    case "list_skills": {
+      try {
+        const { api } = await import("@/api/client");
+        return { ok: true, detail: JSON.stringify(await api.skills()) };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the skills could not be read") };
+      }
+    }
+
+    case "list_agents": {
+      try {
+        const { api } = await import("@/api/client");
+        return { ok: true, detail: JSON.stringify(await api.agents()) };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the assistants could not be read") };
+      }
+    }
+
+    case "list_invitations": {
+      try {
+        const { api } = await import("@/api/client");
+        return { ok: true, detail: JSON.stringify(await api.invitations()) };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the invitations could not be read") };
+      }
+    }
+
+    case "revoke_invitation": {
+      const email = String(a.email ?? "").trim().toLowerCase();
+      if (!email) return { ok: false, detail: "an email is required" };
+      try {
+        const { api } = await import("@/api/client");
+        const rows = await api.invitations();
+        const hit = rows.find((row) => row.email.toLowerCase() === email);
+        if (!hit) return { ok: false, detail: "no live invitation for that address" };
+        await api.revokeInvitation(hit.id);
+        return { ok: true, detail: "revoked" };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the invitation could not be revoked") };
+      }
+    }
+
+    case "list_connectors": {
+      try {
+        const { api } = await import("@/api/client");
+        return { ok: true, detail: JSON.stringify(await api.connectors()) };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the connections could not be read") };
+      }
+    }
+
+    case "list_notifications": {
+      try {
+        const { api } = await import("@/api/client");
+        const res = await api.cards();
+        return { ok: true, detail: JSON.stringify(res.cards.slice(0, 30)) };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the notifications could not be read") };
+      }
+    }
+
+    case "mark_notification_read": {
+      const id = String(a.card_id ?? "").trim();
+      if (!id) return { ok: false, detail: "a card_id is required" };
+      try {
+        const { api } = await import("@/api/client");
+        await api.markCardRead(id);
+        return { ok: true, detail: "marked read" };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the notification could not be marked") };
+      }
+    }
+
+    case "list_task_columns": {
+      try {
+        const { api } = await import("@/api/client");
+        const board = await api.taskBoard();
+        return { ok: true, detail: JSON.stringify(board.columns) };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the board could not be read") };
+      }
+    }
+
+    case "create_task_column": {
+      const name = String(a.name ?? "").trim();
+      if (!name) return { ok: false, detail: "a name is required" };
+      try {
+        const { api } = await import("@/api/client");
+        const row = await api.createTaskColumn(name);
+        return { ok: true, detail: `created ${row.name}` };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the column could not be created") };
+      }
+    }
+
+    case "create_task_label": {
+      const name = String(a.name ?? "").trim();
+      if (!name) return { ok: false, detail: "a name is required" };
+      /* `find`, not a cast: an unknown colour becomes grey instead of being
+         asserted into a union it is not in */
+      const asked = String(a.color ?? "");
+      const colour = TASK_LABEL_COLOURS.find((entry) => entry === asked) ?? "grey";
+      try {
+        const { api } = await import("@/api/client");
+        await api.createTaskLabel(name, colour);
+        return { ok: true, detail: `created ${name}` };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the label could not be created") };
+      }
+    }
+
+    case "set_task_label": {
+      const taskId = String(a.task_id ?? "").trim();
+      const label = String(a.label ?? "").trim().toLowerCase();
+      if (!taskId || !label) return { ok: false, detail: "a task and a label are required" };
+      try {
+        const { api } = await import("@/api/client");
+        const labels = await api.taskLabels();
+        const hit = labels.find((row) => row.name.toLowerCase() === label);
+        if (!hit) return { ok: false, detail: "no label of that name — create_task_label makes one" };
+        await api.setTaskLabel(taskId, hit.id, a.on !== false);
+        return { ok: true, detail: a.on === false ? "removed" : "added" };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the label could not be set") };
+      }
+    }
+
+    case "create_task_topic": {
+      const name = String(a.name ?? "").trim();
+      if (!name) return { ok: false, detail: "a name is required" };
+      try {
+        const { api } = await import("@/api/client");
+        await api.createTaskTopic(name);
+        return { ok: true, detail: `created ${name}` };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the topic could not be created") };
+      }
+    }
+
+    case "update_task_checklist_item": {
+      const itemId = String(a.item_id ?? "").trim();
+      if (!itemId) return { ok: false, detail: "an item_id is required" };
+      const patch: { label?: string; done?: boolean } = {};
+      if (typeof a.done === "boolean") patch.done = a.done;
+      if (typeof a.label === "string" && a.label.trim() !== "") patch.label = a.label.trim();
+      if (Object.keys(patch).length === 0) return { ok: false, detail: "nothing to change" };
+      try {
+        const { api } = await import("@/api/client");
+        await api.updateTaskChecklistItem(itemId, patch);
+        return { ok: true, detail: "updated" };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the line could not be updated") };
+      }
+    }
+
+    case "update_meeting_item": {
+      const meetingId = String(a.meeting_id ?? "").trim();
+      const itemId = String(a.item_id ?? "").trim();
+      if (!meetingId || !itemId) return { ok: false, detail: "a meeting and an item are required" };
+      const patch: { body?: string; done?: boolean; owner?: string | null } = {};
+      if (typeof a.body === "string" && a.body.trim() !== "") patch.body = a.body.trim();
+      if (typeof a.done === "boolean") patch.done = a.done;
+      if (typeof a.owner === "string") patch.owner = a.owner.trim() === "" ? null : a.owner.trim();
+      if (Object.keys(patch).length === 0) return { ok: false, detail: "nothing to change" };
+      try {
+        const { api } = await import("@/api/client");
+        await api.updateMeetingItem(meetingId, itemId, patch);
+        announceChange("calls");
+        return { ok: true, detail: "updated" };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the item could not be updated") };
+      }
+    }
+
+    case "extract_meeting_items": {
+      const meetingId = String(a.meeting_id ?? "").trim();
+      if (!meetingId) return { ok: false, detail: "a meeting is required" };
+      try {
+        const { api } = await import("@/api/client");
+        const res = await api.extractMeetingItems(meetingId);
+        announceChange("calls");
+        /* zero is a RESULT, not a failure: a meeting whose summary holds no
+           decisions is a real answer and must not read as a broken tool */
+        return { ok: true, detail: res.added === 0 ? "nothing to extract" : `added ${res.added}` };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the items could not be extracted") };
+      }
+    }
+
+    case "create_meeting_topic": {
+      const name = String(a.name ?? "").trim();
+      if (!name) return { ok: false, detail: "a name is required" };
+      try {
+        const { api } = await import("@/api/client");
+        await api.createMeetingTopic(name);
+        announceChange("calls");
+        return { ok: true, detail: `created ${name}` };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the topic could not be created") };
+      }
+    }
+
+    case "set_meeting_join_code": {
+      const meetingId = String(a.meeting_id ?? "").trim();
+      if (!meetingId || typeof a.enabled !== "boolean") {
+        return { ok: false, detail: "a meeting and enabled are required" };
+      }
+      try {
+        const { api } = await import("@/api/client");
+        const res = await api.setMeetingJoinCode(meetingId, a.enabled);
+        announceChange("calls");
+        /* the CODE itself is never returned to the model: it is a bearer
+           capability, and a capability in a transcript is a capability
+           anybody who reads that thread has */
+        return { ok: true, detail: res.join_code ? "a guest link is now active" : "the guest link is revoked" };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the guest link could not be changed") };
+      }
+    }
+
+    case "resummarize_record": {
+      /* the empty handle refuses HERE, the way recordAction() does: a
+         resolver asked to find "" reaches the network to answer a question
+         nobody asked */
+      const named = typeof a.record === "string" ? a.record.trim() : "";
+      if (!named) return { ok: false, detail: "record is required" };
+      const who = await resolveRecord(named);
+      if (!who.ok) return { ok: false, detail: who.detail };
+      const opts: { instruction?: string; label?: string } = {};
+      if (typeof a.instruction === "string" && a.instruction.trim() !== "") {
+        opts.instruction = a.instruction.trim();
+      }
+      if (typeof a.label === "string" && a.label.trim() !== "") opts.label = a.label.trim();
+      try {
+        const { api } = await import("@/api/client");
+        await api.resummarize(who.id, opts);
+        announceChange("calls");
+        return { ok: true, detail: "a new summary is being written" };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the summary could not be requested") };
+      }
+    }
+
+    case "translate_record": {
+      /* the empty handle refuses HERE, the way recordAction() does: a
+         resolver asked to find "" reaches the network to answer a question
+         nobody asked */
+      const named = typeof a.record === "string" ? a.record.trim() : "";
+      if (!named) return { ok: false, detail: "record is required" };
+      const who = await resolveRecord(named);
+      if (!who.ok) return { ok: false, detail: who.detail };
+      const what = a.what === "transcript" ? "transcript" : "summary";
+      try {
+        const { api } = await import("@/api/client");
+        const res = await api.translateCall(who.id, what);
+        return { ok: true, detail: res.text };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the translation was refused") };
+      }
+    }
+
+    case "retry_record": {
+      /* the empty handle refuses HERE, the way recordAction() does: a
+         resolver asked to find "" reaches the network to answer a question
+         nobody asked */
+      const named = typeof a.record === "string" ? a.record.trim() : "";
+      if (!named) return { ok: false, detail: "record is required" };
+      const who = await resolveRecord(named);
+      if (!who.ok) return { ok: false, detail: who.detail };
+      try {
+        const { api } = await import("@/api/client");
+        const res = await api.retryCall(who.id);
+        announceChange("calls");
+        return { ok: true, detail: `now ${res.status}` };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the record could not be retried") };
+      }
+    }
+
+    case "rename_speaker": {
+      /* the empty handle refuses HERE, the way recordAction() does: a
+         resolver asked to find "" reaches the network to answer a question
+         nobody asked */
+      const named = typeof a.record === "string" ? a.record.trim() : "";
+      if (!named) return { ok: false, detail: "record is required" };
+      const who = await resolveRecord(named);
+      if (!who.ok) return { ok: false, detail: who.detail };
+      const speakerId = String(a.speaker_id ?? "").trim();
+      const label = String(a.label ?? "").trim();
+      if (!speakerId || !label) return { ok: false, detail: "a speaker and a label are required" };
+      try {
+        const { api } = await import("@/api/client");
+        await api.renameSpeaker(who.id, speakerId, label);
+        announceChange("calls");
+        return { ok: true, detail: `now called ${label}` };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the speaker could not be renamed") };
+      }
+    }
+
+    case "link_speaker": {
+      /* the empty handle refuses HERE, the way recordAction() does: a
+         resolver asked to find "" reaches the network to answer a question
+         nobody asked */
+      const named = typeof a.record === "string" ? a.record.trim() : "";
+      if (!named) return { ok: false, detail: "record is required" };
+      const who = await resolveRecord(named);
+      if (!who.ok) return { ok: false, detail: who.detail };
+      const speakerId = String(a.speaker_id ?? "").trim();
+      if (!speakerId) return { ok: false, detail: "a speaker is required" };
+      const wanted = typeof a.person === "string" ? a.person.trim() : "";
+      try {
+        const { api } = await import("@/api/client");
+        let personId: string | null = null;
+        if (wanted !== "") {
+          const people = await api.directory();
+          const lowered = wanted.toLowerCase();
+          const hit = people.filter((row) => row.display_name.toLowerCase() === lowered);
+          if (hit.length !== 1) {
+            return {
+              ok: false,
+              detail: hit.length === 0
+                ? "nobody in the voice directory has that name — create_person adds one"
+                : "several people share that name — ask the user which",
+            };
+          }
+          personId = hit[0]!.id;
+        }
+        await api.linkSpeaker(who.id, speakerId, personId);
+        announceChange("calls");
+        return { ok: true, detail: personId === null ? "unlinked" : `linked to ${wanted}` };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the speaker could not be linked") };
+      }
+    }
+
+    case "create_person": {
+      const name = String(a.name ?? "").trim();
+      if (!name) return { ok: false, detail: "a name is required" };
+      try {
+        const { api } = await import("@/api/client");
+        await api.createPerson(name, typeof a.title === "string" ? a.title.trim() : "");
+        return { ok: true, detail: `added ${name}` };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the person could not be added") };
+      }
+    }
+
+    case "rename_member": {
+      const who = await resolveMember(String(a.member ?? ""));
+      if (!who.ok) return { ok: false, detail: who.detail };
+      const patch: { display_name?: string; username?: string | null } = {};
+      if (typeof a.display_name === "string" && a.display_name.trim() !== "") {
+        patch.display_name = a.display_name.trim();
+      }
+      if (typeof a.username === "string") {
+        patch.username = a.username.trim() === "" ? null : a.username.trim();
+      }
+      if (Object.keys(patch).length === 0) return { ok: false, detail: "nothing to change" };
+      try {
+        const { api } = await import("@/api/client");
+        await api.renameMember(who.id, patch);
+        return { ok: true, detail: "renamed" };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the member could not be renamed") };
+      }
+    }
+
+    case "list_allowed_models": {
+      try {
+        const { api } = await import("@/api/client");
+        return { ok: true, detail: JSON.stringify(await api.adminModels()) };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the models could not be read") };
+      }
+    }
+
+    case "set_model_allowed": {
+      const id = String(a.model_id ?? "").trim();
+      if (!id || typeof a.allowed !== "boolean") {
+        return { ok: false, detail: "a model_id and allowed are required" };
+      }
+      try {
+        const { api } = await import("@/api/client");
+        await api.setModelAllowed(id, a.allowed);
+        return { ok: true, detail: a.allowed ? "allowed" : "forbidden" };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the model could not be changed") };
+      }
+    }
+
+    case "set_role_permission": {
+      const role = a.role === "member" || a.role === "admin" ? a.role : null;
+      const capability = String(a.capability ?? "").trim();
+      if (!role || !capability || typeof a.allowed !== "boolean") {
+        return { ok: false, detail: "a role, a capability and allowed are required" };
+      }
+      try {
+        const { api } = await import("@/api/client");
+        await api.setCapability(role, capability, a.allowed);
+        return { ok: true, detail: a.allowed ? "granted" : "taken away" };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the permission could not be changed") };
       }
     }
 

@@ -46,6 +46,8 @@ export const CAPABILITY_GROUPS: readonly CapabilityGroup[] = [
       "search_transcripts", "read_window", "get_call", "list_related_calls",
       "list_records", "get_summary", "list_summary_versions", "list_speakers",
       "list_record_notes", "list_voices",
+      "resummarize_record", "translate_record", "retry_record",
+      "rename_speaker", "link_speaker",
     ],
   },
   {
@@ -55,6 +57,8 @@ export const CAPABILITY_GROUPS: readonly CapabilityGroup[] = [
       "list_meetings", "get_meeting", "list_meeting_items", "list_meeting_folders",
       "create_meeting", "update_meeting", "add_meeting_item", "approve_minutes",
       "archive_meeting", "invite_to_meeting", "open_meeting",
+      "update_meeting_item", "extract_meeting_items", "create_meeting_topic",
+      "set_meeting_join_code",
     ],
   },
   {
@@ -64,6 +68,8 @@ export const CAPABILITY_GROUPS: readonly CapabilityGroup[] = [
       "list_tasks", "get_task", "list_task_labels", "create_task", "update_task",
       "complete_task", "assign_task", "comment_on_task",
       "add_task_checklist_item", "archive_task",
+      "list_task_columns", "create_task_column", "create_task_label",
+      "set_task_label", "create_task_topic", "update_task_checklist_item",
     ],
   },
   {
@@ -73,6 +79,36 @@ export const CAPABILITY_GROUPS: readonly CapabilityGroup[] = [
       "list_members", "list_colleagues", "member_stats", "get_organization",
       "list_audit", "send_member_message", "set_member_role", "set_member_status",
       "invite_member", "add_speaker_person",
+      "whoami", "list_invitations", "revoke_invitation", "rename_member",
+      "create_person",
+    ],
+  },
+  {
+    key: "conversations",
+    icon: "ask",
+    tools: [
+      "list_conversations", "read_conversation", "archive_conversation",
+      "share_conversation",
+    ],
+  },
+  {
+    key: "automation",
+    icon: "zap",
+    tools: [
+      "list_workflows", "list_workflow_runs", "set_workflow_enabled",
+      "install_workflow_starter", "list_skills", "list_agents",
+    ],
+  },
+  {
+    /* the permission matrix lives HERE rather than under people: it is a rule
+       about roles, not a fact about a colleague, and the difference is the one
+       an agent has to get right before telling somebody they may not do
+       something */
+    key: "settings",
+    icon: "settings",
+    tools: [
+      "list_role_permissions", "set_role_permission",
+      "list_allowed_models", "set_model_allowed",
     ],
   },
   {
@@ -91,6 +127,8 @@ export const CAPABILITY_GROUPS: readonly CapabilityGroup[] = [
     tools: [
       "start_recording", "pause_recording", "resume_recording", "finish_recording",
       "navigate", "open_call", "set_search", "set_language",
+      "whoami_surface", "list_notifications", "mark_notification_read",
+      "list_connectors",
     ],
   },
 ];

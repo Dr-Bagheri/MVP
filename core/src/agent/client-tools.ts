@@ -641,6 +641,395 @@ export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
     }, ["meeting_id", "invitees"]),
     effect: "write",
   },
+  /*
+   * ── M50: THE REST OF WHAT A PERSON CAN DO ─────────────────────────────
+   *
+   * User directive, 2026-09-04: "give more tools to use in the platform for
+   * all agents and Echo as well — there must be no task that a human can do
+   * and they cannot."
+   *
+   * Every one of these runs in the person's own browser under their own
+   * session, so the reach grows and the AUTHORITY does not: a member asking
+   * for something only an admin may do gets the same refusal their own click
+   * would get, from the same server, for the same reason.
+   *
+   * Four things a human can do are deliberately still absent, and each is a
+   * decision rather than an omission:
+   *   · SENDING A MAIL DRAFT. db/0114 is the wall — echo_agent may insert a
+   *     draft and may never update one — and that grant is the whole reason
+   *     "the assistant will not send mail on its own" is a fact about the
+   *     database rather than a sentence in a prompt. Adding a send tool here
+   *     would route around it in the browser and make the sentence a lie.
+   *   · PASSWORDS, SIGN-IN METHODS, VOICE ENROLMENT. Credentials and
+   *     biometrics are the person's own; an assistant that can change how you
+   *     prove who you are can lock you out of the account it is helping with.
+   *   · PLATFORM-ROOT OPERATIONS. Those belong to the vendor, not to anyone
+   *     inside an organization, so they are not "what a human here can do".
+   *   · HARD DELETES of records and people. The product's own doors are
+   *     archive and soft-delete (M11), and echo_agent holds no DELETE at all.
+   */
+  {
+    name: "whoami_surface",
+    label: { fa: "این صفحه", en: "Reading the screen" },
+    description:
+      "What the person is looking at right now — the current page and, where "
+      + "the surface has one, the record or meeting it is about.",
+    parameters: obj({}, []),
+    effect: "ui",
+  },
+  {
+    name: "list_conversations",
+    label: { fa: "گفت‌وگوها", en: "Listing conversations" },
+    description:
+      "This person's own assistant conversations, newest first. Use it to "
+      + "find something they discussed before rather than asking them to "
+      + "repeat it.",
+    parameters: obj({
+      archived: bool("Return archived conversations instead of live ones."),
+    }, []),
+    effect: "ui",
+  },
+  {
+    name: "read_conversation",
+    label: { fa: "خواندن گفت‌وگو", en: "Reading a conversation" },
+    description: "The messages in one of this person's conversations, in order.",
+    parameters: obj({ conversation: str("Its id, or enough of its title to find it.") }, ["conversation"]),
+    effect: "ui",
+  },
+  {
+    name: "archive_conversation",
+    label: { fa: "بایگانی گفت‌وگو", en: "Archiving a conversation" },
+    description: "Put a conversation in the archive, or take it back out.",
+    parameters: obj({
+      conversation: str("Its id, or enough of its title to find it."),
+      archived: bool("true archives it, false restores it. Defaults to true."),
+    }, ["conversation"]),
+    effect: "write",
+  },
+  {
+    name: "share_conversation",
+    label: { fa: "هم‌رسانی گفت‌وگو", en: "Sharing a conversation" },
+    description:
+      "Make a conversation readable by colleagues in this organization, or "
+      + "stop sharing it. Nobody outside the organization can ever see it.",
+    parameters: obj({
+      conversation: str("Its id, or enough of its title to find it."),
+      shared: bool("true shares it, false stops sharing. Defaults to true."),
+    }, ["conversation"]),
+    effect: "write",
+  },
+  {
+    name: "list_workflows",
+    label: { fa: "گردش‌کارها", en: "Listing workflows" },
+    description:
+      "The workflows this organization has, with whether each is switched on "
+      + "and what starts it.",
+    parameters: obj({}, []),
+    effect: "ui",
+  },
+  {
+    name: "list_workflow_runs",
+    label: { fa: "اجراهای گردش‌کار", en: "Listing workflow runs" },
+    description: "Recent workflow runs and how each ended.",
+    parameters: obj({}, []),
+    effect: "ui",
+  },
+  {
+    name: "set_workflow_enabled",
+    label: { fa: "روشن/خاموش کردن گردش‌کار", en: "Switching a workflow" },
+    description: "Turn one of this organization's workflows on or off.",
+    parameters: obj({
+      workflow: str("Its id or its name."),
+      enabled: bool("true switches it on, false switches it off."),
+    }, ["workflow", "enabled"]),
+    effect: "write",
+  },
+  {
+    name: "install_workflow_starter",
+    label: { fa: "نصب گردش‌کار آماده", en: "Installing a workflow" },
+    description:
+      "Install one of the shipped workflow templates into this organization. "
+      + "Admin work: a member's request is refused by the server.",
+    parameters: obj({ starter: str("The template's key or its name.") }, ["starter"]),
+    effect: "write",
+  },
+  {
+    name: "list_skills",
+    label: { fa: "مهارت‌ها", en: "Listing skills" },
+    description: "The summarizing and answering skills available here.",
+    parameters: obj({}, []),
+    effect: "ui",
+  },
+  {
+    name: "list_agents",
+    label: { fa: "دستیارها", en: "Listing assistants" },
+    description:
+      "The assistants this organization has — the shipped ones and any it "
+      + "has authored — with what each is for.",
+    parameters: obj({}, []),
+    effect: "ui",
+  },
+  {
+    name: "list_invitations",
+    label: { fa: "دعوت‌نامه‌ها", en: "Listing invitations" },
+    description: "Invitations that have been sent and not yet used.",
+    parameters: obj({}, []),
+    effect: "ui",
+  },
+  {
+    name: "revoke_invitation",
+    label: { fa: "لغو دعوت", en: "Revoking an invitation" },
+    description: "Cancel an invitation that has not been redeemed.",
+    parameters: obj({ email: str("The address the invitation was sent to.") }, ["email"]),
+    effect: "write",
+  },
+  {
+    name: "list_connectors",
+    label: { fa: "اتصال‌ها", en: "Listing connections" },
+    description:
+      "Which outside accounts this person has connected (mail, calendar) and "
+      + "what each connection is allowed to do.",
+    parameters: obj({}, []),
+    effect: "ui",
+  },
+  {
+    name: "list_notifications",
+    label: { fa: "اعلان‌ها", en: "Listing notifications" },
+    description: "What is waiting in this person's notification bell.",
+    parameters: obj({}, []),
+    effect: "ui",
+  },
+  {
+    name: "mark_notification_read",
+    label: { fa: "خواندن اعلان", en: "Marking a notification read" },
+    description: "Mark one notification as read.",
+    parameters: obj({ card_id: str("The notification's id, from list_notifications.") }, ["card_id"]),
+    effect: "write",
+  },
+  {
+    name: "list_task_columns",
+    label: { fa: "ستون‌های تخته", en: "Listing board columns" },
+    description:
+      "The columns of the task board, in order — read this before creating a "
+      + "task if the person named where it should go.",
+    parameters: obj({}, []),
+    effect: "ui",
+  },
+  {
+    name: "create_task_column",
+    label: { fa: "ساخت ستون", en: "Creating a board column" },
+    description: "Add a column to the task board.",
+    parameters: obj({ name: str("What the column is called.") }, ["name"]),
+    effect: "write",
+  },
+  {
+    name: "create_task_label",
+    label: { fa: "ساخت برچسب", en: "Creating a task label" },
+    description: "Add a label the whole organization can put on tasks.",
+    parameters: obj({
+      name: str("The label's text."),
+      color: strEnum(
+        ["grey", "blue", "green", "amber", "red", "purple", "teal", "pink"],
+        "Its colour. Defaults to grey.",
+      ),
+    }, ["name"]),
+    effect: "write",
+  },
+  {
+    name: "set_task_label",
+    label: { fa: "برچسب‌گذاری تسک", en: "Labelling a task" },
+    description: "Put a label on a task, or take it off.",
+    parameters: obj({
+      task_id: str("The task's id."),
+      label: str("The label's name."),
+      on: bool("true adds it, false removes it. Defaults to true."),
+    }, ["task_id", "label"]),
+    effect: "write",
+  },
+  {
+    name: "create_task_topic",
+    label: { fa: "ساخت موضوع تسک", en: "Creating a task topic" },
+    description: "Add a topic that tasks can be filed under.",
+    parameters: obj({ name: str("The topic's name.") }, ["name"]),
+    effect: "write",
+  },
+  {
+    name: "update_task_checklist_item",
+    label: { fa: "به‌روزرسانی بند چک‌لیست", en: "Updating a checklist line" },
+    description:
+      "Tick, untick or reword one line of a task's checklist. The line's id "
+      + "comes from get_task.",
+    parameters: obj({
+      item_id: str("The checklist line's id."),
+      done: bool("true ticks it, false unticks it."),
+      label: str("New wording for the line."),
+    }, ["item_id"]),
+    effect: "write",
+  },
+  {
+    name: "update_meeting_item",
+    label: { fa: "به‌روزرسانی بند جلسه", en: "Updating a meeting item" },
+    description:
+      "Change a decision or action item on a meeting — its wording, who owns "
+      + "it, or whether it is done.",
+    parameters: obj({
+      meeting_id: str("The meeting's id."),
+      item_id: str("The item's id, from list_meeting_items."),
+      body: str("New wording."),
+      owner: str("Who owns it."),
+      done: bool("Whether it is finished."),
+    }, ["meeting_id", "item_id"]),
+    effect: "write",
+  },
+  {
+    name: "extract_meeting_items",
+    label: { fa: "استخراج بندهای جلسه", en: "Extracting meeting items" },
+    description:
+      "Pull decisions and action items out of a meeting's recorded summary "
+      + "and add them to its list. Needs a meeting that has been recorded and "
+      + "summarised.",
+    parameters: obj({ meeting_id: str("The meeting's id.") }, ["meeting_id"]),
+    effect: "write",
+  },
+  {
+    name: "create_meeting_topic",
+    label: { fa: "ساخت موضوع جلسه", en: "Creating a meeting topic" },
+    description: "Add a topic that meetings can be filed under.",
+    parameters: obj({ name: str("The topic's name.") }, ["name"]),
+    effect: "write",
+  },
+  {
+    name: "set_meeting_join_code",
+    label: { fa: "لینک مهمان جلسه", en: "Guest link for a meeting" },
+    description:
+      "Turn a meeting's guest link on or off. On, anybody with the link can "
+      + "join without an account; off, the old link stops working.",
+    parameters: obj({
+      meeting_id: str("The meeting's id."),
+      enabled: bool("true mints a link, false revokes it."),
+    }, ["meeting_id", "enabled"]),
+    effect: "write",
+  },
+  {
+    name: "resummarize_record",
+    label: { fa: "خلاصهٔ دوباره", en: "Re-summarising a record" },
+    description:
+      "Make a NEW summary of a record — optionally with an instruction of "
+      + "your own, or in a particular shape. The old summary is kept: "
+      + "summaries are versioned, so this adds one rather than replacing one.",
+    parameters: obj({
+      record: str("The record's id or enough of its title to find it."),
+      instruction: str("What this summary should concentrate on. Optional."),
+      label: str("A name for this version. Optional."),
+    }, ["record"]),
+    effect: "write",
+  },
+  {
+    name: "translate_record",
+    label: { fa: "ترجمهٔ ضبط", en: "Translating a record" },
+    description:
+      "Translate a record's summary or its transcript. The translation is "
+      + "returned to you; it is not stored.",
+    parameters: obj({
+      record: str("The record's id or enough of its title to find it."),
+      what: strEnum(["summary", "transcript"], "Which one to translate."),
+    }, ["record", "what"]),
+    effect: "ui",
+  },
+  {
+    name: "retry_record",
+    label: { fa: "تلاش دوباره", en: "Retrying a record" },
+    description:
+      "Ask the pipeline to have another go at a record that failed to "
+      + "process. Does nothing to one that succeeded.",
+    parameters: obj({ record: str("The record's id or enough of its title to find it.") }, ["record"]),
+    effect: "write",
+  },
+  {
+    name: "rename_speaker",
+    label: { fa: "تغییر نام گوینده", en: "Renaming a speaker" },
+    description:
+      "Give one of a record's speakers a readable label — "
+      + "«گویندهٔ ۲» becomes a name.",
+    parameters: obj({
+      record: str("The record's id or enough of its title to find it."),
+      speaker_id: str("The speaker's id, from list_speakers."),
+      label: str("What to call them."),
+    }, ["record", "speaker_id", "label"]),
+    effect: "write",
+  },
+  {
+    name: "link_speaker",
+    label: { fa: "پیوند گوینده", en: "Linking a speaker" },
+    description:
+      "Say which person in the voice directory one of a record's speakers "
+      + "is, so future recordings recognise them. Pass no person to unlink.",
+    parameters: obj({
+      record: str("The record's id or enough of its title to find it."),
+      speaker_id: str("The speaker's id, from list_speakers."),
+      person: str("The directory person's name. Omit to unlink."),
+    }, ["record", "speaker_id"]),
+    effect: "write",
+  },
+  {
+    name: "create_person",
+    label: { fa: "افزودن به دفترچه", en: "Adding a person to the directory" },
+    description:
+      "Add somebody to the voice directory — a person the platform can "
+      + "recognise, who need not have an account here.",
+    parameters: obj({
+      name: str("Their name."),
+      title: str("Their role or company. Optional."),
+    }, ["name"]),
+    effect: "write",
+  },
+  {
+    name: "rename_member",
+    label: { fa: "تغییر نام عضو", en: "Renaming a member" },
+    description:
+      "Change a colleague's display name or username. Admin work: a "
+      + "member's request is refused by the server.",
+    parameters: obj({
+      member: str("Username, display name or email of the member."),
+      display_name: str("Their new display name."),
+      username: str("Their new username."),
+    }, ["member"]),
+    effect: "write",
+  },
+  {
+    name: "list_allowed_models",
+    label: { fa: "مدل‌های مجاز", en: "Listing allowed models" },
+    description:
+      "Which models this organization permits, and which are switched off.",
+    parameters: obj({}, []),
+    effect: "ui",
+  },
+  {
+    name: "set_model_allowed",
+    label: { fa: "اجازهٔ مدل", en: "Allowing a model" },
+    description:
+      "Allow or forbid one model for this organization. Admin work.",
+    parameters: obj({
+      model_id: str("The model's id, from list_allowed_models."),
+      allowed: bool("true allows it, false forbids it."),
+    }, ["model_id", "allowed"]),
+    effect: "write",
+  },
+  {
+    name: "set_role_permission",
+    label: { fa: "تغییر دسترسی نقش", en: "Changing a role's permission" },
+    description:
+      "Allow or take away one capability for a role, exactly as the "
+      + "permissions screen would. Read list_role_permissions first — and be "
+      + "careful: this changes what colleagues can do, not what one person "
+      + "can. Only the owner may change an admin capability.",
+    parameters: obj({
+      role: strEnum(["member", "admin"], "Whose privilege to change."),
+      capability: str("The capability key, from list_role_permissions."),
+      allowed: bool("true grants it, false takes it away."),
+    }, ["role", "capability", "allowed"]),
+    effect: "write",
+  },
   {
     name: "open_meeting",
     label: { fa: "بازکردن جلسه", en: "Opening a meeting" },

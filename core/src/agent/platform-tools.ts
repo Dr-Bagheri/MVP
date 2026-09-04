@@ -59,6 +59,7 @@ import { createMembersRepo } from "../api/members.ts";
 import { createAuditRepo } from "../api/audit.ts";
 import { createOrgRepo } from "../api/org.ts";
 import { createDirectoryRepo } from "../api/directory.ts";
+import { CAPABILITIES, createCapabilitiesRepo } from "../api/capabilities.ts";
 import type { Db } from "../db/identity.ts";
 
 export interface PlatformToolDeps {
@@ -313,6 +314,83 @@ export function createPlatformTools(): PlatformTool[] {
       parameters: Type.Object({}),
       async run({ identity, deps }) {
         return capped(await createTasksRepo(deps.db).people(identity));
+      },
+    }),
+
+    /*
+     * ── WHO IS ASKING, AND WHAT THEY MAY DO ────────────────────────────────
+     *
+     * User directive, 2026-09-04: "give them access to see who has what role
+     * in the platform, so based on that they will tell the user if they have
+     * access to do what they asked or not."
+     *
+     * These two are SERVER tools rather than browser ones on purpose. A
+     * client tool only exists while somebody is looking at a screen, and the
+     * question "may this person do that" is asked hardest by the runs nobody
+     * is watching — a workflow, a mail draft, a meeting brief.
+     *
+     * Neither is a permission CHECK. The wall is still the wall: every route
+     * refuses on its own, and an agent that read this table and decided to
+     * proceed would be reasoning where the database is deciding. What they
+     * buy is the ability to SAY SO FIRST — "you are a member, and this org
+     * has taken record deletion away from members, so I cannot do that for
+     * you" instead of trying it and relaying a 403.
+     */
+    tool("both", {
+      name: "whoami",
+      label: "من کی هستم",
+      description:
+        "The person you are talking to: their id, their role in this "
+        + "organization (member, admin or owner) and whether their account is "
+        + "active. Read this before telling somebody what they can or cannot "
+        + "do — every tool here runs with THEIR authority, not yours.",
+      parameters: Type.Object({}),
+      async run({ identity }) {
+        /* no query: the identity was resolved against the database before
+           this run was allowed to start, so asking again would be a second
+           reading of one fact that can only disagree with the first */
+        return {
+          user_id: identity.userId,
+          org_id: identity.orgId,
+          role: identity.role,
+          active: identity.isActive,
+        };
+      },
+    }),
+
+    tool("both", {
+      name: "list_role_permissions",
+      label: "دسترسی نقش‌ها",
+      description:
+        "What each role may do in THIS organization. Every capability is "
+        + "allowed unless the organization has written it off, so a key with "
+        + "allowed=true is the default and one with allowed=false was taken "
+        + "away deliberately. `role` is whose privilege it is: an admin is "
+        + "never restricted by a member-level rule, and the owner by none of "
+        + "them. Use it with whoami to answer 'am I allowed to' before "
+        + "attempting anything.",
+      parameters: Type.Object({}),
+      async run({ identity, deps }) {
+        const written = await createCapabilitiesRepo(deps.db).list(identity);
+        const decided = new Map(written.map((row) => [`${row.role}:${row.capability}`, row.allowed]));
+        /*
+         * The whole vocabulary, not just the rows. An org that has never
+         * touched this screen has NO rows, and returning an empty list would
+         * read as "this organization permits nothing" — the absent-versus-
+         * denied confusion, on the one subject where getting it backwards
+         * makes the assistant refuse things it could have done.
+         */
+        return {
+          asking_role: identity.role,
+          capabilities: CAPABILITIES.map((def) => ({
+            capability: def.key,
+            role: def.role,
+            allowed: decided.get(`${def.role}:${def.key}`) ?? true,
+            /* stated per row, because "not written down" and "written down as
+               allowed" are the same permission and different facts */
+            decided: decided.has(`${def.role}:${def.key}`),
+          })),
+        };
       },
     }),
 

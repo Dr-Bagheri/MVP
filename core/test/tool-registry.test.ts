@@ -94,6 +94,40 @@ describe("every tool the platform implements is offered by the platform", () => 
     );
   });
 
+  it("the vocabulary names EVERY registered tool, derived from the producers", async () => {
+    /*
+     * The same seam, asserted by NAME rather than by source text.
+     *
+     * The check above greps skills.ts for the shape of its own expression,
+     * which is what let the CLIENT half sit outside the vocabulary while
+     * reading as covered: the regex was satisfied by `toolsFor(` and had
+     * nothing to say about the ninety browser tools next to it. The agent
+     * page showed twenty-four capabilities for an assistant that held far
+     * more, and no test could see the difference.
+     *
+     * Derived from the four registries, so a tool added to any of them fails
+     * here rather than being discovered by somebody reading their own page.
+     */
+    const { availableTools } = await import("../src/api/skills.ts");
+    const { DOMAIN_TOOL_NAMES } = await import("../src/agent/domain-tools.ts");
+    const { createWriteTools } = await import("../src/agent/write-tools.ts");
+    const { toolsFor } = await import("../src/agent/platform-tools.ts");
+    const { CLIENT_TOOL_NAMES } = await import("../src/agent/client-tools.ts");
+
+    const vocabulary = new Set(availableTools());
+    const registered = [
+      ...DOMAIN_TOOL_NAMES,
+      ...createWriteTools().map((t) => t.name),
+      ...toolsFor("all").map((t) => t.name),
+      ...CLIENT_TOOL_NAMES,
+    ];
+    expect(registered.length, "the registries were not read").toBeGreaterThan(60);
+    expect(
+      registered.filter((name) => !vocabulary.has(name)),
+      "a tool the runtime offers that an agent may not name",
+    ).toEqual([]);
+  });
+
   it("the control: the branch scan CAN answer no", () => {
     /*
      * Proves the assertion above is about the server's text and not about a

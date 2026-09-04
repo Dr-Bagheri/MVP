@@ -93,6 +93,16 @@ const REMAINING: Record<string, number> = {
      by the shape of the ternary is exactly what a false-positive factory
      does, so it stays on the list with its reason. */
   "components/platform/MeetingPage.tsx": 1,
+  /* 2026-09-04: the Instructions panel is a REAL ABSENCE, not a fetch in
+     flight. The three shipped agents carry no instructions of their own —
+     their prompt is product configuration and the wire sends null — so the
+     section renders nothing rather than a heading over an apology, which is
+     what the user asked for when they said "explain what Instructions is; if
+     it does not serve any purpose remove it too". A skeleton here would
+     promise a panel that is never coming. Same reasoning as MeetingPage
+     above, and the same reason it stays listed rather than pattern-matched
+     away: nothing can tell absence from loading by the shape of a ternary. */
+  "components/platform/AgentDetail.tsx": 1,
   // audit finding, 2026-09-02: IntegrationDetail.tsx LEFT this list — its one
   // entry made the WHOLE page wait on api.connectors() although the icon,
   // name and description come from the catalogue; the header renders at once

@@ -19,6 +19,7 @@ import { iso, isoOrNull } from "./vocabulary.ts";
 import { toJsonb, JSONB_PARAM } from "../db/jsonb.ts";
 import { assertUuid, type Db, type SqlTx } from "../db/identity.ts";
 import { DOMAIN_TOOL_NAMES } from "../agent/domain-tools.ts";
+import { CLIENT_TOOL_NAMES } from "../agent/client-tools.ts";
 import { createWriteTools } from "../agent/write-tools.ts";
 import { toolsFor } from "../agent/platform-tools.ts";
 import type { Identity } from "../agent/types.ts";
@@ -56,10 +57,27 @@ export function availableTools(): readonly string[] {
      * list is itself a seam, and this repo has already watched one drift with
      * a hole exactly where the break came.
      */
+    /*
+     * THE CLIENT TOOLS BELONG HERE TOO (user report, 2026-09-04: "update the
+     * tools section in the agents page").
+     *
+     * The agent page reads this list to say what an assistant can do, and it
+     * was showing twenty-four while the assistant actually held ninety-odd:
+     * every tool that runs in the person's browser — recording, navigating,
+     * creating a task, changing a meeting — was missing from the vocabulary
+     * although the run offers all of them. The same seam as the platform
+     * reads above, on the other half of the registry.
+     *
+     * It widens no authority. This list is a VOCABULARY: what a stored tool
+     * array may name, and what the page may describe. A client tool still
+     * only runs where a surface advertised it, and still runs on the person's
+     * own session when it does.
+     */
     cachedTools = [
       ...DOMAIN_TOOL_NAMES,
       ...createWriteTools().map((t) => t.name),
       ...toolsFor("all").map((t) => t.name),
+      ...CLIENT_TOOL_NAMES,
     ];
   }
   return cachedTools;
