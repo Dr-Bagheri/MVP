@@ -10,6 +10,8 @@
 import type {
   MeetingAgendaItem, MeetingMode, MeetingRecord,
   OrgPersonRecord, TaskColumnTone, TaskLabelColor, TaskLabelRecord,
+  ChatChannelRecord, ChatMessageRecord,
+  ProjectRecord, ProjectTone,
   TaskCardRecord, TaskColumnRecord, TaskTopicRecord, TaskDetailRecord,
   TaskChecklistItemRecord, TaskCommentRecord, TaskPriority,
   AuthoredWorkflow,
@@ -1383,6 +1385,85 @@ export const api = {
   },
 
   // ---- the task board (0144) ---------------------------------------------
+  /* ── 0184 the team channel ─────────────────────────────────────────── */
+  async chatChannels(): Promise<ChatChannelRecord[]> {
+    return bff("/api/chat/channels");
+  },
+  async createChatChannel(input: { name: string; topic?: string; project_id?: string }): Promise<ChatChannelRecord> {
+    return bff("/api/chat/channels", {
+      method: "POST", body: JSON.stringify(input), headers: { "content-type": "application/json" },
+    });
+  },
+  async updateChatChannel(id: string, patch: Partial<{ name: string; topic: string; archived: boolean }>): Promise<ChatChannelRecord> {
+    return bff(`/api/chat/channels/${encodeURIComponent(id)}`, {
+      method: "PATCH", body: JSON.stringify(patch), headers: { "content-type": "application/json" },
+    });
+  },
+  async setChatJoined(id: string, on: boolean): Promise<void> {
+    await bff<undefined>(`/api/chat/channels/${encodeURIComponent(id)}/membership`, {
+      method: on ? "PUT" : "DELETE",
+    });
+  },
+  /* `after` is the CATCH-UP read the stream leans on: every connect asks for
+     everything past the cursor, which is what makes a dropped event cost
+     nothing. `before` pages backwards through the scrollback. */
+  async chatMessages(id: string, opts?: { before?: number; after?: number }): Promise<ChatMessageRecord[]> {
+    const params = new URLSearchParams();
+    if (opts?.before !== undefined) params.set("before", String(opts.before));
+    if (opts?.after !== undefined) params.set("after", String(opts.after));
+    const query = params.toString();
+    return bff(`/api/chat/channels/${encodeURIComponent(id)}/messages${query ? `?${query}` : ""}`);
+  },
+  async postChatMessage(id: string, body: string): Promise<ChatMessageRecord> {
+    return bff(`/api/chat/channels/${encodeURIComponent(id)}/messages`, {
+      method: "POST", body: JSON.stringify({ body }), headers: { "content-type": "application/json" },
+    });
+  },
+  async editChatMessage(id: string, patch: { body?: string; deleted?: boolean }): Promise<ChatMessageRecord> {
+    return bff(`/api/chat/messages/${encodeURIComponent(id)}`, {
+      method: "PATCH", body: JSON.stringify(patch), headers: { "content-type": "application/json" },
+    });
+  },
+  async markChatRead(id: string, seq: number): Promise<void> {
+    await bff<undefined>(`/api/chat/channels/${encodeURIComponent(id)}/read`, {
+      method: "POST", body: JSON.stringify({ seq }), headers: { "content-type": "application/json" },
+    });
+  },
+  /** the capability the browser opens the stream with — see chatStream.ts */
+  async chatTicket(): Promise<{ ticket: string; direct_url: string | null }> {
+    return bff("/api/chat/ticket", { method: "POST" });
+  },
+
+  /* ── 0181 projects ─────────────────────────────────────────────────── */
+  async projects(opts?: { archived?: boolean }): Promise<ProjectRecord[]> {
+    return bff(`/api/projects${opts?.archived ? "?archived=1" : ""}`);
+  },
+  async createProject(input: {
+    name: string; summary?: string; tone?: ProjectTone; icon?: string | null;
+    member_ids?: string[];
+  }): Promise<ProjectRecord> {
+    return bff("/api/projects", {
+      method: "POST", body: JSON.stringify(input), headers: { "content-type": "application/json" },
+    });
+  },
+  async project(id: string): Promise<ProjectRecord> {
+    return bff(`/api/projects/${encodeURIComponent(id)}`);
+  },
+  /* archived, never deleted — the schema grants no DELETE and this is the
+     only door there is */
+  async updateProject(id: string, patch: Partial<{
+    name: string; summary: string; tone: ProjectTone; icon: string | null; archived: boolean;
+  }>): Promise<ProjectRecord> {
+    return bff(`/api/projects/${encodeURIComponent(id)}`, {
+      method: "PATCH", body: JSON.stringify(patch), headers: { "content-type": "application/json" },
+    });
+  },
+  async setProjectMember(id: string, userId: string, on: boolean): Promise<void> {
+    await bff<undefined>(`/api/projects/${encodeURIComponent(id)}/members/${encodeURIComponent(userId)}`, {
+      method: on ? "PUT" : "DELETE",
+    });
+  },
+
   async taskBoard(opts?: { archived?: boolean }): Promise<{
     columns: TaskColumnRecord[]; topics: TaskTopicRecord[]; tasks: TaskCardRecord[];
   }> {

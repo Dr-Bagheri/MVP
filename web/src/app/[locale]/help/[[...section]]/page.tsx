@@ -132,7 +132,10 @@ function HelpArt({ slug }: { slug: HelpSlug }) {
       </svg>
     );
   }
-  if (slug === "echo") {
+  if (slug === "meetings") {
+    /* THE SAME DRAWING, RE-HOMED. It was Echo's, and a microphone feeding a
+       transcript was always more true of a meeting than of an app name — so
+       it moved with the feature rather than being deleted with the page. */
     return (
       <svg viewBox="0 0 320 120" className={cls} aria-hidden>
         {/* mic → level bars → transcript document */}

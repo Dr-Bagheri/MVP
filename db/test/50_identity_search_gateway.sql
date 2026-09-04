@@ -63,6 +63,15 @@ insert into argued_deletes (name) values
   -- mentioned only so the next reader of the git history is not left
   -- wondering whether an entry went missing by accident.
   ('call_note'), ('meeting'), ('meeting_attachment'), ('meeting_item'),
+  -- 0181: taking somebody OFF a project is not deleting anything of theirs.
+  -- The project itself takes no delete — it is archived, like every other
+  -- record here — which is why only the membership row appears in this list.
+  ('project_member'),
+  -- 0184: LEAVING a channel. The channel and its messages take no delete at
+  -- all -- a message is tombstoned and stays in the room -- so the only row
+  -- an ordinary act removes here is the person's own membership, which is
+  -- the same shape as the project entry above it.
+  ('chat_channel_member'),
   ('task_assignee'), ('task_checklist_item'), ('task_label'), ('task_label_link');
 
 select t.ok(
@@ -70,7 +79,7 @@ select t.ok(
      from information_schema.role_table_grants
     where grantee = 'echo_app' and privilege_type = 'DELETE' and table_schema = 'echo')
    = (select array_agg(name order by name) from argued_deletes),
-  'core/''s own role deletes exactly the argued list: a note author''s own note (0079), a task''s checklist lines and its assignee rows (0144), a label and a card''s wearing of one (0147), a meeting''s attached document (0159), a meeting''s decisions and action items (0160), an agent''s membership of a room (0164) — every other product row is echo_purge''s alone');
+  'core/''s own role deletes exactly the argued list: a note author''s own note (0079), a task''s checklist lines and its assignee rows (0144), a label and a card''s wearing of one (0147), a meeting''s attached document (0159), a meeting''s decisions and action items (0160), a person''s membership of a project (0181), a person''s membership of a channel (0184) — every other product row is echo_purge''s alone');
 -- Scoped to the application roles: the schema owner also appears as a grantee
 -- of everything on a managed platform, and a superuser was never inside this
 -- wall to begin with — core/ simply never connects as one.

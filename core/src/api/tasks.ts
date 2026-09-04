@@ -64,6 +64,18 @@ export interface OrgPersonRecord {
   display_name: string;
   display_name_en: string | null;
   role: string;
+  /**
+   * The @handle (0035), for the chat composer's mention picker — which is
+   * the one surface that has to offer the exact string the server resolves
+   * a mention by. Null for somebody who has not set one, and the picker
+   * simply cannot offer them: a mention of a handle nobody holds badges
+   * nobody, so offering it would be a control that silently does nothing.
+   *
+   * A handle is a PUBLIC identity in this product (per-org, ASCII, reserved
+   * forever after a tombstone), which is why it may join this list where an
+   * email may not.
+   */
+  username: string | null;
 }
 
 export interface TaskColumnRecord {
@@ -719,7 +731,7 @@ export function createTasksRepo(db: Db) {
   async function people(identity: Identity): Promise<OrgPersonRecord[]> {
     return db.withIdentity(identity, async (tx: SqlTx) => {
       const rows = await tx.unsafe<Record<string, unknown>>(
-        `select id, display_name, display_name_en, role
+        `select id, display_name, display_name_en, role, username
            from echo.app_user
           where org_id = echo.actor_org_id() and status = 'active'
           order by display_name`,
@@ -729,6 +741,7 @@ export function createTasksRepo(db: Db) {
         display_name: String(r.display_name ?? ""),
         display_name_en: (r.display_name_en as string | null) ?? null,
         role: String(r.role ?? "member"),
+        username: (r.username as string | null) ?? null,
       }));
     });
   }

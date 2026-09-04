@@ -116,6 +116,16 @@ export function TaskBoard() {
       .catch(() => setArchive(null));
   }, [view]);
 
+  /* ?topic= — a project's «وظایف» button lands on the board already
+     standing in that project's folder (0181). Read ONCE into the filter
+     rather than held as the source of truth: the chips must stay pressable
+     afterwards, and a URL that keeps re-asserting itself is a filter the
+     person cannot change. */
+  const linkedTopic = params.get("topic");
+  useEffect(() => {
+    if (linkedTopic !== null) setTopic(linkedTopic);
+  }, [linkedTopic]);
+
   /* ?task= deep link — the reference's own URL carries it too */
   const linkedTask = params.get("task");
   useEffect(() => {

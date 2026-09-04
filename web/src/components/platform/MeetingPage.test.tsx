@@ -223,12 +223,45 @@ describe("MeetingPage", () => {
     expect(within(members).getByText("۲")).toBeInTheDocument();
   });
 
-  /* WALKING IN IS THE START (user directive: the mid-meeting page should
-     already be recording). The plan does NOT record — that half is the one
-     worth asserting, because a page that starts a take on load would be
-     recording a room nobody has walked into yet. */
-  it("the STAGE starts the take, with the meeting's mapping — and the plan does not", async () => {
+  /*
+   * THE ONLINE LANE STARTS ON A PRESS (user directive, 2026-09-04: "for the
+   * online meetings go with face screen share to get the audio from web").
+   *
+   * Both halves matter and the FIRST is the one that would rot quietly.
+   * Walking into the stage must NOT start an online take: the share picker
+   * only opens for a gesture, so an auto-started one is refused with the
+   * same error a cancelled picker raises — the person is told they
+   * cancelled a dialog they were never shown. Verified red by deleting the
+   * `mode === "online"` line from the auto-start effect.
+   */
+  it("an online meeting waits for the button, then records the SHARED TAB", async () => {
     MEETING = meeting({ call_id: null, mode: "online", title: "جلسهٔ آنلاین" });
+    render(<MeetingPage id="m-1" />);
+    await waitFor(() => expect(screen.getByText("مشخصات")).toBeInTheDocument());
+    expect(startSpy).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole("button", { name: /حین جلسه/ }));
+    /* in the live stage, and still nothing opened */
+    const start = await screen.findByRole("button", { name: /شروع ضبط/ });
+    expect(startSpy).not.toHaveBeenCalled();
+
+    await userEvent.click(start);
+    await waitFor(() => expect(startSpy).toHaveBeenCalledTimes(1));
+    const opts = startSpy.mock.calls[0]![0] as unknown as Record<string, unknown>;
+    /* "system", not "room" — the reversal. The meetings people actually
+       hold are in software we do not host, and our own room can only ever
+       record the people who came to OURS. */
+    expect(opts.source).toBe("system");
+    expect(opts.title).toBe("جلسهٔ آنلاین");
+  });
+
+  /* WALKING IN IS THE START, where nothing has to be asked for (user
+     directive: the mid-meeting page should already be recording). The plan
+     does NOT record — that half is the one worth asserting, because a page
+     that starts a take on load would be recording a room nobody has walked
+     into yet. */
+  it("an in-person STAGE starts the take itself, once, with the meeting's mapping", async () => {
+    MEETING = meeting({ call_id: null, mode: "in_person", title: "جلسهٔ حضوری" });
     render(<MeetingPage id="m-1" />);
     await waitFor(() => expect(screen.getByText("مشخصات")).toBeInTheDocument());
     expect(startSpy).not.toHaveBeenCalled();
@@ -236,13 +269,8 @@ describe("MeetingPage", () => {
     await userEvent.click(screen.getByRole("button", { name: /حین جلسه/ }));
     await waitFor(() => expect(startSpy).toHaveBeenCalledTimes(1));
     const opts = startSpy.mock.calls[0]![0] as unknown as Record<string, unknown>;
-    /* "room", not "system" (0162). The online lane used to record by asking
-       the person to SHARE A TAB and taking the audio off it; it mixes the
-       video room's own participant tracks now, so there is no picker, no
-       sharing banner, and the recording has whoever is actually in the
-       meeting rather than whatever the chosen tab was playing. */
-    expect(opts.source).toBe("room");
-    expect(opts.title).toBe("جلسهٔ آنلاین");
+    expect(opts.source).toBe("mic");
+    expect(opts.title).toBe("جلسهٔ حضوری");
 
     /* ONCE. Walking back to the plan and in again must not open a second
        take over the first — the ref, not the engine, is what makes that
@@ -252,17 +280,20 @@ describe("MeetingPage", () => {
     expect(startSpy).toHaveBeenCalledTimes(1);
   });
 
-  it("an in-person meeting records the MICROPHONE and is offered no video room", async () => {
-    /* the mapping's other half, and the mode rule the user asked for: a
-       meeting held in the room has no video room and never will, so the tab
-       is absent rather than present-and-empty */
+  it("an in-person meeting is offered no video room", async () => {
+    /* the mode rule the user asked for: a meeting held in the room has no
+       video room and never will, so the tab is absent rather than
+       present-and-empty.
+
+       The `source: "mic"` assertion that used to sit here is GONE, and on
+       purpose — the test above owns it. Two checks that fail together for
+       the same reason read as extra rigour and are a maintenance tax: the
+       one that gets updated is whichever the next person finds first. */
     MEETING = meeting({ call_id: null, mode: "in_person", title: "جلسهٔ حضوری" });
     render(<MeetingPage id="m-1" />);
     await waitFor(() => expect(screen.getByText("مشخصات")).toBeInTheDocument());
 
     await userEvent.click(screen.getByRole("button", { name: /حین جلسه/ }));
-    await waitFor(() => expect(startSpy).toHaveBeenCalledTimes(1));
-    expect((startSpy.mock.calls[0]![0] as Record<string, unknown>).source).toBe("mic");
     expect(screen.queryByRole("button", { name: "ویدیو" })).toBeNull();
     // the canvas is what an in-person meeting opens on
     expect(screen.getByTestId("whiteboard-stub")).toBeInTheDocument();

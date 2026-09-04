@@ -103,6 +103,30 @@ const REMAINING: Record<string, number> = {
      above, and the same reason it stays listed rather than pattern-matched
      away: nothing can tell absence from loading by the shape of a ternary. */
   "components/platform/AgentDetail.tsx": 1,
+  /* 0181, and NOT a loading state. The one match is the progress bar's
+     `ratio === null ? null :` — the TRACK renders unconditionally, and a
+     null ratio means the project has no tasks at all, which the label
+     beside it already says with a dash. Drawing a zero-width fill there
+     would be a claim about the WORK ("nothing done") rather than about the
+     board being empty.
+     Listed with its reason rather than spelled around: `ratio !== null &&`
+     satisfies the checker by changing the code the checker reads, which is
+     the fix that reads as satisfied and moves nothing (the users/page.tsx
+     note above names that exact temptation). The screen's real loading
+     state is framed and is not in this count — `rows === null` renders
+     SkeletonCards in the cards' own grid. */
+  "components/platform/Projects.tsx": 1,
+  /* 0184, and NEITHER is a loading state — both are the two categories this
+     file's header names. `message.author_id === null ? null : people.find(…)`
+     is a REAL ABSENCE: an agent's message has no person behind it, ever, and
+     there is no frame to draw for a colleague who does not exist. `match ===
+     null ? null : match[1]` is the mention picker's VALUE, not a list: no `@`
+     is being typed, so nothing is being fetched.
+     The room's real loading states are framed and are not in this count —
+     the channel list and the message log each render SkeletonLines inside
+     their own box, so the layout does not move when the answers land and
+     "loading" never draws the same picture as "nobody has said anything". */
+  "components/platform/Chat.tsx": 2,
   // audit finding, 2026-09-02: IntegrationDetail.tsx LEFT this list — its one
   // entry made the WHOLE page wait on api.connectors() although the icon,
   // name and description come from the catalogue; the header renders at once

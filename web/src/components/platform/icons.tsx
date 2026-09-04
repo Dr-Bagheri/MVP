@@ -219,9 +219,30 @@ const MeetingsIcon = (p: SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
+/* 0184 — the team channel: two overlapping bubbles, because the room is
+   about people answering each other rather than about one thread */
+const ChatIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden {...p}>
+    <path d="M8.2 14.2H6.4L3.4 17V7.2a2 2 0 0 1 2-2h8.2a2 2 0 0 1 2 2v1" />
+    <path d="M10.2 10.2h8.4a2 2 0 0 1 2 2v4.4a2 2 0 0 1-2 2h-1.6l-3 2.8v-2.8h-3.8a2 2 0 0 1-2-2v-4.4a2 2 0 0 1 2-2Z" />
+  </svg>
+);
+
+/* 0181 — projects: stacked layers, because a project in this product is a
+   folder over work that lives elsewhere rather than a container of its own */
+const ProjectsIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden {...p}>
+    <path d="M12 3.2 21 8l-9 4.8L3 8l9-4.8Z" />
+    <path d="m3.6 12.4 8.4 4.5 8.4-4.5" />
+    <path d="m3.6 16.6 8.4 4.5 8.4-4.5" />
+  </svg>
+);
+
 export const NAV_ICON: Record<string, (p: SVGProps<SVGSVGElement>) => ReactElement> = {
   dashboard: BoardIcon,
   tasks: TasksIcon,
+  projects: ProjectsIcon,
+  chat: ChatIcon,
   meetings: MeetingsIcon,
   assistant: AssistantIcon,
   hub: HomeIcon,

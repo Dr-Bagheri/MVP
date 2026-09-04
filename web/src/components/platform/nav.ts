@@ -79,6 +79,26 @@ export const NAV_PRIMARY: readonly NavItem[] = [
   /* 0144 — the task board (the reference adoption). Rail only: M22's
      four-item bar ceiling has no free slot, and tasks are a desk surface. */
   { href: "/tasks", key: "tasks", inBar: false },
+  /*
+   * 0181 — PROJECTS (user directive, 2026-09-04: "in the menu also add a new
+   * section … the name for the new item in the menu is projects").
+   *
+   * Beside the board rather than above it: a project is a folder over the
+   * same work, and the two screens are read one after the other. Rail only,
+   * like tasks — M22's four-item bar ceiling has no free slot.
+   */
+  { href: "/projects", key: "projects", inBar: false },
+  /*
+   * 0184 — the TEAM CHANNEL (user directive, 2026-09-04: "add a chat room
+   * section in the menu for all members to join and a place that they can
+   * talk to each other").
+   *
+   * It is a rail destination and not a corner of the assistant, and that
+   * distinction is the whole feature: this is where COLLEAGUES talk, and an
+   * assistant session belongs to exactly one person by construction. The
+   * agents are guests in the room rather than the reason for it.
+   */
+  { href: "/chat", key: "chat", inBar: false },
   /* THE ASSISTANT LEFT THIS LIST (user directive, 2026-09-03: "change [the
      green button] to the assistant and remove the assistant access in the
      menu"). It is the rail's PRIMARY action now — the green button at the top

@@ -46,7 +46,9 @@ export type RefreshTopic =
    * only when somebody reloaded the page they were already looking at.
    */
   | "tasks"
-  | "meetings";
+  | "meetings"
+  | "projects"
+  | "chat";
 
 const counters = new Map<RefreshTopic, number>();
 const listeners = new Map<RefreshTopic, Set<() => void>>();
@@ -96,6 +98,14 @@ const TOPIC_RULES: readonly [RegExp, readonly RefreshTopic[]][] = [
      meeting's own panel carries its mini-board, so a write to either can
      change what the other is showing */
   [/^\/api\/tasks/, ["tasks"]],
+  /* a project write moves the board too: creating one creates its task
+     category, and renaming one renames that category (0181) */
+  [/^\/api\/projects/, ["projects", "tasks"]],
+  /* the channel LIST, for the unread badges. Deliberately not the
+     messages: those arrive on the stream, and a bus announcement per
+     message would make every subscriber in the product refetch on every
+     word anybody typed. */
+  [/^\/api\/chat\/channels$/, ["chat"]],
   [/^\/api\/meetings/, ["meetings", "tasks"]],
   [/^\/api\/assistant\/sessions/, ["sessions"]],
   [/^\/api\/workflows/, ["workflows"]],

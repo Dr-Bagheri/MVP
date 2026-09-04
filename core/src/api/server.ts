@@ -44,7 +44,7 @@ import { createPlatformRepo, type PlatformRepo } from "./platform.ts";
 import { createTranscriptsRepo, type TranscriptsRepo } from "./transcripts.ts";
 import { createDomainTools } from "../agent/domain-tools.ts";
 import { toolsFor } from "../agent/platform-tools.ts";
-import { ECHO as ROUTER_ECHO, type RouteDecision } from "../agent/router.ts";
+import { ECHO as ROUTER_ECHO, nameIn, rosterFor, type RouteDecision } from "../agent/router.ts";
 import { rememberIncumbent, routeTurn } from "./routing.ts";
 import { createAgentRunStore } from "../agent/run-store.ts";
 import { createAgentRuntime } from "../agent/runtime.ts";
@@ -55,6 +55,9 @@ import { agentWorkflows, createAssistantAgent, listAssistantAgents, resolveAssis
 import { createConnectorsRepo, type ConnectorOAuthOptions, type ConnectorProvider } from "./connectors.ts";
 import { createMailDraftsRepo } from "./mail-drafts.ts";
 import { createTasksRepo } from "./tasks.ts";
+import { createProjectsRepo } from "./projects.ts";
+import { createChatRepo } from "./chat.ts";
+import { createChatBus, createTicketBook } from "./chatStream.ts";
 import { createMeetingsRepo, MEETING_ITEM_KINDS } from "./meetings.ts";
 import type { MeetingItemKind } from "./meetings.ts";
 import { createTts } from "./tts.ts";
@@ -133,7 +136,23 @@ export interface ServerOptions<TDeps> {
 }
 
 export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstance {
-  const app = Fastify({ logger: options.logger ?? false });
+  const app = Fastify({
+    logger: options.logger ?? false,
+    /*
+     * 0184: `app.close()` NEVER RETURNS with an SSE stream open, on the
+     * default `'idle'` — a live stream is neither idle nor mid-request, so
+     * Fastify waits for it forever. In production that is SIGTERM, a close
+     * that hangs, systemd waiting out its stop timeout, then SIGKILL — on
+     * every deploy, once one person has the chat page open.
+     *
+     * Measured both ways in test/chat-stream.test.ts rather than taken from
+     * the documentation: with the flag and without the bus's own `closeAll`,
+     * close returns and the stream's listener and heartbeat timer leak; with
+     * the hook and without the flag, close hangs. Both are needed and they
+     * fix different halves.
+     */
+    forceCloseConnections: true,
+  });
   const platform: PlatformRepo = createPlatformRepo(options.db);
   const auth: Auth = createAuth({
     db: options.db, jwtSecret: options.jwtSecret,
@@ -190,6 +209,14 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
   const connectors = createConnectorsRepo(options.db, options.connectorOAuth);
   const mailDrafts = createMailDraftsRepo(options.db, connectors);
   const tasks = createTasksRepo(options.db);
+  const projects = createProjectsRepo(options.db);
+  const chat = createChatRepo(options.db);
+  /* 0184: one bus and one ticket book per server instance. They are
+     STATE, which is why they are built here beside the repos rather than
+     imported as module singletons — two servers in one test process
+     sharing a bus would deliver one test's messages into another's. */
+  const chatBus = createChatBus();
+  const chatTickets = createTicketBook();
   const meetings = createMeetingsRepo(options.db);
   // One resolver for the assistant's `/slug` and the pipeline's summarizer.
   // A caller may still inject its own, but the default is the shared one —
@@ -2739,6 +2766,309 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
   });
 
   /**
+   * 0181 — projects. A PERSON's surface, like the board it files into:
+   * gateway keys are refused for the same reason (a machine integration has
+   * no hands on the org's work plan), and every read and write runs as the
+   * caller under 0181's policies.
+   *
+   * There is no DELETE. 0181 grants none, on purpose — a project is
+   * archived like every other record in this product — so a route offering
+   * one could only ever be a 500 wearing a button.
+   */
+  app.get("/v1/projects", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const query = (request.query ?? {}) as { archived?: unknown };
+    return reply.send(await projects.list(identity, { archived: query.archived === "1" }));
+  });
+
+  app.post("/v1/projects", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    return reply.code(201).send(await projects.create(identity, body));
+  });
+
+  app.get("/v1/projects/:id", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    return reply.send(await projects.detail(identity, id));
+  });
+
+  app.patch("/v1/projects/:id", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    return reply.send(await projects.update(identity, id, (request.body ?? {}) as Record<string, unknown>));
+  });
+
+  app.put("/v1/projects/:id/members/:userId", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id, userId } = request.params as { id: string; userId: string };
+    await projects.setMember(identity, id, userId, true);
+    return reply.code(204).send();
+  });
+
+  app.delete("/v1/projects/:id/members/:userId", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id, userId } = request.params as { id: string; userId: string };
+    await projects.setMember(identity, id, userId, false);
+    return reply.code(204).send();
+  });
+
+  /**
+   * 0184 \u2014 the team channel. A PERSON's surface: gateway keys are refused
+   * for the same reason the board refuses them, and every read and write runs
+   * as the caller under 0184's policies.
+   */
+  app.get("/v1/chat/channels", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    return reply.send(await chat.channels(identity));
+  });
+
+  app.post("/v1/chat/channels", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    return reply.code(201).send(await chat.createChannel(identity, (request.body ?? {}) as never));
+  });
+
+  app.patch("/v1/chat/channels/:id", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    return reply.send(await chat.updateChannel(identity, id, (request.body ?? {}) as Record<string, unknown>));
+  });
+
+  app.put("/v1/chat/channels/:id/membership", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    await chat.setJoined(identity, id, true);
+    return reply.code(204).send();
+  });
+
+  app.delete("/v1/chat/channels/:id/membership", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    await chat.setJoined(identity, id, false);
+    return reply.code(204).send();
+  });
+
+  app.get("/v1/chat/channels/:id/messages", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    const query = (request.query ?? {}) as { before?: unknown; after?: unknown };
+    const num = (value: unknown): number | undefined => {
+      const n = Number(value);
+      return typeof value === "string" && value !== "" && Number.isFinite(n) ? n : undefined;
+    };
+    return reply.send(await chat.messages(identity, id, {
+      ...(num(query.before) === undefined ? {} : { before: num(query.before)! }),
+      ...(num(query.after) === undefined ? {} : { after: num(query.after)! }),
+    }));
+  });
+
+  app.post("/v1/chat/channels/:id/messages", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { body?: unknown };
+    const message = await chat.post(identity, id, body);
+    chatBus.publish(identity.orgId, { type: "message", message });
+    /* THE AGENT'S TURN, started and not awaited: the person's message is
+       already written and the reply arrives on the stream when the model is
+       done. Awaiting it would make a send take as long as an answer. */
+    void answerIfNamed(identity, id, message.body ?? "").catch(() => undefined);
+    return reply.code(201).send(message);
+  });
+
+  app.patch("/v1/chat/messages/:id", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    const message = await chat.editMessage(identity, id, (request.body ?? {}) as never);
+    chatBus.publish(identity.orgId, { type: "edited", message });
+    return reply.send(message);
+  });
+
+  app.post("/v1/chat/channels/:id/read", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { seq?: unknown };
+    await chat.markRead(identity, id, Number(body.seq) || 0);
+    return reply.code(204).send();
+  });
+
+  /**
+   * A ticket for the stream, plus the address to open it at.
+   *
+   * The browser cannot put a bearer token on an EventSource, and the BFF is
+   * not a way around that here: every Vercel function is capped at 300
+   * seconds on every plan, so a proxied chat stream would die every five
+   * minutes forever. Same shape as the live-transcription lane, same reason.
+   */
+  app.post("/v1/chat/ticket", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const token = randomUUID().replace(/-/g, "") + randomUUID().replace(/-/g, "");
+    chatTickets.sweep();
+    chatTickets.mint(identity.userId, identity.orgId, token);
+    return reply.send({
+      ticket: token,
+      /* absent when core does not know its own public address \u2014 the client
+         then falls back to polling rather than opening a stream at a guess */
+      direct_url: process.env.CORE_PUBLIC_URL
+        ? `${process.env.CORE_PUBLIC_URL.replace(/\/$/, "")}/v1/chat/stream?ticket=${token}`
+        : null,
+    });
+  });
+
+  app.options("/v1/chat/stream", async (_request, reply) => {
+    reply.header("access-control-allow-origin", "*");
+    reply.header("access-control-allow-methods", "GET, OPTIONS");
+    return reply.code(204).send();
+  });
+
+  app.get("/v1/chat/stream", async (request, reply) => {
+    const { ticket } = request.query as { ticket?: string };
+    const spent = typeof ticket === "string" && ticket !== ""
+      ? chatTickets.redeem(ticket)
+      : null;
+    const orgId = spent?.orgId ?? (await auth.requireActive(request)).orgId;
+
+    /* HIJACK before touching reply.raw. Returning the reply object also
+       suppresses Fastify's send today, but it is the unsupported spelling of
+       the same intent \u2014 it is what broke on the v3\u2192v4 boundary for everyone
+       who had written it that way. */
+    reply.hijack();
+    reply.raw.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      /* `no-transform` is the half that matters to a CDN, and NO
+         Content-Length: that pair is what makes cloudflared flush rather
+         than buffer. `X-Accel-Buffering` is not honoured by Cloudflare and is
+         here for any other proxy in the path.
+         NO `Connection: keep-alive`: meaningless on HTTP/1.1 and a thrown
+         ERR_HTTP2_INVALID_CONNECTION_HEADERS the day anything negotiates h2. */
+      "Cache-Control": "no-cache, no-transform",
+      "X-Accel-Buffering": "no",
+      "access-control-allow-origin": "*",
+    });
+    const close = chatBus.open(orgId, {
+      write: (chunk) => { try { reply.raw.write(chunk); } catch { /* gone */ } },
+      end: () => { try { reply.raw.end(); } catch { /* gone */ } },
+    });
+    /* the RESPONSE's close, never the request's: on a POST the request's
+       fires when the body finished, which would detach milliseconds after
+       attaching. This is a GET and the trap still costs nothing to avoid. */
+    reply.raw.on("close", close);
+  });
+
+  /**
+   * IN A CHANNEL, THE ROUTER'S `default` RUNG IS SILENCE.
+   *
+   * The assistant thread answers every message because it is a conversation
+   * with one person. A room is not: with three colleagues in it, an ambient
+   * trigger means three answers to every human sentence and the feature is
+   * unusable by its second day. So the mention is the whole authorization \u2014
+   * `nameIn` and nothing else, which is the same matcher the assistant uses,
+   * not a second one.
+   *
+   * AND THE ANSWER GETS NO RETRIEVAL TOOLS. This is the sharper rule and it
+   * is not caution: `call_read` admits a call to its OWNER, to the org when
+   * the scope says so, and to admins \u2014 so the person asking may legitimately
+   * see a record that other people in this room cannot. "The agent borrows
+   * the caller's authority" is right in a private thread and wrong here,
+   * because the answer is addressed to everybody. The blast radius decides
+   * the reach (M43's rule), and the room's own conversation is what an answer
+   * here may draw on.
+   */
+  async function answerIfNamed(identity: Identity, channelId: string, text: string): Promise<void> {
+    /* the SAME roster the assistant routes against — listAssistantAgents
+       under this caller's RLS, so a channel can only name an agent the
+       person could have named anywhere else */
+    const cards = await listAssistantAgents(options.db, identity).catch(() => []);
+    const named = nameIn(text, rosterFor(cards.map((a) => ({ handle: a.handle, name: a.name }))));
+    if (named === null) return;
+    /* Echo has no card; anybody else is re-read under this identity, which is
+       also what supplies the persona below */
+    const persona = named === ROUTER_ECHO
+      ? undefined
+      : await resolveAssistantAgent(options.db, identity, named);
+
+    chatBus.publish(identity.orgId, {
+      type: "agent_typing", channel_id: channelId, handle: named,
+    });
+
+    const model = await models.preferred(identity);
+    if (!model) {
+      chatBus.publish(identity.orgId, {
+        type: "agent_failed", channel_id: channelId, handle: named,
+      });
+      return;
+    }
+
+    /* the room's recent words, as the context \u2014 everything this answer is
+       allowed to draw on, and every reader of the answer can already read it */
+    const recent = await chat.messages(identity, channelId, { limit: 30 });
+    const transcript = recent
+      .filter((m) => m.body !== null)
+      .map((m) => `${m.author_kind === "agent" ? m.agent_handle : "\u0647\u0645\u06a9\u0627\u0631"}: ${m.body}`)
+      .join("\n");
+
+    let answer = "";
+    let failed = true;
+    try {
+      await assistant.ask({
+        identity,
+        question: text,
+        model,
+        agentModel: persona?.model,
+        systemInstructions: [
+          persona?.instructions ?? "",
+          languageInstruction(undefined),
+          timeInstructions(new Date(), await callerZone(identity, undefined)),
+          "\u06cc\u06a9 \u06af\u0641\u062a\u06af\u0648\u06cc \u06af\u0631\u0648\u0647\u06cc \u062f\u0631 \u062d\u0627\u0644 \u0627\u0646\u062c\u0627\u0645 \u0627\u0633\u062a \u0648 \u067e\u0627\u0633\u062e \u0634\u0645\u0627 \u0631\u0627 \u0647\u0645\u0647\u0654 \u0627\u0639\u0636\u0627\u06cc \u0627\u062a\u0627\u0642 \u0645\u06cc\u200c\u0628\u06cc\u0646\u0646\u062f. \u06a9\u0648\u062a\u0627\u0647 \u0628\u0646\u0648\u06cc\u0633.",
+          transcript === "" ? "" : `\u06af\u0641\u062a\u06af\u0648\u06cc \u0627\u062e\u06cc\u0631 \u0627\u062a\u0627\u0642:\n${transcript}`,
+        ].filter((part) => part !== "").join("\n"),
+        /* [] is EXPLICIT and load-bearing \u2014 `undefined` would mean
+           "unspecified" and hand this run the server's default read tools,
+           which is the exact scope violation the comment above forbids */
+        allowedTools: [],
+        callId: null,
+        onTurn: async ({ text: produced }) => { answer = produced; },
+      }, {
+        /* a sink that reads nothing: this turn has no screen, and the answer
+           is taken from onTurn's accumulated text, which is the same string
+           the stream carried */
+        write: () => undefined,
+        end: () => undefined,
+      });
+      failed = answer.trim() === "";
+    } catch {
+      failed = true;
+    }
+
+    if (failed) {
+      /* TRANSIENT, never a row. A tidy "something went wrong" message in the
+         record is indistinguishable a week later from something the agent
+         said \u2014 the honest record is the question standing unanswered. */
+      chatBus.publish(identity.orgId, {
+        type: "agent_failed", channel_id: channelId, handle: named,
+      });
+      return;
+    }
+    const message = await chat.postAsAgent(identity, channelId, named, answer);
+    chatBus.publish(identity.orgId, { type: "message", message });
+  }
+
+  /**
    * The org's people, for pickers: names and role, never emails or statuses
    * (that is the admin members surface's business). The wall already lets an
    * active member read their org's rows — 0013's app_user_read — so this is
@@ -4448,6 +4778,22 @@ ${liveText}`
     // Fastify must not also try to reply — we own the socket now.
     return reply;
   });
+
+  /*
+   * SHUTDOWN MUST END THE STREAMS FIRST.
+   *
+   * Fastify's `forceCloseConnections` default is `'idle'`, which destroys a
+   * connection that is neither sending a request nor waiting for a response —
+   * and a live SSE stream is neither, so `app.close()` simply never resolves.
+   * Measured against this repo's own Fastify install. In production that
+   * means SIGTERM, a close that hangs, systemd waiting out its stop timeout
+   * (90s by default) and then SIGKILL — on every deploy, once chat has one
+   * open stream, which it will within a minute of anybody using it.
+   *
+   * Hung off `onClose` rather than left for main.ts to remember: a shutdown
+   * step that lives in the caller is a step the next entrypoint forgets.
+   */
+  app.addHook("onClose", async () => { chatBus.closeAll(); });
 
   return app;
 }

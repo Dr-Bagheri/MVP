@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { BAR_CEILING, GITHUB_HREF, NAV_BAR, NAV_PRIMARY, NAV_UTILITY, activeNavHref } from "./nav";
+import { NAV_ICON } from "./icons";
 
 /**
  * The nav model's rules, as tests rather than as comments.
@@ -139,6 +140,29 @@ describe("activeNavHref", () => {
     }
     /* and the control: territory does not leak to a neighbour */
     expect(activeNavHref("/meetings")).toBe("/meetings");
+  });
+
+  /*
+   * EVERY NAV ENTRY HAS AN ICON — 13½, at the smallest scale that still
+   * ships: `NAV_ICON` is a plain lookup, so a key it does not carry renders
+   * an EMPTY SLOT in the rail and in the mobile bar. No error, no warning,
+   * a destination that is simply invisible next to its labelled neighbours.
+   *
+   * The list is DERIVED from the nav rather than written out here. A
+   * hand-kept enumeration is a second copy of the producer, and the guard
+   * whose coverage list has a hole exactly where the drift arrives is the
+   * one this repo has already shipped once (vocabulary.guard's missing
+   * `Role`).
+   */
+  it("gives every nav destination an icon", () => {
+    const missing = [...NAV_PRIMARY, ...NAV_UTILITY]
+      .map((n) => n.key)
+      .filter((key) => NAV_ICON[key] === undefined);
+    expect(missing, "nav keys with no icon render an empty rail slot").toEqual([]);
+    /* the control: the assertion above is vacuously true against an empty
+       nav, and against a NAV_ICON that answers for every string */
+    expect(NAV_PRIMARY.length).toBeGreaterThan(0);
+    expect(NAV_ICON["definitely-not-a-nav-key"]).toBeUndefined();
   });
 
   it("lights NOTHING on the assistant, because the menu no longer offers it", () => {

@@ -67,6 +67,11 @@ export const TRAIL: Readonly<Record<string, TrailEntry>> = {
   "/tasks": { label: "platform.tasks" },
   "/meetings": { label: "platform.meetings" },
   "/meetings/[id]": { entity: true, parent: "/meetings" },
+  /* 0181 — projects. The detail crumb is the project's NAME, fed by the
+     page through useCrumbTitle; `entity` is what says the label is data. */
+  "/chat": { label: "platform.chat" },
+  "/projects": { label: "platform.projects" },
+  "/projects/[id]": { entity: true, parent: "/projects" },
 
   /* the connected accounts a workflow runs on, beside the workflows */
   /* under SETTINGS now — that is the menu the page wears (2026-09-02), and

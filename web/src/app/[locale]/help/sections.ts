@@ -8,17 +8,32 @@
  * keys in BOTH catalogues fails that test — the step keys are computed at
  * render time, so `keys.test.ts` deliberately cannot see them.
  *
- * Rewritten 2026-08-28 (user directive): the guide now describes the
- * three-root platform — Assistant (with Workflows, Integrations and Agents
- * under its menu), Echo, Management — plus Settings & profile.
+ * REWRITTEN 2026-09-04 (user directive: "update the help we have in help
+ * section — for each section make a new help because we changed it a lot,
+ * remove the old one").
+ *
+ * The guide had gone stale in the way documentation always does: it described
+ * a three-root platform (Assistant, Echo, Management) that no longer exists.
+ * Echo is gone as a surface, meetings and tasks became first-class sections,
+ * and projects and chat are new. So the list below is the RAIL, in the rail's
+ * own order — which is the property that keeps this honest: a section
+ * somebody can navigate to and cannot read about is a gap, and a section here
+ * with nowhere to go is a page describing a product we do not ship.
+ *
+ * The order matters for a second reason: this is also the reading order for
+ * somebody new, and it runs from the shell they are looking at, through the
+ * work they came to do, out to the things they configure once.
  */
 export const HELP_SECTIONS = [
   { slug: "overview", group: "start", steps: 5 },
   { slug: "assistant", group: "parts", steps: 6 },
+  { slug: "meetings", group: "parts", steps: 6 },
+  { slug: "tasks", group: "parts", steps: 6 },
+  { slug: "projects", group: "parts", steps: 5 },
+  { slug: "chat", group: "parts", steps: 5 },
   { slug: "workflows", group: "parts", steps: 6 },
   { slug: "integrations", group: "parts", steps: 5 },
   { slug: "agents", group: "parts", steps: 5 },
-  { slug: "echo", group: "parts", steps: 6 },
   { slug: "management", group: "parts", steps: 5 },
   { slug: "settings", group: "parts", steps: 6 },
 ] as const;

@@ -29,7 +29,6 @@ import {
 import { uploadAudioFile } from "@/lib/uploadFile";
 import { Avatar } from "@/components/Avatar";
 import { digits, formatClock, formatDate, formatDuration, formatTime, personName, instantFromFields } from "@/lib/format";
-import { onRoomAudio } from "@/lib/roomAudio";
 
 /**
  * THE MEETING'S OWN PAGE — the big-milestone round (user directive,
@@ -186,14 +185,6 @@ export function MeetingPage({ id }: { id: string }) {
    * never ask for a microphone), and an engine already running somebody
    * else's take.
    */
-  /* how many REMOTE voices the recording mix carries (0162). UNCONDITIONAL
-     and up here with the others: this component returns early for a meeting
-     that has not loaded, and a hook below that return changes the hook order
-     between renders — which is what happened the first time this was
-     written, three lines under the comment saying so. */
-  const [voices, setVoices] = useState(0);
-  useEffect(() => onRoomAudio((tracks) => setVoices(tracks.length)), []);
-
   const beginTake = useCallback(() => {
     if (typeof meeting !== "object" || meeting === null) return;
     if (meeting.mode === "upload" || meeting.call_id !== null) return;
@@ -214,22 +205,22 @@ export function MeetingPage({ id }: { id: string }) {
       micId: "",
       language: locale === "en" ? "en" : "mixed",
       /*
-       * NO MORE SHARE PICKER (user directive, 2026-09-02: "why we still using
-       * the fake call for captureing the online voices … get the voice from
-       * online in web room from everyone without faking").
+       * THE SHARED TAB, AGAIN — and this is a REVERSAL, recorded as one.
        *
-       * An online meeting on OUR room records the room: every participant's
-       * audio is already a live track in this page, so the recorder mixes
-       * those with this microphone. What the person loses is the sharing
-       * banner, the tab picker and a permission the feature never wanted;
-       * what the recording gains is the actual cast — whoever is in the
-       * meeting, including people who join after the button is pressed —
-       * rather than whatever a chosen tab happens to be playing.
+       * 2026-09-02 moved the online lane onto our own room's tracks: no
+       * picker, no banner, and whoever was actually in the meeting. Today
+       * (user directive): "for the online meetings go with face screen share
+       * to get the audio from web for now as well" — the meetings people
+       * actually hold are in software we do not host, and a room recording
+       * can only ever carry the people who came to OURS.
        *
-       * "system" survives for a call in software we do not host; it is not
-       * reachable from this button.
+       * Note "for now". The room branch is not deleted and neither is the
+       * tap that feeds it (`Room.tsx`'s AudioTap, `lib/roomAudio.ts`): the
+       * switch is one word in this call, so coming back is one word too.
+       * Deleting a working path to take a reversal is how the reversal
+       * becomes permanent by accident.
        */
-      source: meeting.mode === "online" ? "room" : "mic",
+      source: meeting.mode === "online" ? "system" : "mic",
       title: meeting.title,
       locale,
       resume: null,
@@ -283,6 +274,21 @@ export function MeetingPage({ id }: { id: string }) {
   useEffect(() => {
     if (stage !== "hold" || autoStarted.current) return;
     if (typeof meeting !== "object" || meeting === null) return;
+    /*
+     * … EXCEPT WHERE STARTING NEEDS A HAND ON THE MOUSE.
+     *
+     * An online take opens the share picker, and a browser only opens one
+     * for a gesture. Walking into the stage is a click, but the picker is
+     * reached AFTER the microphone resolves — by then the activation is
+     * spent — and a reload straight into a live stage has no gesture at
+     * all. The refusal that follows is `NotAllowedError`, which is also
+     * what a cancelled picker raises: the person would be told they
+     * cancelled a dialog they were never shown.
+     *
+     * So this lane gets a button, and the button is the gesture. The
+     * in-person lane keeps walking in — a microphone needs no picker.
+     */
+    if (meeting.mode === "online") return;
     /* the upload lane and an already-held meeting are refused by
        `beginTake` itself, at the altitude where a microphone would actually
        be opened. A second copy here read as extra rigour and made the test
@@ -466,19 +472,25 @@ export function MeetingPage({ id }: { id: string }) {
             </span>
           ) : null}
           {/*
-            WHOSE VOICES ARE IN THIS TAKE (0162). Recording an online meeting
-            now mixes the room's own tracks, and that makes a new kind of
-            nothing possible: no remote audio means "nobody else has joined"
-            OR "the room never connected here", and the two look identical —
-            a person would get a recording of themselves and no reason to
-            suspect it. So the count is on screen while the light is red,
-            and it says "this device only" rather than showing a zero.
+            IS THE OTHER SIDE STILL IN THE MIX?
+
+            A share can end without the recording ending: the person presses
+            the browser's own "stop sharing" bar, or closes the tab they
+            picked, and the take carries on with a microphone in a room where
+            nobody is speaking. The engine knows (`quality: "shareEnded"`) and
+            nothing on this page said so — which is the worst shape a fault
+            can take here, because the red light stays red and the clock keeps
+            counting while half the meeting stops being recorded.
+
+            The quiet half is on screen too, and deliberately: "tab + mic" is
+            how somebody confirms they picked the right thing, in the seconds
+            when they can still fix it.
           */}
           {recordingLive && meeting.mode === "online" ? (
             <span className={`rounded-xl px-2.5 py-1.5 text-[11px] font-medium ${
-              voices === 0 ? "bg-warning/10 text-warning" : "bg-surface-2 text-fg-muted"
+              engine.quality === "shareEnded" ? "bg-warning/10 text-warning" : "bg-surface-2 text-fg-muted"
             }`}>
-              {voices === 0 ? t("mixDeviceOnly") : t("mixVoices", { n: digits(voices + 1, locale) })}
+              {engine.quality === "shareEnded" ? t("mixShareEnded") : t("mixShared")}
             </span>
           ) : null}
           {recordingLive ? (
@@ -503,6 +515,16 @@ export function MeetingPage({ id }: { id: string }) {
               className="btn bg-accent font-semibold text-on-accent shadow-accent hover:opacity-90">
               {MODE_ICON.upload}
               {t("startUpload")}
+            </button>
+          ) : !held && active === "hold" && meeting.mode === "online" ? (
+            /* THE GESTURE (see the auto-start effect). Named for what it
+               opens, not just for what it starts: a button that says
+               «shuru» and then raises a share dialog is a surprise, and a
+               surprised person cancels. */
+            <button type="button" onClick={beginTake}
+              className="btn bg-accent font-semibold text-on-accent shadow-accent hover:opacity-90">
+              {MODE_ICON.online}
+              {t("startShared")}
             </button>
           ) : !held && active === "pre" ? (
             /* the way IN, named for what it does — the plan's own step
@@ -535,6 +557,15 @@ export function MeetingPage({ id }: { id: string }) {
       {error !== null ? (
         <p role="alert" className="rounded-xl border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
           {error}
+        </p>
+      ) : null}
+      {/* the one thing the picker gets wrong, said BEFORE it opens: a share
+          with the audio box unticked carries no sound, and the engine
+          refuses the take for it (`shareNoAudio`). Telling somebody that
+          after they have chosen is telling them to do it twice. */}
+      {!held && !recordingLive && active === "hold" && meeting.mode === "online" ? (
+        <p className="rounded-xl border border-border bg-surface-2 px-3 py-2 text-xs text-fg-muted">
+          {t("shareHint")}
         </p>
       ) : null}
 

@@ -49,7 +49,7 @@ const COLUMNS: TaskColumnRecord[] = [{ id: "col-todo", name: "برای انجا�
 const TOPICS: TaskTopicRecord[] = [];
 const LABELS: TaskLabelRecord[] = [];
 const PEOPLE: OrgPersonRecord[] = [
-  { id: "u-me", display_name: "سینا", display_name_en: null, role: "owner" },
+  { id: "u-me", display_name: "سینا", display_name_en: null, role: "owner", username: "u-me" },
 ];
 
 const TASK: TaskDetailRecord = {

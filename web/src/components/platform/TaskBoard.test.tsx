@@ -45,7 +45,7 @@ const LABELS: TaskLabelRecord[] = [
   { id: "lab-2", name: "محصول", color: "blue" },
 ];
 const PEOPLE: OrgPersonRecord[] = [
-  { id: "u-me", display_name: "سینا", display_name_en: null, role: "owner" },
+  { id: "u-me", display_name: "سینا", display_name_en: null, role: "owner", username: "u-me" },
 ];
 
 /** producer-shaped (core/src/api/tasks.ts CARD_ROWS) */

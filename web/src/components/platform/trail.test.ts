@@ -174,11 +174,14 @@ describe("the trail's own assumptions", () => {
        trail — leaving it parented to Settings would have been a crumb
        offering a door back to a menu that no longer lists it, which the
        Settings-parent check below now forbids outright. */
-    /* «/echo» left the set on 2026-09-04 with the surface itself */
+    /* «/echo» left the set on 2026-09-04 with the surface itself, and
+       «/projects» joined it the same day — a rail entry begins its own trail,
+       and parenting it to Tasks would put a crumb on the project page naming
+       the board rather than the section the person is standing in */
     expect(roots).toEqual([
-      "/", "/agents", "/assistant", "/help", "/integrations",
-      "/management", "/meetings", "/platform", "/profile", "/search",
-      "/settings", "/tasks", "/workflows",
+      "/", "/agents", "/assistant", "/chat", "/help", "/integrations",
+      "/management", "/meetings", "/platform", "/profile", "/projects",
+      "/search", "/settings", "/tasks", "/workflows",
     ]);
     for (const pattern of Object.keys(TRAIL)) {
       const trail = trailFor(pattern.replace(/\[[^\]]+\]/g, "x"));
