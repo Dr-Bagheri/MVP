@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type KeyboardEvent } from "react";
+import { Select } from "@/components/Select";
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { ConnectorProvider, ConnectorStatus, Me } from "@/api/types";
@@ -370,22 +371,18 @@ export function Integrations() {
                   {apps.length > 1 ? (
                     <label>
                       <span className="sr-only">{t("filterApps")}</span>
-                      <select
-                        /* audit finding, 2026-09-02: same four overrides as the
-                           search box beside it; only the width is this
-                           control's to decide */
-                        className="input w-auto"
+                      <Select
+                        className="w-auto"
                         value={app}
-                        onChange={(event) =>
-                          setApp(event.target.value as ConnectorProvider | "")}
-                      >
-                        <option value="">{t("filterAllApps")}</option>
-                        {apps.map((provider) => (
-                          <option key={provider} value={provider}>
-                            {providerName(provider)}
-                          </option>
-                        ))}
-                      </select>
+                        placeholder={t("filterAllApps")}
+                        onChange={(next) => setApp(next as ConnectorProvider | "")}
+                        options={[
+                          { value: "", label: t("filterAllApps") },
+                          ...apps.map((provider) => ({
+                            value: provider, label: providerName(provider),
+                          })),
+                        ]}
+                      />
                     </label>
                   ) : null}
                 </div>

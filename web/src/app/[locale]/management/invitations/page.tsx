@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Select } from "@/components/Select";
 import { useLocale, useTranslations } from "next-intl";
 import { api, BffError } from "@/api/client";
 import { useRefreshEpoch } from "@/lib/refreshBus";
@@ -217,16 +218,19 @@ export default function InvitationsPage() {
                 md it was the one control in this row not level with the email
                 field beside it. `.input` owns height and type; only the width
                 is this row's to decide. */}
-            <select
-              className="input w-auto"
+            {/* D25: the issuer's role bounds the GRANT — only the owner may
+                mint an admin, and nobody mints an owner */}
+            <Select
+              className="w-auto"
               value={inviteRole}
-              onChange={(e) => setInviteRole(e.target.value as Role)}
-            >
-              <option value="member">{tAdmin("roleMember")}</option>
-              {/* D25: the issuer's role bounds the GRANT — only the owner
-                  may mint an admin, and nobody mints an owner */}
-              {me?.role === "owner" ? <option value="admin">{tAdmin("roleAdmin")}</option> : null}
-            </select>
+              onChange={(next) => setInviteRole(next as Role)}
+              options={[
+                { value: "member", label: tAdmin("roleMember") },
+                ...(me?.role === "owner"
+                  ? [{ value: "admin", label: tAdmin("roleAdmin") }]
+                  : []),
+              ]}
+            />
             <button
               className="btn bg-accent font-semibold text-on-accent"
               disabled={busy || !inviteEmail.trim()}

@@ -615,8 +615,12 @@ describe("when the feed cannot be read", () => {
     render(<AuditLogs />);
     await screen.findByText("e01");
 
-    // change the filter to trigger the failing reload
-    await userEvent.selectOptions(screen.getByRole("combobox"), "agent_run");
+    /* change the filter to trigger the failing reload. The source filter is
+       the platform's own dropdown now, so it is opened and then chosen by
+       `data-value` — the attribute the control carries so a test can name a
+       VALUE rather than a label, which would be a fact about the catalogue. */
+    await userEvent.click(screen.getByRole("combobox"));
+    await userEvent.click(document.querySelector('[data-value="agent_run"]')!);
 
     expect(await screen.findByText(/خواندن سوابق ممکن نشد/)).toBeTruthy();
     /*

@@ -1097,7 +1097,7 @@ export function Hub() {
            the hub was a centred landing card; on a page whose job is a
            conversation it left the prompt floating in a column half the width
            of every other surface in the product. */
-        className={`flex w-full max-w-content flex-col rounded-2xl border border-border-strong bg-surface px-3 pb-2 pt-3 text-start transition-colors focus-within:border-accent ${
+        className={`flex w-full max-w-content flex-col rounded-2xl border border-border-strong bg-surface px-3 pb-0.5 pt-3 text-start transition-colors focus-within:border-accent ${
           idle ? "mx-auto mt-auto" : "sticky bottom-0 mx-auto"
         }`}
       >
@@ -1140,14 +1140,21 @@ export function Hub() {
           prompt box, they are too high in it").
 
           The row was `mt-1.5` under the field, which put it wherever the field
-          happened to end — floating inside a box padded 12px on every side. It
-          sits at the FOOT now, with a clearance rather than a full pad: the
-          box keeps `pt-3` above the field and drops to `pb-2` beneath the
-          controls, which on a ~96px composer is about the tenth of its height
-          the directive asks for. `mt-auto` takes any slack when the box is
-          stretched (the idle hub centres it in the column).
+          happened to end — floating inside a box padded 12px on every side.
+
+          Asked TWICE (2026-09-04, with a before/after pair): the first answer
+          cut the pad to 8px, which was still too high. It is 2px now, and the
+          gap under the glyphs is the icon button's own — `.btn-icon` is 28px
+          around a 16px glyph, so six of the ten pixels beneath a mic are
+          inside its hit area and cannot be taken away without shrinking the
+          target. That is the floor, and it is worth saying because the next
+          person asked to move them "down a bit more" needs to know the
+          remaining space is a 44px-hit-area promise rather than padding.
+
+          `mt-auto` takes any slack when the box is stretched (the idle hub
+          centres it in the column); `pt-3` above the field is untouched.
         */}
-        <div className="mt-auto flex items-center justify-between pt-1.5" dir="ltr">
+        <div className="mt-auto flex items-center justify-between pt-0.5" dir="ltr">
           <span className="flex items-center gap-1">
             <button
               type="button"

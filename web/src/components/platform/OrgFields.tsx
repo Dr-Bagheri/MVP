@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Select } from "@/components/Select";
 import { useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import { notify } from "@/lib/notify";
@@ -497,31 +498,27 @@ export function OrgFields() {
       </FormRow>
 
       <FormRow label={t("orgLocale")} htmlFor="org-locale">
-        {/* 2026-09-03: `.input` owns the height, and this was the last copy of
-            the exact class string the profile page's three selects were fixed
-            for on 2026-09-02 — `min-h-0 h-11 … md:h-control` pins 38px from md
-            up, beside the six 40px `.input` boxes in this same panel. One form,
-            two field heights, and the odd one out is the only control on it
-            that is not a text box. Only the WIDTH stays local: a locale picker
-            sized to its content is a choice about this field, not a re-answer
-            of a promise `.input` already makes (MemberDetail's `input w-32`
-            carries the same line). */}
-        <select
+        {/*
+          The platform's dropdown (user directive, 2026-09-04: "when i ask for
+          all i mean all"). Only the WIDTH stays local — a locale picker sized
+          to its content is a choice about this field, not a re-answer of a
+          promise the control already makes.
+
+          An unrecognised locale is labelled as ITSELF: we have no name for it,
+          and inventing one would be the silent substitution this list exists
+          to prevent — a value stored as `fa-IR` must not render as «فارسی».
+        */}
+        <Select
           id="org-locale"
-          className="input w-auto"
+          className="w-auto"
           value={locale}
           disabled={busy}
-          onChange={(event) => setLocale(event.target.value)}
-        >
-          {localeOptions(org.locale).map((value) => (
-            <option key={value} value={value}>
-              {/* an unrecognised locale is labelled as ITSELF — we have no
-                  name for it, and inventing one would be the substitution
-                  this option exists to prevent */}
-              {value === "fa" || value === "en" ? t(`orgLocale_${value}`) : value}
-            </option>
-          ))}
-        </select>
+          onChange={setLocale}
+          options={localeOptions(org.locale).map((value) => ({
+            value,
+            label: value === "fa" || value === "en" ? t(`orgLocale_${value}`) : value,
+          }))}
+        />
       </FormRow>
 
       {/* THE GLOSSARY ROW LEFT THIS FORM (user directive, 2026-09-02: "remove

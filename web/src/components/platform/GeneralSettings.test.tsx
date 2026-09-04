@@ -80,7 +80,7 @@ describe("the theme control", () => {
    * dark control. `aria-haspopup="listbox"` is what it is; `combobox` was what
    * the old element was.
    */
-  const themeSelect = () => screen.getByRole("button", { name: "پوسته" });
+  const themeSelect = () => screen.getByRole("combobox", { name: "پوسته" });
   /** open it and read the choices it offers */
   const themeOptions = async () => {
     await userEvent.click(themeSelect());

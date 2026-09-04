@@ -359,7 +359,7 @@ export default function ProfilePage() {
 
         <Section title={t("identityTitle")}>
           <FormPanel>
-            <FormRow label={t("photo")} description={t("photoHint")}>
+            <FormRow label={t("photo")}>
               <AvatarEditor me={me} onSaved={adopt} />
             </FormRow>
 
@@ -380,7 +380,7 @@ export default function ProfilePage() {
              * English word and moves the trailing underscore of `ali_` to the
              * left of it.
              */}
-            <FormRow label={t("displayNameEn")} description={t("clearHint")} htmlFor="profile-name-en">
+            <FormRow label={t("displayNameEn")} htmlFor="profile-name-en">
               <input
                 id="profile-name-en"
                 className="input"
@@ -390,7 +390,7 @@ export default function ProfilePage() {
               />
             </FormRow>
 
-            <FormRow label={t("username")} description={t("usernameHint")} htmlFor="profile-username">
+            <FormRow label={t("username")} htmlFor="profile-username">
               <div className="w-full">
                 <input
                   id="profile-username"
@@ -422,7 +422,7 @@ export default function ProfilePage() {
                     the list has not learned yet, because a closed list with
                     no exit is a form somebody cannot fill in truthfully.
                     «دربارهٔ شما» is GONE with it, on the same directive. */}
-                <FormRow label={t("jobTitle")} description={t("jobTitleHint")} htmlFor="profile-job">
+                <FormRow label={t("jobTitle")} htmlFor="profile-job">
                   <Select
                     id="profile-job"
                     value={JOB_TITLES.includes(jobTitle) ? jobTitle : (jobTitle === "" ? "" : "other")}
@@ -475,40 +475,46 @@ export default function ProfilePage() {
 
         <Section title={t("prefsTitle")} divided>
           <FormPanel>
-            {/* audit finding, 2026-09-02: these three wore `.input` and then
-                re-answered its one question — `min-h-0 h-11 md:h-control` made
-                them 38px from md up, beside 40px text boxes in the panel above
-                and the 40px `<Select>` trigger on the row before. `.input`
-                owns the height (and, via `select.input`, the chevron and the
-                option colours); a control that re-states it is how one panel
-                comes to hold two control heights. */}
+            {/*
+              THE PLATFORM'S DROPDOWN, not the browser's (user directive,
+              2026-09-04: "i asked to change all dropdowns in the platform to
+              our theme … when i ask for all i mean all").
+
+              These three were the last native controls on a settings screen,
+              and the reason they were easy to miss is the reason they had to
+              go: a native `<select>` wearing `.input` matches the theme
+              exactly while it is CLOSED. Only the open list gives it away —
+              the browser paints that on its own popup sheet, in white with a
+              Windows-blue row, and no stylesheet of ours reaches it. On a dark
+              screen it is the one thing on the page that is not ours.
+            */}
             <FormRow label={t("language")} htmlFor="profile-language">
-              <select
+              <Select
                 id="profile-language"
-                className="input"
                 value={me.locale}
-                onChange={(e) => {
-                  const locale = e.target.value as "fa" | "en";
+                onChange={(next) => {
+                  const locale = next as "fa" | "en";
                   setMe({ ...me, locale });
                   void api.setLocale(locale);
                   router.replace(pathname, { locale });
                 }}
-              >
-                <option value="fa">فارسی</option>
-                <option value="en">English</option>
-              </select>
+                options={[
+                  { value: "fa", label: "فارسی" },
+                  { value: "en", label: "English" },
+                ]}
+              />
             </FormRow>
 
-            <FormRow label={t("theme")} description={t("themeHint")} htmlFor="profile-theme">
-              <select
+            <FormRow label={t("theme")} htmlFor="profile-theme">
+              <Select
                 id="profile-theme"
-                className="input"
                 value={theme}
-                onChange={(e) => storeTheme(e.target.value as Theme)}
-              >
-                <option value="dark">{t("themeDark")}</option>
-                <option value="light">{t("themeLight")}</option>
-              </select>
+                onChange={(next) => storeTheme(next as Theme)}
+                options={[
+                  { value: "dark", label: t("themeDark") },
+                  { value: "light", label: t("themeLight") },
+                ]}
+              />
             </FormRow>
 
             {/* The "tool-capable only" hint was REMOVED, not restyled: nothing
@@ -517,21 +523,17 @@ export default function ProfilePage() {
                 no such field, so the hint was a safety claim with nothing
                 behind it. A missing hint is a gap; a false one is worse. */}
             <FormRow label={t("model")} htmlFor="profile-model">
-              <select
+              <Select
                 id="profile-model"
-                className="input"
                 value={me.model_id ?? ""}
-                onChange={(e) => {
-                  setMe({ ...me, model_id: e.target.value });
-                  void api.setPreferredModel(e.target.value);
+                onChange={(next) => {
+                  setMe({ ...me, model_id: next });
+                  void api.setPreferredModel(next);
                 }}
-              >
-                {models.map((model) => (
-                  <option key={model.id} value={model.id}>
-                    {modelLabel(model.name)}
-                  </option>
-                ))}
-              </select>
+                options={models.map((model) => ({
+                  value: model.id, label: modelLabel(model.name),
+                }))}
+              />
             </FormRow>
           </FormPanel>
         </Section>
@@ -545,7 +547,7 @@ export default function ProfilePage() {
         {me.assistant_context !== undefined ? (
           <Section title={t("assistantDataTitle")} divided>
             <FormPanel>
-              <FormRow label={t("shareWithAssistant")} description={t("shareWithAssistantHint")}>
+              <FormRow label={t("shareWithAssistant")}>
                 {/* 2026-09-03, control sweep: this stays hand-drawn, on
                     purpose. It is a SWITCH, not a button — the 24×44 track and
                     the 20px knob that slides between `start-0.5` and `end-0.5`
@@ -569,7 +571,7 @@ export default function ProfilePage() {
                   }}
                 />
               </FormRow>
-              <FormRow label={t("exportTitle")} description={t("exportHint")}>
+              <FormRow label={t("exportTitle")}>
                 <ExportAccountData />
               </FormRow>
             </FormPanel>
@@ -590,7 +592,7 @@ export default function ProfilePage() {
             be a promise the flow does not make. */}
         <Section title={t("signOutTitle")} divided>
           <FormPanel>
-            <FormRow label={tPlatform("signOut")} description={t("signOutHint")}>
+            <FormRow label={tPlatform("signOut")}>
               {/* audit finding, 2026-09-02: this was a hand-rolled 40px button
                   with the 16px TILE corner, one section under a Save button
                   that is `.btn-primary` (38px, 11px) — two button shapes on

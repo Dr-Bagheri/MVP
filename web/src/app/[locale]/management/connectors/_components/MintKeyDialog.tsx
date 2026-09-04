@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Select } from "@/components/Select";
 import { useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { User } from "@/api/types";
@@ -129,28 +130,31 @@ export function MintKeyDialog({
           </Field>
 
           <Field label={t("actsAsLabel")} hint={t("actsAsSelectHint")}>
-            <select
-              className="input"
+            {/*
+              Starts unchosen. There is no "(me)" default on purpose — see the
+              header comment; a defaulted actor is a defaulted power.
+
+              Non-active members stay VISIBLE but unselectable, labelled with
+              why. Hiding them would answer "why can't I pick Reza?" with
+              silence; showing them disabled answers it with the fact. A key
+              acting as a disabled member resolves to nothing at
+              `echo.resolve_api_key`, so it would be born dead.
+            */}
+            <Select
               value={actorId}
-              onChange={(event) => setActorId(event.target.value)}
-            >
-              {/* Starts unchosen. There is no "(me)" default on purpose — see
-                  the header comment; a defaulted actor is a defaulted power. */}
-              <option value="">{t("actorChoose")}</option>
-              {members.map((member) => (
-                /*
-                 * Non-active members stay VISIBLE but unselectable, labelled
-                 * with why. Hiding them would answer "why can't I pick Reza?"
-                 * with silence; showing them disabled answers it with the fact.
-                 * A key acting as a disabled member resolves to nothing at
-                 * `echo.resolve_api_key`, so it would be born dead.
-                 */
-                <option key={member.id} value={member.id} disabled={member.status !== "active"}>
-                  {member.display_name}
-                  {member.status === "active" ? "" : ` — ${t(`memberStatus_${member.status}`)}`}
-                </option>
-              ))}
-            </select>
+              placeholder={t("actorChoose")}
+              onChange={setActorId}
+              options={[
+                { value: "", label: t("actorChoose") },
+                ...members.map((member) => ({
+                  value: member.id,
+                  label: member.status === "active"
+                    ? member.display_name
+                    : `${member.display_name} — ${t(`memberStatus_${member.status}`)}`,
+                  disabled: member.status !== "active",
+                })),
+              ]}
+            />
           </Field>
 
           {actor ? (

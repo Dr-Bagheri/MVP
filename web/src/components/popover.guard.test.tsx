@@ -38,7 +38,7 @@ describe("an open dropdown", () => {
         <button type="button">ذخیره</button>
       </div>,
     );
-    const trigger = screen.getByRole("button", { name: "نقش" });
+    const trigger = screen.getByRole("combobox", { name: "نقش" });
     const container = trigger.closest("div")!.parentElement!;
     const before = container.getBoundingClientRect().height;
 
@@ -53,7 +53,7 @@ describe("an open dropdown", () => {
         <Select value="a" options={OPTIONS} onChange={vi.fn()} ariaLabel="نقش" />
       </div>,
     );
-    await userEvent.click(screen.getByRole("button", { name: "نقش" }));
+    await userEvent.click(screen.getByRole("combobox", { name: "نقش" }));
     const list = screen.getByRole("listbox");
     /* the load-bearing half: the panel is NOT inside the box that would clip
        it. A panel that merely looks right in this test while sitting inside

@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { Select } from "@/components/Select";
 import { api } from "@/api/client";
 import type {
   PlatformAuditEntry,
@@ -939,33 +940,35 @@ export default function PlatformControlPage() {
                           34px on top of `.input`, so the arrivals queue's
                           fields sat 6px shorter than every other field on the
                           console. `.input` owns the height. */}
-                      <select
-                        aria-label={t("placeOrg")}
-                        className="input w-48"
+                      <Select
+                        ariaLabel={t("placeOrg")}
+                        className="w-48"
                         value={placement[u.id]?.org ?? ""}
-                        onChange={(e) => setPlacement((prev) => ({
+                        placeholder={t("placeOrgChoose")}
+                        onChange={(next) => setPlacement((prev) => ({
                           ...prev,
-                          [u.id]: { org: e.target.value, role: prev[u.id]?.role ?? "member" },
+                          [u.id]: { org: next, role: prev[u.id]?.role ?? "member" },
                         }))}
-                      >
-                        <option value="">{t("placeOrgChoose")}</option>
-                        {orgs.filter((o) => o.deleted_at === null).map((o) => (
-                          <option key={o.id} value={o.id}>{o.name}</option>
-                        ))}
-                      </select>
-                      <select
-                        aria-label={t("placeRole")}
-                        className="input w-32"
+                        options={[
+                          { value: "", label: t("placeOrgChoose") },
+                          ...orgs.filter((o) => o.deleted_at === null)
+                            .map((o) => ({ value: o.id, label: o.name })),
+                        ]}
+                      />
+                      <Select
+                        ariaLabel={t("placeRole")}
+                        className="w-32"
                         value={placement[u.id]?.role ?? "member"}
-                        onChange={(e) => setPlacement((prev) => ({
+                        onChange={(next) => setPlacement((prev) => ({
                           ...prev,
-                          [u.id]: { org: prev[u.id]?.org ?? "", role: e.target.value },
+                          [u.id]: { org: prev[u.id]?.org ?? "", role: next },
                         }))}
-                      >
-                        <option value="member">{tAdmin("roleMember")}</option>
-                        <option value="admin">{tAdmin("roleAdmin")}</option>
-                        <option value="owner">{tAdmin("roleOwner")}</option>
-                      </select>
+                        options={[
+                          { value: "member", label: tAdmin("roleMember") },
+                          { value: "admin", label: tAdmin("roleAdmin") },
+                          { value: "owner", label: tAdmin("roleOwner") },
+                        ]}
+                      />
                       <button
                         type="button"
                         className="btn btn-sm bg-accent text-on-accent"
@@ -1548,18 +1551,13 @@ function EditDialog({
                   {f.label}
                 </label>
                 {f.kind === "select" ? (
-                  <select
+                  <Select
                     id={id}
                     value={values[f.name] ?? ""}
-                    onChange={(e) => setValues((prev) => ({ ...prev, [f.name]: e.target.value }))}
-                    className="input mt-1 w-full"
-                  >
-                    {(f.options ?? []).map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(next) => setValues((prev) => ({ ...prev, [f.name]: next }))}
+                    className="mt-1 w-full"
+                    options={(f.options ?? []).map((o) => ({ value: o.value, label: o.label }))}
+                  />
                 ) : (
                   <input
                     id={id}

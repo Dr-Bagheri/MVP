@@ -35,6 +35,15 @@ export interface SelectOption {
   label: string;
   /** an optional colour dot, for labels and column tones */
   dot?: string;
+  /**
+   * VISIBLE BUT UNSELECTABLE (the key-minting dialog's suspended members).
+   *
+   * Hiding an option answers "why can't I pick Reza?" with silence; showing it
+   * disabled, with the reason in its own label, answers it with the fact. The
+   * native control had this and the themed one did not, which would have made
+   * the swap a quiet loss of behaviour rather than a change of appearance.
+   */
+  disabled?: boolean;
 }
 
 export function Select({
@@ -56,7 +65,7 @@ export function Select({
 
   const choose = (index: number) => {
     const option = options[index];
-    if (option === undefined) return;
+    if (option === undefined || option.disabled === true) return;
     onChange(option.value);
     setOpen(false);
   };
@@ -75,6 +84,24 @@ export function Select({
         <button
           type="button"
           id={id}
+          /*
+           * `combobox`, not a bare button (2026-09-04).
+           *
+           * A button that opens a listbox and reports one chosen value IS a
+           * combobox, and saying so is what makes this control answer to the
+           * same query as the native `<select>` it replaces — for a screen
+           * reader, and for every test that had been written against one.
+           *
+           * That second half is not a convenience: twelve native selects were
+           * swapped for this in one pass, and five suites went red asking for
+           * `role="combobox"`. A test that has to learn a new query when a
+           * control is re-implemented was asserting the IMPLEMENTATION; one
+           * that keeps working was asserting the control. The role is the
+           * thing that makes the difference.
+           */
+          role="combobox"
+          aria-expanded={open}
+          aria-controls={open ? listId : undefined}
           aria-haspopup="listbox"
           aria-label={ariaLabel}
           /* Radix's trigger opens on Enter and Space; a combobox opens on the
@@ -152,6 +179,7 @@ export function Select({
               role="option"
               data-value={option.value}
               aria-selected={option.value === value}
+              aria-disabled={option.disabled === true ? true : undefined}
               onMouseEnter={() => setCursor(index)}
               onClick={() => choose(index)}
               /* NOT a `.btn`, and the control guard carries the same reason
@@ -163,9 +191,11 @@ export function Select({
                  idiom lives in rowActions (`ENTRY_CLASS`, and SelectMenu's own
                  options); that the two panels do not yet spell it identically
                  is a real finding, and a bigger change than a class swap. */
-              className={`tap flex h-9 cursor-pointer items-center gap-2 rounded-lg px-2.5 text-xs ${
-                index === cursor ? "bg-surface-2" : ""
-              } ${option.value === value ? "font-semibold text-accent" : "text-fg"}`}
+              className={`tap flex h-9 items-center gap-2 rounded-lg px-2.5 text-xs ${
+                option.disabled === true
+                  ? "cursor-not-allowed text-fg-subtle"
+                  : `cursor-pointer ${option.value === value ? "font-semibold text-accent" : "text-fg"}`
+              } ${index === cursor && option.disabled !== true ? "bg-surface-2" : ""}`}
             >
               {option.dot !== undefined ? (
                 <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: option.dot }} aria-hidden />

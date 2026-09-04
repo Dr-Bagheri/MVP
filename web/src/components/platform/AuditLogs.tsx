@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { Select } from "@/components/Select";
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { BffError } from "@/api/client";
@@ -334,22 +335,21 @@ export function AuditLogs() {
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <label>
           <span className="sr-only">{t("filterSource")}</span>
-          <select
-            /* the THEME's field. It carried `h-11 min-h-0 py-0 text-sm md:h-10`
-               — four overrides of the one class whose whole job is to say how
-               tall a field is, which is why this dropdown was the one control
-               on the page that did not match the platform. */
-            className="input w-auto"
+          {/* the PLATFORM's dropdown, not the browser's: a native control
+              paints its list on the browser's own popup sheet, which in dark
+              theme is a white rectangle with a Windows-blue row, and no
+              stylesheet of ours reaches it (user directive, 2026-09-04: "when
+              i ask for all i mean all"). */}
+          <Select
+            className="w-auto"
             value={source}
-            onChange={(event) => setSource(event.target.value as AuditSource | "")}
-          >
-            <option value="">{t("filterAll")}</option>
-            {AUDIT_SOURCES.map((value) => (
-              <option key={value} value={value}>
-                {t(`source.${value}`)}
-              </option>
-            ))}
-          </select>
+            placeholder={t("filterAll")}
+            onChange={(next) => setSource(next as AuditSource | "")}
+            options={[
+              { value: "", label: t("filterAll") },
+              ...AUDIT_SOURCES.map((value) => ({ value, label: t(`source.${value}`) })),
+            ]}
+          />
         </label>
       </div>
 

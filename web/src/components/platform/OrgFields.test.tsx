@@ -187,8 +187,12 @@ describe("a stored locale this build does not offer", () => {
      * organization is set to Persian when it is set to `fa-IR`, and there is
      * nothing on screen to suggest otherwise.
      */
+    /* the TRIGGER shows what is stored — read as text, because the control is
+       the platform's own now and a drawn dropdown has no `.value`. What the
+       assertion is about is unchanged: the screen must say `fa-IR`. */
     const select = screen.getByRole("combobox");
-    expect((select as HTMLSelectElement).value).toBe("fa-IR");
+    expect(select.textContent).toContain("fa-IR");
+    await userEvent.click(select);
     expect(screen.getByRole("option", { name: "fa-IR" })).toBeTruthy();
   });
 
@@ -197,7 +201,11 @@ describe("a stored locale this build does not offer", () => {
     render(<OrgFields />);
     await screen.findByDisplayValue("شرکت نمونه");
 
-    await userEvent.selectOptions(screen.getByRole("combobox"), "en");
+    /* opened, then chosen by VALUE — `data-value` is on every option for
+       exactly this: matching on the label would make the assertion a fact
+       about the catalogue rather than about what the control produces */
+    await userEvent.click(screen.getByRole("combobox"));
+    await userEvent.click(document.querySelector('[data-value="en"]')!);
     await userEvent.click(saveButton());
 
     // preserved by default, changed only on an explicit choice

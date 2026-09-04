@@ -25,7 +25,7 @@ const OPTIONS = [
 describe("Select", () => {
   it("announces itself as a listbox and marks the chosen row", async () => {
     render(<Select value="b" options={OPTIONS} onChange={vi.fn()} ariaLabel="حرف" />);
-    const trigger = screen.getByRole("button", { name: "حرف" });
+    const trigger = screen.getByRole("combobox", { name: "حرف" });
     expect(trigger).toHaveAttribute("aria-haspopup", "listbox");
     expect(trigger).toHaveAttribute("aria-expanded", "false");
     expect(trigger).toHaveTextContent("ب");
@@ -39,7 +39,7 @@ describe("Select", () => {
   it("opens, moves and chooses from the keyboard alone", async () => {
     const onChange = vi.fn();
     render(<Select value="a" options={OPTIONS} onChange={onChange} ariaLabel="حرف" />);
-    screen.getByRole("button", { name: "حرف" }).focus();
+    screen.getByRole("combobox", { name: "حرف" }).focus();
 
     await userEvent.keyboard("{ArrowDown}");        // opens, cursor on the current value
     await userEvent.keyboard("{ArrowDown}");        // → ب
@@ -51,7 +51,7 @@ describe("Select", () => {
   it("Escape dismisses without choosing", async () => {
     const onChange = vi.fn();
     render(<Select value="a" options={OPTIONS} onChange={onChange} ariaLabel="حرف" />);
-    await userEvent.click(screen.getByRole("button", { name: "حرف" }));
+    await userEvent.click(screen.getByRole("combobox", { name: "حرف" }));
     await userEvent.keyboard("{Escape}");
     expect(screen.queryByRole("listbox")).toBeNull();
     expect(onChange).not.toHaveBeenCalled();
@@ -64,7 +64,7 @@ describe("Select", () => {
         <button type="button">جای دیگر</button>
       </div>,
     );
-    await userEvent.click(screen.getByRole("button", { name: "حرف" }));
+    await userEvent.click(screen.getByRole("combobox", { name: "حرف" }));
     expect(screen.getByRole("listbox")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "جای دیگر" }));
     expect(screen.queryByRole("listbox")).toBeNull();
@@ -77,14 +77,14 @@ describe("Select", () => {
     render(
       <Select value="zz" options={OPTIONS} onChange={vi.fn()} placeholder="انتخاب کن" ariaLabel="حرف" />,
     );
-    const trigger = screen.getByRole("button", { name: "حرف" });
+    const trigger = screen.getByRole("combobox", { name: "حرف" });
     expect(trigger).toHaveTextContent("انتخاب کن");
     expect(trigger.textContent).not.toContain("الف");
   });
 
   it("a disabled control does not open", async () => {
     render(<Select value="a" options={OPTIONS} onChange={vi.fn()} disabled ariaLabel="حرف" />);
-    await userEvent.click(screen.getByRole("button", { name: "حرف" }));
+    await userEvent.click(screen.getByRole("combobox", { name: "حرف" }));
     expect(screen.queryByRole("listbox")).toBeNull();
   });
 });

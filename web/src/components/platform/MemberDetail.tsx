@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Select } from "@/components/Select";
 import { useLocale, useTranslations } from "next-intl";
 import type { Role, User } from "@/api/types";
 import { BffError } from "@/api/client";
@@ -259,20 +260,16 @@ export function MemberDetail({
             user.role === "owner" ? (
               <Chip tone="accent">{t("roleOwner")}</Chip>
             ) : editable ? (
-              <select
-                /* audit finding, 2026-09-02: `.input` owns height and size
-                   (see the name field above); only the width stays local */
-                className="input w-32"
+              <Select
+                className="w-32"
                 value={user.role}
                 disabled={busy}
-                onChange={(e) => onSetRole(user.id, e.target.value as Role)}
-              >
-                {assignableRoles.map((r) => (
-                  <option key={r} value={r}>
-                    {tAdmin(r === "admin" ? "roleAdmin" : "roleMember")}
-                  </option>
-                ))}
-              </select>
+                onChange={(next) => onSetRole(user.id, next as Role)}
+                options={assignableRoles.map((r) => ({
+                  value: r,
+                  label: tAdmin(r === "admin" ? "roleAdmin" : "roleMember"),
+                }))}
+              />
             ) : (
               tAdmin(user.role === "admin" ? "roleAdmin" : "roleMember")
             ),

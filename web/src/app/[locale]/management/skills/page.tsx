@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useRef, useState } from "react";
+import { Select } from "@/components/Select";
 import { useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import { useSkillName } from "@/lib/skillName";
@@ -245,17 +246,17 @@ function SkillsPageContent() {
                       h-control (38px) beside .input's 40px text fields — a
                       two-pixel step inside one form; `select.input` is the
                       platform's dropdown template and owns the height */}
-                  <select
+                  {/* offered only where the wall would allow it — the hint
+                      pattern, never the authority */}
+                  <Select
                     id="sk-level"
-                    className="input"
                     value={draft.level}
-                    onChange={(e) => set("level", e.target.value as "org" | "user")}
-                  >
-                    <option value="user">{t("user")}</option>
-                    {/* offered only where the wall would allow it — the
-                        hint pattern, never the authority */}
-                    {isAdmin ? <option value="org">{t("org")}</option> : null}
-                  </select>
+                    onChange={(next) => set("level", next as "org" | "user")}
+                    options={[
+                      { value: "user", label: t("user") },
+                      ...(isAdmin ? [{ value: "org", label: t("org") }] : []),
+                    ]}
+                  />
                 </FormRow>
                 <FormRow label={t("slug")} description={t("slugHint")} htmlFor="sk-slug">
                   <input
@@ -295,19 +296,16 @@ function SkillsPageContent() {
             </FormRow>
             <FormRow label={t("model")} description={t("modelHint")} htmlFor="sk-model">
               {/* audit finding, 2026-09-02: same as the level select above */}
-              <select
+              <Select
                 id="sk-model"
-                className="input"
                 value={draft.model}
-                onChange={(e) => set("model", e.target.value)}
-              >
-                <option value="">{t("modelDefault")}</option>
-                {models.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name}
-                  </option>
-                ))}
-              </select>
+                placeholder={t("modelDefault")}
+                onChange={(next) => set("model", next)}
+                options={[
+                  { value: "", label: t("modelDefault") },
+                  ...models.map((m) => ({ value: m.id, label: m.name })),
+                ]}
+              />
             </FormRow>
             <FormRow label={t("tools")} description={t("toolsHint")}>
               {/* 2026-09-03: the frame before the data — the last of this
