@@ -3454,3 +3454,91 @@ sessions) for the cross-session narrative.
   dedicated control that does nothing visible when pressed teaches, on its
   first press, that the feature does not work.**
   db 190 migrations · core 1344 tests · web 1021 tests + gate + sweep.
+- 2026-09-05 (THE PROJECTS PAGE BECOMES A BOARD, AND THE ROOM'S AGENTS GET
+  HANDS): a fourteen-item directive, taken whole.
+  **PROJECTS.** The page is the task page now, chip for chip — کانبان / لیست /
+  تقویم / آرشیو, the three sorts, «مهلت امروز», and a second row of
+  پروژه‌های من / همه پروژه‌ها — because a person who has learned one toolbar in
+  this product has learned all of them. The kanban uses THE BOARD'S OWN
+  columns, read from the board's own endpoint, and a project has no column of
+  its own, so one is derived by a rule that fits in a sentence: **a project
+  sits where its earliest unfinished work sits** (no cards → the first column,
+  nothing undone → the last). The rejected alternative is recorded with it: a
+  card in every column its work touches is truthful and reads as a bug, and a
+  board is a place where each thing is in one place. Nothing here is stored —
+  the column, the calendar days and «مهلت امروز» are all counted off the board
+  on every read, which is 0181's own rule (progress is counted, never stored)
+  applied to four more facts, and it is why this screen cannot disagree with
+  the board one click away. The two DOORS moved with it: the folder row's `+`
+  opens the whole project dialog (that row's folders ARE projects' categories,
+  so a bare category was the half of a project with no members, no summary and
+  no page), the first row carries an admin-only LINK to /projects — a link and
+  not a chip, because every chip beside it changes what that screen shows and
+  this one leaves it — and **projects left the rail**, since after 0186 it is
+  an admin's surface and the rail is for places every reader has a reason to
+  go. Cost written down rather than hidden: a member can no longer add a
+  folder to the board, because on this board a folder is a project.
+  **THE ROOM.** Five corrections, and the first is one line: the right-click
+  menu opened off the far side of the message because `at.x` counts pixels
+  from the row's LEFT edge and was being written to `inset-inline-start`,
+  which on a Persian page resolves to RIGHT — **the logical property is the
+  reflex here and it is the bug; it would have looked perfect in English.**
+  The hover bar is gone (it floated over the words it acted on), delete is
+  gone from the menu (it sat a few pixels under «پاسخ»), «بایگانی اتاق» became
+  «حذف اتاق» — the word names what the person gets, and the schema still
+  archives because a room's messages are a record — and deleting or leaving a
+  room now EMPTIES THE BOX, which was one defect wearing two faces: the room
+  list reloaded and the messages stayed, so the box went on showing a
+  conversation whose room was gone.
+  **THE AGENTS.** 0184's "a room answer gets NO retrieval tools" is reopened
+  by directive, and the property that made it right survives: `ROOM_TOOLS` is
+  exactly the set whose rows every active member can already read — tasks,
+  meetings, the roster — and what stays out is the per-record-scope family
+  (calls, transcripts, summaries, search) plus every admin surface, because
+  the asker may legitimately see a record the other forty readers cannot and
+  the answer is addressed to everybody. The room's history now names its
+  SPEAKERS (it flattened every human to «همکار», so an agent asked "what did
+  Sara decide" could read the sentence and not know whose it was — which from
+  a chair is indistinguishable from an agent that never looked), and the
+  prompt SAYS THE TOOLS EXIST, which is the fix for the screenshot that
+  started this: «توی سوابق چیزی پیدا نکردم» from a model that had none.
+  **ANSWERING AN AGENT IS NAMING IT** (both halves: the composer writes the
+  handle into the draft where it can be seen and deleted, and the server reads
+  the reply target off the STORED ROW so it works when the handle is gone),
+  and agents can hand off to each other — an agent's message runs back through
+  the same function, guarded by a self-call check and a **four-hop cap**,
+  because two agents that keep naming each other never stop on their own and
+  the first anyone would know is the bill.
+  **Two findings.** `roomResponder` and `roomTranscript` were EXTRACTED from
+  the route before they were tested — every rule in them is invisible from a
+  chair and none is reproducible without spending money on two models, which
+  is the meeting-link lesson applied at write time. And the verify-red earned
+  its keep again: seven of eight breaks turned exactly one test red, and the
+  eighth **stayed green** — deleting `author_kind !== "agent"` from the
+  composer changed nothing, because `agent_handle` is non-null exactly when
+  the author is an agent (0184's own `chat_message_author_shape`) and the
+  second check was already doing all the work. Two spellings of one fact, one
+  of which could never fail; collapsed to the handle, then verified red on
+  THAT. Same shape as the first verify-red of the day before, one layer in.
+  **The bar's own round, same day.** The clock and the search box moved to the
+  MAIN MENU'S side: they had been sitting in the cluster with the theme, the
+  locale pair and the bell — which is where a person looks for settings, and
+  neither of them is one. Against the rail they read as what they are, where
+  you are and when, and the door into everything. The trail keeps `flex-1` and
+  stays the element that truncates, because it is the only one here whose
+  width is its content. Chat left the rail too and its door is a top-bar icon
+  beside the theme toggle, drawn with the RAIL'S OWN glyph rather than a
+  second pair of bubbles — the entry moved and the picture followed it.
+  **And the mic finally shows that it is on.** The room's mic wrote
+  `text-danger` NEXT TO the `text-fg-subtle` its base class already carried,
+  and two utilities setting one property are resolved by their order in the
+  STYLESHEET, not in the string — so the class was present, a reviewer could
+  see it, a grep could find it, and the glyph never changed colour. Minted, or
+  rather met again: **the artifact reads as satisfied and only the computed
+  value disagrees.** One `micTone(status)` now answers for all three surfaces
+  (assistant page, sidebar, room), it returns the ground AND the ink together
+  precisely so no caller composes it with a base that also sets a colour, and
+  the test that guards it asserts the rendered button carries EXACTLY ONE text
+  colour — which is the assertion the broken version would have failed and
+  "the accent class is in the string" would not.
+  core 1356 tests · web 1038 tests + gate + sweep · db unchanged (190).
