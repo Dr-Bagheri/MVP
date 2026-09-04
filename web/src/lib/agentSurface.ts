@@ -464,9 +464,36 @@ export async function executeClientTool(
       if (typeof a.description === "string") patch.description = a.description.slice(0, 8000);
       if (typeof a.priority === "string") patch.priority = a.priority;
       if (typeof a.due === "string" && a.due.trim()) patch.due_at = a.due.trim();
-      if (Object.keys(patch).length === 0) return { ok: false, detail: "nothing to change" };
+      /*
+       * MOVING A CARD IS THE BOARD'S MAIN VERB, and no tool could do it.
+       *
+       * User report, 2026-09-04: asked to put a task «در حال انجام», the agent
+       * answered that the task system had errored. It had not — this tool took
+       * title, description, priority and deadline, and a column was not among
+       * them, so there was no way to say the one thing the board is for. The
+       * failure surfaced as a transport-sounding sentence, which is the worst
+       * shape for a missing capability to take: it reads as "try again later"
+       * for something that was never going to work.
+       *
+       * By NAME, resolved against the board's own columns, because a person
+       * says «در حال انجام» and never a uuid — and an unmatched name refuses
+       * with the real list rather than guessing at the nearest column.
+       */
+      const wantedColumn = typeof a.column === "string" ? a.column.trim().toLowerCase() : "";
       try {
         const { api } = await import("@/api/client");
+        if (wantedColumn !== "") {
+          const board = await api.taskBoard();
+          const hit = board.columns.find((column) => column.name.trim().toLowerCase() === wantedColumn);
+          if (!hit) {
+            return {
+              ok: false,
+              detail: `this board has no column called that — it has ${board.columns.map((c) => c.name).join("، ")}`,
+            };
+          }
+          patch.column_id = hit.id;
+        }
+        if (Object.keys(patch).length === 0) return { ok: false, detail: "nothing to change" };
         await api.updateTask(id, patch as never);
         /* no refresh topic for tasks or meetings — those pages fetch on
            navigation, so a change made here shows on the next visit. Naming

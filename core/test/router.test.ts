@@ -1,174 +1,134 @@
 import { describe, expect, it } from "vitest";
-import {
-  decide, ECHO, KEEP_FLOOR, rosterFor, routerPrompt, SWITCH_FLOOR,
-  type RouterVerdict,
-} from "../src/agent/router.ts";
+import { decide, ECHO, nameIn, namesFor, rosterFor } from "../src/agent/router.ts";
 
 /**
- * THE ROUTER'S HYSTERESIS, WHICH IS WHERE THE INTERESTING FAILURES LIVE.
+ * WHO ANSWERS, under the rule the user drew:
  *
- * The decision function is pure and separate from the model call for exactly
- * this reason: "which agent did the classifier name" is a model question, and
- * "what do we do when it names a different one than last time" is ours. Only
- * the second has failure modes worth a suite.
+ *     handler → echo | roya | ava        and        echo → roya | ava
  *
- * The load-bearing case is the NEGATIVE CONTROL on stickiness. A test that
- * only asserts "a follow-up stays with the incumbent" passes perfectly against
- * a router that never switches at all — which is a worse product than the one
- * being fixed, and indistinguishable from it in every test you would naturally
- * write.
+ * "The default response must come from Echo if I didn't ask for any agent. If
+ * asked for an agent, the handler should not give it to Echo to give it to the
+ * agent — the agent comes up by itself."
+ *
+ * The bug that produced this rule is the first test: the person wrote
+ * «می‌خوام ببینم که اکو دسترسی داره…» — Echo, by name, in the first six words
+ * — and Roya answered, because the message was ABOUT tasks and the classifier
+ * weighed the topic against the name. A router that CAN override a name is a
+ * router that will.
  */
+const ROSTER = rosterFor([
+  { handle: "roya", name: "رؤیا" },
+  { handle: "ava", name: "آوا" },
+]);
 const KNOWN = new Set([ECHO, "roya", "ava"]);
 
-const verdict = (over: Partial<RouterVerdict> = {}): RouterVerdict => ({
-  agent: "roya",
-  confidence: 0.9,
-  continues_previous_topic: false,
-  ...over,
-});
+const answers = (question: string, incumbent: string | null = null): string =>
+  decide(nameIn(question, ROSTER), incumbent, KNOWN).agent;
 
-describe("who answers this turn", () => {
-  it("first turn: a confident choice is taken", () => {
-    const d = decide(verdict(), null, KNOWN);
-    expect(d.agent).toBe("roya");
-    expect(d.rule).toBe("model");
-    expect(d.switched).toBe(false);   // nobody was displaced
+describe("a named agent takes the turn", () => {
+  it("THE REPORTED BUG: naming Echo about a task subject gets Echo", () => {
+    /* the exact message, verbatim. Every word after «اکو» is about tasks,
+       which is what the old classifier routed on. */
+    const asked = "می‌خوام ببینم که اکو دسترسی داره به صفحه تسک‌ها و تسک خلاصه سازی شرکت رو برای من به حالت در حال انجام بذاره";
+    expect(answers(asked)).toBe(ECHO);
   });
 
-  it("first turn, unsure: Echo answers, and the rule says why", () => {
-    /* Echo is the abstain target and a real surface — most routers have to
-       invent an error state here. `floor` is distinguishable in the log from
-       a confident route to Echo, which is the point of naming rules at all. */
-    const d = decide(verdict({ confidence: KEEP_FLOOR - 0.01 }), null, KNOWN);
-    expect(d.agent).toBe(ECHO);
-    expect(d.rule).toBe("floor");
+  it("names a specialist and gets the specialist, in either script", () => {
+    expect(answers("رؤیا لطفاً جلسه‌های امروز را بگو")).toBe("roya");
+    expect(answers("roya, what meetings are today?")).toBe("roya");
+    expect(answers("آوا این را خلاصه کن")).toBe("ava");
+    expect(answers("ava, summarise this")).toBe("ava");
   });
 
-  it("a follow-up stays with whoever is already speaking", () => {
-    /*
-     * «و بعدش؟» after an answer from Ava. The classifier will read that as
-     * carrying no topic and may name anyone; the incumbent keeps it.
-     */
-    const d = decide(
-      verdict({ agent: ECHO, confidence: 0.9, continues_previous_topic: true }),
-      "ava",
-      KNOWN,
-    );
-    expect(d.agent).toBe("ava");
-    expect(d.rule).toBe("sticky");
-    expect(d.switched).toBe(false);
+  it("takes the hamza-less spelling, because that is what keyboards produce", () => {
+    /* «رویا» is «رؤیا» without the hamza, and it is what most people type. A
+       name the product does not answer to is this file's bug pointed the other
+       way: "I asked for Roya" becomes "nobody was named". */
+    expect(answers("رویا این تسک را ببند")).toBe("roya");
   });
 
-  it("THE CONTROL: a genuine topic change DOES switch", () => {
-    /*
-     * Without this, every assertion above is satisfied by a router that
-     * returns the incumbent unconditionally — which would pass the whole file
-     * and ship an agent nobody can ever hand a turn to.
-     */
-    const d = decide(
-      verdict({ agent: "roya", confidence: SWITCH_FLOOR, continues_previous_topic: false }),
-      "ava",
-      KNOWN,
-    );
-    expect(d.agent).toBe("roya");
-    expect(d.switched).toBe(true);
+  it("an @handle is the same pass — @ is not a letter", () => {
+    expect(answers("@ava please look at this")).toBe("ava");
   });
 
-  it("a lukewarm opinion does not take the turn away", () => {
-    /* cheap to stay, expensive to move: the same confidence that WOULD win an
-       empty thread is not enough to displace somebody */
-    const c = (KEEP_FLOOR + SWITCH_FLOOR) / 2;
-    expect(decide(verdict({ confidence: c }), null, KNOWN).agent).toBe("roya");
-    expect(decide(verdict({ confidence: c }), "ava", KNOWN).agent).toBe("ava");
-  });
-
-  it("agreeing with the incumbent is not a switch", () => {
-    const d = decide(verdict({ agent: "ava" }), "ava", KNOWN);
-    expect(d.agent).toBe("ava");
-    expect(d.switched).toBe(false);
-  });
-
-  it("an unknown agent name falls to Echo and does not throw", () => {
-    /* a hallucinated handle is a 500 waiting to happen, and the model is free
-       to invent one whatever the schema says */
-    const d = decide(verdict({ agent: "میلاد" }), null, KNOWN);
-    expect(d.agent).toBe(ECHO);
-    expect(d.rule).toBe("fallback");
-  });
-
-  it("a router that could not answer is a DIFFERENT nothing from one that chose Echo", () => {
-    /*
-     * The two look identical in the product and mean opposite things about the
-     * router's health, so they are different rules and the confidence is null
-     * rather than zero — an absence, not a measurement.
-     */
-    const dead = decide(null, null, KNOWN);
-    expect(dead.agent).toBe(ECHO);
-    expect(dead.rule).toBe("fallback");
-    expect(dead.confidence).toBeNull();
-
-    const chose = decide(verdict({ agent: ECHO, confidence: 0.95 }), null, KNOWN);
-    expect(chose.agent).toBe(ECHO);
-    expect(chose.rule).toBe("model");
-    expect(chose.confidence).toBe(0.95);
-  });
-
-  it("an outage keeps the incumbent rather than yanking the thread to Echo", () => {
-    const d = decide(null, "roya", KNOWN);
-    expect(d.agent).toBe("roya");
-    expect(d.rule).toBe("fallback");
+  it("the FIRST name wins when two are present", () => {
+    /* "ask Roya, or Ava if she is busy" addresses Roya; the last-match rule
+       would answer the aside */
+    expect(answers("از رؤیا بپرس، یا آوا اگر سرش شلوغ است")).toBe("roya");
   });
 });
 
-describe("what the router is told", () => {
-  it("does NOT carry the thread — only the roster, the incumbent and the shape", () => {
-    /*
-     * The regression case, from a router that shipped this bug: with the whole
-     * conversation in the prompt, "looks good, commit it" routed to a tiny
-     * model because the classifier read the acknowledgement instead of the
-     * work. The prompt builder takes no messages at all — asserted as an
-     * ABSENCE, because the version that quietly starts accepting them renders
-     * perfectly.
-     */
-    const prompt = routerPrompt(
-      [{ handle: "roya", owns: "کارها", examples: ["چه تسکی دارم؟"] }],
-      "ava",
-    );
-    expect(prompt).toContain("roya");
-    expect(prompt).toContain("ava");
-    expect(routerPrompt.length, "the builder takes roster + incumbent, nothing else").toBe(2);
+describe("nobody named means Echo", () => {
+  it("an ordinary question goes to the generalist", () => {
+    expect(answers("جلسه‌های این هفته چطور بود؟")).toBe(ECHO);
+    expect(answers("summarise last week")).toBe(ECHO);
   });
 
-  it("describes Echo in the reader's own language", () => {
+  it("even when a specialist answered the previous turn", () => {
     /*
-     * Persian-first means the default path hides the bug: a roster written
-     * only in English routes the two locales differently and nobody notices,
-     * because the language nobody tests is the one that keeps working by
-     * accident. Asserted on the locale that is NOT the default here — the one
-     * a reader of this repo is less likely to open.
+     * The directive read literally. An incumbent that keeps the turn would be
+     * a SECOND rule about who speaks, and two rules is how somebody ends up
+     * unable to predict which colleague replies — which is the complaint this
+     * whole file exists to answer.
      */
-    const fa = rosterFor([], "fa")[0]!;
-    const en = rosterFor([], "en")[0]!;
-    expect(fa.owns).not.toBe(en.owns);
-    expect(en.owns).toMatch(/assistant/i);
-    expect(fa.examples.length).toBeGreaterThan(0);
-    expect(en.examples.length).toBeGreaterThan(0);
+    expect(answers("و بعدش؟", "roya")).toBe(ECHO);
+    const decision = decide(null, "roya", KNOWN);
+    expect(decision.rule).toBe("default");
+    /* the change of voice is still REPORTED, so the log can show it even
+       though it no longer decides anything */
+    expect(decision.switched).toBe(true);
   });
 
-  it("puts Echo first, as the obvious home for an unclassifiable message", () => {
-    const roster = rosterFor([{ handle: "roya", description: "کارها" }], "fa");
-    expect(roster[0]!.handle).toBe(ECHO);
-    expect(roster.map((r) => r.handle)).toContain("roya");
+  it("a name nobody in the roster has is not a name", () => {
+    expect(answers("سارا این را نگاه کن")).toBe(ECHO);
+    expect(decide("nobody", null, KNOWN).agent).toBe(ECHO);
+  });
+});
+
+describe("a name is a word, not a substring", () => {
+  it("does not find «آوا» inside «آواز»", () => {
+    /*
+     * The substring trap this repo has already shipped once, when «دی» matched
+     * inside a surname and was reported as a date. Persian has no word
+     * boundary `\b` understands, so the boundary is "any letter or digit on
+     * either side" — and these are the words that prove it.
+     */
+    expect(answers("این آواز را برایم پیدا کن")).toBe(ECHO);
+    expect(answers("اکوسیستم ما چطور است؟")).toBe(ECHO);
   });
 
-  it("carries each agent's OWN description — the routing contract", () => {
-    /*
-     * When two responders keep being confused for one another the fix is this
-     * sentence, not the model. Derived from the agents the caller can see, so
-     * a renamed or re-described agent re-describes itself to the router with
-     * no second list to keep in step.
-     */
-    const roster = rosterFor([{ handle: "ava", description: "می‌خواند و گزارش می‌دهد" }], "fa");
-    expect(roster.find((r) => r.handle === "ava")!.owns).toBe("می‌خواند و گزارش می‌دهد");
+  it("but finds it beside punctuation", () => {
+    expect(answers("آوا، این را ببین")).toBe("ava");
+    expect(answers("(ava) look")).toBe("ava");
+  });
+
+  it("does not match a Latin name inside a longer word", () => {
+    expect(answers("the avalanche report")).toBe(ECHO);
+    expect(answers("echoing the last point")).toBe(ECHO);
+  });
+});
+
+describe("the roster", () => {
+  it("always contains Echo, even with no agents at all", () => {
+    const bare = rosterFor([]);
+    expect(bare.map((entry) => entry.handle)).toEqual([ECHO]);
+    expect(nameIn("اکو سلام", bare)).toBe(ECHO);
+  });
+
+  it("gives an org's own agent its stored name", () => {
+    const roster = rosterFor([{ handle: "hesabdar", name: "حسابدار" }]);
+    expect(nameIn("حسابدار این فاکتور را ببین", roster)).toBe("hesabdar");
+  });
+
+  it("refuses a stored name too short to be safe", () => {
+    /* a two-letter name matches inside half the words in a Persian sentence,
+       and a false positive here hands the turn to the wrong colleague */
+    expect(namesFor("x", "با")).not.toContain("با");
+    expect(namesFor("x", "حسابدار")).toContain("حسابدار");
+  });
+
+  it("does not duplicate an agent whose handle is echo's", () => {
+    const roster = rosterFor([{ handle: ECHO, name: "Echo" }]);
+    expect(roster).toHaveLength(1);
   });
 });

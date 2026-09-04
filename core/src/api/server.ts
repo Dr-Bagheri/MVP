@@ -119,17 +119,6 @@ export interface ServerOptions<TDeps> {
   /** Resolve a skill slug for the caller (system < org < user). */
   resolveSkill?: ((identity: Identity, slug: string) => Promise<Skill | undefined>) | undefined;
   openrouterKey?: string | undefined;
-  /**
-   * The model that decides WHO answers (M48). A cheap fast one — the routing
-   * call is short, fixed-size and blocks the first token, so a reasoning model
-   * here turns a 400ms decision into a multi-second one.
-   *
-   * Absent = no routing at all, and Echo answers everything. That is the
-   * honest degradation: a deployment that has not chosen a router model gets
-   * the behaviour it had before the router existed, rather than a turn that
-   * fails for a reason nobody configured.
-   */
-  routerModel?: string | undefined;
   /** M30 OAuth apps. Omitting credentials leaves providers honestly unavailable. */
   connectorOAuth?: ConnectorOAuthOptions | undefined;
   /** Storage config for the upload surface (Part 5). Absent = uploads refuse with a named reason. */
@@ -4077,15 +4066,6 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
         identity,
         question: typeof body.question === "string" ? body.question : "",
         sessionId: typeof body.session_id === "string" ? body.session_id : undefined,
-        locale: typeof body.locale === "string" ? body.locale : undefined,
-        apiKey: options.openrouterKey,
-        /*
-         * The cheapest servable model, through the same ladder every other
-         * model choice uses — so the no-Claude exclusion applies here too. A
-         * routing call is the easiest place in the product to forget that,
-         * because nobody reads a router's model name.
-         */
-        model: firstServable(options.routerModel, process.env.ROUTER_MODEL),
       });
       if (route.agent !== ROUTER_ECHO) {
         selectedAgent = await resolveAssistantAgent(options.db, identity, route.agent);
@@ -4094,7 +4074,10 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
            failing, and the log says `fallback` rather than pretending the
            router chose Echo. */
         if (!selectedAgent) {
-          route = { ...route, agent: ROUTER_ECHO, rule: "fallback", switched: false };
+          /* a handle the roster resolved and this line cannot — an agent
+             archived between the two reads. Echo answers, and `default` is
+             the true rule: nobody the product can address was named. */
+          route = { ...route, agent: ROUTER_ECHO, rule: "default", switched: false };
         }
       }
     }

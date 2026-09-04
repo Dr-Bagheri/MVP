@@ -176,7 +176,6 @@ export async function main(): Promise<void> {
      * chosen one. A default here would pick a model nobody agreed to and spend
      * on it silently, once per message.
      */
-    routerModel: process.env.ROUTER_MODEL,
     /*
      * M30 first-party work connectors. These are deliberately optional at
      * boot: an unset OAuth app leaves Google/Microsoft visibly "not

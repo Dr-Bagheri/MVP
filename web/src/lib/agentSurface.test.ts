@@ -16,6 +16,8 @@ const deleteCall = vi.fn();
 const agentSessions = vi.fn();
 const archiveSession = vi.fn();
 const setLocale = vi.fn();
+const taskBoard = vi.fn();
+const updateTask = vi.fn();
 vi.mock("@/api/client", () => ({
   api: {
     members: (...args: unknown[]) => members(...args),
@@ -27,6 +29,8 @@ vi.mock("@/api/client", () => ({
     agentSessions: (...args: unknown[]) => agentSessions(...args),
     archiveSession: (...args: unknown[]) => archiveSession(...args),
     setLocale: (...args: unknown[]) => setLocale(...args),
+    taskBoard: (...args: unknown[]) => taskBoard(...args),
+    updateTask: (...args: unknown[]) => updateTask(...args),
   },
 }));
 
@@ -225,5 +229,70 @@ describe("executeClientTool", () => {
       const result = await executeClientTool(tool, {}, ctx);
       expect(result.detail).not.toBe("this surface cannot perform that tool");
     }
+  });
+});
+
+/**
+ * MOVING A CARD (user report, 2026-09-04: asked to put a task «در حال انجام»,
+ * the agent answered that the task system had errored).
+ *
+ * It had not. `update_task` took a title, a description, a priority and a
+ * deadline, and a COLUMN was not among them — so there was no way to say the
+ * one thing a board is for, and the miss surfaced as a transport-sounding
+ * sentence. That is the worst shape a missing capability can take: it reads
+ * as "try again later" for something that was never going to work.
+ */
+describe("update_task moves a card", () => {
+  const BOARD = {
+    columns: [
+      { id: "col-todo", name: "برای انجام", tone: "blue", position: 1 },
+      { id: "col-doing", name: "در حال انجام", tone: "amber", position: 2 },
+    ],
+    topics: [],
+    tasks: [],
+  };
+
+  beforeEach(() => {
+    taskBoard.mockReset();
+    updateTask.mockReset();
+    taskBoard.mockResolvedValue(BOARD);
+    updateTask.mockResolvedValue({});
+  });
+
+  it("resolves the column by the name a person says", async () => {
+    const { ctx } = surface();
+    const result = await executeClientTool(
+      "update_task", { task_id: "t-1", column: "در حال انجام" }, ctx,
+    );
+    expect(result.ok).toBe(true);
+    expect(updateTask).toHaveBeenCalledWith("t-1", { column_id: "col-doing" });
+  });
+
+  it("refuses a column the board does not have, and says what it does have", async () => {
+    const { ctx } = surface();
+    const result = await executeClientTool(
+      "update_task", { task_id: "t-1", column: "Done" }, ctx,
+    );
+    expect(result.ok).toBe(false);
+    /* the real list, not a guess at the nearest column: moving a card to the
+       wrong place is worse than not moving it, and the model can retry with a
+       name that exists */
+    expect(result.detail).toContain("در حال انجام");
+    expect(updateTask).not.toHaveBeenCalled();
+  });
+
+  it("still patches the other fields, and sends ONLY what was given", async () => {
+    const { ctx } = surface();
+    await executeClientTool("update_task", { task_id: "t-1", priority: "high" }, ctx);
+    /* the control for the column branch: no column means no board read and no
+       column_id — a version that always set one would move every edited card */
+    expect(taskBoard).not.toHaveBeenCalled();
+    expect(updateTask).toHaveBeenCalledWith("t-1", { priority: "high" });
+  });
+
+  it("a patch with nothing in it is a refusal, not an empty write", async () => {
+    const { ctx } = surface();
+    expect((await executeClientTool("update_task", { task_id: "t-1" }, ctx)).ok).toBe(false);
+    expect(updateTask).not.toHaveBeenCalled();
   });
 });

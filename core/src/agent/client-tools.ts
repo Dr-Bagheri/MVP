@@ -466,14 +466,19 @@ export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
     name: "update_task",
     label: { fa: "ویرایش تسک", en: "Updating a task" },
     description:
-      "Change a task's title, description, priority or deadline. Send only "
-      + "the fields being changed; anything omitted is left alone.",
+      "Change a task's title, description, priority, deadline — or MOVE IT to "
+      + "another column of the board, which is what 'put it in progress', "
+      + "'move it to done' and «بذارش در حال انجام» mean. Send only the fields "
+      + "being changed; anything omitted is left alone.",
     parameters: obj({
       task_id: str("The task's id."),
       title: str("A new title."),
       description: str("A new description."),
       priority: strEnum(["low", "medium", "high", "critical"], "How urgent it is."),
       due: str("ISO 8601 deadline."),
+      /* the column by NAME, because that is what a person says. list_task_columns
+         gives the board's own wording when you need to be sure. */
+      column: str("The column to move it to, by name — e.g. «در حال انجام», «Done»."),
     }, ["task_id"]),
     effect: "write",
   },
