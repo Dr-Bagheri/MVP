@@ -3315,3 +3315,72 @@ sessions) for the cross-session narrative.
   sign-in including one for a page that does not exist). db 185 migrations ·
   core 1328 tests · web 1006 tests + build gate + encoding sweep.
   **Still owed from the seven:** nothing — all seven items landed.
+- 2026-09-04 (later — A PROJECT IS AN ORDER, AND AN ORDER CAN COME BACK;
+  commits f411db9, 1dbb1e7; db 0186–0188): the sort row became the second
+  sub-menu (a select for three mutually-exclusive values costs two presses to
+  see the options, and it was the one control on the page with a different
+  silhouette), and projects became what the directive says they are — **the
+  place where work is ASSIGNED**. Creation, renaming and membership are
+  admin-only now; READING did not move, which is the half a narrowing usually
+  takes with it by accident, and the migration asserts BOTH (three write
+  policies that must check `actor_is_admin`, two read policies that must not).
+  The button is ABSENT for a member rather than disabled — a greyed button is
+  a promise the product will not keep, and pressing it explains nothing. The
+  BOARD is deliberately not walled: locking it would make the product's main
+  verb an admin feature.
+  **A REPEATING ORDER (0186)**, and the trigger is COMPLETION, never a clock:
+  a cadence that fires whether or not the last one was done produces a column
+  of identical unfinished cards and gives the person it was handed to no way
+  to say so. `until_date` nullable IS "unlimited in time" — a mode column plus
+  a date would be two spellings of one fact. The next card is written by the
+  COMPLETING TRANSACTION rather than a worker, and the consequence is stated
+  rather than discovered: it exists from the moment the last one is finished,
+  in the first column, with a future due date. The alternative failure is a
+  task that was supposed to come back and did not.
+  **THE TEST FOUND A 500 IN THE MIGRATION IT WAS WRITTEN FOR, the same day.**
+  A composite FK's `on delete set null` nulls **every column in the key** —
+  `org_id` included, which is NOT NULL — so deleting a schedule did not null a
+  pointer, it RAISED, and «توقف تکرار» would have failed for every task that
+  had ever been scheduled. 0186's own comment states the opposite of what the
+  constraint did, and neither core nor web could have found it: both were
+  correct and trusted the constraint. Fixed in 0188 with column-specific `set
+  null (recurrence_id)` (Postgres 17, checked rather than assumed). Minted:
+  **a composite FK's cascade action applies to the WHOLE KEY, so `set null` on
+  a key containing a NOT NULL column is a constraint that can only ever
+  raise** — and it is invisible to review, because the migration reads exactly
+  as intended.
+  **And the db test was wrong before the code was.** Its first version used
+  user `04` as "an ordinary member" — 04 is DAN, who is **pending**. All three
+  "a member cannot" lines would have passed while measuring
+  `actor_is_active()` instead of `actor_is_admin()`: a green file asserting
+  nothing about the rule it was written for. Caught only because the rename
+  assertion reads the record afterwards and a pending user cannot read the
+  record either. Rule 9 in the file, on the day.
+  Two smaller ones kept: **an UPDATE walled by a policy's USING clause is NOT
+  refused — it matches zero rows and succeeds**, so a `t.denied` against one
+  reports a working wall as broken and the assertion has to be on the record;
+  and the other-org case must be read at OWNER altitude, because "I cannot see
+  it" and "it was renamed" are the same answer from where that person stands.
+  `nextRenewal` was EXTRACTED from the SQL so its edges are reachable (the end
+  date is inclusive, the arithmetic is UTC so one schedule ends on one day for
+  everyone, a negative gap cannot walk backwards) — verified red by making the
+  boundary exclusive.
+  **createTask now takes assignees and labels in ONE transaction.** They were
+  separate calls with swallowed catches, on the reasoning that a failed label
+  must not lose the card — right about a label, wrong about a PERSON: a card
+  that exists and belongs to nobody is indistinguishable from one nobody has
+  got to yet, which on an order board is the failure that matters. And ONE
+  dialog: the project's «واگذاری کار» opens the board's own new-task dialog
+  with the category pre-chosen and the schedule fields switched on, because a
+  project-shaped copy of eight fields is the pair that stops matching the
+  first time either gains a rule.
+  «چه کسی چه کرد» counts off the board on every read — every MEMBER appears
+  including the ones carrying nothing (a panel built only from the rows the
+  server returned answers "who has work", and the directive asked for who
+  didn't), and the UNASSIGNED bucket is a row rather than a silence.
+  Last find, from probing the DEPLOYED route: `await request.json()` on an
+  empty body throws, and every throw in a BFF route lands in `errorResponse`'s
+  fallback as a **500** — "unexpected", the status that pages somebody, for a
+  caller who sent nothing. 400 with a code now; verified on the live site with
+  the discriminating pair (no body → 400, a real body unauthenticated → 401).
+  db 188 migrations · core 1338 tests · web 1008 tests + gate + sweep.
