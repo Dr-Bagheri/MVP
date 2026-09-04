@@ -3612,3 +3612,48 @@ sessions) for the cross-session narrative.
   2,394; 190 migrations on disk). Lovable's free workspace ran out of credits
   before the fixes could be sent, so they are applied by hand at the port.
   db 191 migrations · core 1357 tests · web 1042 tests + gate + sweep.
+- 2026-09-05 (latest — THE PANELS GET MEASURED, and a token that was doing
+  two jobs): user directive, "rebuild some parts that are important, and
+  exactly like this — the size of everything from font to dividers to button
+  size … use the style you see in their site, use the browser and inspect the
+  code to get it." So it was MEASURED, not eyeballed: signed in to
+  panel.arameet.ir in the user's own Chrome, computed styles read off the
+  new-task dialog and `?task=836` at 1920x911, and the numbers written into
+  `tasks/panelStyle.ts` WITH their conditions — a recorded observation rather
+  than a value that rots.
+  What the measurement settled: their panels round at **18**, not our 20 —
+  read twice, on the dialog and the detail — so `SCAFFOLD.radius.modal` moved,
+  because a per-file radius is how a product ends up with four of them. Their
+  field ground is **#1D2126**, its own tone; ours had `field` aliased to the
+  RAISED tone (#272C32), so a text box and a hovered chip were the same
+  colour. verify-pairs was re-run rather than assumed and all four floors on
+  the new ground pass. The rest are panel-shaped and live in one module the
+  three surfaces read: field label 11.5/600, rail label 11/600, rail value
+  12.5/600, body heading 11.5/**700** (the weight is what separates a section
+  from a field), body text 12.5 at 1.9, input 45px, segment chip 34px on a
+  **9px** corner, tab 32 in a 42px bar on 8 and 11, footer 42/40 on 11.
+  **A project's page now has the task detail's anatomy** — one panel, a body,
+  and a 283px rail — carrying a project's own facts: the board folder it owns,
+  progress counted off the board, its tone, its people, when it began. Same
+  anatomy, its own contents, which is what "mix it with the project options"
+  asks for; it stays a PAGE because a project is a place you link people at
+  and a modal has no address.
+  **The guard I wrote for it was a false-positive factory and I deleted half
+  of it.** It forbade the string `text-[11px] text-fg-muted` in the three
+  files, on the theory that a hand-typed rail label looks like that — and it
+  fired on two count badges and an explanatory paragraph, all legitimately
+  11px muted text. **A substring cannot tell a rail label from a badge**, and
+  this repo has already deleted one checker for exactly this, because
+  fails-when-it-shouldn't is the failure that gets an instrument muted within
+  a week. The imprecise half is gone rather than tuned; what remains asserts a
+  fact a grep can actually establish (all three surfaces import the module)
+  plus six assertions on the constants themselves — including the one that
+  matters most, that a chip's two states differ by ground and edge and NEVER
+  by size, since a selected chip that changed size would reflow the row every
+  time somebody picked a column.
+  And the keys guard caught the same-namespace trap again, on the rail's first
+  two rows: `fieldTopicFolder` and `noTopic` exist — in the TASKS namespace —
+  while the component reads `projects`, so an existence grep is satisfied and
+  the screen renders a raw key. Third instance of that rule; the labels are the
+  project's own words now («پوشهٔ برد») rather than a task's borrowed.
+  db 191 migrations · core 1357 tests · web 1049 tests + gate + sweep.
