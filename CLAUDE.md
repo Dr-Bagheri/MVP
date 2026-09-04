@@ -3657,3 +3657,44 @@ sessions) for the cross-session narrative.
   the screen renders a raw key. Third instance of that rule; the labels are the
   project's own words now («پوشهٔ برد») rather than a task's borrowed.
   db 191 migrations · core 1357 tests · web 1049 tests + gate + sweep.
+- 2026-09-05 (last — THE SITE COMES INSIDE THE APP, and a comment ships as a
+  paragraph): user ruling, "site becomes a public route in the platform app and
+  the login is a local link." So it is `/[locale]/home` — public, outside
+  PlatformShell (every shell element is a door into a product this reader has
+  no account in), dark-only, with the copy in the catalogues like every other
+  string. The middleware rule is one sentence and was verified as a
+  discriminating pair in a browser: **ask for the ROOT with no session and you
+  get the front page; ask for a SURFACE and you get sign-in, because you were
+  going somewhere.** All five defects found in the generated draft are fixed
+  and the rendered page proves them rather than the source claiming them —
+  login `/fa/sign-in`, **zero buttons on the page** (the one-door rule as a
+  count), `@roya`/`@ava` instead of invented agents, `CHAIN_LIMIT: 04`, and
+  exactly the two figures that rot carrying their measurement date. The brand
+  green needed no fix: using our tokens made the drift unrepresentable.
+  **AND A COMMENT OF MINE SHIPPED AS VISIBLE TEXT.** A note about the task
+  detail's rail was written as a bare block comment in JSX CHILD position,
+  where a comment is not a comment — it is content — and the whole paragraph
+  rendered on the page above the rail. Typecheck passed, 1049 tests passed, and
+  a USER found it in a screenshot. I had verified that edit by typechecking it
+  and never looking at it. Minted: **in JSX children the braces are the
+  difference between a note and a paragraph**, and the sharper half — a leaked
+  comment is valid TypeScript and valid JSX, so no compiler can see it, and no
+  test asserted the absence of text nobody expected. Two more mistakes came out
+  of fixing it: the replacement comment QUOTED the comment terminator in its own
+  prose and closed three lines early (a note about comment syntax must not spell
+  it), and my first instinct — a source grep for bare comments — returned 300+
+  hits because "the previous line ends with > or }" cannot tell a JSX child from
+  a props line. **I wrote the false-positive-factory rule an hour earlier and
+  then built one.** Thrown away; the defect is a RENDER-time fact and is checked
+  there, on both panels, verified by re-introducing the exact leak and watching
+  it fail.
+  **The giant project cards had a real cause**: `.tile` declares `height: 100%`,
+  which inside a flex COLUMN resolves against the column — so every card
+  stretched to fill the 70vh lane and two projects filled the screen. The
+  compact variant overrides it; the list keeps 100%, where it is what makes a
+  row of cards align.
+  Three guards fired on the new site and one caught a real defect: `uppercase`
+  and `letter-spacing` were applied to labels whose Persian is Persian, which
+  pulls joined script apart — the treatment is gated to the LATIN branch now,
+  and the allow-list entry says exactly that rather than "Latin-only".
+  db 191 migrations · core 1357 tests · web 1058 tests + gate + sweep.
