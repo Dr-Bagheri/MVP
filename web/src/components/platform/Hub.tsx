@@ -1075,7 +1075,30 @@ export function Hub() {
           onScroll={(e) => {
             pinnedRef.current = shouldStick(e.currentTarget);
           }}
-          className="scroll-quiet fade-scroll mb-4 min-h-0 flex-1 overflow-y-auto"
+          /*
+           * THE BAR SITS AT THE COLUMN'S EDGE, not inside it (user directive,
+           * 2026-09-04: "position this scroll in the same place as the scroll
+           * of the page, with the exceptional function that it just moves the
+           * chatbox up and down, the page is fixed").
+           *
+           * The scroller lives inside `PageContainer`, which pads the column,
+           * so its bar was drawn 28px in from the edge — a thin line floating
+           * in dark space with nothing beside it, which reads as a stray
+           * element rather than as this region's scrollbar. The negative
+           * inline margin pulls the SCROLLING BOX out to the column's true
+           * edge, exactly where the page's own bar would be, and the padding
+           * goes back on the content so the words do not move at all.
+           *
+           * LOGICAL, not physical: a browser draws the scrollbar on the
+           * inline-end side, which is the LEFT in Persian. `-mx` puts the box
+           * flush on both, so the bar lands correctly in either direction
+           * without this file knowing which one it is in.
+           *
+           * The page stays fixed by construction — the shell is `h-dvh` and
+           * this is the one region with `overflow-y-auto`, so there is nothing
+           * else that could move.
+           */
+          className="scroll-quiet fade-scroll -mx-page-inline mb-4 min-h-0 flex-1 overflow-y-auto px-page-inline md:-mx-page-inline-md md:px-page-inline-md"
         >
           <ConversationThread
             messages={messages}

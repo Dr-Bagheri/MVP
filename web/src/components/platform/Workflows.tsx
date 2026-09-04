@@ -270,7 +270,10 @@ export function Workflows() {
           */}
           {tab === "library" ? (
             <section>
-              <p className="mb-4 text-sm text-fg-muted">{t("libraryHint")}</p>
+              {/* the shelf's explanatory line is GONE (user directive,
+                  2026-09-04). It described what a card obviously does — each
+                  opens on its own page and installs from there — which is a
+                  sentence the first click teaches better than any paragraph. */}
               {/* the SECOND row: what starts them. Only when there is more
                   than one kind on the shelf — a filter with a single option
                   is a control that cannot change anything. */}

@@ -53,6 +53,23 @@ const ALLOWED: Readonly<Record<string, string>> = {
      its own. An allow-list entry for a file that no longer deviates reads as
      coverage and is a hole — which is exactly what the assertion below
      exists to catch, and did. */
+  /*
+   * Hub.tsx is BACK, for one line and a different reason from the copies this
+   * guard was built to catch (2026-09-04).
+   *
+   * It does not draw a page column — the assistant page's PageContainer does.
+   * What it names the step for is the opposite: the thread's scroller pulls
+   * ITSELF OUT of that padding with `-mx-page-inline` and puts it back with
+   * `px-page-inline`, so the scrollbar lands at the column's edge where a page
+   * scrollbar belongs instead of floating 28px inside it.
+   *
+   * A negative margin that must equal the container's padding is exactly the
+   * case for naming the step rather than typing 28px — the number has to move
+   * WITH the rhythm or the bar drifts back inside. The literal is what this
+   * guard forbids; the token is what it exists to make possible.
+   */
+  "components/platform/Hub.tsx":
+    "the thread's scroller negates the page gutter to put its scrollbar at the column edge, and must move with the rhythm rather than pin a literal",
   "app/[locale]/platform/page.tsx":
     "the operations console renders outside PlatformShell entirely — the vendor's room, not a product page — and still owes the product's gutters",
 };
