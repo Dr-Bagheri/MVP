@@ -863,6 +863,20 @@ export type AgentEvent =
    */
   | { type: "session"; id: string; created: boolean }
   /**
+   * M48 — WHO IS ANSWERING, sent before a single token.
+   *
+   * The router picks one responder and that one owns the turn, so the thread
+   * can name them while the answer is still being written. That is what makes
+   * the extra routing round trip acceptable: a name in 300ms reads as faster
+   * than silence followed by the same words.
+   *
+   * `rule` is how the decision was reached. It is not rendered — a person does
+   * not need to know a classifier was involved — but it is the difference
+   * between a route that fell back after a timeout and one that confidently
+   * chose Echo, which are the same picture and opposite facts.
+   */
+  | { type: "route"; agent: string; rule: string; switched: boolean }
+  /**
    * db/0169 — a COLLEAGUE spoke in this thread.
    *
    * Echo can call Roya or Ava mid-answer; their reply arrives whole rather

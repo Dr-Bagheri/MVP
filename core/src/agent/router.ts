@@ -239,6 +239,43 @@ export function rosterFor(
   ];
 }
 
+/**
+ * Read a verdict out of whatever the model returned.
+ *
+ * Tolerant on the way in and strict on the way out: models fence JSON, prefix
+ * it with a sentence, or return a number where a boolean was asked for, and
+ * none of that is worth failing a turn over. Anything that cannot be read
+ * becomes `null`, which `decide` already treats as "nothing usable came back"
+ * — the same branch as a timeout, because from the decision's point of view
+ * they are the same fact.
+ */
+export function parseVerdict(text: string): RouterVerdict | null {
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start === -1 || end <= start) return null;
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text.slice(start, end + 1));
+  } catch {
+    return null;
+  }
+  if (typeof raw !== "object" || raw === null) return null;
+  const row = raw as Record<string, unknown>;
+  const agent = typeof row.agent === "string" ? row.agent.trim().toLowerCase() : "";
+  if (agent === "") return null;
+  /* a missing confidence is NOT zero — zero is a statement, absence is not.
+     0.5 sits exactly on the keep floor, so an unstated confidence is enough to
+     answer a fresh thread and never enough to take a turn from somebody. */
+  const confidence = typeof row.confidence === "number" && Number.isFinite(row.confidence)
+    ? Math.min(1, Math.max(0, row.confidence))
+    : 0.5;
+  return {
+    agent,
+    confidence,
+    continues_previous_topic: row.continues_previous_topic === true,
+  };
+}
+
 /** Test seam / caller helper: the identity is unused today and named so the
     signature does not change when per-person routing preferences arrive. */
 export type RouterIdentity = Identity;

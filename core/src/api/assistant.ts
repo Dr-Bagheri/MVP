@@ -93,6 +93,13 @@ export interface AskRequest {
    * does not get to convene the others.
    */
   agentHandle?: string | undefined;
+  /** M48: who the router picked, and why. Absent = nothing was routed. */
+  route?: {
+    agent: string;
+    rule: string;
+    switched: boolean;
+    confidence: number | null;
+  } | undefined;
 }
 
 export interface AssistantDeps<TDeps> {
@@ -199,6 +206,31 @@ export function createAssistant<TDeps>(config: AssistantDeps<TDeps>) {
           type: "session",
           id: request.sessionId,
           created: request.sessionCreated === true,
+        });
+      }
+      /*
+       * WHO IS ANSWERING, SAID FIRST (M48).
+       *
+       * Before a single token. The routing call is one extra round trip in
+       * front of the answer, and the whole of what makes that acceptable is
+       * that the screen can say «رؤیا در حال پاسخ…» while it happens —
+       * perceived latency is what a person judges, and a name arriving in
+       * 300ms reads as faster than silence followed by the same answer.
+       *
+       * Additive to the wire, like `session` before it: a client that has
+       * never heard of this event drops it by contract and renders the reply
+       * exactly as it did yesterday.
+       *
+       * `rule` rides along because the audit surface should be able to answer
+       * "why did Roya take this one" — and because a route that FELL BACK and
+       * one that confidently chose Echo look identical without it.
+       */
+      if (request.route) {
+        stream.send({
+          type: "route",
+          agent: request.route.agent,
+          rule: request.route.rule,
+          switched: request.route.switched,
         });
       }
       /*

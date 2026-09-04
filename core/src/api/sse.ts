@@ -36,6 +36,24 @@ import type { AgentStep } from "../agent/types.ts";
 
 export type SseEvent =
   | { type: "session"; id: string; created: boolean }
+  /**
+   * M48 — WHO IS ANSWERING THIS TURN, sent before a single token.
+   *
+   * The router picks one responder and that one owns the turn (a handoff, not
+   * a delegation), so the surface can name them while the answer is still
+   * being written. That is the whole of what makes the extra routing round
+   * trip acceptable: a name in 300ms reads as faster than silence followed by
+   * the same words.
+   *
+   * `rule` says HOW the decision was reached, and it matters more than it
+   * looks: a route that fell back after a router timeout and one that
+   * confidently chose Echo are the same picture and opposite facts.
+   *
+   * Additive, like `session` before it — the contract is unknown-types-
+   * ignorable, so a client that has never heard of this drops it and renders
+   * the answer exactly as it did before.
+   */
+  | { type: "route"; agent: string; rule: string; switched: boolean }
   | { type: "text_delta"; delta: string }
   | { type: "tool_call"; id: string; name: string; label: string;
       state: "started" | "ok" | "denied" | "blocked" | "error"; ms?: number }

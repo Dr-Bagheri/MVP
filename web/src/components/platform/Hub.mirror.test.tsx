@@ -73,7 +73,9 @@ async function* handDriven(signal?: AbortSignal): AsyncGenerator<AgentEvent> {
   }
 }
 
-const persisted: { id: string; role: "user" | "assistant"; content: string }[] = [];
+const persisted: {
+  id: string; role: "user" | "assistant"; content: string; author?: string;
+}[] = [];
 
 vi.mock("@/api/client", () => ({
   BffError: class BffError extends Error {},
@@ -194,5 +196,63 @@ describe("one conversation, two windows onto it", () => {
     first.unmount();
 
     expect(assistantSnapshot().sessionId).toBe("sess-1");
+  });
+
+  it("names the responder BEFORE the answer, and Echo stays an absence", async () => {
+    /*
+     * M48. The router picks one agent and that one owns the turn, so the
+     * thread says who is speaking while the words are still arriving — which
+     * is the whole of what makes the extra routing round trip acceptable.
+     *
+     * The half that would be easy to get wrong: routing to ECHO must leave the
+     * message exactly as it was. `author` absent has always meant Echo, and
+     * stamping it with the handle "echo" would give the assistant a roster
+     * lookup that can never resolve — the avatar would fall to the unknown
+     * face on every ordinary turn.
+     */
+    render(<Hub />);
+    await ask("این هفته چه جلساتی دارم؟");
+    push({ type: "session", id: "sess-1", created: true });
+    push({ type: "route", agent: "roya", rule: "model", switched: false });
+    await waitFor(() => {
+      const live = assistantSnapshot().messages.find((m) => m.streaming === true);
+      expect(live?.author, "the responder is named before a token arrives").toBe("roya");
+    });
+
+    /*
+     * And the name SURVIVES the settle. The hook refetches the persisted rows
+     * when a run finishes, so the stored `author` column is what the reader
+     * sees a second later — if the server did not write it, the avatar would
+     * appear during the answer and vanish the moment it landed.
+     *
+     * The fixture carries it for that reason. An empty `persisted` would make
+     * this assertion read a thread the refetch had just emptied, which is a
+     * fact about the fixture wearing the costume of a fact about the wire.
+     */
+    persisted.push({ id: "m-1", role: "assistant", content: "سه جلسه", author: "roya" });
+    push({ type: "text_delta", delta: "سه جلسه" });
+    push({ type: "done", runId: "r-1", failed: false });
+    end();
+    await waitFor(() => expect(assistantSnapshot().streaming).toBe(false));
+    await waitFor(() => expect(assistantSnapshot().messages.at(-1)?.author).toBe("roya"));
+  });
+
+  it("THE CONTROL: routing to Echo leaves the turn unauthored", async () => {
+    /*
+     * Without this the assertion above passes against a handler that stamps
+     * every route onto the message — including Echo's, which would hand the
+     * ordinary turn a handle no agent row has and draw the unknown-handle
+     * face beside every answer the assistant gives.
+     */
+    render(<Hub />);
+    await ask("سلام");
+    push({ type: "session", id: "sess-2", created: true });
+    push({ type: "route", agent: "echo", rule: "model", switched: false });
+    persisted.push({ id: "m-2", role: "assistant", content: "سلام" });
+    push({ type: "text_delta", delta: "سلام" });
+    push({ type: "done", runId: "r-2", failed: false });
+    end();
+    await waitFor(() => expect(assistantSnapshot().streaming).toBe(false));
+    expect(assistantSnapshot().messages.at(-1)?.author).toBeUndefined();
   });
 });

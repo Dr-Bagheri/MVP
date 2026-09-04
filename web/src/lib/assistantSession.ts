@@ -383,6 +383,22 @@ async function consume(
         publish({ sessionId: event.id });
         setLiveConversation(event.id);
         break;
+      case "route":
+        /*
+         * WHO IS ANSWERING (M48), before a word of the answer.
+         *
+         * Written onto the reply that is already in the thread rather than
+         * announced separately: the avatar and the name beside a streaming
+         * message are the same two things a settled turn shows, so the turn
+         * does not change shape when it finishes. Echo is the ABSENCE of an
+         * author, which is what that column has always meant — routing to
+         * Echo must leave the message exactly as it was, not stamp it with a
+         * handle no roster row has.
+         */
+        patch(replyId, (m) => (event.agent === "echo"
+          ? m
+          : { ...m, author: event.agent }));
+        break;
       case "text_delta":
         patch(replyId, (m) => ({ ...m, content: m.content + event.delta }));
         adapter?.onDelta?.(event.delta);

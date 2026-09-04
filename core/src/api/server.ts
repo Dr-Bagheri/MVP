@@ -42,6 +42,8 @@ import { createPlatformRepo, type PlatformRepo } from "./platform.ts";
 import { createTranscriptsRepo, type TranscriptsRepo } from "./transcripts.ts";
 import { createDomainTools } from "../agent/domain-tools.ts";
 import { toolsFor } from "../agent/platform-tools.ts";
+import { ECHO as ROUTER_ECHO, type RouteDecision } from "../agent/router.ts";
+import { rememberIncumbent, routeTurn } from "./routing.ts";
 import { createAgentRunStore } from "../agent/run-store.ts";
 import { createAgentRuntime } from "../agent/runtime.ts";
 import { findProposal, recordDecision } from "../agent/proposals.ts";
@@ -115,6 +117,17 @@ export interface ServerOptions<TDeps> {
   /** Resolve a skill slug for the caller (system < org < user). */
   resolveSkill?: ((identity: Identity, slug: string) => Promise<Skill | undefined>) | undefined;
   openrouterKey?: string | undefined;
+  /**
+   * The model that decides WHO answers (M48). A cheap fast one — the routing
+   * call is short, fixed-size and blocks the first token, so a reasoning model
+   * here turns a 400ms decision into a multi-second one.
+   *
+   * Absent = no routing at all, and Echo answers everything. That is the
+   * honest degradation: a deployment that has not chosen a router model gets
+   * the behaviour it had before the router existed, rather than a turn that
+   * fails for a reason nobody configured.
+   */
+  routerModel?: string | undefined;
   /** M30 OAuth apps. Omitting credentials leaves providers honestly unavailable. */
   connectorOAuth?: ConnectorOAuthOptions | undefined;
   /** Storage config for the upload surface (Part 5). Absent = uploads refuse with a named reason. */
@@ -3986,10 +3999,10 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
      * request can neither select an invisible agent nor submit instructions
      * of its own.
      */
-    const selectedAgent = typeof body.agent === "string" && body.agent !== ""
+    const namedAgent = typeof body.agent === "string" && body.agent !== ""
       ? await resolveAssistantAgent(options.db, identity, body.agent)
       : undefined;
-    if (typeof body.agent === "string" && body.agent !== "" && !selectedAgent) {
+    if (typeof body.agent === "string" && body.agent !== "" && !namedAgent) {
       throw new ValidationError("unknown agent", { code: "agent_not_found" });
     }
 
@@ -4006,6 +4019,58 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       : undefined;
     if (typeof body.workflow === "string" && body.workflow !== "" && !selectedWorkflow) {
       throw new ValidationError("unknown workflow", { code: "workflow_not_found" });
+    }
+
+    /*
+     * ── WHO ANSWERS THIS TURN (M48) ─────────────────────────────────────
+     *
+     * User directive, 2026-09-04: "take a message to a neutral ground and see
+     * which of them are getting called first — only that one should answer …
+     * I don't want Echo to call them each time."
+     *
+     * STAGE 0 IS NOT A MODEL CALL. A message that NAMES an agent is already
+     * routed, and so is a turn driven by a workflow or a skill: all three are
+     * somebody saying what should happen. Spending a call to re-derive a
+     * decision a person already made is slower AND worse, and overriding one
+     * would be the same mistake as ignoring an @mention.
+     *
+     * Everything else gets one cheap constrained call, and whoever it names
+     * owns the whole turn. The hysteresis — cheap to stay with the current
+     * speaker, expensive to take the turn away — lives in agent/router.ts.
+     */
+    let route: RouteDecision | undefined;
+    let selectedAgent = namedAgent;
+    if (namedAgent) {
+      route = {
+        agent: namedAgent.handle, rule: "mention", confidence: null,
+        incumbent: null, switched: false,
+      };
+    } else if (selectedWorkflow === undefined && skill === undefined) {
+      route = await routeTurn({
+        db: options.db,
+        identity,
+        question: typeof body.question === "string" ? body.question : "",
+        sessionId: typeof body.session_id === "string" ? body.session_id : undefined,
+        locale: typeof body.locale === "string" ? body.locale : undefined,
+        apiKey: options.openrouterKey,
+        /*
+         * The cheapest servable model, through the same ladder every other
+         * model choice uses — so the no-Claude exclusion applies here too. A
+         * routing call is the easiest place in the product to forget that,
+         * because nobody reads a router's model name.
+         */
+        model: firstServable(options.routerModel, process.env.ROUTER_MODEL),
+      });
+      if (route.agent !== ROUTER_ECHO) {
+        selectedAgent = await resolveAssistantAgent(options.db, identity, route.agent);
+        /* a handle the roster resolved and this line cannot — an agent
+           archived between the two reads. Echo answers rather than the turn
+           failing, and the log says `fallback` rather than pretending the
+           router chose Echo. */
+        if (!selectedAgent) {
+          route = { ...route, agent: ROUTER_ECHO, rule: "fallback", switched: false };
+        }
+      }
     }
 
     /**
@@ -4285,6 +4350,8 @@ ${liveText}`
        * ANDed with each agent's `web` flag: either off is off.
        */
       ...(selectedAgent ? { agentHandle: selectedAgent.handle } : {}),
+      /* M48: the surface names the responder before the first token */
+      ...(route ? { route } : {}),
       agentsWeb,
       signal: controller.signal,
       sessionId: conversation.id,
@@ -4299,6 +4366,22 @@ ${liveText}`
        */
       onTurn: async ({ runId, text, toolCalls, author }) => {
         if (!text.trim()) return;
+        /*
+         * THE INCUMBENT, remembered (M48). Written when a turn actually
+         * PRODUCED something, not when the router decided: a run that failed
+         * before saying a word has not established anybody as the thread's
+         * speaker, and recording it would make the next follow-up stick to an
+         * agent the person never heard from.
+         *
+         * Best-effort on purpose. Failing to remember costs the next turn its
+         * stickiness — it routes fresh — and that is a far smaller thing than
+         * failing an answer that already succeeded.
+         */
+        if (route) {
+          await rememberIncumbent(
+            options.db, identity, conversation.id, route.agent,
+          ).catch(() => undefined);
+        }
         try {
           await sessions.append(identity, {
             sessionId: conversation.id,

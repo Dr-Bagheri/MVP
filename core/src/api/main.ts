@@ -170,6 +170,14 @@ export async function main(): Promise<void> {
     toolDeps: {},
     openrouterKey: process.env.OPENROUTER_API_KEY,
     /*
+     * M48: the model that decides who answers. Absent = no routing, and Echo
+     * answers everything — the behaviour this deployment had before the router
+     * existed, which is the honest degradation for a deployment that has not
+     * chosen one. A default here would pick a model nobody agreed to and spend
+     * on it silently, once per message.
+     */
+    routerModel: process.env.ROUTER_MODEL,
+    /*
      * M30 first-party work connectors. These are deliberately optional at
      * boot: an unset OAuth app leaves Google/Microsoft visibly "not
      * configured" rather than taking the entire assistant offline. Values
