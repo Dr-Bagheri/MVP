@@ -2820,7 +2820,7 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
   });
 
   /**
-   * 0184 \u2014 the team channel. A PERSON's surface: gateway keys are refused
+   * 0184 — the team channel. A PERSON's surface: gateway keys are refused
    * for the same reason the board refuses them, and every read and write runs
    * as the caller under 0184's policies.
    */
@@ -2920,14 +2920,15 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     const token = randomUUID().replace(/-/g, "") + randomUUID().replace(/-/g, "");
     chatTickets.sweep();
     chatTickets.mint(identity.userId, identity.orgId, token);
-    return reply.send({
-      ticket: token,
-      /* absent when core does not know its own public address \u2014 the client
-         then falls back to polling rather than opening a stream at a guess */
-      direct_url: process.env.CORE_PUBLIC_URL
-        ? `${process.env.CORE_PUBLIC_URL.replace(/\/$/, "")}/v1/chat/stream?ticket=${token}`
-        : null,
-    });
+    /* THE TICKET ONLY. The public address is the BFF's to add, not core's:
+       `CORE_PUBLIC_URL` is a VERCEL variable — the live-transcription lane
+       has read it there since M38, and reading it here as well would be one
+       name meaning two things at two layers, with the server's copy absent
+       and the answer therefore always "no direct address". Found by
+       deploying and grepping the server's env for a variable that was never
+       supposed to be there: the feature would have run in its fallback lane
+       forever and looked like a decision. */
+    return reply.send({ ticket: token });
   });
 
   app.options("/v1/chat/stream", async (_request, reply) => {
@@ -2945,7 +2946,7 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
 
     /* HIJACK before touching reply.raw. Returning the reply object also
        suppresses Fastify's send today, but it is the unsupported spelling of
-       the same intent \u2014 it is what broke on the v3\u2192v4 boundary for everyone
+       the same intent — it is what broke on the v3→v4 boundary for everyone
        who had written it that way. */
     reply.hijack();
     reply.raw.writeHead(200, {
@@ -2976,13 +2977,13 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
    * The assistant thread answers every message because it is a conversation
    * with one person. A room is not: with three colleagues in it, an ambient
    * trigger means three answers to every human sentence and the feature is
-   * unusable by its second day. So the mention is the whole authorization \u2014
+   * unusable by its second day. So the mention is the whole authorization —
    * `nameIn` and nothing else, which is the same matcher the assistant uses,
    * not a second one.
    *
    * AND THE ANSWER GETS NO RETRIEVAL TOOLS. This is the sharper rule and it
    * is not caution: `call_read` admits a call to its OWNER, to the org when
-   * the scope says so, and to admins \u2014 so the person asking may legitimately
+   * the scope says so, and to admins — so the person asking may legitimately
    * see a record that other people in this room cannot. "The agent borrows
    * the caller's authority" is right in a private thread and wrong here,
    * because the answer is addressed to everybody. The blast radius decides
@@ -3014,12 +3015,12 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       return;
     }
 
-    /* the room's recent words, as the context \u2014 everything this answer is
+    /* the room's recent words, as the context — everything this answer is
        allowed to draw on, and every reader of the answer can already read it */
     const recent = await chat.messages(identity, channelId, { limit: 30 });
     const transcript = recent
       .filter((m) => m.body !== null)
-      .map((m) => `${m.author_kind === "agent" ? m.agent_handle : "\u0647\u0645\u06a9\u0627\u0631"}: ${m.body}`)
+      .map((m) => `${m.author_kind === "agent" ? m.agent_handle : "همکار"}: ${m.body}`)
       .join("\n");
 
     let answer = "";
@@ -3034,10 +3035,10 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
           persona?.instructions ?? "",
           languageInstruction(undefined),
           timeInstructions(new Date(), await callerZone(identity, undefined)),
-          "\u06cc\u06a9 \u06af\u0641\u062a\u06af\u0648\u06cc \u06af\u0631\u0648\u0647\u06cc \u062f\u0631 \u062d\u0627\u0644 \u0627\u0646\u062c\u0627\u0645 \u0627\u0633\u062a \u0648 \u067e\u0627\u0633\u062e \u0634\u0645\u0627 \u0631\u0627 \u0647\u0645\u0647\u0654 \u0627\u0639\u0636\u0627\u06cc \u0627\u062a\u0627\u0642 \u0645\u06cc\u200c\u0628\u06cc\u0646\u0646\u062f. \u06a9\u0648\u062a\u0627\u0647 \u0628\u0646\u0648\u06cc\u0633.",
-          transcript === "" ? "" : `\u06af\u0641\u062a\u06af\u0648\u06cc \u0627\u062e\u06cc\u0631 \u0627\u062a\u0627\u0642:\n${transcript}`,
+          "یک گفتگوی گروهی در حال انجام است و پاسخ شما را همهٔ اعضای اتاق می‌بینند. کوتاه بنویس.",
+          transcript === "" ? "" : `گفتگوی اخیر اتاق:\n${transcript}`,
         ].filter((part) => part !== "").join("\n"),
-        /* [] is EXPLICIT and load-bearing \u2014 `undefined` would mean
+        /* [] is EXPLICIT and load-bearing — `undefined` would mean
            "unspecified" and hand this run the server's default read tools,
            which is the exact scope violation the comment above forbids */
         allowedTools: [],
@@ -3058,7 +3059,7 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     if (failed) {
       /* TRANSIENT, never a row. A tidy "something went wrong" message in the
          record is indistinguishable a week later from something the agent
-         said \u2014 the honest record is the question standing unanswered. */
+         said — the honest record is the question standing unanswered. */
       chatBus.publish(identity.orgId, {
         type: "agent_failed", channel_id: channelId, handle: named,
       });
