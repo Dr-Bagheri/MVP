@@ -9,7 +9,7 @@ import { PageContainer, Section, SkeletonLines } from "@/components/scaffold";
 import { EmptyState } from "@/components/ui";
 import { Icon } from "@/components/icons";
 import { AgentAvatar } from "./AgentAvatar";
-import { useAgentCopy, agentLevelTone } from "./agentAppearance";
+import { useAgentCopy } from "./agentAppearance";
 import { useCrumbTitle } from "./CrumbTitle";
 
 /**
@@ -88,11 +88,17 @@ export function AgentDetail({ handle }: { handle: string }) {
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="h-page truncate">{name}</h1>
-            <span className={`chip text-xs ${agentLevelTone(agent.level) === "accent"
-              ? "bg-accent-soft text-accent" : "bg-info/15 text-info"}`}>
-              {t(`level_${agent.level}`)}
-            </span>
-            <code className="text-xs text-fg-subtle">@{agent.handle}</code>
+            {/*
+              THE LEVEL CHIP IS GONE, not translated. It rendered the raw key
+              `agents.level_system` — the keys never existed — and the honest
+              fix was not to invent them: the «نوع» row four lines below says
+              the same fact in a sentence. A chip and a labelled row stating
+              one thing twice is how the two come to disagree.
+            */}
+            {/* `dir="ltr"` because a handle is an ADDRESS: without it «@ava»
+                renders as «ava@», the sigil dragged to the wrong end by the
+                paragraph around it */}
+            <code className="text-xs text-fg-subtle" dir="ltr">@{agent.handle}</code>
           </div>
           <p className="mt-1 text-sm text-fg-muted">{description}</p>
         </div>

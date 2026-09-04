@@ -55,7 +55,22 @@ const DropdownMenuSubTrigger = React.forwardRef<
     {...props}
   >
     {children}
-    <ChevronRight className="ms-auto" />
+    {/*
+      THE ONLY CHEVRON, and it MIRRORS (user report, 2026-09-04: "we have two
+      way arrow, make it one outward").
+
+      `rowActions` used to draw its own on top of this one, on a comment
+      claiming this file ships its chevron "via a child selector" — it does
+      not, it ships the element right here. Two arrows, and only the
+      hand-rolled one flipped for RTL, so on a Persian menu they pointed in
+      opposite directions.
+
+      The duplicate is gone and the flip moved HERE, which is the half that
+      matters for the other three files using this trigger: they never drew
+      their own, so before this they had a chevron pointing INTO the menu it
+      opens, on every Persian screen.
+    */}
+    <ChevronRight className="ms-auto rtl:-scale-x-100" />
   </DropdownMenuPrimitive.SubTrigger>
 ))
 DropdownMenuSubTrigger.displayName =

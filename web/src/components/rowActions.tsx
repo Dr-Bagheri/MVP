@@ -73,7 +73,7 @@ import {
   AlertDialogDescription,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { IconChevronRight, IconClose, IconDots } from "@/components/icons";
+import { IconClose, IconDots } from "@/components/icons";
 
 /**
  * FORWARDS ITS REF AND ITS REST PROPS, which is what lets it stand in as a
@@ -239,13 +239,12 @@ function MenuEntry({ item }: { item: KebabItem }) {
       <DropdownMenuSub>
         <DropdownMenuSubTrigger className={`${ENTRY_CLASS} ${toneClass(item)}`}>
           <EntryFace item={item} />
-          {/* an ICON, not an arrow character: the text arrow did not share
-              the set's stroke or box, and could not mirror for RTL. The
-              shadcn sub-trigger ships its own chevron via a child selector;
-              ours is the only one, and it flips. */}
-          <span aria-hidden className="inline-flex rtl:-scale-x-100">
-            <IconChevronRight width={12} height={12} />
-          </span>
+          {/* NO CHEVRON HERE. The sub-trigger draws one itself — it always
+              did, as a literal element rather than the "child selector" the
+              comment this replaces claimed — so this one made two, pointing
+              opposite ways because only this one mirrored. The flip lives on
+              the shared trigger now, where the platform's other three submenu
+              users get it too. */}
         </DropdownMenuSubTrigger>
         <DropdownMenuSubContent
           className="min-w-[13.5rem] rounded-lg border-border bg-surface p-0 py-1 shadow-xl"
