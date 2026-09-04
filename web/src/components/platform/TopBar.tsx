@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocale } from "next-intl";
-import { usePathname, useRouter } from "@/i18n/routing";
+import { Link, usePathname, useRouter } from "@/i18n/routing";
 import { useTranslations } from "next-intl";
 import type { User } from "@/api/types";
 import { IconMoon, IconSearch, IconSun } from "@/components/icons";
@@ -11,6 +11,7 @@ import { useTheme } from "@/lib/useTheme";
 import { formatDate } from "@/lib/format";
 import { useTimezonePreference } from "@/lib/usePreferences";
 import { Breadcrumbs } from "./Breadcrumbs";
+import { ChatIcon } from "./icons";
 import { NotificationBell } from "./NotificationBell";
 import { registerPresenceAnchor } from "./presenceAnchor";
 import { registerRecorderAnchor } from "./recorderAnchor";
@@ -141,49 +142,24 @@ export function TopBar({
               The trail takes the free space rather than a fixed slot: it is
               the only element here whose width is content, and it must be
               able to truncate rather than push the controls off the bar. */}
-          <Breadcrumbs />
-        </div>
-
-        <div className="flex min-w-0 items-center justify-end gap-2">
-          {/* Conversations moved UNDER the hub's prompt box (user directive,
-              round 2) — the bar carries no twin of it. */}
-
-          {/* the mini recorder docks here while a take is live (user
-              directive, 2026-08-23): beside the calendar/clock, DOM-first in
-              this end cluster = the centre-side position in BOTH directions
-              (LTR lays the cluster out left→right, RTL right→left — first
-              child lands nearest the centre either way). Empty and invisible
-              when nothing is rolling. */}
-          <div
-            ref={setRecorderAnchorRef}
-            id="neurai-topbar-recorder"
-            className="flex min-w-0 items-center empty:hidden"
-          />
-          <Clock />
-
           {/*
-            THE ASSISTANT'S DOOR, BELOW md ONLY (2026-09-03).
+            THE CLOCK AND THE SEARCH BOX MOVED TO THIS SIDE (user directive,
+            2026-09-05: "put the date and time and also search at the other
+            side in the top menu, near to the main menu").
 
-            This slot used to be the orb's cradle: a 68px ring floating over the
-            bar's centre column, which the dock portalled a WebGL orb into. The
-            orb and its drag-to-pin are gone, and the assistant is a column at
-            the inline-end edge now — so at `md` and up the collapsed sidebar is
-            on screen and carries its own trigger, and this slot is hidden.
-            Below `md` there is no rail, so this is where the one door lives.
+            They were at the far end of the bar, in the cluster with the
+            theme, the locale pair and the bell — which is where a person
+            looks for SETTINGS, and neither of these is one. Against the rail
+            they read as what they are: where you are and when, and the door
+            into everything.
 
-            `md:hidden` and the rail's presence are exclusive by construction:
-            a person never sees two ways into the same room, and there is one
-            button implementation for both places (AssistantSidebar's
-            `trigger`). Empty and invisible if the sidebar is silent on this
-            route.
+            Order matters and is deliberate: the clock is a fixed width and
+            the trail is the only element here whose width is its content, so
+            the trail keeps `flex-1` and stays the thing that truncates. Put
+            the other way round, a long breadcrumb would push the search box
+            off the bar.
           */}
-          <div
-            ref={setPresenceAnchorRef}
-            id="neurai-topbar-presence"
-            data-presence-cradle
-            className="flex items-center empty:hidden md:hidden"
-          />
-
+          <Clock />
           {/*
             GLOBAL SEARCH IS BACK IN THE BAR (user directive, 2026-08-31,
             the reference adoption): the reference keeps one search box in
@@ -224,6 +200,48 @@ export function TopBar({
               aria-label={tPlatform("searchEverything")}
             />
           </form>
+          <Breadcrumbs />
+        </div>
+
+        <div className="flex min-w-0 items-center justify-end gap-2">
+          {/* Conversations moved UNDER the hub's prompt box (user directive,
+              round 2) — the bar carries no twin of it. */}
+
+          {/* the mini recorder docks here while a take is live (user
+              directive, 2026-08-23): beside the calendar/clock, DOM-first in
+              this end cluster = the centre-side position in BOTH directions
+              (LTR lays the cluster out left→right, RTL right→left — first
+              child lands nearest the centre either way). Empty and invisible
+              when nothing is rolling. */}
+          <div
+            ref={setRecorderAnchorRef}
+            id="neurai-topbar-recorder"
+            className="flex min-w-0 items-center empty:hidden"
+          />
+
+          {/*
+            THE ASSISTANT'S DOOR, BELOW md ONLY (2026-09-03).
+
+            This slot used to be the orb's cradle: a 68px ring floating over the
+            bar's centre column, which the dock portalled a WebGL orb into. The
+            orb and its drag-to-pin are gone, and the assistant is a column at
+            the inline-end edge now — so at `md` and up the collapsed sidebar is
+            on screen and carries its own trigger, and this slot is hidden.
+            Below `md` there is no rail, so this is where the one door lives.
+
+            `md:hidden` and the rail's presence are exclusive by construction:
+            a person never sees two ways into the same room, and there is one
+            button implementation for both places (AssistantSidebar's
+            `trigger`). Empty and invisible if the sidebar is silent on this
+            route.
+          */}
+          <div
+            ref={setPresenceAnchorRef}
+            id="neurai-topbar-presence"
+            data-presence-cradle
+            className="flex items-center empty:hidden md:hidden"
+          />
+
 
           {/* the theme, one press away (the reference keeps it in the bar) —
               the SAME store Settings·General writes, never a second state.
@@ -233,6 +251,32 @@ export function TopBar({
               flex+items-center). `.btn-icon` is the theme's icon button, 28
               on a side — the same line Meetings.tsx:532 writes. `.btn`
               already composes `.tap` and the transition. */}
+          {/*
+            THE ROOM'S DOOR (user directive, 2026-09-05: "add a small icon with
+            the same size as switch theme near it for the chat section, and
+            remove it from the menu as well").
+
+            The rail's own glyph, through `NAV_ICON` rather than a second
+            drawing of two bubbles — the entry left the rail and the picture
+            should not have to be redrawn to follow it. The box is the theme
+            toggle's, character for character, because they stand in the same
+            cluster and a twelfth invented square is how this bar got audited
+            in the first place.
+
+            `md:inline-flex` matches the toggle beside it: below md the bottom
+            bar carries navigation, and this is chrome for the desktop shell.
+          */}
+          <Link
+            href="/chat"
+            title={tPlatform("chat")}
+            aria-label={tPlatform("chat")}
+            className="btn btn-icon hidden border border-border text-fg-muted hover:text-fg md:inline-flex"
+          >
+            {/* the RAIL'S own glyph, imported rather than redrawn: the entry
+                left the rail and the picture follows it */}
+            <ChatIcon width={16} height={16} />
+          </Link>
+
           <button
             type="button"
             onClick={() => storeTheme(theme === "dark" ? "light" : "dark")}

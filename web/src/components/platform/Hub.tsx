@@ -7,7 +7,7 @@ import type { ConnectorProvider, ConnectorStatus, MailDraft, Skill, WorkflowCard
 import { useRouter } from "@/i18n/routing";
 import { useSearchParams } from "next/navigation";
 import { SkeletonLines } from "@/components/scaffold";
-import { useDictation } from "@/lib/dictation";
+import { micTone, useDictation } from "@/lib/dictation";
 import { usePushToTalk } from "@/lib/usePushToTalk";
 import { deliverDoc } from "@/lib/deliver";
 import { subscribeComposer, takePendingDraft } from "@/lib/assistantBus";
@@ -1251,11 +1251,7 @@ export function Hub() {
           <span className="flex items-center gap-1">
             <button
               type="button"
-              className={`btn btn-icon shrink-0 ${
-                dictation.status === "listening"
-                  ? "animate-pulse bg-accent-soft text-accent"
-                  : "text-fg-muted hover:bg-surface-2 hover:text-fg"
-              }`}
+              className={`btn btn-icon shrink-0 ${micTone(dictation.status)}`}
               title={dictation.status === "listening" ? t("voiceListening") : t("voice")}
               aria-pressed={dictation.status === "listening"}
               onClick={dictation.toggle}

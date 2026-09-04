@@ -13,27 +13,36 @@ import { digits, personName } from "@/lib/format";
 import { MessageBody } from "./MessageBody";
 
 /**
- * ONE MESSAGE (0184, its actions 0189).
+ * ONE MESSAGE (0184, its actions 0189, and 2026-09-05's corrections).
  *
- * ── THE ACTIONS ARE VISIBLE *AND* ON RIGHT-CLICK ──────────────────────────
+ * ── RIGHT-CLICK IS THE DOOR, AND IT LANDS ON THE MESSAGE ──────────────────
  *
- * User directive, 2026-09-04: "for each message that has been sent there must
- * be a possible right click to do the reply and reaction emoji as well."
+ * Three changes, all from one user report, all about the same thing being in
+ * the wrong place:
  *
- * Right-click alone would re-open the hole the platform closed the same week:
- * `rowActions.tsx` records why `ContextMenu` was REMOVED from tables — "a
- * right-click menu is invisible, so a row whose only actions live behind it
- * has no actions as far as most people can tell. On a touch screen it has
- * none at all." That reasoning is about affordance and it does not stop being
- * true inside a chat room.
+ *  1. THE MENU OPENED FAR FROM THE POINTER. `at.x` is measured from the row's
+ *     LEFT edge (`clientX - box.left`) and was being written to
+ *     `inset-inline-start`, which on a Persian page resolves to RIGHT — so
+ *     the anchor was mirrored and the panel landed off the far side of the
+ *     message. Physical `left`, because the number is physical. The logical
+ *     property is the reflex here and it is the bug; it would have looked
+ *     perfect in English.
  *
- * So both, driven by ONE list: a small bar that appears on hover, and the
- * same items on `contextmenu`. The directive is satisfied and the person who
- * never right-clicks anything can still reply.
+ *  2. THE HOVER BAR IS GONE ("remove the other reply and emoji that comes in
+ *     the same row"). It floated over the message's own first line, which is
+ *     what made it worth removing: an action strip that covers the words it
+ *     acts on costs more than the affordance it buys. The cost is recorded
+ *     rather than argued away — `rowActions.tsx` says a right-click menu is
+ *     invisible and has no touch equivalent, and that is now true here.
  *
- * The right-click opens the SAME Radix menu, anchored to a zero-size element
- * at the pointer — the shape `ContextMenu` used before it was deleted, and
- * the reason it is not a hand-rolled panel (2026-09-02: the portals are the
+ *  3. DELETE IS GONE FROM THE MENU. It sat one row under «پاسخ», where the
+ *     press that meant "answer this" is a few pixels from the press that
+ *     removes it. Removing a message is not reachable from the room any more;
+ *     the route and the policy stay, so bringing it back is a menu entry.
+ *
+ * The menu is the SAME Radix menu, anchored to a zero-size element at the
+ * pointer — the shape `ContextMenu` used before it was deleted, and the
+ * reason it is not a hand-rolled panel (2026-09-02: the portals are the
  * primitive's).
  */
 
@@ -58,7 +67,7 @@ export function grouped(message: ChatMessageRecord, previous: ChatMessageRecord 
   return new Date(message.created_at).getDate() === new Date(previous.created_at).getDate();
 }
 
-export function MessageRow({ message, previous, people, meId, locale, onReply, onReact, onRemove }: {
+export function MessageRow({ message, previous, people, meId, locale, onReply, onReact }: {
   message: ChatMessageRecord;
   previous: ChatMessageRecord | null;
   people: OrgPersonRecord[];
@@ -66,7 +75,6 @@ export function MessageRow({ message, previous, people, meId, locale, onReply, o
   locale: string;
   onReply: (message: ChatMessageRecord) => void;
   onReact: (message: ChatMessageRecord, emoji: string, on: boolean) => void;
-  onRemove: (message: ChatMessageRecord) => void;
 }) {
   const t = useTranslations("chat");
   /* where the right-click landed, in the row's own coordinates. Null = the
@@ -79,7 +87,6 @@ export function MessageRow({ message, previous, people, meId, locale, onReply, o
   const name = message.author_kind === "agent"
     ? message.agent_handle ?? "?"
     : person === null ? t("unknownPerson") : personName(person, locale);
-  const mine = meId !== null && message.author_id === meId;
   const namedMe = meId !== null && message.mentions.includes(meId);
   const head = !grouped(message, previous);
 
@@ -115,11 +122,6 @@ export function MessageRow({ message, previous, people, meId, locale, onReply, o
         <IconAsk width={12} height={12} />
         {t("reply")}
       </DropdownMenuItem>
-      {mine && !message.deleted ? (
-        <DropdownMenuItem onSelect={() => onRemove(message)} className="text-danger">
-          {t("removeMessage")}
-        </DropdownMenuItem>
-      ) : null}
     </>
   );
 
@@ -211,23 +213,6 @@ export function MessageRow({ message, previous, people, meId, locale, onReply, o
         </div>
       ) : null}
 
-      {/* THE VISIBLE HALF: a hover bar carrying the same two actions. It is
-          what keeps the right-click from being the only door. */}
-      {!message.deleted ? (
-        <div className="absolute -top-3 end-2 hidden items-center gap-0.5 rounded-lg border border-border bg-surface p-0.5 shadow-card group-hover:flex">
-          <button type="button" onClick={() => onReact(message, "👍", !(message.reactions.find((r) => r.emoji === "👍")?.mine ?? false))}
-            className="btn btn-icon text-xs hover:bg-surface-2"
-            aria-label={t("react")} title={t("react")}>
-            👍
-          </button>
-          <button type="button" onClick={() => onReply(message)}
-            className="btn btn-icon text-fg-muted hover:bg-surface-2 hover:text-fg"
-            aria-label={t("reply")} title={t("reply")}>
-            <IconAsk width={12} height={12} />
-          </button>
-        </div>
-      ) : null}
-
       {/* THE RIGHT-CLICK, the SAME items, anchored where the pointer was.
           A zero-size trigger rather than a hand-rolled panel: the portal, the
           focus trap, the outside-press and the viewport flip are the
@@ -238,7 +223,11 @@ export function MessageRow({ message, previous, people, meId, locale, onReply, o
           <span
             aria-hidden
             className="pointer-events-none absolute h-0 w-0"
-            style={at === null ? { display: "none" } : { insetInlineStart: at.x, top: at.y }}
+            /* PHYSICAL `left`, and that is the fix: `at.x` counts pixels from
+               the row's LEFT edge, so writing it to a logical property makes
+               the anchor mirror itself on a Persian page and the menu opens
+               off the far side of the message. */
+            style={at === null ? { display: "none" } : { left: at.x, top: at.y }}
           />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="min-w-[13rem] p-1">

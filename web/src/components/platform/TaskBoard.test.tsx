@@ -68,12 +68,17 @@ let refuseNextPatch = false;
 /** watched, because a card drag that moves a COLUMN is the bug below */
 const updateTaskColumn = vi.fn();
 
+/* the reader, mutable: the board grew two ADMIN-only controls on 2026-09-05
+   and a fixture that can only be one role cannot test an absence. */
+let ME: { id: string; org_name?: string; role?: string } = { id: "u-me", org_name: "نورای" };
+const createdProjects: Record<string, unknown>[] = [];
+
 vi.mock("@/api/client", () => ({
   BffError: class BffError extends Error {
     constructor(public status: number) { super("bff " + status); }
   },
   api: {
-    me: async () => ({ id: "u-me", org_name: "نورای" }),
+    me: async () => ME,
     orgPeople: async () => PEOPLE,
     taskLabels: async () => LABELS,
     taskBoard: async () => {
@@ -95,6 +100,14 @@ vi.mock("@/api/client", () => ({
       description: "", checklist: [], comments: [], events: [], recurrence: null,
     }),
     createTask: vi.fn(), createTaskColumn: vi.fn(), createTaskTopic: vi.fn(),
+    /* the board's `+` opens the project dialog now (2026-09-05), and the
+       dialog is the projects page's own component — so the board's mock has
+       to answer what that component asks, or it throws inside a promise and
+       the failure arrives wearing an assertion's costume */
+    createProject: async (input: Record<string, unknown>) => {
+      createdProjects.push(input);
+      return { id: "p-new", name: String(input.name) };
+    },
     updateTaskColumn: (...a: unknown[]) => updateTaskColumn(...a), addTaskChecklistItem: vi.fn(),
     updateTaskChecklistItem: vi.fn(), deleteTaskChecklistItem: vi.fn(),
     addTaskComment: vi.fn(), setTaskLabel: vi.fn(), setTaskAssignee: vi.fn(),
@@ -109,6 +122,8 @@ beforeEach(() => {
   patches = [];
   boardReads = 0;
   refuseNextPatch = false;
+  ME = { id: "u-me", org_name: "نورای", role: "admin" };
+  createdProjects.length = 0;
   updateTaskColumn.mockReset();
   updateTaskColumn.mockResolvedValue({});
 });
@@ -345,5 +360,69 @@ describe("TaskBoard", () => {
     await waitFor(() => expect(updateTaskColumn).toHaveBeenCalledTimes(1));
     expect(updateTaskColumn.mock.calls[0]![0]).toBe("col-todo");
     expect(patches, "a column drag wrote a task").toHaveLength(0);
+  });
+});
+
+describe("the board's two doors into projects (2026-09-05)", () => {
+  it("opens the PROJECT dialog from the folder row's «+», for an admin only", async () => {
+    /*
+     * User directive: "the plus in the second top sub menu in tasks will open
+     * the new project pop up window."
+     *
+     * The row's folders ARE projects' categories (0181), so a bare category
+     * was the half of a project with no members, no summary and no page. The
+     * `+` asks the whole question now — and only an admin may answer it,
+     * because 0186 made creating a project an admin's act.
+     */
+    boardTasks = [card({ id: "t-1", column_id: "col-todo" })];
+    render(<TaskBoard />);
+    await screen.findByText("برای انجام");
+
+    await userEvent.click(await screen.findByRole("button", { name: "پروژهٔ تازه" }));
+    /* the PROJECT dialog specifically, named by its own label rather than by
+       the button that opened it: the two read differently on purpose («پروژهٔ
+       تازه» on the board's row, «پروژهٔ جدید» on the dialog), and asserting
+       the button's own text back would pass against a dialog that never
+       opened. */
+    expect(await screen.findByRole("dialog", { name: "پروژهٔ جدید" })).toBeInTheDocument();
+    /* and it is the WHOLE question — the field the bare folder composer this
+       replaced never had */
+    expect(screen.getByText("توضیح کوتاه")).toBeInTheDocument();
+  });
+
+  it("shows a MEMBER neither the «+» nor the projects link", async () => {
+    /*
+     * Absent rather than disabled, and asserted against a control: the board
+     * still renders for a member, so "no button" is not "no page". The cost
+     * is real and recorded — a member can no longer add a folder to the
+     * board, because on this board a folder is a project.
+     */
+    ME = { id: "u-me", org_name: "نورای", role: "member" };
+    boardTasks = [card({ id: "t-1", column_id: "col-todo" })];
+    render(<TaskBoard />);
+    await screen.findByText("برای انجام");
+
+    expect(screen.queryByRole("button", { name: "پروژهٔ تازه" })).toBeNull();
+    expect(screen.queryByRole("link", { name: /پروژه‌ها/ })).toBeNull();
+    /* the control */
+    expect(screen.getByRole("button", { name: /کانبان/ })).toBeInTheDocument();
+  });
+
+  it("gives an admin a LINK to the projects page, not a filter chip", async () => {
+    /*
+     * "For admins there must be a new button in the first sub menu before
+     * only-my-tasks with the name projects, that navigates you to the project
+     * page."
+     *
+     * A link and not a chip, because every chip beside it changes what THIS
+     * screen shows and this one leaves it. Asserted as a link with an href,
+     * since a button that looked identical would navigate nowhere.
+     */
+    boardTasks = [card({ id: "t-1", column_id: "col-todo" })];
+    render(<TaskBoard />);
+    await screen.findByText("برای انجام");
+
+    const link = await screen.findByRole("link", { name: /پروژه‌ها/ });
+    expect(link).toHaveAttribute("href", expect.stringContaining("/projects"));
   });
 });

@@ -1,7 +1,7 @@
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { OrgPersonRecord, ProjectRecord, TaskCardRecord } from "@/api/types";
+import type { OrgPersonRecord, ProjectRecord, TaskCardRecord, TaskColumnRecord } from "@/api/types";
 
 /**
  * PROJECTS (0181) — the contract facts, and every one of them is a place the
@@ -11,7 +11,7 @@ import type { OrgPersonRecord, ProjectRecord, TaskCardRecord } from "@/api/types
  *     no completion, and «۰ از ۰» is a claim about the WORK where the truth
  *     is a claim about the board being empty. (Verified red by rendering the
  *     numbers unconditionally: the empty project reported «۰ از ۰».)
- *  2. «مال من» DOES NOTHING UNTIL THE IDENTITY LANDS — and does nothing by
+ *  2. «پروژه‌های من» DOES NOTHING UNTIL THE IDENTITY LANDS — and does nothing by
  *     showing nothing, never by showing everything. `meId === null` is both
  *     "still loading" and "nobody"; a filter that falls back to the whole
  *     list on either is a screen quietly answering a different question.
@@ -58,6 +58,12 @@ const PEOPLE: OrgPersonRecord[] = [
 let LIST: ProjectRecord[] = [];
 let ONE: ProjectRecord = project({});
 let TASKS: TaskCardRecord[] = [];
+/* the BOARD'S columns, mutable: the kanban reads them from the board's own
+   endpoint (2026-09-05, "it will have the same columns"), so a fixture that
+   could only be one column could not test where a project lands. */
+let COLUMNS: TaskColumnRecord[] = [
+  { id: "c-1", name: "انجام‌شده", tone: "green", position: 1 },
+];
 
 vi.mock("@/api/client", () => ({
   BffError: class BffError extends Error {},
@@ -78,11 +84,7 @@ vi.mock("@/api/client", () => ({
        this suite's sibling minted a rule about hours ago. */
     taskLabels: async () => [],
     projectWorkload: async () => [],
-    taskBoard: async () => ({
-      columns: [{ id: "c-1", name: "انجام‌شده", tone: "green", position: 1 }],
-      topics: [],
-      tasks: TASKS,
-    }),
+    taskBoard: async () => ({ columns: COLUMNS, topics: [], tasks: TASKS }),
   },
 }));
 
@@ -98,9 +100,18 @@ const detail = (id: string, meId: string | null) => (
   <CrumbTitleProvider><ProjectDetail id={id} meId={meId} isAdmin /></CrumbTitleProvider>
 );
 
+/** the kanban column's own box — the element carrying its project cards */
+async function columnOf(name: string): Promise<HTMLElement> {
+  const heading = await screen.findByText(name);
+  const section = heading.closest("section");
+  if (section === null) throw new Error("no <section> around " + name);
+  return section;
+}
+
 beforeEach(() => {
   LIST = [];
   TASKS = [];
+  COLUMNS = [{ id: "c-1", name: "انجام‌شده", tone: "green", position: 1 }];
   ONE = project({});
   created.length = 0;
   pushSpy.mockClear();
@@ -165,8 +176,10 @@ describe("Projects", () => {
     render(<Projects isAdmin={false} meId="u-1" />);
     await waitFor(() => expect(screen.getByText("پروژه")).toBeInTheDocument());
     expect(screen.queryByRole("button", { name: /پروژهٔ جدید/ })).toBeNull();
-    /* the control: the page still rendered, so "no button" is not "no page" */
-    expect(screen.getByRole("button", { name: "همه" })).toBeInTheDocument();
+    /* the control: the page still rendered, so "no button" is not "no page".
+       The second row's chip carries a count beside its label, so the name is
+       matched loosely — an exact string here would break on the number. */
+    expect(screen.getByRole("button", { name: /همه پروژه‌ها/ })).toBeInTheDocument();
   });
 
   it("«مال من» keeps only the projects the reader is on", async () => {
@@ -178,7 +191,7 @@ describe("Projects", () => {
     await waitFor(() => expect(screen.getByText("پروژهٔ من")).toBeInTheDocument());
     expect(screen.getByText("پروژهٔ دیگری")).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: "مال من" }));
+    await userEvent.click(screen.getByRole("button", { name: "پروژه‌های من" }));
     await waitFor(() => expect(screen.queryByText("پروژهٔ دیگری")).toBeNull());
     expect(screen.getByText("پروژهٔ من")).toBeInTheDocument();
   });
@@ -198,7 +211,7 @@ describe("Projects", () => {
     render(<Projects isAdmin meId={null} />);
     await waitFor(() => expect(screen.getByText("پروژهٔ من")).toBeInTheDocument());
 
-    await userEvent.click(screen.getByRole("button", { name: "مال من" }));
+    await userEvent.click(screen.getByRole("button", { name: "پروژه‌های من" }));
     await waitFor(() => expect(screen.queryByText("پروژهٔ من")).toBeNull());
     expect(screen.queryByText("پروژهٔ دیگری")).toBeNull();
     /* and the empty state names the FILTER rather than the organisation —
@@ -268,5 +281,68 @@ describe("ProjectDetail", () => {
     await waitFor(() =>
       expect(screen.getByText("هنوز کاری زیر این پروژه ثبت نشده است.")).toBeInTheDocument());
     expect(screen.queryByText("کارِ یک پروژهٔ دیگر")).toBeNull();
+  });
+});
+
+describe("the kanban (2026-09-05)", () => {
+  /*
+   * "In the kanban it will have the same columns."
+   *
+   * They are the BOARD'S columns, read from the board's own endpoint — and a
+   * project has no column of its own, so one is derived by a rule that fits
+   * in a sentence: a project sits where its EARLIEST unfinished work sits.
+   * Every case below is a different reading of that sentence, and each one
+   * fails differently: a rule that took the LAST column would put a project
+   * with one card left to do beside the finished ones, and a rule that
+   * ignored `done` would never let anything reach the end.
+   */
+  it("puts a project in the column of its earliest unfinished card", async () => {
+    COLUMNS = [
+      { id: "c-1", name: "برای انجام", tone: "blue", position: 1 },
+      { id: "c-2", name: "در حال انجام", tone: "amber", position: 2 },
+      { id: "c-3", name: "انجام‌شده", tone: "green", position: 3 },
+    ];
+    LIST = [project({ id: "p-a", name: "پروژهٔ الف", topic_id: "top-a" })];
+    TASKS = [
+      /* the LATER column first in the array, so a version that took the first
+         match rather than the earliest column would pass by luck */
+      card({ id: "t-2", topic_id: "top-a", column_id: "c-2", done: false }),
+      card({ id: "t-1", topic_id: "top-a", column_id: "c-1", done: false }),
+    ];
+    render(<Projects isAdmin meId="u-1" />);
+
+    const column = await columnOf("برای انجام");
+    expect(within(column).getByText("پروژهٔ الف")).toBeInTheDocument();
+    expect(within(await columnOf("در حال انجام")).queryByText("پروژهٔ الف")).toBeNull();
+  });
+
+  it("moves it to the LAST column once nothing is left undone", async () => {
+    COLUMNS = [
+      { id: "c-1", name: "برای انجام", tone: "blue", position: 1 },
+      { id: "c-3", name: "انجام‌شده", tone: "green", position: 3 },
+    ];
+    LIST = [project({ id: "p-a", name: "پروژهٔ الف", topic_id: "top-a" })];
+    /* the card still SITS in the first column and is done — which is the case
+       that separates "where the cards are" from "where the work got to" */
+    TASKS = [card({ id: "t-1", topic_id: "top-a", column_id: "c-1", done: true })];
+    render(<Projects isAdmin meId="u-1" />);
+
+    expect(within(await columnOf("انجام‌شده")).getByText("پروژهٔ الف")).toBeInTheDocument();
+    expect(within(await columnOf("برای انجام")).queryByText("پروژهٔ الف")).toBeNull();
+  });
+
+  it("puts a project with NO work in the first column, not the last", async () => {
+    /* nothing-to-do and everything-done are different states, and the version
+       that treats "no unfinished cards" as "finished" reports a project
+       nobody has started as complete */
+    COLUMNS = [
+      { id: "c-1", name: "برای انجام", tone: "blue", position: 1 },
+      { id: "c-3", name: "انجام‌شده", tone: "green", position: 3 },
+    ];
+    LIST = [project({ id: "p-a", name: "پروژهٔ الف", topic_id: "top-a" })];
+    TASKS = [];
+    render(<Projects isAdmin meId="u-1" />);
+
+    expect(within(await columnOf("برای انجام")).getByText("پروژهٔ الف")).toBeInTheDocument();
   });
 });

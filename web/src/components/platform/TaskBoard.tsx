@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
-import { useRouter } from "@/i18n/routing";
+import { Link, useRouter } from "@/i18n/routing";
 import { api } from "@/api/client";
 import type {
   OrgPersonRecord, TaskCardRecord, TaskColumnRecord, TaskDetailRecord,
@@ -14,9 +14,11 @@ import {
   LABEL_COLORS, NewTaskDialog, PRIORITY_CHIP, PRIORITY_ORDER, TONE_CHIP, TONE_DOT,
 } from "./tasks/TaskDialogs";
 import { TaskDetail } from "./tasks/TaskDetail";
+import { NewProjectDialog } from "./Projects";
 import { TaskCalendar, TaskListView } from "./tasks/TaskViews";
 import {
-  IconCheck, IconClock, IconDots, IconFolder, IconPlus, IconRetry, IconTrash, IconUser, IconVideo, IconClose, IconPencil } from "@/components/icons";
+  IconCheck, IconChevronEnd, IconClock, IconDots, IconFolder, IconPlus, IconRetry,
+  IconTrash, IconUser, IconVideo, IconClose, IconPencil } from "@/components/icons";
 import { useSeededName } from "@/lib/seededNames";
 import { digits, personName } from "@/lib/format";
 import { useRefreshEpoch } from "@/lib/refreshBus";
@@ -64,11 +66,17 @@ export function TaskBoard() {
   const [dueToday, setDueToday] = useState(false);
   const [topic, setTopic] = useState<string>("all");
   /* the inline topic composer — open, and the name being typed */
-  const [addingTopic, setAddingTopic] = useState(false);
   const [topicName, setTopicName] = useState("");
   /** the topic being renamed — the inline composer doubles as the editor */
   const [renamingTopic, setRenamingTopic] = useState<{ id: string; name: string } | null>(null);
   const [me, setMe] = useState<{ id: string } | null>(null);
+  /* 0186 made creating a project an admin's act, and both doors below
+     lead there. `false` while /me is in flight, so the controls are
+     absent until the answer arrives rather than appearing and being
+     refused — erring toward absent is the safe direction for a
+     permission. */
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [creatingProject, setCreatingProject] = useState(false);
 
   /* the COLUMN the new-card form was opened from — null when closed. A
      boolean would have lost which column was pressed, which is the whole
@@ -106,7 +114,14 @@ export function TaskBoard() {
   const tasksEpoch = useRefreshEpoch("tasks");
   useEffect(load, [load, tasksEpoch]);
   useEffect(loadLabels, [loadLabels, tasksEpoch]);
-  useEffect(() => { void api.me().then(setMe).catch(() => setMe(null)); }, []);
+  useEffect(() => {
+    void api.me()
+      .then((who) => {
+        setMe(who);
+        setIsAdmin(who?.role === "admin" || who?.role === "owner");
+      })
+      .catch(() => { setMe(null); setIsAdmin(false); });
+  }, []);
   useEffect(() => { void api.orgPeople().then(setPeople).catch(() => setPeople([])); }, []);
 
   useEffect(() => {
@@ -221,6 +236,31 @@ export function TaskBoard() {
           {PRIORITY_ORDER.map((level) =>
             chip(priority === level, t(`priority_${level}`), () => setPriority(level)))}
           <span className="mx-1 h-5 w-px bg-border" aria-hidden />
+          {/*
+           * THE WAY TO THE PROJECTS PAGE (user directive, 2026-09-05: "for
+           * admins there must be a new button in the first sub menu before
+           * only-my-tasks with the name projects, that when you press it will
+           * navigate you to the project page so you can manage projects").
+           *
+           * Before «مال من», in the position the directive names. It is a
+           * LINK and not a chip: the chips beside it change what this screen
+           * shows and this one leaves it, so it carries the arrow that says
+           * so rather than the pressed state that would claim it is a filter.
+           *
+           * Admin-only because managing projects is (0186) — and because the
+           * rail entry was removed in the same directive, this is now the
+           * door. A member reaches a project through its card on this board.
+           */}
+          {isAdmin ? (
+            <Link
+              href="/projects"
+              className="btn btn-sm gap-1.5 border border-border font-medium text-fg-muted hover:text-fg"
+            >
+              <IconFolder width={12} height={12} />
+              {t("projectsLink")}
+              <IconChevronEnd width={12} height={12} className="opacity-60" />
+            </Link>
+          ) : null}
           {/* 2026-09-03: the same compact control as the chips beside them —
               these two were the same 36px box with a border added, which is
               a STATE (this filter is on), never a second geometry. `.btn` and
@@ -345,17 +385,17 @@ export function TaskBoard() {
         </button>
 
         {/*
-          INLINE, never `window.prompt` (user directive, 2026-09-02: "this top
-          pop up should never appear anywhere in the platform … fix it like
-          the new column that you wrote there").
-          A native prompt is the browser's dialog, not ours: it says
-          "app.neurai.pt says", it is unstyled in both themes, it cannot be
-          dismissed by the platform's own Escape handling, and it blocks the
-          page while it is up. The column composer beside this row already
-          solved the same problem the right way, so this is that pattern,
-          not a second one.
+          RENAMING still happens inline, never in `window.prompt` (user
+          directive, 2026-09-02: "this top pop up should never appear anywhere
+          in the platform"). A native prompt is the browser's dialog, not
+          ours: it says "app.neurai.pt says", it is unstyled in both themes,
+          it cannot be dismissed by the platform's own Escape handling, and it
+          blocks the page while it is up.
+
+          ADDING no longer happens here — the `+` below opens the project
+          dialog, which asks the whole question this field asked a third of.
         */}
-        {addingTopic || renamingTopic !== null ? (
+        {renamingTopic !== null ? (
           <span className="inline-flex items-center gap-1 rounded-md border border-accent bg-surface px-1.5">
             {/* ONE composer, two jobs: a new topic and a rename. Two boxes
                 would be two places for the same rules to be written down.
@@ -371,22 +411,24 @@ export function TaskBoard() {
               onChange={(e) => setTopicName(e.target.value)}
               onKeyDown={(e) => {
                 const value = (topicName || renamingTopic?.name || "").trim();
-                if (e.key === "Enter" && value !== "") {
-                  const done = () => { setTopicName(""); setAddingTopic(false); setRenamingTopic(null); load(); };
-                  void (renamingTopic !== null
-                    ? api.updateTaskTopic(renamingTopic.id, { name: value })
-                    : api.createTaskTopic(value)
-                  ).then(done).catch(refusal);
+                if (e.key === "Enter" && value !== "" && renamingTopic !== null) {
+                  /* RENAME ONLY. The create branch that stood here became
+                     unreachable the moment the `+` started opening the project
+                     dialog, and an unreachable branch beside a live one is the
+                     kind of code a reader trusts because it is still there. */
+                  void api.updateTaskTopic(renamingTopic.id, { name: value })
+                    .then(() => { setTopicName(""); setRenamingTopic(null); load(); })
+                    .catch(refusal);
                 }
-                if (e.key === "Escape") { setTopicName(""); setAddingTopic(false); setRenamingTopic(null); }
+                if (e.key === "Escape") { setTopicName(""); setRenamingTopic(null); }
               }}
-              placeholder={t("newTopicPrompt")}
+              placeholder={t("renameTopic")}
               className="h-[30px] w-36 bg-transparent text-xs text-fg outline-none placeholder:text-fg-subtle"
             />
             <button
               type="button"
               aria-label={t("cancel")}
-              onClick={() => { setTopicName(""); setAddingTopic(false); setRenamingTopic(null); }}
+              onClick={() => { setTopicName(""); setRenamingTopic(null); }}
               /* 2026-09-03: the theme's icon control. The guard could not see
                  this one — it spelled its corner as a bare `rounded`, and the
                  pattern reads `rounded-md|lg|xl|2xl|full` — but a 24px
@@ -398,12 +440,30 @@ export function TaskBoard() {
               <IconClose width={12} height={12} />
             </button>
           </span>
-        ) : (
+        ) : isAdmin ? (
+          /*
+           * THE `+` OPENS A PROJECT (user directive, 2026-09-05: "the plus in
+           * the second top sub menu in tasks will open the new project pop up
+           * window").
+           *
+           * It is the same act it always was. This row's folders ARE
+           * projects' categories: creating a project creates the category and
+           * renaming one renames it (0181), so a bare category was the half
+           * of a project with no members, no summary and no page — a thing
+           * the product had no other way to describe. Now the row's `+` asks
+           * the whole question.
+           *
+           * ADMINS ONLY, and absent rather than disabled: 0186 made creating
+           * a project an admin's act, so for a member this button would open
+           * a dialog the wall refuses on save. The cost is written down
+           * rather than hidden — a member can no longer add a folder to the
+           * board, because on this board a folder is a project.
+           */
           <button
             type="button"
-            aria-label={t("newTopic")}
-            title={t("newTopic")}
-            onClick={() => setAddingTopic(true)}
+            aria-label={t("newProjectFolder")}
+            title={t("newProjectFolder")}
+            onClick={() => setCreatingProject(true)}
             /* the MEETINGS chip-row's add button, exactly: dashed, the same
                square, in the same place. Two boards showing the same row
                should not disagree about what "add a folder" looks like. */
@@ -411,7 +471,7 @@ export function TaskBoard() {
           >
             <IconPlus width={12} height={12} />
           </button>
-        )}
+        ) : null}
       </div>
 
       {error !== null ? (
@@ -727,6 +787,21 @@ export function TaskBoard() {
             void api.updateTaskColumn(target.id, { archived: true })
               .then(load).catch(refusal);
           }}
+        />
+      ) : null}
+
+      {/* THE PROJECT DIALOG, the board's own copy of the projects page's —
+          the SAME component, so the two doors into "make a project" cannot
+          grow different fields. `load()` afterwards rather than a redirect:
+          the person opened this from the board and the new folder appears in
+          the row they pressed, which is where they were looking. */}
+      {creatingProject ? (
+        <NewProjectDialog
+          people={people}
+          meId={me?.id ?? null}
+          onClose={() => setCreatingProject(false)}
+          onCreated={() => { setCreatingProject(false); load(); }}
+          onFailed={() => { setCreatingProject(false); refusal(); }}
         />
       ) : null}
     </div>

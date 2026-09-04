@@ -42,6 +42,35 @@ function recognitionCtor(): (new () => RecognitionLike) | undefined {
     | undefined;
 }
 
+/**
+ * WHAT A MIC LOOKS LIKE WHILE IT IS LISTENING (user report, 2026-09-05: "the
+ * mic in the chat does not show when it is active — make the 3 of them the
+ * same way").
+ *
+ * The three surfaces with a mic — the assistant page, the assistant sidebar
+ * and the room's composer — had two answers between them, and the room's was
+ * silently broken: it wrote `text-danger` NEXT TO the `text-fg-subtle` its
+ * base class already carried, and two utilities setting the same property are
+ * resolved by their order in the STYLESHEET, not in the string. So the class
+ * was present, a reviewer could see it, a grep could find it, and the glyph
+ * never changed colour. That is the CSS-layer failure this repo keeps
+ * meeting: the artifact reads as satisfied and only the computed value
+ * disagrees.
+ *
+ * One function, so there is one answer. It returns the WHOLE tone — ground
+ * and ink together — precisely so no caller has to compose it with a base
+ * class that also sets a colour.
+ *
+ * The states are meant to be told apart at a glance rather than read: bright
+ * accent on a soft ground while it is listening, muted ink with no ground
+ * while it is not, and a pulse only on the live one.
+ */
+export function micTone(status: DictationStatus): string {
+  return status === "listening"
+    ? "animate-pulse bg-accent-soft text-accent"
+    : "text-fg-muted hover:bg-surface-2 hover:text-fg";
+}
+
 export function useDictation(
   lang: string,
   onText: (text: string) => void,

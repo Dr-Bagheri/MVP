@@ -44,7 +44,9 @@ import { createPlatformRepo, type PlatformRepo } from "./platform.ts";
 import { createTranscriptsRepo, type TranscriptsRepo } from "./transcripts.ts";
 import { createDomainTools } from "../agent/domain-tools.ts";
 import { toolsFor } from "../agent/platform-tools.ts";
-import { ECHO as ROUTER_ECHO, nameIn, rosterFor, type RouteDecision } from "../agent/router.ts";
+import {
+  ECHO as ROUTER_ECHO, nameIn, roomResponder, rosterFor, type RouteDecision,
+} from "../agent/router.ts";
 import { rememberIncumbent, routeTurn } from "./routing.ts";
 import { createAgentRunStore } from "../agent/run-store.ts";
 import { createAgentRuntime } from "../agent/runtime.ts";
@@ -56,7 +58,7 @@ import { createConnectorsRepo, type ConnectorOAuthOptions, type ConnectorProvide
 import { createMailDraftsRepo } from "./mail-drafts.ts";
 import { createTasksRepo } from "./tasks.ts";
 import { createProjectsRepo } from "./projects.ts";
-import { createChatRepo } from "./chat.ts";
+import { createChatRepo, roomTranscript } from "./chat.ts";
 import { createInvitesRepo } from "./invites.ts";
 import { createChatBus, createTicketBook } from "./chatStream.ts";
 import { createMeetingsRepo, MEETING_ITEM_KINDS } from "./meetings.ts";
@@ -2912,8 +2914,17 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     chatBus.publish(identity.orgId, { type: "message", message });
     /* THE AGENT'S TURN, started and not awaited: the person's message is
        already written and the reply arrives on the stream when the model is
-       done. Awaiting it would make a send take as long as an answer. */
-    void answerIfNamed(identity, id, message.body ?? "").catch(() => undefined);
+       done. Awaiting it would make a send take as long as an answer.
+
+       `replyTo` is what makes ANSWERING an agent count as naming it. It is
+       read off the written row rather than off the request, so a client that
+       forgets to send it, or sends one pointing at somebody else's message,
+       cannot decide who gets summoned. */
+    void answerIfNamed(identity, id, message.body ?? "", {
+      replyTo: message.reply_to?.author_kind === "agent"
+        ? message.reply_to.agent_handle
+        : null,
+    }).catch(() => undefined);
     return reply.code(201).send(message);
   });
 
@@ -3049,33 +3060,132 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
   });
 
   /**
-   * IN A CHANNEL, THE ROUTER'S `default` RUNG IS SILENCE.
+   * THE ROOM'S AGENTS (0184; the reach and the hand-offs opened 2026-09-05).
    *
-   * The assistant thread answers every message because it is a conversation
-   * with one person. A room is not: with three colleagues in it, an ambient
-   * trigger means three answers to every human sentence and the feature is
-   * unusable by its second day. So the mention is the whole authorization —
-   * `nameIn` and nothing else, which is the same matcher the assistant uses,
-   * not a second one.
+   * -- WHO ANSWERS -------------------------------------------------------
    *
-   * AND THE ANSWER GETS NO RETRIEVAL TOOLS. This is the sharper rule and it
-   * is not caution: `call_read` admits a call to its OWNER, to the org when
-   * the scope says so, and to admins — so the person asking may legitimately
-   * see a record that other people in this room cannot. "The agent borrows
-   * the caller's authority" is right in a private thread and wrong here,
-   * because the answer is addressed to everybody. The blast radius decides
-   * the reach (M43's rule), and the room's own conversation is what an answer
-   * here may draw on.
+   * The `default` rung is still SILENCE. The assistant thread answers every
+   * message because it is a conversation with one person; a room is not, and
+   * with three colleagues in it an ambient trigger means three answers to
+   * every human sentence. So being NAMED is the authorization -- plus the one
+   * addition the directive asked for: ANSWERING AN AGENT IS NAMING IT.
+   * Pressing reply on Roya's message and typing "why?" addresses Roya as
+   * plainly as writing her handle, and making the person type it anyway was a
+   * rule the product could not explain.
+   *
+   * -- WHAT IT MAY REACH (a documented ruling, reopened by the user) ------
+   *
+   * 0184 gave a room answer NO tools at all. That reasoning was sound and it
+   * was about ONE property: `call_read` admits a call to its owner, to the
+   * org when the scope says so, and to admins -- so the asker may legitimately
+   * see a record the other forty readers cannot, and the answer here is
+   * addressed to everybody.
+   *
+   * The user's directive ("it should help based on the chat box and the
+   * chats, also with the knowledge of all platform resources like the
+   * meeting, task and etc") reopens the reach, and the property survives it:
+   * ROOM_TOOLS is exactly the set whose rows every active member of the org
+   * can already read -- tasks (0144), meetings (0145), the roster. What is
+   * NOT in it is the per-record-scope family: calls, transcripts, summaries,
+   * search, and every admin surface. So an answer can say what is on the
+   * board and in the calendar, and it still cannot read one person's private
+   * call aloud to the room.
+   *
+   * -- AND THEY CAN CALL EACH OTHER --------------------------------------
+   *
+   * An agent's message runs back through this function, so `@ava` written by
+   * Roya reaches Ava. Two guards, because a loop here spends money on both
+   * sides: an agent naming ITSELF answers nothing, and the chain stops at
+   * MAX_AGENT_HOPS. The cap is the reason this is not simply "post, then
+   * trigger" -- without it two agents that keep naming each other never stop,
+   * and the first anyone would know is the bill.
    */
-  async function answerIfNamed(identity: Identity, channelId: string, text: string): Promise<void> {
-    /* the SAME roster the assistant routes against — listAssistantAgents
-       under this caller's RLS, so a channel can only name an agent the
-       person could have named anywhere else */
+
+  /** the sentence that makes a room answer different from a private one */
+  const ROOM_BRIEF =
+    "یک گفتگوی گروهی در حال انجام است و پاسخ شما را همهٔ اعضای اتاق می‌بینند. کوتاه بنویس.";
+
+  /*
+   * SAY THAT THE TOOLS EXIST. Without this the model answers "چیزی در سوابق
+   * پیدا نکردم" from the transcript alone — which is what the user saw, and
+   * which reads as an assistant that looked and found nothing rather than one
+   * that never looked.
+   */
+  const ROOM_TOOL_HINT =
+    "به کارها، جلسه‌ها و فهرست همکاران دسترسی دارید. پیش از این‌که بگویید چیزی را نمی‌دانید یا در سوابق نیست، از ابزارها استفاده کنید."
+    + " به پرونده‌های تماس و متن گفتگوهای ضبط‌شده دسترسی ندارید، چون ممکن است فقط برای یک نفر از اعضای این اتاق قابل دیدن باشند.";
+
+  /** the other agents in the room, and how to hand off to one */
+  const ROOM_HANDOFF = (handles: readonly string[]): string =>
+    `دستیارهای دیگر این اتاق: ${handles.map((h) => `@${h}`).join("، ")}.`
+    + " اگر پاسخ در حوزهٔ یکی از آن‌هاست، نامش را با @ در پیام خود بنویسید تا وارد گفتگو شود.";
+
+  const ROOM_HISTORY = (transcript: string): string =>
+    `گفتگوی این اتاق تا این لحظه:\n${transcript}`;
+
+  /** what a room answer may read: rows every active member can already read */
+  const ROOM_TOOLS = [
+    "list_tasks", "get_task", "list_task_labels",
+    "list_meetings", "get_meeting", "list_meeting_items", "list_meeting_folders",
+    "list_colleagues", "whoami",
+  ];
+
+  /**
+   * How far a hand-off may travel. Four, because the directive asked for
+   * "three or four times back and forth" -- and a cap at all because every
+   * hop is a model call nobody pressed a button for.
+   */
+  const MAX_AGENT_HOPS = 4;
+
+  /** the room's words, bounded -- the newest are the ones that matter */
+  const TRANSCRIPT_MESSAGES = 200;
+  const TRANSCRIPT_CHARS = 20000;
+
+  async function transcriptFor(identity: Identity, channelId: string): Promise<string> {
+    const [recent, roster] = await Promise.all([
+      chat.messages(identity, channelId, { limit: TRANSCRIPT_MESSAGES }),
+      tasks.people(identity).catch(() => []),
+    ]);
+    return roomTranscript(
+      recent,
+      new Map(roster.map((p) => [p.id, p.display_name])),
+      { chars: TRANSCRIPT_CHARS, unknown: "همکار", agent: "دستیار" },
+    );
+  }
+
+  async function answerIfNamed(
+    identity: Identity,
+    channelId: string,
+    text: string,
+    opts: {
+      /** the handle of the agent being answered, when this is a reply to one */
+      replyTo?: string | null;
+      /** who produced `text` -- an agent handle, or null for a person */
+      speaker?: string | null;
+      hops?: number;
+    } = {},
+  ): Promise<void> {
+    const hops = opts.hops ?? 0;
+    /* LOUD IN THE LOG, silent in the room: a chain that stopped because it hit
+       its ceiling and a chain that ended because nobody was named look
+       identical from a chair, and only one of them is a thing to tune. */
+    if (hops >= MAX_AGENT_HOPS) {
+      app.log.info({ channel_id: channelId, hops }, "chat_agent_hop_limit");
+      return;
+    }
+
     const cards = await listAssistantAgents(options.db, identity).catch(() => []);
-    const named = nameIn(text, rosterFor(cards.map((a) => ({ handle: a.handle, name: a.name }))));
+    const roster = rosterFor(cards.map((a) => ({ handle: a.handle, name: a.name })));
+    /* every rule about WHO answers is in `roomResponder`, which is pure and
+       has its own tests — this line is the whole decision */
+    const named = roomResponder(nameIn(text, roster), {
+      replyTo: opts.replyTo ?? null,
+      speaker: opts.speaker ?? null,
+      hops,
+      max: MAX_AGENT_HOPS,
+    });
     if (named === null) return;
-    /* Echo has no card; anybody else is re-read under this identity, which is
-       also what supplies the persona below */
+
     const persona = named === ROUTER_ECHO
       ? undefined
       : await resolveAssistantAgent(options.db, identity, named);
@@ -3092,13 +3202,11 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       return;
     }
 
-    /* the room's recent words, as the context — everything this answer is
-       allowed to draw on, and every reader of the answer can already read it */
-    const recent = await chat.messages(identity, channelId, { limit: 30 });
-    const transcript = recent
-      .filter((m) => m.body !== null)
-      .map((m) => `${m.author_kind === "agent" ? m.agent_handle : "همکار"}: ${m.body}`)
-      .join("\n");
+    const transcript = await transcriptFor(identity, channelId);
+    /* the handles it may hand off to, written out: an agent that does not
+       know the others exist cannot call them, and asking a model to guess a
+       colleague's handle is how it invents one */
+    const others = roster.map((r) => r.handle).filter((h) => h !== named);
 
     let answer = "";
     let failed = true;
@@ -3112,13 +3220,12 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
           persona?.instructions ?? "",
           languageInstruction(undefined),
           timeInstructions(new Date(), await callerZone(identity, undefined)),
-          "یک گفتگوی گروهی در حال انجام است و پاسخ شما را همهٔ اعضای اتاق می‌بینند. کوتاه بنویس.",
-          transcript === "" ? "" : `گفتگوی اخیر اتاق:\n${transcript}`,
+          ROOM_BRIEF,
+          ROOM_TOOL_HINT,
+          others.length === 0 ? "" : ROOM_HANDOFF(others),
+          transcript === "" ? "" : ROOM_HISTORY(transcript),
         ].filter((part) => part !== "").join("\n"),
-        /* [] is EXPLICIT and load-bearing — `undefined` would mean
-           "unspecified" and hand this run the server's default read tools,
-           which is the exact scope violation the comment above forbids */
-        allowedTools: [],
+        allowedTools: ROOM_TOOLS,
         callId: null,
         onTurn: async ({ text: produced }) => { answer = produced; },
       }, {
@@ -3136,7 +3243,7 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     if (failed) {
       /* TRANSIENT, never a row. A tidy "something went wrong" message in the
          record is indistinguishable a week later from something the agent
-         said — the honest record is the question standing unanswered. */
+         said -- the honest record is the question standing unanswered. */
       chatBus.publish(identity.orgId, {
         type: "agent_failed", channel_id: channelId, handle: named,
       });
@@ -3144,6 +3251,12 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     }
     const message = await chat.postAsAgent(identity, channelId, named, answer);
     chatBus.publish(identity.orgId, { type: "message", message });
+    /* THE HAND-OFF, not awaited for the same reason the first turn is not:
+       the room already has this answer, and the next one arrives on the
+       stream when it is ready. */
+    void answerIfNamed(identity, channelId, answer, {
+      speaker: named, hops: hops + 1,
+    }).catch(() => undefined);
   }
 
   /**

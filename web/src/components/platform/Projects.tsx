@@ -5,30 +5,67 @@ import { useLocale, useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/routing";
 import { api } from "@/api/client";
 import { useRefreshEpoch } from "@/lib/refreshBus";
-import type { OrgPersonRecord, ProjectRecord, ProjectTone } from "@/api/types";
+import type {
+  OrgPersonRecord, ProjectRecord, ProjectTone,
+  TaskCardRecord, TaskColumnRecord, TaskTopicRecord,
+} from "@/api/types";
 import { Overlay } from "./Overlay";
 import { Avatar } from "@/components/Avatar";
-import { TONE_DOT } from "./tasks/TaskDialogs";
-import { IconCheck, IconClose, IconFolder, IconPeople3, IconPlus } from "@/components/icons";
+import { TONE_CHIP, TONE_DOT } from "./tasks/TaskDialogs";
+import {
+  IconCheck, IconChevronRight, IconClock, IconClose, IconFolder,
+  IconPeople3, IconPlus, IconUser,
+} from "@/components/icons";
 import { SkeletonCards } from "@/components/scaffold";
-import { digits, formatDate, personName } from "@/lib/format";
+import { dayKeyOf, digits, formatDate, monthGridAt, personName } from "@/lib/format";
+
+/** what `api.taskBoard()` answers — the shape this screen reads it for */
+type Board = {
+  columns: TaskColumnRecord[];
+  topics: TaskTopicRecord[];
+  tasks: TaskCardRecord[];
+};
 
 /**
- * PROJECTS (0181) — user directive, 2026-09-04: "in the menu also add a new
- * section with the platform theme design, with a sub menu on top — two of
- * them for filter, sort and add. The name for the new item in the menu is
- * projects, and add these in it."
+ * PROJECTS (0181; rebuilt to the board's shape 2026-09-05).
  *
- * The list is the reference's: cards carrying an icon, a name, a line of
- * summary, the people on it, and how far its work has got. What it does NOT
- * carry is a second copy of anything — a project's progress is counted off
- * the tasks filed under its own category (0181), so a card that says «۳ از ۷»
- * is reading the board rather than a number somebody remembered to update.
+ * User directive: "the project page must look like the tasks page with the
+ * same sub menus on top — کانبان / لیست / تقویم / آرشیو | تازه‌ترین / بر اساس
+ * نام / بر اساس پیشرفت | مهلت امروز — and also a second menu with the same
+ * look: پروژه‌های من / همه پروژه‌ها. And in the kanban it will have the same
+ * columns; it will have a list view and calendar view as well."
  *
- * TWO ROWS, because the directive asked for two: filters and the add button
- * on the first, sorting on the second. The pattern is the meetings toolbar's,
- * deliberately — a person who has learned one toolbar in this product has
- * learned all of them.
+ * ── ONE TOOLBAR, TWO ROWS, THE BOARD'S OWN ────────────────────────────────
+ *
+ * Every chip here is the board's `btn btn-sm`, in the board's order, because
+ * a person who has learned one toolbar in this product has learned all of
+ * them. `آرشیو` is a VIEW rather than a filter for the same reason it is on
+ * the board: archived work is a place you go, not a box you tick.
+ *
+ * ── WHERE A PROJECT SITS ON THE KANBAN ────────────────────────────────────
+ *
+ * The columns are the BOARD'S columns — the same rows, the same order, read
+ * from the same endpoint — because "the same columns" is what was asked for
+ * and because inventing a second set would be a second answer to "what are
+ * the stages of work here".
+ *
+ * A project has no column of its own, so one is DERIVED, by a rule that fits
+ * in a sentence: **a project sits where its earliest unfinished work sits.**
+ * No tasks at all → the first column (nothing has started). Nothing left
+ * undone → the last (nothing to move). Otherwise the leftmost column still
+ * holding one of its cards.
+ *
+ * The alternative — a card in every column its work touches — was rejected:
+ * one project appearing three times reads as a bug, and a board is a place
+ * where each thing is in one place.
+ *
+ * ── AND WHY THIS SCREEN READS THE BOARD ───────────────────────────────────
+ *
+ * Two requests, deliberately: the projects list carries counts, and the board
+ * carries WHICH column and WHICH deadline. Everything the three views draw is
+ * counted off the board on every read — the column, the days, «مهلت امروز» —
+ * so nothing here can disagree with the board a click away. That is 0181's
+ * rule (progress is counted, never stored) applied to four more facts.
  */
 
 export const PROJECT_TONES: ProjectTone[] = [
@@ -40,7 +77,8 @@ export const PROJECT_TONES: ProjectTone[] = [
    into, and the card draws it at 20px. */
 const ICON_CHOICES = ["📁", "🚀", "🎯", "🧩", "📈", "🛠️", "💡", "🌱"];
 
-type Filter = "all" | "mine" | "archived";
+type Scope = "all" | "mine";
+type View = "kanban" | "list" | "calendar" | "archive";
 type Sort = "recent" | "name" | "progress";
 
 /** how far the work has got, as a fraction — null when there is no work yet,
@@ -51,34 +89,80 @@ function progressOf(p: ProjectRecord): number | null {
 
 export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: boolean }) {
   const t = useTranslations("projects");
+  const tTasks = useTranslations("tasks");
   const locale = useLocale();
   const router = useRouter();
   const [rows, setRows] = useState<ProjectRecord[] | null | "failed">(null);
+  const [board, setBoard] = useState<Board | null>(null);
   const [people, setPeople] = useState<OrgPersonRecord[]>([]);
-  const [filter, setFilter] = useState<Filter>("all");
+  const [scope, setScope] = useState<Scope>("all");
+  const [view, setView] = useState<View>("kanban");
   const [sort, setSort] = useState<Sort>("recent");
+  const [dueToday, setDueToday] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(() => {
-    void api.projects({ archived: filter === "archived" })
+    void api.projects({ archived: view === "archive" })
       .then(setRows)
       .catch(() => setRows("failed"));
-  }, [filter]);
+    /* the board, for the column, the deadlines and «مهلت امروز» — a failed
+       read leaves an EMPTY board rather than null, so the kanban draws its
+       columns and says nothing rather than looking like it is still loading */
+    void api.taskBoard()
+      .then(setBoard)
+      .catch(() => setBoard({ columns: [], topics: [], tasks: [] }));
+  }, [view]);
   /* the same subscription every list takes: a project the assistant creates
-     lands here without a reload */
+     lands here without a reload. `tasks` too, because this screen draws the
+     board's own facts and a card moved on the board moves a project here. */
   const epoch = useRefreshEpoch("projects");
-  useEffect(load, [load, epoch]);
+  const taskEpoch = useRefreshEpoch("tasks");
+  useEffect(load, [load, epoch, taskEpoch]);
 
   useEffect(() => {
     void api.orgPeople().then(setPeople).catch(() => setPeople([]));
   }, []);
 
+  /** a project's live cards on the board, by the category it owns (0181) */
+  const cardsOf = useCallback((p: ProjectRecord): TaskCardRecord[] => {
+    if (board === null || p.topic_id === null) return [];
+    return board.tasks.filter((task) => task.topic_id === p.topic_id && !task.archived);
+  }, [board]);
+
+  const columns = useMemo(
+    () => [...(board?.columns ?? [])].sort((a, b) => a.position - b.position),
+    [board],
+  );
+
+  /** the rule from the header, in one place so the kanban and nothing else
+      decides where a project stands */
+  const columnOf = useCallback((p: ProjectRecord): string | null => {
+    if (columns.length === 0) return null;
+    const cards = cardsOf(p);
+    if (cards.length === 0) return columns[0]!.id;
+    const open = cards.filter((task) => !task.done);
+    if (open.length === 0) return columns[columns.length - 1]!.id;
+    let best: { id: string; at: number } | null = null;
+    for (const task of open) {
+      const at = columns.findIndex((c) => c.id === task.column_id);
+      if (at < 0) continue;
+      if (best === null || at < best.at) best = { id: task.column_id, at };
+    }
+    return best?.id ?? columns[0]!.id;
+  }, [columns, cardsOf]);
+
   const shown = useMemo(() => {
     if (!Array.isArray(rows)) return [];
+    const today = dayKeyOf(new Date());
     const list = rows.filter((p) => {
-      if (filter === "mine") return meId !== null && p.member_ids.includes(meId);
-      return true;
+      if (scope === "mine" && !(meId !== null && p.member_ids.includes(meId))) return false;
+      if (!dueToday) return true;
+      /* «مهلت امروز» on a project means UNFINISHED work due today. A done
+         card that was due this morning is not something anybody needs to be
+         shown at four in the afternoon. */
+      return cardsOf(p).some((task) =>
+        !task.done && task.due_at !== null && dayKeyOf(task.due_at) === today);
     });
     return [...list].sort((a, b) => {
       if (sort === "name") return a.name.localeCompare(b.name, locale);
@@ -94,7 +178,7 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
       }
       return b.created_at.localeCompare(a.created_at);
     });
-  }, [rows, filter, sort, meId, locale]);
+  }, [rows, scope, sort, dueToday, meId, locale, cardsOf]);
 
   const chip = (active: boolean, label: string, onClick: () => void) => (
     <button
@@ -112,12 +196,31 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
-      {/* ── row one: the filters and the way in ──────────────────────── */}
+      {/* ── row one: the board's toolbar, chip for chip ───────────────── */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-1">
-          {chip(filter === "all", t("filterAll"), () => setFilter("all"))}
-          {chip(filter === "mine", t("filterMine"), () => setFilter("mine"))}
-          {chip(filter === "archived", t("filterArchived"), () => setFilter("archived"))}
+          {chip(view === "kanban", tTasks("viewKanban"), () => setView("kanban"))}
+          {chip(view === "list", tTasks("viewList"), () => setView("list"))}
+          {chip(view === "calendar", tTasks("viewCalendar"), () => setView("calendar"))}
+          {chip(view === "archive", tTasks("viewArchive"), () => setView("archive"))}
+          <span className="mx-1 h-5 w-px bg-border" aria-hidden />
+          {chip(sort === "recent", t("sortRecent"), () => setSort("recent"))}
+          {chip(sort === "name", t("sortName"), () => setSort("name"))}
+          {chip(sort === "progress", t("sortProgress"), () => setSort("progress"))}
+          <span className="mx-1 h-5 w-px bg-border" aria-hidden />
+          {/* the board's own «مهلت امروز», the same box with a border for the
+              on state — a state, never a second geometry */}
+          <button
+            type="button"
+            aria-pressed={dueToday}
+            onClick={() => setDueToday((v) => !v)}
+            className={`btn btn-sm gap-1.5 border font-medium ${
+              dueToday ? "border-accent bg-accent-soft text-accent" : "border-border bg-surface text-fg-muted hover:text-fg"
+            }`}
+          >
+            <IconClock width={12} height={12} />
+            {tTasks("dueTodayFilter")}
+          </button>
         </div>
         {/* ADMIN ONLY (0186, user directive: "the admins only can make
             projects and they will add members"). Absent rather than disabled:
@@ -137,21 +240,34 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
         ) : null}
       </div>
 
-      {/* ── row two: the order, as a SUB-MENU and not a dropdown (user
-             directive, 2026-09-04: "make the sort dropdown become the second
-             sub menu top").
-
-             A select for three mutually-exclusive values costs two presses to
-             see what the options even are, and it rendered as a full-width
-             panel under a toolbar of chips — the one control on the page with
-             a different silhouette. Chips show the choices and the current
-             answer at once, which is what the row above it already does. */}
+      {/* ── row two: whose projects, in the board's second-row shape ───── */}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-1">
-          <span className="me-1 text-xs text-fg-muted">{t("sortBy")}</span>
-          {chip(sort === "recent", t("sortRecent"), () => setSort("recent"))}
-          {chip(sort === "name", t("sortName"), () => setSort("name"))}
-          {chip(sort === "progress", t("sortProgress"), () => setSort("progress"))}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <button
+            type="button"
+            aria-pressed={scope === "mine"}
+            onClick={() => setScope("mine")}
+            className={`btn btn-sm gap-1.5 border font-medium ${
+              scope === "mine" ? "border-accent bg-accent-soft font-semibold text-accent" : "border-border text-fg-muted hover:text-fg"
+            }`}
+          >
+            <IconUser width={12} height={12} />
+            {t("scopeMine")}
+          </button>
+          <button
+            type="button"
+            aria-pressed={scope === "all"}
+            onClick={() => setScope("all")}
+            className={`btn btn-sm gap-1.5 border font-medium ${
+              scope === "all" ? "border-accent bg-accent-soft font-semibold text-accent" : "border-border text-fg-muted hover:text-fg"
+            }`}
+          >
+            <IconFolder width={12} height={12} />
+            {t("scopeAll")}
+            <span className="badge-num rounded-md bg-surface-2 px-1 text-[10px]">
+              {digits(Array.isArray(rows) ? rows.length : 0, locale)}
+            </span>
+          </button>
         </div>
         <span className="text-xs text-fg-subtle">
           {t("count", { n: digits(shown.length, locale) })}
@@ -164,7 +280,7 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
         </p>
       ) : null}
 
-      {/* ── the cards ────────────────────────────────────────────────── */}
+      {/* ── the views ────────────────────────────────────────────────── */}
       {rows === null ? (
         <SkeletonCards count={3} className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" height="h-36" />
       ) : rows === "failed" ? (
@@ -175,14 +291,26 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
         <div className="tile flex flex-col items-center gap-2 p-8 text-center">
           <IconFolder width={24} height={24} />
           <p className="text-sm font-medium text-fg">
-            {filter === "all" ? t("emptyTitle") : t("emptyFiltered")}
+            {scope === "all" && !dueToday && view !== "archive" ? t("emptyTitle") : t("emptyFiltered")}
           </p>
-          {filter === "all" ? (
+          {scope === "all" && !dueToday && view !== "archive" ? (
             <p className="max-w-sm text-xs text-fg-muted">
               {isAdmin ? t("emptyBody") : t("emptyBodyMember")}
             </p>
           ) : null}
         </div>
+      ) : view === "kanban" && columns.length > 0 ? (
+        <ProjectKanban
+          columns={columns}
+          projects={shown}
+          columnOf={columnOf}
+          people={people}
+          locale={locale}
+        />
+      ) : view === "list" ? (
+        <ProjectList projects={shown} cardsOf={cardsOf} people={people} locale={locale} />
+      ) : view === "calendar" ? (
+        <ProjectCalendar projects={shown} cardsOf={cardsOf} locale={locale} />
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {shown.map((p) => (
@@ -203,6 +331,196 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
           onFailed={() => { setCreating(false); setError(t("writeFailed")); }}
         />
       ) : null}
+    </div>
+  );
+}
+
+/* ═══ the three views ═══════════════════════════════════════════════════ */
+
+/**
+ * THE BOARD'S COLUMNS, carrying projects.
+ *
+ * No drag: a project's column is DERIVED from where its work sits (see the
+ * header's rule), so a card somebody could drag would be a control that looks
+ * like it moves something and cannot — the shape this repo keeps finding and
+ * removing. Work moves on the board; this screen reports where it got to.
+ */
+function ProjectKanban({ columns, projects, columnOf, people, locale }: {
+  columns: TaskColumnRecord[];
+  projects: ProjectRecord[];
+  columnOf: (p: ProjectRecord) => string | null;
+  people: OrgPersonRecord[];
+  locale: string;
+}) {
+  const t = useTranslations("projects");
+  return (
+    <div className="scroll-quiet flex min-h-0 flex-1 gap-3 overflow-x-auto pb-2">
+      {columns.map((col) => {
+        const here = projects.filter((p) => columnOf(p) === col.id);
+        return (
+          <section key={col.id} className="flex w-72 shrink-0 flex-col gap-2">
+            <header className="flex items-center justify-between px-1">
+              <h2 className="truncate text-xs font-semibold text-fg">
+                <bdi>{col.name}</bdi>
+              </h2>
+              <span className="badge-num rounded-md bg-surface-2 px-1.5 text-[10px] text-fg-subtle">
+                {digits(here.length, locale)}
+              </span>
+            </header>
+            <div className="flex min-h-0 flex-1 flex-col gap-2 rounded-xl border border-border bg-surface-2/40 p-2">
+              {here.length === 0 ? (
+                <p className="px-1 py-4 text-center text-[11px] text-fg-subtle">{t("noneHere")}</p>
+              ) : here.map((p) => (
+                <ProjectCard key={p.id} project={p} people={people} locale={locale} compact />
+              ))}
+            </div>
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
+/** the board's list view, one row per project */
+function ProjectList({ projects, cardsOf, people, locale }: {
+  projects: ProjectRecord[];
+  cardsOf: (p: ProjectRecord) => TaskCardRecord[];
+  people: OrgPersonRecord[];
+  locale: string;
+}) {
+  const t = useTranslations("projects");
+  return (
+    <div className="flex flex-col gap-1.5">
+      {projects.map((p) => {
+        const cards = cardsOf(p);
+        const open = cards.filter((task) => !task.done).length;
+        const members = p.member_ids
+          .map((id) => people.find((x) => x.id === id))
+          .filter((x): x is OrgPersonRecord => x !== undefined);
+        return (
+          <Link
+            key={p.id}
+            href={`/projects/${p.id}`}
+            className="tile flex items-center gap-3 px-3 py-2.5 transition-colors hover:border-accent/40"
+          >
+            <span className={`h-2 w-2 shrink-0 rounded-full ${TONE_DOT[p.tone] ?? TONE_DOT.grey!}`} aria-hidden />
+            <span aria-hidden className="text-base">{p.icon ?? "📁"}</span>
+            <span className="min-w-0 flex-1">
+              <bdi className="block truncate text-sm font-medium text-fg">{p.name}</bdi>
+              {p.summary === "" ? null : (
+                <bdi className="block truncate text-[11px] text-fg-muted">{p.summary}</bdi>
+              )}
+            </span>
+            <span className="badge-num shrink-0 text-[11px] text-fg-subtle">
+              {t("openCount", { n: digits(open, locale) })}
+            </span>
+            <span className="badge-num shrink-0 text-[11px] text-fg-muted">
+              {p.task_total === 0 ? "—" : t("doneOf", {
+                done: digits(p.task_done, locale), total: digits(p.task_total, locale),
+              })}
+            </span>
+            <span className="flex shrink-0 -space-x-1.5">
+              {members.slice(0, 3).map((m) => (
+                <Avatar key={m.id} name={personName(m, locale)} size="xs" />
+              ))}
+            </span>
+          </Link>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * A MONTH OF DEADLINES, by project.
+ *
+ * A project has no date of its own, so the day a project appears on is a day
+ * one of ITS cards is due — which is the only project-shaped thing a calendar
+ * can honestly say. The square carries the project and how many of its cards
+ * land there, so a day with one deadline and a day with nine do not look the
+ * same.
+ */
+function ProjectCalendar({ projects, cardsOf, locale }: {
+  projects: ProjectRecord[];
+  cardsOf: (p: ProjectRecord) => TaskCardRecord[];
+  locale: string;
+}) {
+  const t = useTranslations("projects");
+  const tTasks = useTranslations("tasks");
+  const [offset, setOffset] = useState(0);
+  const month = useMemo(() => monthGridAt(new Date(), locale, offset), [locale, offset]);
+
+  /** day → the projects with work due that day, and how much */
+  const byDay = useMemo(() => {
+    const out = new Map<number, { project: ProjectRecord; n: number }[]>();
+    for (const p of projects) {
+      const days = new Map<number, number>();
+      for (const task of cardsOf(p)) {
+        if (task.due_at === null) continue;
+        const key = dayKeyOf(task.due_at);
+        days.set(key, (days.get(key) ?? 0) + 1);
+      }
+      for (const [key, n] of days) {
+        const bucket = out.get(key);
+        if (bucket) bucket.push({ project: p, n });
+        else out.set(key, [{ project: p, n }]);
+      }
+    }
+    return out;
+  }, [projects, cardsOf]);
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1">
+          <button type="button" onClick={() => setOffset(0)} className="btn btn-sm border border-border text-fg-muted hover:text-fg">
+            {tTasks("today")}
+          </button>
+          <button type="button" aria-label={tTasks("prev")} onClick={() => setOffset((n) => n - 1)}
+            className="btn btn-icon border border-border text-fg-muted hover:text-fg">
+            <IconChevronRight width={12} height={12} className="rotate-180 rtl:rotate-0" />
+          </button>
+          <button type="button" aria-label={tTasks("next")} onClick={() => setOffset((n) => n + 1)}
+            className="btn btn-icon border border-border text-fg-muted hover:text-fg">
+            <IconChevronRight width={12} height={12} className="rtl:rotate-180" />
+          </button>
+        </div>
+        <span className="text-sm font-semibold text-fg">{month.title}</span>
+      </div>
+
+      <div className="grid grid-cols-7 gap-1 text-center text-[10px] text-fg-subtle">
+        {month.weekdays.map((d) => <span key={d}>{d}</span>)}
+      </div>
+      <div className="grid min-h-0 flex-1 grid-cols-7 gap-1">
+        {month.cells.map((cell) => (
+          <div
+            key={cell.key}
+            className={`min-h-[5rem] rounded-lg border p-1 ${
+              cell.today ? "border-accent bg-accent-soft/30"
+                : cell.weekend ? "border-border bg-surface-2/40" : "border-border bg-surface"
+            } ${cell.inMonth ? "" : "opacity-40"}`}
+          >
+            <span className="badge-num block text-[10px] text-fg-subtle">{cell.label}</span>
+            <div className="mt-0.5 flex flex-col gap-0.5">
+              {(byDay.get(cell.key) ?? []).slice(0, 3).map(({ project, n }) => (
+                <Link
+                  key={project.id}
+                  href={`/projects/${project.id}`}
+                  className={`tap flex items-center gap-1 rounded px-1 py-0.5 text-[10px] ${TONE_CHIP[project.tone] ?? TONE_CHIP.grey!}`}
+                >
+                  <bdi className="min-w-0 flex-1 truncate">{project.name}</bdi>
+                  <span className="badge-num">{digits(n, locale)}</span>
+                </Link>
+              ))}
+              {(byDay.get(cell.key) ?? []).length > 3 ? (
+                <span className="px-1 text-[10px] text-fg-subtle">
+                  {t("more", { n: digits((byDay.get(cell.key) ?? []).length - 3, locale) })}
+                </span>
+              ) : null}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -243,10 +561,14 @@ export function TonePicker({ value, onChange, label }: {
   );
 }
 
-function ProjectCard({ project, people, locale }: {
+function ProjectCard({ project, people, locale, compact = false }: {
   project: ProjectRecord;
   people: OrgPersonRecord[];
   locale: string;
+  /** on the kanban, where the card lives in a 288px column: the same card
+      with less air, never a second card. Two drawings of one thing is the
+      pair that stops matching the first time either gains a field. */
+  compact?: boolean;
 }) {
   const t = useTranslations("projects");
   const ratio = progressOf(project);
@@ -257,16 +579,18 @@ function ProjectCard({ project, people, locale }: {
   return (
     <Link
       href={`/projects/${project.id}`}
-      className="tile flex flex-col gap-3 p-4 transition-colors hover:border-accent/40"
+      className={`tile flex flex-col transition-colors hover:border-accent/40 ${
+        compact ? "gap-2 p-2.5" : "gap-3 p-4"
+      }`}
     >
-      <div className="flex items-start gap-3">
+      <div className={`flex items-start ${compact ? "gap-2" : "gap-3"}`}>
         {/* the icon, or the first letter — the same fallback a person's
             avatar takes, so an unnamed swatch never renders as an empty box */}
         <span
           aria-hidden
-          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-lg ${
-            project.icon === null ? "bg-surface-2 text-sm font-bold text-fg-muted" : "bg-surface-2"
-          }`}
+          className={`flex shrink-0 items-center justify-center rounded-xl bg-surface-2 ${
+            compact ? "h-7 w-7 text-sm" : "h-10 w-10 text-lg"
+          } ${project.icon === null ? "text-sm font-bold text-fg-muted" : ""}`}
         >
           {project.icon ?? [...project.name][0] ?? "?"}
         </span>
@@ -280,9 +604,11 @@ function ProjectCard({ project, people, locale }: {
               </span>
             ) : null}
           </div>
-          <p className="mt-0.5 line-clamp-2 text-xs text-fg-muted">
-            {project.summary === "" ? t("noSummary") : project.summary}
-          </p>
+          {compact ? null : (
+            <p className="mt-0.5 line-clamp-2 text-xs text-fg-muted">
+              {project.summary === "" ? t("noSummary") : project.summary}
+            </p>
+          )}
         </div>
       </div>
 
@@ -343,7 +669,7 @@ function ProjectCard({ project, people, locale }: {
  * that, the box arrives — and it arrives with a reason, not because a search
  * field looks more finished.
  */
-function NewProjectDialog({ people, meId, onClose, onCreated, onFailed }: {
+export function NewProjectDialog({ people, meId, onClose, onCreated, onFailed }: {
   people: OrgPersonRecord[];
   meId: string | null;
   onClose: () => void;

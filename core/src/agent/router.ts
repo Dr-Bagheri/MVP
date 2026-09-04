@@ -155,6 +155,44 @@ export function decide(
 }
 
 /** The roster this identity may address — Echo plus every visible agent. */
+/**
+ * WHO ANSWERS IN A ROOM (0184; the reply rule and the hop cap, 2026-09-05).
+ *
+ * Four rules, and every one of them is invisible from a chair:
+ *
+ *  · a written name wins over the message being answered, because somebody
+ *    who presses reply on Roya and then names Ava is addressing Ava;
+ *  · ANSWERING AN AGENT IS NAMING IT, so a reply with no handle still
+ *    reaches the agent it answers ("it does not always need to put @
+ *    yourself");
+ *  · an agent never answers itself — its own sentence carries its own name
+ *    often enough that without this the first hand-off is a self-call;
+ *  · and the chain stops. Every hop is a model call nobody pressed a button
+ *    for, and two agents that keep naming each other would not stop on their
+ *    own.
+ *
+ * Pure, and separated from the route for the reason the router itself is:
+ * the failure it replaces could only be reproduced by spending money on two
+ * models, and this one can be reproduced by calling a function.
+ */
+export function roomResponder(
+  written: Responder | null,
+  opts: {
+    /** the agent whose message is being answered, if any */
+    replyTo?: string | null;
+    /** who produced the text — an agent's handle, or null for a person */
+    speaker?: string | null;
+    hops: number;
+    max: number;
+  },
+): Responder | null {
+  if (opts.hops >= opts.max) return null;
+  const named = written ?? opts.replyTo ?? null;
+  if (named === null) return null;
+  if (opts.speaker !== null && opts.speaker !== undefined && named === opts.speaker) return null;
+  return named;
+}
+
 export function rosterFor(
   agents: readonly { handle: string; name?: string | undefined }[],
 ): RosterEntry[] {

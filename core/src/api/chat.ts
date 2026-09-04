@@ -211,6 +211,41 @@ function toMessage(row: Record<string, unknown>): ChatMessageRecord {
   };
 }
 
+/**
+ * THE ROOM'S WORDS, as one string an agent can read (2026-09-05).
+ *
+ * User directive: "when the agent is added to the chat it should already read
+ * all there is in the chat box, the previous chats between members, so it can
+ * help based on the chat box."
+ *
+ * Two things it does that the inline version did not. It names the SPEAKER —
+ * every human used to be flattened to one label, so an agent asked "what did
+ * Sara decide" could read the sentence and not know whose it was, which from
+ * a chair is indistinguishable from an agent that never looked. And it trims
+ * from the FRONT when the window is too long, because a budget spent on the
+ * oldest lines answers yesterday's question.
+ *
+ * A tombstoned message contributes nothing: its words are gone from the room
+ * and putting "[deleted]" in a prompt tells a model there was something there,
+ * which is the one thing a tombstone exists not to say.
+ */
+export function roomTranscript(
+  messages: readonly ChatMessageRecord[],
+  names: ReadonlyMap<string, string>,
+  limits: { chars: number; unknown: string; agent: string },
+): string {
+  const lines = messages
+    .filter((m) => m.body !== null && m.body !== "" && !m.deleted)
+    .map((m) => {
+      const who = m.author_kind === "agent"
+        ? (m.agent_handle ?? limits.agent)
+        : (m.author_id === null ? limits.unknown : names.get(m.author_id) ?? limits.unknown);
+      return `${who}: ${m.body}`;
+    });
+  while (lines.length > 1 && lines.join("\n").length > limits.chars) lines.shift();
+  return lines.join("\n");
+}
+
 const MESSAGE_ROWS = `
   select m.id, m.seq, m.channel_id, m.author_kind, m.author_id, m.agent_handle,
          m.body, m.edited_at, m.deleted_at, m.created_at,

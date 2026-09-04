@@ -80,14 +80,18 @@ export const NAV_PRIMARY: readonly NavItem[] = [
      four-item bar ceiling has no free slot, and tasks are a desk surface. */
   { href: "/tasks", key: "tasks", inBar: false },
   /*
-   * 0181 — PROJECTS (user directive, 2026-09-04: "in the menu also add a new
-   * section … the name for the new item in the menu is projects").
+   * PROJECTS IS NOT IN THE RAIL (user directive, 2026-09-05: "remove projects
+   * from the menu too").
    *
-   * Beside the board rather than above it: a project is a folder over the
-   * same work, and the two screens are read one after the other. Rail only,
-   * like tasks — M22's four-item bar ceiling has no free slot.
+   * It was added here on 2026-09-04 and the same week's directive moved the
+   * door: an admin reaches /projects from the BOARD'S toolbar, beside the
+   * folders the page is about, and a member reaches a project by opening its
+   * card. The rail is for places every reader has a reason to go, and after
+   * 0186 made projects an admin's surface this was not one of them.
+   *
+   * The ROUTE stays — a rail entry is a door, not the room, and the trail,
+   * the reachability check and every existing link still resolve.
    */
-  { href: "/projects", key: "projects", inBar: false },
   /*
    * 0184 — the TEAM CHANNEL (user directive, 2026-09-04: "add a chat room
    * section in the menu for all members to join and a place that they can
@@ -98,7 +102,14 @@ export const NAV_PRIMARY: readonly NavItem[] = [
    * assistant session belongs to exactly one person by construction. The
    * agents are guests in the room rather than the reason for it.
    */
-  { href: "/chat", key: "chat", inBar: false },
+  /* CHAT IS NOT IN THE RAIL EITHER (user directive, 2026-09-05: "add a
+     small icon with the same size as switch theme near it for the chat
+     section, and remove it from the menu as well").
+
+     Its door is the top bar now, beside the theme toggle — chrome that
+     is one press away from every screen, which is what a room people
+     drop into all day should be. The ROUTE and the trail entry stay:
+     a rail entry is a door, not the room. */
   /* THE ASSISTANT LEFT THIS LIST (user directive, 2026-09-03: "change [the
      green button] to the assistant and remove the assistant access in the
      menu"). It is the rail's PRIMARY action now — the green button at the top

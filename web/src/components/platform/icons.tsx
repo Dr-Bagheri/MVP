@@ -220,8 +220,14 @@ const MeetingsIcon = (p: SVGProps<SVGSVGElement>) => (
 );
 
 /* 0184 — the team channel: two overlapping bubbles, because the room is
-   about people answering each other rather than about one thread */
-const ChatIcon = (p: SVGProps<SVGSVGElement>) => (
+   about people answering each other rather than about one thread.
+
+   EXPORTED since 2026-09-05: chat left the rail for the top bar, and the bar
+   draws the same glyph rather than a second pair of bubbles. It stays in
+   NAV_ICON as well — the map is keyed by string and the mobile bottom bar
+   still resolves through it — so this is one drawing with two readers, never
+   two drawings of one thing. */
+export const ChatIcon = (p: SVGProps<SVGSVGElement>) => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden {...p}>
     <path d="M8.2 14.2H6.4L3.4 17V7.2a2 2 0 0 1 2-2h8.2a2 2 0 0 1 2 2v1" />
     <path d="M10.2 10.2h8.4a2 2 0 0 1 2 2v4.4a2 2 0 0 1-2 2h-1.6l-3 2.8v-2.8h-3.8a2 2 0 0 1-2-2v-4.4a2 2 0 0 1 2-2Z" />

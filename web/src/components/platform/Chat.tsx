@@ -12,7 +12,7 @@ import { InvitePeople } from "./InvitePeople";
 import { AgentAvatar } from "./AgentAvatar";
 import { KebabMenu } from "@/components/rowActions";
 import { SkeletonLines } from "@/components/scaffold";
-import { IconArchive, IconCheck, IconClose, IconPeople3, IconPlus } from "@/components/icons";
+import { IconCheck, IconClose, IconPeople3, IconPlus, IconTrash } from "@/components/icons";
 import { digits } from "@/lib/format";
 import { MessageRow } from "./chat/MessageRow";
 import { Composer } from "./chat/Composer";
@@ -190,14 +190,28 @@ export function Chat({ meId, isAdmin, people }: {
     }
   };
 
-  const react = (message: ChatMessageRecord, emoji: string, on: boolean) => {
-    void api.reactToChatMessage(message.id, emoji, on)
-      .then((updated) => setMessages((cur) => mergeBySeq(cur ?? [], [updated])))
-      .catch(() => setError(t("writeFailed")));
+  /**
+   * Stand in no room.
+   *
+   * One function because the two callers had the same bug: deleting a room
+   * cleared `current` and left `messages` holding the room's words, so the
+   * box went on showing a conversation whose room was gone — and leaving did
+   * not even clear the selection. Everything the box draws is reset here,
+   * including the read cursor, because the next room's cursor must not
+   * inherit this one's.
+   */
+  const leaveRoom = () => {
+    setCurrent(null);
+    setMessages([]);
+    setReplyTo(null);
+    setTyping(null);
+    setFailedAgent(null);
+    tip.current = 0;
+    acked.current = 0;
   };
 
-  const remove = (message: ChatMessageRecord) => {
-    void api.editChatMessage(message.id, { deleted: true })
+  const react = (message: ChatMessageRecord, emoji: string, on: boolean) => {
+    void api.reactToChatMessage(message.id, emoji, on)
       .then((updated) => setMessages((cur) => mergeBySeq(cur ?? [], [updated])))
       .catch(() => setError(t("writeFailed")));
   };
@@ -298,17 +312,30 @@ export function Chat({ meId, isAdmin, people }: {
                   icon: <IconCheck width={12} height={12} />,
                   onSelect: () => {
                     void api.setChatJoined(channel.id, !channel.joined)
-                      .then(loadChannels).catch(() => setError(t("writeFailed")));
+                      .then(() => {
+                        /* LEAVING EMPTIES THE BOX (user directive). Standing
+                           in a room you have just left, still reading it, is
+                           the control reporting that it did nothing. */
+                        if (channel.joined) leaveRoom();
+                        loadChannels();
+                      })
+                      .catch(() => setError(t("writeFailed")));
                   },
                 },
                 {
-                  key: "archive",
-                  label: t("archive"),
-                  icon: <IconArchive width={12} height={12} />,
+                  key: "delete",
+                  /* «حذف اتاق», not «بایگانی اتاق» (user directive: "change
+                     the text for delete, now it's archive it"). The schema
+                     still archives — a room's messages are a record and this
+                     product does not destroy those — but the word on the menu
+                     names what the person gets, and what they get is a room
+                     that is gone. */
+                  label: t("deleteRoom"),
+                  icon: <IconTrash width={12} height={12} />,
                   danger: true,
                   onSelect: () => {
                     void api.updateChatChannel(channel.id, { archived: true })
-                      .then(() => { setCurrent(null); loadChannels(); })
+                      .then(() => { leaveRoom(); loadChannels(); })
                       .catch(() => setError(t("writeFailed")));
                   },
                 },
@@ -340,7 +367,6 @@ export function Chat({ meId, isAdmin, people }: {
                 locale={locale}
                 onReply={setReplyTo}
                 onReact={react}
-                onRemove={remove}
               />
             ))
           )}

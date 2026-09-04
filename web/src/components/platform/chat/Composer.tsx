@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import type { ChatMessageRecord, OrgPersonRecord } from "@/api/types";
-import { useDictation } from "@/lib/dictation";
+import { micTone, useDictation } from "@/lib/dictation";
 import { usePushToTalk } from "@/lib/usePushToTalk";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuTrigger,
@@ -86,6 +86,41 @@ export function Composer({ disabled, people, replyTo, onCancelReply, onSend }: {
       .filter((c) => c.handle.toLowerCase().startsWith(q))
       .slice(0, 6);
   }, [picking, people, locale]);
+
+  /**
+   * ANSWERING AN AGENT NAMES IT (user directive, 2026-09-05: "if you reply on
+   * agent's message it must add @ automatically").
+   *
+   * Written into the DRAFT rather than bolted on at send: the person sees the
+   * handle they are about to send, can delete it, and gets exactly the
+   * message they read before pressing Enter. A silent prefix added on the way
+   * out would summon somebody with a word the sender never saw.
+   *
+   * The server does not depend on this. It reads the reply target off the
+   * stored row and treats answering an agent as naming it there too, so the
+   * agent answers even when this handle has been deleted — which is the point
+   * of the directive's other half ("it does not always need to put @
+   * yourself"). This is the visible half of one rule, not the rule.
+   */
+  const quoted = replyTo?.id ?? null;
+  useEffect(() => {
+    /* ONE check, on the HANDLE. `author_kind === "agent"` was here beside it
+       and was a second spelling of the same fact: 0184's own
+       `chat_message_author_shape` makes `agent_handle` non-null exactly when
+       the author is an agent, so the two could never disagree — and the
+       verify-red proved it, staying green when the kind check was deleted
+       because the handle check was already doing all the work. A guard that
+       cannot fail is a guard the next reader trusts. */
+    const handle = replyTo?.agent_handle ?? null;
+    if (handle === null || handle === "") return;
+    setDraft((cur) => (new RegExp(`(?:^|\s)@${handle}\b`, "i").test(cur)
+      ? cur
+      : `@${handle} ${cur.trimStart()}`));
+    box.current?.focus();
+    /* on the TARGET's id, not on the object: the parent rebuilds `replyTo`
+       on every message that arrives, and a dependency on the object would
+       prepend the handle again with each one */
+  }, [quoted, replyTo]);
 
   const onChange = (value: string) => {
     setDraft(value);
@@ -203,7 +238,12 @@ export function Composer({ disabled, people, replyTo, onCancelReply, onSend }: {
               disabled={disabled}
               onClick={() => dictation.toggle()}
               aria-pressed={dictation.status === "listening"}
-              className={`${tool} ${dictation.status === "listening" ? "text-danger" : ""}`}
+              /* NOT `tool`: that base sets its own colour, and this button's
+                 whole job is to change colour. `micTone` carries the ground
+                 and the ink together for exactly that reason — the version
+                 that appended a colour to `tool` is the one a person reported
+                 as "the mic does not show when it is active". */
+              className={`btn btn-icon ${micTone(dictation.status)}`}
               aria-label={t("dictate")}
               title={t("dictate")}
             >
