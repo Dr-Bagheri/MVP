@@ -46,6 +46,10 @@ export const TASK_EVENT_KINDS = [
   "created", "done", "undone", "moved", "renamed", "priority",
   "due_set", "due_cleared", "assigned", "unassigned",
   "label_added", "label_removed", "archived", "restored",
+  /* 0186: an instance of a repeating order, created by the completion of the
+     one before it. `detail.from` carries the previous instance's id, so the
+     chain is walkable without a second table. */
+  "renewed",
 ] as const;
 export type TaskEventKind = (typeof TASK_EVENT_KINDS)[number];
 
@@ -56,6 +60,26 @@ export interface TaskEventRecord {
   /** codes and NAMES only — never a description's contents */
   detail: Record<string, string>;
   created_at: string;
+}
+
+/**
+ * A REPEATING ORDER (0186).
+ *
+ * The trigger is COMPLETION, never a clock: a cadence that fires whether or
+ * not the last one was done produces a column of identical unfinished cards
+ * and gives the person it was handed to no way to say so.
+ */
+export interface TaskRecurrenceRecord {
+  id: string;
+  /** the wait between finishing one and the next falling due; 0 is legal */
+  gap_days: number;
+  /** null = unlimited in time */
+  until_date: string | null;
+  /** false once the series has run past its end date — so a spent schedule
+      says so on the card instead of sitting there looking armed */
+  active: boolean;
+  /** how many times it has come back */
+  renewed: number;
 }
 
 /** the roster an assignee picker needs: names, never emails or statuses */
@@ -112,6 +136,9 @@ export interface TaskCardRecord {
   checklist_total: number;
   comment_count: number;
   created_at: string;
+  /** set when this card is an instance of a repeating order (0186) — the
+      board draws a small mark, and the detail reads the schedule itself */
+  recurrence_id: string | null;
 }
 
 export interface TaskChecklistItemRecord {
@@ -133,6 +160,9 @@ export interface TaskDetailRecord extends TaskCardRecord {
   checklist: TaskChecklistItemRecord[];
   comments: TaskCommentRecord[];
   events: TaskEventRecord[];
+  /** the repeating order this card belongs to, read in full (0186) — null
+      when it is an ordinary one-off task */
+  recurrence: TaskRecurrenceRecord | null;
 }
 
 /** the reference's four, seeded lazily in board order */
@@ -146,7 +176,7 @@ const DEFAULT_COLUMNS: ReadonlyArray<{ name_fa: string; tone: TaskColumnTone }> 
 const CARD_ROWS = `
   select t.id, t.column_id, t.topic_id, t.call_id, c.title as call_title,
          t.title, t.priority, t.labels, t.due_at, t.done_at, t.position,
-         t.archived_at, t.created_by, t.created_at,
+         t.archived_at, t.created_by, t.created_at, t.recurrence_id,
          coalesce(ch.total, 0) as checklist_total,
          coalesce(ch.done, 0) as checklist_done,
          coalesce(cm.n, 0) as comment_count,
@@ -170,6 +200,21 @@ const CARD_ROWS = `
         from echo.task_label_link l where l.task_id = t.id
     ) lbl on true`;
 
+function toRecurrence(row: Record<string, unknown>): TaskRecurrenceRecord {
+  return {
+    id: String(row.id),
+    gap_days: Number(row.gap_days ?? 0),
+    /* a DATE, not a timestamp: "until the end of March" is a calendar fact
+       about the person's own year, and rendering it through an instant would
+       move it by a day for anybody east or west of the server */
+    until_date: row.until_date === null || row.until_date === undefined
+      ? null
+      : String(row.until_date).slice(0, 10),
+    active: row.active === true,
+    renewed: Number(row.renewed ?? 0),
+  };
+}
+
 function toCard(row: Record<string, unknown>): TaskCardRecord {
   return {
     id: String(row.id),
@@ -177,6 +222,7 @@ function toCard(row: Record<string, unknown>): TaskCardRecord {
     topic_id: (row.topic_id as string | null) ?? null,
     call_id: (row.call_id as string | null) ?? null,
     call_title: (row.call_title as string | null) ?? null,
+    recurrence_id: (row.recurrence_id as string | null) ?? null,
     title: String(row.title),
     priority: row.priority as TaskPriority,
     labels: (row.labels as string[]) ?? [],
@@ -208,6 +254,38 @@ function parseDue(value: unknown): string | null {
     throw new ValidationError("unreadable due date", { code: "task_due_invalid" });
   }
   return at.toISOString();
+}
+
+/**
+ * WHEN THE NEXT INSTANCE FALLS DUE — or null when the series is spent.
+ *
+ * Extracted from the completing transaction on purpose. The branch that
+ * matters is "or until this date", and a rule whose only test would need a
+ * database, a task, a schedule and a tick is a rule nobody exercises at its
+ * edges — which is exactly where an end date lives.
+ *
+ * UTC ARITHMETIC, and that is a decision rather than an omission. `until_date`
+ * is a calendar date somebody typed and the gap is a count of days; neither
+ * has a timezone, and picking one (the server's? the completer's? the person
+ * who wrote the order?) would make the same schedule end on different days
+ * for different people. One clock, stated.
+ *
+ * The boundary is INCLUSIVE: a next instance falling due exactly on the end
+ * date is created. "Until the 20th" that refuses the 20th is the off-by-one
+ * every date range ships once, and the reading a person means is the
+ * generous one.
+ */
+export function nextRenewal(
+  schedule: { gap_days: number; until_date: string | null },
+  completedAt: Date,
+): string | null {
+  const gap = Number.isFinite(schedule.gap_days) ? Math.max(0, Math.trunc(schedule.gap_days)) : 0;
+  const due = new Date(Date.UTC(
+    completedAt.getUTCFullYear(), completedAt.getUTCMonth(), completedAt.getUTCDate() + gap,
+  ));
+  const day = due.toISOString().slice(0, 10);
+  if (schedule.until_date !== null && day > schedule.until_date) return null;
+  return day;
 }
 
 export function createTasksRepo(db: Db) {
@@ -300,6 +378,13 @@ export function createTasksRepo(db: Db) {
           order by created_at desc limit 200`,
         [id],
       );
+      const schedule = await tx.unsafe<Record<string, unknown>>(
+        `select r.id, r.gap_days, r.until_date, r.active, r.renewed
+           from echo.task_recurrence r
+           join echo.task t on t.recurrence_id = r.id
+          where t.id = $1`,
+        [id],
+      );
       return {
         ...toCard(rows[0]),
         events: eventRows.map((r) => ({
@@ -310,6 +395,7 @@ export function createTasksRepo(db: Db) {
           created_at: iso(r.created_at),
         })),
         description: String(body[0]?.description ?? ""),
+        recurrence: schedule[0] === undefined ? null : toRecurrence(schedule[0]),
         checklist: checklist.map((i) => ({
           id: String(i.id), label: String(i.label),
           done: Boolean(i.done), position: Number(i.position),
@@ -325,6 +411,19 @@ export function createTasksRepo(db: Db) {
   async function create(identity: Identity, input: {
     title: unknown; column_id?: unknown; topic_id?: unknown; call_id?: unknown;
     description?: unknown; priority?: unknown; due_at?: unknown;
+    /* an order is given to somebody AT THE MOMENT it is written (0186). A
+       separate assign call would leave a window where the task exists and
+       belongs to nobody, which on a project board reads as an unassigned
+       card somebody forgot. */
+    assignees?: unknown;
+    /* label ROWS (0147), by id. They used to be a second write from the
+       dialog beside the assignments; the reason given was that a failed
+       label must not lose the card. That is right about a label and wrong
+       about a person, and having two spellings of "attach this at birth"
+       is worse than either — so both are here, in the one transaction, and
+       the dialog keeps its fields on screen when the write refuses. */
+    label_ids?: unknown;
+    schedule?: unknown;
   }): Promise<TaskDetailRecord> {
     const title = typeof input.title === "string" ? input.title.trim() : "";
     if (title === "" || title.length > 300) {
@@ -332,6 +431,13 @@ export function createTasksRepo(db: Db) {
     }
     const priority = input.priority === undefined ? "medium" : parsePriority(input.priority);
     const due = parseDue(input.due_at);
+    const schedule = parseSchedule(input.schedule);
+    const assignees = Array.isArray(input.assignees)
+      ? input.assignees.filter((v): v is string => typeof v === "string" && v !== "").slice(0, 20)
+      : [];
+    const labelIds = Array.isArray(input.label_ids)
+      ? input.label_ids.filter((v): v is string => typeof v === "string" && v !== "").slice(0, 12)
+      : [];
     const id = await db.withIdentity(identity, async (tx: SqlTx) => {
       let columnId = typeof input.column_id === "string" && input.column_id !== ""
         ? input.column_id : null;
@@ -364,10 +470,85 @@ export function createTasksRepo(db: Db) {
         ],
       );
       if (!rows[0]) throw new NotFoundError();
-      await note(tx, String(rows[0].id), "created");
-      return String(rows[0].id);
+      const taskId = String(rows[0].id);
+      await note(tx, taskId, "created");
+
+      if (schedule !== null) {
+        const made = await tx.unsafe<Record<string, unknown>>(
+          `insert into echo.task_recurrence (org_id, gap_days, until_date, created_by)
+           values (echo.actor_org_id(), $1, $2, echo.actor_id())
+           returning id`,
+          [schedule.gap_days, schedule.until_date],
+        );
+        await tx.unsafe(
+          `update echo.task set recurrence_id = $2 where id = $1`,
+          [taskId, String(made[0]!.id)],
+        );
+      }
+
+      /* IN THE SAME TRANSACTION as the task. An assignment written afterwards
+         can fail on its own, and what that leaves is a card nobody was
+         given, indistinguishable from one nobody has got to yet. */
+      for (const userId of assignees) {
+        await tx.unsafe(
+          `insert into echo.task_assignee (task_id, user_id, org_id)
+           select t.id, $2, t.org_id from echo.task t where t.id = $1
+           on conflict do nothing`,
+          [taskId, userId],
+        );
+        const who = await tx.unsafe<Record<string, unknown>>(
+          `select display_name from echo.app_user where id = $1`, [userId],
+        );
+        await note(tx, taskId, "assigned", { person: String(who[0]?.display_name ?? "") });
+      }
+
+      for (const labelId of labelIds) {
+        const label = await tx.unsafe<Record<string, unknown>>(
+          `select name from echo.task_label where id = $1`, [labelId],
+        );
+        if (!label[0]) continue;
+        await tx.unsafe(
+          `insert into echo.task_label_link (task_id, label_id, org_id)
+           select t.id, $2, t.org_id from echo.task t where t.id = $1
+           on conflict do nothing`,
+          [taskId, labelId],
+        );
+        await note(tx, taskId, "label_added", { label: String(label[0].name) });
+      }
+      return taskId;
     });
     return detail(identity, id);
+  }
+
+  /**
+   * The schedule as the wire may state it, or null for an ordinary task.
+   *
+   * `undefined` and an explicit null are the same answer here — both mean
+   * "this task does not repeat" — because a create with no schedule and a
+   * create that says so out loud should not produce different tasks.
+   */
+  function parseSchedule(value: unknown): { gap_days: number; until_date: string | null } | null {
+    if (value === undefined || value === null) return null;
+    if (typeof value !== "object") {
+      throw new ValidationError("unreadable schedule", { code: "task_schedule_invalid" });
+    }
+    const spec = value as { gap_days?: unknown; until_date?: unknown };
+    const gap = Number(spec.gap_days ?? 0);
+    if (!Number.isInteger(gap) || gap < 0 || gap > 365) {
+      throw new ValidationError("the gap between renewals is 0 to 365 days", {
+        code: "task_schedule_gap_invalid", params: { max: "365" },
+      });
+    }
+    const until = spec.until_date;
+    if (until === undefined || until === null || until === "") {
+      return { gap_days: gap, until_date: null };
+    }
+    if (typeof until !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(until)) {
+      throw new ValidationError("the end date must be a calendar date", {
+        code: "task_schedule_until_invalid",
+      });
+    }
+    return { gap_days: gap, until_date: until };
   }
 
   async function update(identity: Identity, id: string, patch: Record<string, unknown>): Promise<TaskDetailRecord> {
@@ -442,6 +623,10 @@ export function createTasksRepo(db: Db) {
       const was = before[0];
       if ("done" in patch && (patch.done === true) !== (was.done_at !== null)) {
         await note(tx, id, patch.done === true ? "done" : "undone");
+        /* FINISHING IS THE TRIGGER (0186). In the same transaction as the
+           tick, so the next order cannot be lost between two processes and
+           the person who just ticked the box sees it appear. */
+        if (patch.done === true) await renew(tx, id);
       }
       if ("archived" in patch && (patch.archived === true) !== (was.archived_at !== null)) {
         await note(tx, id, patch.archived === true ? "archived" : "restored");
@@ -716,6 +901,144 @@ export function createTasksRepo(db: Db) {
    * that succeeded — a history that disagrees with the board while looking
    * authoritative. Detail carries codes and NAMES only.
    */
+  /**
+   * THE ORDER COMES BACK (0186), or the series ends and says so.
+   *
+   * Everything about the finished card is copied except the three things that
+   * belong to the instance rather than to the order: its column (a renewed
+   * order starts at the BEGINNING, not in «انجام‌شده»), its completion, and
+   * the meeting it may have come out of — the next one is not that meeting's
+   * task. The checklist comes across UNCHECKED, because the steps are part of
+   * what the order IS and a repeat with its boxes already ticked is a repeat
+   * that looks done.
+   *
+   * Silent when there is no schedule, which is every ordinary task.
+   */
+  async function renew(tx: SqlTx, taskId: string): Promise<void> {
+    const rows = await tx.unsafe<Record<string, unknown>>(
+      `select r.id, r.gap_days, r.until_date, r.active
+         from echo.task_recurrence r
+         join echo.task t on t.recurrence_id = r.id
+        where t.id = $1`,
+      [taskId],
+    );
+    const schedule = rows[0];
+    if (schedule === undefined || schedule.active !== true) return;
+
+    const due = nextRenewal(
+      {
+        gap_days: Number(schedule.gap_days ?? 0),
+        until_date: schedule.until_date === null || schedule.until_date === undefined
+          ? null
+          : String(schedule.until_date).slice(0, 10),
+      },
+      new Date(),
+    );
+    if (due === null) {
+      /* THE SERIES IS SPENT, and it says so rather than staying armed and
+         never firing — an "active" schedule that can no longer produce
+         anything is a promise the card goes on making. */
+      await tx.unsafe(
+        `update echo.task_recurrence set active = false where id = $1`,
+        [String(schedule.id)],
+      );
+      return;
+    }
+
+    const next = await tx.unsafe<Record<string, unknown>>(
+      `insert into echo.task (org_id, column_id, topic_id, title, description,
+                              priority, labels, due_at, recurrence_id, position, created_by)
+       select t.org_id,
+              coalesce(
+                (select c.id from echo.task_column c
+                  where c.archived_at is null order by c.position, c.created_at limit 1),
+                t.column_id),
+              t.topic_id, t.title, t.description, t.priority, t.labels,
+              $2::date, t.recurrence_id,
+              coalesce((select min(x.position) from echo.task x
+                         where x.column_id = t.column_id and x.archived_at is null), 1) - 1,
+              echo.actor_id()
+         from echo.task t where t.id = $1
+       returning id`,
+      [taskId, due],
+    );
+    const nextId = String(next[0]!.id);
+
+    await tx.unsafe(
+      `insert into echo.task_assignee (task_id, user_id, org_id)
+       select $2, a.user_id, a.org_id from echo.task_assignee a where a.task_id = $1`,
+      [taskId, nextId],
+    );
+    await tx.unsafe(
+      `insert into echo.task_label_link (task_id, label_id, org_id)
+       select $2, l.label_id, l.org_id from echo.task_label_link l where l.task_id = $1`,
+      [taskId, nextId],
+    );
+    await tx.unsafe(
+      `insert into echo.task_checklist_item (task_id, org_id, label, done, position)
+       select $2, i.org_id, i.label, false, i.position
+         from echo.task_checklist_item i where i.task_id = $1`,
+      [taskId, nextId],
+    );
+    await tx.unsafe(
+      `update echo.task_recurrence set renewed = renewed + 1 where id = $1`,
+      [String(schedule.id)],
+    );
+    await note(tx, nextId, "renewed", { from: taskId });
+  }
+
+  /**
+   * Attach, change or remove a schedule on an existing task.
+   *
+   * `null` removes it — and the ROW goes, not just its flag: an inactive
+   * schedule sitting on a task is a state the card would have to explain, and
+   * "this used to repeat" is not a fact anybody asked us to keep. The
+   * instances already finished keep their history; their `recurrence_id`
+   * nulls out by the FK, which is what SET NULL is there for.
+   */
+  async function setRecurrence(
+    identity: Identity,
+    taskId: string,
+    spec: { gap_days?: unknown; until_date?: unknown } | null,
+  ): Promise<TaskDetailRecord> {
+    const parsed = spec === null ? null : parseSchedule(spec);
+    await db.withIdentity(identity, async (tx: SqlTx) => {
+      const rows = await tx.unsafe<Record<string, unknown>>(
+        `select recurrence_id from echo.task where id = $1`, [taskId],
+      );
+      if (!rows[0]) throw new NotFoundError();
+      const existing = (rows[0].recurrence_id as string | null) ?? null;
+
+      if (parsed === null) {
+        if (existing === null) return;
+        await tx.unsafe(`delete from echo.task_recurrence where id = $1`, [existing]);
+        return;
+      }
+      if (existing === null) {
+        const made = await tx.unsafe<Record<string, unknown>>(
+          `insert into echo.task_recurrence (org_id, gap_days, until_date, created_by)
+           values (echo.actor_org_id(), $1, $2, echo.actor_id())
+           returning id`,
+          [parsed.gap_days, parsed.until_date],
+        );
+        await tx.unsafe(
+          `update echo.task set recurrence_id = $2 where id = $1`,
+          [taskId, String(made[0]!.id)],
+        );
+        return;
+      }
+      /* EDITING RE-ARMS IT. Somebody who changes the end date of a spent
+         series means "carry on", and leaving `active` false would make the
+         edit do nothing while reading as saved. */
+      await tx.unsafe(
+        `update echo.task_recurrence set gap_days = $2, until_date = $3, active = true
+          where id = $1`,
+        [existing, parsed.gap_days, parsed.until_date],
+      );
+    });
+    return detail(identity, taskId);
+  }
+
   async function note(
     tx: SqlTx, taskId: string, kind: TaskEventKind, detail: Record<string, string> = {},
   ): Promise<void> {
@@ -874,5 +1197,6 @@ export function createTasksRepo(db: Db) {
     addChecklistItem, updateChecklistItem, deleteChecklistItem,
     addComment, setAssigned: setAssignedWithNote, createColumn, updateColumn, createTopic, updateTopic,
     people, labels, createLabel, updateLabel, deleteLabel, setLabel, events,
+    setRecurrence,
   };
 }

@@ -11,7 +11,7 @@ import type {
   MeetingAgendaItem, MeetingMode, MeetingRecord,
   OrgPersonRecord, TaskColumnTone, TaskLabelColor, TaskLabelRecord,
   ChatChannelRecord, ChatMessageRecord,
-  ProjectRecord, ProjectTone,
+  ProjectRecord, ProjectTone, ProjectWorkloadRow,
   TaskCardRecord, TaskColumnRecord, TaskTopicRecord, TaskDetailRecord,
   TaskChecklistItemRecord, TaskCommentRecord, TaskPriority,
   AuthoredWorkflow,
@@ -1458,6 +1458,10 @@ export const api = {
       method: "PATCH", body: JSON.stringify(patch), headers: { "content-type": "application/json" },
     });
   },
+  /** who is carrying what in this project (0186) — counted, never stored */
+  async projectWorkload(id: string): Promise<ProjectWorkloadRow[]> {
+    return bff(`/api/projects/${encodeURIComponent(id)}/workload`);
+  },
   async setProjectMember(id: string, userId: string, on: boolean): Promise<void> {
     await bff<undefined>(`/api/projects/${encodeURIComponent(id)}/members/${encodeURIComponent(userId)}`, {
       method: on ? "PUT" : "DELETE",
@@ -1470,9 +1474,21 @@ export const api = {
     const suffix = opts?.archived ? "?archived=1" : "";
     return bff(`/api/tasks/board${suffix}`);
   },
+  /**
+   * Everything the card IS, in one write (0186).
+   *
+   * `assignees` and `label_ids` used to be separate calls the dialog made
+   * after the create, so a refused assignment left a card belonging to
+   * nobody — which on an order board is indistinguishable from one somebody
+   * has not got to yet. One transaction: the card and the person it was
+   * given to arrive together or neither does, and the dialog still has the
+   * fields on screen to try again.
+   */
   async createTask(input: {
     title: string; column_id?: string; topic_id?: string; call_id?: string;
     description?: string; priority?: TaskPriority; due_at?: string | null;
+    assignees?: string[]; label_ids?: string[];
+    schedule?: { gap_days: number; until_date: string | null } | null;
   }): Promise<TaskDetailRecord> {
     return bff("/api/tasks", {
       method: "POST", body: JSON.stringify(input), headers: { "content-type": "application/json" },
@@ -1488,6 +1504,17 @@ export const api = {
   }>): Promise<TaskDetailRecord> {
     return bff(`/api/tasks/${encodeURIComponent(id)}`, {
       method: "PATCH", body: JSON.stringify(patch), headers: { "content-type": "application/json" },
+    });
+  },
+  /** attach or replace a task's repeating schedule (0186); null removes it */
+  async setTaskSchedule(
+    taskId: string,
+    schedule: { gap_days: number; until_date: string | null } | null,
+  ): Promise<TaskDetailRecord> {
+    const path = `/api/tasks/${encodeURIComponent(taskId)}/schedule`;
+    if (schedule === null) return bff(path, { method: "DELETE" });
+    return bff(path, {
+      method: "PUT", body: JSON.stringify(schedule), headers: { "content-type": "application/json" },
     });
   },
   async addTaskChecklistItem(taskId: string, label: string): Promise<TaskChecklistItemRecord> {

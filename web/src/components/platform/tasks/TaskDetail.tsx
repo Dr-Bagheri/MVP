@@ -12,11 +12,12 @@ import type {
 } from "@/api/types";
 import { ConfirmDialog, KebabMenu } from "@/components/rowActions";
 import {
-  AssigneePicker, DueField, LabelRow, PRIORITY_DOT, PRIORITY_ORDER, TONE_CHIP, TONE_DOT,
-  relativeTime,
+  AssigneePicker, DueField, LabelRow, PRIORITY_DOT, PRIORITY_ORDER, ScheduleFields,
+  TONE_CHIP, TONE_DOT, relativeTime,
 } from "./TaskDialogs";
+import { Overlay } from "../Overlay";
 import {
-  IconArchive, IconCheck, IconClose, IconPencil, IconPlus, IconTrash, IconVideo,
+  IconArchive, IconCheck, IconClose, IconPencil, IconPlus, IconRetry, IconTrash, IconVideo,
 } from "@/components/icons";
 import { digits, formatDate, personName } from "@/lib/format";
 
@@ -500,6 +501,12 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
               />
             </div>
 
+            {/* THE REPEATING ORDER (0186). It renders here, in the rail
+                where every other property of the card lives, rather than as
+                a section of its own — a schedule is a fact about this task
+                exactly like its priority and its due date. */}
+            <ScheduleRow task={task} onChanged={onChanged} onFailed={() => setFailed(true)} />
+
             {task.created_at !== "" ? (
               <p className="pt-1 text-[10px] text-fg-subtle">
                 {t("createdAt", { at: formatDate(task.created_at, locale) })}
@@ -566,3 +573,107 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
 }
 
 export { TONE_CHIP, TONE_DOT };
+
+/**
+ * A task's schedule, read and edited in place (0186).
+ *
+ * Three states and each says something different:
+ *   · no schedule      — the switch, off. This is every ordinary task.
+ *   · a live schedule  — the sentence, and how many times it has come back.
+ *   · a SPENT schedule — the same sentence with the end date past, said as
+ *     spent rather than left looking armed. A schedule that can no longer
+ *     produce anything and still reads "repeats" is the card making a promise
+ *     the server has already stopped keeping.
+ */
+function ScheduleRow({ task, onChanged, onFailed }: {
+  task: TaskDetailRecord;
+  onChanged: () => void;
+  onFailed: () => void;
+}) {
+  const t = useTranslations("tasks");
+  const locale = useLocale();
+  const [open, setOpen] = useState(false);
+  const [gapDays, setGapDays] = useState(String(task.recurrence?.gap_days ?? 0));
+  const [until, setUntil] = useState<string | null>(task.recurrence?.until_date ?? null);
+  const [busy, setBusy] = useState(false);
+
+  const write = (schedule: { gap_days: number; until_date: string | null } | null) => {
+    setBusy(true);
+    void api.setTaskSchedule(task.id, schedule)
+      .then(() => { setBusy(false); setOpen(false); onChanged(); })
+      .catch(() => { setBusy(false); onFailed(); });
+  };
+
+  const schedule = task.recurrence;
+  return (
+    <div>
+      <span className="mb-1 block text-[11px] text-fg-muted">{t("scheduleField")}</span>
+      {schedule === null ? (
+        <button type="button" onClick={() => setOpen(true)}
+          className="btn btn-sm w-full justify-start border border-border text-fg-muted hover:text-fg">
+          <IconRetry width={12} height={12} />
+          {t("scheduleAdd")}
+        </button>
+      ) : (
+        <div className="rounded-xl border border-border bg-surface-2 p-2.5">
+          <p className={`text-[11px] leading-5 ${schedule.active ? "text-fg" : "text-warning"}`}>
+            {schedule.active
+              ? (schedule.until_date === null
+                  ? t("scheduleSaysForever", { n: digits(schedule.gap_days, locale) })
+                  : t("scheduleSaysUntil", {
+                      n: digits(schedule.gap_days, locale),
+                      date: formatDate(schedule.until_date, locale),
+                    }))
+              : t("scheduleSpent")}
+          </p>
+          {schedule.renewed > 0 ? (
+            <p className="mt-0.5 text-[10px] text-fg-subtle">
+              {t("scheduleRenewedTimes", { n: digits(schedule.renewed, locale) })}
+            </p>
+          ) : null}
+          <div className="mt-2 flex items-center gap-1.5">
+            <button type="button" onClick={() => setOpen(true)} disabled={busy}
+              className="btn btn-sm border border-border text-fg-muted hover:text-fg">
+              {t("edit")}
+            </button>
+            <button type="button" onClick={() => write(null)} disabled={busy}
+              className="btn btn-sm text-fg-subtle hover:text-danger">
+              {t("scheduleStop")}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {open ? (
+        <Overlay onClose={() => setOpen(false)} label={t("scheduleField")} size="sm">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-base font-semibold text-fg">{t("scheduleField")}</h2>
+            <button type="button" onClick={() => setOpen(false)}
+              className="btn btn-icon text-fg-muted hover:text-fg" aria-label={t("close")}>
+              <IconClose width={14} height={14} />
+            </button>
+          </div>
+          {/* the SAME fields the create dialog offers, forced on — the switch
+              would be a second way to say what «توقف تکرار» already says */}
+          <ScheduleFields
+            repeats
+            gapDays={gapDays}
+            until={until}
+            onRepeats={() => undefined}
+            onGapDays={setGapDays}
+            onUntil={setUntil}
+          />
+          <div className="mt-3 flex items-center justify-end gap-2 border-t border-border pt-3">
+            <button type="button" onClick={() => setOpen(false)}
+              className="btn text-fg-muted hover:text-fg">{t("cancel")}</button>
+            <button type="button" disabled={busy}
+              onClick={() => write({ gap_days: Number(gapDays) || 0, until_date: until })}
+              className="btn bg-accent text-on-accent shadow-accent hover:opacity-90 disabled:opacity-50">
+              {t("save")}
+            </button>
+          </div>
+        </Overlay>
+      ) : null}
+    </div>
+  );
+}

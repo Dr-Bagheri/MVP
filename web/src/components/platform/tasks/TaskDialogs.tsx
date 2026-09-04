@@ -425,13 +425,26 @@ export function DueField({ value, onPick }: {
 }
 
 /* ── THE NEW-TASK DIALOG, field for field ────────────────────────────── */
-export function NewTaskDialog({ columns, topics, labels, people, defaultColumnId, defaultTopicId, onClose, onCreated, onLabelsChanged }: {
+export function NewTaskDialog({ columns, topics, labels, people, defaultColumnId, defaultTopicId, allowSchedule = false, onClose, onCreated, onLabelsChanged }: {
   columns: TaskColumnRecord[];
   topics: TaskTopicRecord[];
   labels: TaskLabelRecord[];
   people: OrgPersonRecord[];
   defaultColumnId: string | null;
   defaultTopicId: string | null;
+  /**
+   * Offer the REPEATING ORDER fields (0186).
+   *
+   * On by default nowhere: a schedule is the project surface's idea — work
+   * handed to somebody that has to come back — and putting it on the board's
+   * own quick-add would add a section to the one dialog people use twenty
+   * times a day for a thing they want twice a month.
+   *
+   * ONE dialog either way. A separate "order" dialog would be a second copy
+   * of eight fields, and the day one of them gained a rule is the day the two
+   * stopped matching.
+   */
+  allowSchedule?: boolean;
   onClose: () => void;
   onCreated: () => void;
   onLabelsChanged: () => void;
@@ -445,6 +458,12 @@ export function NewTaskDialog({ columns, topics, labels, people, defaultColumnId
   const [priority, setPriority] = useState<TaskPriority>("medium");
   const [due, setDue] = useState<string | null>(null);
   const [assignees, setAssignees] = useState<string[]>([]);
+  /* the schedule, held as three plain values rather than an object: an
+     absent schedule is `repeats === false`, which is one boolean instead of
+     a null that every field then has to guard against */
+  const [repeats, setRepeats] = useState(false);
+  const [gapDays, setGapDays] = useState("0");
+  const [until, setUntil] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
 
@@ -452,6 +471,17 @@ export function NewTaskDialog({ columns, topics, labels, people, defaultColumnId
     if (title.trim() === "" || busy) return;
     setBusy(true);
     setFailed(false);
+    /*
+     * ONE WRITE (0186). This used to create the card and then fire the
+     * labels and the people at it, each with its own `.catch(() =>
+     * undefined)`, on the reasoning that a failed label must not lose the
+     * card. That is right about a label and wrong about a PERSON: a card
+     * that exists and belongs to nobody is indistinguishable from one
+     * nobody has got to yet, and on a board whose whole purpose is handing
+     * work out, that is the failure that matters. The server takes all of
+     * it in one transaction now; a refusal leaves the dialog open with
+     * every field still filled in.
+     */
     void api.createTask({
       title: title.trim(),
       column_id: columnId,
@@ -459,16 +489,11 @@ export function NewTaskDialog({ columns, topics, labels, people, defaultColumnId
       ...(description.trim() !== "" ? { description } : {}),
       priority,
       ...(due !== null ? { due_at: due } : {}),
+      ...(assignees.length > 0 ? { assignees } : {}),
+      ...(labelIds.length > 0 ? { label_ids: labelIds } : {}),
+      ...(repeats ? { schedule: { gap_days: Number(gapDays) || 0, until_date: until } } : {}),
     })
-      .then(async (task) => {
-        /* the card exists; its labels and people are separate writes, and a
-           failure in one of them must not lose the card */
-        await Promise.all([
-          ...labelIds.map((id) => api.setTaskLabel(task.id, id, true).catch(() => undefined)),
-          ...assignees.map((id) => api.setTaskAssignee(task.id, id, true).catch(() => undefined)),
-        ]);
-        onCreated();
-      })
+      .then(() => onCreated())
       .catch(() => { setBusy(false); setFailed(true); });
   };
 
@@ -600,6 +625,17 @@ export function NewTaskDialog({ columns, topics, labels, people, defaultColumnId
             />
           </div>
         </div>
+
+        {allowSchedule ? (
+          <ScheduleFields
+            repeats={repeats}
+            gapDays={gapDays}
+            until={until}
+            onRepeats={setRepeats}
+            onGapDays={setGapDays}
+            onUntil={setUntil}
+          />
+        ) : null}
       </div>
 
       <div className="mt-3 flex items-center justify-between">
@@ -618,6 +654,90 @@ export function NewTaskDialog({ columns, topics, labels, people, defaultColumnId
         </button>
       </div>
     </Overlay>
+  );
+}
+
+/**
+ * THE REPEATING ORDER's three fields (0186), one component so the create
+ * dialog and the task detail cannot drift into two spellings of the same
+ * schedule.
+ *
+ * The switch first, then the two numbers it governs, and the numbers are
+ * HIDDEN rather than disabled when it is off — a disabled date picker beside
+ * an off switch is two controls saying the same thing.
+ */
+/**
+ * An instant as the READER'S calendar day, `YYYY-MM-DD`.
+ *
+ * NOT `toISOString().slice(0, 10)`, which is the same line one timezone to
+ * the left: a date picked at 9pm in Tehran is already tomorrow in UTC, so the
+ * schedule would end a day later than the person chose — and only for people
+ * east of the meridian, in the evening, which is a bug that gets reported as
+ * "sometimes".
+ */
+function calendarDay(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+export function ScheduleFields({ repeats, gapDays, until, onRepeats, onGapDays, onUntil }: {
+  repeats: boolean;
+  gapDays: string;
+  until: string | null;
+  onRepeats: (on: boolean) => void;
+  onGapDays: (value: string) => void;
+  onUntil: (value: string | null) => void;
+}) {
+  const t = useTranslations("tasks");
+  return (
+    <div className="rounded-xl border border-border bg-surface-2 p-3">
+      <label className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          checked={repeats}
+          onChange={(e) => onRepeats(e.target.checked)}
+          className="h-4 w-4 accent-[var(--accent)]"
+        />
+        <span className="text-xs font-medium text-fg">{t("scheduleRepeats")}</span>
+      </label>
+      <p className="mt-1 text-[11px] leading-5 text-fg-muted">{t("scheduleExplain")}</p>
+
+      {repeats ? (
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium text-fg-muted">{t("scheduleGap")}</span>
+            <input
+              type="number"
+              min={0}
+              max={365}
+              value={gapDays}
+              onChange={(e) => onGapDays(e.target.value)}
+              /* dir="ltr" and NOT a logical form: a number input's spinner and
+                 its digits are physical, and the field sits inside an RTL
+                 form where `end` would put the caret on the wrong side of the
+                 value somebody is typing */
+              dir="ltr"
+              className="input w-full"
+            />
+            <span className="mt-1 block text-[11px] text-fg-subtle">{t("scheduleGapHint")}</span>
+          </label>
+          <div>
+            <span className="mb-1 block text-xs font-medium text-fg-muted">{t("scheduleUntil")}</span>
+            {/* the BOARD'S OWN date control, not a second one: it carries
+                the Jalali grid, the presets and «بدون مهلت» — which is
+                exactly "unlimited in time" and already spelled once. */}
+            <DueField
+              value={until}
+              onPick={(iso) => onUntil(iso === null ? null : calendarDay(iso))}
+            />
+            <span className="mt-1 block text-[11px] text-fg-subtle">
+              {until === null ? t("scheduleForever") : t("scheduleUntilHint")}
+            </span>
+          </div>
+        </div>
+      ) : null}
+    </div>
   );
 }
 

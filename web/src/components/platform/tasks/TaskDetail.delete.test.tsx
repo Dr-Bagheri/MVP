@@ -58,6 +58,7 @@ const TASK: TaskDetailRecord = {
   done: false, position: 1, archived: false, created_by: "u-me", assignee_ids: [],
   label_ids: [], checklist_done: 0, checklist_total: 0, comment_count: 0,
   created_at: "2026-09-01T10:00:00Z", description: "", checklist: [], comments: [], events: [],
+  recurrence_id: null, recurrence: null,
 };
 
 function open() {

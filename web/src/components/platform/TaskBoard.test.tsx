@@ -56,6 +56,7 @@ function card(over: Partial<TaskCardRecord>): TaskCardRecord {
     due_at: null, done: false, position: 1, archived: false,
     created_by: "u-me", assignee_ids: [], label_ids: [], checklist_done: 0,
     checklist_total: 0, comment_count: 0, created_at: "2026-08-31T10:00:00Z",
+    recurrence_id: null,
     ...over,
   };
 }
@@ -91,7 +92,7 @@ vi.mock("@/api/client", () => ({
        have the modal quietly disagree with it */
     taskDetail: async (id: string): Promise<TaskDetailRecord> => ({
       ...card({ id }), ...(boardTasks.find((t) => t.id === id) ?? {}),
-      description: "", checklist: [], comments: [], events: [],
+      description: "", checklist: [], comments: [], events: [], recurrence: null,
     }),
     createTask: vi.fn(), createTaskColumn: vi.fn(), createTaskTopic: vi.fn(),
     updateTaskColumn: (...a: unknown[]) => updateTaskColumn(...a), addTaskChecklistItem: vi.fn(),

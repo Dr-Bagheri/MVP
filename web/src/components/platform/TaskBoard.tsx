@@ -16,7 +16,7 @@ import {
 import { TaskDetail } from "./tasks/TaskDetail";
 import { TaskCalendar, TaskListView } from "./tasks/TaskViews";
 import {
-  IconCheck, IconClock, IconDots, IconFolder, IconPlus, IconTrash, IconUser, IconVideo, IconClose, IconPencil } from "@/components/icons";
+  IconCheck, IconClock, IconDots, IconFolder, IconPlus, IconRetry, IconTrash, IconUser, IconVideo, IconClose, IconPencil } from "@/components/icons";
 import { useSeededName } from "@/lib/seededNames";
 import { digits, personName } from "@/lib/format";
 import { useRefreshEpoch } from "@/lib/refreshBus";
@@ -838,6 +838,13 @@ function Card({ task, labels, people, onOpen, onToggleDone }: {
           ) : null}
           {task.comment_count > 0 ? (
             <span className="ltr">{digits(task.comment_count, locale)}</span>
+          ) : null}
+          {/* A REPEATING ORDER (0186), marked on the card because it changes
+              what finishing MEANS: ticking this one produces the next. A
+              person moving it to «انجام‌شده» should be able to see that from
+              the board rather than discover it when the card comes back. */}
+          {task.recurrence_id !== null ? (
+            <IconRetry width={12} height={12} aria-label={t("repeats")} />
           ) : null}
         </span>
       </div>

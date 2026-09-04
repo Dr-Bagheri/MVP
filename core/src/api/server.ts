@@ -2742,6 +2742,25 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     return reply.code(204).send();
   });
 
+  /**
+   * The repeating order attached to a task (0186). PUT sets or replaces it,
+   * DELETE removes it — there is no "pause", because a paused schedule is a
+   * state the card would have to explain and nobody asked for it.
+   */
+  app.put("/v1/tasks/:id/schedule", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    return reply.send(await tasks.setRecurrence(identity, id, (request.body ?? {}) as never));
+  });
+
+  app.delete("/v1/tasks/:id/schedule", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    return reply.send(await tasks.setRecurrence(identity, id, null));
+  });
+
   app.get("/v1/tasks/:id/events", async (request, reply) => {
     const identity = await auth.requireActive(request);
     refuseApiKey(identity);
@@ -2801,6 +2820,14 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     refuseApiKey(identity);
     const { id } = request.params as { id: string };
     return reply.send(await projects.update(identity, id, (request.body ?? {}) as Record<string, unknown>));
+  });
+
+  /* who is carrying what, counted from the board (0186) */
+  app.get("/v1/projects/:id/workload", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    return reply.send(await projects.workload(identity, id));
   });
 
   app.put("/v1/projects/:id/members/:userId", async (request, reply) => {

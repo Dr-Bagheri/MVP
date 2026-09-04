@@ -145,6 +145,26 @@ function toProject(row: Record<string, unknown>): ProjectRecord {
   };
 }
 
+/**
+ * WHO DID WHAT, AND WHO DIDN'T (0186) — one row per person the project's work
+ * touches, plus the bucket for work nobody was given.
+ *
+ * Counted, never stored. A project's numbers change every time anybody ticks
+ * a box on the board, and a maintained tally would be a second copy going
+ * stale between two screens that are supposed to agree.
+ */
+export interface ProjectWorkloadRow {
+  /** null is the UNASSIGNED bucket — "who didn't" includes "nobody was
+      given this", which is the reading a project's owner most needs and the
+      one an inner join silently drops */
+  user_id: string | null;
+  assigned: number;
+  done: number;
+  open: number;
+  /** open AND past its due date — a subset of `open`, not a fourth state */
+  overdue: number;
+}
+
 export function createProjectsRepo(db: Db) {
   async function list(
     identity: Identity,
@@ -297,7 +317,44 @@ export function createProjectsRepo(db: Db) {
     });
   }
 
-  return { list, detail, create, update, setMember };
+  /**
+   * The project's work, by person.
+   *
+   * A task with two people on it counts for BOTH: the question is "what is
+   * this person carrying", not "how do we divide one card between them", and
+   * a fractional card is a number nobody can act on.
+   */
+  async function workload(identity: Identity, id: string): Promise<ProjectWorkloadRow[]> {
+    return db.withIdentity(identity, async (tx: SqlTx) => {
+      const rows = await tx.unsafe<Record<string, unknown>>(
+        `select a.user_id,
+                count(*)::int as assigned,
+                count(*) filter (where t.done_at is not null)::int as done,
+                count(*) filter (where t.done_at is null)::int as open,
+                count(*) filter (where t.done_at is null
+                                   and t.due_at is not null
+                                   and t.due_at < now())::int as overdue
+           from echo.task t
+           join echo.task_topic tt on tt.id = t.topic_id and tt.project_id = $1
+           /* LEFT, and that is the whole point: the row with a null user is
+              the work nobody was given, which an inner join would hide at
+              exactly the moment somebody is looking for it */
+           left join echo.task_assignee a on a.task_id = t.id
+          where t.archived_at is null
+          group by a.user_id`,
+        [id],
+      );
+      return rows.map((r) => ({
+        user_id: (r.user_id as string | null) ?? null,
+        assigned: Number(r.assigned ?? 0),
+        done: Number(r.done ?? 0),
+        open: Number(r.open ?? 0),
+        overdue: Number(r.overdue ?? 0),
+      }));
+    });
+  }
+
+  return { list, detail, create, update, setMember, workload };
 }
 
 export type ProjectsRepo = ReturnType<typeof createProjectsRepo>;

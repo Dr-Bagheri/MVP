@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { OrgPersonRecord, ProjectRecord, TaskCardRecord } from "@/api/types";
@@ -45,7 +45,7 @@ function card(over: Partial<TaskCardRecord>): TaskCardRecord {
     title: "کارت", priority: "medium", labels: [], due_at: null, done: false,
     position: 1, archived: false, created_by: "u-1", assignee_ids: [],
     label_ids: [], checklist_done: 0, checklist_total: 0, comment_count: 0,
-    created_at: "2026-09-01T08:00:00.000Z",
+    created_at: "2026-09-01T08:00:00.000Z", recurrence_id: null,
     ...over,
   };
 }
@@ -72,6 +72,12 @@ vi.mock("@/api/client", () => ({
     setProjectMember: vi.fn(async () => undefined),
     orgPeople: async () => PEOPLE,
     me: async () => ({ id: "u-1" }),
+    /* the detail reads BOTH of these to draw the order dialog and the
+       workload panel. Without them the component throws inside a promise and
+       the failure arrives wearing an assertion's costume — the exact shape
+       this suite's sibling minted a rule about hours ago. */
+    taskLabels: async () => [],
+    projectWorkload: async () => [],
     taskBoard: async () => ({
       columns: [{ id: "c-1", name: "انجام‌شده", tone: "green", position: 1 }],
       topics: [],
@@ -89,7 +95,7 @@ import { CrumbTitleProvider } from "./CrumbTitle";
    output instead of the rule. It also keeps the missing-floor throw honest
    — a detail page rendered outside a provider SHOULD fail. */
 const detail = (id: string, meId: string | null) => (
-  <CrumbTitleProvider><ProjectDetail id={id} meId={meId} /></CrumbTitleProvider>
+  <CrumbTitleProvider><ProjectDetail id={id} meId={meId} isAdmin /></CrumbTitleProvider>
 );
 
 beforeEach(() => {
@@ -106,7 +112,7 @@ describe("Projects", () => {
       project({ id: "p-a", name: "پروژهٔ خالی", task_total: 0, task_done: 0 }),
       project({ id: "p-b", name: "پروژهٔ جاری", task_total: 5, task_done: 2 }),
     ];
-    render(<Projects meId="u-1" />);
+    render(<Projects isAdmin meId="u-1" />);
     await waitFor(() => expect(screen.getByText("پروژهٔ خالی")).toBeInTheDocument());
 
     /* scoped to each card, so a dash anywhere else on the page cannot make
@@ -118,12 +124,57 @@ describe("Projects", () => {
     expect(within(running).getByText("۲ از ۵")).toBeInTheDocument();
   });
 
+  it("offers the sort as a SUB-MENU of chips, never a dropdown", async () => {
+    /*
+     * User directive, 2026-09-04: "make the sort dropdown become the second
+     * sub menu top". Asserted on the RENDERED CONTROL rather than on the
+     * absence of an import, because the failure this guards is somebody
+     * reaching for `<Select>` again — which looks perfectly reasonable in a
+     * diff and puts a full-width panel back under a toolbar of chips.
+     */
+    LIST = [project({ id: "p-a", name: "پروژه" })];
+    render(<Projects isAdmin meId="u-1" />);
+    await waitFor(() => expect(screen.getByText("پروژه")).toBeInTheDocument());
+
+    for (const label of ["تازه‌ترین", "بر اساس نام", "بر اساس پیشرفت"]) {
+      expect(screen.getByRole("button", { name: label })).toBeInTheDocument();
+    }
+    /* the current answer is VISIBLE, which is the whole reason a chip row
+       beats a select here */
+    expect(screen.getByRole("button", { name: "تازه‌ترین" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "بر اساس نام" })).toHaveAttribute("aria-pressed", "false");
+    /* and the control: no combobox anywhere on the toolbar */
+    expect(screen.queryByRole("combobox")).toBeNull();
+
+    await userEvent.click(screen.getByRole("button", { name: "بر اساس نام" }));
+    expect(screen.getByRole("button", { name: "بر اساس نام" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("offers «پروژهٔ جدید» to an admin and to nobody else", async () => {
+    /*
+     * 0186: "the admins only can make projects". ABSENT rather than
+     * disabled — a greyed button is a promise the product will not keep for
+     * this person, and pressing it explains nothing. The wall itself is the
+     * policy; this asserts the screen agrees with it.
+     */
+    LIST = [project({ id: "p-a", name: "پروژه" })];
+    render(<Projects isAdmin meId="u-1" />);
+    expect(await screen.findByRole("button", { name: /پروژهٔ جدید/ })).toBeInTheDocument();
+
+    cleanup();
+    render(<Projects isAdmin={false} meId="u-1" />);
+    await waitFor(() => expect(screen.getByText("پروژه")).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: /پروژهٔ جدید/ })).toBeNull();
+    /* the control: the page still rendered, so "no button" is not "no page" */
+    expect(screen.getByRole("button", { name: "همه" })).toBeInTheDocument();
+  });
+
   it("«مال من» keeps only the projects the reader is on", async () => {
     LIST = [
       project({ id: "p-a", name: "پروژهٔ من", member_ids: ["u-1", "u-2"] }),
       project({ id: "p-b", name: "پروژهٔ دیگری", member_ids: ["u-2"] }),
     ];
-    render(<Projects meId="u-1" />);
+    render(<Projects isAdmin meId="u-1" />);
     await waitFor(() => expect(screen.getByText("پروژهٔ من")).toBeInTheDocument());
     expect(screen.getByText("پروژهٔ دیگری")).toBeInTheDocument();
 
@@ -144,7 +195,7 @@ describe("Projects", () => {
       project({ id: "p-a", name: "پروژهٔ من", member_ids: ["u-1"] }),
       project({ id: "p-b", name: "پروژهٔ دیگری", member_ids: ["u-2"] }),
     ];
-    render(<Projects meId={null} />);
+    render(<Projects isAdmin meId={null} />);
     await waitFor(() => expect(screen.getByText("پروژهٔ من")).toBeInTheDocument());
 
     await userEvent.click(screen.getByRole("button", { name: "مال من" }));
@@ -156,7 +207,7 @@ describe("Projects", () => {
   });
 
   it("creates with the wire's shape, and never sends the creator as a member", async () => {
-    render(<Projects meId="u-1" />);
+    render(<Projects isAdmin meId="u-1" />);
     await userEvent.click(await screen.findByRole("button", { name: /پروژهٔ جدید/ }));
 
     await userEvent.type(await screen.findByLabelText("نام پروژه"), "بازطراحی");

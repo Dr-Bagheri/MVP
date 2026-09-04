@@ -31,7 +31,8 @@ export type {
   TaskCardRecord, TaskColumnRecord, TaskTopicRecord, TaskDetailRecord,
   TaskChecklistItemRecord, TaskCommentRecord, TaskPriority, TaskColumnTone,
   TaskLabelRecord, TaskLabelColor, TaskEventRecord, TaskEventKind, OrgPersonRecord,
-  ProjectRecord, ProjectTone,
+  ProjectRecord, ProjectTone, ProjectWorkloadRow,
+  TaskRecurrenceRecord,
   ChatChannelRecord, ChatMessageRecord, ChatEvent,
 } from "@echo/core/wire";
 export type { PlatformAuditEntry, PlatformOrganization, PlatformOverview, PlatformPage, PlatformUser };

@@ -8,7 +8,6 @@ import { useRefreshEpoch } from "@/lib/refreshBus";
 import type { OrgPersonRecord, ProjectRecord, ProjectTone } from "@/api/types";
 import { Overlay } from "./Overlay";
 import { Avatar } from "@/components/Avatar";
-import { Select } from "@/components/Select";
 import { TONE_DOT } from "./tasks/TaskDialogs";
 import { IconCheck, IconClose, IconFolder, IconPeople3, IconPlus } from "@/components/icons";
 import { SkeletonCards } from "@/components/scaffold";
@@ -50,7 +49,7 @@ function progressOf(p: ProjectRecord): number | null {
   return p.task_total === 0 ? null : p.task_done / p.task_total;
 }
 
-export function Projects({ meId }: { meId: string | null }) {
+export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: boolean }) {
   const t = useTranslations("projects");
   const locale = useLocale();
   const router = useRouter();
@@ -120,30 +119,40 @@ export function Projects({ meId }: { meId: string | null }) {
           {chip(filter === "mine", t("filterMine"), () => setFilter("mine"))}
           {chip(filter === "archived", t("filterArchived"), () => setFilter("archived"))}
         </div>
-        <button
-          type="button"
-          onClick={() => setCreating(true)}
-          className="btn bg-accent text-on-accent shadow-accent hover:opacity-90"
-        >
-          <IconPlus width={14} height={14} />
-          {t("newProject")}
-        </button>
+        {/* ADMIN ONLY (0186, user directive: "the admins only can make
+            projects and they will add members"). Absent rather than disabled:
+            a greyed button is a promise the product has no intention of
+            keeping for this person, and it invites the press that explains
+            nothing. The wall itself is the policy — this is the button
+            agreeing with it. */}
+        {isAdmin ? (
+          <button
+            type="button"
+            onClick={() => setCreating(true)}
+            className="btn bg-accent text-on-accent shadow-accent hover:opacity-90"
+          >
+            <IconPlus width={14} height={14} />
+            {t("newProject")}
+          </button>
+        ) : null}
       </div>
 
-      {/* ── row two: the order ───────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs text-fg-muted">{t("sortBy")}</span>
-        <Select
-          value={sort}
-          onChange={(v) => setSort(v as Sort)}
-          ariaLabel={t("sortBy")}
-          className="h-8 w-44 text-xs"
-          options={[
-            { value: "recent", label: t("sortRecent") },
-            { value: "name", label: t("sortName") },
-            { value: "progress", label: t("sortProgress") },
-          ]}
-        />
+      {/* ── row two: the order, as a SUB-MENU and not a dropdown (user
+             directive, 2026-09-04: "make the sort dropdown become the second
+             sub menu top").
+
+             A select for three mutually-exclusive values costs two presses to
+             see what the options even are, and it rendered as a full-width
+             panel under a toolbar of chips — the one control on the page with
+             a different silhouette. Chips show the choices and the current
+             answer at once, which is what the row above it already does. */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-1">
+          <span className="me-1 text-xs text-fg-muted">{t("sortBy")}</span>
+          {chip(sort === "recent", t("sortRecent"), () => setSort("recent"))}
+          {chip(sort === "name", t("sortName"), () => setSort("name"))}
+          {chip(sort === "progress", t("sortProgress"), () => setSort("progress"))}
+        </div>
         <span className="text-xs text-fg-subtle">
           {t("count", { n: digits(shown.length, locale) })}
         </span>
@@ -169,7 +178,9 @@ export function Projects({ meId }: { meId: string | null }) {
             {filter === "all" ? t("emptyTitle") : t("emptyFiltered")}
           </p>
           {filter === "all" ? (
-            <p className="max-w-sm text-xs text-fg-muted">{t("emptyBody")}</p>
+            <p className="max-w-sm text-xs text-fg-muted">
+              {isAdmin ? t("emptyBody") : t("emptyBodyMember")}
+            </p>
           ) : null}
         </div>
       ) : (

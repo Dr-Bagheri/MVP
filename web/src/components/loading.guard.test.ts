@@ -127,6 +127,12 @@ const REMAINING: Record<string, number> = {
      their own box, so the layout does not move when the answers land and
      "loading" never draws the same picture as "nobody has said anything". */
   "components/platform/Chat.tsx": 2,
+  /* 0186, and NOT a loading state. The one match is the schedule's date
+     conversion — `iso === null ? null : calendarDay(iso)` — where null is
+     the picker's own word for «بدون مهلت», which this feature reads as
+     "no end date". A value, not a fetch: nothing is in flight and there is
+     no frame to draw for a date somebody deliberately did not pick. */
+  "components/platform/tasks/TaskDialogs.tsx": 1,
   // audit finding, 2026-09-02: IntegrationDetail.tsx LEFT this list — its one
   // entry made the WHOLE page wait on api.connectors() although the icon,
   // name and description come from the catalogue; the header renders at once
