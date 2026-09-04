@@ -16,6 +16,9 @@ import { ConfirmDialog } from "@/components/rowActions";
 import { TONE_DOT, PRIORITY_CHIP, NewTaskDialog } from "./tasks/TaskDialogs";
 import { TonePicker } from "./Projects";
 import {
+  BODY_HEADING, BODY_TEXT, RAIL_LABEL, RAIL_VALUE, RAIL_EMPTY, TOP_BUTTON,
+} from "./tasks/panelStyle";
+import {
   IconArchive, IconCheck, IconClose, IconPencil, IconPeople3, IconPlus, IconRetry,
   IconTrash,
 } from "@/components/icons";
@@ -116,8 +119,23 @@ export function ProjectDetail({ id, meId, isAdmin }: { id: string; meId: string 
   };
 
   return (
+    /*
+     * THE TASK DETAIL'S ANATOMY, ON A PAGE (user directive, 2026-09-05: "add
+     * the same structure for project edit as well that looks like the task,
+     * and mix it with the project's options").
+     *
+     * One panel with a body and a 283px rail, exactly as `?task=` opens — the
+     * measurements are the reference's own (panelStyle.ts). What differs is
+     * what the rail HOLDS: a task's rail carries column, priority, deadline;
+     * a project's carries its tone, its progress, its people and the two acts
+     * that end it. Same anatomy, its own contents, which is what "mix it with
+     * the project options" asks for.
+     *
+     * It stays a PAGE rather than becoming a modal: a project is a place you
+     * navigate to and link people at, and a modal has no address.
+     */
     <div className="flex min-h-0 flex-1 flex-col gap-4">
-      {/* ── the identity tile ────────────────────────────────────────── */}
+      {/* ── the identity row, the detail's own top bar ───────────────── */}
       <section className="tile flex flex-wrap items-start gap-3 p-4">
         <span
           aria-hidden
@@ -130,32 +148,29 @@ export function ProjectDetail({ id, meId, isAdmin }: { id: string; meId: string 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className={`h-2 w-2 shrink-0 rounded-full ${TONE_DOT[project.tone] ?? TONE_DOT.grey!}`} aria-hidden />
-            <h1 className="truncate text-base font-semibold text-fg">{project.name}</h1>
+            <h1 className="truncate text-[17px] font-bold text-fg">{project.name}</h1>
             {project.archived_at !== null ? (
               <span className="badge-num rounded-md bg-surface-2 px-1.5 text-[10px] text-fg-muted">
                 {t("archived")}
               </span>
             ) : null}
           </div>
-          <p className="mt-1 text-xs leading-6 text-fg-muted">
+          <p className={`mt-1.5 ${BODY_TEXT}`}>
             {project.summary === "" ? t("noSummary") : project.summary}
-          </p>
-          <p className="mt-1 text-[11px] text-fg-subtle">
-            {t("createdOn", { date: formatDate(project.created_at, locale) })}
           </p>
         </div>
         <div className={`flex items-center gap-1.5 ${isAdmin ? "" : "hidden"}`}>
-          <button type="button" onClick={() => setEditing(true)} className="btn btn-sm gap-1.5 border border-border text-fg-muted hover:text-fg">
+          <button type="button" onClick={() => setEditing(true)} className={TOP_BUTTON}>
             <IconPencil width={12} height={12} />
             {t("edit")}
           </button>
           {project.archived_at === null ? (
-            <button type="button" onClick={() => setCondemned(true)} className="btn btn-sm gap-1.5 border border-border text-fg-muted hover:text-fg">
+            <button type="button" onClick={() => setCondemned(true)} className={TOP_BUTTON}>
               <IconArchive width={12} height={12} />
               {t("archive")}
             </button>
           ) : (
-            <button type="button" onClick={() => patch({ archived: false })} className="btn btn-sm gap-1.5 border border-border text-fg-muted hover:text-fg">
+            <button type="button" onClick={() => patch({ archived: false })} className={TOP_BUTTON}>
               <IconCheck width={12} height={12} />
               {t("restore")}
             </button>
@@ -167,7 +182,7 @@ export function ProjectDetail({ id, meId, isAdmin }: { id: string; meId: string 
               deleting removes it. Danger-toned, because only one of the two
               cannot be undone. */}
           <button type="button" onClick={() => setDeleting(true)}
-            className="btn btn-sm gap-1.5 border border-border text-danger hover:border-danger/40">
+            className={`${TOP_BUTTON} text-danger hover:border-danger/40 hover:text-danger`}>
             <IconTrash width={12} height={12} />
             {tCommon("delete")}
           </button>
@@ -180,11 +195,12 @@ export function ProjectDetail({ id, meId, isAdmin }: { id: string; meId: string 
         </p>
       ) : null}
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_280px]">
+      {/* the detail's own split: body, then a 283px rail (measured) */}
+      <div className="grid gap-4 lg:grid-cols-[1fr_283px]">
         {/* ── the work ───────────────────────────────────────────────── */}
         <section className="tile p-4" aria-label={t("work")}>
           <div className="mb-3 flex items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold text-fg">{t("work")}</h2>
+            <h2 className={BODY_HEADING}>{t("work")}</h2>
             <div className="flex items-center gap-2">
               <span className="badge-num text-[11px] text-fg-muted">
                 {mine.length === 0
@@ -269,35 +285,99 @@ export function ProjectDetail({ id, meId, isAdmin }: { id: string; meId: string 
           meId={meId}
         />
 
-        {/* ── the people ─────────────────────────────────────────────── */}
-        <section className="tile self-start p-4" aria-label={t("fieldMembers")}>
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold text-fg">{t("fieldMembers")}</h2>
-            {isAdmin ? (
-              <button type="button" onClick={() => setManaging(true)} className="btn btn-icon text-fg-muted hover:text-fg" aria-label={t("manageMembers")}>
-                <IconPlus width={12} height={12} />
-              </button>
-            ) : null}
+        {/*
+          ── THE RAIL ──────────────────────────────────────────────────
+          The task detail's rail, row for row: an 11px/600 label above a
+          12.5px/600 value, receded when the value is empty so the row still
+          reads as a row. What it CARRIES is a project's own facts, which is
+          the "mix it with the project options" half of the directive — a
+          task's rail has column, priority and deadline; this one has the
+          folder the work is filed under, how far it has got, its tone, its
+          people and when it began.
+        */}
+        <aside className="tile self-start space-y-4 p-5" aria-label={t("fieldMembers")}>
+          {/* the board folder this project owns (0181) — the one row that
+              points somewhere, because the work itself lives there */}
+          <div>
+            <span className={RAIL_LABEL}>{t("fieldBoardFolder")}</span>
+            {project.topic_id === null ? (
+              <span className={RAIL_EMPTY}>{t("noBoardFolder")}</span>
+            ) : (
+              <Link href={`/tasks?topic=${project.topic_id}`} className={`${RAIL_VALUE} hover:text-accent`}>
+                <bdi>{project.name}</bdi>
+              </Link>
+            )}
           </div>
-          {members.length === 0 ? (
-            <p className="flex items-center gap-1.5 py-3 text-xs text-fg-subtle">
-              <IconPeople3 width={12} height={12} />
-              {t("noMembers")}
-            </p>
-          ) : (
-            <ul className="space-y-1.5">
-              {members.map((person) => (
-                <li key={person.id} className="flex items-center gap-2">
-                  <Avatar name={personName(person, locale)} size="xs" />
-                  <span className="min-w-0 flex-1 truncate text-xs text-fg">{personName(person, locale)}</span>
-                  {person.id === meId ? (
-                    <span className="text-[10px] text-fg-subtle">{t("you")}</span>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+
+          {/* PROGRESS, counted off the board on every read (0181) — never a
+              stored number, so this row cannot disagree with the cards */}
+          <div>
+            <span className={RAIL_LABEL}>{t("fieldProgress")}</span>
+            {project.task_total === 0 ? (
+              <span className={RAIL_EMPTY}>{t("noWorkYet")}</span>
+            ) : (
+              <>
+                <span className={RAIL_VALUE}>
+                  {t("progress", {
+                    done: digits(project.task_done, locale),
+                    total: digits(project.task_total, locale),
+                  })}
+                </span>
+                <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-surface-2">
+                  <div
+                    className="h-full rounded-full bg-accent"
+                    style={{ width: `${Math.round((project.task_done / project.task_total) * 100)}%` }}
+                  />
+                </div>
+              </>
+            )}
+          </div>
+
+          <div>
+            <span className={RAIL_LABEL}>{t("fieldTone")}</span>
+            <span className="flex items-center gap-2">
+              <span className={`h-3 w-3 rounded-md ${TONE_DOT[project.tone] ?? TONE_DOT.grey!}`} aria-hidden />
+              <span className={RAIL_VALUE}>{project.tone}</span>
+            </span>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between gap-2">
+              <span className={RAIL_LABEL}>{t("fieldMembers")}</span>
+              {isAdmin ? (
+                <button type="button" onClick={() => setManaging(true)}
+                  className="btn btn-icon -mt-1 text-fg-muted hover:text-fg" aria-label={t("manageMembers")}>
+                  <IconPlus width={12} height={12} />
+                </button>
+              ) : null}
+            </div>
+            {members.length === 0 ? (
+              <span className={`flex items-center gap-1.5 ${RAIL_EMPTY}`}>
+                <IconPeople3 width={12} height={12} />
+                {t("noMembers")}
+              </span>
+            ) : (
+              <ul className="space-y-1.5">
+                {members.map((person) => (
+                  <li key={person.id} className="flex items-center gap-2">
+                    <Avatar name={personName(person, locale)} size="xs" />
+                    <span className={`min-w-0 flex-1 truncate ${RAIL_VALUE}`}>
+                      {personName(person, locale)}
+                    </span>
+                    {person.id === meId ? (
+                      <span className="text-[10px] text-fg-subtle">{t("you")}</span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div>
+            <span className={RAIL_LABEL}>{t("fieldCreated")}</span>
+            <span className={RAIL_VALUE}>{formatDate(project.created_at, locale)}</span>
+          </div>
+        </aside>
         </div>
       </div>
 
@@ -432,7 +512,7 @@ function Workload({ rows, people, members, locale, meId }: {
 
   return (
     <section className="tile p-4" aria-label={t("whoDidWhat")}>
-      <h2 className="mb-3 text-sm font-semibold text-fg">{t("whoDidWhat")}</h2>
+      <h2 className={`${BODY_HEADING} mb-3`}>{t("whoDidWhat")}</h2>
       {rows === null ? (
         <SkeletonLines lines={3} />
       ) : ids.length === 0 && unassigned === undefined ? (

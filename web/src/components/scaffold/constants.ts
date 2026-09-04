@@ -174,7 +174,12 @@ export const SCAFFOLD = {
     control: 11, // rounded-md — inputs, buttons (measured: 11)
     panel: 12, // rounded-lg (and DEFAULT) — nav rows, menu pills (12)
     tile: 16, // rounded-xl — list rows and tiles (16)
-    modal: 20, // rounded-2xl — cards and dialogs (20)
+    /* 18, MEASURED (2026-09-05, panel.arameet.ir at 1920x911): the
+       reference's dialog and its detail modal both round at 18, and this
+       token said 20 — close enough to look deliberate and wrong on every
+       dialog in the product at once, which is exactly why it is a token and
+       not a per-file number. */
+    modal: 18, // rounded-2xl — cards and dialogs (measured: 18)
   },
 
   /**

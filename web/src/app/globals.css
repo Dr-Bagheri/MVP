@@ -65,7 +65,7 @@
        shares the card's reads as nothing at all and has to be found by its
        border. In dark the same job wants the raised tone, so this equals
        surface-2 here — one token, two theme answers. */
-    --field: 39 44 50;            /* #272C32 */
+    --field: 29 33 38;            /* #1D2126 — measured 2026-09-05; its own ground, not the raised tone */
     --border: 43 46 49;           /* #2B2E31 — hairline, decorative */
     --border-strong: 114 121 130; /* #727982 — control edges, 3:1+ */
     --fg: 242 244 246;            /* #F2F4F6 */

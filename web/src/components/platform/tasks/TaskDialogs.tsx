@@ -12,6 +12,10 @@ import { Avatar } from "@/components/Avatar";
 import { Select } from "@/components/Select";
 import { ConfirmDialog } from "@/components/rowActions";
 import { JalaliPicker } from "./JalaliPicker";
+import {
+  FIELD_LABEL, PANEL_INPUT, PANEL_TEXTAREA, chipClass,
+  FOOTER_CANCEL, FOOTER_PRIMARY,
+} from "./panelStyle";
 import { IconCheck, IconClose, IconPencil, IconPlus, IconTrash, IconUser } from "@/components/icons";
 import { digits, formatDate, personName } from "@/lib/format";
 
@@ -165,7 +169,7 @@ function LabelEditor({ label, onClose, onSaved }: {
       </div>
       {failed ? <p role="alert" className="mb-2 text-xs text-danger">{t("writeFailed")}</p> : null}
       <label className="block">
-        <span className="mb-1 block text-xs font-medium text-fg-muted">{t("labelName")}</span>
+        <span className={FIELD_LABEL}>{t("labelName")}</span>
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -515,8 +519,8 @@ export function NewTaskDialog({ columns, topics, labels, people, defaultColumnId
     <Overlay onClose={onClose} label={t("newTask")} size="md">
       <div className="mb-1 flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-base font-bold text-fg">{t("newTask")}</h2>
-          <p className="mt-0.5 text-xs text-fg-muted">{t("newTaskSubtitle")}</p>
+          <h2 className="text-[15px] font-bold text-fg">{t("newTask")}</h2>
+          <p className="mt-0.5 text-[12px] text-fg-subtle">{t("newTaskSubtitle")}</p>
         </div>
         {/* 2026-09-03: `.btn btn-icon`, the one icon-only shape in the theme
             — the same control the task screen's close and every kebab in the
@@ -531,21 +535,21 @@ export function NewTaskDialog({ columns, topics, labels, people, defaultColumnId
         {failed ? <p role="alert" className="text-xs text-danger">{t("writeFailed")}</p> : null}
 
         <label className="block">
-          <span className="mb-1 block text-xs font-medium text-fg-muted">{t("fieldTitleRequired")}</span>
+          <span className={FIELD_LABEL}>{t("fieldTitleRequired")}</span>
           <input value={title} onChange={(e) => setTitle(e.target.value)}
             placeholder={t("titlePlaceholder")}
-            className="h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-fg outline-none placeholder:text-fg-subtle focus:border-accent" />
+            className={PANEL_INPUT} />
         </label>
 
         <label className="block">
-          <span className="mb-1 block text-xs font-medium text-fg-muted">{t("fieldDescription")}</span>
+          <span className={FIELD_LABEL}>{t("fieldDescription")}</span>
           <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3}
             placeholder={t("descriptionPlaceholder")}
-            className="w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-fg outline-none placeholder:text-fg-subtle focus:border-accent" />
+            className={PANEL_TEXTAREA} />
         </label>
 
         <div>
-          <span className="mb-1 block text-xs font-medium text-fg-muted">{t("fieldLabels")}</span>
+          <span className={FIELD_LABEL}>{t("fieldLabels")}</span>
           <LabelRow
             labels={labels}
             selected={labelIds}
@@ -555,7 +559,7 @@ export function NewTaskDialog({ columns, topics, labels, people, defaultColumnId
         </div>
 
         <label className="block">
-          <span className="mb-1 block text-xs font-medium text-fg-muted">{t("fieldTopicFolder")}</span>
+          <span className={FIELD_LABEL}>{t("fieldTopicFolder")}</span>
           {/* the platform's own dropdown, not the browser's: a native
               option list paints on Chrome's sheet with its own blue
               selection and nothing in this stylesheet reaches it */}
@@ -571,7 +575,7 @@ export function NewTaskDialog({ columns, topics, labels, people, defaultColumnId
         </label>
 
         <div>
-          <span className="mb-1 block text-xs font-medium text-fg-muted">{t("fieldColumn")}</span>
+          <span className={FIELD_LABEL}>{t("fieldColumn")}</span>
           <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label={t("fieldColumn")}>
             {columns.map((column) => (
               <button
@@ -580,16 +584,11 @@ export function NewTaskDialog({ columns, topics, labels, people, defaultColumnId
                 role="radio"
                 aria-checked={columnId === column.id}
                 onClick={() => setColumnId(column.id)}
-                /* 2026-09-03: `.btn btn-sm` + an explicit border. The guard
-                   never saw this row (a height and a corner, no centring
-                   word) while it saw the priority row directly below, which
-                   is the same control — converting one and not the other
-                   would have put two shapes in one form. */
-                className={`btn btn-sm border ${
-                  columnId === column.id
-                    ? "border-accent bg-accent-soft text-accent"
-                    : "border-border bg-surface text-fg-muted hover:text-fg"
-                }`}
+                /* the reference's own segment chip, measured: 34px tall,
+                   12px/600, a 9px corner of its own, and two states that
+                   differ by ground and edge so the row does not move when the
+                   selection does (see panelStyle.ts). */
+                className={chipClass(columnId === column.id)}
               >
                 {column.name}
               </button>
@@ -598,7 +597,7 @@ export function NewTaskDialog({ columns, topics, labels, people, defaultColumnId
         </div>
 
         <div>
-          <span className="mb-1 block text-xs font-medium text-fg-muted">{t("fieldPriority")}</span>
+          <span className={FIELD_LABEL}>{t("fieldPriority")}</span>
           <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label={t("fieldPriority")}>
             {PRIORITY_ORDER.map((level) => (
               <button
@@ -607,15 +606,12 @@ export function NewTaskDialog({ columns, topics, labels, people, defaultColumnId
                 role="radio"
                 aria-checked={priority === level}
                 onClick={() => setPriority(level)}
-                /* 2026-09-03: the same `.btn btn-sm` the task screen's rail
-                   now uses for this very choice — one product, one priority
-                   button. The border is written out because `.btn` draws
-                   none, and `border-warning` on a borderless button would
-                   paint nothing. */
-                className={`btn btn-sm border ${
-                  priority === level
-                    ? "border-warning bg-warning/10 text-warning"
-                    : "border-border bg-surface text-fg-muted hover:text-fg"
+                /* the SAME chip as the column row above it — one product,
+                   one segment control. Only the selected TONE differs, because
+                   priority is the one closed choice in this form that carries
+                   a colour of its own. */
+                className={`${chipClass(priority === level)} ${
+                  priority === level ? "border-warning bg-warning/10 text-warning" : ""
                 }`}
               >
                 <span className={`h-1.5 w-1.5 rounded-full ${PRIORITY_DOT[level]}`} aria-hidden />
@@ -627,11 +623,11 @@ export function NewTaskDialog({ columns, topics, labels, people, defaultColumnId
 
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
-            <span className="mb-1 block text-xs font-medium text-fg-muted">{t("fieldDue")}</span>
+            <span className={FIELD_LABEL}>{t("fieldDue")}</span>
             <DueField value={due} onPick={setDue} />
           </div>
           <div>
-            <span className="mb-1 block text-xs font-medium text-fg-muted">{t("fieldAssignees")}</span>
+            <span className={FIELD_LABEL}>{t("fieldAssignees")}</span>
             <AssigneePicker
               people={people}
               selected={assignees}
@@ -652,17 +648,16 @@ export function NewTaskDialog({ columns, topics, labels, people, defaultColumnId
         ) : null}
       </div>
 
-      <div className="mt-3 flex items-center justify-between">
-        {/* 2026-09-03: `.btn` — it stood at 40px/14px beside the create
-            button on the same row, which was already `.btn` at 38px/11px.
-            Two buttons in one footer, two shapes, was the directive in
-            miniature. */}
-        <button type="button" onClick={onClose}
-          className="btn border border-border bg-surface text-fg hover:bg-border">
+      {/* the reference's footer, measured: cancel 42px with a strong edge,
+          create 40px filled, both at 13px on an 11px corner. They stood at
+          two different shapes before, which is the complaint this whole round
+          is about, one form down. */}
+      <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
+        <button type="button" onClick={onClose} className={FOOTER_CANCEL}>
           {t("cancel")}
         </button>
         <button type="button" onClick={submit} disabled={title.trim() === "" || busy || columnId === ""}
-          className="btn bg-accent font-semibold text-on-accent shadow-accent disabled:opacity-50">
+          className={FOOTER_PRIMARY}>
           <IconPlus width={14} height={14} />
           {t("createTask")}
         </button>
@@ -720,7 +715,7 @@ export function ScheduleFields({ repeats, gapDays, until, onRepeats, onGapDays, 
       {repeats ? (
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <label className="block">
-            <span className="mb-1 block text-xs font-medium text-fg-muted">{t("scheduleGap")}</span>
+            <span className={FIELD_LABEL}>{t("scheduleGap")}</span>
             <input
               type="number"
               min={0}
@@ -737,7 +732,7 @@ export function ScheduleFields({ repeats, gapDays, until, onRepeats, onGapDays, 
             <span className="mt-1 block text-[11px] text-fg-subtle">{t("scheduleGapHint")}</span>
           </label>
           <div>
-            <span className="mb-1 block text-xs font-medium text-fg-muted">{t("scheduleUntil")}</span>
+            <span className={FIELD_LABEL}>{t("scheduleUntil")}</span>
             {/* the BOARD'S OWN date control, not a second one: it carries
                 the Jalali grid, the presets and «بدون مهلت» — which is
                 exactly "unlimited in time" and already spelled once. */}

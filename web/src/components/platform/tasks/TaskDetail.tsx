@@ -16,6 +16,7 @@ import {
   TONE_CHIP, TONE_DOT, relativeTime,
 } from "./TaskDialogs";
 import { Overlay } from "../Overlay";
+import { BODY_HEADING, RAIL_LABEL, TAB_BAR, tabClass } from "./panelStyle";
 import {
   IconArchive, IconCheck, IconClose, IconPencil, IconPlus, IconRetry, IconTrash, IconVideo,
 } from "@/components/icons";
@@ -181,13 +182,13 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
                 className="h-11 w-full rounded-xl border border-border bg-surface px-3 text-lg font-bold text-fg outline-none focus:border-accent"
               />
             ) : (
-              <h2 className={`text-lg font-bold ${task.done ? "text-fg-subtle line-through" : "text-fg"}`}>
+              <h2 className={`text-[17px] font-bold ${task.done ? "text-fg-subtle line-through" : "text-fg"}`}>
                 {task.title}
               </h2>
             )}
 
             <section aria-label={t("fieldDescription")}>
-              <h3 className="mb-1 text-xs text-fg-muted">{t("fieldDescription")}</h3>
+              <h3 className={`${BODY_HEADING} mb-2`}>{t("fieldDescription")}</h3>
               {editing ? (
                 <textarea
                   value={description}
@@ -300,7 +301,7 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
             </section>
 
             {/* ── the two tabs ─────────────────────────────────────── */}
-            <div role="tablist" className="flex rounded-xl border border-border bg-surface-2/60 p-1">
+            <div role="tablist" className={TAB_BAR}>
               {([["comments", `${t("comments")} ${digits(task.comments.length, locale)}`],
                  ["history", `${t("history")} ${digits(task.events.length, locale)}`]] as const).map(([key, label]) => (
                 <button
@@ -309,15 +310,11 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
                   role="tab"
                   aria-selected={tab === key}
                   onClick={() => setTab(key)}
-                  /* 2026-09-03: `.btn btn-sm` is the measured segmented tab
-                     (globals names it as that case by name) — this pair had
-                     invented a 32px/10px one instead. The guard could not
-                     see it: no `items-center` in the string, so it read as
-                     spacing. Converted with its neighbours because leaving
-                     it would put two compact shapes on one screen. */
-                  className={`btn btn-sm flex-1 ${
-                    tab === key ? "bg-surface text-fg shadow-card" : "text-fg-muted hover:text-fg"
-                  }`}
+                  /* the reference's own tab, measured 2026-09-05: 32px on
+                     an 8px corner inside a 42px bar, and the active one is
+                     lifted by GROUND rather than by a shadow — a shadow
+                     inside a recessed strip reads as a second surface. */
+                  className={tabClass(tab === key)}
                 >
                   {label}
                 </button>
@@ -415,9 +412,12 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
           </div>
 
           {/* ── the rail ───────────────────────────────────────────── */}
-          <aside className="space-y-3 border-t border-border bg-surface-2/30 p-4 md:border-s md:border-t-0">
+          /* 283px, measured — and no tinted ground: the reference's rail is the
+             panel's own surface with a hairline between, so the eye reads one
+             card with two columns rather than two panels side by side */
+          <aside className="space-y-4 border-t border-border p-5 md:w-[283px] md:shrink-0 md:border-s md:border-t-0">
             <div>
-              <span className="mb-1 block text-[11px] text-fg-muted">{t("fieldTopic")}</span>
+              <span className={RAIL_LABEL}>{t("fieldTopic")}</span>
               <Select
                 value={task.topic_id ?? ""}
                 onChange={(v) => patch({ topic_id: v === "" ? null : v })}
@@ -430,7 +430,7 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
             </div>
 
             <div>
-              <span className="mb-1 block text-[11px] text-fg-muted">{t("fieldColumn")}</span>
+              <span className={RAIL_LABEL}>{t("fieldColumn")}</span>
               <Select
                 value={task.column_id}
                 onChange={(v) => patch({ column_id: v })}
@@ -440,7 +440,7 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
             </div>
 
             <div>
-              <span className="mb-1 block text-[11px] text-fg-muted">{t("fieldAssignees")}</span>
+              <span className={RAIL_LABEL}>{t("fieldAssignees")}</span>
               {task.assignee_ids.length === 0 ? (
                 <p className="mb-1 text-xs text-fg-subtle">{t("noAssignee")}</p>
               ) : null}
@@ -455,7 +455,7 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
             </div>
 
             <div>
-              <span className="mb-1 block text-[11px] text-fg-muted">{t("fieldPriority")}</span>
+              <span className={RAIL_LABEL}>{t("fieldPriority")}</span>
               <div className="flex flex-wrap gap-1">
                 {PRIORITY_ORDER.map((level) => (
                   <button
@@ -481,12 +481,12 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
             </div>
 
             <div>
-              <span className="mb-1 block text-[11px] text-fg-muted">{t("fieldDue")}</span>
+              <span className={RAIL_LABEL}>{t("fieldDue")}</span>
               <DueField value={task.due_at} onPick={(iso) => patch({ due_at: iso })} />
             </div>
 
             <div>
-              <span className="mb-1 block text-[11px] text-fg-muted">{t("fieldLabels")}</span>
+              <span className={RAIL_LABEL}>{t("fieldLabels")}</span>
               {task.label_ids.length === 0 ? (
                 <p className="mb-1 text-xs text-fg-subtle">{t("noLabels")}</p>
               ) : null}
@@ -607,7 +607,7 @@ function ScheduleRow({ task, onChanged, onFailed }: {
   const schedule = task.recurrence;
   return (
     <div>
-      <span className="mb-1 block text-[11px] text-fg-muted">{t("scheduleField")}</span>
+      <span className={RAIL_LABEL}>{t("scheduleField")}</span>
       {schedule === null ? (
         <button type="button" onClick={() => setOpen(true)}
           className="btn btn-sm w-full justify-start border border-border text-fg-muted hover:text-fg">

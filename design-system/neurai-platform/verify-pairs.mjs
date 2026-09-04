@@ -73,7 +73,11 @@ export const DARK = {
   bg: "#0F1113",            // the ground
   surface: "#16191C",       // panels and cards sit ABOVE it
   surface2: "#272C32",      // raised: chips, hovered rows
-  field: "#272C32",         // dark: the raised tone does the field's job too
+  /* MEASURED 2026-09-05 on panel.arameet.ir: their field ground is its own
+     darker tone, not the raised one. Ours had the raised tone doing both
+     jobs, which made a text box and a hovered chip the same colour — the
+     reference tells them apart and the product reads better for it. */
+  field: "#1D2126",         // dark: the field has its own ground
   border: "#2B2E31",        // hairline (reference: white at 9% over surface)
   borderStrong: "#727982",  // control boundaries — clears 3:1
   fg: "#F2F4F6",
