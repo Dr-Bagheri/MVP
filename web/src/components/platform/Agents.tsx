@@ -188,11 +188,15 @@ function AgentTile({ agent, copy, big = false }: {
         */}
         <AgentAvatar handle={agent.handle} size={big ? "xl" : "lg"} />
         <span className="min-w-0">
+          {/* NO HANDLE ON THE CARD (user directive, 2026-09-04: "remove the
+              @roya and @ava text from the buttons"). It is an ADDRESS — how you
+              summon them in a message — and a card is where you meet them by
+              name. It stays on the agent's own page, where somebody has gone
+              looking for exactly that kind of detail. */}
           <span className="flex items-baseline gap-1.5">
             <span className={`truncate font-semibold text-fg group-hover:text-accent ${
               big ? "text-base" : "text-sm"
             }`}>{name}</span>
-            <code className="shrink-0 text-xs text-fg-subtle">@{agent.handle}</code>
           </span>
           {/* the small card truncates its one line here; the big one gives
               the sentence a line of its own below, unclipped */}

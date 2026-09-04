@@ -223,7 +223,17 @@ const MessageRow = memo(function MessageRow({
                     ? `rounded-2xl bg-accent-soft px-3.5 py-2.5 text-sm leading-7 text-fg ${
                         locale === "fa" ? "rounded-bl-sm" : "rounded-br-sm"
                       }`
-                    : "text-sm leading-7 text-fg"
+                    /* A STEP DIMMER THAN THE NAME (user directive,
+                       2026-09-04: "make the response text a little dimmer so
+                       you can separate them from each other"). Two answers in
+                       a row were one unbroken block of `--fg`, with only a
+                       small avatar between them; the body at `--fg-muted`
+                       leaves the SPEAKER as the brightest thing on the line,
+                       which is what makes the boundary visible. The token is
+                       the theme's own secondary — verify-pairs holds it to a
+                       contrast floor, so this is a step down the scale rather
+                       than a value picked by eye. */
+                    : "text-sm leading-7 text-fg-muted"
                 }
               >
                 {/* the name leads the answer's first line, in its own weight
