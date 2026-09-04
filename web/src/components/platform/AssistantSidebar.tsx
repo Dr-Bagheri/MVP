@@ -15,6 +15,11 @@ import { AgentAvatar, AgentName, ECHO } from "./AgentAvatar";
 import { ThinkingLine, TypingCaret } from "./ThinkingLine";
 import { useDictation } from "@/lib/dictation";
 import { usePushToTalk } from "@/lib/usePushToTalk";
+import { useAutoGrow } from "@/lib/autoGrow";
+
+/** the panel is a narrower column, so it grows to eight rather than the
+    page's twelve — the FLOOR is the directive's three in both */
+const PANEL_PROMPT_ROWS = { min: 3, max: 8 };
 import {
   adoptAssistantThread, askAssistant, assistantServerSnapshot, assistantSnapshot,
   registerAssistantSurface, resetAssistantSession, stopAssistant, subscribeAssistant,
@@ -480,6 +485,7 @@ export function AssistantSidebar() {
 
   const [toasts, setToasts] = useState<PlatformNotice[]>([]);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  useAutoGrow(inputRef, input, PANEL_PROMPT_ROWS);
   const endRef = useRef<HTMLDivElement>(null);
   /** the ONE voice listener (lib/voiceLoop — the 2026-08-22 rebuild) */
   const loopRef = useRef<VoiceLoopHandle | null>(null);
@@ -1247,15 +1253,23 @@ export function AssistantSidebar() {
               onSubmit={(e) => { e.preventDefault(); send(); }}
             >
               <div className="rounded-2xl border border-border bg-field px-2.5 py-2 transition-colors focus-within:border-accent">
+                {/* three lines, growing, then the box's own thin scrollbar —
+                    the page's composer and this one are the same box at two
+                    widths, so they take the same rows and the same hook */}
                 <textarea
                   ref={inputRef}
-                  rows={1}
-                  className="max-h-40 w-full resize-none bg-transparent text-detail leading-6 text-fg outline-none placeholder:text-fg-subtle"
+                  rows={PANEL_PROMPT_ROWS.min}
+                  className="scroll-quiet w-full resize-none bg-transparent text-detail leading-6 text-fg outline-none placeholder:text-fg-subtle"
                   placeholder={t("placeholder")}
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
+                    /* Enter sends, Shift+Enter breaks the line, and an IME
+                       choosing a candidate does neither */
+                    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                      e.preventDefault();
+                      send();
+                    }
                   }}
                 />
                 <div className="mt-1.5 flex items-center gap-1">

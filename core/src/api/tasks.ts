@@ -200,7 +200,25 @@ function parseDue(value: unknown): string | null {
 
 export function createTasksRepo(db: Db) {
   /** the whole board in three queries — columns (seeded if absent), topics, cards */
-  async function board(identity: Identity, opts: { archived?: boolean } = {}): Promise<{
+  /**
+   * `seed` — may this read CREATE the board it did not find?
+   *
+   * The default four columns appear on a person's first visit, which is a
+   * feature, and it makes `board()` a read that writes. That is fine for the
+   * screen and wrong for everything else: an agent's `list_tasks` runs on a
+   * role holding SELECT and nothing more, so a board that came back empty for
+   * ANY reason — including an RLS gap, which is what happened — turned a
+   * missing answer into a PostgresError the model reported as a broken system
+   * (user report, 2026-09-04; db/0178 is the gap).
+   *
+   * A read tool must not write. The flag is explicit rather than inferred
+   * from the role, because "who is calling" is not a fact this repo wants
+   * repos guessing at.
+   */
+  async function board(
+    identity: Identity,
+    opts: { archived?: boolean; seed?: boolean } = {},
+  ): Promise<{
     columns: TaskColumnRecord[];
     topics: TaskTopicRecord[];
     tasks: TaskCardRecord[];
@@ -210,7 +228,7 @@ export function createTasksRepo(db: Db) {
         `select id, name, tone, position from echo.task_column
           where archived_at is null order by position, created_at`,
       );
-      if (columns.length === 0) {
+      if (columns.length === 0 && opts.seed !== false) {
         /* first visit: the reference's four, created as the reader. The
            unique-free insert is safe under a race — two first visitors make
            eight columns in the worst case, which an admin can archive; a

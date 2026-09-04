@@ -269,8 +269,12 @@ export function createPlatformTools(): PlatformTool[] {
         archived: Type.Optional(Type.Boolean()),
       }),
       async run({ identity, deps }, args) {
+        /* seed:false — a READ TOOL MUST NOT WRITE. The screen creates the
+           default columns on a first visit; an agent asking what is on the
+           board must answer "nothing" rather than build one, and on a role
+           with SELECT only the attempt is an error rather than a board. */
         const board = await createTasksRepo(deps.db)
-          .board(identity, { archived: args.archived === true });
+          .board(identity, { archived: args.archived === true, seed: false });
         return {
           columns: board.columns,
           tasks: capped(board.tasks, CAP),

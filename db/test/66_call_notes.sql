@@ -100,12 +100,26 @@ select t.ok(
 -- and RLS still decides WHICH notes: the grant did not widen the view, it
 -- opened the table. Without this the line above passes identically against a
 -- policy that shows the agent every org's notes.
+--
+-- AGAINST THE ACTOR'S OWN ORG, not a literal. This assertion carried the id
+-- `01000000-…-0001`, which is not the org the fixture's notes are in — so it
+-- asked "is there a note outside an organization nobody here belongs to", and
+-- the answer was yes the moment the agent could see anything. It never failed
+-- because until db/0178 the agent had a GRANT and no policy and saw zero rows:
+-- the check could not fail, so its wrong constant could not be noticed. A
+-- hardcoded id in a scoping assertion is a second copy of the fixture that
+-- nothing keeps in step; `actor_org_id()` is the fact being tested.
 select t.ok(
   not exists (
-    select 1 from echo.call_note n
-     where n.org_id <> '01000000-0000-4000-8000-000000000001'
+    select 1 from echo.call_note n where n.org_id <> echo.actor_org_id()
   ),
   'a note from another organization is still invisible to the agent');
+
+-- and it is NOT seeing nothing, which is what made the line above vacuous for
+-- as long as it existed: the agent reads its own org's notes.
+select t.ok(
+  (select count(*) from echo.call_note) > 0,
+  'the agent actually sees the notes it is allowed to — the check above has a subject');
 
 -- the half that must stay shut: reading is not writing.
 select t.denied(

@@ -101,7 +101,12 @@ const { assistantSnapshot } = await import("@/lib/assistantSession");
 
 async function ask(text: string) {
   const box = screen.getByPlaceholderText(/بپرسید/);
-  const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")!.set!;
+  const setter = Object.getOwnPropertyDescriptor(
+    /* the element's OWN prototype: the composer became a <textarea> when it
+       grew to three lines (2026-09-04), and React's value setter is a
+       different property on each class — pinning HTMLInputElement made every
+       one of these throw "not a valid instance" */
+    Object.getPrototypeOf(box), "value")!.set!;
   setter.call(box, text);
   box.dispatchEvent(new Event("input", { bubbles: true }));
   const send = await screen.findByRole("button", { name: /ارسال/ });

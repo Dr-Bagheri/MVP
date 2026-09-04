@@ -35,6 +35,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { startRecording } from "@/lib/recordingEngine";
+import { useAutoGrow } from "@/lib/autoGrow";
+
+/** three lines before it scrolls, twelve before the box stops growing —
+    the directive's floor, and a ceiling so one pasted document cannot take
+    the whole column */
+const PROMPT_ROWS = { min: 3, max: 12 };
 
 type CreateKind = "doc" | "pdf";
 
@@ -161,7 +167,10 @@ export function Hub() {
    */
   const [webSearch, setWebSearch] = useState(false);
   /** The skill and model pickers — Sources-style hover menus, not selects. */
-  const promptRef = useRef<HTMLInputElement>(null);
+  const promptRef = useRef<HTMLTextAreaElement>(null);
+  /* the box is the size of what is in it — three lines up to twelve, then
+     its own thin scrollbar */
+  useAutoGrow(promptRef, input, PROMPT_ROWS);
   const resetVersionRef = useRef(resetVersion);
   const appliedResetVersionRef = useRef(resetVersion);
   /** The mic dictates into the composer (it is NOT Echo's recorder). */
@@ -1159,15 +1168,38 @@ export function Hub() {
           both locales. The TEXT inside the field is untouched — it follows the
           page, as prose must.
         */}
-        <input
+        {/*
+          A TEXTAREA, THREE LINES TALL (user directive, 2026-09-04: "the
+          prompt box must be multi-line and should get as much as I gave it,
+          and show at least three lines then go to scroll mode inside it with
+          a thin scroll").
+
+          It was an `<input>` — one line by construction, no wrapping at all —
+          so a dictated paragraph scrolled off sideways and the person could
+          read the last few words of their own sentence. `useAutoGrow` takes it
+          from three lines to twelve and hands the rest to the box's own
+          scrollbar, which is `scroll-quiet`: the platform's 6px bar, not a new
+          one invented here.
+
+          `resize-none` because the corner grip would fight the measurement —
+          a person's dragged height is overwritten by the next keystroke, which
+          is a control that works once.
+        */}
+        <textarea
           ref={promptRef}
-          className="min-h-[38px] w-full bg-transparent text-sm text-fg outline-none placeholder:text-fg-muted focus-visible:ring-0 focus-visible:ring-offset-0"
+          rows={PROMPT_ROWS.min}
+          className="scroll-quiet w-full resize-none bg-transparent text-sm leading-6 text-fg outline-none placeholder:text-fg-muted focus-visible:ring-0 focus-visible:ring-offset-0"
           placeholder={t("promptPlaceholder")}
           aria-label={t("promptPlaceholder")}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
+            /*
+             * ENTER SENDS, SHIFT+ENTER BREAKS THE LINE — and `isComposing`
+             * guards the one case where that is wrong: an IME is mid-word and
+             * Enter is choosing a candidate, not finishing a thought.
+             */
+            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault();
               void send();
             }
@@ -1246,14 +1278,31 @@ export function Hub() {
                  the same call the sidebar's send key took. `disabled:opacity`
                  is what says the box is empty. */
               className="btn btn-icon shrink-0 text-fg-muted hover:bg-surface-2 hover:text-fg disabled:opacity-40 disabled:hover:bg-transparent"
-              title={t("send")}
-              disabled={input.trim() === ""}
-              onClick={() => void send()}
+              /*
+                IT SAYS WHEN IT CANNOT SEND (user report, 2026-09-04: "the
+                enter key is not working for sending the prompt").
+
+                `send()` returns silently while a run is streaming — correct,
+                since two questions on one thread would interleave — but this
+                button was disabled only on an EMPTY box, so during a run it
+                looked live, took the press and did nothing. Enter did the
+                same. After a turn that ended badly the composer was simply
+                dead, with nothing on screen to say so and nothing to press to
+                recover.
+
+                The panel already solved this: while streaming the key becomes
+                the way to STOP. Same here now, so the state is visible and the
+                way out is the control already under the pointer.
+              */
+              title={streaming ? t("stop") : t("send")}
+              aria-label={streaming ? t("stop") : t("send")}
+              disabled={!streaming && input.trim() === ""}
+              onClick={() => { if (streaming) stop(); else void send(); }}
             >
               {/* the RETURN key's own glyph, not a paper plane: the button and
                   the Enter shortcut it duplicates stop being two unrelated
                   facts a person has to learn separately */}
-              <Icon name="enter" size="sm" />
+              <Icon name={streaming ? "pause" : "enter"} size="sm" />
             </button>
           )}
         </div>
