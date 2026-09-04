@@ -230,7 +230,13 @@ const MessageRow = memo(function MessageRow({
                     — not a heading above it */}
                 {isUser ? null : (
                   <span className="me-1.5 font-semibold text-fg">
-                    <AgentName handle={m.author ?? ECHO} />
+                    {/* the COLON is what makes this a speaker label rather
+                        than the answer's first word (user directive,
+                        2026-09-04: "give a space after the name of echo and
+                        the : symbol, so it shows a space and means this one is
+                        talking"). Without it «اکو من دو همکار دارم» reads as
+                        one sentence that happens to start with a name. */}
+                    <AgentName handle={m.author ?? ECHO} />:
                   </span>
                 )}
                 {isUser ? m.content : <AnswerContent text={m.content} />}

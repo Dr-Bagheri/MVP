@@ -2,7 +2,6 @@ import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
-import { resetVoicePrefsForTest } from "@/lib/voicePrefs";
 import { resetPushToTalkForTest } from "@/lib/pushToTalk";
 import { resolve } from "node:path";
 
@@ -55,21 +54,33 @@ vi.mock("@/lib/agentSurface", () => ({
   executeClientTool: async () => ({ ok: true }),
 }));
 /* a quiet voice loop: supported and started, so mounting produces no
-   "microphone denied" toast that later assertions would have to step around.
-   `started`/`sessions` are what the push-to-talk case reads — the mic opening
-   and the session opening are two different facts and it needs both. */
-const started = vi.fn();
-const sessions = vi.fn();
+   "microphone denied" toast that later assertions would have to step around */
 vi.mock("@/lib/voiceLoop", () => ({
   voiceLoopSupported: () => true,
-  startVoiceLoop: async () => {
-    started();
-    return {
-      stop() {}, endSession() {}, setSpeaking() {}, setMuted() {},
-      openSession() { sessions(); },
-    };
-  },
+  startVoiceLoop: async () => ({
+    stop() {}, endSession() {}, setSpeaking() {}, setMuted() {}, openSession() {},
+  }),
 }));
+
+/*
+ * The browser's dictation engine, stubbed — jsdom has none, and the hook reads
+ * its absence as `unsupported`, which would make the push-to-talk case pass
+ * for the wrong reason (nothing started because nothing COULD).
+ */
+const started = vi.fn();
+const stopped = vi.fn();
+class FakeRecognition {
+  lang = "";
+  interimResults = false;
+  continuous = false;
+  onresult: unknown = null;
+  onerror: unknown = null;
+  onend: (() => void) | null = null;
+  start() { started(); }
+  stop() { stopped(); this.onend?.(); }
+  abort() {}
+}
+(globalThis as unknown as { SpeechRecognition: unknown }).SpeechRecognition = FakeRecognition;
 vi.mock("@/lib/voice", () => ({
   speak: vi.fn(),
   speakQueued: vi.fn(),
@@ -289,74 +300,59 @@ describe("the assistant sidebar floats, and is shut until asked for", () => {
   });
 
   /**
-   * PUSH TO TALK OPENS THE MIC WITH THE EARS SWITCHED OFF.
+   * HOLD THE HOTKEY, THE COMPOSER'S MIC LISTENS.
    *
    * The bug this exists for (user report, 2026-09-04: "the hotkey for mic is
-   * not working"): the key called `beginLoop`, whose first line was `if
-   * (!earsRef.current) return`. Push-to-talk is FOR the person who keeps the
-   * mic off — that is what a key you hold is — so it refused exactly the
-   * people it was built for. With the ears ON the loop was already running and
-   * the key was equally inert, so the feature was a no-op in BOTH states,
-   * which is the one shape a manual check never catches: whichever state you
-   * try, nothing was supposed to visibly change.
+   * not working") had two lives. First it called the wake-word loop's
+   * `beginLoop`, whose first line refused anybody with the ears switched off —
+   * which is exactly the person a hold-to-talk key is for, so it was a no-op
+   * with the ears off and, since the loop was already running, equally inert
+   * with them on. **A feature that does nothing in both states is the one
+   * shape a manual check never catches**: whichever state you try, nothing was
+   * supposed to visibly change.
    *
-   * The session half is asserted beside it because "the mic opened" is not the
-   * feature. Idle means only the wake word acts, so a mic opened without a
-   * session throws away everything said into it — a hotkey that listens and
-   * discards, which from the outside is indistinguishable from one that does
-   * nothing at all.
+   * Then the directive settled which mic it had meant all along — the one
+   * beside the composer on the assistant page — so the key drives DICTATION on
+   * both surfaces now, and the panel has that mic for the first time.
+   *
+   * Asserted through `SpeechRecognition.start`, which is the browser API the
+   * dictation hook reaches for. A stub, not the real engine: jsdom has none,
+   * and its absence is what the hook reports as `unsupported`.
    */
-  it("opens the mic AND the session on the hotkey, with the ears switched off", async () => {
-    /*
-     * The stores are MODULE state and cache their first read, so writing
-     * storage is not enough: a previous case in this file has already
-     * hydrated `voicePrefs` with the ears on, and the preference under test
-     * would never be seen. Clearing storage without this looks like a reset
-     * and is not one.
-     */
-    /* RESET FIRST, then write. `resetPushToTalkForTest` clears storage as
-       well as memory — that is what makes it a real reset — so calling it
-       after the write erased the very key under test, and the case failed
-       reporting that the mic never opened. */
-    resetVoicePrefsForTest();
+  it("starts dictation on the hotkey — the same mic the button presses", async () => {
+    /* RESET FIRST, then write. `resetPushToTalkForTest` clears storage as well
+       as memory — that is what makes it a real reset — so calling it after the
+       write erased the very key under test, and the case failed reporting that
+       the mic never opened. */
     resetPushToTalkForTest();
-    localStorage.setItem("neurai-voice-ears", "0");
     localStorage.setItem("neurai-push-to-talk", "F9");
     started.mockClear();
-    sessions.mockClear();
+    stopped.mockClear();
 
     await mount();
-    /* the ears are off, so nothing has opened the mic on its own — without
-       this the assertion below could be satisfied by the ordinary loop */
-    expect(started, "the ears are off; nothing should be listening yet").not.toHaveBeenCalled();
+    expect(started, "nothing should be listening before the key").not.toHaveBeenCalled();
 
     await act(async () => {
       window.dispatchEvent(new KeyboardEvent("keydown", { code: "F9" }));
     });
     await waitFor(() => expect(started).toHaveBeenCalled());
-    await waitFor(() => expect(sessions, "the hold is the wake word").toHaveBeenCalled());
+
+    /* and RELEASING stops it — the half that makes it push-to-talk rather
+       than a toggle with extra steps, and the half whose absence leaves a
+       microphone open after the finger comes off */
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keyup", { code: "F9" }));
+    });
+    await waitFor(() => expect(stopped).toHaveBeenCalled());
   });
 
   it("THE CONTROL: another key does nothing", async () => {
     /*
      * Without this, the case above passes against a handler that opens the mic
-     * on ANY keystroke — which is a worse bug than the one being fixed, and
-     * one nobody would notice until a microphone opened while they typed.
+     * on ANY keystroke — a worse bug than the one being fixed, and one nobody
+     * would notice until a microphone opened while they typed.
      */
-    /*
-     * The stores are MODULE state and cache their first read, so writing
-     * storage is not enough: a previous case in this file has already
-     * hydrated `voicePrefs` with the ears on, and the preference under test
-     * would never be seen. Clearing storage without this looks like a reset
-     * and is not one.
-     */
-    /* RESET FIRST, then write. `resetPushToTalkForTest` clears storage as
-       well as memory — that is what makes it a real reset — so calling it
-       after the write erased the very key under test, and the case failed
-       reporting that the mic never opened. */
-    resetVoicePrefsForTest();
     resetPushToTalkForTest();
-    localStorage.setItem("neurai-voice-ears", "0");
     localStorage.setItem("neurai-push-to-talk", "F9");
     started.mockClear();
 
@@ -365,5 +361,18 @@ describe("the assistant sidebar floats, and is shut until asked for", () => {
       window.dispatchEvent(new KeyboardEvent("keydown", { code: "F8" }));
     });
     expect(started).not.toHaveBeenCalled();
+  });
+
+  it("the panel offers the mic as a BUTTON too, not only as a hidden key", async () => {
+    /* a hotkey whose effect no visible control offers is a feature only its
+       author can find — and this panel had no mic at all before the directive
+       asked for the page's one here */
+    /* OPENED first: a shut panel renders no composer, so a query against the
+       closed state would report "no mic" about a control that is simply not on
+       screen yet — the kind of red that sends somebody to fix working code */
+    localStorage.setItem("neurai-assistant-sidebar", "1");
+    const { container } = await mount();
+    await waitFor(() => expect(container.querySelector("textarea")).not.toBeNull());
+    expect(container.querySelector('[data-icon="mic"]')).not.toBeNull();
   });
 });

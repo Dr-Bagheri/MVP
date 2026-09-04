@@ -12,7 +12,8 @@ import type { ConnectorStatus } from "@/api/types";
 import { useRouter } from "@/i18n/routing";
 import { mentionedAgent } from "@/lib/agentMention";
 import { AgentAvatar, AgentName, ECHO } from "./AgentAvatar";
-import { pushToTalkKey, pushToTalkServer, subscribePushToTalk } from "@/lib/pushToTalk";
+import { useDictation } from "@/lib/dictation";
+import { usePushToTalk } from "@/lib/usePushToTalk";
 import {
   adoptAssistantThread, askAssistant, assistantServerSnapshot, assistantSnapshot,
   registerAssistantSurface, resetAssistantSession, stopAssistant, subscribeAssistant,
@@ -229,6 +230,9 @@ export function sidebarIsSilentOn(pathname: string): boolean {
 
 export function AssistantSidebar() {
   const t = useTranslations("presence");
+  /* the mic's label lives in `platform` with the assistant page's own mic —
+     one label for one control, said the same way on both surfaces */
+  const tp = useTranslations("platform");
   const locale = useLocale();
   const pathname = usePathname();
   const router = useRouter();
@@ -424,9 +428,6 @@ export function AssistantSidebar() {
   const prefs = useSyncExternalStore(subscribeVoicePrefs, voicePrefs, voicePrefsServer);
   const silent = prefs.silent;
   const ears = prefs.ears;
-  /* the push-to-talk binding, per device — see lib/pushToTalk for why it is
-     its own store and why it holds a physical key code */
-  const hotkey = useSyncExternalStore(subscribePushToTalk, pushToTalkKey, pushToTalkServer);
   const silentRef = useRef(silent);
   const earsRef = useRef(ears);
   silentRef.current = silent;
@@ -450,66 +451,31 @@ export function AssistantSidebar() {
   }, [ears]);
 
   /**
-   * PUSH TO TALK (user directive, 2026-09-04).
+   * HOLD THE HOTKEY, THE COMPOSER'S MIC LISTENS (user directive, 2026-09-04:
+   * "the key ... is the mic in the ai assistant page — make it for both ai
+   * assistant page and side bar").
    *
-   * Hold the chosen key and the assistant listens; let go and it stops. The
-   * key is the person's own, from `lib/pushToTalk`, and NOTHING happens until
-   * they have chosen one — an unbound hotkey must not guess at a default and
-   * silently take a key away from the browser.
+   * The first version drove THIS PANEL'S WAKE-WORD LOOP, and that was the
+   * wrong mic. The loop is an always-on listener waiting to be addressed by
+   * name; the mic the directive points at dictates what you say into the box
+   * you are looking at. Two features that both use a microphone, and a key you
+   * press to talk and release to stop belongs to the second.
    *
-   * `event.code`, matching what was stored: the PHYSICAL key, so the binding
-   * survives switching to a Persian layout, which is the default here.
-   *
-   * Two guards that are not optional:
-   *
-   *   · a key pressed while TYPING is a character, not a command. A person
-   *     writing «سلام» into any field on the platform must not open a
-   *     microphone because their hotkey happens to be a letter.
-   *   · `event.repeat` — holding a key fires keydown continuously, and
-   *     starting the loop forty times a second is a stream of requests
-   *     nobody asked for.
-   *
-   * The keyup releases regardless of those guards, deliberately: if the
-   * pointer moved into a field while the key was down, the correct behaviour
-   * is still to stop listening, and an unmatched release is a no-op.
+   * So the panel now has the page's mic — the same `useDictation`, the same
+   * button beside its composer — and the hotkey presses it. The wake loop is
+   * untouched and still governed by the ears switch: they answer different
+   * questions and neither replaces the other.
    */
-  useEffect(() => {
-    if (hotkey === null) return;
-    let holding = false;
-    const typing = (target: EventTarget | null) =>
-      target instanceof HTMLElement &&
-      (["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName) || target.isContentEditable);
-
-    function down(event: KeyboardEvent) {
-      if (event.code !== hotkey || event.repeat || holding) return;
-      if (typing(event.target)) return;
-      event.preventDefault();
-      holding = true;
+  const dictation = useDictation(locale === "fa" ? "fa-IR" : "en-US", (text) =>
+    setInput((v) => (v.trim() === "" ? text : `${v} ${text}`)),
+  );
+  usePushToTalk({
+    onPress: () => {
       reveal();
-      /* `true` = pushed: listen even with the ears switched off, and treat
-         what follows as a command rather than waiting for the wake word */
-      beginLoopRef.current(true);
-    }
-    function up(event: KeyboardEvent) {
-      if (event.code !== hotkey || !holding) return;
-      holding = false;
-      /*
-       * Back to the STANDING preference, never to "off": someone whose ears
-       * are normally on must not be pushed into silence by releasing a key.
-       * With them off the loop stops entirely; with them on it stays up and
-       * only leaves the session, so the wake word governs again.
-       */
-      if (earsRef.current) loopRef.current?.endSession();
-      else suspendLoop();
-    }
-    window.addEventListener("keydown", down);
-    window.addEventListener("keyup", up);
-    return () => {
-      window.removeEventListener("keydown", down);
-      window.removeEventListener("keyup", up);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- refs are stable
-  }, [hotkey]);
+      if (dictation.status !== "listening") dictation.toggle();
+    },
+    onRelease: () => { if (dictation.status === "listening") dictation.toggle(); },
+  });
 
   const [toasts, setToasts] = useState<PlatformNotice[]>([]);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -1180,7 +1146,8 @@ export function AssistantSidebar() {
                           above it */}
                       {m.role === "assistant" ? (
                         <span className="me-1.5 font-semibold text-fg">
-                          <AgentName handle={m.author ?? ECHO} />
+                          {/* the colon marks a speaker — see ConversationThread */}
+                          <AgentName handle={m.author ?? ECHO} />:
                         </span>
                       ) : null}
                       {m.content}
@@ -1313,6 +1280,26 @@ export function AssistantSidebar() {
                     {streaming
                       ? <span className="text-detail" aria-hidden>…</span>
                       : <Icon name="enter" size="sm" />}
+                  </button>
+                  {/*
+                    THE MIC, matching the assistant page's (2026-09-04). A
+                    hotkey whose effect no visible control offers is a hidden
+                    feature — and this panel had no mic at all, so "make it for
+                    both" was really "give the sidebar the page's mic".
+                  */}
+                  <button
+                    type="button"
+                    className={`btn btn-icon shrink-0 ${
+                      dictation.status === "listening"
+                        ? "animate-pulse bg-accent-soft text-accent"
+                        : "text-fg-muted hover:bg-surface-2 hover:text-fg"
+                    }`}
+                    aria-pressed={dictation.status === "listening"}
+                    aria-label={tp("voice")}
+                    title={tp("voice")}
+                    onClick={dictation.toggle}
+                  >
+                    <Icon name="mic" size="sm" />
                   </button>
                   <ComposerMenu
                     className="ms-auto"

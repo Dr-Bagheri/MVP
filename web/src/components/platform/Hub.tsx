@@ -8,6 +8,7 @@ import { useRouter } from "@/i18n/routing";
 import { useSearchParams } from "next/navigation";
 import { SkeletonLines } from "@/components/scaffold";
 import { useDictation } from "@/lib/dictation";
+import { usePushToTalk } from "@/lib/usePushToTalk";
 import { deliverDoc } from "@/lib/deliver";
 import { subscribeComposer, takePendingDraft } from "@/lib/assistantBus";
 import { shouldStick } from "@/lib/threadFollow";
@@ -167,6 +168,22 @@ export function Hub() {
   const dictation = useDictation(locale === "fa" ? "fa-IR" : "en-US", (text) =>
     setInput((v) => (v.trim() === "" ? text : `${v} ${text}`)),
   );
+  /*
+   * HOLD THE HOTKEY, THIS MIC LISTENS (user directive, 2026-09-04: "the key
+   * that i want it to be the hotkey for in the setting is the mic in the ai
+   * assistant page").
+   *
+   * The same control the button beside the box presses — not a second path
+   * into dictation, which is how a key and a button come to disagree about
+   * whether the microphone is open. `toggle` is a toggle, so each side checks
+   * the status first: a press while already listening would STOP it, which is
+   * the opposite of what holding a key means.
+   */
+  usePushToTalk({
+    onPress: () => { if (dictation.status !== "listening") dictation.toggle(); },
+    onRelease: () => { if (dictation.status === "listening") dictation.toggle(); },
+  });
+
   /* system skills localize (shipped product content); authored names never do */
 
   /* a suggestion pressed in the sub-menu: applied on arrival (the mailbox)
