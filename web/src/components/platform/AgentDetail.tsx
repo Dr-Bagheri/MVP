@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { AgentCard } from "@/api/types";
 import { useRouter } from "@/i18n/routing";
@@ -9,7 +9,9 @@ import { PageContainer, Section, SkeletonLines } from "@/components/scaffold";
 import { EmptyState } from "@/components/ui";
 import { Icon } from "@/components/icons";
 import { AgentAvatar } from "./AgentAvatar";
-import { useAgentCopy } from "./agentAppearance";
+import { toolDescription, useAgentCopy } from "./agentAppearance";
+import { groupTools } from "./agentCapabilities";
+import { digits } from "@/lib/format";
 import { useCrumbTitle } from "./CrumbTitle";
 
 /**
@@ -39,12 +41,24 @@ export function AgentDetail({ handle }: { handle: string }) {
   const copy = useAgentCopy();
   const router = useRouter();
   const [agents, setAgents] = useState<AgentCard[] | "failed" | null>(null);
+  const [available, setAvailable] = useState<string[] | null>(null);
+  const locale = useLocale();
+  /* `t.raw` and not `t()`: a per-key lookup returns the KEY PATH for a tool
+     the catalogue has not met, and a key path is not a sentence. The object
+     is read once and `toolDescription` decides what a miss means. */
+  const toolCopy = t.raw("tool") as Record<string, unknown>;
 
   useEffect(() => {
     let alive = true;
     void api.agents()
       .then((rows) => { if (alive) setAgents(rows); })
       .catch(() => { if (alive) setAgents("failed"); });
+    /* the platform's vocabulary, for the capability list. A failure leaves it
+       null and the stored list stands in — a page that says less rather than
+       a page that says nothing. */
+    void api.assistantTools()
+      .then((names) => { if (alive) setAvailable(names); })
+      .catch(() => undefined);
     return () => { alive = false; };
   }, []);
 
@@ -79,10 +93,39 @@ export function AgentDetail({ handle }: { handle: string }) {
 
   const { name, description } = copy(agent);
   const shipped = agent.level === "system";
+  /*
+   * WHAT IT ACTUALLY HOLDS, not what its row lists.
+   *
+   * The stored `tools` column stopped being a ceiling on 2026-09-04 — it is a
+   * preference now, "reach for these first" — so rendering it as this agent's
+   * capabilities would understate them by fifty tools and contradict what the
+   * agent will happily do when asked. The platform's own vocabulary is the
+   * honest answer; a run narrows nothing.
+   *
+   * `available` is null while the read is in flight, which is why the stored
+   * list stands in: five true sentences beat an empty panel, and the count
+   * settles upward rather than appearing from nothing.
+   */
+  const tools = available ?? agent.tools;
+
+  const groups = groupTools(tools);
 
   return (
     <PageContainer>
-      {/* ── who ─────────────────────────────────────────────────────────── */}
+      {/*
+        ── THE IDENTITY CARD ────────────────────────────────────────────
+
+        The page opened with a bare row on the page ground: avatar, name, a
+        description, then a hairline and a grid of four labels. On a dark
+        screen that reads as a fragment rather than as a subject — nothing
+        holds it, and the eye finds no edge until the divider, by which point
+        it has left the thing it came to read.
+
+        One card, with the facts inside it, gives the identity a boundary and
+        makes the sections below read as what is known ABOUT that subject
+        rather than as four unrelated blocks stacked down a page.
+      */}
+      <div className="rounded-2xl border border-border bg-surface p-6">
       <div className="flex flex-wrap items-center gap-4">
         <AgentAvatar handle={agent.handle} size="xl" />
         <div className="min-w-0 flex-1">
@@ -115,9 +158,9 @@ export function AgentDetail({ handle }: { handle: string }) {
         </div>
       </div>
 
-      {/* ── what governs it ─────────────────────────────────────────────── */}
-      <Section title={t("detailAbout")}>
-        <dl className="grid gap-x-8 gap-y-3 sm:grid-cols-2">
+      {/* the four facts, INSIDE the card and under a hairline of their own:
+          they are properties of the thing named above, not a new topic */}
+      <dl className="mt-6 grid gap-x-8 gap-y-4 border-t border-border pt-5 sm:grid-cols-4">
           <Fact label={t("detailModel")}>
             {/* null is a real state and says something useful: this agent
                 takes whatever the platform's ladder serves, which is why it
@@ -133,29 +176,58 @@ export function AgentDetail({ handle }: { handle: string }) {
           <Fact label={t("detailEditable")}>
             {agent.editable ? t("detailEditableYes") : t("detailEditableNo")}
           </Fact>
-        </dl>
-      </Section>
+      </dl>
+      </div>
 
-      {/* ── what it can reach ───────────────────────────────────────────── */}
+      {/*
+        ── WHAT IT CAN DO ───────────────────────────────────────────────
+
+        Sentences, grouped, in the agent's own voice — not `search_transcripts`
+        beside a picture of a gear. Two things were wrong there and only one was
+        visible: the chips showed identifiers, and the catalogue that turns a
+        name into a sentence was EMPTY, so every tool fell through to its own
+        name with the underscores spaced out. `toolDescription()` had been
+        written and the copy never had.
+
+        READING FIRST, CHANGING LAST. Somebody scanning this page is deciding
+        how much to trust a colleague they did not hire, and the honest shape of
+        that answer is: everything it can look at, and then, at the end, what it
+        can change.
+      */}
       <Section title={t("detailTools")} divided>
-        {agent.tools.length === 0 ? (
-          /*
-           * An empty tool list is NOT "this agent can do nothing" — it means
-           * no per-agent restriction, so the assistant's own set applies. The
-           * two read identically as an empty box, which is exactly the kind of
-           * absence this repo has been bitten by; it gets a sentence.
-           */
-          <p className="text-sm text-fg-muted">{t("detailToolsAll")}</p>
-        ) : (
-          <ul className="flex flex-wrap gap-1.5">
-            {agent.tools.map((tool) => (
-              <li key={tool} className="chip bg-surface-2 text-xs text-fg-muted">
-                <Icon name="chip" size="sm" />
-                <code>{tool}</code>
-              </li>
-            ))}
-          </ul>
-        )}
+        <p className="mb-5 max-w-prose text-sm leading-6 text-fg-muted">
+          {t("detailToolsIntro", { count: digits(tools.length, locale) })}
+        </p>
+        <div className="grid gap-4 lg:grid-cols-2">
+          {groups.map((group) => (
+            <section key={group.key} className="rounded-xl border border-border bg-surface p-4">
+              <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-fg">
+                <span className="grid h-6 w-6 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent">
+                  <Icon name={group.icon} size="sm" />
+                </span>
+                {t(`capability_${group.key}`)}
+                <span className="badge-num ms-auto text-xs text-fg-subtle">
+                  {digits(group.tools.length, locale)}
+                </span>
+              </h3>
+              <ul className="space-y-1.5">
+                {group.tools.map((tool) => (
+                  /* the SENTENCE, with the identifier kept as a title: a
+                     person reads what it does, and anyone debugging can still
+                     find out which tool that was without a second surface */
+                  <li
+                    key={tool}
+                    title={tool}
+                    className="flex gap-2 text-xs leading-5 text-fg-muted"
+                  >
+                    <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-fg-subtle" aria-hidden />
+                    {toolDescription(toolCopy, tool)}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
       </Section>
 
       {/* ── the words it was given ──────────────────────────────────────── */}
