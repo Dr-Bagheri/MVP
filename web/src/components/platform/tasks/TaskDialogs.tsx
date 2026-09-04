@@ -253,21 +253,35 @@ function LabelEditor({ label, onClose, onSaved }: {
 }
 
 /* ── the assignee picker: the org's people, searched by name ──────────── */
-export function AssigneePicker({ selected, onToggle }: {
+export function AssigneePicker({ selected, onToggle, people }: {
   selected: string[];
   onToggle: (userId: string) => void;
+  /*
+   * THE ROSTER, HANDED DOWN — not fetched here.
+   *
+   * User report, 2026-09-04: "the task is already assigned to Sina but it does
+   * not show it; when I press the plus button it loads that Sina is assigned."
+   * Both halves were one fact. The chips are `people.filter(…)`, and `people`
+   * was fetched when the POPOVER OPENED, so a task with assignees rendered
+   * exactly like a task with none until somebody clicked `+` — at which point
+   * the people it had all along appeared. The names were downstream of a fetch
+   * that only a click could start, and the screen said "nobody" while the
+   * record said Sina.
+   *
+   * Loading it sooner was the small fix. This is the real one: the board
+   * ALREADY reads the roster on mount and already hands it to TaskDetail, so
+   * this component was keeping a second copy of a fact it had been given — and
+   * the copy that was empty is the one the person was looking at. Both call
+   * sites live under the board, so the roster is simply a prop now, and the
+   * fetch, its loading state and its failure state are gone rather than fixed.
+   */
+  people: OrgPersonRecord[];
 }) {
   const t = useTranslations("tasks");
   const locale = useLocale();
   const [open, setOpen] = useState(false);
-  const [people, setPeople] = useState<OrgPersonRecord[] | null | "failed">(null);
   const [query, setQuery] = useState("");
   const box = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!open || people !== null) return;
-    void api.orgPeople().then(setPeople).catch(() => setPeople("failed"));
-  }, [open, people]);
 
   useEffect(() => {
     if (!open) return;
@@ -278,11 +292,14 @@ export function AssigneePicker({ selected, onToggle }: {
     return () => document.removeEventListener("mousedown", away);
   }, [open]);
 
-  const chosen = Array.isArray(people) ? people.filter((p) => selected.includes(p.id)) : [];
-  const shown = Array.isArray(people)
-    ? people.filter((p) => query.trim() === ""
-      || personName(p, locale).toLowerCase().includes(query.trim().toLowerCase()))
-    : [];
+  const chosen = people.filter((p) => selected.includes(p.id));
+  /* assigned, and not in the roster — a colleague who has left, or a roster
+     read that came back empty. The COUNT stays true even when the name cannot:
+     "nobody is assigned" and "we cannot name who" are different statements and
+     must not be the same picture. */
+  const unnamed = selected.filter((id) => !people.some((p) => p.id === id));
+  const shown = people.filter((p) => query.trim() === ""
+    || personName(p, locale).toLowerCase().includes(query.trim().toLowerCase()));
 
   return (
     <div ref={box} className="relative flex flex-wrap items-center gap-1.5">
@@ -303,6 +320,11 @@ export function AssigneePicker({ selected, onToggle }: {
           {personName(person, locale)}
           <IconClose width={12} height={12} />
         </button>
+      ))}
+      {unnamed.map((id) => (
+        <span key={id} className="btn btn-sm bg-surface-2 text-fg-subtle">
+          {t("assigneeUnnamed")}
+        </span>
       ))}
       <button
         type="button"
@@ -329,10 +351,8 @@ export function AssigneePicker({ selected, onToggle }: {
                it. The margin stays: that is this popover's, not the field's. */
             className="input-sm mb-1"
           />
-          {people === null ? <p className="p-2 text-xs text-fg-muted">…</p>
-            : people === "failed" ? <p className="p-2 text-xs text-fg-muted">{t("readFailed")}</p>
-              : shown.length === 0 ? <p className="p-2 text-xs text-fg-muted">{t("noPeopleFound")}</p>
-                : (
+          {shown.length === 0 ? <p className="p-2 text-xs text-fg-muted">{t("noPeopleFound")}</p>
+            : (
                   <ul className="max-h-56 overflow-y-auto">
                     {shown.map((person) => (
                       <li key={person.id}>
@@ -405,10 +425,11 @@ export function DueField({ value, onPick }: {
 }
 
 /* ── THE NEW-TASK DIALOG, field for field ────────────────────────────── */
-export function NewTaskDialog({ columns, topics, labels, defaultColumnId, defaultTopicId, onClose, onCreated, onLabelsChanged }: {
+export function NewTaskDialog({ columns, topics, labels, people, defaultColumnId, defaultTopicId, onClose, onCreated, onLabelsChanged }: {
   columns: TaskColumnRecord[];
   topics: TaskTopicRecord[];
   labels: TaskLabelRecord[];
+  people: OrgPersonRecord[];
   defaultColumnId: string | null;
   defaultTopicId: string | null;
   onClose: () => void;
@@ -573,6 +594,7 @@ export function NewTaskDialog({ columns, topics, labels, defaultColumnId, defaul
           <div>
             <span className="mb-1 block text-xs font-medium text-fg-muted">{t("fieldAssignees")}</span>
             <AssigneePicker
+              people={people}
               selected={assignees}
               onToggle={(id) => setAssignees((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id])}
             />

@@ -2723,6 +2723,7 @@
     "commentHint": "Enter ارسال · Shift+Enter خط جدید",
     "someone": "یک نفر",
     "noAssignee": "کسی مسئول نیست.",
+    "assigneeUnnamed": "عضو نامشخص",
     "noLabels": "بدون برچسب.",
     "createdAt": "ساخته‌شده {at}",
     "archiveTaskTitle": "این تسک بایگانی شود؟",

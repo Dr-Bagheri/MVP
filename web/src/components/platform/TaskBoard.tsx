@@ -18,7 +18,8 @@ import { TaskCalendar, TaskListView } from "./tasks/TaskViews";
 import {
   IconCheck, IconClock, IconDots, IconFolder, IconPlus, IconTrash, IconUser, IconVideo, IconClose, IconPencil } from "@/components/icons";
 import { useSeededName } from "@/lib/seededNames";
-import { digits } from "@/lib/format";
+import { Avatar } from "@/components/Avatar";
+import { digits, personName } from "@/lib/format";
 
 /**
  * THE TASK BOARD — rebuilt from the reference's own product (walked screen
@@ -545,6 +546,7 @@ export function TaskBoard() {
                     key={task.id}
                     task={task}
                     labels={labels}
+                    people={people}
                     onOpen={() => openDetail(task.id)}
                     onToggleDone={(done) => void patchTask(task.id, { done })}
                   />
@@ -618,6 +620,7 @@ export function TaskBoard() {
 
       {creating !== null ? (
         <NewTaskDialog
+          people={people}
           columns={board.columns}
           topics={board.topics}
           labels={labels}
@@ -673,15 +676,30 @@ export function TaskBoard() {
 }
 
 /** the reference's card: title, labels, its record, priority, progress */
-function Card({ task, labels, onOpen, onToggleDone }: {
+function Card({ task, labels, people, onOpen, onToggleDone }: {
   task: TaskCardRecord;
   labels: TaskLabelRecord[];
+  people: OrgPersonRecord[];
   onOpen: () => void;
   onToggleDone: (done: boolean) => void;
 }) {
   const t = useTranslations("tasks");
   const locale = useLocale();
   const worn = labels.filter((label) => task.label_ids.includes(label.id));
+  /*
+   * WHO IT IS FOR, on the card (user directive, 2026-09-04: "in the same row
+   * as the priority, on the other end, add the assigned person name").
+   *
+   * The board already holds the roster, so this costs no request. Order is
+   * the roster's, not `assignee_ids`', so two cards showing the same pair of
+   * people name the same one first — a card is scanned, and a list that
+   * reorders itself between rows cannot be.
+   */
+  const assigned = people.filter((person) => task.assignee_ids.includes(person.id));
+  /* somebody is assigned whom the roster does not carry — a former colleague,
+     or a roster that came back empty. The COUNT is still true, so the card
+     says how many rather than quietly saying nobody. */
+  const unnamed = task.assignee_ids.length - assigned.length;
   return (
     <div
       draggable
@@ -738,7 +756,26 @@ function Card({ task, labels, onOpen, onToggleDone }: {
         <span className={`rounded-md px-1.5 py-0.5 text-[11px] font-medium ${PRIORITY_CHIP[task.priority]}`}>
           {t(`priority_${task.priority}`)}
         </span>
-        <span className="flex items-center gap-2 text-[11px] text-fg-subtle">
+        <span className="flex min-w-0 items-center gap-2 text-[11px] text-fg-subtle">
+          {assigned.length > 0 || unnamed > 0 ? (
+            <span className="flex min-w-0 items-center gap-1" title={
+              [...assigned.map((p) => personName(p, locale)),
+                ...(unnamed > 0 ? [t("assigneeUnnamed")] : [])].join("، ")
+            }>
+              {assigned[0] !== undefined ? (
+                <>
+                  <Avatar name={personName(assigned[0], locale)} size="xs" />
+                  <span className="truncate">{personName(assigned[0], locale)}</span>
+                </>
+              ) : (
+                <span className="truncate">{t("assigneeUnnamed")}</span>
+              )}
+              {/* the rest as a count, so a card with five owners stays a card */}
+              {task.assignee_ids.length > 1 ? (
+                <span className="ltr shrink-0">+{digits(task.assignee_ids.length - 1, locale)}</span>
+              ) : null}
+            </span>
+          ) : null}
           {task.due_at !== null ? <span>{t("due")}</span> : null}
           {task.checklist_total > 0 ? (
             <span className="ltr">{digits(task.checklist_done, locale)}/{digits(task.checklist_total, locale)}</span>

@@ -84,8 +84,12 @@ vi.mock("@/api/client", () => ({
       if (hit) Object.assign(hit, body);
       return { ...card({ id }), ...(hit ?? {}) };
     },
+    /* the detail a person opens is the row the board is showing — merged the
+       way updateTask does, so a fixture cannot set a field on the card and
+       have the modal quietly disagree with it */
     taskDetail: async (id: string): Promise<TaskDetailRecord> => ({
-      ...card({ id }), description: "", checklist: [], comments: [], events: [],
+      ...card({ id }), ...(boardTasks.find((t) => t.id === id) ?? {}),
+      description: "", checklist: [], comments: [], events: [],
     }),
     createTask: vi.fn(), createTaskColumn: vi.fn(), createTaskTopic: vi.fn(),
     updateTaskColumn: vi.fn(), addTaskChecklistItem: vi.fn(),
@@ -221,5 +225,60 @@ describe("TaskBoard", () => {
     await userEvent.click(screen.getByRole("button", { name: "لیست" }));
     // an undated card lands in the no-deadline group, named
     await waitFor(() => expect(screen.getByText(/بدون مهلت/)).toBeInTheDocument());
+  });
+  /*
+   * WHO A TASK IS FOR — reported 2026-09-04: "the task is already assigned to
+   * Sina but it does not show it; when I press the plus button it loads that
+   * Sina is assigned."
+   *
+   * The picker kept its own copy of the roster and fetched it when the popover
+   * OPENED, so an assigned task looked exactly like an unassigned one until
+   * somebody clicked `+`. Both assertions below are about the same fact seen
+   * from the two places a person looks at it.
+   */
+  it("names the assignee in the detail, before anyone opens the picker", async () => {
+    boardTasks = [card({ id: "t-1", title: "پایگاه داده", assignee_ids: ["u-me"] })];
+    render(<TaskBoard />);
+    await waitFor(() => expect(screen.getByText("پایگاه داده")).toBeInTheDocument());
+    await userEvent.click(screen.getByText("پایگاه داده"));
+
+    /*
+     * The chip's OWN affordance. Asserting the name alone would be satisfied
+     * by «سینا» appearing anywhere in the modal — a history line, the card
+     * still rendered behind it — and this must be the chip or it is not the
+     * bug. Nothing else in the tree carries this title.
+     */
+    await waitFor(() =>
+      expect(screen.getByTitle("حذف سینا"), "the assignee chip is missing").toBeInTheDocument());
+
+    /* and the `+` was never pressed — the whole point */
+    expect(screen.queryByPlaceholderText("جستجوی عضو…"), "the picker opened by itself").toBeNull();
+  });
+
+  it("names the assignee on the card, and only on the card that has one", async () => {
+    boardTasks = [
+      card({ id: "t-1", title: "پایگاه داده", column_id: "col-todo", assignee_ids: ["u-me"] }),
+      card({ id: "t-2", title: "بی‌مسئول", column_id: "col-doing" }),
+    ];
+    render(<TaskBoard />);
+    await waitFor(() => expect(screen.getByText("پایگاه داده")).toBeInTheDocument());
+
+    expect(within(columnRegion("برای انجام")).getByText("سینا")).toBeInTheDocument();
+    /* the control: a version that names somebody on every card — or names the
+       whole roster — passes the assertion above and fails this one */
+    expect(within(columnRegion("در حال انجام")).queryByText("سینا")).toBeNull();
+  });
+
+  it("keeps the count true when the roster cannot name everybody", async () => {
+    /* two assigned, one of whom the roster does not carry — a colleague who
+       has left. "+۱" is a fact about the task; dropping it would report one
+       owner for a task that has two. */
+    boardTasks = [card({ id: "t-1", title: "پایگاه داده", assignee_ids: ["u-me", "u-gone"] })];
+    render(<TaskBoard />);
+    await waitFor(() => expect(screen.getByText("پایگاه داده")).toBeInTheDocument());
+
+    const column = within(columnRegion("برای انجام"));
+    expect(column.getByText("سینا")).toBeInTheDocument();
+    expect(column.getByText("+۱"), "the second assignee vanished from the count").toBeInTheDocument();
   });
 });

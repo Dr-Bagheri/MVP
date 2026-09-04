@@ -444,6 +444,7 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
                 <p className="mb-1 text-xs text-fg-subtle">{t("noAssignee")}</p>
               ) : null}
               <AssigneePicker
+                people={people}
                 selected={task.assignee_ids}
                 onToggle={(userId) => {
                   const on = !task.assignee_ids.includes(userId);

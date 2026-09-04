@@ -2723,6 +2723,7 @@
     "commentHint": "Enter to send · Shift+Enter for a new line",
     "someone": "Someone",
     "noAssignee": "No one is on this.",
+    "assigneeUnnamed": "Unknown member",
     "noLabels": "No labels.",
     "createdAt": "Created {at}",
     "archiveTaskTitle": "Archive this task?",
