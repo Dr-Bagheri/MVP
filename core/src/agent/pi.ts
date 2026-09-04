@@ -65,10 +65,45 @@ export function catalogue(provider = "openrouter"): { id: string; name: string; 
   }));
 }
 
+/**
+ * OpenRouter spells "search the web" as a SUFFIX ON THE MODEL ID —
+ * `<id>:online` — which is a transport feature wearing an identity's clothes.
+ * The catalogue holds models, never decorations, so `google/x:online` is not
+ * in it and never will be.
+ *
+ * Found live, 2026-09-04, as "I press enter and nothing happens": db/0177 gave
+ * the shipped agents the second half of the web switch, the first suffixed id
+ * in this platform's history reached here, and every ask after it died on
+ * `unknown model: openrouter/google/gemini-3.1-pro-preview:online` — four
+ * seconds after the request, before a single token. The capability had been
+ * built four times (assistant, workflow `ask`, mail drafts, meeting prep) and
+ * had never once run: they all dispatch through this function, and this
+ * function looked the decoration up as if it were a name.
+ *
+ * So the two ids are now separate facts rather than one string doing both
+ * jobs: RESOLVE the base, DISPATCH the suffix.
+ */
+const WEB_SUFFIX = ":online";
+
+/** The id the catalogue, the exclusion filter and the model wall all mean. */
+export function baseModelId(id: string): string {
+  return id.endsWith(WEB_SUFFIX) ? id.slice(0, -WEB_SUFFIX.length) : id;
+}
+
 export function resolveModel(ref: PiModelRef): { model: unknown; reasoningRequired: boolean } {
-  const model = getBuiltinModel(ref.provider as never, ref.id as never) as { reasoning?: boolean };
-  if (!model) throw new Error(`unknown model: ${ref.provider}/${ref.id}`);
-  return { model, reasoningRequired: Boolean(model.reasoning) };
+  const base = baseModelId(ref.id);
+  const model = getBuiltinModel(ref.provider as never, base as never) as { reasoning?: boolean };
+  if (!model) throw new Error(`unknown model: ${ref.provider}/${base}`);
+  return {
+    /*
+     * A COPY when the suffix is in play. `getBuiltinModel` hands back the
+     * registry's own object, so stamping `:online` onto it would rename that
+     * model for every later run in this process — one person's web-enabled
+     * turn silently putting every other org's asks on the web plan.
+     */
+    model: base === ref.id ? model : { ...model, id: ref.id },
+    reasoningRequired: Boolean(model.reasoning),
+  };
 }
 
 /**
