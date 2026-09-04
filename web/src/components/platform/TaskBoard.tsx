@@ -19,6 +19,7 @@ import {
   IconCheck, IconClock, IconDots, IconFolder, IconPlus, IconTrash, IconUser, IconVideo, IconClose, IconPencil } from "@/components/icons";
 import { useSeededName } from "@/lib/seededNames";
 import { digits, personName } from "@/lib/format";
+import { useRefreshEpoch } from "@/lib/refreshBus";
 
 /**
  * THE TASK BOARD — rebuilt from the reference's own product (walked screen
@@ -88,8 +89,23 @@ export function TaskBoard() {
     void api.taskLabels().then(setLabels).catch(() => undefined);
   }, []);
 
-  useEffect(load, [load]);
-  useEffect(loadLabels, [loadLabels]);
+  /*
+   * A WRITE ANYWHERE REACHES THIS BOARD (user report, 2026-09-04: "when the
+   * assistant adds a task the related tables should get refreshed — I have to
+   * refresh by hand").
+   *
+   * The epoch bumps on any successful non-GET to `/api/tasks`, whoever made
+   * it: this screen's own buttons, another tab, or the assistant's hands in
+   * the panel beside it — they all press the same client methods, so they all
+   * flow through the same announcer. In the deps of the load effect, a bump
+   * is a refetch.
+   *
+   * A second fetch after this screen's OWN action is the price of never being
+   * stale, and it is an idempotent GET.
+   */
+  const tasksEpoch = useRefreshEpoch("tasks");
+  useEffect(load, [load, tasksEpoch]);
+  useEffect(loadLabels, [loadLabels, tasksEpoch]);
   useEffect(() => { void api.me().then(setMe).catch(() => setMe(null)); }, []);
   useEffect(() => { void api.orgPeople().then(setPeople).catch(() => setPeople([])); }, []);
 
@@ -403,12 +419,45 @@ export function TaskBoard() {
               data-column={col.id}
               draggable={renaming !== col.id}
               onDragStart={(e) => {
+                /*
+                 * ONLY WHEN THE COLUMN ITSELF IS THE SOURCE (user report,
+                 * 2026-09-04: "for moving cards by hand they all move
+                 * together").
+                 *
+                 * `dragstart` BUBBLES. A card is inside its column and is
+                 * draggable too, so picking one up fired the card's handler
+                 * and then this one — the transfer left carrying BOTH a
+                 * task id and a column id, and the drop below reads the
+                 * column id first. Dragging one card moved the whole column,
+                 * which on screen is every card in it moving at once.
+                 *
+                 * `e.target !== e.currentTarget` is the whole fix: the
+                 * section starts a column drag only when the section is what
+                 * was picked up.
+                 */
+                if (e.target !== e.currentTarget) return;
                 draggedColumn.current = col.id;
                 e.dataTransfer.setData("text/column-id", col.id);
               }}
               onDragOver={(e) => e.preventDefault()}
               onDrop={(e) => {
                 e.preventDefault();
+                /*
+                 * ONE GUARD, at the source above — not two.
+                 *
+                 * This read was written as "prefer a task id, whatever else
+                 * rode along", and it works; so does the source check. Which
+                 * is the problem: with both in place NEITHER can fail for its
+                 * own reason, and a probe that removed each in turn left the
+                 * suite green — only removing both reproduced the bug. A
+                 * second mechanism that the tests cannot exercise reads as
+                 * rigour and is a place for a future edit to hide.
+                 *
+                 * The source check is the stronger single one: it stops the
+                 * column id reaching the transfer at all, so `draggedColumn`
+                 * is not set either, and there is one fact about what was
+                 * picked up rather than two that could disagree.
+                 */
                 const columnId = e.dataTransfer.getData("text/column-id");
                 if (columnId !== "" && columnId !== col.id) {
                   /* dropping column A onto column B takes B's slot */

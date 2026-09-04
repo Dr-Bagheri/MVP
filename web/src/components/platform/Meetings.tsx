@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/routing";
 import { api } from "@/api/client";
+import { useRefreshEpoch } from "@/lib/refreshBus";
 import type { MeetingAgendaItem, MeetingMode, MeetingRecord } from "@/api/types";
 import { Overlay } from "./Overlay";
 import { Select } from "@/components/Select";
@@ -118,7 +119,10 @@ export function Meetings() {
       .then(setRows)
       .catch(() => setRows("failed"));
   }, [filter]);
-  useEffect(load, [load]);
+  /* the same subscription the board takes: a meeting created in the assistant
+     panel lands on this list without a reload (user report, 2026-09-04) */
+  const meetingsEpoch = useRefreshEpoch("meetings");
+  useEffect(load, [load, meetingsEpoch]);
 
   /* ?new=1 — the dashboard's «شروع ضبط جلسه» and the rail's CTA land here
      with the dialog already open, its time defaulted to the click moment.
@@ -141,7 +145,7 @@ export function Meetings() {
   const loadTopics = useCallback(() => {
     void api.meetingTopics().then(setTopicRows).catch(() => setTopicRows([]));
   }, []);
-  useEffect(loadTopics, [loadTopics]);
+  useEffect(loadTopics, [loadTopics, meetingsEpoch]);
   const [renamingTopic, setRenamingTopic] = useState<{ id: string; name: string } | null>(null);
   const [addingTopic, setAddingTopic] = useState(false);
 

@@ -89,7 +89,31 @@ export function useDictation(
       /* a refused microphone is not something to reopen — and `aborted` is
          a stop we asked for. Anything else is transient and `onend` retries. */
       if (fatal || e.error === "aborted") wantRef.current = false;
-      setStatus(fatal ? "denied" : "idle");
+      if (fatal) {
+        setStatus("denied");
+        return;
+      }
+      /*
+       * A TRANSIENT ERROR MUST NOT REPORT IDLE (user report, 2026-09-04: "the
+       * voice hotkey does not work now — it was working and adding my command
+       * to the prompt box").
+       *
+       * `no-speech` is what Chrome sends when somebody pauses, which is most
+       * of the time. This said `idle` unconditionally, and `onend` then
+       * reopened the session — so the microphone was open while the screen and
+       * every caller believed it was closed. Push-to-talk asks
+       * `status !== "listening"` before starting, so the NEXT press called
+       * toggle on a live recogniser and STOPPED it: the hotkey did nothing,
+       * twice in a row, forever.
+       *
+       * The fix is in `onend`, which says `listening` again the moment it
+       * reopens — ONE mechanism, and the provable one: a probe that removed
+       * the guard which used to stand here left the suite green, because the
+       * restart overwrites this status either way. Two mechanisms where
+       * neither can fail for its own reason is a place for a future edit to
+       * hide, so this is a plain `idle` and the restart is what corrects it.
+       */
+      setStatus("idle");
     };
     rec.onend = () => {
       /*
@@ -112,6 +136,10 @@ export function useDictation(
       if (wantRef.current) {
         try {
           rec.start();
+          /* and it is listening again — said out loud, because a transient
+             error may have been reported in between and the status is what
+             every caller reads to decide whether to start or stop */
+          setStatus("listening");
           return;
         } catch {
           /* start() throws if the engine is not ready to be restarted; fall

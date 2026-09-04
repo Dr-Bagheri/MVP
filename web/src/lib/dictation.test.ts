@@ -79,6 +79,43 @@ describe("dictation across a pause", () => {
     expect(heard).toEqual(["سلام", "جلسه را بگذار"]);
   });
 
+  it("keeps saying LISTENING through the pause error Chrome sends", async () => {
+    /*
+     * The regression the restart introduced, reported 2026-09-04 as "the voice
+     * hotkey does not work now".
+     *
+     * `no-speech` is what Chrome sends when somebody pauses — most of the
+     * time. The handler reported `idle` for it and `onend` then reopened the
+     * session, so the microphone was open while every caller believed it was
+     * closed. Push-to-talk asks `status !== "listening"` before starting, so
+     * the next press called toggle on a live recogniser and STOPPED it: the
+     * hotkey did nothing, and kept doing nothing.
+     *
+     * The status is what callers steer by, so it has to be about the
+     * microphone rather than about the last event.
+     */
+    install();
+    const heard: string[] = [];
+    const { result } = renderHook(() => useDictation("fa-IR", (t) => heard.push(t)));
+    act(() => result.current.toggle());
+    const rec = only();
+
+    act(() => rec.onerror?.({ error: "no-speech" }));
+    act(() => rec.endsByItself());
+
+    expect(result.current.status, "it reported idle while the mic was open").toBe("listening");
+    expect(rec.starts, "the session was not reopened").toBe(2);
+
+    /* and it is really the same live session: what is said next still lands */
+    act(() => rec.says("ادامهٔ جمله"));
+    expect(heard).toEqual(["ادامهٔ جمله"]);
+
+    /* the control — the press after the pause STOPS it, because it was
+       listening all along and the caller can now see that */
+    act(() => result.current.toggle());
+    expect(result.current.status).toBe("idle");
+  });
+
   it("stops for good when the person stops it", () => {
     /* the control. Without it, "always restart" passes the test above and
        makes the mic impossible to turn off — a worse bug than the one fixed. */

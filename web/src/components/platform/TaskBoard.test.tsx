@@ -64,6 +64,8 @@ let boardTasks: TaskCardRecord[] = [];
 let patches: { id: string; body: Record<string, unknown> }[] = [];
 let boardReads = 0;
 let refuseNextPatch = false;
+/** watched, because a card drag that moves a COLUMN is the bug below */
+const updateTaskColumn = vi.fn();
 
 vi.mock("@/api/client", () => ({
   BffError: class BffError extends Error {
@@ -92,7 +94,7 @@ vi.mock("@/api/client", () => ({
       description: "", checklist: [], comments: [], events: [],
     }),
     createTask: vi.fn(), createTaskColumn: vi.fn(), createTaskTopic: vi.fn(),
-    updateTaskColumn: vi.fn(), addTaskChecklistItem: vi.fn(),
+    updateTaskColumn: (...a: unknown[]) => updateTaskColumn(...a), addTaskChecklistItem: vi.fn(),
     updateTaskChecklistItem: vi.fn(), deleteTaskChecklistItem: vi.fn(),
     addTaskComment: vi.fn(), setTaskLabel: vi.fn(), setTaskAssignee: vi.fn(),
     createTaskLabel: vi.fn(), updateTaskLabel: vi.fn(), deleteTaskLabel: vi.fn(),
@@ -106,6 +108,8 @@ beforeEach(() => {
   patches = [];
   boardReads = 0;
   refuseNextPatch = false;
+  updateTaskColumn.mockReset();
+  updateTaskColumn.mockResolvedValue({});
 });
 
 /** the column's own container — the element carrying its cards */
@@ -280,5 +284,65 @@ describe("TaskBoard", () => {
     const column = within(columnRegion("برای انجام"));
     expect(column.getByText("سینا")).toBeInTheDocument();
     expect(column.getByText("+۱"), "the second assignee vanished from the count").toBeInTheDocument();
+  });
+
+  it("dragging a CARD moves the card — not the column it came out of", async () => {
+    /*
+     * User report, 2026-09-04: "for moving cards by hand they all move
+     * together."
+     *
+     * `dragstart` BUBBLES. A card sits inside its column and both are
+     * draggable, so picking up a card fired the card's handler and then the
+     * column's — the transfer left carrying a task id AND a column id, and the
+     * drop read the column first. One dragged card repositioned the whole
+     * column, which on screen is every card in it moving at once.
+     *
+     * THE FIXTURE IS THE POINT. The drop tests above hand in a `getData` that
+     * answers "" to anything but `text/task-id`, so the column id could not be
+     * on the transfer and the bug was unreachable — a fake agreeing with the
+     * belief the code was written on. This one RECORDS what `setData` writes
+     * and reads it back, which is what a DataTransfer does.
+     */
+    boardTasks = [card({ id: "t-1", title: "اجرای اسکریپت", column_id: "col-todo" })];
+    render(<TaskBoard />);
+    await waitFor(() => expect(screen.getByText("اجرای اسکریپت")).toBeInTheDocument());
+
+    const store = new Map<string, string>();
+    const dt = {
+      setData: (kind: string, value: string) => { store.set(kind, value); },
+      getData: (kind: string) => store.get(kind) ?? "",
+      effectAllowed: "", dropEffect: "",
+    };
+    const cardEl = screen.getByText("اجرای اسکریپت").closest("[draggable]") as HTMLElement;
+    fireEvent.dragStart(cardEl, { dataTransfer: dt });
+    fireEvent.drop(columnRegion("در حال انجام"), { dataTransfer: dt });
+
+    await waitFor(() => expect(patches).toHaveLength(1));
+    expect(patches[0]!.body.column_id, "the card did not move").toBe("col-doing");
+    expect(
+      updateTaskColumn,
+      "dragging one card repositioned its whole column",
+    ).not.toHaveBeenCalled();
+  });
+
+  it("THE CONTROL: dragging a COLUMN still moves the column", async () => {
+    /* without this, "never move a column" passes the test above and takes the
+       board's own reordering with it */
+    boardTasks = [card({ id: "t-1", title: "اجرای اسکریپت", column_id: "col-todo" })];
+    render(<TaskBoard />);
+    await waitFor(() => expect(screen.getByText("اجرای اسکریپت")).toBeInTheDocument());
+
+    const store = new Map<string, string>();
+    const dt = {
+      setData: (kind: string, value: string) => { store.set(kind, value); },
+      getData: (kind: string) => store.get(kind) ?? "",
+      effectAllowed: "", dropEffect: "",
+    };
+    fireEvent.dragStart(columnRegion("برای انجام"), { dataTransfer: dt });
+    fireEvent.drop(columnRegion("در حال انجام"), { dataTransfer: dt });
+
+    await waitFor(() => expect(updateTaskColumn).toHaveBeenCalledTimes(1));
+    expect(updateTaskColumn.mock.calls[0]![0]).toBe("col-todo");
+    expect(patches, "a column drag wrote a task").toHaveLength(0);
   });
 });

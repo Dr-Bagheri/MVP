@@ -31,7 +31,22 @@ export type RefreshTopic =
   | "models"
   | "org"
   | "gateway"
-  | "platform";
+  | "platform"
+  /*
+   * THE BOARD AND THE CALENDAR (user report, 2026-09-04: "when the assistant
+   * adds a task or a new meeting the related tables should get refreshed —
+   * I have to refresh by hand to see the changes").
+   *
+   * These two were missing, and the gap was written down rather than closed:
+   * a comment in the surface executor said "no refresh topic for tasks or
+   * meetings — those pages fetch on navigation". That was true and it was the
+   * defect. The assistant writes through the same client methods the buttons
+   * do, so it flows through the same announcer — and the announcer had no
+   * rule for either path, so a card created in the panel appeared on the board
+   * only when somebody reloaded the page they were already looking at.
+   */
+  | "tasks"
+  | "meetings";
 
 const counters = new Map<RefreshTopic, number>();
 const listeners = new Map<RefreshTopic, Set<() => void>>();
@@ -77,6 +92,11 @@ const TOPIC_RULES: readonly [RegExp, readonly RefreshTopic[]][] = [
   [/^\/api\/admin\/members/, ["members"]],
   [/^\/api\/admin\/invitations/, ["invitations", "members"]],
   [/^\/api\/calls/, ["calls"]],
+  /* both, and in this order: a task can be created FROM a meeting and a
+     meeting's own panel carries its mini-board, so a write to either can
+     change what the other is showing */
+  [/^\/api\/tasks/, ["tasks"]],
+  [/^\/api\/meetings/, ["meetings", "tasks"]],
   [/^\/api\/assistant\/sessions/, ["sessions"]],
   [/^\/api\/workflows/, ["workflows"]],
   [/^\/api\/skills/, ["skills"]],
