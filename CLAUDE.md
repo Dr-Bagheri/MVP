@@ -3384,3 +3384,73 @@ sessions) for the cross-session narrative.
   caller who sent nothing. 400 with a code now; verified on the live site with
   the discriminating pair (no body → 400, a real body unauthenticated → 401).
   db 188 migrations · core 1338 tests · web 1008 tests + gate + sweep.
+- 2026-09-04 (later still — THE ROOM GETS ITS HANDS: replies, reactions and an
+  invitation somebody answers; db 0189–0190): the second directive of the day,
+  taken whole against the Buzz screenshots. The rooms and their `+` left the
+  left rail for the TOP SUB-MENU (chips with `role="tab"`, bold for unread, a
+  number when you were named) — chat had been the one screen whose navigation
+  sat somewhere else. The room is a FIXED box that scrolls inside itself, with
+  two numbers rather than one because they answer different questions (how big
+  should this be, and what must it never exceed). The composer is the
+  directive read literally: two lines that do not grow, an OUTLINE enter at the
+  bottom right, and `@` / mic / emoji at the left — **on a row pinned
+  `dir="ltr"`, because the person was looking at the RTL page when they named
+  the corners**, and the logical form would have looked right in English and
+  moved both clusters to the other side of the box they had just pointed at.
+  The mic is the assistant's own hook and hotkey, not a second dictation ("a
+  room with its own voice implementation is two places for *the mic stopped
+  working* to be true"). Actions are on right-click AND on a hover bar driven
+  by ONE list: `rowActions.tsx` already records why ContextMenu was deleted
+  from tables — "a right-click menu is invisible" — and that reasoning does
+  not stop being true inside a chat room.
+  **0189 says plainly that an invitation grants NOTHING**: 0184 made every room
+  readable org-wide and 0145 did the same for meetings, so what it carries is
+  attention and a one-press way in. That is not a reason to skip the feature,
+  it is the reason to describe it correctly — an "accept" that reads like
+  unlocking a door which was never locked teaches a wrong model of who can see
+  what, and the day private rooms arrive that wrong model is the one people
+  will be reasoning with. The room/meeting split lives in ONE predicate
+  (`kind = 'meeting' or actor_is_admin()`) so nobody has to remember it; the
+  ORG OWNER is deliberately not admitted to the read policy, the one place
+  where "an admin can see everything" would turn a courtesy into surveillance.
+  The reply FK names its single column (`set null (reply_to_id)`) — 0188's
+  lesson applied the day after it cost a migration.
+  **Three findings, and the first is about my own instrument.** (1) A
+  verify-red pass on five load-bearing assertions came back RED five times and
+  proved NOTHING: the Bash tool's environment has no `node`, so every run died
+  before a test was collected. Minted: **a red is only evidence if the harness
+  could have been green — run the control first**. Re-run where node exists,
+  each break turned exactly one test red and the right one (reply posted with
+  no parent; the quote lost on a refused send; a reaction that cannot come
+  off; the control row mirrored back to logical sides; every invitation landing
+  in the chat). (2) The refresh bus gained an `invites` topic **with no
+  subscriber, spelled one letter from `invitations`, which has one** — a
+  producer with no consumer wearing a near-name, which is the drift shape.
+  Dropped: the only real consequence of accepting is that the channel list
+  moves, so `/api/invites` announces `chat`, and the test asserts the
+  discriminating pair in both directions (neither path may reach the other's
+  topic). (3) **0189 shipped with self-checks and no standing test.** A
+  migration's self-checks run ONCE, on the day it is applied; they cannot see a
+  policy dropped and recreated two migrations later, which is the edit they
+  exist for. `db/test/107` is that test — 23 checks walking the whole matrix
+  both ways — and its own verify-red is the point: a green SQL file that is
+  silently skipped reads exactly like one that passed, so two assertions were
+  flipped and had to FAIL by name before the file was believed.
+  Smaller keepers: the bell's two destinations are asserted SEPARATELY, since
+  one destination for both kinds passes the room test and sends every meeting
+  invitation to the chat; the composer's sides are asserted as the `dir`
+  attribute plus DOM order rather than a class, because a class assertion
+  cannot tell a physical row from a logical one; and the loading guard caught
+  a STALE entry (`Chat.tsx: 2`) in the same run that caught the two new files,
+  which is exactly why it fails in both directions.
+  Two more the screen found rather than a test: the emoji picker was reaching
+  for `IconSparkle`, which in this product means "the assistant did this" (the
+  meeting panel's extraction, the call page's AI actions) — a person pressing
+  it in the message box would expect the assistant and get a grid of emoji, so
+  it has its own face now and the icon registry's guard caught the missing
+  entry on the first run. And the `@` BUTTON inserted a character and opened
+  nothing: `insert` does not run the change handler that decides whether the
+  picker is open, so the list appeared only after the next keystroke — **a
+  dedicated control that does nothing visible when pressed teaches, on its
+  first press, that the feature does not work.**
+  db 190 migrations · core 1344 tests · web 1021 tests + gate + sweep.
