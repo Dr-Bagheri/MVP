@@ -3221,3 +3221,97 @@ sessions) for the cross-session narrative.
   its value to the other, so reading a field meant crossing empty space and
   hoping the thing on the far side belonged to the label you started from —
   a failure that gets worse the wider the card gets.
+- 2026-09-04 (ECHO LEAVES, PROJECTS AND A TEAM ROOM ARRIVE — commits
+  ff03981, 489aa43, 1cb0c48; db 0180–0185): a seven-item directive, taken
+  whole. **Echo is gone as a surface** (route, section menu, four sections);
+  what stayed is what meetings use, and `EchoAppShell` MOVED as
+  `platform/ToolbarShell` because it was never Echo's — a component that
+  outlives the feature it was named after should be renamed on the way out.
+  Three instruments found the danglers, including a `/echo/records` link
+  inside the Recorder and a SEPARATE enum of destinations in the navigate
+  tool. Cost recorded: there is no longer a screen listing every record.
+  **The online meeting records the SHARED TAB again — a REVERSAL**, and the
+  room branch is not deleted (the switch is one word in one call, so coming
+  back is one word too; deleting a working path to take a reversal is how a
+  reversal becomes permanent by accident). Two things had to move with it:
+  the auto-start YIELDS for online, because `getDisplayMedia` only opens for
+  a gesture and the picker is reached AFTER the microphone resolves — the
+  refusal that follows is `NotAllowedError`, the same error a cancelled
+  picker raises, so the person would be told they cancelled a dialog they
+  were never shown. And the chip now reports the SHARE, because a share can
+  stop without the recording stopping: red light on, clock running, half the
+  meeting unrecorded. The tell was stale copy — `modeExplain_online` had said
+  "system audio … pick a tab" for two days while the code recorded the room.
+  **PROJECTS (0181–0183)**: a project OWNS nothing and points at everything —
+  creating one creates its CATEGORY on the board in the same statement run,
+  renaming it renames that category, progress is COUNTED off the tasks filed
+  there. Every active member sees every project: the create dialog picks who
+  it is FOR, not who may know it exists.
+  **THE TEAM CHANNEL (0184–0185)**, and it is justified against 0166's
+  deletion rather than in spite of it: `owns_agent_session` binds a session to
+  ONE person, so two colleagues cannot talk to each other in the assistant
+  thread at all. This is a room for the humans and the agents are guests —
+  hence **in a channel the router's `default` rung is SILENCE** (three
+  colleagues in a room means an ambient trigger answers three times to every
+  sentence). **And a channel answer gets NO RETRIEVAL TOOLS**: `call_read`
+  admits a call to its owner, to the org when the scope says so, and to
+  admins, so the asker may legitimately see a record the other forty readers
+  cannot — "the agent borrows the caller's authority" is right in a private
+  thread and wrong where the answer is addressed to everybody. Attribution
+  carried forward from 0164 verbatim: `author_kind` pinned by the WRITING
+  ROLE, so an agent posting as a colleague is unrepresentable. Unread is a
+  COMPARISON, never a maintained count; a removed message keeps its row and
+  loses its words (hiding it makes the delete's post-image invisible to its
+  own author — M11's exact shape).
+  **Two facts only measurement settled.** `app.close()` NEVER RETURNS with an
+  SSE stream open (Fastify's `forceCloseConnections` default is `'idle'` and
+  a live stream is neither idle nor mid-request) — in production that is a
+  90-second hang and a SIGKILL on every deploy. BOTH halves are needed and
+  they fix different things: the flag alone leaks the listener and the
+  heartbeat timer; `closeAll` alone still hangs. Each verified by removal; I
+  had written only one of them from the research. And **`CORE_PUBLIC_URL` is
+  a VERCEL variable** — I read it on the SERVER, where it does not exist, so
+  `direct_url` would have been null forever and the chat would have run in
+  its polling fallback permanently, looking like a decision. Found by
+  deploying and grepping the server's env for a variable that was never
+  supposed to be there. Minted: **a name that means two things at two layers
+  is the two-spellings defect with a network hop in the middle.**
+  Also this round: an SSE stream needs a 15s heartbeat (Cloudflare's proxy
+  read timeout is 125s BETWEEN READS, and a chat stream is idle by nature)
+  and a SPREAD `retry:` (Chromium 3000ms and Firefox 5000ms are both fixed
+  with no jitter, so every client a deploy drops returns in one cluster).
+  **The help is current again** — eleven sections in the RAIL'S OWN ORDER,
+  which is what keeps it honest: a section somebody can reach and cannot read
+  about is a gap, and a section here with nowhere to go describes a product
+  we do not ship. Echo's mic-and-transcript sketch moved to meetings.
+  **Escape leak, one-directional and worth naming**: a raw-string script wrote
+  `\u2014` into the source as five literal characters. Inside a TS STRING
+  that is still an em-dash — every Persian prompt was correct — and inside a
+  COMMENT it is garbage, which is what eight of them were. So the half that
+  BROKE is the half nothing executes and the half that was FINE is the half a
+  test could have caught; a reviewer reading the diff would have seen the
+  Persian and moved on. 95 escapes decoded; the sweep passes over 1142 files.
+  **My own instruments were wrong before the code was, twice.** A verify-red
+  probe on the project work filter went GREEN — the guard it tested was
+  redundant, since the equality is already false for every card when the id is
+  null; the line is gone and the test now fails against the mistake that is
+  actually possible. And the first chat test failed with a missing name when
+  the real cause was `AgentAvatar` throwing inside a promise on an incomplete
+  mock: an unhandled rejection wearing the costume of an assertion failure,
+  which is the shape that sends somebody to fix working code.
+  Every guard fired for a real reason: purge coverage caught six new
+  org-scoped tables across two waves, the closed DELETE allow-list caught two
+  membership tables, the RLS check caught two enabled-but-not-FORCED, and the
+  control guard caught tone swatches hand-rolling `h-7 rounded-lg` — which the
+  task board had already solved with `.btn btn-icon`, so the fix was to
+  consume the answer rather than write a second one. A new 13½ instrument
+  joined them: every nav destination must have an icon, derived from the nav
+  rather than enumerated, because `NAV_ICON` is a plain lookup and a missing
+  key renders an EMPTY RAIL SLOT with no error at all.
+  Deployed: 0181–0185 on production, core on Hetzner (both services active,
+  new routes 401-not-404 against a 404 control), web on Vercel (the three new
+  BFF routes 401 while `/api/nonsense` 404s — the page probe could NOT
+  discriminate, because the middleware redirects every signed-out request to
+  sign-in including one for a page that does not exist). db 185 migrations ·
+  core 1328 tests · web 1006 tests + build gate + encoding sweep.
+  **Still owed from the seven:** nothing — all seven items landed.
