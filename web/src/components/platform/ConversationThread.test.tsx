@@ -174,3 +174,57 @@ describe("ConversationThread", () => {
     expect(screen.queryByText(/search_transcripts/)).toBeNull();
   });
 });
+
+/**
+ * THE WAIT IS VISIBLE, AND IT SITS AT THE FOOT.
+ *
+ * User report, 2026-09-04: "the thinking and its icon for agents and Echo was
+ * removed also when you were removing the tools details under it — add it
+ * under the name and its response in the lowest part like Claude does it."
+ *
+ * Two properties. That it is THERE, because in the panel the tool chips had
+ * been doing this job by accident and taking them away left an avatar, a name
+ * and nothing. And that it is LAST, because inline after the name put the
+ * spinner exactly where the first word was about to appear.
+ */
+describe("the wait", () => {
+  it("shows the spinner and the word while nothing has been written", () => {
+    render(<ConversationThread messages={[assistant("m1", "", { streaming: true })]} />);
+    expect(screen.getByText("در حال فکر کردن…")).toBeTruthy();
+  });
+
+  /*
+   * WHERE IT SITS IS NOT ASSERTED HERE, and that is deliberate.
+   *
+   * The directive is about LAYOUT — "under the name and its response", on its
+   * own line rather than inline beside the speaker — and jsdom computes no
+   * styles, so every arrangement produces the same tree. A first version of
+   * this file did assert it, with `compareDocumentPosition` against the name,
+   * and the assertion was VACUOUS: while nothing has been written there is no
+   * answer node to be after, and both placements follow the name. Moving the
+   * component back inline kept every test green.
+   *
+   * So it was measured instead, in a real browser on the real classes
+   * (2026-09-04, Chrome): the old `inline-flex` gave a 25.9px block — one line
+   * — with the mark 4.7px from the name's own top; the shipped `flex` gives a
+   * 46.9px block with the mark 27.1px BELOW the name. Two lines, which is what
+   * "under the name" means. The measurement is the record: a class-list
+   * assertion here would read as rigour and could not fail for its reason.
+   */
+
+  it("swaps to a caret once words are arriving — the two waits are different", () => {
+    render(<ConversationThread messages={[assistant("m1", "بله،", { streaming: true })]} />);
+    /* a spinner under a half-written sentence claims nothing is happening;
+       a caret in front of an empty one claims words are arriving */
+    expect(screen.queryByText("در حال فکر کردن…")).toBeNull();
+    expect(screen.getByText("▍")).toBeTruthy();
+  });
+
+  it("shows neither once the answer is finished", () => {
+    /* the control: without it, a version that always renders the line passes
+       both positive assertions above */
+    render(<ConversationThread messages={[assistant("m1", "بله، فردا.")]} />);
+    expect(screen.queryByText("در حال فکر کردن…")).toBeNull();
+    expect(screen.queryByText("▍")).toBeNull();
+  });
+});

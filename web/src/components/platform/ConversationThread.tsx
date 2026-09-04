@@ -3,6 +3,7 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { AgentAvatar, AgentName, ECHO } from "./AgentAvatar";
+import { ThinkingLine, TypingCaret } from "./ThinkingLine";
 import { api } from "@/api/client";
 import type { AgentMessage } from "@/api/types";
 import { deliverDoc, deliverPdf } from "@/lib/deliver";
@@ -250,22 +251,19 @@ const MessageRow = memo(function MessageRow({
                   </span>
                 )}
                 {isUser ? m.content : <AnswerContent text={m.content} />}
+                {/* mid-sentence: the caret goes where the next character will
+                    be, which is why this one stays INLINE */}
+                {m.streaming && m.content !== "" ? <TypingCaret /> : null}
                 {/*
-                  Two different waits, said differently. Nothing written yet =
-                  THINKING, and a spinner is the honest picture. Mid-sentence =
-                  still typing, and the caret belongs there. A blinking cursor
-                  in front of an empty answer claims words are arriving when
-                  none have.
+                  AND THE WAIT UNDERNEATH (user directive, 2026-09-04: "add it
+                  under the name and its response in the lowest part like
+                  Claude does it"). It used to sit inline right after the name
+                  — which put the spinner exactly where the first word was
+                  about to appear, so the answer arrived by shoving it
+                  sideways. Underneath, the text lands where it was always
+                  going to land and the line below it simply goes away.
                 */}
-                {m.streaming && m.content === "" ? (
-                  <span className="inline-flex items-center gap-2 text-fg-muted">
-                    <ThinkingMark />
-                    <span className="text-xs">{t("thinking")}</span>
-                  </span>
-                ) : null}
-                {m.streaming && m.content !== "" ? (
-                  <span className="ms-1 animate-pulse text-fg-muted">▍</span>
-                ) : null}
+                {m.streaming && m.content === "" ? <ThinkingLine /> : null}
               </div>
 
               {/*
@@ -615,18 +613,3 @@ function SpeakButton({ text }: { text: string }) {
   );
 }
 
-/** The wait's mark: a ring with a gap, turning. */
-function ThinkingMark() {
-  return (
-    <svg viewBox="0 0 20 20" className="thinking-spin h-4 w-4" aria-hidden>
-      <circle cx="10" cy="10" r="7.5" fill="none" stroke="currentColor" strokeOpacity="0.25" strokeWidth="2" />
-      <path
-        d="M10 2.5a7.5 7.5 0 0 1 7.5 7.5"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}

@@ -12,6 +12,7 @@ import type { ConnectorStatus } from "@/api/types";
 import { useRouter } from "@/i18n/routing";
 import { mentionedAgent } from "@/lib/agentMention";
 import { AgentAvatar, AgentName, ECHO } from "./AgentAvatar";
+import { ThinkingLine, TypingCaret } from "./ThinkingLine";
 import { useDictation } from "@/lib/dictation";
 import { usePushToTalk } from "@/lib/usePushToTalk";
 import {
@@ -1154,18 +1155,26 @@ export function AssistantSidebar() {
                       ) : null}
                       {m.content}
                       {/*
-                        NO TOOL CHIPS (user directive, 2026-09-04: "remove the
-                        tools text name in the chat box, it does not need to
-                        show what tools they are using, all the page now is
-                        full of this tools names").
+                        NO TOOL CHIPS (user directive, 2026-09-04) — and THIS
+                        panel is where removing them was felt, for a reason
+                        worth keeping: it never had a thinking indicator of its
+                        own. While a turn ran the chips appeared one at a time,
+                        and that is what read as "it is working" — so they were
+                        doing a second job nobody had assigned them. Taking
+                        away the job they WERE assigned took the other one with
+                        it, and the panel went from a stream of activity to an
+                        avatar, a name, a colon and nothing at all.
 
-                        A turn that searched, listed and wrote wore four chips
-                        under two lines of answer, so the record of HOW an
-                        answer was reached crowded out the answer. It is not
-                        lost: `tool_calls` still travel on the wire and still
-                        render on the agent-run surface, where a trace is the
-                        subject rather than the margin.
+                        The trace is not lost: `tool_calls` still travel on the
+                        wire and still render on the agent-run surface, where
+                        it is the subject rather than the margin.
                       */}
+                      {m.role === "assistant" && m.streaming && m.content !== ""
+                        ? <TypingCaret />
+                        : null}
+                      {m.role === "assistant" && m.streaming && m.content === ""
+                        ? <ThinkingLine />
+                        : null}
                       {m.failed ? (
                         <span className="mt-1 block text-group-label text-warning">
                           {t("failed")}
