@@ -93,6 +93,18 @@ export const IconVoice = (p: SVGProps<SVGSVGElement>) => (
 export const IconUser = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><circle cx="12" cy="12" r="8.5" /><circle cx="12" cy="10" r="2.8" /><path d="M6.8 18.4c1.1-2.4 3-3.6 5.2-3.6s4.1 1.2 5.2 3.6" /></svg>
 );
+/**
+ * A FACE, for the emoji picker (0189).
+ *
+ * It exists because the composer's picker was reaching for `IconSparkle`, and
+ * in this product a sparkle means "the assistant did this" — it marks the AI
+ * extraction on the meeting panel and the AI actions on a call. A person
+ * pressing it in the message box would reasonably expect the assistant and
+ * get a grid of emoji. One glyph, one meaning.
+ */
+export const IconSmile = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><circle cx="12" cy="12" r="8.5" /><circle cx="9.3" cy="10" r="1.1" fill="currentColor" stroke="none" /><circle cx="14.7" cy="10" r="1.1" fill="currentColor" stroke="none" /><path d="M8.4 14.1c.9 1.2 2.1 1.9 3.6 1.9s2.7-.7 3.6-1.9" /></svg>
+);
 export const IconSparkle = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}><path d="M12 3.5 13.8 9l5.7 1.8-5.7 1.8L12 18.3l-1.8-5.7L4.5 10.8 10.2 9 12 3.5Z" /><path d="M19 16.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8.8-2.2Z" strokeWidth="1.3" /></svg>
 );
@@ -450,6 +462,7 @@ export const ICONS = {
   "share": IconShare,
   "enter": IconEnter,
   "robot": IconRobot,
+  "smile": IconSmile,
   "sparkle": IconSparkle,
   "speaker": IconSpeaker,
   "tag": IconTag,

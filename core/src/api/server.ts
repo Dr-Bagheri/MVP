@@ -57,6 +57,7 @@ import { createMailDraftsRepo } from "./mail-drafts.ts";
 import { createTasksRepo } from "./tasks.ts";
 import { createProjectsRepo } from "./projects.ts";
 import { createChatRepo } from "./chat.ts";
+import { createInvitesRepo } from "./invites.ts";
 import { createChatBus, createTicketBook } from "./chatStream.ts";
 import { createMeetingsRepo, MEETING_ITEM_KINDS } from "./meetings.ts";
 import type { MeetingItemKind } from "./meetings.ts";
@@ -211,6 +212,7 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
   const tasks = createTasksRepo(options.db);
   const projects = createProjectsRepo(options.db);
   const chat = createChatRepo(options.db);
+  const invites = createInvitesRepo(options.db);
   /* 0184: one bus and one ticket book per server instance. They are
      STATE, which is why they are built here beside the repos rather than
      imported as module singletons — two servers in one test process
@@ -2905,14 +2907,28 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     const identity = await auth.requireActive(request);
     refuseApiKey(identity);
     const { id } = request.params as { id: string };
-    const body = (request.body ?? {}) as { body?: unknown };
-    const message = await chat.post(identity, id, body);
+    const body = (request.body ?? {}) as { body?: unknown; reply_to?: unknown };
+    const message = await chat.post(identity, id, body as never);
     chatBus.publish(identity.orgId, { type: "message", message });
     /* THE AGENT'S TURN, started and not awaited: the person's message is
        already written and the reply arrives on the stream when the model is
        done. Awaiting it would make a send take as long as an answer. */
     void answerIfNamed(identity, id, message.body ?? "").catch(() => undefined);
     return reply.code(201).send(message);
+  });
+
+  app.put("/v1/chat/messages/:id/reactions/:emoji", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id, emoji } = request.params as { id: string; emoji: string };
+    return reply.send(await chat.react(identity, id, decodeURIComponent(emoji), true));
+  });
+
+  app.delete("/v1/chat/messages/:id/reactions/:emoji", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id, emoji } = request.params as { id: string; emoji: string };
+    return reply.send(await chat.react(identity, id, decodeURIComponent(emoji), false));
   });
 
   app.patch("/v1/chat/messages/:id", async (request, reply) => {
@@ -2930,6 +2946,40 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     const { id } = request.params as { id: string };
     const body = (request.body ?? {}) as { seq?: unknown };
     await chat.markRead(identity, id, Number(body.seq) || 0);
+    return reply.code(204).send();
+  });
+
+  /**
+   * 0189 — invitations. A PERSON's inbox: gateway keys are refused like every
+   * other member surface, and the wall (an admin for a room, anybody for a
+   * meeting, the invitee alone for the answer) is 0189's policies rather than
+   * a check here.
+   */
+  app.get("/v1/invites", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    return reply.send(await invites.inbox(identity));
+  });
+
+  app.post("/v1/invites", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    return reply.code(201).send(await invites.invite(identity, (request.body ?? {}) as never));
+  });
+
+  app.post("/v1/invites/:id/respond", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { accept?: unknown };
+    return reply.send(await invites.respond(identity, id, body.accept === true ? "accepted" : "declined"));
+  });
+
+  app.delete("/v1/invites/:id", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    await invites.withdraw(identity, id);
     return reply.code(204).send();
   });
 

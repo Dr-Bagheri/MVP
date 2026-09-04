@@ -116,17 +116,22 @@ const REMAINING: Record<string, number> = {
      state is framed and is not in this count — `rows === null` renders
      SkeletonCards in the cards' own grid. */
   "components/platform/Projects.tsx": 1,
-  /* 0184, and NEITHER is a loading state — both are the two categories this
-     file's header names. `message.author_id === null ? null : people.find(…)`
-     is a REAL ABSENCE: an agent's message has no person behind it, ever, and
-     there is no frame to draw for a colleague who does not exist. `match ===
-     null ? null : match[1]` is the mention picker's VALUE, not a list: no `@`
-     is being typed, so nothing is being fetched.
-     The room's real loading states are framed and are not in this count —
-     the channel list and the message log each render SkeletonLines inside
-     their own box, so the layout does not move when the answers land and
-     "loading" never draws the same picture as "nobody has said anything". */
-  "components/platform/Chat.tsx": 2,
+  /* 0184/0189, and NONE of these is a loading state — all three are the two
+     categories this file's header names: a REAL ABSENCE and a picker's VALUE.
+     `message.author_id === null` is an agent's message, which never has a
+     person behind it; the same check inside the reply quote is that fact one
+     level in; `match === null` is the mention picker, where no `@` is being
+     typed and nothing is in flight.
+     Chat.tsx itself dropped to ZERO when the room was rebuilt (2026-09-04):
+     the rows and the composer moved into chat/, and this list caught the
+     STALE entry in the same run that caught the two new files — which is
+     exactly why it fails in both directions.
+     The room's real loading states are framed and are not in this count: the
+     message log renders SkeletonLines inside its own fixed box, so the layout
+     does not move when the answer lands and "loading" never draws the same
+     picture as "nobody has said anything". */
+  "components/platform/chat/MessageRow.tsx": 2,
+  "components/platform/chat/Composer.tsx": 1,
   /* 0186, and NOT a loading state. The one match is the schedule's date
      conversion — `iso === null ? null : calendarDay(iso)` — where null is
      the picker's own word for «بدون مهلت», which this feature reads as

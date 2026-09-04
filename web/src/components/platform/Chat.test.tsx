@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChatChannelRecord, ChatMessageRecord, OrgPersonRecord } from "@/api/types";
@@ -83,7 +83,7 @@ function message(over: Partial<ChatMessageRecord>): ChatMessageRecord {
   return {
     id: "m-1", seq: 1, channel_id: "c-1", author_kind: "user", author_id: "u-1",
     agent_handle: null, body: "سلام", deleted: false, edited_at: null,
-    created_at: "2026-09-01T08:00:00.000Z", mentions: [],
+    created_at: "2026-09-01T08:00:00.000Z", mentions: [], reactions: [], reply_to: null,
     ...over,
   };
 }
@@ -107,19 +107,41 @@ beforeEach(() => {
 
 describe("the channel list", () => {
   it("bolds an unread room and numbers a mention — and does neither for a read one", async () => {
+    /* the rooms moved from a left RAIL to the top sub-menu on 2026-09-04
+       (user directive). The states did not change and neither did this test's
+       subject: bold = unread, a number = you were named, and no third. */
     CHANNELS = [
       channel({ id: "c-1", name: "عمومی", last_seq: 9, last_read_seq: 9 }),
       channel({ id: "c-2", name: "پشتیبانی", last_seq: 12, last_read_seq: 4, mention_count: 3 }),
     ];
-    render(<Chat meId="u-1" people={PEOPLE} />);
-    const rail = await screen.findByRole("complementary", { name: "اتاق‌ها" });
+    render(<Chat isAdmin meId="u-1" people={PEOPLE} />);
+    const rooms = await screen.findByRole("tablist", { name: "اتاق‌ها" });
 
-    const read = within(rail).getByText("عمومی");
-    const unread = within(rail).getByText("پشتیبانی");
+    const read = within(rooms).getByText("عمومی");
+    const unread = within(rooms).getByText("پشتیبانی");
     expect(unread.className).toContain("font-bold");
-    /* the control: without it, a component that bolded EVERY row passes */
+    /* the control: without it, a component that bolded EVERY chip passes */
     expect(read.className).not.toContain("font-bold");
-    expect(within(rail).getByText("۳")).toBeInTheDocument();
+    expect(within(rooms).getByText("۳")).toBeInTheDocument();
+  });
+
+  it("offers «افزودن اعضا» to an admin and to nobody else", async () => {
+    /*
+     * 0189: "the admins had to have this option to add all members and other
+     * admins to the room". ABSENT rather than disabled, for the same reason
+     * the project's create button is: a greyed control is a promise the
+     * product will not keep, and pressing it explains nothing.
+     */
+    CHANNELS = [channel({ id: "c-1", name: "عمومی" })];
+    render(<Chat isAdmin meId="u-1" people={PEOPLE} />);
+    expect(await screen.findByRole("button", { name: /افزودن اعضا/ })).toBeInTheDocument();
+
+    cleanup();
+    render(<Chat isAdmin={false} meId="u-1" people={PEOPLE} />);
+    await waitFor(() => expect(screen.getByText("عمومی")).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: /افزودن اعضا/ })).toBeNull();
+    /* the control: the room still rendered, so "no button" is not "no page" */
+    expect(screen.getByRole("button", { name: /اتاق تازه/ })).toBeInTheDocument();
   });
 });
 
@@ -132,7 +154,7 @@ describe("the room", () => {
         agent_handle: "roya", body: "سلام! در خدمتم.",
       }),
     ];
-    render(<Chat meId="u-1" people={PEOPLE} />);
+    render(<Chat isAdmin meId="u-1" people={PEOPLE} />);
     const log = await screen.findByRole("log", { name: "پیام‌ها" });
 
     /* anchored on a value that exists only AFTER the read lands: the log box
@@ -150,7 +172,7 @@ describe("the room", () => {
       message({ id: "m-2", seq: 2, body: null, deleted: true }),
       message({ id: "m-3", seq: 3, body: "پیام سوم" }),
     ];
-    render(<Chat meId="u-1" people={PEOPLE} />);
+    render(<Chat isAdmin meId="u-1" people={PEOPLE} />);
     const log = await screen.findByRole("log", { name: "پیام‌ها" });
 
     expect(await within(log).findByText("این پیام حذف شد.")).toBeInTheDocument();
@@ -162,7 +184,7 @@ describe("the room", () => {
 
   it("renders an agent's failure as an ANNOTATION, never as a message", async () => {
     MESSAGES = [message({ id: "m-1", seq: 1, body: "@roya یک خلاصه بده" })];
-    render(<Chat meId="u-1" people={PEOPLE} />);
+    render(<Chat isAdmin meId="u-1" people={PEOPLE} />);
     const log = await screen.findByRole("log", { name: "پیام‌ها" });
     /* AFTER the read, or `before` counts the skeleton and the assertion at
        the foot compares two different moments rather than two states */
@@ -183,7 +205,7 @@ describe("the room", () => {
 
   it("adds a message that arrives on the stream, once", async () => {
     MESSAGES = [message({ id: "m-1", seq: 1, body: "اولین" })];
-    render(<Chat meId="u-1" people={PEOPLE} />);
+    render(<Chat isAdmin meId="u-1" people={PEOPLE} />);
     const log = await screen.findByRole("log", { name: "پیام‌ها" });
     await within(log).findByText("اولین");
     await waitFor(() => expect(emit).not.toBeNull());
@@ -200,7 +222,7 @@ describe("the room", () => {
 
   it("ignores an event for a room the reader is not standing in", async () => {
     MESSAGES = [message({ id: "m-1", seq: 1, body: "اینجا" })];
-    render(<Chat meId="u-1" people={PEOPLE} />);
+    render(<Chat isAdmin meId="u-1" people={PEOPLE} />);
     const log = await screen.findByRole("log", { name: "پیام‌ها" });
     await within(log).findByText("اینجا");
     await waitFor(() => expect(emit).not.toBeNull());
@@ -213,7 +235,7 @@ describe("the room", () => {
 
 describe("the composer", () => {
   it("sends on Enter and offers agents as well as colleagues after @", async () => {
-    render(<Chat meId="u-1" people={PEOPLE} />);
+    render(<Chat isAdmin meId="u-1" people={PEOPLE} />);
     const box = await screen.findByPlaceholderText(/پیام بنویسید/);
     /* the composer is DISABLED until a room is selected, and typing into a
        disabled box does nothing at all — silently, which is what made the
@@ -234,8 +256,63 @@ describe("the composer", () => {
     await waitFor(() => expect(posted).toEqual(["سلام"]));
   });
 
+  it("puts the tools left and the send right — PHYSICALLY — and the send has no fill", async () => {
+    /*
+     * The directive named corners: "on the right side, lowest part, an enter
+     * icon without fill for sending, and on the other side, left, there must
+     * be a @ option … and a mic … and an emoji dropdown."
+     *
+     * The person was LOOKING AT THE RTL PAGE when they said that, so the row
+     * is pinned `dir="ltr"` and the logical properties are deliberately not
+     * used. A logical version would look right in English and move both
+     * clusters to the other side of the box they had just pointed at — which
+     * is exactly why this asserts the attribute and the DOM ORDER rather than
+     * a class: under dir="ltr", first is left and last is right.
+     */
+    render(<Chat isAdmin meId="u-1" people={PEOPLE} />);
+    const send = await screen.findByRole("button", { name: "ارسال" });
+    const row = send.parentElement!;
+    expect(row).toHaveAttribute("dir", "ltr");
+
+    const mention = within(row).getByRole("button", { name: "صدا زدن کسی" });
+    // eslint-disable-next-line no-bitwise
+    expect(mention.compareDocumentPosition(send) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    /* «an enter icon WITHOUT fill»: an outline glyph, not a filled pill. In a
+       room the send is pressed by Enter almost every time, so a solid accent
+       button would be the loudest thing on a screen whose subject is the
+       conversation. */
+    expect(send.className).toContain("border");
+    expect(send.className).not.toContain("bg-accent");
+
+    /* the other two the directive named, on the left with the @ */
+    expect(within(row).getByRole("button", { name: "گفتن با میکروفون" })).toBeInTheDocument();
+    expect(within(row).getByRole("button", { name: "ایموجی" })).toBeInTheDocument();
+  });
+
+  it("the @ BUTTON opens the picker, not just a character in the box", async () => {
+    /*
+     * The control the directive named ("an @ option that can add agents to
+     * the chat"). Pressing it used to insert the character and nothing else,
+     * because the insert path does not run the change handler that decides
+     * whether a picker is open — so the list appeared only after the next
+     * keystroke. A dedicated button that does nothing visible when pressed
+     * teaches, on its first press, that the feature does not work.
+     */
+    render(<Chat isAdmin meId="u-1" people={PEOPLE} />);
+    const box = await screen.findByPlaceholderText(/پیام بنویسید/);
+    await waitFor(() => expect(box).not.toBeDisabled());
+
+    await userEvent.click(screen.getByRole("button", { name: "صدا زدن کسی" }));
+    /* agents FIRST, because naming one is the whole authorization for it to
+       answer — and a colleague too, so the list is not an agent menu */
+    expect(await screen.findByText("@roya")).toBeInTheDocument();
+    expect(screen.getByText("@maryam")).toBeInTheDocument();
+    expect(box).toHaveValue("@");
+  });
+
   it("never offers a colleague who has no handle", async () => {
-    render(<Chat meId="u-1" people={PEOPLE} />);
+    render(<Chat isAdmin meId="u-1" people={PEOPLE} />);
     const box = await screen.findByPlaceholderText(/پیام بنویسید/);
     await waitFor(() => expect(box).not.toBeDisabled());
     /* رضا has username null. A mention of a handle nobody holds resolves to

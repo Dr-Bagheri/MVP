@@ -8,46 +8,58 @@ import { openChatLive, mergeBySeq, type ChatLiveState } from "@/lib/chatLive";
 import { shouldStick } from "@/lib/threadFollow";
 import type { ChatChannelRecord, ChatMessageRecord, OrgPersonRecord } from "@/api/types";
 import { Overlay } from "./Overlay";
-import { Avatar } from "@/components/Avatar";
+import { InvitePeople } from "./InvitePeople";
 import { AgentAvatar } from "./AgentAvatar";
 import { KebabMenu } from "@/components/rowActions";
 import { SkeletonLines } from "@/components/scaffold";
-import { IconArchive, IconClose, IconPlus, IconSend } from "@/components/icons";
-import { digits, personName } from "@/lib/format";
+import { IconArchive, IconCheck, IconClose, IconPeople3, IconPlus } from "@/components/icons";
+import { digits } from "@/lib/format";
+import { MessageRow } from "./chat/MessageRow";
+import { Composer } from "./chat/Composer";
 
 /**
- * THE TEAM CHANNEL (0184) — user directive, 2026-09-04: "add a chat room
- * section in the menu for all members to join and a place that they can talk
- * to each other … so everyone can be added and chat there even the agents."
+ * THE TEAM CHANNEL (0184; its actions and invitations 0189).
  *
- * What is here and why each piece is:
+ * ── THE ROOMS ARE A TOP SUB-MENU ──────────────────────────────────────────
  *
- *   · A CHANNEL LIST with two states and no third. Bold = unread, a numeric
- *     badge = you were named. That is Slack's model and it is two classes on
- *     purpose: a dot beside a bold row is a third state nobody can name.
- *   · GROUPING at five minutes, broken by author, by day, and — the
- *     non-obvious one — by anything that changes the header, so an older
- *     message is never filed under a newer name.
- *   · MENTION HIGHLIGHT that is not colour alone: a tint AND a border AND a
- *     word a screen reader reads.
- *   · `<bdi>` around every name and handle. Not decoration: a Persian name
- *     inside an English row, or a Latin handle at the head of a Persian
- *     sentence, drags the punctuation to the wrong end of the line. The
- *     bubble's own direction follows the CONVERSATION when the text has no
- *     strong character of its own — `dir="auto"` alone returns `ltr` there,
- *     by specification, and that is the message-starts-with-@handle bug that
- *     every chat product has shipped at least once.
+ * User directive, 2026-09-04: "put the room and its plus option in the sub
+ * menu top like the tasks with the same look."
  *
- * What is deliberately absent: typing indicators between PEOPLE (highest
- * fan-out, lowest value — the vendor that invented it has stranded the API),
- * read receipts (Slack's own `mark` broadcasts to your own devices only;
- * there is no mechanism by which member B learns member A's position), and
- * threads.
+ * They were a left rail. Every other list surface in this product — tasks,
+ * meetings, projects — puts its filters and its `+` in a row of chips above
+ * the content, and a rail here made chat the one screen whose navigation sat
+ * somewhere else. The chips carry what the rail did: the name, bold when
+ * unread, and a number when you were named.
+ *
+ * ── THE ROOM IS A FIXED BOX ───────────────────────────────────────────────
+ *
+ * "Make the size of the chat box fixed, and if they continue chatting it must
+ * go to scroll mode inside itself."
+ *
+ * A height that grows with the conversation moves everything below it and
+ * eventually takes the composer off the bottom of the screen — so the box is
+ * a fixed height and the messages scroll inside it. The ceiling is capped
+ * against the viewport as well, because "fixed" on a 13-inch laptop must not
+ * mean "taller than the window".
+ *
+ * ── WHAT IS DELIBERATELY ABSENT ───────────────────────────────────────────
+ *
+ * Typing indicators between PEOPLE (highest fan-out, lowest value — the
+ * vendor that invented the pattern has stranded its API) and read receipts
+ * (there is no mechanism by which member B learns member A's position; even
+ * Slack's own mark broadcasts to your own devices only).
  */
 
-const GROUP_WINDOW_MS = 5 * 60 * 1000;
+/* FIXED, and capped: 34rem is the box, and the cap keeps it inside a short
+   window. Two numbers rather than one because they answer different
+   questions — how big should this be, and what must it never exceed. */
+const ROOM_HEIGHT = "h-[34rem] max-h-[calc(100vh-14rem)]";
 
-export function Chat({ meId, people }: { meId: string | null; people: OrgPersonRecord[] }) {
+export function Chat({ meId, isAdmin, people }: {
+  meId: string | null;
+  isAdmin: boolean;
+  people: OrgPersonRecord[];
+}) {
   const t = useTranslations("chat");
   const locale = useLocale();
   const [channels, setChannels] = useState<ChatChannelRecord[] | null | "failed">(null);
@@ -57,6 +69,8 @@ export function Chat({ meId, people }: { meId: string | null; people: OrgPersonR
   const [typing, setTyping] = useState<string | null>(null);
   const [failedAgent, setFailedAgent] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [inviting, setInviting] = useState(false);
+  const [replyTo, setReplyTo] = useState<ChatMessageRecord | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const epoch = useRefreshEpoch("chat");
@@ -65,9 +79,9 @@ export function Chat({ meId, people }: { meId: string | null; people: OrgPersonR
   }, []);
   useEffect(loadChannels, [loadChannels, epoch]);
 
-  /* the first channel, once. Not `current ?? channels[0]` at render: that
-     would silently move the person to another room the moment a channel is
-     archived, which reads as the app losing their place. */
+  /* the first room, once. Not `current ?? channels[0]` at render: that would
+     silently move the person to another room the moment one is archived,
+     which reads as the app losing their place. */
   useEffect(() => {
     if (current !== null || !Array.isArray(channels) || channels[0] === undefined) return;
     setCurrent(channels[0].id);
@@ -84,7 +98,7 @@ export function Chat({ meId, people }: { meId: string | null; people: OrgPersonR
       .then((rows) => {
         /* the answer may arrive after the person moved rooms — dropping it
            is the whole point of the check, because merging it would put one
-           channel's messages under another's name */
+           room's messages under another's name */
         if (currentRef.current !== channelId) return;
         setMessages((cur) => (mode === "open" ? rows : mergeBySeq(cur ?? [], rows)));
         for (const row of rows) tip.current = Math.max(tip.current, row.seq);
@@ -98,19 +112,20 @@ export function Chat({ meId, people }: { meId: string | null; people: OrgPersonR
     setMessages(null);
     setTyping(null);
     setFailedAgent(null);
+    setReplyTo(null);
     loadMessages(current, "open");
   }, [current, loadMessages]);
 
-  /* ONE stream for the whole org, demultiplexed here. A stream per channel
-     would hit the browser's six-connection HTTP/1.1 ceiling with four rooms
-     and two tabs open. */
+  /* ONE stream for the whole org, demultiplexed here. A stream per room would
+     hit the browser's six-connection HTTP/1.1 ceiling with four rooms and two
+     tabs open. */
   useEffect(() => openChatLive({
     onState: setLive,
     onPoll: () => { if (currentRef.current !== null) loadMessages(currentRef.current, "catchup"); },
     onEvent: (event) => {
       if (event.type === "message" || event.type === "edited") {
         if (event.message.channel_id !== currentRef.current) {
-          /* another room moved — the badge is the channel list's business */
+          /* another room moved — the badge is the room list's business */
           loadChannels();
           return;
         }
@@ -127,8 +142,8 @@ export function Chat({ meId, people }: { meId: string | null; people: OrgPersonR
 
   /* ── the read cursor ─────────────────────────────────────────────────
      Debounced, and acknowledged EXPLICITLY rather than as a side effect of
-     rendering: the unread divider has to stay where it is while somebody
-     reads the messages under it. */
+     rendering: the unread mark has to stay where it is while somebody reads
+     the messages under it. */
   const acked = useRef(0);
   useEffect(() => {
     if (current === null || messages === null || messages.length === 0) return;
@@ -159,68 +174,101 @@ export function Chat({ meId, people }: { meId: string | null; people: OrgPersonR
 
   const send = async (body: string) => {
     if (current === null) return;
+    const answering = replyTo;
+    setReplyTo(null);
     try {
-      const message = await api.postChatMessage(current, body);
+      const message = await api.postChatMessage(current, body, answering?.id ?? null);
       setMessages((cur) => mergeBySeq(cur ?? [], [message]));
       tip.current = Math.max(tip.current, message.seq);
       stick.current = true;
     } catch {
+      /* PUT THE QUOTE BACK. A refused send that silently forgot what it was
+         answering leaves the person to retype into a room where their next
+         message replies to nothing. */
+      setReplyTo(answering);
       setError(t("sendFailed"));
     }
   };
 
+  const react = (message: ChatMessageRecord, emoji: string, on: boolean) => {
+    void api.reactToChatMessage(message.id, emoji, on)
+      .then((updated) => setMessages((cur) => mergeBySeq(cur ?? [], [updated])))
+      .catch(() => setError(t("writeFailed")));
+  };
+
+  const remove = (message: ChatMessageRecord) => {
+    void api.editChatMessage(message.id, { deleted: true })
+      .then((updated) => setMessages((cur) => mergeBySeq(cur ?? [], [updated])))
+      .catch(() => setError(t("writeFailed")));
+  };
+
   return (
-    <div className="flex min-h-0 flex-1 gap-4">
-      {/* ── the rooms ─────────────────────────────────────────────────── */}
-      <aside className="hidden w-56 shrink-0 flex-col gap-2 md:flex" aria-label={t("channels")}>
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-fg">{t("channels")}</h2>
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
+      {/* ── the rooms, as the top sub-menu ───────────────────────────── */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-1" role="tablist" aria-label={t("channels")}>
+          {channels === null ? (
+            <span className="text-xs text-fg-subtle">{t("loadingRooms")}</span>
+          ) : channels === "failed" ? (
+            <span className="text-xs text-fg-muted">{t("readFailed")}</span>
+          ) : channels.length === 0 ? (
+            <span className="text-xs text-fg-subtle">{t("noChannels")}</span>
+          ) : channels.map((room) => {
+            const unread = room.last_seq > room.last_read_seq;
+            return (
+              <button
+                key={room.id}
+                type="button"
+                role="tab"
+                aria-selected={room.id === current}
+                onClick={() => setCurrent(room.id)}
+                className={`btn btn-sm gap-1.5 border font-medium ${
+                  room.id === current
+                    ? "border-accent bg-accent-soft text-accent"
+                    : "border-border bg-surface text-fg-muted hover:text-fg"
+                }`}
+              >
+                <span aria-hidden className="text-fg-subtle">#</span>
+                {/* BOLD is the unread state — no dot beside it, because a bold
+                    chip with a dot is a third state nobody can name */}
+                <bdi className={unread ? "font-bold text-fg" : ""}>{room.name}</bdi>
+                {room.mention_count > 0 ? (
+                  <span className="badge-num rounded-md bg-danger px-1.5 text-[10px] font-bold text-on-accent">
+                    {digits(room.mention_count, locale)}
+                  </span>
+                ) : null}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          {/* ADDING PEOPLE IS AN ADMIN'S (0189, the directive's own words).
+              Absent rather than disabled: a greyed button is a promise the
+              product will not keep for this person. */}
+          {isAdmin && channel !== null ? (
+            <button type="button" onClick={() => setInviting(true)}
+              className="btn btn-sm gap-1.5 border border-border text-fg-muted hover:text-fg">
+              <IconPeople3 width={12} height={12} />
+              {t("addPeople")}
+            </button>
+          ) : null}
           <button type="button" onClick={() => setCreating(true)}
-            className="btn btn-icon text-fg-muted hover:text-fg" aria-label={t("newChannel")}>
+            className="btn btn-sm gap-1.5 bg-accent text-on-accent hover:opacity-90">
             <IconPlus width={12} height={12} />
+            {t("newChannel")}
           </button>
         </div>
-        {channels === null ? (
-          <SkeletonLines lines={4} />
-        ) : channels === "failed" ? (
-          <p className="text-xs text-fg-muted">{t("readFailed")}</p>
-        ) : channels.length === 0 ? (
-          <p className="text-xs text-fg-subtle">{t("noChannels")}</p>
-        ) : (
-          <ul className="space-y-0.5">
-            {channels.map((room) => {
-              const unread = room.last_seq > room.last_read_seq;
-              return (
-                <li key={room.id}>
-                  <button
-                    type="button"
-                    aria-current={room.id === current ? "true" : undefined}
-                    onClick={() => setCurrent(room.id)}
-                    className={`tap flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-start text-xs ${
-                      room.id === current ? "bg-accent-soft text-accent" : "text-fg-muted hover:bg-surface-2"
-                    }`}
-                  >
-                    <span aria-hidden className="text-fg-subtle">#</span>
-                    {/* BOLD is the unread state — no dot beside it, because a
-                        bold row with a dot is a third state nobody can name */}
-                    <bdi className={`min-w-0 flex-1 truncate ${unread ? "font-bold text-fg" : ""}`}>
-                      {room.name}
-                    </bdi>
-                    {room.mention_count > 0 ? (
-                      <span className="badge-num shrink-0 rounded-md bg-danger px-1.5 text-[10px] font-bold text-on-accent">
-                        {digits(room.mention_count, locale)}
-                      </span>
-                    ) : null}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </aside>
+      </div>
 
-      {/* ── the room ──────────────────────────────────────────────────── */}
-      <section className="tile flex min-h-0 flex-1 flex-col" aria-label={t("room")}>
+      {error !== null ? (
+        <p role="alert" className="rounded-xl border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
+          {error}
+        </p>
+      ) : null}
+
+      {/* ── the room: a FIXED box that scrolls inside itself ─────────── */}
+      <section className={`tile flex ${ROOM_HEIGHT} flex-col`} aria-label={t("room")}>
         <header className="flex items-center gap-2 border-b border-border px-4 py-2.5">
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-sm font-semibold text-fg">
@@ -231,8 +279,8 @@ export function Chat({ meId, people }: { meId: string | null; people: OrgPersonR
             ) : null}
           </div>
           {/* the delivery lane, named. "polling" is a real state a person can
-              act on (their answers arrive within seconds instead of at once),
-              and hiding it would make a working fallback look like a fault. */}
+              act on, and hiding it would make a working fallback look like a
+              fault. */}
           <span className={`badge-num rounded-lg px-2 py-1 text-[10px] ${
             live === "live" ? "bg-success/10 text-success"
               : live === "polling" ? "bg-warning/10 text-warning"
@@ -247,7 +295,7 @@ export function Chat({ meId, people }: { meId: string | null; people: OrgPersonR
                 {
                   key: "join",
                   label: channel.joined ? t("leave") : t("join"),
-                  icon: <IconPlus width={12} height={12} />,
+                  icon: <IconCheck width={12} height={12} />,
                   onSelect: () => {
                     void api.setChatJoined(channel.id, !channel.joined)
                       .then(loadChannels).catch(() => setError(t("writeFailed")));
@@ -269,12 +317,6 @@ export function Chat({ meId, people }: { meId: string | null; people: OrgPersonR
           ) : null}
         </header>
 
-        {error !== null ? (
-          <p role="alert" className="border-b border-danger/30 bg-danger/10 px-4 py-2 text-xs text-danger">
-            {error}
-          </p>
-        ) : null}
-
         <div
           ref={scroller}
           onScroll={(e) => { stick.current = shouldStick(e.currentTarget); }}
@@ -289,14 +331,16 @@ export function Chat({ meId, people }: { meId: string | null; people: OrgPersonR
             <p className="py-10 text-center text-xs text-fg-subtle">{t("emptyRoom")}</p>
           ) : (
             messages.map((message, i) => (
-              <Row
+              <MessageRow
                 key={message.id}
                 message={message}
                 previous={messages[i - 1] ?? null}
                 people={people}
                 meId={meId}
                 locale={locale}
-                onEdited={(updated) => setMessages((cur) => mergeBySeq(cur ?? [], [updated]))}
+                onReply={setReplyTo}
+                onReact={react}
+                onRemove={remove}
               />
             ))
           )}
@@ -325,6 +369,8 @@ export function Chat({ meId, people }: { meId: string | null; people: OrgPersonR
         <Composer
           disabled={current === null}
           people={people}
+          replyTo={replyTo}
+          onCancelReply={() => setReplyTo(null)}
           onSend={send}
         />
       </section>
@@ -336,200 +382,16 @@ export function Chat({ meId, people }: { meId: string | null; people: OrgPersonR
           onFailed={() => { setCreating(false); setError(t("writeFailed")); }}
         />
       ) : null}
-    </div>
-  );
-}
 
-/** the same five-minute window Element uses, with the break conditions that
-    matter more than the number */
-function grouped(message: ChatMessageRecord, previous: ChatMessageRecord | null): boolean {
-  if (previous === null) return false;
-  if (previous.author_kind !== message.author_kind) return false;
-  if (previous.author_id !== message.author_id) return false;
-  if (previous.agent_handle !== message.agent_handle) return false;
-  const gap = new Date(message.created_at).getTime() - new Date(previous.created_at).getTime();
-  if (gap > GROUP_WINDOW_MS) return false;
-  /* a day change breaks the group even inside five minutes — 23:58 and 00:01
-     belong under different headers however close they are */
-  return new Date(message.created_at).getDate() === new Date(previous.created_at).getDate();
-}
-
-function Row({ message, previous, people, meId, locale, onEdited }: {
-  message: ChatMessageRecord;
-  previous: ChatMessageRecord | null;
-  people: OrgPersonRecord[];
-  meId: string | null;
-  locale: string;
-  onEdited: (message: ChatMessageRecord) => void;
-}) {
-  const t = useTranslations("chat");
-  const person = message.author_id === null
-    ? null
-    : people.find((p) => p.id === message.author_id) ?? null;
-  const name = message.author_kind === "agent"
-    ? message.agent_handle ?? "?"
-    : person === null ? t("unknownPerson") : personName(person, locale);
-  const mine = meId !== null && message.author_id === meId;
-  const namedMe = meId !== null && message.mentions.includes(meId);
-  const head = !grouped(message, previous);
-
-  return (
-    <div
-      className={`group -mx-2 rounded-lg px-2 py-0.5 ${head ? "mt-2" : ""} ${
-        /* not colour alone: a tint AND a border AND a word */
-        namedMe ? "border-s-2 border-accent bg-accent-soft/40" : ""
-      }`}
-    >
-      {namedMe ? <span className="sr-only">{t("youWereMentioned")}</span> : null}
-      {head ? (
-        <div className="flex items-center gap-2">
-          {message.author_kind === "agent"
-            ? <AgentAvatar handle={message.agent_handle ?? ""} size="sm" />
-            : <Avatar name={name} size="xs" />}
-          {/* <bdi>, not a span: a Persian name in an English row and a Latin
-              one in a Persian row both drag their neighbours' punctuation to
-              the wrong end of the line, and a stylesheet is allowed to be
-              ignored where this element is not */}
-          <bdi className="text-xs font-semibold text-fg">{name}</bdi>
-          {message.author_kind === "agent" ? (
-            <span className="badge-num rounded bg-surface-2 px-1 text-[9px] text-fg-subtle">
-              {t("agentTag")}
-            </span>
-          ) : null}
-          <time className="badge-num text-[10px] text-fg-subtle" dateTime={message.created_at}>
-            {new Date(message.created_at).toLocaleTimeString(locale === "fa" ? "fa-IR" : "en-GB",
-              { hour: "2-digit", minute: "2-digit" })}
-          </time>
-          {mine && !message.deleted ? (
-            <button
-              type="button"
-              onClick={() => {
-                void api.editChatMessage(message.id, { deleted: true })
-                  .then(onEdited).catch(() => undefined);
-              }}
-              className="tap text-[10px] text-fg-subtle opacity-0 transition-opacity hover:text-danger group-hover:opacity-100"
-            >
-              {t("removeMessage")}
-            </button>
-          ) : null}
-        </div>
-      ) : null}
-      <p
-        /* the CONVERSATION's direction is the fallback, never `auto` alone:
-           the spec walks past digits and emoji but returns `ltr` for a
-           message whose first strong character is Latin — an @handle, a URL,
-           "OK" — which is the bug every chat product ships once */
-        dir={/[؀-ۿ]/.test(message.body ?? "") ? "rtl" : "auto"}
-        className={`ps-7 text-sm leading-6 ${
-          message.deleted ? "text-fg-subtle italic" : "text-fg"
-        }`}
-      >
-        {message.deleted ? t("removedMessage") : message.body}
-        {message.edited_at !== null && !message.deleted ? (
-          <span className="ms-1 text-[10px] text-fg-subtle">{t("edited")}</span>
-        ) : null}
-      </p>
-    </div>
-  );
-}
-
-function Composer({ disabled, people, onSend }: {
-  disabled: boolean;
-  people: OrgPersonRecord[];
-  onSend: (body: string) => void | Promise<void>;
-}) {
-  const t = useTranslations("chat");
-  const locale = useLocale();
-  const [draft, setDraft] = useState("");
-  const [picking, setPicking] = useState<string | null>(null);
-  const box = useRef<HTMLTextAreaElement | null>(null);
-
-  /* the handles a `@` is currently reaching for. Agents included: naming one
-     is the WHOLE authorization for it to answer, so it has to be as easy to
-     type as a colleague's name. */
-  const candidates = useMemo(() => {
-    if (picking === null) return [];
-    const q = picking.toLowerCase();
-    const agents = ["echo", "roya", "ava"].map((handle) => ({ handle, label: handle, agent: true }));
-    /* only people who HAVE a handle: a mention of a handle nobody holds
-       resolves to nobody, so offering it would be a control that silently
-       does nothing */
-    const humans = people
-      .filter((p) => p.username !== null)
-      .map((p) => ({ handle: p.username!, label: personName(p, locale), agent: false }));
-    return [...agents, ...humans]
-      .filter((c) => c.handle.toLowerCase().startsWith(q))
-      .slice(0, 6);
-  }, [picking, people, locale]);
-
-  const onChange = (value: string) => {
-    setDraft(value);
-    const caret = box.current?.selectionStart ?? value.length;
-    const match = /(?:^|\s)@([a-z0-9_-]*)$/i.exec(value.slice(0, caret));
-    setPicking(match === null ? null : match[1]!);
-  };
-
-  const choose = (handle: string) => {
-    setDraft((cur) => cur.replace(/@([a-z0-9_-]*)$/i, `@${handle} `));
-    setPicking(null);
-    box.current?.focus();
-  };
-
-  const submit = () => {
-    const body = draft.trim();
-    if (body === "" || disabled) return;
-    setDraft("");
-    setPicking(null);
-    void onSend(body);
-  };
-
-  return (
-    <div className="relative border-t border-border p-3">
-      {candidates.length > 0 ? (
-        <ul className="absolute bottom-full mb-1 w-56 overflow-hidden rounded-xl border border-border bg-surface shadow-island">
-          {candidates.map((c) => (
-            <li key={c.handle}>
-              <button type="button" onClick={() => choose(c.handle)}
-                className="tap flex w-full items-center gap-2 px-3 py-1.5 text-start text-xs text-fg hover:bg-surface-2">
-                <bdi className="font-medium">{c.label}</bdi>
-                <bdi className="text-fg-subtle">@{c.handle}</bdi>
-                {c.agent ? (
-                  <span className="ms-auto text-[9px] text-fg-subtle">{t("agentTag")}</span>
-                ) : null}
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      <div className="flex items-end gap-2">
-        <textarea
-          ref={box}
-          value={draft}
-          disabled={disabled}
-          rows={1}
-          onChange={(e) => onChange(e.target.value)}
-          onKeyDown={(e) => {
-            /* `isComposing` is the half most implementations miss: without it
-               the Enter that CONFIRMS an IME candidate sends a half-typed
-               word, which is a daily annoyance in exactly the languages this
-               product is for */
-            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-              e.preventDefault();
-              submit();
-            }
-          }}
-          placeholder={t("composerPlaceholder")}
-          /* explicit, because `placeholder` ignores dir="auto" in every
-             browser — an open bug, not something to wait out */
-          dir={locale === "fa" ? "rtl" : "ltr"}
-          className="input max-h-32 min-h-0 flex-1 resize-none py-2"
+      {inviting && channel !== null ? (
+        <InvitePeople
+          kind="chat_channel"
+          targetId={channel.id}
+          meId={meId}
+          onClose={() => setInviting(false)}
+          onFailed={() => { setInviting(false); setError(t("writeFailed")); }}
         />
-        <button type="button" onClick={submit} disabled={disabled || draft.trim() === ""}
-          className="btn btn-icon bg-accent text-on-accent hover:opacity-90 disabled:opacity-40"
-          aria-label={t("send")}>
-          <IconSend width={14} height={14} />
-        </button>
-      </div>
+      ) : null}
     </div>
   );
 }

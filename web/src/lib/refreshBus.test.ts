@@ -40,6 +40,25 @@ describe("the table-refresh bus", () => {
     expect(refreshEpoch("speakers")).toBe(1);
   });
 
+  it("answering a join invitation refreshes the ROOMS, and never the roster", () => {
+    /*
+     * 0189. Accepting is what puts the room in your own list, so the room
+     * chips have to refetch — but `/api/invites` and `/api/admin/invitations`
+     * are two different features whose names are one letter apart, and a rule
+     * that caught both would refetch the member table on every accepted room
+     * invitation while looking entirely reasonable.
+     */
+    announceWrite("/api/invites/i-1/respond");
+    expect(refreshEpoch("chat")).toBe(1);
+    expect(refreshEpoch("invitations")).toBe(0);
+    expect(refreshEpoch("members")).toBe(0);
+
+    /* and the pair pointed the other way: the org's invitations must not
+       reach the chat */
+    announceWrite("/api/admin/invitations");
+    expect(refreshEpoch("chat")).toBe(1);
+  });
+
   it("negative control: a path outside the map announces NOTHING", () => {
     announceWrite("/api/auth/sign-in");
     announceWrite("/api/me/autonomy");

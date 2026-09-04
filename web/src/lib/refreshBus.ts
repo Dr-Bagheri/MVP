@@ -106,6 +106,12 @@ const TOPIC_RULES: readonly [RegExp, readonly RefreshTopic[]][] = [
      message would make every subscriber in the product refetch on every
      word anybody typed. */
   [/^\/api\/chat\/channels$/, ["chat"]],
+  /* ACCEPTING AN INVITATION JOINS A ROOM, so the channel list moves — and
+     that is the ONLY consequence, which is why there is no `invites` topic
+     of its own. The bell owns the invitation rows and already drops the one
+     it just answered; a second topic would be a producer with no consumer,
+     spelled one letter from the org-wide `invitations` above. */
+  [/^\/api\/invites/, ["chat"]],
   [/^\/api\/meetings/, ["meetings", "tasks"]],
   [/^\/api\/assistant\/sessions/, ["sessions"]],
   [/^\/api\/workflows/, ["workflows"]],

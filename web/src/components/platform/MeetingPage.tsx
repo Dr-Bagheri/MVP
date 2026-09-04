@@ -10,6 +10,7 @@ import type { Call, CallNote, Me, MeetingAgendaItem, MeetingRecord, MeetingAttac
 import { useCrumbTitle } from "@/components/platform/CrumbTitle";
 import { ConfirmDialog } from "@/components/rowActions";
 import { Overlay } from "@/components/platform/Overlay";
+import { InvitePeople } from "@/components/platform/InvitePeople";
 import { DateField, TimeField } from "@/components/DateTimeFields";
 import { Select } from "@/components/Select";
 import { AgendaEditor, MODE_ICON } from "./Meetings";
@@ -22,7 +23,7 @@ import { MeetingTasksBoard } from "./meeting/MiniTasks";
 import { MeetingAssistant } from "./meeting/MeetingAssistant";
 import {
   IconCheck, IconCopy, IconFileText, IconMic, IconPlus, IconRows, IconTrash,
-  IconUsers, IconUpload } from "@/components/icons";
+  IconUsers, IconUpload, IconMailPlus } from "@/components/icons";
 import {
   finish, recorderSnapshot, startRecording, subscribeRecorder,
 } from "@/lib/recordingEngine";
@@ -587,6 +588,7 @@ export function MeetingPage({ id }: { id: string }) {
           meeting={meeting}
           locale={locale}
           recordingLive={recordingLive}
+          meId={me?.id ?? null}
         />
       ) : null}
       {active === "post" ? (
@@ -1092,10 +1094,16 @@ function EditMeetingDialog({ meeting, onPatch, onClose }: {
 
 /* ═══ برگزاری — the live room: engine in the background, whiteboard in
        front ═══════════════════════════════════════════════════════════════ */
-function HoldStage({ meeting, locale, recordingLive }: {
+function HoldStage({ meeting, locale, recordingLive, meId }: {
   meeting: MeetingRecord;
   locale: string;
   recordingLive: boolean;
+  /* the READER, threaded down for the invite dialog alone. It was `null`
+     there, and the server skips the actor when it writes invitations, so
+     picking yourself off the list was a control that reads as working and
+     does nothing — the count comes back one lower than the picks and
+     nothing on screen says why. */
+  meId: string | null;
 }) {
   const t = useTranslations("meetings");
   /* the host is a fact about the MEETING, read from the wire — never the
@@ -1108,6 +1116,7 @@ function HoldStage({ meeting, locale, recordingLive }: {
       );
   const [noteDraft, setNoteDraft] = useState("");
   const [taskDraft, setTaskDraft] = useState("");
+  const [invitingPeople, setInvitingPeople] = useState(false);
   /* every outcome goes to the NOTIFICATION bus (platform rule): a banner
      that lives in this card is a second place to look, and it disappears
      before someone who glanced away can read it */
@@ -1137,6 +1146,15 @@ function HoldStage({ meeting, locale, recordingLive }: {
 
   return (
     <div className={`grid min-h-0 flex-1 gap-4 ${STAGE_COLUMNS}`}>
+      {invitingPeople ? (
+        <InvitePeople
+          kind="meeting"
+          targetId={meeting.id}
+          meId={meId}
+          onClose={() => setInvitingPeople(false)}
+          onFailed={() => setInvitingPeople(false)}
+        />
+      ) : null}
       {/* the stage — the reference puts the media on the START side */}
       <MeetingStage
         meeting={meeting}
@@ -1174,11 +1192,24 @@ function HoldStage({ meeting, locale, recordingLive }: {
 
         {/* اعضای جلسه */}
         <section className="tile p-3.5" aria-label={t("membersTitle")}>
-          <header className="mb-2 flex items-center justify-between">
+          <header className="mb-2 flex items-center justify-between gap-2">
             <h3 className="text-sm font-semibold text-fg">{t("membersTitle")}</h3>
-            <span className="badge-num rounded-full bg-surface-2 px-2 text-[11px] text-fg-subtle">
-              {digits(meeting.invitees.length + (hostName === null ? 0 : 1), locale)}
-            </span>
+            <div className="flex items-center gap-1.5">
+              {/* NOTIFY COLLEAGUES (0189, user directive: "do the same
+                  notification if they are invited for an online meeting as
+                  well"). Not admin-walled, unlike a room: arranging a meeting
+                  is not an administrative act, and the person booking it is
+                  the one who knows who should be in it — 0189's insert policy
+                  says exactly that, so this button and the wall agree. */}
+              <button type="button" onClick={() => setInvitingPeople(true)}
+                className="btn btn-sm gap-1.5 border border-border text-fg-muted hover:text-fg">
+                <IconMailPlus width={12} height={12} />
+                {t("notifyMembers")}
+              </button>
+              <span className="badge-num rounded-full bg-surface-2 px-2 text-[11px] text-fg-subtle">
+                {digits(meeting.invitees.length + (hostName === null ? 0 : 1), locale)}
+              </span>
+            </div>
           </header>
           <ul className="space-y-1.5">
             {hostName !== null ? (

@@ -34,6 +34,7 @@ export type {
   ProjectRecord, ProjectTone, ProjectWorkloadRow,
   TaskRecurrenceRecord,
   ChatChannelRecord, ChatMessageRecord, ChatEvent,
+  ChatReactionRecord, ChatReplyPreview, JoinInviteRecord, InviteKind,
 } from "@echo/core/wire";
 export type { PlatformAuditEntry, PlatformOrganization, PlatformOverview, PlatformPage, PlatformUser };
 

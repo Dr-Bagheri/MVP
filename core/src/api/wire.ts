@@ -58,7 +58,8 @@ export type {
 } from "./tasks.ts";
 export type { MeetingRecord, MeetingAgendaItem, MeetingMode, MeetingSignature } from "./meetings.ts";
 export type { ProjectRecord, ProjectTone, ProjectWorkloadRow } from "./projects.ts";
-export type { ChatChannelRecord, ChatMessageRecord } from "./chat.ts";
+export type { ChatChannelRecord, ChatMessageRecord, ChatReactionRecord, ChatReplyPreview } from "./chat.ts";
+export type { JoinInviteRecord, InviteKind } from "./invites.ts";
 export type { ChatEvent } from "./chatStream.ts";
 export type { ConnectorStatus, ConnectorItem, ConnectorProvider, ConnectorSourceKind } from "./connectors.ts";
 export type {

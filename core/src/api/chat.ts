@@ -43,6 +43,33 @@ export interface ChatChannelRecord {
   mention_count: number;
 }
 
+/** one emoji on one message, folded across everybody who pressed it */
+export interface ChatReactionRecord {
+  emoji: string;
+  count: number;
+  /** did the reader press this one — the client needs it to draw the
+      pressed state, and computing it there would need every reactor's id */
+  mine: boolean;
+}
+
+/**
+ * The message being answered, resolved for the quote (0189).
+ *
+ * Carried ON the reply rather than looked up by the client, because the
+ * parent may be older than the page in hand: a reply to something from
+ * yesterday would otherwise render a quote of nothing, which is the worst
+ * shape a quote can take — it looks like the parent was deleted.
+ */
+export interface ChatReplyPreview {
+  id: string;
+  author_kind: "user" | "agent";
+  author_id: string | null;
+  agent_handle: string | null;
+  /** null when the parent was tombstoned — the quote then says so, rather
+      than quoting an empty string as though somebody had said nothing */
+  excerpt: string | null;
+}
+
 export interface ChatMessageRecord {
   id: string;
   seq: number;
@@ -57,6 +84,8 @@ export interface ChatMessageRecord {
   created_at: string;
   /** the ids this message named, so a client can highlight without parsing */
   mentions: string[];
+  reactions: ChatReactionRecord[];
+  reply_to: ChatReplyPreview | null;
 }
 
 const MAX_BODY = 20000;
@@ -145,6 +174,7 @@ function toChannel(row: Record<string, unknown>): ChatChannelRecord {
 
 function toMessage(row: Record<string, unknown>): ChatMessageRecord {
   const deleted = row.deleted_at !== null && row.deleted_at !== undefined;
+  const parentGone = row.reply_deleted_at !== null && row.reply_deleted_at !== undefined;
   return {
     id: String(row.id),
     seq: Number(row.seq),
@@ -163,17 +193,60 @@ function toMessage(row: Record<string, unknown>): ChatMessageRecord {
       : iso(row.edited_at),
     created_at: iso(row.created_at),
     mentions: ((row.mentions as string[] | null) ?? []).map(String),
+    reactions: ((row.reactions as ChatReactionRecord[] | null) ?? []).map((r) => ({
+      emoji: String(r.emoji),
+      count: Number(r.count),
+      mine: r.mine === true,
+    })),
+    reply_to: row.reply_id === null || row.reply_id === undefined ? null : {
+      id: String(row.reply_id),
+      author_kind: row.reply_author_kind as "user" | "agent",
+      author_id: (row.reply_author_id as string | null) ?? null,
+      agent_handle: (row.reply_agent_handle as string | null) ?? null,
+      /* ONE LINE of it. A quote that reproduces a long message twice on one
+         screen is the thing every chat product trims, and trimming at the
+         source keeps the wire honest about what the client will draw. */
+      excerpt: parentGone ? null : String(row.reply_body ?? "").slice(0, 140),
+    },
   };
 }
 
 const MESSAGE_ROWS = `
   select m.id, m.seq, m.channel_id, m.author_kind, m.author_id, m.agent_handle,
          m.body, m.edited_at, m.deleted_at, m.created_at,
-         coalesce(men.ids, '{}') as mentions
+         coalesce(men.ids, '{}') as mentions,
+         coalesce(rx.list, '[]'::jsonb) as reactions,
+         p.id as reply_id, p.author_kind as reply_author_kind,
+         p.author_id as reply_author_id, p.agent_handle as reply_agent_handle,
+         p.body as reply_body, p.deleted_at as reply_deleted_at
     from echo.chat_message m
     left join lateral (
       select array_agg(x.user_id) as ids from echo.chat_mention x where x.message_id = m.id
-    ) men on true`;
+    ) men on true
+    /* FOLDED IN SQL, not in the client: a room with forty reactions on one
+       message would otherwise put forty rows on the wire for a control that
+       renders three chips. The mine flag is computed here too, and the
+       backticks are gone from around it on purpose: this comment lives INSIDE
+       a template literal, so one of them ends the SQL string and the file
+       stops parsing four lines later at a word that reads like prose.
+       The reason for computing it here rather than in the client: the
+       alternative ships every reactor's id to answer one boolean. */
+    left join lateral (
+      select jsonb_agg(jsonb_build_object('emoji', g.emoji, 'count', g.n, 'mine', g.mine)
+                       order by g.first_at) as list
+        from (
+          select r.emoji,
+                 count(*)::int as n,
+                 bool_or(r.user_id = echo.actor_id()) as mine,
+                 min(r.created_at) as first_at
+            from echo.chat_reaction r
+           where r.message_id = m.id
+           group by r.emoji
+        ) g
+    ) rx on true
+    /* the parent, joined rather than fetched by the client — see
+       ChatReplyPreview for why the quote cannot be a second read */
+    left join echo.chat_message p on p.id = m.reply_to_id`;
 
 export function createChatRepo(db: Db) {
   /** the agent's own handle on the database — role "agent", same actor */
@@ -338,16 +411,19 @@ export function createChatRepo(db: Db) {
   async function post(
     identity: Identity,
     channelId: string,
-    input: { body?: unknown },
+    input: { body?: unknown; reply_to?: unknown },
   ): Promise<ChatMessageRecord> {
     const body = cleanBody(input.body);
     const handles = handlesIn(body);
+    const replyTo = typeof input.reply_to === "string" && input.reply_to !== ""
+      ? input.reply_to
+      : null;
     return db.withIdentity(identity, async (tx: SqlTx) => {
       const created = await tx.unsafe<Record<string, unknown>>(
-        `insert into echo.chat_message (org_id, channel_id, author_kind, author_id, body)
-         values (echo.actor_org_id(), $1, 'user', echo.actor_id(), $2)
+        `insert into echo.chat_message (org_id, channel_id, author_kind, author_id, body, reply_to_id)
+         values (echo.actor_org_id(), $1, 'user', echo.actor_id(), $2, $3)
          returning id, seq`,
-        [channelId, body],
+        [channelId, body, replyTo],
       );
       if (!created[0]) throw new NotFoundError();
       const id = String(created[0].id);
@@ -477,9 +553,57 @@ export function createChatRepo(db: Db) {
     });
   }
 
+  /**
+   * Press an emoji, or press it again to take it back (0189).
+   *
+   * `on` is explicit rather than a toggle the server derives, because a
+   * toggle makes the outcome depend on what the server thinks the current
+   * state is — and two quick presses from one person then race each other
+   * into whichever order the connections happened to take. The client knows
+   * what it drew; it says what it wants.
+   */
+  async function react(
+    identity: Identity,
+    messageId: string,
+    emoji: string,
+    on: boolean,
+  ): Promise<ChatMessageRecord> {
+    const clean = typeof emoji === "string" ? emoji.trim() : "";
+    if (clean === "" || [...clean].length > 8) {
+      throw new ValidationError("a reaction is one emoji", { code: "chat_emoji_invalid" });
+    }
+    await db.withIdentity(identity, async (tx: SqlTx) => {
+      if (on) {
+        await tx.unsafe(
+          `insert into echo.chat_reaction (message_id, user_id, emoji, org_id)
+           select m.id, echo.actor_id(), $2, m.org_id
+             from echo.chat_message m where m.id = $1
+           on conflict do nothing`,
+          [messageId, clean],
+        );
+      } else {
+        await tx.unsafe(
+          `delete from echo.chat_reaction
+            where message_id = $1 and user_id = echo.actor_id() and emoji = $2`,
+          [messageId, clean],
+        );
+      }
+    });
+    /* the WHOLE message back, not the reaction: the caller has to redraw the
+       chip row anyway, and returning a fragment would make the client
+       reassemble a count it can simply be told */
+    return db.withIdentity(identity, async (tx: SqlTx) => {
+      const rows = await tx.unsafe<Record<string, unknown>>(
+        `${MESSAGE_ROWS} where m.id = $1`, [messageId],
+      );
+      if (!rows[0]) throw new NotFoundError();
+      return toMessage(rows[0]);
+    });
+  }
+
   return {
     channels, channel, createChannel, updateChannel, setJoined,
-    messages, post, postAsAgent, editMessage, markRead,
+    messages, post, postAsAgent, editMessage, markRead, react,
   };
 }
 

@@ -10,7 +10,7 @@
 import type {
   MeetingAgendaItem, MeetingMode, MeetingRecord,
   OrgPersonRecord, TaskColumnTone, TaskLabelColor, TaskLabelRecord,
-  ChatChannelRecord, ChatMessageRecord,
+  ChatChannelRecord, ChatMessageRecord, JoinInviteRecord, InviteKind,
   ProjectRecord, ProjectTone, ProjectWorkloadRow,
   TaskCardRecord, TaskColumnRecord, TaskTopicRecord, TaskDetailRecord,
   TaskChecklistItemRecord, TaskCommentRecord, TaskPriority,
@@ -1414,9 +1414,34 @@ export const api = {
     const query = params.toString();
     return bff(`/api/chat/channels/${encodeURIComponent(id)}/messages${query ? `?${query}` : ""}`);
   },
-  async postChatMessage(id: string, body: string): Promise<ChatMessageRecord> {
+  async postChatMessage(id: string, body: string, replyTo?: string | null): Promise<ChatMessageRecord> {
     return bff(`/api/chat/channels/${encodeURIComponent(id)}/messages`, {
-      method: "POST", body: JSON.stringify({ body }), headers: { "content-type": "application/json" },
+      method: "POST",
+      body: JSON.stringify({ body, ...(replyTo ? { reply_to: replyTo } : {}) }),
+      headers: { "content-type": "application/json" },
+    });
+  },
+  /** press an emoji or take it back (0189) — the whole message comes back */
+  async reactToChatMessage(id: string, emoji: string, on: boolean): Promise<ChatMessageRecord> {
+    return bff(
+      `/api/chat/messages/${encodeURIComponent(id)}/reactions/${encodeURIComponent(emoji)}`,
+      { method: on ? "PUT" : "DELETE" },
+    );
+  },
+
+  /* ── 0189 invitations ──────────────────────────────────────────────── */
+  async invites(): Promise<JoinInviteRecord[]> {
+    return bff("/api/invites");
+  },
+  async sendInvites(input: { kind: InviteKind; target_id: string; user_ids: string[] }): Promise<{ invited: number }> {
+    return bff("/api/invites", {
+      method: "POST", body: JSON.stringify(input), headers: { "content-type": "application/json" },
+    });
+  },
+  /** the answer carries kind+target back, so the caller can navigate */
+  async respondToInvite(id: string, accept: boolean): Promise<{ kind: InviteKind; target_id: string }> {
+    return bff(`/api/invites/${encodeURIComponent(id)}/respond`, {
+      method: "POST", body: JSON.stringify({ accept }), headers: { "content-type": "application/json" },
     });
   },
   async editChatMessage(id: string, patch: { body?: string; deleted?: boolean }): Promise<ChatMessageRecord> {
