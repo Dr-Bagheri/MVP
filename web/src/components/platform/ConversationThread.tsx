@@ -2,7 +2,7 @@
 
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { AgentAvatar, AgentName } from "./AgentAvatar";
+import { AgentAvatar, AgentName, ECHO } from "./AgentAvatar";
 import { api } from "@/api/client";
 import type { AgentMessage } from "@/api/types";
 import { deliverDoc, deliverPdf } from "@/lib/deliver";
@@ -162,18 +162,22 @@ const MessageRow = memo(function MessageRow({
           >
             <div className={isUser ? "max-w-[85%]" : "w-full"}>
               {/*
-                WHOSE TURN THIS IS (db/0169). Only when it is NOT Echo's:
-                Echo is the voice of the surface you are in, and a face beside
-                every one of its paragraphs would make the ordinary case
-                noisier to buy a consistency nobody asked for. The mark
-                appears exactly when it answers a question the reader would
-                otherwise have — somebody else is speaking.
+                WHOSE TURN THIS IS (db/0169; every answer, 2026-09-04).
+                
+                This used to draw a mark only for a COLLEAGUE, leaving Echo's
+                turns bare on the reasoning that the assistant is the surface
+                rather than a participant in it. With Roya and Ava answering in
+                the same thread that inverted: the unmarked turns became the
+                ones a reader had to work out, and "no face" is a worse way of
+                saying "Echo" than Echo's own face. The size is the assistant
+                page's, one step up from the sidebar's — the user asked for it
+                bigger in the chat box, and this is the chat box.
               */}
-              {!isUser && m.author ? (
-                <div className="mb-1 flex items-center gap-1.5">
-                  <AgentAvatar handle={m.author} size="sm" />
-                  <span className="text-xs font-semibold text-fg-muted">
-                    <AgentName handle={m.author} />
+              {!isUser ? (
+                <div className="mb-1.5 flex items-center gap-2">
+                  <AgentAvatar handle={m.author ?? ECHO} size="lg" />
+                  <span className="text-sm font-semibold text-fg">
+                    <AgentName handle={m.author ?? ECHO} />
                   </span>
                 </div>
               ) : null}

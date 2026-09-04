@@ -1,10 +1,10 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import { api } from "@/api/client";
 import type { AgentCard } from "@/api/types";
-import { Icon } from "@/components/icons";
-import { agentColorClasses, agentIconName, useAgentCopy } from "./agentAppearance";
+import { agentAvatarTone, useAgentCopy } from "./agentAppearance";
 
 /**
  * WHOSE WORDS THESE ARE (user directive, 2026-09-03: "each of them when they
@@ -28,14 +28,15 @@ import { agentColorClasses, agentIconName, useAgentCopy } from "./agentAppearanc
  * promise: a thread with twenty of Roya's turns must not make twenty requests,
  * and a hook per message would do exactly that.
  *
- * ── ECHO HAS NO AVATAR HERE ────────────────────────────────────────────────
+ * ── ECHO IS A HANDLE LIKE ANY OTHER ────────────────────────────────────────
  *
- * `author` absent means Echo, and Echo's turns render as they always have —
- * plain text, no mark. That is deliberate: the assistant is the voice of the
- * surface you are in, and giving it a face beside every paragraph would make
- * the ordinary case noisier to buy consistency nobody asked for. The mark
- * appears exactly when it answers a question the reader would otherwise have:
- * somebody OTHER than Echo is speaking.
+ * It was not, until 2026-09-04: an assistant turn drew no mark at all, on the
+ * reasoning that Echo is the voice of the surface rather than a participant in
+ * it. The user asked for the opposite and they are right — with two colleagues
+ * answering in the same thread, the turns WITHOUT a face were the ones you had
+ * to work out. `handle="echo"` resolves to no roster row, and that is the
+ * point: the letter comes from the handle and the tone is named `echo`, so it
+ * needs no seat in a table it will never have.
  */
 
 let rosterPromise: Promise<AgentCard[]> | null = null;
@@ -73,35 +74,85 @@ export function useAgent(handle: string | null | undefined): AgentCard | null {
  * sidebar's narrower column can go one step down without inventing a second
  * component.
  */
+/**
+ * THE LETTER, on a lit disc (user directive, 2026-09-04: "for echo also add an
+ * avatar with E sign like the one in the logo of the site and make something
+ * more cinematic, also for roya with R and for ava A, and make it bigger in
+ * the chatbox").
+ *
+ * Three decisions worth the words:
+ *
+ *   · A LETTER, not a glyph. Roya and Ava were drawn with the icon their row
+ *     stores — a sparkle and a chart — which says what they DO and not who
+ *     they are. An initial is a face: it is what the person's own avatar does
+ *     three rows up, and it makes the three of them one family rather than an
+ *     assistant and two tools.
+ *
+ *   · THE RING IS THE SITE'S MARK. `EchoMark` is a stroked circle around a
+ *     filled core, and that is the shape here too — ring, glow, letter in the
+ *     middle. The "cinematic" part is a soft radial bloom behind the disc and
+ *     a hairline highlight along its top edge, so it reads as lit rather than
+ *     printed. Both are CSS on tokens: no image to load, nothing to go stale
+ *     in a second theme.
+ *
+ *   · ONE TONE PER AGENT, from the row's own `color`. Echo takes the accent —
+ *     it is the platform's own voice — and the others keep the colour their
+ *     row already carries, so renaming or recolouring an agent moves its face
+ *     with it.
+ */
+const SIZES = {
+  sm: { box: "h-5 w-5", text: "text-[10px]" },
+  md: { box: "h-6 w-6", text: "text-[11px]" },
+  lg: { box: "h-8 w-8", text: "text-sm" },
+} as const;
+
+/** Echo's handle, which is deliberately not a row in the agents table. */
+export const ECHO = "echo";
+
 export function AgentAvatar({ handle, size = "md" }: {
   handle: string;
-  size?: "sm" | "md";
+  size?: keyof typeof SIZES;
 }) {
   const agent = useAgent(handle);
   const copy = useAgentCopy();
-  const box = size === "sm" ? "h-5 w-5" : "h-6 w-6";
+  const t = useTranslations("platform");
+  const { box, text } = SIZES[size];
 
-  /* BEFORE THE ROSTER LANDS, the mark is drawn in its neutral form rather
-     than omitted. A face that appears a beat after the words is a layout that
-     moves under the reader — and the handle is enough to say somebody other
-     than Echo is speaking, which is the whole job. */
-  if (agent === null) {
-    return (
-      <span className={`grid ${box} shrink-0 place-items-center rounded-lg bg-surface-2 text-fg-muted`}
-        title={`@${handle}`} aria-hidden>
-        <Icon name="robot" size="sm" />
-      </span>
-    );
-  }
+  /*
+   * THE LETTER COMES FROM THE HANDLE, not from the display name.
+   *
+   * «رؤیا» begins with a Persian letter, and the directive asks for R and A —
+   * the Latin initials, which are what the handles are and what stays stable
+   * when somebody renames an agent in one language. `Array.from` because a
+   * handle could begin with a surrogate pair and `[0]` would take half of it.
+   */
+  const letter = (Array.from(handle.trim())[0] ?? "?").toUpperCase();
+  /* Echo's tone is named rather than stored — it has no row to read it from,
+     and the accent is the platform's own colour, which is the point */
+  const tone = handle === ECHO ? ECHO : agent === null ? "slate" : agent.color;
+  const name = handle === ECHO ? t("echo") : agent === null ? `@${handle}` : copy(agent).name;
 
-  const { name } = copy(agent);
   return (
     <span
-      className={`grid ${box} shrink-0 place-items-center rounded-lg ${agentColorClasses(agent.color)}`}
+      data-agent-avatar={handle}
+      className={`relative grid ${box} shrink-0 place-items-center rounded-full ${agentAvatarTone(tone)}`}
       title={name}
       aria-hidden
     >
-      <Icon name={agentIconName(agent.icon)} size="sm" />
+      {/* the bloom: a soft light behind the disc, so it sits IN the surface
+          rather than on it. `blur` on a sibling rather than a shadow, because
+          a shadow the same colour as the ring reads as a smudge in dark. */}
+      <span
+        className="pointer-events-none absolute -inset-1 rounded-full opacity-40 blur-[6px] [background:radial-gradient(circle,currentColor_0%,transparent_70%)]"
+        aria-hidden
+      />
+      {/* the highlight along the top edge — one hairline, the difference
+          between a printed circle and a lit one */}
+      <span
+        className="pointer-events-none absolute inset-0 rounded-full [background:linear-gradient(to_bottom,rgb(255_255_255/0.28),transparent_45%)]"
+        aria-hidden
+      />
+      <span className={`relative font-bold leading-none ${text}`} dir="ltr">{letter}</span>
     </span>
   );
 }
@@ -110,6 +161,8 @@ export function AgentAvatar({ handle, size = "md" }: {
 export function AgentName({ handle }: { handle: string }) {
   const agent = useAgent(handle);
   const copy = useAgentCopy();
+  const t = useTranslations("platform");
+  if (handle === ECHO) return <>{t("echo")}</>;
   /* the handle while the roster is in flight: it is what the person typed to
      summon them, so it is never a stranger */
   return <>{agent === null ? `@${handle}` : copy(agent).name}</>;

@@ -31,11 +31,17 @@ export const SURFACE_TOOLS: readonly string[] = [
   "delete_conversation",
   "add_speaker_person",
   "send_member_message",
+  "create_meeting",
+  "create_task",
+  "open_meeting",
 ];
 
 /** Routes the agent may navigate to — the same set a human can click to. */
 /** exported for the seam test: core's navigate enum must stay inside it */
-export const NAVIGABLE = /^\/(assistant|echo(\/(record|upload|calls|records|summaries|archive|speakers))?|workflows|agents|conversations|settings(\/[a-z-]+)?|management(\/[a-z-]+)?|search)?$/;
+/* the destinations the executor will perform. Kept in step with core's
+   `navigate` enum by route-map.test.ts, which checks BOTH against the app
+   directory — the pair used to agree with each other and with nothing else. */
+export const NAVIGABLE = /^\/(assistant|meetings|tasks|integrations|profile|echo(\/(record|upload|calls|records|summaries|archive))?|workflows|agents|conversations|settings(\/[a-z-]+)?|management(\/[a-z-]+)?|search)?$/;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -297,6 +303,71 @@ export async function executeClientTool(
         return { ok: true, detail: `the message was sent to ${who.name}` };
       } catch (cause) {
         return { ok: false, detail: refusalDetail(cause, "the message was not sent") };
+      }
+    }
+    case "create_meeting": {
+      const title = typeof a.title === "string" ? a.title.trim().slice(0, 120) : "";
+      if (!title) return { ok: false, detail: "a meeting needs a title" };
+      const when = typeof a.when === "string" && a.when.trim() !== ""
+        ? a.when
+        : new Date().toISOString();
+      if (Number.isNaN(new Date(when).getTime())) {
+        return { ok: false, detail: "that start time is not a date" };
+      }
+      try {
+        const { api } = await import("@/api/client");
+        const meeting = await api.createMeeting({
+          title,
+          scheduled_at: when,
+          mode: a.mode === "in_person" ? "in_person" : "online",
+        });
+        surface.push(`/meetings/${meeting.id}`);
+        return { ok: true, detail: `the meeting «${title}» was created and opened` };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the meeting was not created") };
+      }
+    }
+    case "create_task": {
+      const title = typeof a.title === "string" ? a.title.trim().slice(0, 200) : "";
+      if (!title) return { ok: false, detail: "a task needs a title" };
+      try {
+        const { api } = await import("@/api/client");
+        const board = await api.taskBoard();
+        const column = board.columns[0];
+        if (column === undefined) {
+          /* a real state with its own sentence, not a crash: an org whose
+             board has no columns cannot hold a card yet */
+          return { ok: false, detail: "this board has no columns to put a card in" };
+        }
+        const task = await api.createTask({
+          title,
+          column_id: column.id,
+          ...(typeof a.description === "string" && a.description.trim() !== ""
+            ? { description: a.description.trim() } : {}),
+          ...(typeof a.due === "string" && a.due.trim() !== "" ? { due_at: a.due } : {}),
+        });
+        surface.push("/tasks");
+        return { ok: true, detail: `the task «${title}» was added${task.id ? "" : ""}` };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "the task was not created") };
+      }
+    }
+    case "open_meeting": {
+      const name = typeof a.meeting === "string" ? a.meeting.trim() : "";
+      if (!name) return { ok: false, detail: "a meeting title is required" };
+      try {
+        const { api } = await import("@/api/client");
+        const rows = await api.meetings();
+        const lowered = name.toLowerCase();
+        const exact = rows.filter((m) => (m.title ?? "").toLowerCase() === lowered);
+        const hit = exact.length === 1
+          ? exact[0]
+          : rows.filter((m) => (m.title ?? "").toLowerCase().includes(lowered))[0];
+        if (hit === undefined) return { ok: false, detail: "no meeting matched that title" };
+        surface.push(`/meetings/${hit.id}`);
+        return { ok: true, detail: `opened «${hit.title}»` };
+      } catch (cause) {
+        return { ok: false, detail: refusalDetail(cause, "that meeting could not be opened") };
       }
     }
     case "rename_record": {

@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { api, BffError } from "@/api/client";
-import type { AgentEvent, AgentMessage, ConnectorProvider, ConnectorStatus, MailDraft, SearchHit, Skill, WorkflowCard } from "@/api/types";
+import { api } from "@/api/client";
+import type { ConnectorProvider, ConnectorStatus, MailDraft, SearchHit, Skill, WorkflowCard } from "@/api/types";
 import { useRouter } from "@/i18n/routing";
 import { useSearchParams } from "next/navigation";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -14,13 +14,18 @@ import { subscribeComposer, takePendingDraft } from "@/lib/assistantBus";
 import { shouldStick } from "@/lib/threadFollow";
 import { useSkillStarters } from "@/lib/skillName";
 import { ConversationThread } from "./ConversationThread";
+import {
+  adoptAssistantThread, askAssistant, assistantServerSnapshot, assistantSnapshot,
+  regenerateAssistant, registerAssistantSurface, resetAssistantSession,
+  stopAssistant, subscribeAssistant,
+} from "@/lib/assistantSession";
 import { MailDraftCard } from "./MailDraftCard";
 import { useAssistantConversation } from "./AssistantConversationState";
 /* SendIcon left with the paper plane (2026-09-03): the send key wears the
    RETURN glyph now, which is the key it duplicates. */
 import { DocumentIcon, MicIcon, PlusIcon } from "./icons";
 import { mentionedAgent } from "@/lib/agentMention";
-import { liveConversation, setLiveConversation } from "@/lib/liveConversation";
+import { liveConversation } from "@/lib/liveConversation";
 import { SURFACE_TOOLS } from "@/lib/agentSurface";
 import { handleClientToolCall } from "@/lib/clientToolRunner";
 import { Icon } from "@/components/icons";
@@ -33,18 +38,10 @@ import { startRecording } from "@/lib/recordingEngine";
 
 type CreateKind = "doc" | "pdf";
 
-/**
- * A stream that ended without `done` — the transport died (proxy timeout,
- * dropped tunnel), it did not succeed. Its own class so the catch can tell
- * "the run died mid-air" from "the run never started": the two nothings get
- * different copy, and only the second one may claim nothing ever ran.
- */
-class StreamDiedError extends Error {
-  constructor() {
-    super("stream ended without done");
-    this.name = "StreamDiedError";
-  }
-}
+/* `StreamDiedError` moved to `assistantSession` with the loop it belongs to
+   (2026-09-04). It was declared here and re-declared in the sidebar — two
+   spellings of one ending, which is exactly the drift that let one surface
+   check for a silent stream death and the other not. */
 
 /**
  * The AI-assistant hub — NeurAI's first page (M22, user-approved).
@@ -78,7 +75,20 @@ export function Hub() {
   const locale = useLocale();
   const router = useRouter();
   const { resetVersion, setStarted } = useAssistantConversation();
-  const [messages, setMessages] = useState<AgentMessage[]>([]);
+  /*
+   * THE THREAD IS NOT THIS COMPONENT'S (user directive, 2026-09-04: "the side
+   * bar of ai assistant and its page is basically one … it should be like a
+   * mirroring in two different places").
+   *
+   * `messages`, `streaming` and the session id live in `assistantSession`, a
+   * module outside React, and this page is one of two windows onto them. That
+   * is what makes a run survive walking away from here: unmounting this
+   * component now drops a subscription instead of aborting a fetch, which is
+   * what used to CANCEL the answer (closing the SSE body tells the server
+   * nobody is listening).
+   */
+  const live = useSyncExternalStore(subscribeAssistant, assistantSnapshot, assistantServerSnapshot);
+  const messages = live.messages;
   /**
    * WHICH conversation's thread the screen currently holds (audit finding,
    * 2026-09-02). `resumeId` alone says which one is WANTED; until the two
@@ -107,13 +117,18 @@ export function Hub() {
      have no picker on this surface by directive, so the only thing this list
      does is tell a mention from an ordinary at-sign. */
   const [agentHandles, setAgentHandles] = useState<string[]>([]);
-  const [streaming, setStreaming] = useState(false);
+  const streaming = live.streaming;
   const [feedback, setFeedback] = useState<Record<string, string>>({});
   const [shared, setShared] = useState(false);
   const [skills, setSkills] = useState<Skill[]>([]);
   const [model, setModel] = useState<string>("");
   const [skill, setSkill] = useState<string>("");
   /** The SERVER's refusal sentence, when an ask never opened a stream. */
+  /* the COMPOSER's own refusals (a file too large, too many attachments) —
+     a different fact from a refused run, which the store owns and names in
+     the server's words. Rendered through one line below; only one of the two
+     can be set at a time, and merging them at the render is honest where a
+     second copy of either would not be. */
   const [askError, setAskError] = useState<string | null>(null);
   /**
    * Attached files (user directive: "add files and ask about them"). Text
@@ -184,8 +199,9 @@ export function Hub() {
   const skillStarters = useSkillStarters();
   /** Held in a ref, not state: it is read inside the stream loop, where a
    *  stale closure over state would silently start a second conversation. */
-  const sessionId = useRef<string | undefined>(undefined);
-  const abortRef = useRef<AbortController | null>(null);
+  /* no AbortController here any more: the run is the store's, and a
+     component that could abort it would re-create the defect this change
+     exists to fix — a navigation that cancels the answer */
   const threadEnd = useRef<HTMLDivElement>(null);
   /** The thread's own scroll box (md+) — the page never scrolls for it. */
   const scrollerRef = useRef<HTMLDivElement>(null);
@@ -526,16 +542,12 @@ export function Hub() {
     ]);
     /* A just-cleared hub must not be repopulated by an older in-flight fetch. */
     if (versionAtStart !== resetVersionRef.current) return;
-    setMessages(thread);
-    /* beside setMessages, in the same synchronous block, so the two land in
-       one render — a tick apart and the skeleton would flash once more over
-       a thread that had already arrived */
+    /* one call: the thread, the id, and the sidebar handoff are one fact, and
+       `adoptAssistantThread` publishes them together — a tick apart and the
+       skeleton would flash once more over a thread that had already arrived */
+    adoptAssistantThread(id, thread);
     setHeldThreadId(id);
     setFeedback(verdicts);
-    sessionId.current = id;
-    /* the other direction of the handoff: leave this page and the sidebar
-       picks up where this left off */
-    setLiveConversation(id);
     setStarted(true);
     void api.shareState(id).then(setShared).catch(() => setShared(false));
   }, [setStarted]);
@@ -563,6 +575,28 @@ export function Hub() {
 
   useEffect(() => {
     if (!continueId) return;
+    /*
+     * ALREADY HOLDING IT = NOTHING TO LOAD (2026-09-04).
+     *
+     * With one shared conversation, arriving here often means arriving at a
+     * thread that is already in memory — the person walked over from the
+     * sidebar, possibly mid-answer. Refetching then is not merely wasteful:
+     * it REPLACES a live thread with the stored rows, and the stored rows are
+     * not the same thing. A run still streaming has written nothing yet; a
+     * fetch that comes back short (a purge, an older deployment, a partial
+     * answer that failed and was never persisted) silently shortens the
+     * conversation the person is reading.
+     *
+     * Caught by the mirroring test with an empty fixture: the answer arrived,
+     * the page remounted, and the question vanished from under it.
+     */
+    const held = assistantSnapshot();
+    if (held.sessionId === continueId && held.messages.length > 0) {
+      setHeldThreadId(continueId);
+      setStarted(true);
+      void refreshDrafts(continueId);
+      return;
+    }
     /* a freshly opened thread shows its LATEST turn — re-pin here, not in
        adoptThread: adoptThread also runs after every `done`, where re-pinning
        would yank a reader who scrolled up mid-answer */
@@ -593,15 +627,12 @@ export function Hub() {
     appliedResetVersionRef.current = resetVersion;
     /* Starting fresh also stops a live response. Otherwise its completion
        could put content back into the just-cleared hub. */
-    abortRef.current?.abort();
-    abortRef.current = null;
-    sessionId.current = undefined;
-    /* and the handoff, or the sidebar would pick up the conversation this
-       button just cleared — a "new conversation" that follows you back into
-       the platform as the old one */
-    setLiveConversation(null);
+    /* Starting fresh also stops a live response and clears the handoff — the
+       store does both, or the sidebar would pick up the conversation this
+       button just cleared: a "new conversation" that follows you back into
+       the platform as the old one. */
+    resetAssistantSession();
     pinnedRef.current = true;
-    setMessages([]);
     setHeldThreadId(null);
     setInput("");
     setFeedback({});
@@ -611,7 +642,6 @@ export function Hub() {
     setCreateKind(null);
     setWebSearch(false);
     setAskError(null);
-    setStreaming(false);
     /* `/assistant`, not `/` — the hub's own address. `/` became the
        dashboard (2026-08-25) and this line kept sending "new conversation"
        to a briefing screen; same seam as the workflow launcher's. */
@@ -682,228 +712,49 @@ export function Hub() {
      the hub — a briefing and a conversation are different screens */
 
   /**
-   * One reducer for ask and regenerate — same events, same thread.
+   * THE HANDS THIS PAGE LENDS A RUN.
    *
-   * `progress` is written as events arrive so `run` can tell three endings
-   * apart: a clean finish (`sawDone`), a stream that broke after saying
-   * something (`sawAny` without `sawDone`), and one that ended before a
-   * single frame. The wire contract (core sse.ts) is explicit: `done` is
-   * ALWAYS the last event, including on failure, so **a stream that simply
-   * ends without it died in transport — it is never a success**. The pane
-   * implemented that rule from day one; the hub did not, and a dropped
-   * proxy connection walked the success path here in silence.
+   * The run belongs to the store and outlives this component; what cannot
+   * outlive it is the ability to navigate, switch locale, and refetch the
+   * persisted rows. So they are REGISTERED while mounted rather than captured
+   * when the ask starts — a run that began here and finished after you walked
+   * to /meetings performs its client tools with the sidebar's hands, which is
+   * the correct answer to "whose browser is this".
+   *
+   * The reducer itself — deltas, tool calls, a colleague's turn, the
+   * stream-died check — moved to `assistantSession` whole. It had been written
+   * TWICE, once here and once in the sidebar, and the two had already drifted:
+   * only one of them handled `client_tool_call`, which is how a recording
+   * asked for on this page hung until the 120-second timeout.
    */
-  async function consume(
-    stream: AsyncGenerator<AgentEvent>,
-    replyId: string,
-    progress: { sawAny: boolean; sawDone: boolean },
-  ) {
-    for await (const event of stream) {
-      progress.sawAny = true;
-      switch (event.type) {
-        case "session":
-          sessionId.current = event.id;
-          /* the earliest moment a lazily created conversation has an id —
-             published here so walking off this page carries it to the sidebar
-             rather than leaving the thread behind */
-          setLiveConversation(event.id);
-          break;
-        case "text_delta":
-          setMessages((prev) =>
-            prev.map((m) => (m.id === replyId ? { ...m, content: m.content + event.delta } : m)),
-          );
-          break;
-        case "client_tool_call":
-          /*
-           * THE HANDLER THIS PAGE NEVER HAD (user report, 2026-09-03: "echo
-           * stuck in thinking mode").
-           *
-           * It advertised `SURFACE_TOOLS` — see the comment on that line,
-           * which tells the story of the LAST time this seam broke — and had
-           * no case for the event those tools produce. So the model was told
-           * it could start a recording, called `start_recording`, and the
-           * browser dropped the event while the server waited for the answer
-           * it had asked for. The run hung until the 120-second client-tool
-           * timeout, which on screen is a spinner that never stops.
-           *
-           * Half a seam closed reads exactly like a whole one: the earlier fix
-           * taught this page to ADVERTISE and never taught it to PERFORM.
-           */
-          await handleClientToolCall(event, {
-            /* no consent card on this surface yet, so write-effect tools are
-               NOT offered a silent yes — `askConsent` is absent, which the
-               runner reads as "this surface cannot ask", and the server's own
-               `requires_consent` still governs what it sends */
-            push: router.push,
-            switchLocale: (next) => router.replace("/assistant", { locale: next }),
-          });
-          break;
-        case "agent_message":
-          /**
-           * A COLLEAGUE SPOKE (db/0169). It goes in BEFORE Echo's streaming
-           * reply, not after — Echo is still writing into `replyId`, and its
-           * conclusion refers to what the colleague just said, so a thread
-           * that appended this at the end would read backwards.
-           *
-           * Its own message with its own `author`, never merged into Echo's
-           * bubble: the whole point of the avatar is that the reader can tell
-           * whose sentence they are reading, and a merged paragraph makes
-           * that unanswerable.
-           */
-          setMessages((prev) => {
-            const idx = prev.findIndex((m) => m.id === replyId);
-            const turn: AgentMessage = {
-              id: `${replyId}-${event.author}-${prev.length}`,
-              role: "assistant",
-              content: event.text,
-              tool_calls: [],
-              proposal: null,
-              author: event.author,
-              ...(event.failed ? { failed: true } : {}),
-            };
-            if (idx === -1) return [...prev, turn];
-            return [...prev.slice(0, idx), turn, ...prev.slice(idx)];
-          });
-          break;
-        case "tool_call":
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === replyId
-                ? {
-                    ...m,
-                    tool_calls: [
-                      ...m.tool_calls.filter((c) => c.id !== event.id),
-                      { id: event.id, name: event.name, label: event.label, state: event.state, ms: event.ms },
-                    ],
-                  }
-                : m,
-            ),
-          );
-          break;
-        case "done":
-          progress.sawDone = true;
-          setMessages((prev) => {
-            const idx = prev.findIndex((m) => m.id === replyId);
-            const emptyFailure =
-              event.failed && (prev[idx]?.content ?? "") === "";
-            return prev
-              .map((m, i) => {
-                if (m.id === replyId) {
-                  return {
-                    ...m,
-                    streaming: false,
-                    run_id: event.runId,
-                    failed: event.failed,
-                  };
-                }
-                /* Shape A drops the empty reply below — the failed flag moves
-                   onto the question it annotates. The raw failure SENTENCE is
-                   deliberately not carried (user directive, 2026-08-20): a
-                   provider's JSON under a chat reads as debug output; the
-                   reason lives on the audit surface and in the server log. */
-                if (emptyFailure && i === idx - 1 && m.role === "user") {
-                  return { ...m, failed: true };
-                }
-                return m;
-              })
-              /* a failed run with nothing said is no turn at all — the
-                 question stands, which is what the server persisted */
-              .filter((m) => !(m.id === replyId && emptyFailure));
-          });
-          break;
-        // no default: unknown event types are ignorable by contract
-      }
-    }
-  }
-
-  async function run(start: (signal: AbortSignal) => AsyncGenerator<AgentEvent>, replyId: string) {
-    setStreaming(true);
-    const controller = new AbortController();
-    abortRef.current = controller;
-    const progress = { sawAny: false, sawDone: false };
-    try {
-      await consume(start(controller.signal), replyId, progress);
+  useEffect(() => registerAssistantSurface({
+    handleClientTool: (event) => handleClientToolCall(event, {
+      /* no consent card on this surface yet, so write-effect tools are NOT
+         offered a silent yes — `askConsent` is absent, which the runner reads
+         as "this surface cannot ask", and the server's own `requires_consent`
+         still governs what it sends */
+      push: router.push,
+      switchLocale: (next) => router.replace("/assistant", { locale: next }),
+    }),
+    onSettled: (reason) => {
+      const id = assistantSnapshot().sessionId;
+      if (!id) return;
       /*
-       * **A stream that ends without `done` died in transport.** The wire
-       * contract (core sse.ts: "done is ALWAYS the last event, including on
-       * failure — the client treats stream-end-without-done as a transport
-       * failure") had only one half built: core never drops the stream
-       * silently, and the hub never checked. A proxy timeout closing the
-       * SSE body cleanly (the Cloudflare tunnel, Vercel's duration kill —
-       * both on record for this deployment) therefore walked the SUCCESS
-       * path: no error, no annotation, a reply stuck on "thinking" — and
-       * when the cut landed on a conversation's opening turn before the
-       * `session` frame, the id never arrived, so the person's next message
-       * silently opened a NEW conversation under the old thread. The
-       * assistant "forgot everything" while the screen looked connected
-       * (user report, 2026-08-28). Refusing the silent ending here is what
-       * makes the death visible; the session ref is deliberately left
-       * untouched below, so when the id IS known the next message continues
-       * the same conversation.
+       * NOT AFTER A FAILURE, and this is the one branch worth stating.
+       *
+       * A clean finish and a stop both leave the server holding the truth —
+       * the toolbar needs its ids, and the Shape-A/B rules decide what an
+       * interrupted run persisted, so refetching is right. A FAILED run does
+       * not: the partial answer that arrived is on screen and is not in the
+       * database, so adopting the stored rows would erase exactly the
+       * evidence the annotation is pointing at. The person would watch their
+       * half-answer disappear and be told it was cut off.
        */
-      if (!progress.sawDone) throw new StreamDiedError();
-      // adopt the persisted rows — the toolbar needs server ids
-      if (sessionId.current) await adoptThread(sessionId.current);
-      await refreshDrafts(sessionId.current);
-    } catch (cause) {
-      if ((cause as Error).name === "AbortError") {
-        /*
-         * The STOP button. What remains on screen is what was said before
-         * the abort; the server's Shape-A/B rules decide what persists, and
-         * the next adoptThread shows exactly that. Settle the local flag so
-         * the caret stops blinking on a message nobody is writing.
-         */
-        setMessages((prev) =>
-          prev.map((m) => (m.id === replyId ? { ...m, streaming: false } : m)),
-        );
-        if (sessionId.current) await adoptThread(sessionId.current).catch(() => undefined);
-      } else {
-        /*
-         * Settle the turn the way `done` would have (Shape A/B, mirrored
-         * from the done-handler): a reply that said NOTHING is no turn at
-         * all — it goes, and the failed flag moves onto the question it
-         * annotates; a PARTIAL reply is a real turn that ended badly — it
-         * stays, settled and marked, so the existing annotation renders
-         * under it. Never a synthetic bubble (standing rule): the thread is
-         * the record, and our commentary must not be able to join it. The
-         * old code removed only EMPTY replies, which left a partial one
-         * blinking its caret forever on a dead stream.
-         */
-        setMessages((prev) => {
-          const idx = prev.findIndex((m) => m.id === replyId);
-          const empty = (prev[idx]?.content ?? "") === "";
-          return prev
-            .map((m, i) => {
-              if (m.id === replyId) return { ...m, streaming: false, failed: true };
-              if (empty && i === idx - 1 && m.role === "user") return { ...m, failed: true };
-              return m;
-            })
-            .filter((m) => !(m.id === replyId && empty));
-        });
-        /*
-         * The refusal's own sentence, rendered — the previous version knew
-         * only "the run did not finish" and swallowed WHY, which left the
-         * user staring at an unanswered question with no lever to pull.
-         * The server names the problem ("no model selected…"); saying it
-         * is the difference between a bug report and a fixed dropdown.
-         *
-         * But only where the sentence is TRUE (distinguish the kinds of
-         * nothing): `askFailed` says "refused before a run started", which
-         * is right for a refusal or a fetch that never connected, and a
-         * false claim for a stream that died mid-answer — there the run DID
-         * start, and the annotation on the turn is the honest sign.
-         */
-        if (cause instanceof BffError) {
-          setAskError(cause.detail ?? t("askFailed"));
-        } else if (!(cause instanceof StreamDiedError) && !progress.sawAny) {
-          setAskError(t("askFailed"));
-        }
-      }
-    } finally {
-      abortRef.current = null;
-      setStreaming(false);
-    }
-  }
+      if (reason === "failed") return;
+      void adoptThread(id).catch(() => undefined);
+      if (reason === "done") void refreshDrafts(id);
+    },
+  }), [router, adoptThread, refreshDrafts]);
 
   /**
    * `text` is the auto-run's: state is not readable in the same tick it is
@@ -957,33 +808,18 @@ export function Hub() {
             .join("\n\n") + `\n\n${authoredRequest}`;
     setAttachments([]);
 
-    const userMsg: AgentMessage = {
-      id: `u-${Date.now()}`,
-      role: "user",
-      content: question,
-      tool_calls: [],
-      proposal: null,
-    };
-    const replyId = `a-${Date.now()}`;
-    setMessages((prev) => [
-      ...prev,
-      userMsg,
-      {
-        id: replyId, role: "assistant", content: "", tool_calls: [], proposal: null,
-        streaming: true,
-        /* client-only tag: when this answer lands, the toolbar offers the
-           promised deliverable (Save as PDF / download) — the Create chip
-           used to only PREFIX the prompt, and the person got prose with no
-           file (user report, 2026-08-20) */
-        ...(createKind ? { created: createKind } : {}),
-      },
-    ]);
-
-    await run(
-      (signal) =>
-        /* the attached meetings ARE the context — Sources made them chips,
-           and this is where the chips become real scoping on the wire */
-        api.ask(question, { page: "hub", callIds: contextCalls.map((c) => c.id) }, sessionId.current, {
+    await askAssistant({
+      question,
+      page: "hub",
+      /* the attached meetings ARE the context — Sources made them chips, and
+         this is where the chips become real scoping on the wire */
+      callIds: contextCalls.map((c) => c.id),
+      /* client-only tag: when this answer lands, the toolbar offers the
+         promised deliverable (Save as PDF / download) — the Create chip used
+         to only PREFIX the prompt, and the person got prose with no file
+         (user report, 2026-08-20) */
+      ...(createKind ? { created: createKind } : {}),
+      options: {
           model: model || undefined,
           skill: skill || undefined,
           /* `?agent=` pins the conversation; an `@handle` in THIS message
@@ -1011,28 +847,17 @@ export function Hub() {
            * One list, spread from the module that owns it, so the two
            * surfaces cannot drift into advertising different capabilities.
            */
-          clientTools: [...SURFACE_TOOLS],
-          signal,
-        }),
-      replyId,
-    );
+        clientTools: [...SURFACE_TOOLS],
+      },
+    });
   }
 
   async function regenerate() {
-    if (!sessionId.current || streaming) return;
-    const replyId = `a-${Date.now()}`;
-    setMessages((prev) => [
-      ...prev,
-      { id: replyId, role: "assistant", content: "", tool_calls: [], proposal: null, streaming: true },
-    ]);
-    await run(
-      (signal) => api.regenerate(sessionId.current!, { model: model || undefined, locale, signal }),
-      replyId,
-    );
+    await regenerateAssistant({ model: model || undefined, locale });
   }
 
   function stop() {
-    abortRef.current?.abort();
+    stopAssistant();
   }
 
   async function judge(messageId: string, verdict: "up" | "down") {
@@ -1048,8 +873,8 @@ export function Hub() {
   }
 
   async function toggleShare() {
-    if (!sessionId.current) return;
-    setShared(await api.setShared(sessionId.current, !shared));
+    if (!live.sessionId) return;
+    setShared(await api.setShared(live.sessionId, !shared));
   }
 
   /** The visible thread as Markdown — a file the reader can keep. */
@@ -1165,7 +990,7 @@ export function Hub() {
         destination. The row now renders only when it has something in it:
         an empty `mb-4` div under a first live ask was 16px of dead space.
       */}
-      {!idle && sessionId.current ? (
+      {!idle && live.sessionId ? (
         <div className="mb-4 flex flex-wrap items-center gap-2">
           <button
             type="button"
@@ -1290,9 +1115,12 @@ export function Hub() {
             onFeedback={(id, verdict) => void judge(id, verdict)}
             onRegenerate={() => void regenerate()}
           />
-          {askError ? (
+          {/* the composer's own refusal, or the run's — the run's words are
+              the SERVER's when it gave any, and this page's translated line
+              when it did not (a store has no locale and must not write copy) */}
+          {askError !== null || live.error !== null ? (
             <p role="alert" className="mt-2 text-xs leading-6 text-danger">
-              {askError}
+              {askError ?? live.error?.detail ?? t("askFailed")}
             </p>
           ) : null}
           {drafts.map((draft) => (

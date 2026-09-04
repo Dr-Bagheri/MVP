@@ -84,31 +84,56 @@ export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
      */
     description:
       "Navigate the user's screen to a page. Destinations: "
-      + "/ = home hub. "
-      + "/echo = New meeting (record in the browser or upload a file — two tabs, recorder first). "
-      + "/echo/upload = the New meeting page opened on the UPLOAD tab. "
-      + "/echo/records = the RECORDS list (recorded calls/meetings — the section formerly named calls). "
+      + "/ = home dashboard. "
+      + "/assistant = this assistant's own full-page conversation. "
+      + "/meetings = MEETINGS — the product's meetings: plan one, run it, its "
+      + "minutes and decisions. This is where a meeting lives. "
+      + "/tasks = the task board. "
+      + "/echo = start a RECORDING in the browser or upload an audio file. "
+      + "A recording is not a meeting: use /meetings for a meeting. "
+      + "/echo/records = the recorded calls. "
       + "/echo/summaries = summaries of the recordings, gathered for reading. "
-      + "/echo/archive = ARCHIVED records (the archive). "
-      + "/echo/speakers = speakers directory. "
+      + "/echo/archive = archived records. "
       + "/conversations = past assistant conversations (history). "
       + "/search = transcript search. "
-      + "/workflows = workflows. /agents = agents. "
-      + "/management/users = user & member management (people, roles, invitations). "
+      + "/workflows = workflows. /agents = the agents and their profiles. "
+      + "/integrations = connected services (Google and the rest). "
+      + "/profile = the signed-in person's own profile. "
+      + "/management/users = people, roles and invitations. "
+      + "/management/speakers = the speaker directory. "
       + "/management/skills = assistant skills. /management/models = AI models. "
-      + "/management/connectors = calendar/mail connectors. "
+      + "/management/workflows = the organization's workflows. "
+      + "/management/privileges = what each role may do. "
+      + "/management/connectors = calendar/mail connectors (admin). "
+      + "/management/general = the organization's own record. "
       + "/management/server = server status (admin). "
-      + "/settings = settings home. /settings/general = general settings. "
-      + "/settings/assistant = assistant settings (voice, weekly digest). "
+      + "/settings/general = general settings. "
+      + "/settings/assistant = assistant settings (voice, agent web access). "
       + "/settings/security = security. /settings/audit-logs = audit logs. ",
     parameters: obj({
+      /*
+       * REBUILT FROM THE ROUTE TREE (user report, 2026-09-04: "i asked roya to
+       * start a meeting but it went to echo platform that we already removed").
+       *
+       * The enum predated meetings, tasks and integrations entirely, so the
+       * closest thing to "start a meeting" the model could reach was /echo —
+       * the RECORDER. It obeyed the map it was given and the map was three
+       * months old.
+       *
+       * `/echo/speakers` is gone from the list too: that address redirects to
+       * /management/speakers now, and a destination that bounces is a tool
+       * that half-works. `route-map.test.ts` compares this enum against the
+       * actual app directory, which is what would have caught all of it.
+       */
       path: strEnum([
-        "/", "/echo", "/echo/upload", "/echo/records", "/echo/summaries",
-        "/echo/archive", "/echo/speakers",
-        "/conversations", "/search", "/workflows", "/agents",
-        "/management/users", "/management/skills", "/management/models",
-        "/management/connectors", "/management/server",
-        "/settings", "/settings/general", "/settings/assistant",
+        "/", "/assistant", "/meetings", "/tasks",
+        "/echo", "/echo/records", "/echo/summaries", "/echo/archive",
+        "/conversations", "/search", "/workflows", "/agents", "/integrations",
+        "/profile",
+        "/management/users", "/management/speakers", "/management/skills",
+        "/management/models", "/management/workflows", "/management/privileges",
+        "/management/connectors", "/management/general", "/management/server",
+        "/settings/general", "/settings/assistant",
         "/settings/security", "/settings/audit-logs",
       ], "The destination route."),
     }, ["path"]),
@@ -315,6 +340,56 @@ export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
       message: str("The message, in the user's own voice. Up to 2000 characters."),
     }, ["member", "message"]),
     effect: "write",
+  },
+  {
+    /*
+     * THE THING ITSELF, not the page near it (user report, 2026-09-04: "i
+     * asked roya to start a meeting but it went to echo platform").
+     *
+     * There was no tool for creating a meeting, so the best a model could do
+     * with "start a meeting" was navigate somewhere plausible — and the
+     * closest destination in its map was the RECORDER. A capability the
+     * product has and the agents cannot reach is how an agent ends up doing
+     * something adjacent and calling it done.
+     */
+    name: "create_meeting",
+    label: { fa: "ساختن جلسه", en: "Creating a meeting" },
+    description:
+      "Create a meeting in the product and open it. This is what 'start a "
+      + "meeting', 'set up a meeting' or 'book a call' means — NOT a recording. "
+      + "Give a title; the time is optional and defaults to now, which is right "
+      + "for a meeting somebody is about to hold.",
+    parameters: obj({
+      title: str("What the meeting is called."),
+      when: str("ISO 8601 start time. Omit for a meeting starting now."),
+      mode: strEnum(["online", "in_person"], "How it is held. Defaults to online."),
+    }, ["title"]),
+    effect: "write",
+  },
+  {
+    name: "create_task",
+    label: { fa: "ساختن تسک", en: "Creating a task" },
+    description:
+      "Add a card to the task board and open it. Use it when the user asks for "
+      + "something to be tracked, assigned or remembered as work — not for a "
+      + "note to themselves, which belongs on the record it is about.",
+    parameters: obj({
+      title: str("The task, in a few words."),
+      description: str("Anything the person doing it needs. Optional."),
+      due: str("ISO 8601 deadline. Optional."),
+    }, ["title"]),
+    effect: "write",
+  },
+  {
+    name: "open_meeting",
+    label: { fa: "بازکردن جلسه", en: "Opening a meeting" },
+    description:
+      "Open one meeting by its title. Use it to put a meeting on the user's "
+      + "screen after you have found it — the read tools give you the title.",
+    parameters: obj({
+      meeting: str("The meeting's title, as list_meetings returned it."),
+    }, ["meeting"]),
+    effect: "ui",
   },
 ] as const;
 

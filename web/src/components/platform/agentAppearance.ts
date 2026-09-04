@@ -62,6 +62,40 @@ export function agentColorClasses(wire: string): string {
   return COLOR_BY_WIRE[wire] ?? COLOR_BY_WIRE.violet!;
 }
 
+/**
+ * THE FACE, as opposed to the tile (user directive, 2026-09-04: "for echo also
+ * add an avatar with E sign like the one in the logo of the site and make
+ * something more cinematic").
+ *
+ * A separate map from `agentColorClasses` on purpose, and the difference is
+ * the RING. The tile above is a soft square holding a glyph; a face is a disc
+ * with an edge, and an edge needs a border colour the tile map never had. One
+ * map with a conditional would have to answer both questions at once.
+ *
+ * `text-*` here is doing double duty: it inks the letter AND it is what the
+ * bloom behind the disc reads through `currentColor`, so an agent recoloured
+ * in the editor is recoloured in its own light with no second edit.
+ *
+ * `echo` is a tone rather than a stored colour because Echo has no row in the
+ * agents table — it is the platform's own voice, and it takes the platform's
+ * own accent, which is what "like the logo of the site" means.
+ */
+const AVATAR_TONE: Record<string, string> = {
+  echo: "border border-accent/50 bg-accent-soft text-accent",
+  violet: "border border-accent/50 bg-accent-soft text-accent",
+  blue: "border border-info/50 bg-info/15 text-info",
+  orange: "border border-warning/50 bg-warning/15 text-warning",
+  lime: "border border-success/50 bg-success/15 text-success",
+  green: "border border-success/50 bg-success/15 text-success",
+  slate: "border border-border-strong bg-surface-2 text-fg-muted",
+};
+
+/** Unknown colours land on slate — a legible neutral face, never a blank
+    disc, which beside a name would read as a picture that failed to load. */
+export function agentAvatarTone(wire: string): string {
+  return AVATAR_TONE[wire] ?? AVATAR_TONE.slate!;
+}
+
 /** What the editor offers — one entry per DISTINCT rendering (green would be
     a second name for lime's pair, and two names for one colour is drift). */
 export const AGENT_COLOR_CHOICES = ["violet", "blue", "orange", "lime", "slate"] as const;

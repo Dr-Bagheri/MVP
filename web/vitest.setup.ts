@@ -1,5 +1,39 @@
 import "@testing-library/jest-dom/vitest";
-import { vi } from "vitest";
+import { beforeEach, vi } from "vitest";
+
+/**
+ * THE ASSISTANT'S CONVERSATION IS MODULE STATE, ON PURPOSE.
+ *
+ * `lib/assistantSession` holds the thread and the running stream outside React
+ * so a run survives the screen it started on — which is the whole point, and
+ * which also means it survives a TEST. Left alone, one file's in-flight stream
+ * writes into the next file's first assertion; `lib/liveConversation` already
+ * documents that exact symptom ("expected 'sess-live-1' to be undefined" on an
+ * ask that had not happened yet), and it was mocked away there rather than
+ * closed.
+ *
+ * Central rather than per-file, for the same reason as the stub above: it bites
+ * every test that renders either assistant surface, and a reset each author has
+ * to rediscover is a tax paid repeatedly for one fact about the store. It
+ * ABORTS anything running, which is what actually stops the late write.
+ */
+beforeEach(async () => {
+  /*
+   * IMPORTED HERE, NOT AT THE TOP, and the difference is not style.
+   *
+   * A static import in a setup file instantiates the module — and everything
+   * it imports — BEFORE any test file's `vi.mock` is registered. The store
+   * imports `@/api/client`, so the top-level version bound the REAL client
+   * while the suite under test was driving a scripted mock: every ask went to
+   * a fetch nobody had stubbed, and the symptom was `expected +0 to be 1` on
+   * a call count, which reads as "the component did not ask" rather than "the
+   * component asked the wrong module". A dynamic import inside the hook runs
+   * after the mocks are in place and returns the same instance the test file
+   * already loaded.
+   */
+  const { resetAssistantForTest } = await import("@/lib/assistantSession");
+  resetAssistantForTest();
+});
 
 /**
  * jsdom has no `scrollIntoView`, and unstubbed it THROWS inside an effect —

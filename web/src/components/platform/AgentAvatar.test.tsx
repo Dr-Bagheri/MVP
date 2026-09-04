@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import fa from "../../messages/fa.json";
-import { agentIconName } from "./agentAppearance";
+import { agentAvatarTone } from "./agentAppearance";
 
 /*
  * The REAL catalogue, not a key-echoing stub.
@@ -31,7 +31,7 @@ vi.mock("next-intl", () => ({
 const agents = vi.fn();
 vi.mock("@/api/client", () => ({ api: { agents: () => agents() } }));
 
-const { AgentAvatar, AgentName, resetAgentRosterForTest } =
+const { AgentAvatar, AgentName, ECHO, resetAgentRosterForTest } =
   await import("./AgentAvatar");
 
 /**
@@ -63,38 +63,56 @@ beforeEach(() => {
 });
 
 describe("a colleague's mark", () => {
-  it("draws the agent's own icon and name once the roster lands", async () => {
+  it("draws the agent's own letter and name once the roster lands", async () => {
     render(<><AgentAvatar handle="ava" /><AgentName handle="ava" /></>);
     await waitFor(() => expect(screen.getByText("آوا")).toBeTruthy());
     /*
-     * The ICON is the agent's, not a generic one — a mark that ignored it
-     * would make both colleagues look identical, which is the whole failure
-     * this component exists to prevent.
-     *
-     * The expected glyph comes from `agentIconName`, the PRODUCER, and not
-     * from the stored string. The first version of this line asserted
-     * `data-icon="chart"` because that is what the fixture stores — and the
-     * map turns `chart` into `pulse`, so the assertion was my belief about
-     * the mapping rather than the mapping. Rule 9, in one line of a test.
+     * The LETTER comes from the handle, which is why the directive could ask
+     * for R and A at all: «رؤیا» does not start with an R. Asserting it
+     * against `handle[0]` would be the code's own belief restated, so the
+     * expected letters are written out.
      */
-    expect(document.querySelector(`[data-icon="${agentIconName("chart")}"]`)).toBeTruthy();
-    /* and the two are DIFFERENT, which is the property that matters: an
-       identical fallback for both would satisfy the line above */
-    expect(agentIconName("chart")).not.toBe(agentIconName("sparkles"));
+    const face = document.querySelector('[data-agent-avatar="ava"]');
+    expect(face?.textContent).toBe("A");
+    /* the tone is the agent's own, and the two colleagues DIFFER — an
+       identical fallback for both would satisfy an assertion that only asked
+       whether a class was present */
+    expect(face?.className).toContain(agentAvatarTone("blue"));
+    expect(agentAvatarTone("blue")).not.toBe(agentAvatarTone("violet"));
+  });
+
+  it("Echo wears the platform's own accent, with no row to read it from", async () => {
+    /*
+     * User directive, 2026-09-04: "for echo also add an avatar with E sign
+     * like the one in the logo of the site". Echo has no seat in the agents
+     * table and never will — it is the assistant, not a colleague — so this
+     * asserts the two facts that make that workable: the letter comes from
+     * the handle, and the tone is named rather than looked up.
+     */
+    render(<><AgentAvatar handle={ECHO} /><AgentName handle={ECHO} /></>);
+    const face = document.querySelector(`[data-agent-avatar="${ECHO}"]`);
+    expect(face?.textContent).toBe("E");
+    expect(face?.className).toContain(agentAvatarTone("echo"));
+    /* and it is NOT the unknown-handle face, which is the thing it would
+       silently become if `echo` were resolved through the roster */
+    expect(face?.className).not.toContain(agentAvatarTone("slate"));
+    await waitFor(() => expect(screen.getByText(fa.platform.echo)).toBeTruthy());
   });
 
   it("draws a mark BEFORE the roster lands, not a gap", async () => {
     /*
      * The temporal case, and the one a reader actually hits. A component that
      * rendered nothing until the fetch resolved would let the message appear
-     * first and the face arrive after, shoving the text. The neutral robot
-     * says "not Echo" — which is the whole job — and the handle is in the
-     * title, so nothing is unidentified even in that instant.
+     * first and the face arrive after, shoving the text.
+     *
+     * The letter is the part that makes this free: it comes from the handle,
+     * so the face is CORRECT before the network, not merely present. Only the
+     * tone arrives late.
      */
     let settle: (rows: unknown) => void = () => {};
     agents.mockReturnValue(new Promise((resolve) => { settle = resolve; }));
     render(<><AgentAvatar handle="roya" /><AgentName handle="roya" /></>);
-    expect(document.querySelector('[data-icon="robot"]')).toBeTruthy();
+    expect(document.querySelector('[data-agent-avatar="roya"]')?.textContent).toBe("R");
     expect(screen.getByText("@roya")).toBeTruthy();
 
     settle(ROSTER);
@@ -134,6 +152,8 @@ describe("a colleague's mark", () => {
        to Echo, which is the one thing the author column exists to prevent. */
     render(<><AgentAvatar handle="ghost" /><AgentName handle="ghost" /></>);
     await waitFor(() => expect(screen.getByText("@ghost")).toBeTruthy());
-    expect(document.querySelector('[data-icon="robot"]')).toBeTruthy();
+    const face = document.querySelector('[data-agent-avatar="ghost"]');
+    expect(face?.textContent).toBe("G");
+    expect(face?.className).toContain(agentAvatarTone("slate"));
   });
 });

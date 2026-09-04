@@ -8,11 +8,15 @@ import { createPortal } from "react-dom";
 import { useLocale, useTranslations } from "next-intl";
 import { usePathname } from "next/navigation";
 import { api } from "@/api/client";
-import type { AgentEvent, ConnectorStatus } from "@/api/types";
+import type { ConnectorStatus } from "@/api/types";
 import { useRouter } from "@/i18n/routing";
 import { mentionedAgent } from "@/lib/agentMention";
-import { AgentAvatar, AgentName } from "./AgentAvatar";
-import { liveConversation, setLiveConversation } from "@/lib/liveConversation";
+import { AgentAvatar, AgentName, ECHO } from "./AgentAvatar";
+import {
+  adoptAssistantThread, askAssistant, assistantServerSnapshot, assistantSnapshot,
+  registerAssistantSurface, resetAssistantSession, stopAssistant, subscribeAssistant,
+} from "@/lib/assistantSession";
+import { liveConversation } from "@/lib/liveConversation";
 import {
   subscribeVoicePrefs, voicePrefs, voicePrefsServer,
 } from "@/lib/voicePrefs";
@@ -109,18 +113,15 @@ import {
 
 /** who is speaking, when it is not the assistant itself */
 
-interface SidebarMessage {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  chips: string[];
-  failed?: boolean;
-  /** the server's own refusal sentence, when it gave one — a 400's message
-      is actionable ("no model selected…"); a bare "did not finish" is not */
-  failedDetail?: string;
-  /** db/0169 — a colleague's handle when Echo called one in; absent = Echo */
-  author?: string;
-}
+/*
+ * `SidebarMessage` LEFT on 2026-09-04. This panel and the assistant page are
+ * one conversation now (`lib/assistantSession`), and a second message shape
+ * over one thread is the two-spellings problem at close range: the panel kept
+ * `chips: string[]` where the page kept `tool_calls`, so the same turn
+ * genuinely was two different objects depending on which window you were
+ * looking through. Chips are DERIVED at the render below, where they are a
+ * presentation choice rather than a second copy of the data.
+ */
 
 /** the person's own choice, remembered per browser */
 const SIDEBAR_KEY = "neurai-assistant-sidebar";
@@ -264,7 +265,10 @@ export function AssistantSidebar() {
       .catch(() => { /* no roster: mentions stay plain text, see above */ });
     return () => { alive = false; };
   }, []);
-  const [messages, setMessages] = useState<SidebarMessage[]>([]);
+  /* the thread is the store's — see lib/assistantSession. This panel is one
+     of two windows onto it, and the other is the assistant page. */
+  const live = useSyncExternalStore(subscribeAssistant, assistantSnapshot, assistantServerSnapshot);
+  const messages = live.messages;
   /** a STORED conversation being fetched — its own state, because "loading"
       and "this conversation is empty" are different sentences and the empty
       copy is a claim about the thread */
@@ -306,10 +310,16 @@ export function AssistantSidebar() {
    * condition that can never be false.)
    */
   function openSidebar(): void {
-    if (!streamingRef.current) {
-      setMessages([]);
-      sessionId.current = undefined;
-    }
+    /*
+     * OPENING NO LONGER WIPES THE THREAD (2026-09-04).
+     *
+     * It used to start fresh, which was right while this panel had a
+     * conversation of its own — a scratch surface, cleared each time. It is a
+     * window onto ONE conversation now, so clearing on open would throw away
+     * whatever the assistant page is in the middle of, which is precisely the
+     * loss the mirroring directive was filed about. «گفت‌وگوی جدید» in the
+     * menu is the deliberate way to start over, and it says so.
+     */
     reveal();
     setTimeout(() => inputRef.current?.focus(), 0);
   }
@@ -327,9 +337,18 @@ export function AssistantSidebar() {
    * collapsed a sidebar a timeout collapsed for them.
    */
   function shutter(): void {
-    abortRef.current?.abort();
-    setMessages([]);
-    sessionId.current = undefined;
+    /*
+     * CLOSING HIDES, IT NO LONGER ENDS (2026-09-04).
+     *
+     * The 2026-08-26 rule — "nothing should remain here as a history" — was
+     * about a panel that owned its own thread: closing it was the only way to
+     * be rid of a scratch conversation. Two directives later this panel and
+     * the assistant page are the same conversation, and a shutter that
+     * destroyed it would let closing a panel delete what the other window is
+     * showing. So the newer, more fundamental rule wins: the panel closes, the
+     * conversation stays where it can be found (the page, and History), and
+     * ending it is what the New conversation button is for.
+     */
     setOpen(false);
   }
 
@@ -347,17 +366,14 @@ export function AssistantSidebar() {
    * history says.
    */
   function freshConversation(): void {
-    abortRef.current?.abort();
-    setMessages([]);
-    sessionId.current = undefined;
-    /* and the handoff is cleared too — otherwise opening the assistant page
-       after "new conversation" would resume the one just left behind, which
-       is the exact opposite of what the button says */
-    setLiveConversation(null);
+    /* the store aborts anything in flight and clears the handoff too —
+       otherwise opening the assistant page after "new conversation" would
+       resume the one just left behind, the exact opposite of what it says */
+    resetAssistantSession();
     notify(t("newConversationStarted"));
   }
 
-  const [streaming, setStreaming] = useState(false);
+  const streaming = live.streaming;
   const [consent, setConsent] = useState<
     | null
     | { label: string; resolve: (allowed: boolean) => void }
@@ -430,7 +446,6 @@ export function AssistantSidebar() {
   }, [ears]);
 
   const [toasts, setToasts] = useState<PlatformNotice[]>([]);
-  const sessionId = useRef<string | undefined>(undefined);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   /** the ONE voice listener (lib/voiceLoop — the 2026-08-22 rebuild) */
@@ -439,8 +454,9 @@ export function AssistantSidebar() {
   const speakReplyRef = useRef(false);
   const replyTextRef = useRef("");
   const streamingRef = useRef(false);
-  /** the running ask, abortable by the spoken/typed STOP intent */
-  const abortRef = useRef<AbortController | null>(null);
+  /* the run is the store's, and so is its abort — a controller held here
+     would let unmounting this panel cancel an answer the assistant page is
+     waiting for, which is the defect the shared store exists to end */
   /** a barge-in's (or a stale-thread retry's) question, waiting for the
       aborted run to unwind */
   const pendingCommandRef = useRef<{ text: string; viaVoice: boolean } | null>(null);
@@ -471,7 +487,7 @@ export function AssistantSidebar() {
     if (streamingRef.current) {
       // barge-in over thinking: abort the run; its unwind asks the new thing
       pendingCommandRef.current = { text, viaVoice: true };
-      abortRef.current?.abort();
+      stopAssistant();
       return;
     }
     reveal();
@@ -553,7 +569,7 @@ export function AssistantSidebar() {
   useEffect(() => {
     if (!visible) return;
     const handed = liveConversation();
-    if (handed === null || handed === sessionId.current) return;
+    if (handed === null || handed === assistantSnapshot().sessionId) return;
     void loadSession(handed);
     // `loadSession` is stable for this component's life; re-running on its
     // identity would reload the thread on every render
@@ -633,24 +649,14 @@ export function AssistantSidebar() {
    * new questions continuing it.
    */
   async function loadSession(id: string) {
-    sessionId.current = id;
-    /* whichever surface is showing a thread says so, so the other one can pick
-       it up when the person walks over (see lib/liveConversation.ts) */
-    setLiveConversation(id);
     setLoadingThread(true);
     try {
-      const thread = await api.agentMessages(id);
-      setMessages(thread.map((m) => ({
-        id: m.id,
-        role: m.role,
-        content: m.content,
-        chips: m.tool_calls.map((c) => c.name).filter((n): n is string => typeof n === "string"),
-        /* db/0169 — the RELOAD path. Without this a colleague's turn keeps its
-           avatar only until the page is refreshed, and then quietly becomes
-           Echo's: the stream would be honest and the record would not, which
-           is the worse half to get wrong. */
-        ...(m.author ? { author: m.author } : {}),
-      })));
+      /* one call: the rows, the id, and the handoff — and the assistant page
+         sees the same adoption, because it is the same store. The per-message
+         re-shaping that used to happen here is gone with `SidebarMessage`;
+         `author` in particular had to be copied by hand, and a colleague's
+         turn quietly became Echo's on any reload that forgot to. */
+      adoptAssistantThread(id, await api.agentMessages(id));
     } catch {
       notify(t("failed"), "warn");
     } finally {
@@ -766,20 +772,11 @@ export function AssistantSidebar() {
     const trimmed = question.trim();
     if (!trimmed || streamingRef.current) return;
     reveal();
-    setStreaming(true);
     streamingRef.current = true;
     speakReplyRef.current = viaVoice;
     muteReplyRef.current = false;
     replyTextRef.current = "";
-    const replyId = `p-${Date.now()}`;
-    const userMsgId = `u-${Date.now()}`;
-    setMessages((prev) => [
-      ...prev,
-      { id: userMsgId, role: "user", content: trimmed, chips: [] },
-      { id: replyId, role: "assistant", content: "", chips: [] },
-    ]);
-    const controller = new AbortController();
-    abortRef.current = controller;
+    spokenIdxRef.current = 0;
     try {
       const model = await ensureModel();
       /* `@roya` routes the turn to Roya. The mention stays IN the question —
@@ -809,80 +806,30 @@ export function AssistantSidebar() {
        * an unrelated question — the record is the source once there is one.
        */
       const engine = recorderSnapshot();
-      const live = engine.phase === "recording" || engine.phase === "paused"
+      const liveText = engine.phase === "recording" || engine.phase === "paused"
         ? (engine.captions?.finals ?? "").trim()
         : "";
-      const stream = api.ask(trimmed, { page: pathname, callIds: [] }, sessionId.current, {
-        model,
-        locale,
-        ...(mention === null ? {} : { agent: mention.handle }),
-        ...(live === "" ? {} : { liveText: live }),
-        clientTools: [...SURFACE_TOOLS],
-        surface: { route: pathname.replace(/^\/(fa|en)(?=\/|$)/, "") || "/" },
-        signal: controller.signal,
-      });
       /*
-       * SENTENCE-STREAMED SPEECH (latency rework): a voice reply starts
-       * SPEAKING at the first finished sentence, while the rest still streams
-       * — not after the whole answer landed and synthesized.
+       * ONE ASK, ONE THREAD. The stale-thread recovery that used to live here
+       * moved into the store with the session id it repairs — the id belongs
+       * to the conversation, not to whichever panel typed the question, and
+       * the assistant page had no such recovery precisely because this one
+       * was written in a component.
        */
-      let spokenIdx = 0;
-      const speakNewSentences = (finalFlush: boolean) => {
-        if (!speakReplyRef.current || silentRef.current) return;
-        // a live recording means NO voice — ours would be in the call audio
-        if (muteReplyRef.current || recordingLive()) return;
-        const text = replyTextRef.current;
-        if (finalFlush) {
-          const tail = text.slice(spokenIdx).trim();
-          spokenIdx = text.length;
-          if (tail) speakQueued(tail);
-          return;
-        }
-        let lastEnd = -1;
-        const boundary = /[.!?؟…]\s|\n/g;
-        boundary.lastIndex = spokenIdx;
-        for (let m = boundary.exec(text); m; m = boundary.exec(text)) {
-          lastEnd = m.index + m[0].length;
-        }
-        // tiny fragments wait for company — per-sentence synthesis is a
-        // request each, and "Yes." alone is not worth one
-        if (lastEnd > spokenIdx && lastEnd - spokenIdx >= 25) {
-          const chunk = text.slice(spokenIdx, lastEnd).trim();
-          spokenIdx = lastEnd;
-          if (chunk) speakQueued(chunk);
-        }
-      };
-      for await (const event of stream) {
-        await handleEvent(event, replyId);
-        if (event.type === "text_delta") speakNewSentences(false);
-      }
-      speakNewSentences(true);
-    } catch (cause) {
-      if (controller.signal.aborted) {
-        // the person said STOP — keep whatever was already said, drop an
-        // empty bubble; an interruption is not a failure
-        setMessages((prev) => prev.filter((m) => !(m.id === replyId && m.content === "")));
-      } else {
-        const detail = (cause as { detail?: string }).detail;
-        const status = (cause as { status?: number }).status;
-        /*
-         * THE STALE-THREAD TRAP (user screenshot, 2026-08-22: EVERY ask died
-         * "not found"): the stored conversation id can be gone — swept, purged,
-         * or minted against a different database. A dead thread must not kill
-         * every future question: drop the id, remove the doomed bubbles, retry
-         * ONCE fresh. A second failure has no stored id and reports honestly.
-         */
-        if (sessionId.current && (status === 404 || /not.?found/i.test(detail ?? ""))) {
-          sessionId.current = undefined;
-          setMessages((prev) => prev.filter((m) => m.id !== replyId && m.id !== userMsgId));
-          pendingCommandRef.current = { text: trimmed, viaVoice };
-        } else {
-          setMessages((prev) =>
-            prev.map((m) => (m.id === replyId ? { ...m, failed: true, failedDetail: detail } : m)));
-        }
-      }
+      await askAssistant({
+        question: trimmed,
+        page: pathname,
+        options: {
+          model,
+          locale,
+          ...(mention === null ? {} : { agent: mention.handle }),
+          ...(liveText === "" ? {} : { liveText }),
+          clientTools: [...SURFACE_TOOLS],
+          surface: { route: pathname.replace(/^\/(fa|en)(?=\/|$)/, "") || "/" },
+        },
+      });
+      flushSpeech();
     } finally {
-      setStreaming(false);
       streamingRef.current = false;
       setConsent(null);
       // a barge-in (or the stale-thread retry) parked its question while this
@@ -894,6 +841,7 @@ export function AssistantSidebar() {
       }
     }
   }
+
   submitRef.current = (question, viaVoice) => { void submit(question, viaVoice); };
 
   function send() {
@@ -903,89 +851,87 @@ export function AssistantSidebar() {
     void submit(question, false);
   }
 
-  async function handleEvent(event: AgentEvent, replyId: string) {
-    switch (event.type) {
-      case "agent_message":
-        /* A COLLEAGUE SPOKE (db/0169). Inserted BEFORE Echo's streaming reply
-           rather than appended: Echo is still writing, and its conclusion
-           refers to what the colleague just said, so appending at the end
-           would put the answer before the evidence. */
-        setMessages((prev) => {
-          const idx = prev.findIndex((m) => m.id === replyId);
-          const turn: SidebarMessage = {
-            id: `${replyId}-${event.author}-${prev.length}`,
-            role: "assistant",
-            content: event.text,
-            chips: [],
-            author: event.author,
-            ...(event.failed ? { failed: true } : {}),
-          };
-          return idx === -1
-            ? [...prev, turn]
-            : [...prev.slice(0, idx), turn, ...prev.slice(idx)];
-        });
-        break;
-      case "session":
-        sessionId.current = event.id;
-        /* THE HANDOFF POINT. The session event is the first frame of a lazily
-           created conversation, so this is the earliest moment there is an id
-           to hand over — earlier than the first token, which is what makes
-           "ask here, then open the assistant page" continue rather than
-           restart. */
-        setLiveConversation(event.id);
-        break;
-      case "text_delta":
-        replyTextRef.current += event.delta;
-        setMessages((prev) =>
-          prev.map((m) => (m.id === replyId ? { ...m, content: m.content + event.delta } : m)));
-        break;
-      case "tool_call":
-        if (event.state === "started") {
-          setMessages((prev) =>
-            prev.map((m) => (m.id === replyId ? { ...m, chips: [...m.chips, event.label] } : m)));
-        }
-        break;
-      case "client_tool_call":
-        /*
-         * ONE handler, shared with the assistant page (lib/clientToolRunner).
-         * It was this file's alone, and the page advertised the same tools
-         * with no handler at all — the model called one, nothing answered,
-         * and the run hung until the 120-second timeout. A copy here would
-         * have been the second place for that to happen.
-         *
-         * NO toast for the assistant's own actions (user directive,
-         * 2026-08-22): the conversation already shows the tool chip and the
-         * model narrates the outcome — a popup on top was the same fact a
-         * third time. Toasts remain for everything ELSE on the platform.
-         */
-        await handleClientToolCall(event, {
-          askConsent: async (label) => {
-            const allowed = await askConsent(label);
-            setConsent(null);
-            return allowed;
-          },
-          push: router.push,
-          // the top bar's own switch mechanism: same route, other locale
-          switchLocale: (next) => router.replace(
-            pathname.replace(/^\/(fa|en)(?=\/|$)/, "") || "/",
-            { locale: next },
-          ),
-          // starting/resuming a recording SHUTS the voice for this reply — and
-          // cuts anything already being said (user rule, 2026-08-21)
-          onRecordingStarted: () => { muteReplyRef.current = true; stopSpeaking(); },
-        });
-        break;
-      case "done":
-        if (event.failed) {
-          setMessages((prev) =>
-            prev.map((m) => (m.id === replyId ? { ...m, failed: true } : m))
-              .filter((m) => !(m.id === replyId && event.failed && m.content === "")));
-        }
-        break;
-      default:
-        break; // unknown-ignorable, the wire's contract
+  /**
+   * SENTENCE-STREAMED SPEECH (latency rework): a voice reply starts SPEAKING
+   * at the first finished sentence, while the rest still streams — not after
+   * the whole answer landed and synthesized.
+   *
+   * It reads the store's deltas through `onDelta` now rather than looping over
+   * the stream itself. Speaking is this panel's capability and nobody else's:
+   * the assistant page has no voice, and the run does not care which window is
+   * watching it.
+   */
+  const spokenIdxRef = useRef(0);
+  const speakNewSentences = useCallback((finalFlush: boolean) => {
+    if (!speakReplyRef.current || silentRef.current) return;
+    // a live recording means NO voice — ours would be in the call audio
+    if (muteReplyRef.current || recordingLive()) return;
+    const text = replyTextRef.current;
+    if (finalFlush) {
+      const tail = text.slice(spokenIdxRef.current).trim();
+      spokenIdxRef.current = text.length;
+      if (tail) speakQueued(tail);
+      return;
     }
-  }
+    let lastEnd = -1;
+    const boundary = /[.!?؟…]\s|\n/g;
+    boundary.lastIndex = spokenIdxRef.current;
+    for (let m = boundary.exec(text); m; m = boundary.exec(text)) {
+      lastEnd = m.index + m[0].length;
+    }
+    // tiny fragments wait for company — per-sentence synthesis is a request
+    // each, and "Yes." alone is not worth one
+    if (lastEnd > spokenIdxRef.current && lastEnd - spokenIdxRef.current >= 25) {
+      const chunk = text.slice(spokenIdxRef.current, lastEnd).trim();
+      spokenIdxRef.current = lastEnd;
+      if (chunk) speakQueued(chunk);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refs only
+  }, []);
+  const flushSpeech = () => speakNewSentences(true);
+
+  /**
+   * THE HANDS THIS PANEL LENDS A RUN — client tools, and the voice.
+   *
+   * Registered while mounted rather than captured when the ask starts, because
+   * the run outlives the surface: a question asked on the assistant page and
+   * finished after walking back into the platform performs its tools here,
+   * which is the correct answer to "whose browser is this".
+   */
+  useEffect(() => registerAssistantSurface({
+    onDelta: (delta) => {
+      replyTextRef.current += delta;
+      speakNewSentences(false);
+    },
+    handleClientTool: (event) =>
+      /*
+       * ONE handler, shared with the assistant page (lib/clientToolRunner).
+       * It was this file's alone, and the page advertised the same tools with
+       * no handler at all — the model called one, nothing answered, and the
+       * run hung until the 120-second timeout.
+       *
+       * NO toast for the assistant's own actions (user directive,
+       * 2026-08-22): the conversation already shows the tool chip and the
+       * model narrates the outcome — a popup on top was the same fact a third
+       * time. Toasts remain for everything ELSE on the platform.
+       */
+      handleClientToolCall(event, {
+        askConsent: async (label) => {
+          const allowed = await askConsent(label);
+          setConsent(null);
+          return allowed;
+        },
+        push: router.push,
+        // the top bar's own switch mechanism: same route, other locale
+        switchLocale: (next) => router.replace(
+          pathname.replace(/^\/(fa|en)(?=\/|$)/, "") || "/",
+          { locale: next },
+        ),
+        // starting/resuming a recording SHUTS the voice for this reply — and
+        // cuts anything already being said (user rule, 2026-08-21)
+        onRecordingStarted: () => { muteReplyRef.current = true; stopSpeaking(); },
+      }),
+  }), [askConsent, router, pathname, speakNewSentences]);
 
   if (!visible) return null;
 
@@ -1092,12 +1038,14 @@ export function AssistantSidebar() {
               ) : (
                 messages.map((m) => (
                   <div key={m.id} className={m.role === "user" ? "flex justify-end" : ""}>
-                    {/* whose turn — only when it is not Echo's (db/0169) */}
-                    {m.role === "assistant" && m.author ? (
+                    {/* whose turn — Echo's included since 2026-09-04, and one
+                        size down from the page: this column is 30% of the
+                        screen and a face here competes with the words */}
+                    {m.role === "assistant" ? (
                       <div className="mb-1 flex items-center gap-1.5">
-                        <AgentAvatar handle={m.author} size="sm" />
+                        <AgentAvatar handle={m.author ?? ECHO} size="md" />
                         <span className="text-group-label font-semibold text-fg-muted">
-                          <AgentName handle={m.author} />
+                          <AgentName handle={m.author ?? ECHO} />
                         </span>
                       </div>
                     ) : null}
@@ -1109,14 +1057,19 @@ export function AssistantSidebar() {
                       }
                     >
                       {m.content}
-                      {m.chips.length > 0 ? (
+                      {m.tool_calls.length > 0 ? (
                         <span className="mt-1 flex flex-wrap gap-1">
-                          {m.chips.map((chip, i) => (
+                          {/* DERIVED, not stored (2026-09-04): the panel used
+                              to keep its own `chips` array beside the page's
+                              `tool_calls`, two shapes for one turn. A chip is
+                              a way of drawing a tool call, so it is made where
+                              it is drawn. */}
+                          {m.tool_calls.map((call) => (
                             <span
-                              key={i}
+                              key={call.id}
                               className="rounded-full bg-surface-2 px-2 py-0.5 text-group-label text-fg-muted"
                             >
-                              {chip}
+                              {call.label}
                             </span>
                           ))}
                         </span>
@@ -1124,15 +1077,27 @@ export function AssistantSidebar() {
                       {m.failed ? (
                         <span className="mt-1 block text-group-label text-warning">
                           {t("failed")}
-                          {m.failedDetail ? (
-                            <span className="block" dir="ltr">{m.failedDetail}</span>
-                          ) : null}
                         </span>
                       ) : null}
                     </div>
                   </div>
                 ))
               )}
+              {/*
+                THE REFUSAL'S OWN SENTENCE, once. It used to be stored on the
+                message as `failedDetail`; it belongs to the RUN, not to a
+                turn, and the store keeps it there — a 400's message is
+                actionable ("no model selected…") where a bare "did not
+                finish" is not, so it is worth saying, and worth saying in
+                exactly one place.
+              */}
+              {live.error ? (
+                <p className="text-group-label text-warning">
+                  {live.error.detail
+                    ? <span dir="ltr">{live.error.detail}</span>
+                    : t("failed")}
+                </p>
+              ) : null}
               {consent ? (
                 <div className="rounded-xl border border-accent/30 bg-accent-soft p-3">
                   <p className="text-detail text-fg">{t("consentAsk", { action: consent.label })}</p>
