@@ -56,6 +56,7 @@ export const SURFACE_TOOLS: readonly string[] = [
   "invite_member",
   "run_workflow",
   "rename_conversation",
+  "invite_to_meeting",
 ];
 
 /** Routes the agent may navigate to — the same set a human can click to. */
@@ -342,6 +343,15 @@ export async function executeClientTool(
           title,
           scheduled_at: when,
           mode: a.mode === "in_person" ? "in_person" : "online",
+          /* names or addresses, never ids: an invitee may have no row here at
+             all, which is why db/0145 made this a text array */
+          ...(Array.isArray(a.invitees)
+            ? {
+              invitees: a.invitees
+                .filter((v): v is string => typeof v === "string")
+                .map((v) => v.trim()).filter(Boolean).slice(0, 100),
+            }
+            : {}),
         });
         surface.push(`/meetings/${meeting.id}`);
         return { ok: true, detail: `the meeting «${title}» was created and opened` };
@@ -464,6 +474,42 @@ export async function executeClientTool(
       }
     }
 
+    case "invite_to_meeting": {
+      const id = typeof a.meeting_id === "string" ? a.meeting_id : "";
+      const adding = Array.isArray(a.invitees)
+        ? a.invitees.filter((v): v is string => typeof v === "string")
+          .map((v) => v.trim()).filter(Boolean)
+        : [];
+      if (!id || adding.length === 0) {
+        return { ok: false, detail: "a meeting and at least one person" };
+      }
+      try {
+        const { api } = await import("@/api/client");
+        /*
+         * READ, THEN APPEND. `invitees` is a whole-array write, so sending
+         * only the new names would silently uninvite everybody already on the
+         * list — the lost-update hazard this repo already recorded against
+         * `allowed_models`, arriving here as "the agent removed four people
+         * while adding one". The read is what makes this an ADD.
+         */
+        const meeting = await api.meetingDetail(id);
+        const seen = new Set(meeting.invitees.map((v) => v.trim().toLowerCase()));
+        const merged = [
+          ...meeting.invitees,
+          ...adding.filter((v) => !seen.has(v.trim().toLowerCase())),
+        ];
+        if (merged.length === meeting.invitees.length) {
+          /* everybody named was already there — a true statement, and a
+             different one from "added", which the model should be able to say */
+          return { ok: true, detail: "they were already invited" };
+        }
+        await api.updateMeeting(id, { invitees: merged.slice(0, 100) });
+        announceChange("calls");
+        return { ok: true, detail: `invited ${merged.length - meeting.invitees.length}` };
+      } catch {
+        return { ok: false, detail: "that meeting's invitees could not be changed" };
+      }
+    }
     case "update_meeting": {
       const id = typeof a.meeting_id === "string" ? a.meeting_id : "";
       if (!id) return { ok: false, detail: "which meeting?" };
@@ -633,8 +679,30 @@ export async function executeClientTool(
             ? { description: a.description.trim() } : {}),
           ...(typeof a.due === "string" && a.due.trim() !== "" ? { due_at: a.due } : {}),
         });
+        /*
+         * ASSIGNED IN THE SAME BREATH. "Make a task for Sina" is one sentence
+         * and should be one act — creating it and then telling the person to
+         * open the board and assign it themselves is the product handing its
+         * job back. Best-effort on purpose: a task that exists unassigned is a
+         * far better outcome than a failed creation, so the assignment's
+         * refusal is REPORTED rather than thrown, and the sentence says which
+         * half happened.
+         */
+        let assigned = false;
+        if (typeof a.assignee === "string" && a.assignee.trim() !== "") {
+          assigned = await api.setTaskAssignee(task.id, a.assignee.trim(), true)
+            .then(() => true).catch(() => false);
+        }
         surface.push("/tasks");
-        return { ok: true, detail: `the task «${title}» was added${task.id ? "" : ""}` };
+        announceChange("members");
+        return {
+          ok: true,
+          detail: typeof a.assignee === "string" && a.assignee.trim() !== ""
+            ? (assigned
+              ? `the task «${title}» was added and assigned`
+              : `the task «${title}» was added, but it could not be assigned`)
+            : `the task «${title}» was added`,
+        };
       } catch (cause) {
         return { ok: false, detail: refusalDetail(cause, "the task was not created") };
       }

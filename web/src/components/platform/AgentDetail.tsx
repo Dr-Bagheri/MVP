@@ -168,6 +168,22 @@ export function AgentDetail({ handle }: { handle: string }) {
             {agent.model ?? <span className="text-fg-muted">{t("detailModelDefault")}</span>}
           </Fact>
           <Fact label={t("detailWeb")}>
+            {/*
+              TWO SWITCHES, ONE FACT (user report, 2026-09-04: "i gave them web
+              access but it didn't add to the page and to them").
+              
+              Web access is `person.agents_web AND agent.web` — either off is
+              off. This row showed the AGENT's half and labelled it as the
+              whole answer, so somebody who had just turned their own switch ON
+              read «خاموش» and reasonably concluded nothing had happened.
+              
+              It names the composition now. The row cannot resolve it alone —
+              the person's switch is not on this wire — and saying "on, when
+              you allow it" is the honest shape of a fact that takes two
+              yeses: it reports what this agent permits and points at where
+              the other half lives, rather than reporting half and calling it
+              all.
+            */}
             {agent.web ? t("detailWebOn") : t("detailWebOff")}
           </Fact>
           <Fact label={t("detailLevel")}>

@@ -369,6 +369,9 @@ export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
       title: str("What the meeting is called."),
       when: str("ISO 8601 start time. Omit for a meeting starting now."),
       mode: strEnum(["online", "in_person"], "How it is held. Defaults to online."),
+      /* names or addresses, not ids: an invitee may be somebody with no row
+         here at all, which is why the meeting stores text (db/0145) */
+      invitees: arr("Who is coming — colleagues by name, or email addresses for people outside the organisation."),
     }, ["title"]),
     effect: "write",
   },
@@ -383,6 +386,14 @@ export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
       title: str("The task, in a few words."),
       description: str("Anything the person doing it needs. Optional."),
       due: str("ISO 8601 deadline. Optional."),
+      /*
+       * ONE STEP, not two. "Make a task for Sina" is a single sentence and it
+       * should be a single act — creating and then telling the person to open
+       * the board and assign it themselves is the product asking them to
+       * finish its job. `assign_task` still exists for a task that already
+       * exists; this is for the one being made.
+       */
+      assignee: str("Who it is for — a colleague's id from list_members. Optional."),
     }, ["title"]),
     effect: "write",
   },
@@ -604,6 +615,19 @@ export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
       "Give this conversation a title. Useful when a thread has drifted from "
       + "the question it was named after.",
     parameters: obj({ title: str("The new title.") }, ["title"]),
+    effect: "write",
+  },
+  {
+    name: "invite_to_meeting",
+    label: { fa: "دعوت به جلسه", en: "Inviting to a meeting" },
+    description:
+      "Add people to a meeting's invitee list. Names for colleagues, email "
+      + "addresses for anybody outside the organisation. This ADDS — whoever "
+      + "is already invited stays invited.",
+    parameters: obj({
+      meeting_id: str("The meeting's id."),
+      invitees: arr("The people to add, by name or email address."),
+    }, ["meeting_id", "invitees"]),
     effect: "write",
   },
   {
