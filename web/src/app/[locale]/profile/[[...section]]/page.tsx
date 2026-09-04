@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { use, useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Select } from "@/components/Select";
 import { Switch } from "@/components/Switch";
@@ -11,8 +11,8 @@ import { Avatar } from "@/components/Avatar";
 import { AvatarEditor } from "@/components/platform/AvatarEditor";
 import { ChangePassword } from "@/components/platform/ChangePassword";
 import { ExportAccountData } from "@/components/platform/ExportAccountData";
-import { PlatformShell } from "@/components/platform/PlatformShell";
-import { FormPanel, FormRow, PageContainer, PageHeader, PanelFooter, Section, Skeleton } from "@/components/scaffold";
+import { TwoPane, type PaneGroup } from "@/components/platform/TwoPane";
+import { FormPanel, FormRow, PageHeader, PanelFooter, Section, Skeleton } from "@/components/scaffold";
 import { digits, modelLabel, personName } from "@/lib/format";
 import { signOutThisDevice } from "@/lib/signOut";
 import { notify } from "@/lib/notify";
@@ -68,9 +68,65 @@ const JOB_TITLES: string[] = [
   "research", "data", "qa", "it", "assistant", "consultant", "intern",
 ];
 
-export default function ProfilePage() {
+
+/**
+ * THE FOUR SUB-PAGES, in the order the user gave (directive, 2026-09-04:
+ * "add a sub menu on top for it with order like this: Identity, Preferences,
+ * Assistant & data, Change password").
+ *
+ * This screen was one long scroll of five stacked sections while every other
+ * surface — Settings, Management, Echo, Help — had already become a top
+ * toolbar over one section's content. It is the same component now, so the
+ * profile stops being the page that reads differently from the rest.
+ *
+ * REAL ROUTES rather than local tab state, deliberately: `/profile/password`
+ * can be linked to and come back to, the breadcrumb has something to say, and
+ * the route-tree instruments (rule 13.5 — every href the shell renders must
+ * resolve) can see these at all. A tab set living in `useState` is invisible
+ * to every one of them.
+ *
+ * SESSION IS NOT A SECTION. It was a fifth heading over a single button; the
+ * way out now sits at the foot of Identity, beside the account it ends.
+ */
+const PROFILE_SECTIONS = ["identity", "preferences", "assistant", "password"] as const;
+type ProfileSection = (typeof PROFILE_SECTIONS)[number];
+
+/** each section's heading — the menu item, the page title and the breadcrumb
+    all read this, so a section cannot end up called two things */
+const SECTION_LABEL: Record<ProfileSection, string> = {
+  identity: "identityTitle",
+  preferences: "prefsTitle",
+  assistant: "assistantDataTitle",
+  password: "passwordTitle",
+};
+
+/** the section this URL means; an unknown tail lands on Identity, which is
+    also what a bare /profile means */
+function sectionFor(tail: string[] | undefined): ProfileSection {
+  const slug = tail?.[0];
+  return PROFILE_SECTIONS.find((entry) => entry === slug) ?? "identity";
+}
+
+export default function ProfilePage({
+  params,
+}: {
+  params: Promise<{ section?: string[] }>;
+}) {
   const t = useTranslations("profile");
   const tPlatform = useTranslations("platform");
+  const { section } = use(params);
+  const active = sectionFor(section);
+  /* ONE group, no title: four items that are all "your account" need no
+     heading above them to say so — SectionMenu's own rule for a group whose
+     label would only repeat its items. */
+  const groups: PaneGroup[] = [{
+    key: "profile",
+    items: PROFILE_SECTIONS.map((slug) => ({
+      slug,
+      href: slug === "identity" ? "/profile" : `/profile/${slug}`,
+      label: t(SECTION_LABEL[slug]),
+    })),
+  }];
   const locale = useLocale();
   const router = useRouter();
   const pathname = usePathname();
@@ -236,8 +292,7 @@ export default function ProfilePage() {
    */
   if (!me)
     return (
-      <PlatformShell>
-        <PageContainer>
+      <TwoPane navLabel={t("title")} groups={groups} activeSlug={active} width="small">
           <section className="tile tile-row mb-4 flex-wrap items-center justify-between gap-4 p-4">
             <div className="flex min-w-0 items-center gap-3">
               {/* 2026-09-03: h-12, because the header's mark is `<Avatar
@@ -267,7 +322,7 @@ export default function ProfilePage() {
             </dl>
           </section>
 
-          <Section title={t("identityTitle")}>
+          <Section>
             <FormPanel>
               {[t("photo"), t("displayName"), t("displayNameEn"), t("username")].map((label) => (
                 <FormRow key={label} label={label}>
@@ -279,7 +334,7 @@ export default function ProfilePage() {
             </FormPanel>
           </Section>
 
-          <Section title={t("prefsTitle")} divided>
+          <Section divided>
             <FormPanel>
               {[t("language"), t("theme"), t("model")].map((label) => (
                 <FormRow key={label} label={label}>
@@ -288,14 +343,21 @@ export default function ProfilePage() {
               ))}
             </FormPanel>
           </Section>
-        </PageContainer>
-      </PlatformShell>
+      </TwoPane>
     );
 
   return (
-    <PlatformShell>
-      <PageContainer>
-        <PageHeader title={t("title")} subtitle={t("subtitle")} />
+    <TwoPane navLabel={t("title")} groups={groups} activeSlug={active} width="small">
+      {/* the SECTION's name, not the page's — the breadcrumb and the toolbar
+          already say "profile", and a third copy of the word is the heading
+          this product spent a round removing everywhere else */}
+      <PageHeader
+        title={t(SECTION_LABEL[active])}
+        {...(active === "identity" ? { subtitle: t("subtitle") } : {})}
+      />
+
+      {active === "identity" ? (
+        <>
 
         {/* THE PERSON, AND WHAT THEY HAVE DONE (user directive, after the
             reference's own profile header): avatar, name, role, and the
@@ -357,7 +419,7 @@ export default function ProfilePage() {
           </dl>
         </section>
 
-        <Section title={t("identityTitle")}>
+        <Section>
           <FormPanel>
             <FormRow label={t("photo")}>
               <AvatarEditor me={me} onSaved={adopt} />
@@ -473,7 +535,36 @@ export default function ProfilePage() {
           </FormPanel>
         </Section>
 
-        <Section title={t("prefsTitle")} divided>
+        {/*
+          THE WAY OUT, at the foot of Identity (user directive, 2026-09-04:
+          "in the identity sub page remove the session section, just put a big
+          sign out button").
+
+          It was a section of its own titled «نشست» holding one row holding
+          one button — a heading, a panel and a label all saying what the
+          button already said. Full width and alone now, because it is the
+          last thing on the page and nothing else competes for the press.
+
+          It ends THIS session on THIS device, and the hint still says so: a
+          sign-out that read as "everywhere" would be a promise this flow does
+          not make. The tone stays the soft danger wash rather than a solid
+          `btn-danger` — signing out is reversible by signing back in.
+        */}
+        <Section divided>
+          <button
+            type="button"
+            onClick={() => { void signOutThisDevice(locale); }}
+            className="btn w-full bg-danger/10 font-semibold text-danger hover:bg-danger/20"
+          >
+            {tPlatform("signOut")}
+          </button>
+          <p className="mt-2 text-xs text-fg-muted">{t("signOutHint")}</p>
+        </Section>
+        </>
+      ) : null}
+
+      {active === "preferences" ? (
+        <Section>
           <FormPanel>
             {/*
               THE PLATFORM'S DROPDOWN, not the browser's (user directive,
@@ -537,16 +628,21 @@ export default function ProfilePage() {
             </FormRow>
           </FormPanel>
         </Section>
+      ) : null}
 
-        {/* Assistant & data (user directive, 2026-08-22, after the sana.ai
+      {active === "assistant" ? (
+        /* Assistant & data (user directive, 2026-08-22, after the sana.ai
             reference): the CONSENT switch — may the assistant see the role
             and about texts above — and the data export. The switch saves
             immediately (a consent that waits for a Save button is a consent
             someone believes they gave and didn't), and adopts the server's
-            answer, never optimistic. */}
-        {me.assistant_context !== undefined ? (
-          <Section title={t("assistantDataTitle")} divided>
+            answer, never optimistic. */
+        <Section>
             <FormPanel>
+              {/* the consent row needs the column; the EXPORT below does not,
+                  so a deployment without db/0080 gets a section that still
+                  does something rather than an empty page behind a menu item */}
+              {me.assistant_context !== undefined ? (
               <FormRow label={t("shareWithAssistant")}>
                 {/* 2026-09-03, control sweep: this stays hand-drawn, on
                     purpose. It is a SWITCH, not a button — the 24×44 track and
@@ -571,48 +667,25 @@ export default function ProfilePage() {
                   }}
                 />
               </FormRow>
+              ) : null}
               <FormRow label={t("exportTitle")}>
                 <ExportAccountData />
               </FormRow>
             </FormPanel>
-          </Section>
-        ) : null}
+        </Section>
+      ) : null}
 
         {/* Its own section and its own save. A password change is not another
             profile field: it re-authenticates, it can fail for reasons the
             fields above never can, and folding it into the same submit would
             mean a rejected password discarded a perfectly good rename. */}
-        <Section title={t("passwordTitle")} divided>
+      {active === "password" ? (
+        <Section>
           <ChangePassword />
         </Section>
+      ) : null}
 
-        {/* THE WAY OUT lives on this page too (user directive), beside the
-            account it belongs to. It ends THIS session on THIS device — the
-            hint says so, because a sign-out that read as "everywhere" would
-            be a promise the flow does not make. */}
-        <Section title={t("signOutTitle")} divided>
-          <FormPanel>
-            <FormRow label={tPlatform("signOut")}>
-              {/* audit finding, 2026-09-02: this was a hand-rolled 40px button
-                  with the 16px TILE corner, one section under a Save button
-                  that is `.btn-primary` (38px, 11px) — two button shapes on
-                  one page. `.btn` owns height, corner, padding and type (and
-                  already composes `.tap`); only the TONE is stated here,
-                  because a sign-out is not destructive — it is reversible by
-                  signing back in, so it stays the soft danger wash rather
-                  than becoming a solid `btn-danger`. */}
-              <button
-                type="button"
-                onClick={() => { void signOutThisDevice(locale); }}
-                className="btn bg-danger/10 text-danger hover:bg-danger/20"
-              >
-                {tPlatform("signOut")}
-              </button>
-            </FormRow>
-          </FormPanel>
-        </Section>
-      </PageContainer>
-    </PlatformShell>
+    </TwoPane>
   );
 }
 

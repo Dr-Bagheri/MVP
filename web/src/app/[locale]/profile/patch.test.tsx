@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { User } from "@/api/types";
 
@@ -24,6 +24,13 @@ vi.mock("@/components/platform/PlatformShell", () => ({
 vi.mock("@/i18n/routing", () => ({
   usePathname: () => "/profile",
   useRouter: () => ({ replace: vi.fn() }),
+  /* the section toolbar's items are locale-aware Links, and a mock that omits
+     an export the component renders makes React render `undefined` — which
+     arrived as nine failing tests about a patch body, none of them about
+     routing */
+  Link: ({ href, children, ...rest }: { href: unknown; children: React.ReactNode }) => (
+    <a href={typeof href === "string" ? href : "#"} {...rest}>{children}</a>
+  ),
 }));
 
 const me = vi.fn();
@@ -56,7 +63,7 @@ vi.mock("@/api/client", async (importOriginal) => {
 });
 
 const { BffError } = await import("@/api/client");
-const { default: ProfilePage } = await import("./page");
+const { default: ProfilePage } = await import("./[[...section]]/page");
 
 const SAVED: User = {
   id: "u-1", org_id: "o-1", username: "sara", display_name: "سارا",
@@ -81,7 +88,14 @@ const saveButton = () => screen.getByRole("button", { name: "ذخیره" });
 
 async function open(user: User) {
   me.mockResolvedValue(user);
-  render(<ProfilePage />);
+  /* the identity section, which is what a bare /profile means — this
+     file is about the identity form and its patch shape */
+  /* AWAITED act, because the page reads its section from `use(params)` and a
+     promise SUSPENDS: a bare render() mounts the fallback and the tree the
+     assertions want never arrives inside the query timeout. */
+  await act(async () => {
+    render(<ProfilePage params={Promise.resolve({})} />);
+  });
   await screen.findByDisplayValue(user.display_name);
 }
 
