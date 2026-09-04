@@ -367,7 +367,14 @@ export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
       + "for a meeting somebody is about to hold.",
     parameters: obj({
       title: str("What the meeting is called."),
-      when: str("ISO 8601 start time. Omit for a meeting starting now."),
+      when: str(
+        "When it starts, as a full ISO 8601 instant carrying the offset of the"
+        + " person's time zone, e.g. 2026-09-07T09:00:00+03:30. Your instructions"
+        + " carry the current instant and that offset: resolve «فردا», «دوشنبه»,"
+        + " \"next Monday at nine\" and Jalali dates against them. A bare date with"
+        + " no time is not enough — a meeting has an hour. Omit ONLY when the"
+        + " person means starting right now.",
+      ),
       mode: strEnum(["online", "in_person"], "How it is held. Defaults to online."),
       /* names or addresses, not ids: an invitee may be somebody with no row
          here at all, which is why the meeting stores text (db/0145) */
@@ -385,7 +392,11 @@ export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
     parameters: obj({
       title: str("The task, in a few words."),
       description: str("Anything the person doing it needs. Optional."),
-      due: str("ISO 8601 deadline. Optional."),
+      due: str(
+        "The deadline, as a full ISO 8601 instant with the person's offset"
+        + " (e.g. 2026-09-07T17:00:00+03:30), resolved against the current instant"
+        + " in your instructions. Optional.",
+      ),
       /*
        * ONE STEP, not two. "Make a task for Sina" is a single sentence and it
        * should be a single act — creating and then telling the person to open

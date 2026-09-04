@@ -311,12 +311,12 @@ export function AssigneePicker({ selected, onToggle, people }: {
           title={t("removeAssignee", { name: personName(person, locale) })}
           className="btn btn-sm bg-accent-soft font-medium text-accent"
         >
-          {/* 2026-09-03: the platform's avatar at its chip size, not a fifth
-              hand-drawn one — 20px is what an assignee pill holds, which is why
-              `xs` exists. It loses the filled accent disc on purpose: the
-              component's soft ground and hairline ring are the roster's, and a
-              filled accent circle reads as SELECTED rather than as a person. */}
-          <Avatar name={personName(person, locale)} size="xs" />
+          {/* NAME ONLY (user directive, 2026-09-04: "do not include the
+              avatar, the name is enough in the tasks assignments"). A mark
+              that carries the same person's first letter directly beside
+              their written name tells the reader nothing the name has not
+              already told them, and in a chip it costs a fifth of the width
+              that the name itself needs. */}
           {personName(person, locale)}
           <IconClose width={12} height={12} />
         </button>

@@ -18,7 +18,6 @@ import { TaskCalendar, TaskListView } from "./tasks/TaskViews";
 import {
   IconCheck, IconClock, IconDots, IconFolder, IconPlus, IconTrash, IconUser, IconVideo, IconClose, IconPencil } from "@/components/icons";
 import { useSeededName } from "@/lib/seededNames";
-import { Avatar } from "@/components/Avatar";
 import { digits, personName } from "@/lib/format";
 
 /**
@@ -762,11 +761,9 @@ function Card({ task, labels, people, onOpen, onToggleDone }: {
               [...assigned.map((p) => personName(p, locale)),
                 ...(unnamed > 0 ? [t("assigneeUnnamed")] : [])].join("، ")
             }>
+              {/* name only — see the assignee chip (user directive) */}
               {assigned[0] !== undefined ? (
-                <>
-                  <Avatar name={personName(assigned[0], locale)} size="xs" />
-                  <span className="truncate">{personName(assigned[0], locale)}</span>
-                </>
+                <span className="truncate">{personName(assigned[0], locale)}</span>
               ) : (
                 <span className="truncate">{t("assigneeUnnamed")}</span>
               )}

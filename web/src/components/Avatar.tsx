@@ -1,3 +1,8 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { glyphOffsetEm } from "@/lib/glyphCentre";
+
 /**
  * THE PERSON MARK — the round well that stands beside a name.
  *
@@ -77,7 +82,60 @@ export function Avatar({
       aria-hidden
       className={`${shell} bg-accent-soft font-semibold text-fg ${text}`}
     >
-      {initial}
+      <Centred glyph={initial} />
+    </span>
+  );
+}
+
+/**
+ * The initial, on the circle's centre line rather than its line box's.
+ *
+ * The offset is measured from the glyph's own ink (lib/glyphCentre.ts explains
+ * why it cannot be a per-script constant) and applied in em, so one
+ * measurement serves every size the mark is drawn at.
+ *
+ * It starts at zero — the server has no canvas, and neither does jsdom — so
+ * the first paint is exactly what shipped before and the correction arrives
+ * with the effect. That order matters more than it looks: measuring against a
+ * font that has not loaded would cache the FALLBACK's metrics and be wrong for
+ * the rest of the session, so `glyphOffsetEm` answers 0 until the real face is
+ * there and this asks again when it arrives.
+ */
+function Centred({ glyph }: { glyph: string }) {
+  const ref = useRef<HTMLSpanElement | null>(null);
+  const [offset, setOffset] = useState(0);
+
+  useEffect(() => {
+    const node = ref.current;
+    if (node === null) return;
+    const read = () => {
+      const style = getComputedStyle(node);
+      setOffset(glyphOffsetEm(glyph, style.fontFamily, style.fontWeight));
+    };
+    read();
+    /*
+     * A second chance once the face has loaded. `fonts.ready` settles once per
+     * document and is already settled on a warm navigation, so this is not a
+     * poll — and the whole thing is guarded because a FONT MANAGER IS NOT
+     * GUARANTEED TO EXIST: jsdom has none, and reaching past that took down
+     * every subtree containing an avatar, which is nine failing tests about
+     * profile forms and meeting stages and nothing about a letter in a circle.
+     * A missing font manager means "nothing more to learn", not "throw".
+     */
+    let live = true;
+    const fonts = (document as Document & { fonts?: FontFaceSet }).fonts;
+    if (fonts?.ready === undefined) return;
+    void fonts.ready.then(() => { if (live) read(); }).catch(() => undefined);
+    return () => { live = false; };
+  }, [glyph]);
+
+  return (
+    <span
+      ref={ref}
+      className="block"
+      style={offset === 0 ? undefined : { transform: `translateY(${offset.toFixed(4)}em)` }}
+    >
+      {glyph}
     </span>
   );
 }

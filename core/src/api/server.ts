@@ -13,10 +13,12 @@ import { randomBytes, randomUUID } from "node:crypto";
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 
 import { assistantAllowed, createApiKeysRepo, type ApiKeysRepo } from "./apikeys.ts";
-import { createAssistant, languageInstruction, personalAssistantInstructions } from "./assistant.ts";
+import {
+  createAssistant, languageInstruction, personalAssistantInstructions, timeInstructions,
+} from "./assistant.ts";
 import { CLIENT_TOOL_NAMES, deliverClientToolResult } from "../agent/client-tools.ts";
 import { actorAutonomy, hasAutonomyColumn, hasSignalTables } from "../db/capabilities.ts";
-import { iso } from "./vocabulary.ts";
+import { iso, TIMEZONE_AUTO } from "./vocabulary.ts";
 import { assertUuid } from "../db/identity.ts";
 import { createAuditRepo, type AuditRepo } from "./audit.ts";
 import {
@@ -3888,6 +3890,7 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       systemInstructions: [
         languageInstruction(body.locale),
         personalAssistantInstructions(await members.me(identity)),
+        timeInstructions(new Date(), await callerZone(identity, undefined)),
       ].filter((part) => part !== "").join("\n"),
       systemPromptOverride: replay?.systemPrompt,
       // A recorded [] remains an explicit no-tool replay ceiling. This is
@@ -3924,6 +3927,26 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
     return reply;
   });
 
+  /**
+   * The zone an instant should be spoken in for this caller.
+   *
+   * Their stored preference wins when they have actually chosen one - that is
+   * what choosing it means - and "auto" defers to the zone the client
+   * resolved and sent, which is the precedence the screens already use to
+   * render a date. With neither, UTC: `timeInstructions` then says so out
+   * loud, rather than letting a guessed zone read as a known one.
+   */
+  async function callerZone(identity: Identity, sent: unknown): Promise<string> {
+    let stored: string = TIMEZONE_AUTO;
+    try {
+      stored = (await members.me(identity)).timezone;
+    } catch {
+      /* a profile read must never be the thing that stops somebody asking */
+    }
+    if (stored !== TIMEZONE_AUTO && stored.trim() !== "") return stored;
+    return typeof sent === "string" && sent.trim() !== "" ? sent.trim() : "UTC";
+  }
+
   app.post("/v1/assistant/ask", async (request, reply) => {
     const identity = await auth.requireActive(request);
     await capabilities.require(identity, "assistant.ask");
@@ -3933,6 +3956,9 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       agent?: unknown; workflow?: unknown; connector_provider?: unknown; source_id?: unknown;
       locale?: unknown; client_tools?: unknown; context?: unknown;
       live_text?: unknown;
+      /* the browser's RESOLVED zone (M24: an explicit preference wins, "auto"
+         follows the client) - what makes "nine in the morning" an instant */
+      timezone?: unknown;
     };
     if (typeof body.question !== "string" || body.question.trim() === "") {
       throw new ValidationError("question is required");
@@ -4299,6 +4325,7 @@ ${liveText}`
         conciseInstruction,
         // last, so the interface-language fact wins on language (see helper)
         languageInstruction(body.locale),
+        timeInstructions(new Date(), await callerZone(identity, body.timezone)),
       ].filter(Boolean).join("\n\n"),
       agentModel: selectedAgent?.model,
       /*

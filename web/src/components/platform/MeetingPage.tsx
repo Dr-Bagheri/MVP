@@ -10,6 +10,8 @@ import type { Call, CallNote, Me, MeetingAgendaItem, MeetingRecord, MeetingAttac
 import { useCrumbTitle } from "@/components/platform/CrumbTitle";
 import { ConfirmDialog } from "@/components/rowActions";
 import { Overlay } from "@/components/platform/Overlay";
+import { DateField, TimeField } from "@/components/DateTimeFields";
+import { Select } from "@/components/Select";
 import { AgendaEditor, MODE_ICON } from "./Meetings";
 import { InviteDialog } from "./meeting/InviteDialog";
 import { MeetingStage } from "./meeting/Stage";
@@ -950,15 +952,36 @@ function EditMeetingDialog({ meeting, onPatch, onClose }: {
   const [time, setTime] = useState(
     `${String(at.getHours()).padStart(2, "0")}:${String(at.getMinutes()).padStart(2, "0")}`,
   );
-  const [topic, setTopic] = useState(meeting.topic ?? "");
+  /*
+   * THE TOPIC IS AN ID, and this dialog used to send the NAME.
+   *
+   * User report, 2026-09-04: editing a meeting answered «این تغییر ذخیره
+   * نشد.» — every time, on every field. `topic` is a READ field: the wire
+   * derives it by joining `meeting_topic` for the row's `topic_id`, and the
+   * patch route knows only `topic_id`, so a body carrying `topic` hit the
+   * `default:` branch and the whole PATCH was refused as `unknown_fields`.
+   * One derived field in the body, and the title, the date and the time went
+   * down with it.
+   *
+   * A free-text box could never have worked either: a topic is an org ENTITY
+   * (a row people filter and count by, the folders on the meetings list), and
+   * a name typed into a box cannot become one without quietly minting
+   * duplicates. So it is the list, and what leaves here is the id.
+   */
+  const [topicId, setTopicId] = useState(meeting.topic_id ?? "");
+  const [topics, setTopics] = useState<{ id: string; name: string }[]>([]);
   const [description, setDescription] = useState(meeting.description);
+
+  useEffect(() => {
+    void api.meetingTopics().then(setTopics).catch(() => setTopics([]));
+  }, []);
 
   const save = () => {
     onPatch({
       title: title.trim(),
       /* the same zone the fields were written in — see nowFields */
       scheduled_at: instantFromFields(date, time).toISOString(),
-      topic: topic.trim() === "" ? null : topic.trim(),
+      topic_id: topicId === "" ? null : topicId,
       description,
     });
     onClose();
@@ -982,19 +1005,41 @@ function EditMeetingDialog({ meeting, onPatch, onClose }: {
           <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} />
         </label>
         <div className="grid grid-cols-2 gap-2">
-          <label className="block">
+          {/*
+            THE PLATFORM'S FIELDS, not the browser's (user report, 2026-09-04:
+            "the design of the hours dropdown is not the default of the
+            platform theme").
+
+            `<input type="date">` and `<input type="time">` hand the whole
+            control to Chrome: its own blue list, its own AM/PM column, its own
+            Gregorian month grid, in the browser's locale and reading
+            direction, ignoring every token this product has. It is also the
+            one place a Persian-first product would show a Latin calendar to
+            somebody who has chosen the Jalali one. DateField and TimeField are
+            what the new-meeting dialog next door already uses — the same two
+            controls, the same theme, and the same 24-hour minutes.
+          */}
+          <div>
             <span className="mb-1 block text-xs font-medium text-fg-muted">{t("fieldDate")}</span>
-            <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-          </label>
-          <label className="block">
+            <DateField value={date} onChange={setDate} />
+          </div>
+          <div>
             <span className="mb-1 block text-xs font-medium text-fg-muted">{t("fieldTime")}</span>
-            <input className="input" type="time" value={time} onChange={(e) => setTime(e.target.value)} />
-          </label>
+            <TimeField value={time} onChange={setTime} />
+          </div>
         </div>
-        <label className="block">
+        <div>
           <span className="mb-1 block text-xs font-medium text-fg-muted">{t("fieldTopic")}</span>
-          <input className="input" value={topic} onChange={(e) => setTopic(e.target.value)} />
-        </label>
+          <Select
+            value={topicId}
+            onChange={setTopicId}
+            ariaLabel={t("fieldTopic")}
+            options={[
+              { value: "", label: t("noTopic") },
+              ...topics.map((row) => ({ value: row.id, label: row.name })),
+            ]}
+          />
+        </div>
         <label className="block">
           <span className="mb-1 block text-xs font-medium text-fg-muted">{t("fieldDescription")}</span>
           <textarea className="input min-h-[84px] py-2" value={description} rows={3}

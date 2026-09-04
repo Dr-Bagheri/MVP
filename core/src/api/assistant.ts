@@ -156,6 +156,85 @@ export function personalAssistantInstructions(prefs: {
   return parts.join("\n");
 }
 
+/**
+ * WHAT TIME IT IS, AND WHICH CALENDAR THE PERSON IS COUNTING IN.
+ *
+ * User directive, 2026-09-04: "give access to the agents and Echo to
+ * understand the calendar and the time, so when I ask to create a meeting for
+ * this date and this hour they can select the right date and time."
+ *
+ * They had none. Nothing in the assembled instructions said what day it was,
+ * so "Monday at nine" was answered out of a training corpus: the reported case
+ * put the date on the day the person meant and the time at half past twelve,
+ * which is the shape of a model that inferred a date from the surrounding
+ * conversation and had nothing at all to say about the hour. There was no bug
+ * to find — the fact was never sent.
+ *
+ * Three things go out, and each is load-bearing:
+ *
+ *   · THE INSTANT WITH ITS OFFSET. A meeting is stored as an instant, so the
+ *     only thing that makes "nine in the morning" a fact is the zone it is
+ *     nine in. Handing the model a bare UTC clock for a person in Tehran puts
+ *     every meeting three and a half hours out — and the wrong-by-a-fixed-
+ *     amount failure is the one nobody reads as a bug, because the date is
+ *     right and the meeting is simply at the wrong time.
+ *   · BOTH CALENDARS. The person says «۱۶ شهریور» and the wire speaks ISO;
+ *     a model given only one of those has to convert unaided, and it is the
+ *     Persian half it will get wrong. Giving it today in both means the
+ *     mapping is read, not computed.
+ *   · THE DAY OF THE WEEK, because "Monday" cannot be resolved without it.
+ *
+ * `zone` is the person's own: their explicit preference when they have set
+ * one, the browser's resolved zone otherwise (M24's "auto follows the
+ * language" rule, applied to time). When there is neither — an API caller
+ * with no browser — this says UTC and SAYS SO, rather than guessing a zone
+ * on someone's behalf.
+ */
+export function timeInstructions(now: Date, zone: string): string {
+  /* Intl at runtime, never a list of our own: the zone was validated by the
+     same mechanism when it was stored (members.ts), and a second spelling of
+     "which zones exist" is a second thing to keep current. */
+  let timeZone = zone;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone }).format(now);
+  } catch {
+    timeZone = "UTC";
+  }
+
+  const at = (locale: string, options: Intl.DateTimeFormatOptions): string =>
+    new Intl.DateTimeFormat(locale, { timeZone, ...options }).format(now);
+
+  /* the wall clock in that zone, assembled from parts — `toISOString` is UTC
+     by definition and would print the very number this exists to correct */
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone, hour12: false,
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+  }).formatToParts(now);
+  const get = (type: string): string => parts.find((p) => p.type === type)?.value ?? "00";
+  /* "GMT+03:30" → "+03:30"; UTC formats as plain "GMT", which is "+00:00" */
+  const named = new Intl.DateTimeFormat("en-US", { timeZone, timeZoneName: "longOffset" })
+    .formatToParts(now).find((p) => p.type === "timeZoneName")?.value ?? "GMT";
+  const offset = named === "GMT" ? "+00:00" : named.replace("GMT", "");
+  const iso = `${get("year")}-${get("month")}-${get("day")}`
+    + `T${get("hour")}:${get("minute")}:${get("second")}${offset}`;
+
+  const gregorian = at("en-US", { dateStyle: "full", timeStyle: "short" });
+  const jalali = at("fa-IR-u-ca-persian", { dateStyle: "full", timeStyle: "short" });
+
+  return [
+    `Right now it is ${iso} — ${gregorian} in the Gregorian calendar,`
+    + ` ${jalali} in the Jalali (Persian) calendar.`,
+    `The person's time zone is ${timeZone}${zone === timeZone ? "" : " (their own zone was not usable, so this is a fallback)"}.`,
+    "Resolve every relative or spoken time — «فردا», «دوشنبه», «ساعت ۹ صبح»,"
+    + " \"next week\", \"this afternoon\" — against that instant, and pass tools a"
+    + " full ISO 8601 value carrying that same offset"
+    + ` (a meeting at nine in the morning is "…T09:00:00${offset}", never a bare date).`,
+    "A Jalali date the person gives you is a date in that calendar: convert it,"
+    + " do not read its numbers as Gregorian.",
+  ].join(" ");
+}
+
 export function languageInstruction(locale: unknown): string {
   const mirror =
     "Always reply in the language of the user's most recent message: an English"

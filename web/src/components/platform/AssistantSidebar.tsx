@@ -1153,23 +1153,19 @@ export function AssistantSidebar() {
                         </span>
                       ) : null}
                       {m.content}
-                      {m.tool_calls.length > 0 ? (
-                        <span className="mt-1 flex flex-wrap gap-1">
-                          {/* DERIVED, not stored (2026-09-04): the panel used
-                              to keep its own `chips` array beside the page's
-                              `tool_calls`, two shapes for one turn. A chip is
-                              a way of drawing a tool call, so it is made where
-                              it is drawn. */}
-                          {m.tool_calls.map((call) => (
-                            <span
-                              key={call.id}
-                              className="rounded-full bg-surface-2 px-2 py-0.5 text-group-label text-fg-muted"
-                            >
-                              {call.label}
-                            </span>
-                          ))}
-                        </span>
-                      ) : null}
+                      {/*
+                        NO TOOL CHIPS (user directive, 2026-09-04: "remove the
+                        tools text name in the chat box, it does not need to
+                        show what tools they are using, all the page now is
+                        full of this tools names").
+
+                        A turn that searched, listed and wrote wore four chips
+                        under two lines of answer, so the record of HOW an
+                        answer was reached crowded out the answer. It is not
+                        lost: `tool_calls` still travel on the wire and still
+                        render on the agent-run surface, where a trace is the
+                        subject rather than the margin.
+                      */}
                       {m.failed ? (
                         <span className="mt-1 block text-group-label text-warning">
                           {t("failed")}

@@ -268,15 +268,15 @@ const MessageRow = memo(function MessageRow({
                 ) : null}
               </div>
 
-              {m.tool_calls.length > 0 ? (
-                <div className="mt-1.5 flex flex-wrap gap-1.5">
-                  {m.tool_calls.map((c) => (
-                    <span key={c.id} className="chip bg-surface-2 text-[11px] text-fg-muted">
-                      {c.label || c.name}
-                    </span>
-                  ))}
-                </div>
-              ) : null}
+              {/*
+                NO TOOL CHIPS (user directive, 2026-09-04: "remove the tools
+                text name in the chat box … all the page now is full of this
+                tools names"). A turn that searched, listed and wrote wore four
+                chips under two lines of answer, so the record of HOW an answer
+                was reached crowded out the answer. `tool_calls` still travel on
+                the wire and still render on the agent-run surface, where a
+                trace is the subject rather than the margin.
+              */}
 
               {/*
                 NOT a message. No bubble, no avatar, no role — an annotation on

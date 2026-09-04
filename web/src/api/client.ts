@@ -343,6 +343,15 @@ export type IdentityState =
   | { state: "pending"; detail?: string }
   | { state: "suspended"; detail?: string };
 
+/** the browser's own IANA zone, or "" where the runtime will not say */
+function resolvedZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone ?? "";
+  } catch {
+    return "";
+  }
+}
+
 export const api = {
   // ---- session ---------------------------------------------------------------
   /**
@@ -2499,6 +2508,14 @@ export const api = {
           ...(opts?.clientTools?.length ? { client_tools: opts.clientTools } : {}),
           ...(opts?.surface ? { context: opts.surface } : {}),
           ...(opts?.liveText ? { live_text: opts.liveText } : {}),
+          /*
+           * THE ZONE THIS PERSON IS IN, so the assistant can turn "nine in the
+           * morning" into an instant. Resolved rather than assumed, and sent
+           * on every ask because it is a fact about the client and can change
+           * between two of them (a laptop that travelled). The server prefers
+           * an explicit stored preference over it — this is what "auto" means.
+           */
+          ...(resolvedZone() ? { timezone: resolvedZone() } : {}),
         },
         opts?.signal,
       );

@@ -146,7 +146,20 @@ describe("ConversationThread", () => {
     expect(screen.queryByText(/ناتمام ماند؛ ادامه‌اش نوشته نشد/)).toBeNull();
   });
 
-  it("renders tool calls as chips, not as a trace", () => {
+  it("shows the answer, and NOT the tools it took to get there", () => {
+    /*
+     * User directive, 2026-09-04: "remove the tools text name in the chat box,
+     * it does not need to show what tools they are using, all the page now is
+     * full of this tools names." A turn that searched, listed and wrote wore
+     * four chips under two lines of answer.
+     *
+     * Asserted as an ABSENCE, and both spellings of it: the label a person
+     * would read AND the identifier, because a version that rendered the raw
+     * name instead of the label would look like a regression to whoever sees
+     * it and like a pass to a test that only banned the label. The data is
+     * untouched — `tool_calls` still arrive, and the agent-run surface still
+     * draws them, where a trace is the subject rather than the margin.
+     */
     render(
       <ConversationThread
         messages={[
@@ -156,8 +169,8 @@ describe("ConversationThread", () => {
         ]}
       />,
     );
-    expect(screen.getByText("جست‌وجو")).toBeTruthy();
-    // the full trace belongs to the audit surface — no state, no timing here
+    expect(screen.getByText("پاسخ"), "the answer itself must still render").toBeTruthy();
+    expect(screen.queryByText("جست‌وجو")).toBeNull();
     expect(screen.queryByText(/search_transcripts/)).toBeNull();
   });
 });
