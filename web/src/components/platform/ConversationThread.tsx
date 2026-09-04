@@ -179,27 +179,31 @@ const MessageRow = memo(function MessageRow({
           <div
             className={`message-arrives flex ${isUser ? mine : locale === "fa" ? "justify-end" : "justify-start"}`}
           >
-            <div className={isUser ? "max-w-[85%]" : "w-full"}>
+            <div className={isUser ? "max-w-[85%]" : "flex w-full items-start gap-2.5"}>
               {/*
-                WHOSE TURN THIS IS (db/0169; every answer, 2026-09-04).
+                AVATAR, NAME, ANSWER — ON ONE LINE (user directive, 2026-09-04:
+                "first it must show the avatar then its name and then the
+                response in same lane, now the name and avatar is on top, make
+                it same lane").
                 
-                This used to draw a mark only for a COLLEAGUE, leaving Echo's
-                turns bare on the reasoning that the assistant is the surface
-                rather than a participant in it. With Roya and Ava answering in
-                the same thread that inverted: the unmarked turns became the
-                ones a reader had to work out, and "no face" is a worse way of
-                saying "Echo" than Echo's own face. The size is the assistant
-                page's, one step up from the sidebar's — the user asked for it
-                bigger in the chat box, and this is the chat box.
+                The mark and the name were a header ROW above the answer, which
+                spends a whole line on two short things and pushes every reply
+                down by one. They are the start of the answer's own line now:
+                the avatar outside the text column, the name as the first words
+                of it, and the reply continuing from there.
+                
+                `items-start`, not `items-center` — a multi-paragraph answer
+                would otherwise centre its portrait against the whole block and
+                float it half a screen below the sentence it belongs to.
+                
+                Whose turn it is (db/0169): this used to mark only a COLLEAGUE,
+                leaving Echo's turns bare on the reasoning that the assistant is
+                the surface rather than a participant. With Roya and Ava
+                answering in the same thread that inverted — the unmarked turns
+                became the ones a reader had to work out.
               */}
-              {!isUser ? (
-                <div className="mb-1.5 flex items-center gap-2">
-                  <AgentAvatar handle={m.author ?? ECHO} size="lg" />
-                  <span className="text-sm font-semibold text-fg">
-                    <AgentName handle={m.author ?? ECHO} />
-                  </span>
-                </div>
-              ) : null}
+              {!isUser ? <AgentAvatar handle={m.author ?? ECHO} size="lg" /> : null}
+              <div className={isUser ? undefined : "min-w-0 flex-1"}>
               {/*
                 THE ANSWER HAS NO BOX (user directive, 2026-08-27: "lose the
                 text box in the ai assistant, just the text").
@@ -222,6 +226,13 @@ const MessageRow = memo(function MessageRow({
                     : "text-sm leading-7 text-fg"
                 }
               >
+                {/* the name leads the answer's first line, in its own weight
+                    — not a heading above it */}
+                {isUser ? null : (
+                  <span className="me-1.5 font-semibold text-fg">
+                    <AgentName handle={m.author ?? ECHO} />
+                  </span>
+                )}
                 {isUser ? m.content : <AnswerContent text={m.content} />}
                 {/*
                   Two different waits, said differently. Nothing written yet =
@@ -309,6 +320,7 @@ const MessageRow = memo(function MessageRow({
                   onRegenerate={onRegenerate}
                 />
               ) : null}
+              </div>
             </div>
           </div>
   );

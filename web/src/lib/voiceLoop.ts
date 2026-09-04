@@ -223,6 +223,9 @@ export function createVoiceBehavior(
   return {
     setSpeaking(next: boolean) { speaking = next; },
     endSession,
+    /* the same `renew` the wake word calls — exposed so a held key can be the
+       wake, rather than a second, hidden path into the session state */
+    openSession: renew,
     get inSession() { return inSession; },
 
     consume(text: string, now = Date.now()) {
@@ -313,6 +316,16 @@ export interface VoiceLoopHandle {
    */
   setMuted: (muted: boolean) => void;
   endSession: () => void;
+  /**
+   * OPEN A SESSION WITHOUT THE WAKE WORD (push-to-talk, 2026-09-04).
+   *
+   * Idle means only the NAME acts — which is the right default for a mic that
+   * is always on, and exactly wrong for a key somebody is HOLDING DOWN. The
+   * hold IS the wake: a person pressing a key and speaking has already said
+   * who they are talking to, and making them say "Echo" as well is asking for
+   * the password twice.
+   */
+  openSession: () => void;
 }
 
 export function voiceLoopSupported(): boolean {
@@ -512,5 +525,6 @@ export async function startVoiceLoop(handlers: VoiceHandlers): Promise<VoiceLoop
       }
     },
     endSession: () => behavior.endSession(),
+    openSession: () => behavior.openSession(),
   };
 }

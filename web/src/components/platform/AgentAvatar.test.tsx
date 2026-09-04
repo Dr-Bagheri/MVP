@@ -63,22 +63,21 @@ beforeEach(() => {
 });
 
 describe("a colleague's mark", () => {
-  it("draws the agent's own letter and name once the roster lands", async () => {
+  it("draws the agent's own PORTRAIT and name once the roster lands", async () => {
     render(<><AgentAvatar handle="ava" /><AgentName handle="ava" /></>);
     await waitFor(() => expect(screen.getByText("آوا")).toBeTruthy());
     /*
-     * The LETTER comes from the handle, which is why the directive could ask
-     * for R and A at all: «رؤیا» does not start with an R. Asserting it
-     * against `handle[0]` would be the code's own belief restated, so the
-     * expected letters are written out.
+     * The three the product ships have artwork (user directive, 2026-09-04).
+     * The file is asserted by NAME because the mapping is the thing that can
+     * be wrong — the directive assigns a specific picture to each agent, and
+     * swapping two of them is a defect no "an image rendered" check can see.
      */
     const face = document.querySelector('[data-agent-avatar="ava"]');
-    expect(face?.textContent).toBe("A");
-    /* the tone is the agent's own, and the two colleagues DIFFER — an
-       identical fallback for both would satisfy an assertion that only asked
-       whether a class was present */
-    expect(face?.className).toContain(agentAvatarTone("blue"));
-    expect(agentAvatarTone("blue")).not.toBe(agentAvatarTone("violet"));
+    expect(face?.getAttribute("src")).toBe("/agents/ava.png");
+    /* and they DIFFER: one file for all three would satisfy the line above */
+    render(<AgentAvatar handle="roya" />);
+    expect(document.querySelector('[data-agent-avatar="roya"]')?.getAttribute("src"))
+      .toBe("/agents/roya.png");
   });
 
   it("Echo wears the platform's own accent, with no row to read it from", async () => {
@@ -91,11 +90,9 @@ describe("a colleague's mark", () => {
      */
     render(<><AgentAvatar handle={ECHO} /><AgentName handle={ECHO} /></>);
     const face = document.querySelector(`[data-agent-avatar="${ECHO}"]`);
-    expect(face?.textContent).toBe("E");
-    expect(face?.className).toContain(agentAvatarTone("echo"));
-    /* and it is NOT the unknown-handle face, which is the thing it would
-       silently become if `echo` were resolved through the roster */
-    expect(face?.className).not.toContain(agentAvatarTone("slate"));
+    expect(face?.getAttribute("src")).toBe("/agents/echo.png");
+    /* the NAME still resolves without a roster row, which is the half that
+       would break if `echo` were ever looked up like a colleague */
     await waitFor(() => expect(screen.getByText(fa.platform.echo)).toBeTruthy());
   });
 
@@ -105,14 +102,15 @@ describe("a colleague's mark", () => {
      * rendered nothing until the fetch resolved would let the message appear
      * first and the face arrive after, shoving the text.
      *
-     * The letter is the part that makes this free: it comes from the handle,
-     * so the face is CORRECT before the network, not merely present. Only the
-     * tone arrives late.
+     * The portrait is the part that makes this free: it is keyed by HANDLE,
+     * which the caller already has, so the face is correct before the network
+     * rather than merely present. Only the NAME arrives late.
      */
     let settle: (rows: unknown) => void = () => {};
     agents.mockReturnValue(new Promise((resolve) => { settle = resolve; }));
     render(<><AgentAvatar handle="roya" /><AgentName handle="roya" /></>);
-    expect(document.querySelector('[data-agent-avatar="roya"]')?.textContent).toBe("R");
+    expect(document.querySelector('[data-agent-avatar="roya"]')?.getAttribute("src"))
+      .toBe("/agents/roya.png");
     expect(screen.getByText("@roya")).toBeTruthy();
 
     settle(ROSTER);
@@ -152,7 +150,15 @@ describe("a colleague's mark", () => {
        to Echo, which is the one thing the author column exists to prevent. */
     render(<><AgentAvatar handle="ghost" /><AgentName handle="ghost" /></>);
     await waitFor(() => expect(screen.getByText("@ghost")).toBeTruthy());
+    /*
+     * THE FALLBACK, and it is not only for a ghost: this is how an agent an
+     * organisation MAKES will look, since only the three shipped ones have
+     * artwork. An interpolated `/agents/${handle}.png` would ask for a file
+     * nobody drew and render a broken image — which reads as a bug in the
+     * avatar rather than as an agent without a portrait.
+     */
     const face = document.querySelector('[data-agent-avatar="ghost"]');
+    expect(face?.tagName).toBe("SPAN");
     expect(face?.textContent).toBe("G");
     expect(face?.className).toContain(agentAvatarTone("slate"));
   });

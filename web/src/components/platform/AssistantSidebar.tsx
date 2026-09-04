@@ -486,15 +486,21 @@ export function AssistantSidebar() {
       event.preventDefault();
       holding = true;
       reveal();
-      beginLoopRef.current();
+      /* `true` = pushed: listen even with the ears switched off, and treat
+         what follows as a command rather than waiting for the wake word */
+      beginLoopRef.current(true);
     }
     function up(event: KeyboardEvent) {
       if (event.code !== hotkey || !holding) return;
       holding = false;
-      /* back to the standing preference, not to "off": someone whose ears are
-         normally ON has just been pushed into silence by releasing a key they
-         held for two seconds, which is the opposite of what the key promised */
-      if (!earsRef.current) suspendLoop();
+      /*
+       * Back to the STANDING preference, never to "off": someone whose ears
+       * are normally on must not be pushed into silence by releasing a key.
+       * With them off the loop stops entirely; with them on it stays up and
+       * only leaves the session, so the wake word governs again.
+       */
+      if (earsRef.current) loopRef.current?.endSession();
+      else suspendLoop();
     }
     window.addEventListener("keydown", down);
     window.addEventListener("keyup", up);
@@ -755,9 +761,32 @@ export function AssistantSidebar() {
    * chosen" is about ADDING press-to-talk to the sidebar, which is not built
    * here; what already listens keeps listening.
    */
-  const beginLoop = useCallback(() => {
-    if (!earsRef.current) return; // the ears toggle is OFF — stay deaf
-    if (loopRef.current || recordingLive()) return;
+  /**
+   * `push` = the person is HOLDING the hotkey (2026-09-04).
+   *
+   * It changes two things, and both are the reason push-to-talk did nothing
+   * before it existed:
+   *
+   *   · it ignores the ears preference. Push-to-talk is FOR the person who
+   *     keeps the mic off — that is the whole point of a key you hold — and
+   *     the first line of this function refused them. With ears ON the loop
+   *     was already running and the key was equally inert, so the feature was
+   *     a no-op in both states: the one shape a manual check never catches,
+   *     because whichever state you test, nothing was supposed to change.
+   *
+   *   · it opens the SESSION, so what you say while holding the key is a
+   *     command. Idle means only the wake word acts, and asking somebody who
+   *     is holding a talk key to also say "Echo" is asking twice.
+   */
+  const beginLoop = useCallback((push = false) => {
+    if (!push && !earsRef.current) return; // the ears toggle is OFF — stay deaf
+    if (recordingLive()) return;
+    if (loopRef.current) {
+      /* already listening — the hold still opens the session, which is what
+         makes the key work for somebody who leaves the ears on */
+      if (push) loopRef.current.openSession();
+      return;
+    }
     if (!voiceLoopSupported()) {
       notify(t("voiceUnsupported"), "warn");
       return;
@@ -779,6 +808,10 @@ export function AssistantSidebar() {
       if (loopRef.current) { handle.stop(); return; } // a race — keep one
       loopRef.current = handle;
       handle.setSpeaking(speakingRef.current);
+      /* the mic takes a moment to open; the session is opened HERE rather
+         than at the key press, or the first thing said while holding would
+         land in idle and be thrown away for not being a wake word */
+      if (push) handle.openSession();
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [t]);
@@ -1123,28 +1156,33 @@ export function AssistantSidebar() {
                     key={m.id}
                     className={m.role === "user"
                       ? `flex ${locale === "fa" ? "justify-start" : "justify-end"}`
-                      : ""}
+                      : "flex items-start gap-2"}
                   >
-                    {/* whose turn — Echo's included since 2026-09-04, and one
-                        size down from the page: this column is 30% of the
-                        screen and a face here competes with the words */}
-                    {m.role === "assistant" ? (
-                      <div className="mb-1 flex items-center gap-1.5">
-                        <AgentAvatar handle={m.author ?? ECHO} size="md" />
-                        <span className="text-group-label font-semibold text-fg-muted">
-                          <AgentName handle={m.author ?? ECHO} />
-                        </span>
-                      </div>
-                    ) : null}
+                    {/* AVATAR, NAME, ANSWER ON ONE LINE — the page's shape,
+                        one size down: this column is 30% of the screen, so a
+                        face here competes with the words it introduces.
+                        `items-start` so a long answer keeps its portrait beside
+                        the sentence it belongs to rather than centred against
+                        the whole block. */}
+                    {m.role === "assistant"
+                      ? <AgentAvatar handle={m.author ?? ECHO} size="md" />
+                      : null}
                     <div
                       className={
                         m.role === "user"
                           ? `max-w-[85%] rounded-2xl bg-accent-soft px-3 py-2 text-detail leading-6 text-fg ${
                               locale === "fa" ? "rounded-bl-sm" : "rounded-br-sm"
                             }`
-                          : "text-detail leading-6 text-fg"
+                          : "min-w-0 flex-1 text-detail leading-6 text-fg"
                       }
                     >
+                      {/* the name leads the answer's own line, not a heading
+                          above it */}
+                      {m.role === "assistant" ? (
+                        <span className="me-1.5 font-semibold text-fg">
+                          <AgentName handle={m.author ?? ECHO} />
+                        </span>
+                      ) : null}
                       {m.content}
                       {m.tool_calls.length > 0 ? (
                         <span className="mt-1 flex flex-wrap gap-1">

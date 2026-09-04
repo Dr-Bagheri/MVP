@@ -1,7 +1,9 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
+import { resetVoicePrefsForTest } from "@/lib/voicePrefs";
+import { resetPushToTalkForTest } from "@/lib/pushToTalk";
 import { resolve } from "node:path";
 
 /* mutable, so one case can put the panel on a surface it must stay off. The
@@ -53,12 +55,20 @@ vi.mock("@/lib/agentSurface", () => ({
   executeClientTool: async () => ({ ok: true }),
 }));
 /* a quiet voice loop: supported and started, so mounting produces no
-   "microphone denied" toast that later assertions would have to step around */
+   "microphone denied" toast that later assertions would have to step around.
+   `started`/`sessions` are what the push-to-talk case reads — the mic opening
+   and the session opening are two different facts and it needs both. */
+const started = vi.fn();
+const sessions = vi.fn();
 vi.mock("@/lib/voiceLoop", () => ({
   voiceLoopSupported: () => true,
-  startVoiceLoop: async () => ({
-    stop() {}, endSession() {}, setSpeaking() {}, setMuted() {},
-  }),
+  startVoiceLoop: async () => {
+    started();
+    return {
+      stop() {}, endSession() {}, setSpeaking() {}, setMuted() {},
+      openSession() { sessions(); },
+    };
+  },
 }));
 vi.mock("@/lib/voice", () => ({
   speak: vi.fn(),
@@ -276,5 +286,84 @@ describe("the assistant sidebar floats, and is shut until asked for", () => {
     claims.length = 0;
     await mount();
     await waitFor(() => expect(claims.length).toBeGreaterThan(0));
+  });
+
+  /**
+   * PUSH TO TALK OPENS THE MIC WITH THE EARS SWITCHED OFF.
+   *
+   * The bug this exists for (user report, 2026-09-04: "the hotkey for mic is
+   * not working"): the key called `beginLoop`, whose first line was `if
+   * (!earsRef.current) return`. Push-to-talk is FOR the person who keeps the
+   * mic off — that is what a key you hold is — so it refused exactly the
+   * people it was built for. With the ears ON the loop was already running and
+   * the key was equally inert, so the feature was a no-op in BOTH states,
+   * which is the one shape a manual check never catches: whichever state you
+   * try, nothing was supposed to visibly change.
+   *
+   * The session half is asserted beside it because "the mic opened" is not the
+   * feature. Idle means only the wake word acts, so a mic opened without a
+   * session throws away everything said into it — a hotkey that listens and
+   * discards, which from the outside is indistinguishable from one that does
+   * nothing at all.
+   */
+  it("opens the mic AND the session on the hotkey, with the ears switched off", async () => {
+    /*
+     * The stores are MODULE state and cache their first read, so writing
+     * storage is not enough: a previous case in this file has already
+     * hydrated `voicePrefs` with the ears on, and the preference under test
+     * would never be seen. Clearing storage without this looks like a reset
+     * and is not one.
+     */
+    /* RESET FIRST, then write. `resetPushToTalkForTest` clears storage as
+       well as memory — that is what makes it a real reset — so calling it
+       after the write erased the very key under test, and the case failed
+       reporting that the mic never opened. */
+    resetVoicePrefsForTest();
+    resetPushToTalkForTest();
+    localStorage.setItem("neurai-voice-ears", "0");
+    localStorage.setItem("neurai-push-to-talk", "F9");
+    started.mockClear();
+    sessions.mockClear();
+
+    await mount();
+    /* the ears are off, so nothing has opened the mic on its own — without
+       this the assertion below could be satisfied by the ordinary loop */
+    expect(started, "the ears are off; nothing should be listening yet").not.toHaveBeenCalled();
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { code: "F9" }));
+    });
+    await waitFor(() => expect(started).toHaveBeenCalled());
+    await waitFor(() => expect(sessions, "the hold is the wake word").toHaveBeenCalled());
+  });
+
+  it("THE CONTROL: another key does nothing", async () => {
+    /*
+     * Without this, the case above passes against a handler that opens the mic
+     * on ANY keystroke — which is a worse bug than the one being fixed, and
+     * one nobody would notice until a microphone opened while they typed.
+     */
+    /*
+     * The stores are MODULE state and cache their first read, so writing
+     * storage is not enough: a previous case in this file has already
+     * hydrated `voicePrefs` with the ears on, and the preference under test
+     * would never be seen. Clearing storage without this looks like a reset
+     * and is not one.
+     */
+    /* RESET FIRST, then write. `resetPushToTalkForTest` clears storage as
+       well as memory — that is what makes it a real reset — so calling it
+       after the write erased the very key under test, and the case failed
+       reporting that the mic never opened. */
+    resetVoicePrefsForTest();
+    resetPushToTalkForTest();
+    localStorage.setItem("neurai-voice-ears", "0");
+    localStorage.setItem("neurai-push-to-talk", "F9");
+    started.mockClear();
+
+    await mount();
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { code: "F8" }));
+    });
+    expect(started).not.toHaveBeenCalled();
   });
 });
