@@ -266,7 +266,21 @@ export function IconRail() {
       {/* ── the destinations ─────────────────────────────────────────── */}
       <div className="scroll-quiet flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto">
         {NAV_PRIMARY.map(item)}
-        <div className="my-2 border-t border-border" aria-hidden />
+        {/*
+          SETTINGS AND HELP AT THE END (user directive, 2026-09-04: "change the
+          location of settings and help to end of the menu").
+          
+          The column is `flex-1`, so all the spare height was BELOW this group
+          and the two low-frequency destinations sat tight under the last
+          primary with a screen of nothing under them. `mt-auto` on the rule
+          gives that space to the gap instead: the destinations stay at the
+          top, these two settle just above the person's card.
+          
+          `mb-2` rather than `my-2`, because `my-2` also sets a top margin and
+          which of the two wins is decided by the stylesheet's order, not by
+          the order they are written here — a coin toss between 8px and auto.
+        */}
+        <div className="mb-2 mt-auto border-t border-border" aria-hidden />
         {NAV_UTILITY.map(item)}
       </div>
 

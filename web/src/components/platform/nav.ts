@@ -151,7 +151,15 @@ export const NAV_PRIMARY: readonly NavItem[] = [
 export const NAV_UTILITY: readonly NavItem[] = [
   { href: "/settings", key: "settings", inBar: false },
   { href: "/help", key: "help", inBar: false },
-  { href: GITHUB_HREF, key: "github", inBar: false },
+  /*
+   * NO GITHUB (user directive, 2026-09-04: "remove GitHub from the menu").
+   *
+   * It was the one entry in the navigation that left the product, and it sat
+   * in a group of two destinations somebody uses inside it. `GITHUB_HREF`
+   * stays exported and is not orphaned: the help page still offers the
+   * repository as a card, which is where a link out belongs — on a page about
+   * the project rather than in the rail somebody navigates with.
+   */
 ];
 
 /** Bottom-bar items = the flagged primaries; "More" occupies the last slot. */

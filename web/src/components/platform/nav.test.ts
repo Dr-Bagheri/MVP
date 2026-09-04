@@ -37,7 +37,41 @@ describe("platform nav", () => {
    * but invented* repo URL can't be slipped in as though it were decided.
    */
   it("ships GitHub as an explicit placeholder until the user answers", () => {
+    /* still exported and still used — the help page offers the repository as
+       a card, which is where a link OUT of the product belongs */
     expect(GITHUB_HREF === "#" || GITHUB_HREF.startsWith("http")).toBe(true);
+  });
+
+  it("keeps GitHub out of the navigation (user directive, 2026-09-04)", () => {
+    /*
+     * Asserted as an ABSENCE, because the version that carries it renders
+     * perfectly: it was one entry in a rail of destinations that pointed
+     * outside the product entirely, and nothing on screen says an item is a
+     * different KIND of thing from its neighbours.
+     */
+    const keys = [...NAV_PRIMARY, ...NAV_UTILITY].map((item) => item.key);
+    expect(keys).not.toContain("github");
+    /* and nothing else in the rail leaves the product either */
+    const external = [...NAV_PRIMARY, ...NAV_UTILITY]
+      .filter((item) => !item.href.startsWith("/"));
+    expect(external.map((item) => item.key)).toEqual([]);
+  });
+
+  it("ends with Settings and Help, in that order", () => {
+    /*
+     * The ORDER is the directive ("change the location of settings and help
+     * to end of the menu"), so it is asserted as a sequence: a set of the
+     * right two keys in the wrong arrangement satisfies "both are there", and
+     * the arrangement is what was asked for.
+     *
+     * WHERE they sit on screen is a layout fact this suite cannot see — the
+     * rule above them is `mt-auto` inside a `flex-1` column, and jsdom
+     * computes no styles. Measured in the browser instead, recorded in the
+     * commit rather than asserted here as a class name.
+     */
+    expect(NAV_UTILITY.map((item) => item.key)).toEqual(["settings", "help"]);
+    const all = [...NAV_PRIMARY, ...NAV_UTILITY].map((item) => item.key);
+    expect(all.slice(-2)).toEqual(["settings", "help"]);
   });
 });
 
