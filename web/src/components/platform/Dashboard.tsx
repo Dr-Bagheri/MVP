@@ -2,9 +2,9 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
-import { IconCheck, IconPencil, IconPin, IconTrash } from "@/components/icons";
+import { IconPin, IconTrash } from "@/components/icons";
 import {
-  defaultLayout, readLayout, writeLayout, specFor,
+  defaultLayout, writeLayout, specFor,
   type DashboardLayout, type TilePlacement, type TileSize, type WidgetKey,
 } from "@/lib/dashboardLayout";
 import { WidgetBoard } from "./dashboard/WidgetBoard";
@@ -92,8 +92,21 @@ function GreetingHead() {
 
 export function Dashboard() {
   const t = useTranslations("dashboard");
+  /*
+   * ONE ARRANGEMENT, THE SAME FOR EVERYBODY (user directive, 2026-09-04:
+   * "remove the edit from the dashboard and fix the positions for all items
+   * in the dashboard for all users for now").
+   *
+   * The board no longer reads the per-device store, so a layout somebody
+   * rearranged last week does not outlive the directive — and the thing they
+   * see is the thing everybody sees, which is the point of fixing it. The
+   * MACHINERY is untouched: `readLayout` / `writeLayout` still exist, tiles
+   * still declare their sizes, and the engine still knows how to drag, pin
+   * and resize. "For now" is a door left open, not a feature deleted.
+   */
   const [layout, setLayout] = useState<DashboardLayout>(() => defaultLayout());
-  /** the store is only read after mount — SSR has no localStorage */
+  /** kept: the board's own skeleton reads it, and the shape below is easier
+      to give back its store than to re-derive */
   const [ready, setReady] = useState(false);
   /**
    * ARRANGING, or reading.
@@ -105,10 +118,16 @@ export function Dashboard() {
    * a board you are reading cannot be rearranged by a stray press, and the
    * things that would rearrange it are not even on screen.
    */
-  const [editing, setEditing] = useState(false);
+  /*
+   * ALWAYS READING. The board has one arrangement now, so there is no mode to
+   * be in — `editing` stays a constant rather than a state, which is what
+   * keeps the pins, the grips and the remove buttons off the screen without
+   * each of them having to learn a new rule.
+   */
+  const editing = false;
 
   useEffect(() => {
-    setLayout(readLayout());
+    /* the stored layout is deliberately NOT read — see the note above */
     setReady(true);
   }, []);
 
@@ -296,52 +315,16 @@ export function Dashboard() {
       <div className="flex shrink-0 flex-wrap items-center justify-end gap-3">
 
         {/*
-          READING, or ARRANGING. Everything that changes the board lives
-          behind Edit: the density, the add menu, the pins, the remove
-          buttons, the drag and the resize grips. Save is the way out, and it
-          says "Save" rather than "Done" because what it does is fix the
-          arrangement in place — which is the sentence the person used.
+          NO EDIT (user directive, 2026-09-04). The board is arranged, and the
+          arrangement is the product's — so there is no mode to enter, nothing
+          to save, and no state in which a card can be dragged out of the
+          shape everybody else is looking at.
+
+          Asserted as an ABSENCE in the tests, because the version that still
+          renders the button looks completely fine: it is only wrong beside
+          the sentence "for all users".
         */}
         <span className="flex items-center gap-2">
-          {editing ? (
-            <>
-              {/*
-                THE DENSITY TOGGLE AND THE ADD MENU ARE GONE (user directive,
-                2026-09-02: "remove add card, remove compact and comfortable").
-                Both were controls over the board's SHAPE, and the board has a
-                shape now — the reference's, arrived at by measurement and
-                signed off. A density switch offers two answers to a question
-                that has one, and an add menu offers cards back onto a board
-                somebody deliberately arranged.
-                The catalogue and the layout engine are untouched: a widget
-                still declares its sizes and a tile can still be pinned,
-                dragged, resized and removed. What left is the two controls,
-                not the machinery under them.
-              */}
-              <button
-                type="button"
-                className="btn btn-sm bg-accent font-semibold text-on-accent hover:opacity-90"
-                onClick={() => {
-                  /* the layout is already stored on every change — Save
-                     LOCKS it, which is the promise the button makes */
-                  writeLayout(layout);
-                  setEditing(false);
-                }}
-              >
-                <IconCheck width={14} height={14} />
-                {t("saveBoard")}
-              </button>
-            </>
-          ) : (
-            <button
-              type="button"
-              className="btn btn-sm border border-border bg-surface text-fg-muted hover:text-fg"
-              onClick={() => setEditing(true)}
-            >
-              <IconPencil width={14} height={14} />
-              {t("editBoard")}
-            </button>
-          )}
         </span>
         </div>
       </div>

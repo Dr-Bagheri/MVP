@@ -57,6 +57,17 @@ export function useAutoGrow(
      * the box is one line shorter than its content, a bar that flickers in and
      * out as somebody types.
      */
-    node.style.overflowY = wanted > max ? "auto" : "hidden";
+    const scrolls = wanted > max;
+    node.style.overflowY = scrolls ? "auto" : "hidden";
+    /*
+     * THE FADE BELONGS TO THE SCROLLING STATE, not to the element.
+     *
+     * A mask on a box that fits its content just dims its first and last
+     * lines for no reason — the fade means "there is more past this edge",
+     * and on a full box there is not. Toggled here because this is the one
+     * place that knows, and a class the component sets statically would be
+     * a second answer to the same question.
+     */
+    node.classList.toggle("fade-scroll", scrolls);
   }, [ref, value, rows.min, rows.max]);
 }

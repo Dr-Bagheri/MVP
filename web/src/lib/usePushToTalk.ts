@@ -57,7 +57,27 @@ export function usePushToTalk(handlers: {
 
     function down(event: KeyboardEvent) {
       if (event.code !== hotkey || event.repeat || holding) return;
-      if (typing(event.target)) return;
+      /*
+       * ONLY A KEY THAT WOULD TYPE SOMETHING IS BLOCKED WHILE TYPING.
+       *
+       * User report, 2026-09-04: "the hotkey works in the side menu bar with
+       * the mic getting selected, but in the AI assistant page it does not."
+       *
+       * Both surfaces run this hook, so the difference was never the surface
+       * — it was FOCUS. The assistant page puts the caret in its composer on
+       * mount, so `event.target` is that textarea and this guard refused; the
+       * panel does not, so the same key worked. The composer is also exactly
+       * where dictation writes, which makes "your caret is in a text box" the
+       * worst possible reason to refuse a microphone.
+       *
+       * The guard is still needed and still right for what it was written
+       * for: a hotkey bound to a LETTER must stay a letter while somebody is
+       * writing «سلام». `event.key.length === 1` is what separates the two —
+       * a printable key produces one character, F9 and the like produce a
+       * name. So a character key is refused inside a field and every other
+       * key is allowed, which is the rule the guard meant all along.
+       */
+      if (typing(event.target) && event.key.length === 1) return;
       event.preventDefault();
       holding = true;
       ref.current.onPress();

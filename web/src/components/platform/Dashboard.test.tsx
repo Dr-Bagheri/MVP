@@ -1,6 +1,6 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { DEFAULT_WIDGETS } from "@/lib/dashboardLayout";
+import { DEFAULT_WIDGETS, defaultLayout, writeLayout } from "@/lib/dashboardLayout";
 
 /**
  * THE BOARD, as an artifact.
@@ -36,7 +36,7 @@ vi.mock("@/i18n/routing", () => ({
  * this stub would be asserting the stub. What the Dashboard is responsible
  * for is the PROP, and that is the seam this file can honestly check.
  */
-const boardProps: { locked?: boolean } = {};
+const boardProps: { locked?: boolean; layout?: { tiles: { key: string }[] } } = {};
 vi.mock("./dashboard/WidgetBoard", () => ({
   WidgetBoard: ({
     layout,
@@ -48,6 +48,7 @@ vi.mock("./dashboard/WidgetBoard", () => ({
     renderTile: (key: string) => React.ReactNode;
   }) => {
     boardProps.locked = locked;
+    boardProps.layout = layout;
     return <div>{layout.tiles.map((tile) => <div key={tile.key}>{renderTile(tile.key)}</div>)}</div>;
   },
 }));
@@ -137,30 +138,47 @@ describe("reading, or arranging", () => {
     expect(boardProps.locked).toBe(true);
   });
 
-  it("shows the pins and the remove buttons while editing, and locks again on Save", async () => {
+  it("has no edit mode at all — one arrangement, the same for everybody", async () => {
+    /*
+     * User directive, 2026-09-04: "remove the edit from the dashboard and fix
+     * the positions for all items in the dashboard for all users for now."
+     *
+     * Asserted as an ABSENCE, because the version that still offers Edit looks
+     * completely fine — it is only wrong beside the words "for all users". The
+     * two tests this replaces drove the pins and the remove buttons THROUGH
+     * that button, so they described a mode rather than the board.
+     *
+     * The board stays LOCKED, which is the half that matters: without it a
+     * drag could still rearrange what everyone is meant to be seeing, and no
+     * button would have to exist for that to happen.
+     */
     await act(async () => { render(<Dashboard />); });
-
-    await act(async () => { fireEvent.click(screen.getByText("ویرایش")); });
-    const tiles = document.querySelectorAll("section.tile").length;
-    expect(screen.getAllByTitle("سنجاق کردن")).toHaveLength(tiles);
-    expect(screen.getAllByTitle("برداشتن از تخته")).toHaveLength(tiles);
-    expect(boardProps.locked).toBe(false);
-
-    await act(async () => { fireEvent.click(screen.getByText("ذخیره")); });
+    expect(screen.queryByText("ویرایش"), "the board still offers an edit mode").toBeNull();
+    expect(screen.queryByText("ذخیره")).toBeNull();
+    expect(boardProps.locked, "the board can still be rearranged by a drag").toBe(true);
+    /* and none of the arranging controls are on screen either */
     expect(screen.queryAllByTitle("سنجاق کردن")).toHaveLength(0);
-    expect(boardProps.locked).toBe(true);
+    expect(screen.queryAllByTitle("برداشتن از تخته")).toHaveLength(0);
   });
 
-  it("pins one card without pinning the rest", async () => {
+  it("shows the shipped arrangement, not one a device remembered", async () => {
+    /*
+     * The control for "the same for everybody". A stored layout from before
+     * the directive must not outlive it — and this is the assertion that
+     * fails if the component goes back to reading the store, which is the
+     * one edit that would silently undo the directive.
+     */
+    /* the stored layout is BUILT FROM THE PRODUCER — one tile of the real
+       board rather than an object assembled here from memory of its shape,
+       which is how the first draft of this line invented three fields the
+       type does not have and one value the union does not allow */
+    const shipped = defaultLayout();
+    writeLayout({ ...shipped, tiles: shipped.tiles.slice(0, 1) });
+
     await act(async () => { render(<Dashboard />); });
-    await act(async () => { fireEvent.click(screen.getByText("ویرایش")); });
-
-    const pins = screen.getAllByTitle("سنجاق کردن");
-    await act(async () => { fireEvent.click(pins[0]!); });
-
-    /* exactly one — a toggle that pinned everything would satisfy any
-       "is it pinned" assertion just as happily */
-    expect(screen.getAllByTitle("برداشتن سنجاق")).toHaveLength(1);
-    expect(screen.getAllByTitle("سنجاق کردن")).toHaveLength(pins.length - 1);
+    expect(boardProps.layout?.tiles).toHaveLength(shipped.tiles.length);
+    /* and the shipped board is more than one tile, so the assertion above is
+       not satisfied by the single remembered one */
+    expect(shipped.tiles.length, "the default board cannot tell the two apart").toBeGreaterThan(1);
   });
 });

@@ -17,9 +17,9 @@ import { useDictation } from "@/lib/dictation";
 import { usePushToTalk } from "@/lib/usePushToTalk";
 import { useAutoGrow } from "@/lib/autoGrow";
 
-/** the panel is a narrower column, so it grows to eight rather than the
-    page's twelve — the FLOOR is the directive's three in both */
-const PANEL_PROMPT_ROWS = { min: 3, max: 8 };
+/** three and three — the same box at two widths (see Hub.tsx on why the
+    ceiling is the floor) */
+const PANEL_PROMPT_ROWS = { min: 3, max: 3 };
 import {
   adoptAssistantThread, askAssistant, assistantServerSnapshot, assistantSnapshot,
   registerAssistantSurface, resetAssistantSession, stopAssistant, subscribeAssistant,
@@ -472,9 +472,13 @@ export function AssistantSidebar() {
    * untouched and still governed by the ears switch: they answer different
    * questions and neither replaces the other.
    */
-  const dictation = useDictation(locale === "fa" ? "fa-IR" : "en-US", (text) =>
-    setInput((v) => (v.trim() === "" ? text : `${v} ${text}`)),
-  );
+  const dictation = useDictation(locale === "fa" ? "fa-IR" : "en-US", (text) => {
+    setInput((v) => (v.trim() === "" ? text : `${v} ${text}`));
+    /* the caret follows the words — see Hub.tsx: dictating filled this box
+       without touching focus, so Enter afterwards went to the document body
+       and the composer's own handler never ran */
+    inputRef.current?.focus();
+  });
   usePushToTalk({
     onPress: () => {
       reveal();
@@ -1280,7 +1284,7 @@ export function AssistantSidebar() {
                 <textarea
                   ref={inputRef}
                   rows={PANEL_PROMPT_ROWS.min}
-                  className="scroll-quiet w-full resize-none bg-transparent text-detail leading-6 text-fg outline-none placeholder:text-fg-subtle"
+                  className="scroll-quiet fade-scroll-tight w-full resize-none bg-transparent text-detail leading-6 text-fg outline-none placeholder:text-fg-subtle"
                   placeholder={t("placeholder")}
                   value={input}
                   onChange={(e) => setInput(e.target.value)}

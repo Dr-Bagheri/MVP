@@ -37,10 +37,19 @@ import {
 import { startRecording } from "@/lib/recordingEngine";
 import { useAutoGrow } from "@/lib/autoGrow";
 
-/** three lines before it scrolls, twelve before the box stops growing —
-    the directive's floor, and a ceiling so one pasted document cannot take
-    the whole column */
-const PROMPT_ROWS = { min: 3, max: 12 };
+/**
+ * THREE LINES, THEN IT SCROLLS (user directive, 2026-09-04: "the prompt box
+ * does not go to scroll mode after more than 3 lines of text — give it this
+ * option and make it a thin scroll bar with fade shape").
+ *
+ * The first reading of "at least three lines" was a FLOOR with room to grow,
+ * so the box climbed to twelve and a dictated paragraph pushed the thread off
+ * the screen. Three is the height, in both senses: it opens at three and it
+ * stops at three. Everything past that scrolls inside the box, which is what
+ * keeps the composer a fixed part of the page instead of something that
+ * grows under your hands while you talk.
+ */
+const PROMPT_ROWS = { min: 3, max: 3 };
 
 type CreateKind = "doc" | "pdf";
 
@@ -174,8 +183,20 @@ export function Hub() {
   const resetVersionRef = useRef(resetVersion);
   const appliedResetVersionRef = useRef(resetVersion);
   /** The mic dictates into the composer (it is NOT Echo's recorder). */
-  const dictation = useDictation(locale === "fa" ? "fa-IR" : "en-US", (text) =>
-    setInput((v) => (v.trim() === "" ? text : `${v} ${text}`)),
+  const dictation = useDictation(locale === "fa" ? "fa-IR" : "en-US", (text) => {
+    setInput((v) => (v.trim() === "" ? text : `${v} ${text}`));
+    /*
+     * THE CARET FOLLOWS THE WORDS (user report, 2026-09-04: "Enter works on
+     * the assistant page but in the sidebar assistant it does not").
+     *
+     * Dictating fills the box without touching focus, so somebody who spoke
+     * their question and then pressed Enter was pressing it against the
+     * document body — the composer's own handler never ran and nothing
+     * happened. Sending is a key on the box, so the box has to have the
+     * caret once there is something in it to send.
+     */
+    promptRef.current?.focus();
+  },
   );
   /*
    * HOLD THE HOTKEY, THIS MIC LISTENS (user directive, 2026-09-04: "the key
@@ -1188,7 +1209,7 @@ export function Hub() {
         <textarea
           ref={promptRef}
           rows={PROMPT_ROWS.min}
-          className="scroll-quiet w-full resize-none bg-transparent text-sm leading-6 text-fg outline-none placeholder:text-fg-muted focus-visible:ring-0 focus-visible:ring-offset-0"
+          className="scroll-quiet fade-scroll-tight w-full resize-none bg-transparent text-sm leading-6 text-fg outline-none placeholder:text-fg-muted focus-visible:ring-0 focus-visible:ring-offset-0"
           placeholder={t("promptPlaceholder")}
           aria-label={t("promptPlaceholder")}
           value={input}

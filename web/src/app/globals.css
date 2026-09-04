@@ -694,10 +694,14 @@
    * overlay, so it fades the CONTENT and needs no element stacked over it
    * that would eat the scroll it sits on.
    */
+  /* ONE mask, a variable edge. The composer is three lines tall, and the
+     thread's 1.25rem would fade two of them — an edge that is a fixed length
+     is only right for one box height. */
   .fade-scroll {
-    -webkit-mask-image: linear-gradient(to bottom, transparent, black 1.25rem, black calc(100% - 1.25rem), transparent);
-    mask-image: linear-gradient(to bottom, transparent, black 1.25rem, black calc(100% - 1.25rem), transparent);
+    -webkit-mask-image: linear-gradient(to bottom, transparent, black var(--fade-edge, 1.25rem), black calc(100% - var(--fade-edge, 1.25rem)), transparent);
+    mask-image: linear-gradient(to bottom, transparent, black var(--fade-edge, 1.25rem), black calc(100% - var(--fade-edge, 1.25rem)), transparent);
   }
+  .fade-scroll-tight { --fade-edge: 0.55rem; }
 
   .date-block {
     @apply grid shrink-0 place-content-center place-items-center rounded-lg bg-surface-2
