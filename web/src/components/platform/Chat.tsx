@@ -79,10 +79,28 @@ export function Chat({ meId, isAdmin, people }: {
   }, []);
   useEffect(loadChannels, [loadChannels, epoch]);
 
-  /* the first room, once. Not `current ?? channels[0]` at render: that would
-     silently move the person to another room the moment one is archived,
-     which reads as the app losing their place. */
+  /**
+   * THE ROOM THE READER JUST LEFT, and why a ref rather than state.
+   *
+   * User report, twice: deleting a room emptied the box for one frame and the
+   * old conversation came straight back; a reload fixed it. The cause is the
+   * effect below. `leaveRoom` sets `current` to null, but `channels` is still
+   * the STALE array that contains the room — so this effect ran, found it at
+   * index 0, and selected it again. The archive had already landed; only the
+   * list had not caught up.
+   *
+   * A ref, because nothing renders from it: it is a note about an action the
+   * person took, read once by an effect, and making it state would re-run the
+   * effect it exists to suppress.
+   */
+  const dismissed = useRef(false);
+
+  /* the first room, once — and NOT after the reader has left one. Not
+     `current ?? channels[0]` at render either: that would move somebody to
+     another room the moment one is archived, which reads as the app losing
+     their place. */
   useEffect(() => {
+    if (dismissed.current) return;
     if (current !== null || !Array.isArray(channels) || channels[0] === undefined) return;
     setCurrent(channels[0].id);
   }, [channels, current]);
@@ -201,6 +219,9 @@ export function Chat({ meId, isAdmin, people }: {
    * inherit this one's.
    */
   const leaveRoom = () => {
+    /* FIRST, because everything below is undone by the auto-select effect
+       until this is set */
+    dismissed.current = true;
     setCurrent(null);
     setMessages([]);
     setReplyTo(null);
@@ -235,7 +256,7 @@ export function Chat({ meId, isAdmin, people }: {
                 type="button"
                 role="tab"
                 aria-selected={room.id === current}
-                onClick={() => setCurrent(room.id)}
+                onClick={() => { dismissed.current = false; setCurrent(room.id); }}
                 className={`btn btn-sm gap-1.5 border font-medium ${
                   room.id === current
                     ? "border-accent bg-accent-soft text-accent"
@@ -352,7 +373,12 @@ export function Chat({ meId, isAdmin, people }: {
           aria-live="polite"
           className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-4 py-3"
         >
-          {messages === null ? (
+          {current === null ? (
+            /* NOT «no messages yet» — that is a claim about a room, and there
+               is no room. The two nothings are different and the copy says
+               which one this is. */
+            <p className="py-10 text-center text-xs text-fg-subtle">{t("noRoomChosen")}</p>
+          ) : messages === null ? (
             <SkeletonLines lines={5} />
           ) : messages.length === 0 ? (
             <p className="py-10 text-center text-xs text-fg-subtle">{t("emptyRoom")}</p>
@@ -404,7 +430,12 @@ export function Chat({ meId, isAdmin, people }: {
       {creating ? (
         <NewChannelDialog
           onClose={() => setCreating(false)}
-          onCreated={(room) => { setCreating(false); setCurrent(room.id); loadChannels(); }}
+          onCreated={(room) => {
+            dismissed.current = false;
+            setCreating(false);
+            setCurrent(room.id);
+            loadChannels();
+          }}
           onFailed={() => { setCreating(false); setError(t("writeFailed")); }}
         />
       ) : null}

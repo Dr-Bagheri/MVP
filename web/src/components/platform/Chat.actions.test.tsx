@@ -236,17 +236,34 @@ describe("standing in no room", () => {
    * gone. Asserted on the words rather than on the room chip, because the
    * chip disappearing while the transcript stayed is exactly the bug.
    */
-  it("empties the box when the room is deleted", async () => {
+  it("empties the box when the room is deleted — with the list still stale", async () => {
+    /*
+     * THE FIRST VERSION OF THIS TEST COULD NOT SEE THE BUG, and the bug was
+     * reported twice.
+     *
+     * It set `CHANNELS = []` BEFORE pressing delete — pre-emptying the room
+     * list, which is the one state in which the defect cannot happen. The
+     * real sequence is the opposite: the archive lands, the box clears, and
+     * the list has NOT caught up yet — so the auto-select effect finds the
+     * deleted room still sitting at index 0 and hands it straight back. That
+     * is why a reload "fixed" it.
+     *
+     * So the list stays stale here on purpose. The fixture is the state the
+     * user was in, not the state that makes the assertion easy.
+     */
     MESSAGES = [message({ id: "m-1", seq: 1, body: "پیام قدیمی" })];
     render(<Chat isAdmin meId="u-1" people={PEOPLE} />);
     const log = await screen.findByRole("log", { name: "پیام‌ها" });
     await within(log).findByText("پیام قدیمی");
 
-    CHANNELS = [];
     await userEvent.click(screen.getByRole("button", { name: "گزینه‌های اتاق" }));
     await userEvent.click(await screen.findByRole("menuitem", { name: /حذف اتاق/ }));
 
     await waitFor(() => expect(screen.queryByText("پیام قدیمی")).toBeNull());
+    /* and it STAYS gone — the defect was a re-selection one tick later, so an
+       assertion that fires immediately would pass against the broken code */
+    await waitFor(() => expect(screen.getByText(/اتاقی انتخاب نشده است/)).toBeInTheDocument());
+    expect(screen.queryByText("پیام قدیمی")).toBeNull();
   });
 
   it("empties it when the reader LEAVES, too", async () => {
@@ -259,6 +276,26 @@ describe("standing in no room", () => {
     await userEvent.click(await screen.findByRole("menuitem", { name: "خروج از اتاق" }));
 
     await waitFor(() => expect(screen.queryByText("پیام قدیمی")).toBeNull());
+    /* leaving keeps the room in the LIST — it is still readable by every
+       member — so this is the case where the auto-select effect would hand it
+       back forever. The box must stay empty until a room is chosen. */
+    await waitFor(() => expect(screen.getByText(/اتاقی انتخاب نشده است/)).toBeInTheDocument());
+  });
+
+  it("comes back the moment a room is CHOSEN, so leaving is not a dead end", async () => {
+    /* the control for the two above: a version that simply stopped selecting
+       rooms would pass both of them and leave the product unusable */
+    MESSAGES = [message({ id: "m-1", seq: 1, body: "پیام قدیمی" })];
+    render(<Chat isAdmin meId="u-1" people={PEOPLE} />);
+    const log = await screen.findByRole("log", { name: "پیام‌ها" });
+    await within(log).findByText("پیام قدیمی");
+
+    await userEvent.click(screen.getByRole("button", { name: "گزینه‌های اتاق" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "خروج از اتاق" }));
+    await waitFor(() => expect(screen.getByText(/اتاقی انتخاب نشده است/)).toBeInTheDocument());
+
+    await userEvent.click(screen.getByRole("tab", { name: /عمومی/ }));
+    await waitFor(() => expect(screen.getByText("پیام قدیمی")).toBeInTheDocument());
   });
 
   it("says «حذف اتاق» rather than «بایگانی»", async () => {

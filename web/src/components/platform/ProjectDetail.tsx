@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { Link } from "@/i18n/routing";
+import { Link, useRouter } from "@/i18n/routing";
 import { api } from "@/api/client";
 import { useRefreshEpoch } from "@/lib/refreshBus";
 import { useCrumbTitle } from "./CrumbTitle";
@@ -17,6 +17,7 @@ import { TONE_DOT, PRIORITY_CHIP, NewTaskDialog } from "./tasks/TaskDialogs";
 import { TonePicker } from "./Projects";
 import {
   IconArchive, IconCheck, IconClose, IconPencil, IconPeople3, IconPlus, IconRetry,
+  IconTrash,
 } from "@/components/icons";
 import { SkeletonLines } from "@/components/scaffold";
 import { digits, formatDate, personName } from "@/lib/format";
@@ -50,7 +51,9 @@ export function ProjectDetail({ id, meId, isAdmin }: { id: string; meId: string 
   const [workload, setWorkload] = useState<ProjectWorkloadRow[] | null>(null);
   const [labels, setLabels] = useState<TaskLabelRecord[]>([]);
   const [topics, setTopics] = useState<TaskTopicRecord[]>([]);
+  const router = useRouter();
   const [condemned, setCondemned] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const epoch = useRefreshEpoch("projects");
@@ -157,6 +160,17 @@ export function ProjectDetail({ id, meId, isAdmin }: { id: string; meId: string 
               {t("restore")}
             </button>
           )}
+          {/* DELETE, beside archive and not instead of it (user directive,
+              2026-09-05: "right now it only has the archive and it only does
+              archive"). They are different acts and the page now offers both
+              under their own names — archiving keeps a readable project,
+              deleting removes it. Danger-toned, because only one of the two
+              cannot be undone. */}
+          <button type="button" onClick={() => setDeleting(true)}
+            className="btn btn-sm gap-1.5 border border-border text-danger hover:border-danger/40">
+            <IconTrash width={12} height={12} />
+            {tCommon("delete")}
+          </button>
         </div>
       </section>
 
@@ -327,6 +341,29 @@ export function ProjectDetail({ id, meId, isAdmin }: { id: string; meId: string 
           meId={meId}
           onClose={() => setManaging(false)}
           onChanged={load}
+        />
+      ) : null}
+
+      {deleting ? (
+        <ConfirmDialog
+          title={t("deleteTitle")}
+          /* the body names what STAYS, because that is the part nobody can
+             guess and the part that decides whether this press is safe: the
+             cards keep their folder on the board and the room keeps its
+             conversation. Both are the schema's doing (0191), not a promise
+             this dialog makes. */
+          body={t("deleteBody", { name: project.name })}
+          confirmLabel={tCommon("delete")}
+          cancelLabel={tCommon("cancel")}
+          onCancel={() => setDeleting(false)}
+          onConfirm={() => {
+            setDeleting(false);
+            void api.deleteProject(project.id)
+              /* AWAY, unlike archive: there is no project left to render, and
+                 staying would show a page about a row that is gone. */
+              .then(() => router.push("/projects"))
+              .catch(() => setError(t("writeFailed")));
+          }}
         />
       ) : null}
 

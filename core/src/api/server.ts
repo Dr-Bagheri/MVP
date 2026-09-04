@@ -2827,6 +2827,18 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
   });
 
   /* who is carrying what, counted from the board (0186) */
+  /* 0191 — deleting a project deletes the PROJECT. The board keeps its
+     folder and the room keeps its conversation; the wall admits only an
+     admin, and the repo turns a filtered-to-zero delete into a 404 so a
+     refusal is not reported as a success. */
+  app.delete("/v1/projects/:id", async (request, reply) => {
+    const identity = await auth.requireActive(request);
+    refuseApiKey(identity);
+    const { id } = request.params as { id: string };
+    await projects.remove(identity, id);
+    return reply.code(204).send();
+  });
+
   app.get("/v1/projects/:id/workload", async (request, reply) => {
     const identity = await auth.requireActive(request);
     refuseApiKey(identity);

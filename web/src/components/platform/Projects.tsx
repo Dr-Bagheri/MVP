@@ -222,13 +222,18 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
             {tTasks("dueTodayFilter")}
           </button>
         </div>
-        {/* ADMIN ONLY (0186, user directive: "the admins only can make
-            projects and they will add members"). Absent rather than disabled:
-            a greyed button is a promise the product has no intention of
-            keeping for this person, and it invites the press that explains
-            nothing. The wall itself is the policy — this is the button
-            agreeing with it. */}
-        {isAdmin ? (
+        {/* «پروژهٔ جدید» LEFT THIS ROW on 2026-09-05 (user directive: "remove
+            the add new project on top and add it like tasks in the column").
+            The way in is the dashed row inside each kanban column now — the
+            board's own shape, and a project is made where it will sit. It is
+            still admin-only (0186), and still ABSENT rather than disabled for
+            everybody else: a greyed control is a promise the product has no
+            intention of keeping.
+
+            The LIST, CALENDAR and ARCHIVE views have no column to put it in,
+            so they carry the button; the kanban does not. That is written
+            down because it looks like an inconsistency and is not one. */}
+        {isAdmin && view !== "kanban" ? (
           <button
             type="button"
             onClick={() => setCreating(true)}
@@ -285,6 +290,21 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
         <SkeletonCards count={3} className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" height="h-36" />
       ) : rows === "failed" ? (
         <p className="text-sm text-fg-muted">{t("readFailed")}</p>
+      ) : view === "kanban" && columns.length > 0 ? (
+        /* THE BOARD RENDERS EVEN WITH NOTHING ON IT, and that is not a
+           cosmetic choice: the way to create a project now lives INSIDE a
+           column, so an empty state here would leave an admin with no
+           projects and no way to make one — on the default view. A kanban
+           with no cards still has its columns; that is what a kanban is. */
+        <ProjectKanban
+          columns={columns}
+          projects={shown}
+          columnOf={columnOf}
+          people={people}
+          locale={locale}
+          isAdmin={isAdmin}
+          onAdd={() => setCreating(true)}
+        />
       ) : shown.length === 0 ? (
         /* the two nothings said apart: an organisation with no projects is
            not the same as a filter that matched none of them */
@@ -299,14 +319,6 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
             </p>
           ) : null}
         </div>
-      ) : view === "kanban" && columns.length > 0 ? (
-        <ProjectKanban
-          columns={columns}
-          projects={shown}
-          columnOf={columnOf}
-          people={people}
-          locale={locale}
-        />
       ) : view === "list" ? (
         <ProjectList projects={shown} cardsOf={cardsOf} people={people} locale={locale} />
       ) : view === "calendar" ? (
@@ -345,21 +357,33 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
  * like it moves something and cannot — the shape this repo keeps finding and
  * removing. Work moves on the board; this screen reports where it got to.
  */
-function ProjectKanban({ columns, projects, columnOf, people, locale }: {
+function ProjectKanban({ columns, projects, columnOf, people, locale, isAdmin, onAdd }: {
   columns: TaskColumnRecord[];
   projects: ProjectRecord[];
   columnOf: (p: ProjectRecord) => string | null;
   people: OrgPersonRecord[];
   locale: string;
+  isAdmin: boolean;
+  onAdd: () => void;
 }) {
   const t = useTranslations("projects");
   return (
+    /* THE BOARD'S OWN SCROLLER (user directive, 2026-09-05: "use the same
+       size fixed position column for the kanban like tasks"). Every number
+       here is TaskBoard's: the 300px column, the 2xl corner, the surface
+       ground, the card shadow and the 70vh floor. Two boards on one product
+       showing the same shape must not disagree about it — and the version
+       this replaces was a 288px column on a tinted ground with no floor, so
+       the columns changed height as projects moved between them. */
     <div className="scroll-quiet flex min-h-0 flex-1 gap-3 overflow-x-auto pb-2">
       {columns.map((col) => {
         const here = projects.filter((p) => columnOf(p) === col.id);
         return (
-          <section key={col.id} className="flex w-72 shrink-0 flex-col gap-2">
-            <header className="flex items-center justify-between px-1">
+          <section
+            key={col.id}
+            className="flex min-h-[70vh] w-[300px] shrink-0 flex-col self-stretch rounded-2xl border border-border bg-surface p-2.5 shadow-card"
+          >
+            <header className="mb-2 flex items-center justify-between px-1">
               <h2 className="truncate text-xs font-semibold text-fg">
                 <bdi>{col.name}</bdi>
               </h2>
@@ -367,12 +391,30 @@ function ProjectKanban({ columns, projects, columnOf, people, locale }: {
                 {digits(here.length, locale)}
               </span>
             </header>
-            <div className="flex min-h-0 flex-1 flex-col gap-2 rounded-xl border border-border bg-surface-2/40 p-2">
-              {here.length === 0 ? (
-                <p className="px-1 py-4 text-center text-[11px] text-fg-subtle">{t("noneHere")}</p>
-              ) : here.map((p) => (
+            <div className="flex min-h-0 flex-1 flex-col gap-2">
+              {here.map((p) => (
                 <ProjectCard key={p.id} project={p} people={people} locale={locale} compact />
               ))}
+              {/* THE WAY IN LIVES IN THE COLUMN (same directive: "remove the
+                  add new project on top and add it like tasks in the column").
+                  The board's own dashed row, verbatim — a project is made
+                  where it is going to sit, and the page no longer carries a
+                  separate button at the top that has to be told nothing.
+                  Admin-only, because creating a project is (0186). */}
+              {isAdmin ? (
+                <button
+                  type="button"
+                  onClick={onAdd}
+                  className="btn btn-sm w-full justify-center gap-1.5 border border-dashed border-border font-medium text-fg-muted hover:border-border-strong hover:text-fg"
+                >
+                  <IconPlus width={12} height={12} />
+                  {t("addProject")}
+                </button>
+              ) : here.length === 0 ? (
+                /* a member gets a sentence rather than an empty box — the
+                   column still has to say what it is showing */
+                <p className="px-1 py-4 text-center text-[11px] text-fg-subtle">{t("noneHere")}</p>
+              ) : null}
             </div>
           </section>
         );

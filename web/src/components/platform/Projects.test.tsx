@@ -29,6 +29,7 @@ vi.mock("@/i18n/routing", () => ({
 
 const pushSpy = vi.fn();
 const created: Record<string, unknown>[] = [];
+const deleted: string[] = [];
 
 function project(over: Partial<ProjectRecord>): ProjectRecord {
   return {
@@ -76,6 +77,7 @@ vi.mock("@/api/client", () => ({
     },
     updateProject: async (id: string, patch: Record<string, unknown>) => project({ id, ...patch }),
     setProjectMember: vi.fn(async () => undefined),
+    deleteProject: async (id: string) => { deleted.push(id); },
     orgPeople: async () => PEOPLE,
     me: async () => ({ id: "u-1" }),
     /* the detail reads BOTH of these to draw the order dialog and the
@@ -114,6 +116,7 @@ beforeEach(() => {
   COLUMNS = [{ id: "c-1", name: "انجام‌شده", tone: "green", position: 1 }];
   ONE = project({});
   created.length = 0;
+  deleted.length = 0;
   pushSpy.mockClear();
 });
 
@@ -161,21 +164,24 @@ describe("Projects", () => {
     expect(screen.getByRole("button", { name: "بر اساس نام" })).toHaveAttribute("aria-pressed", "true");
   });
 
-  it("offers «پروژهٔ جدید» to an admin and to nobody else", async () => {
+  it("offers the way in to an admin and to nobody else", async () => {
     /*
      * 0186: "the admins only can make projects". ABSENT rather than
      * disabled — a greyed button is a promise the product will not keep for
      * this person, and pressing it explains nothing. The wall itself is the
      * policy; this asserts the screen agrees with it.
+     *
+     * The CONTROL moved into the kanban column on 2026-09-05 and the rule did
+     * not, which is why this test follows it rather than being deleted.
      */
     LIST = [project({ id: "p-a", name: "پروژه" })];
     render(<Projects isAdmin meId="u-1" />);
-    expect(await screen.findByRole("button", { name: /پروژهٔ جدید/ })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /افزودن پروژه/ })).toBeInTheDocument();
 
     cleanup();
     render(<Projects isAdmin={false} meId="u-1" />);
     await waitFor(() => expect(screen.getByText("پروژه")).toBeInTheDocument());
-    expect(screen.queryByRole("button", { name: /پروژهٔ جدید/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /افزودن پروژه/ })).toBeNull();
     /* the control: the page still rendered, so "no button" is not "no page".
        The second row's chip carries a count beside its label, so the name is
        matched loosely — an exact string here would break on the number. */
@@ -212,16 +218,24 @@ describe("Projects", () => {
     await waitFor(() => expect(screen.getByText("پروژهٔ من")).toBeInTheDocument());
 
     await userEvent.click(screen.getByRole("button", { name: "پروژه‌های من" }));
+    /* THE SUBJECT: neither project renders. A filter that treated null as
+       "no filter" would show both, which is the defect this test is for. */
     await waitFor(() => expect(screen.queryByText("پروژهٔ من")).toBeNull());
     expect(screen.queryByText("پروژهٔ دیگری")).toBeNull();
-    /* and the empty state names the FILTER rather than the organisation —
-       "no projects yet" here would be a claim about the org */
-    expect(screen.getByText("با این فیلتر پروژه‌ای نیست")).toBeInTheDocument();
+
+    /* the empty-state COPY lives on the views that have one — the kanban's
+       nothing is a board with empty columns (2026-09-05), because the way to
+       create a project now lives inside a column and a card covering them
+       would take it away. So the sentence is checked where it renders. */
+    await userEvent.click(screen.getByRole("button", { name: "لیست" }));
+    /* it names the FILTER rather than the organisation — "no projects yet"
+       here would be a claim about the org */
+    expect(await screen.findByText("با این فیلتر پروژه‌ای نیست")).toBeInTheDocument();
   });
 
   it("creates with the wire's shape, and never sends the creator as a member", async () => {
     render(<Projects isAdmin meId="u-1" />);
-    await userEvent.click(await screen.findByRole("button", { name: /پروژهٔ جدید/ }));
+    await userEvent.click(await screen.findByRole("button", { name: /افزودن پروژه/ }));
 
     await userEvent.type(await screen.findByLabelText("نام پروژه"), "بازطراحی");
     await userEvent.type(screen.getByLabelText("توضیح کوتاه"), "صفحهٔ اول");
@@ -344,5 +358,54 @@ describe("the kanban (2026-09-05)", () => {
     render(<Projects isAdmin meId="u-1" />);
 
     expect(within(await columnOf("برای انجام")).getByText("پروژهٔ الف")).toBeInTheDocument();
+  });
+});
+
+describe("the way in moved into the column (2026-09-05)", () => {
+  it("offers «افزودن پروژه» inside each kanban column, and no button on top", async () => {
+    /*
+     * User directive: "remove the add new project on top and add it like
+     * tasks in the column with the name add project, with the same style the
+     * add cards has."
+     *
+     * Both halves asserted, because the version that added the in-column row
+     * and left the top button is the likely half-done state and looks fine.
+     */
+    COLUMNS = [
+      { id: "c-1", name: "برای انجام", tone: "blue", position: 1 },
+      { id: "c-2", name: "انجام‌شده", tone: "green", position: 2 },
+    ];
+    LIST = [project({ id: "p-a", name: "پروژهٔ الف", topic_id: "top-a" })];
+    render(<Projects isAdmin meId="u-1" />);
+
+    /* one per column — a project is made where it will sit */
+    await waitFor(() =>
+      expect(screen.getAllByRole("button", { name: /افزودن پروژه/ })).toHaveLength(2));
+    expect(screen.queryByRole("button", { name: /پروژهٔ جدید/ })).toBeNull();
+  });
+
+  it("keeps the top button on the views that HAVE no column", async () => {
+    /* the control, and the reason the rule is written down: list, calendar
+       and archive have nowhere to put an in-column row, so they keep the
+       button. A version that removed it everywhere leaves an admin unable to
+       create a project from three of the four views. */
+    COLUMNS = [{ id: "c-1", name: "برای انجام", tone: "blue", position: 1 }];
+    LIST = [project({ id: "p-a", name: "پروژهٔ الف" })];
+    render(<Projects isAdmin meId="u-1" />);
+    await screen.findByText("پروژهٔ الف");
+
+    await userEvent.click(screen.getByRole("button", { name: "لیست" }));
+    expect(await screen.findByRole("button", { name: /پروژهٔ جدید/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /افزودن پروژه/ })).toBeNull();
+  });
+
+  it("shows a MEMBER neither control", async () => {
+    COLUMNS = [{ id: "c-1", name: "برای انجام", tone: "blue", position: 1 }];
+    LIST = [project({ id: "p-a", name: "پروژهٔ الف" })];
+    render(<Projects isAdmin={false} meId="u-1" />);
+    await screen.findByText("پروژهٔ الف");
+
+    expect(screen.queryByRole("button", { name: /افزودن پروژه/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /پروژهٔ جدید/ })).toBeNull();
   });
 });

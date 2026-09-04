@@ -416,7 +416,21 @@ export function DueField({ value, onPick }: {
         <IconCheck width={12} height={12} className={value === null ? "opacity-0" : "text-accent"} />
       </button>
       {open ? (
-        <div className="absolute top-11 z-50">
+        /*
+         * UPWARD (user directive, 2026-09-05: "in new task the date dropdown
+         * opens downward, make it upward").
+         *
+         * The deadline sits low in the dialog and the calendar is tall, so
+         * opening down pushed six weeks of dates past the dialog's own edge —
+         * the month was reachable and the last rows were not. `bottom-full`
+         * hangs it from the control instead, which is the one direction that
+         * cannot run out of dialog: everything above the field is the dialog.
+         *
+         * Not a flip-if-it-would-overflow: that needs a measurement, and a
+         * panel whose side changes with the scroll position is harder to use
+         * than one that is always in the same place.
+         */
+        <div className="absolute bottom-full z-50 mb-2">
           <JalaliPicker value={value} onPick={onPick} onClose={() => setOpen(false)} />
         </div>
       ) : null}

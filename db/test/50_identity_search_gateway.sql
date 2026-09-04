@@ -82,6 +82,13 @@ insert into argued_deletes (name) values
   -- happened and a record that says they said no are different facts. This
   -- row is the inviter taking back a message they should not have sent.
   ('join_invite'),
+  -- 0191: DELETING A PROJECT. The one entry here that removes a thing rather
+  -- than a person's own row or their membership of one -- and it earns its
+  -- place because a project is a LABEL over work, not the work: the schema
+  -- nulls the board's folder and the room's link rather than cascading, so
+  -- what this grant destroys is the project and who was on it. Admin-only by
+  -- policy, like every other project write since 0186.
+  ('project'),
   ('task_assignee'), ('task_checklist_item'), ('task_label'), ('task_label_link');
 
 select t.ok(
@@ -89,7 +96,7 @@ select t.ok(
      from information_schema.role_table_grants
     where grantee = 'echo_app' and privilege_type = 'DELETE' and table_schema = 'echo')
    = (select array_agg(name order by name) from argued_deletes),
-  'core/''s own role deletes exactly the argued list: a note author''s own note (0079), a task''s checklist lines and its assignee rows (0144), a label and a card''s wearing of one (0147), a meeting''s attached document (0159), a meeting''s decisions and action items (0160), a person''s membership of a project (0181), a person''s membership of a channel (0184), a person''s own reaction and an inviter''s withdrawn invitation (0189) — every other product row is echo_purge''s alone');
+  'core/''s own role deletes exactly the argued list: a note author''s own note (0079), a task''s checklist lines and its assignee rows (0144), a label and a card''s wearing of one (0147), a meeting''s attached document (0159), a meeting''s decisions and action items (0160), a person''s membership of a project (0181), a person''s membership of a channel (0184), a person''s own reaction and an inviter''s withdrawn invitation (0189), a project itself (0191) — every other product row is echo_purge''s alone');
 -- Scoped to the application roles: the schema owner also appears as a grantee
 -- of everything on a managed platform, and a superuser was never inside this
 -- wall to begin with — core/ simply never connects as one.

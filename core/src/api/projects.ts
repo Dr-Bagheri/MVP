@@ -354,7 +354,31 @@ export function createProjectsRepo(db: Db) {
     });
   }
 
-  return { list, detail, create, update, setMember, workload };
+  /**
+   * Delete one (0191).
+   *
+   * A DELETE and not a soft one, because "archive" already exists beside it
+   * and a product with two words for the same act has one of them lying. What
+   * goes is the project row and its membership; what stays is the WORK — the
+   * board keeps the category as an ordinary folder and the room keeps its
+   * conversation, both by `on delete set null (project_id)` rather than by
+   * anything this function does. A folder full of cards must not disappear
+   * because its label did.
+   *
+   * `returning id` is how a refusal is told from a miss: RLS filters a DELETE
+   * to zero rows rather than raising, so without this a member's forbidden
+   * delete and an id that never existed would both answer 204.
+   */
+  async function remove(identity: Identity, id: string): Promise<void> {
+    return db.withIdentity(identity, async (tx: SqlTx) => {
+      const gone = await tx.unsafe<Record<string, unknown>>(
+        `delete from echo.project where id = $1 returning id`, [id],
+      );
+      if (!gone[0]) throw new NotFoundError();
+    });
+  }
+
+  return { list, detail, create, update, setMember, workload, remove };
 }
 
 export type ProjectsRepo = ReturnType<typeof createProjectsRepo>;

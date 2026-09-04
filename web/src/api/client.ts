@@ -1483,6 +1483,13 @@ export const api = {
       method: "PATCH", body: JSON.stringify(patch), headers: { "content-type": "application/json" },
     });
   },
+
+  /** 0191 — delete a project. The work stays: the board keeps its folder and
+      the room keeps its conversation, both by the schema rather than by
+      anything this call does. */
+  async deleteProject(id: string): Promise<void> {
+    await bff(`/api/projects/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
   /** who is carrying what in this project (0186) — counted, never stored */
   async projectWorkload(id: string): Promise<ProjectWorkloadRow[]> {
     return bff(`/api/projects/${encodeURIComponent(id)}/workload`);

@@ -3181,6 +3181,7 @@
     "writeFailed": "That change was not saved."
   },
   "projects": {
+    "addProject": "Add project",
     "andMore": "and {n} more",
     "archive": "Archive",
     "archiveBody": "“{name}” moves to the archive. Its tasks and members stay exactly as they are, and you can bring it back whenever you want.",
@@ -3192,6 +3193,8 @@
     "create": "Create project",
     "createdOn": "Created {date}",
     "creating": "Creating…",
+    "deleteBody": "«{name}» is deleted and cannot be brought back. The work is not: its folder stays on the board and its room keeps every message.",
+    "deleteTitle": "Delete this project?",
     "doneOf": "{done}/{total}",
     "edit": "Edit",
     "emptyBody": "A project is a folder over work you already have: creating one also creates its category on the task board, so the cards for that work gather under it.",
@@ -3274,6 +3277,7 @@
     "newChannel": "New room",
     "noChannels": "No rooms have been created yet.",
     "noColleagues": "There are no other colleagues in this organization.",
+    "noRoomChosen": "No room chosen. Pick one from the row above.",
     "readFailed": "Rooms could not be loaded.",
     "removedMessage": "This message was removed.",
     "reply": "Reply",
