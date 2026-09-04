@@ -348,56 +348,24 @@ export function KebabMenu({
   );
 }
 
-/**
- * A RIGHT-CLICK menu (user directive, 2026-08-25): table rows stopped
- * showing a ⋯ trigger — the same items open as a context menu at the
- * pointer instead. Same panel, same discipline (portal, full open with a
- * flip, outside/Escape/scroll closes). The caller owns the open state:
- * `onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX,
- * y: e.clientY }); }}`.
+/*
+ * `ContextMenu` LEFT ON 2026-09-04, and the reversal is worth recording so
+ * nobody re-derives the old directive from the git history and puts it back.
+ *
+ * On 2026-08-25 the ⋯ trigger was removed from table rows and the same items
+ * were opened by RIGHT-CLICK instead. The user has now asked for the opposite
+ * — "instead of right click kebab menu for all tables in the platform, at the
+ * end of the row add the three dot" — and the second reading is the one that
+ * survives contact with a person who did not read the first: a right-click
+ * menu is invisible, so a row whose only actions live behind it has no actions
+ * as far as most people can tell. On a touch screen it has none at all.
+ *
+ * `DataTable` renders the ⋯ for every table that passes `menuItems`, so the
+ * affordance is a property of being a table rather than something fifteen
+ * screens each remember. `KebabMenu` is the one menu now, which is also one
+ * fewer place for the two to drift.
  */
-export function ContextMenu({
-  at,
-  items,
-  onClose,
-}: {
-  at: { x: number; y: number };
-  items: KebabItem[];
-  onClose: () => void;
-}) {
-  /*
-   * THE SAME MENU as the kebab, opened at a POINT instead of at a button.
-   * The anchor is a zero-size element parked at the pointer: Radix places,
-   * flips and clamps against it exactly as it does against a trigger, so a
-   * right-click near the bottom of the screen opens upward without this file
-   * measuring anything. It also means the two menus cannot drift — one
-   * `MenuBody`, one set of theme rules, two ways in.
-   */
-  return (
-    <DropdownMenu
-      open
-      modal={false}
-      onOpenChange={(next) => {
-        if (!next) onClose();
-      }}
-    >
-      <DropdownMenuTrigger asChild>
-        <span
-          aria-hidden
-          style={{ position: "fixed", top: at.y, left: at.x, width: 0, height: 0 }}
-        />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="start"
-        sideOffset={0}
-        onClick={(e) => e.stopPropagation()}
-        className="min-w-[13.5rem] rounded-lg border-border bg-surface p-0 py-1 shadow-xl"
-      >
-        <MenuBody items={items} />
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
+
 
 export interface SelectMenuOption {
   value: string;

@@ -1,12 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
-import type { ConnectorProvider, ConnectorStatus, MailDraft, SearchHit, Skill, WorkflowCard } from "@/api/types";
+import type { ConnectorProvider, ConnectorStatus, MailDraft, Skill, WorkflowCard } from "@/api/types";
 import { useRouter } from "@/i18n/routing";
 import { useSearchParams } from "next/navigation";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { SkeletonLines } from "@/components/scaffold";
 import { useDictation } from "@/lib/dictation";
 import { deliverDoc } from "@/lib/deliver";
@@ -153,23 +152,11 @@ export function Hub() {
   /** A document format is a visible, removable part of the request — never
    * hidden text placed into the editor on the person's behalf. */
   const [createKind, setCreateKind] = useState<CreateKind | null>(null);
-  const [sourcesOpen, setSourcesOpen] = useState(false);
   /**
    * Meetings attached as context. These ride the ask as `callIds` — the same
    * context mechanic the Echo pane's @mention uses, reached here through
    * Sources → search. The agent still re-checks visibility server-side;
    * attaching is scoping, never authority.
-   */
-  const [contextCalls, setContextCalls] = useState<{ id: string; title: string }[]>([]);
-  const [sourceQuery, setSourceQuery] = useState("");
-  const [sourceHits, setSourceHits] = useState<SearchHit[]>([]);
-  const [sourceBusy, setSourceBusy] = useState(false);
-  /**
-   * Web search (2026-08-18): REAL — the ask rides the provider's `:online`
-   * variant, so the model searches the live web before answering. Off by
-   * default: the scope promise («در محدودهٔ دسترسی خودتان») is the hub's
-   * caption, and reaching outside it is a choice the person makes per
-   * conversation, never a silent ambient behaviour.
    */
   const [webSearch, setWebSearch] = useState(false);
   /** The skill and model pickers — Sources-style hover menus, not selects. */
@@ -431,29 +418,6 @@ export function Hub() {
       messages.length, workflowCards, router, recordOnRun, locale]);
 
   /**
-   * The Sources search — live, debounced, against the real index. Results
-   * are calls the caller can already see (RLS filters the index by
-   * construction); attaching one adds it to the ask's context.
-   */
-  useEffect(() => {
-    const q = sourceQuery.trim();
-    if (q.length === 0) {
-      setSourceHits([]);
-      setSourceBusy(false);
-      return;
-    }
-    setSourceBusy(true);
-    const timer = setTimeout(() => {
-      void api
-        .search(q)
-        .then(setSourceHits)
-        .catch(() => setSourceHits([]))
-        .finally(() => setSourceBusy(false));
-    }, 250);
-    return () => clearTimeout(timer);
-  }, [sourceQuery]);
-
-  /**
    * Keyboard shortcuts (the reference hub's, mapped to surfaces that exist):
    * Ctrl+Shift+A → agents, Ctrl+Shift+I → workflows,
    * `/` → focus the prompt. Registered on the hub only — a global map is the
@@ -478,14 +442,6 @@ export function Hub() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [router]);
-
-  function attachCall(hit: SearchHit) {
-    setContextCalls((prev) =>
-      prev.some((c) => c.id === hit.call_id)
-        ? prev
-        : [...prev, { id: hit.call_id, title: hit.call_title }],
-    );
-  }
 
   const ATTACH_MAX_BYTES = 50_000;
   const ATTACH_MAX_COUNT = 3;
@@ -638,7 +594,6 @@ export function Hub() {
     setFeedback({});
     setShared(false);
     setAttachments([]);
-    setContextCalls([]);
     setCreateKind(null);
     setWebSearch(false);
     setAskError(null);
@@ -811,9 +766,6 @@ export function Hub() {
     await askAssistant({
       question,
       page: "hub",
-      /* the attached meetings ARE the context — Sources made them chips, and
-         this is where the chips become real scoping on the wire */
-      callIds: contextCalls.map((c) => c.id),
       /* client-only tag: when this answer lands, the toolbar offers the
          promised deliverable (Save as PDF / download) — the Create chip used
          to only PREFIX the prompt, and the person got prose with no file
@@ -1145,7 +1097,7 @@ export function Hub() {
            the hub was a centred landing card; on a page whose job is a
            conversation it left the prompt floating in a column half the width
            of every other surface in the product. */
-        className={`w-full max-w-content rounded-2xl border border-border-strong bg-surface p-3 text-start transition-colors focus-within:border-accent ${
+        className={`flex w-full max-w-content flex-col rounded-2xl border border-border-strong bg-surface px-3 pb-1 pt-3 text-start transition-colors focus-within:border-accent ${
           idle ? "mx-auto mt-auto" : "sticky bottom-0 mx-auto"
         }`}
       >
@@ -1182,7 +1134,20 @@ export function Hub() {
             if (e.key === "Escape" && streaming) stop();
           }}
         />
-        <div className="mt-1.5 flex items-center justify-between" dir="ltr">
+        {/*
+          THE CONTROLS SIT LOW (user directive, 2026-09-04: "make the items
+          icons of the enter and plus and mic 10% above the bottom level of the
+          prompt box, they are too high in it").
+
+          The row was `mt-1.5` under the field, which put it wherever the field
+          happened to end — floating in the middle of a 3-unit-padded box. It
+          is pinned to the FOOT now: `mt-auto` in a column takes the slack, and
+          the box's own `pb` is cut to a tenth of its height so the buttons
+          clear the bottom edge by about that much rather than by a full pad.
+          Measured against the box, not typed: 38px control in a 3-unit (12px)
+          pad, so `pb-1` leaves ~10% of the composer's height beneath them.
+        */}
+        <div className="mt-auto flex items-center justify-between pt-1.5" dir="ltr">
           <span className="flex items-center gap-1">
             <button
               type="button"
@@ -1206,26 +1171,9 @@ export function Hub() {
               pdfLabel={t("createPdf")}
               menuLabel={t("composerMenu")}
               attachFileLabel={t("sourcesAttach")}
-              searchMeetingsLabel={t("sourcesSearch")}
               webSearchLabel={t("sourcesWeb")}
-              attachedCount={contextCalls.length}
               webSearch={webSearch}
               onCreate={(kind) => { setCreateKind(kind); setCreateOpen(false); }}
-              /*
-                DEFERRED BY A TICK, and not for tidiness. Radix dismisses a
-                popover that opens during a menu item's `onSelect`: closing the
-                menu returns focus to its trigger, and the dismissable layer
-                stack reads that as a click outside the new panel. Opening on
-                the next task lets the menu finish closing first.
-                A `setTimeout(0)` in a click handler is usually a smell; here
-                it is the documented shape of "after this interaction", and the
-                alternative — `preventDefault` to keep the menu open — leaves
-                two panels stacked over each other.
-              */
-              onSources={() => {
-                setCreateOpen(false);
-                setTimeout(() => setSourcesOpen(true), 0);
-              }}
               onAttachFile={() => fileRef.current?.click()}
               onToggleWeb={() => setWebSearch((v) => !v)}
               onManageConnectors={() => router.push("/settings/integrations")}
@@ -1267,24 +1215,6 @@ export function Hub() {
           <p className="mt-2 text-xs leading-5 text-fg-muted">
             {dictation.status === "unsupported" ? t("voiceUnsupported") : t("voiceDenied")}
           </p>
-        ) : null}
-        {contextCalls.length > 0 ? (
-          /* the attached meetings — the visible half of the callIds wire */
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {contextCalls.map((c) => (
-              <span key={c.id} className="chip bg-accent-soft text-xs text-accent">
-                @{c.title.slice(0, 24)}
-                <button
-                  type="button"
-                  aria-label={t("removeContext", { name: c.title })}
-                  className="ms-1 text-accent/70 hover:text-accent"
-                  onClick={() => setContextCalls((prev) => prev.filter((x) => x.id !== c.id))}
-                >
-                  ×
-                </button>
-              </span>
-            ))}
-          </div>
         ) : null}
         {attachments.length > 0 ? (
           <div className="mt-2 flex flex-wrap gap-1.5">
@@ -1341,110 +1271,21 @@ export function Hub() {
               ⊕ opens it now, so a second button beside the field would be two
               doors to one room. The chip above still shows the chosen format. */}
 
-          {/* SOURCES — attach real context: search meetings, add a text file.
-              What the reference fakes as toggles, this menu does as acts. */}
-          <HoverMenu
-            open={sourcesOpen}
-            onOpen={() => {
-              setSourcesOpen(true);
-              setCreateOpen(false);
-            }}
-            onClose={() => setSourcesOpen(false)}
-            panelClass="w-[19rem] p-2"
-            /*
-              A ZERO-SIZE ANCHOR, not a button (2026-09-03). «منابع» lives in
-              the composer's ⊕ now; this panel is what its "search meetings"
-              row opens, and a visible trigger beside the field was the label
-              drawn twice — once in the menu and once underneath it, which is
-              what the screenshot showed.
-              The element stays because the panel has to hang off SOMETHING:
-              the same anchor pattern the right-click menu uses. `sr-only`
-              rather than `hidden`, so it keeps a box to position against.
-            */
-            button={<span className="sr-only" aria-hidden />}
-          >
-            <div>
-                <input
-                  autoFocus
-                  /* `.input` owns its height and type size (audit finding,
-                     2026-09-02): `h-9 text-sm` on top of it was the same
-                     re-answering the Settings dropdown was stripped of */
-                  className="input mb-1.5 w-full"
-                  placeholder={t("sourcesSearch")}
-                  value={sourceQuery}
-                  onChange={(e) => setSourceQuery(e.target.value)}
-                />
-                {sourceBusy ? (
-                  <p className="px-2 py-1.5 text-xs text-fg-muted">{t("sourcesSearching")}</p>
-                ) : sourceHits.length > 0 ? (
-                  <ul className="max-h-44 overflow-y-auto">
-                    {[...new Map(sourceHits.map((h) => [h.call_id, h])).values()].map((hit) => {
-                      const attached = contextCalls.some((c) => c.id === hit.call_id);
-                      return (
-                        <li key={hit.call_id}>
-                          <button
-                            type="button"
-                            className="tap flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-sm text-fg hover:bg-surface-2"
-                            onClick={() => attachCall(hit)}
-                          >
-                            <span className="truncate">{hit.call_title}</span>
-                            {attached ? (
-                              <span className="text-[10px] text-accent">{t("sourcesAttached")}</span>
-                            ) : null}
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                ) : sourceQuery.trim().length > 0 ? (
-                  <p className="px-2 py-1.5 text-xs text-fg-muted">{t("sourcesNoHits")}</p>
-                ) : null}
-                <hr className="my-1.5 border-border" />
-                <button
-                  type="button"
-                  className="tap flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-fg hover:bg-surface-2"
-                  onClick={() => {
-                    setSourcesOpen(false);
-                    fileRef.current?.click();
-                  }}
-                >
-                  <PlusIcon width={14} height={14} />
-                  {t("addFile")}
-                </button>
-                <hr className="my-1.5 border-border" />
-                {/* REAL web search — the ask dispatches the model's :online
-                    variant. A switch, because it is a per-conversation stance,
-                    not an act. */}
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={webSearch}
-                  className="tap flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-sm text-fg hover:bg-surface-2"
-                  onClick={() => setWebSearch((v) => !v)}
-                >
-                  <span>{t("searchWeb")}</span>
-                  {/* the switch's LOOK, not the component: the whole ROW is
-                      the control here (a menu row that reports a state), so
-                      the track is decoration inside it and <Switch> would nest
-                      a button in a button. What it does adopt is the theme's
-                      answer — accent, and a white knob — where this drew
-                      `bg-success` with a `bg-bg` knob, which in dark theme is
-                      the opposite colour to every other switch (2026-09-03). */}
-                  <span
-                    aria-hidden
-                    className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${
-                      webSearch ? "bg-accent" : "bg-surface-2 border border-border"
-                    }`}
-                  >
-                    <span
-                      className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${
-                        webSearch ? "end-0.5" : "start-0.5"
-                      }`}
-                    />
-                  </span>
-                </button>
-            </div>
-          </HoverMenu>
+          {/*
+            THE MEETING SEARCH IS GONE (user directive, 2026-09-04: "remove the
+            search in source"), and the panel went with it rather than staying
+            behind as a room with no door. It was the only opener; `attachCall`,
+            the debounced search and the attached-meeting chips were the only
+            things it fed, so they are gone too. A producer with no consumer is
+            a defect its author cannot see — and this one would have been an
+            entire panel, its state, and a network call on every keystroke into
+            a field nobody could reach.
+
+            The `call_ids` WIRE is untouched: the ask still carries context
+            calls, there is simply no producer for them on this surface at the
+            moment. That is a smaller thing than a panel, and it is where a
+            future "ask about this meeting" would arrive.
+          */}
           {/* THE RECORDER LEFT THE COMPOSER (user directive, 2026-09-02:
               "remove record from it as well"). It started an Echo take from
               the assistant's prompt box — two products in one control, on the
@@ -1517,42 +1358,10 @@ export function Hub() {
  * is no room above, which is the half a hand-written `bottom-full` cannot do
  * and the reason the old panel could be clipped on a short viewport.
  */
-function HoverMenu({
-  open,
-  onOpen,
-  onClose,
-  align = "start",
-  button,
-  panelClass,
-  children,
-}: {
-  open: boolean;
-  onOpen: () => void;
-  onClose: () => void;
-  align?: "start" | "end";
-  button: ReactNode;
-  panelClass: string;
-  children: ReactNode;
-}) {
-  return (
-    <Popover open={open} onOpenChange={(next) => (next ? onOpen() : onClose())}>
-      <PopoverTrigger asChild>{button}</PopoverTrigger>
-      <PopoverContent
-        side="top"
-        align={align}
-        sideOffset={8}
-        /* KebabMenu's panel classes verbatim (audit finding, 2026-09-02): the
-           directive above asks for "the same as any dropdown that we have",
-           and what shipped was the 16px tile radius with the island shadow
-           beside menus that are all `rounded-lg … shadow-xl` (rowActions) */
-        className={`w-auto rounded-lg border-border bg-surface p-0 text-start shadow-xl ${panelClass}`}
-      >
-        {children}
-      </PopoverContent>
-    </Popover>
-  );
-}
-
+/* `HoverMenu` left with the sources panel (2026-09-04) — it was written for
+   that one panel and had exactly one consumer, so keeping it would have been a
+   component nothing renders waiting to be rediscovered and reused for
+   something it was not shaped for. */
 
 /**
  * THE COMPOSER'S ⊕ (user directive, 2026-09-03: "in the plus make a kebab menu
@@ -1578,9 +1387,9 @@ function HoverMenu({
  */
 function ComposerActions({
   connectorsLabel, manageLabel, createLabel, sourcesLabel,
-  docLabel, pdfLabel, menuLabel, attachFileLabel, searchMeetingsLabel,
-  webSearchLabel, attachedCount, webSearch,
-  onCreate, onSources, onAttachFile, onToggleWeb, onManageConnectors,
+  docLabel, pdfLabel, menuLabel, attachFileLabel,
+  webSearchLabel, webSearch,
+  onCreate, onAttachFile, onToggleWeb, onManageConnectors,
 }: {
   connectorsLabel: string;
   manageLabel: string;
@@ -1590,12 +1399,9 @@ function ComposerActions({
   pdfLabel: string;
   menuLabel: string;
   attachFileLabel: string;
-  searchMeetingsLabel: string;
   webSearchLabel: string;
-  attachedCount: number;
   webSearch: boolean;
   onCreate: (kind: "doc" | "pdf") => void;
-  onSources: () => void;
   onAttachFile: () => void;
   onToggleWeb: () => void;
   onManageConnectors: () => void;
@@ -1614,6 +1420,19 @@ function ComposerActions({
      three things beside a field, not a section */
   const item = "gap-2 px-2 py-1 text-xs";
   const panel = "min-w-0 p-0.5";
+  /*
+   * FORTY PER CENT NARROWER (user directive, 2026-09-04: "make the length of
+   * the menu of the plus 40% less than what it is now").
+   *
+   * Written as the arithmetic rather than as the answer, because the answer is
+   * the part that stops being checkable: 13rem was chosen for a menu whose
+   * longest row is «اتصال‌ها», and 13 × 0.6 = 7.8 is a sentence somebody can
+   * verify against the directive a month from now. `w-32` would be 8rem and
+   * near enough, and near enough is how a measured value becomes folklore.
+   */
+  const menuW = "w-[7.8rem]";      // 13rem − 40%
+  const subW = "w-[8.4rem]";       // 14rem − 40%, the wider submenus
+  const subNarrowW = "w-[6.6rem]"; // 11rem − 40%, Create's two rows
   return (
     <DropdownMenu onOpenChange={(next) => { if (next) load(); }}>
       <DropdownMenuTrigger asChild>
@@ -1633,13 +1452,13 @@ function ComposerActions({
         (make something, attach something, reach something), so the glyph is
         doing work rather than decorating.
       */}
-      <DropdownMenuContent side="top" align="start" className={`w-52 ${panel}`}>
+      <DropdownMenuContent side="top" align="start" className={`${menuW} ${panel}`}>
         <DropdownMenuSub>
           <DropdownMenuSubTrigger className={item}>
             <DocumentIcon width={13} height={13} />
             {createLabel}
           </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className={`w-44 ${panel}`}>
+          <DropdownMenuSubContent className={`${subNarrowW} ${panel}`}>
             <DropdownMenuItem className={item} onSelect={() => onCreate("doc")}>
               <Icon name="fileText" size="sm" />
               {docLabel}
@@ -1664,17 +1483,8 @@ function ComposerActions({
           <DropdownMenuSubTrigger className={item}>
             <Icon name="tag" size="sm" />
             {sourcesLabel}
-            {attachedCount > 0 ? (
-              <span className="badge-num ms-auto rounded-full bg-accent-soft px-1.5 text-[10px] font-semibold text-accent">
-                {attachedCount}
-              </span>
-            ) : null}
           </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className={`w-56 ${panel}`}>
-            <DropdownMenuItem className={item} onSelect={onSources}>
-              <Icon name="search" size="sm" />
-              {searchMeetingsLabel}
-            </DropdownMenuItem>
+          <DropdownMenuSubContent className={`${subW} ${panel}`}>
             <DropdownMenuItem className={item} onSelect={onAttachFile}>
               <Icon name="fileText" size="sm" />
               {attachFileLabel}
@@ -1696,7 +1506,7 @@ function ComposerActions({
             <Icon name="plug" size="sm" />
             {connectorsLabel}
           </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className={`w-56 ${panel}`}>
+          <DropdownMenuSubContent className={`${subW} ${panel}`}>
             {connectors === null ? (
               <div className="px-2 py-1"><SkeletonLines lines={2} /></div>
             ) : connectors === "failed" ? (

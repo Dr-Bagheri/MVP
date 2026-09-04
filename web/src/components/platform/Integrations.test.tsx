@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConnectorStatus } from "@/api/types";
+import fa from "../../messages/fa.json";
 
 /**
  * The integrations page has one failure mode that renders perfectly: a tile
@@ -94,6 +95,31 @@ beforeEach(() => {
   CONNECTORS = [GOOGLE];
 });
 
+
+/**
+ * Show the CONNECTED half.
+ *
+ * The page is two tabs now (user directive, 2026-09-04) and opens on
+ * Available, because a fresh account has nothing connected and an empty table
+ * is a poor first screen. Four cases here are about the connected table, so
+ * they say so — going through the real tab rather than reaching past it, for
+ * the reason every menu test in this repo does: a test that reached past the
+ * control would keep passing after the control stopped working.
+ */
+async function showConnected() {
+  /* named from the CATALOGUE, not retyped: a tab label with a ZWNJ in it is
+     one a hand-written regex gets subtly wrong, and the failure reads as "the
+     tab does not exist" rather than "I spelled it differently" */
+  /* a PREFIX match, from the catalogue rather than retyped: the tab's
+     accessible name is its label PLUS its count badge, and an exact match
+     against the label alone fails in a way that reads as "the tab does not
+     exist" rather than "the name has a number on the end" */
+  const tab = screen.getByRole("tab", {
+    name: (accessible) => accessible.startsWith(fa.integrations.connectedTitle),
+  });
+  await act(async () => { fireEvent.click(tab); });
+}
+
 describe("the integrations page", () => {
   /**
    * ONE grant, FOUR rows, and the differences between them are the assertion.
@@ -112,6 +138,7 @@ describe("the integrations page", () => {
    */
   it("splits one connection into its sources, and reports the mailbox's sync where the others have none", async () => {
     await act(async () => { render(<Integrations />); });
+    await showConnected();
 
     /* scoped to the TABLE: «جی‌میل» and «تقویم گوگل» also name the tiles in
        the Available section below, and an unscoped query cannot tell "it is
@@ -159,6 +186,7 @@ describe("the integrations page", () => {
    */
   it("opens a source's own detail page when its row is clicked", async () => {
     await act(async () => { render(<Integrations />); });
+    await showConnected();
     const table = await screen.findByRole("table");
 
     fireEvent.click(within(table).getByText("تقویم گوگل").closest("tr")!);
@@ -178,6 +206,7 @@ describe("the integrations page", () => {
    */
   it("filters the table by what is typed, including the account under the name", async () => {
     await act(async () => { render(<Integrations />); });
+    await showConnected();
     const table = await screen.findByRole("table");
     const box = screen.getByPlaceholderText("جست‌وجو در اتصال‌ها");
 
@@ -291,10 +320,12 @@ describe("the integrations page", () => {
     CONNECTORS = [{ ...GOOGLE, can_drive: false }];
     await act(async () => { render(<Integrations />); });
 
-    // the offer, on the Drive tile
+    /* the offer is on the Drive TILE, which lives in the Available half — the
+       page's opening tab, so nothing is switched to see it */
     expect(screen.getByRole("button", { name: "برای دسترسی به درایو دوباره وصل شوید" })).toBeTruthy();
-    /* and no Drive ROW: a grant that never covered Drive has no Drive
-       connection to report on — not a broken one, an unasked one */
+    /* and no Drive ROW in the connected half: a grant that never covered Drive
+       has no Drive connection to report on — not a broken one, an unasked one */
+    await showConnected();
     const table = screen.getByRole("table");
     expect(within(table).queryByText("گوگل درایو")).toBeNull();
 
@@ -303,6 +334,7 @@ describe("the integrations page", () => {
     CONNECTORS = [GOOGLE];
     await act(async () => { render(<Integrations />); });
     expect(screen.queryByText("برای دسترسی به درایو دوباره وصل شوید")).toBeNull();
+    await showConnected();
     expect(within(screen.getByRole("table")).getByText("گوگل درایو")).toBeTruthy();
   });
 

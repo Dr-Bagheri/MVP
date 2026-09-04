@@ -206,29 +206,27 @@ describe("Hub — session continuity", () => {
     await waitFor(() => expect(screen.queryByText("پاسخ")).toBeNull());
   });
 
-  it("searches Sources from the first character, without an instruction or Echo shortcut", async () => {
-    render(<Hub />);
-
+  it("no longer offers a meeting search under Sources — and searches nothing", async () => {
     /*
-     * THE ROUTE CHANGED (user directive, 2026-09-03): «منابع» is a submenu of
-     * the composer's ⊕ now, and its "search meetings" row opens this panel.
-     * The visible «منابع» button under the field is gone — it was the label
-     * drawn twice, once in the menu and once beneath it.
+     * THE FEATURE LEFT (user directive, 2026-09-04: "remove the search in
+     * source"), and this asserts its absence rather than being deleted with
+     * it. The panel it opened, the debounce and the attached-meeting chips
+     * went too; what would be easy to leave behind is the NETWORK CALL, which
+     * had fired on every keystroke and is invisible on screen either way.
      *
      * A PRESS at every step, not a hover (2026-09-02): these are the
      * platform's own menus, and one that opens because a pointer passed over
      * it is one that opens by accident, with no keyboard equivalent at all.
      */
+    render(<Hub />);
     await userEvent.click(screen.getByRole("button", { name: "افزودن" }));
     await userEvent.click(await screen.findByRole("menuitem", { name: "منابع" }));
-    await userEvent.click(
-      await screen.findByRole("menuitem", { name: "جست‌وجو در تماس‌ها و جلسه‌ها…" }));
-    const search = screen.getByPlaceholderText("جست‌وجو در تماس‌ها و جلسه‌ها…");
-    fireEvent.change(search, { target: { value: "ا" } });
 
-    await waitFor(() => expect(sourceSearches).toEqual(["ا"]));
-    expect(screen.queryByText("برای جست‌وجو در رونوشت‌ها و خلاصه‌ها دست‌کم دو نویسه بنویسید.")).toBeNull();
-    expect(screen.queryByText("جلسه‌ها — بازکردن اکو")).toBeNull();
+    /* the two acts that REMAIN are still there — without this the assertion
+       below would also pass on a Sources submenu that had lost everything */
+    expect(await screen.findByRole("menuitem", { name: "پیوست فایل" })).toBeTruthy();
+    expect(screen.queryByRole("menuitem", { name: /جست‌وجو در تماس/ })).toBeNull();
+    expect(sourceSearches, "nothing may still be searching the index").toEqual([]);
   });
 
   it("selects Doc without putting an instruction inside the composer", async () => {

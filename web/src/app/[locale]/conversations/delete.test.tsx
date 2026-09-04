@@ -11,6 +11,7 @@
  * the way the row does, and confirming archives it and fetches again.
  */
 import { act, fireEvent, render, screen } from "@testing-library/react";
+import { openRowMenu } from "@/test/rowMenu";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { resetRefreshBus } from "@/lib/refreshBus";
 
@@ -66,7 +67,7 @@ describe("history table × delete", () => {
     expect(screen.queryByRole("button", { name: "حذف" })).toBeNull();
 
     /* the records-table gesture */
-    fireEvent.contextMenu(screen.getByText("اولی"), { clientX: 40, clientY: 40 });
+    await openRowMenu("اولی");
     fireEvent.click(await screen.findByRole("menuitem", { name: /حذف/ }));
 
     /* the press ASKS — nothing is written before the dialog's own consent */

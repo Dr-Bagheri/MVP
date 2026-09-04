@@ -17,7 +17,7 @@ import type { DomainTool } from "../agent/tools.ts";
 import type { Db } from "../db/identity.ts";
 import type { Identity, Skill } from "../agent/types.ts";
 import { createClientTools } from "../agent/client-tools.ts";
-import { createDelegationTools } from "../agent/delegation.ts";
+import { createDelegationTools, createEchoTool } from "../agent/delegation.ts";
 
 export interface AskRequest {
   identity: Identity;
@@ -228,8 +228,41 @@ export function createAssistant<TDeps>(config: AssistantDeps<TDeps>) {
        * and a thread that reorders itself on reload is a thread nobody trusts.
        */
       const delegateTurns: { author: string; text: string; failed: boolean }[] = [];
+      /*
+       * AN AGENT'S TURN GETS `ask_echo` INSTEAD (user directive, 2026-09-04:
+       * "they also must have the ability to talk to echo and ask things from
+       * echo as well").
+       *
+       * Still no onward delegation — Roya cannot reach Ava, which is guard 1
+       * and stays an absence rather than a check. What she gains is the one
+       * direction that was missing: the platform assistant, asked as a
+       * colleague, with a read-only tool set and no voice in the thread. See
+       * `createEchoTool` for why its reach is narrower than Echo's own.
+       */
       const delegationTools = request.agentHandle
-        ? []
+        ? await createEchoTool({
+          db: config.db,
+          identity: request.identity,
+          web: request.agentsWeb === true,
+          locale: request.locale,
+          askedBy: request.agentHandle,
+          onTurn: async () => { /* Echo answering its agent is not a turn */ },
+          runNested: async (nested) => runtime.run({
+            identity: request.identity,
+            kind: "assistant",
+            systemInstructions: nested.instructions,
+            agentModel: nested.model,
+            callerModel: request.model,
+            input: nested.question,
+            tools: nested.tools as never,
+            clientTools: [] as never,
+            deps: config.deps as never,
+            callId: null,
+            web: nested.web,
+            signal: request.signal,
+            apiKey: config.apiKey,
+          }),
+        })
         : await createDelegationTools({
           db: config.db,
           identity: request.identity,

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { openRowMenu } from "@/test/rowMenu";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const platformAccess = vi.fn();
@@ -106,9 +107,8 @@ function rootData() {
  * they assert is unchanged: WHICH actions a given row offers, and which of
  * them it refuses.
  */
-function openRowMenu(text: string): void {
-  fireEvent.contextMenu(screen.getByText(text));
-}
+/* the ⋯ at the end of the row (2026-09-04) — shared, so the next change to
+   how a row's menu opens is one edit rather than five */
 
 /** A menu entry, by its label. */
 function item(name: string): HTMLElement {
@@ -140,7 +140,7 @@ describe("Platform-root console", () => {
 
     // The whole point of the redesign: the action is a live entry, not a
     // permanently-disabled one gated behind a hidden textarea.
-    openRowMenu("Northwind");
+    await openRowMenu("Northwind");
     expect(item("تعلیق سازمان")).not.toHaveAttribute("aria-disabled", "true");
 
     // The black title and the privacy banner were removed by request; guard
@@ -157,7 +157,7 @@ describe("Platform-root console", () => {
     render(<PlatformControlPage />);
 
     await screen.findByText("Northwind");
-    openRowMenu("Northwind");
+    await openRowMenu("Northwind");
     fireEvent.click(item("تعلیق سازمان"));
 
     // dialog open: confirm is disabled until a valid reason is typed
@@ -181,7 +181,7 @@ describe("Platform-root console", () => {
 
     fireEvent.click(screen.getByRole("tab", { name: /کاربران/ }));
     await screen.findByText("operator@example.test");
-    openRowMenu("operator@example.test");
+    await openRowMenu("operator@example.test");
     /* REFUSED, not absent. The three acts stay in the menu and say no —
        "you may not disable yourself" and "there is no such action" are
        different sentences, and this is the screen where the difference is
@@ -201,7 +201,7 @@ describe("Platform-root console", () => {
 
     fireEvent.click(screen.getByRole("tab", { name: /کاربران/ }));
     await screen.findByText("member@example.test");
-    openRowMenu("member@example.test");
+    await openRowMenu("member@example.test");
     expect(item("غیرفعال‌کردن کاربر")).not.toHaveAttribute("aria-disabled", "true");
     expect(item("حذف کاربر")).not.toHaveAttribute("aria-disabled", "true");
     /* a member is not a root, so the grant is what their row offers */
@@ -214,7 +214,7 @@ describe("Platform-root console", () => {
     render(<PlatformControlPage />);
     await screen.findByText("Northwind");
 
-    openRowMenu("Northwind");
+    await openRowMenu("Northwind");
     fireEvent.click(item("ویرایش"));
 
     const name = await screen.findByLabelText("نام سازمان");
@@ -237,7 +237,7 @@ describe("Platform-root console", () => {
 
     fireEvent.click(screen.getByRole("tab", { name: /کاربران/ }));
     await screen.findByText("member@example.test");
-    openRowMenu("member@example.test");
+    await openRowMenu("member@example.test");
     fireEvent.click(item("ویرایش"));
 
     // The immutability note is shown; the email is nowhere editable.
@@ -251,7 +251,7 @@ describe("Platform-root console", () => {
     render(<PlatformControlPage />);
     await screen.findByText("Northwind");
 
-    openRowMenu("Northwind");
+    await openRowMenu("Northwind");
     fireEvent.click(item("حذف سازمان"));
     fireEvent.change(await screen.findByLabelText(/دلیل/), { target: { value: "offboarding the account" } });
     fireEvent.click(screen.getByRole("button", { name: "تأیید" }));
@@ -272,7 +272,7 @@ describe("Platform-root console", () => {
       expect(platformOrganizations).toHaveBeenCalledWith({ search: "", limit: 50, deleted: true }),
     );
     expect(await screen.findByText("Oldco")).toBeTruthy();
-    openRowMenu("Oldco");
+    await openRowMenu("Oldco");
     expect(item("بازیابی سازمان")).toBeTruthy();
     // In trash view the suspend/delete acts are not offered at all — the row
     // is already deleted, and the only two questions left are put it back or

@@ -104,6 +104,9 @@ const SIZES = {
   sm: { box: "h-5 w-5", text: "text-[10px]" },
   md: { box: "h-6 w-6", text: "text-[11px]" },
   lg: { box: "h-8 w-8", text: "text-sm" },
+  /* the roster's big card and the detail page's header — the two places an
+     agent is the SUBJECT rather than the author of a line */
+  xl: { box: "h-14 w-14", text: "text-xl" },
 } as const;
 
 /** Echo's handle, which is deliberately not a row in the agents table. */

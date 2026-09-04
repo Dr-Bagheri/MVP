@@ -148,18 +148,34 @@ export function Section({
   title,
   description,
   divided = false,
+  hidden = false,
   children,
 }: {
   title?: string;
   description?: string;
   divided?: boolean;
+  /**
+   * Present but not shown — for a section that is one tab of a page (see
+   * `SectionTabs`). Hidden rather than unmounted on purpose: a table's search
+   * box, its filters and its page number are things a person set, and losing
+   * them because they glanced at the other tab is the kind of small betrayal
+   * that teaches people not to explore a screen.
+   *
+   * The attribute, not a class: `hidden` takes the element out of the
+   * accessibility tree as well as the layout, so a screen reader does not read
+   * out the tab nobody chose.
+   */
+  hidden?: boolean;
   children: ReactNode;
 }) {
   return (
     /* first-of-type:pt-0 — the header's own mb-6 (or the container's aligned
        top) carries the space; pt-8 on top of it read as a hole under every
        divider */
-    <section className={`py-6 first-of-type:pt-0 ${divided ? "border-t border-border" : ""}`}>
+    <section
+      hidden={hidden}
+      className={`py-6 first-of-type:pt-0 ${divided ? "border-t border-border" : ""}`}
+    >
       {/* audit finding, 2026-09-02: this h2 wore `text-xl`, and the re-pitched
           scale points `xl` at rem(SCAFFOLD.fontSize.pageTitle) = 16 — so every
           block heading inside a page rendered at the PAGE title's size, a step

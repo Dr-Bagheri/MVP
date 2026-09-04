@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { StarterWorkflow, WorkflowCard } from "@/api/types";
 import fa from "../../messages/fa.json";
@@ -124,18 +124,49 @@ beforeEach(() => {
   CARD_ROWS = CARDS;
 });
 
+
+/**
+ * Show the LIBRARY half.
+ *
+ * The page is two tabs since 2026-09-04 ("add a sub menu on the top in
+ * workflow as well with name Active Workflow and second Workflow library") and
+ * opens on Active — what this organization runs, which is the question a
+ * person arrives with. The shelf is the other tab, so a case about the shelf
+ * goes through the tab rather than reaching past it.
+ */
+async function showLibrary() {
+  await act(async () => {
+    fireEvent.click(screen.getByRole("tab", {
+      name: (accessible) => accessible.startsWith(fa.workflows.libraryTitle),
+    }));
+  });
+}
+
 describe("the workflows list", () => {
   it("renders one card per template, with the WHOLE card as the link", async () => {
     await act(async () => { render(<Workflows />); });
 
-    /* the two templates first, then the whole LIBRARY in registry order —
-       the expected list is derived from the producer, never transcribed */
+    /* the ACTIVE half is the two templates alone now — the shelf moved to its
+       own tab, which is the whole point of the change. Asserted as an exact
+       list so a starter leaking back into this half fails here. */
     const links = screen.getAllByRole("link");
     expect(links.map((link) => link.getAttribute("href"))).toEqual([
       "/workflows/draft-email-replies",
       "/workflows/prepare-meetings",
-      ...Object.values(STARTER_WORKFLOWS).map((starter) => `/workflows/${starter.handle}`),
     ]);
+
+    /* and the shelf IS reachable, in registry order — derived from the
+       producer, never transcribed. Without this the assertion above would be
+       satisfied by a page that had simply lost the library. */
+    await showLibrary();
+    expect(screen.getAllByRole("link").map((link) => link.getAttribute("href"))).toEqual(
+      Object.values(STARTER_WORKFLOWS).map((starter) => `/workflows/${starter.handle}`),
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByRole("tab", {
+        name: (accessible) => accessible.startsWith(fa.workflows.activeTitle),
+      }));
+    });
 
     /* the description lives INSIDE the link — the assertion the previous
        title-only-link shape fails, and the only one that distinguishes a card
@@ -254,25 +285,27 @@ describe("the workflows list", () => {
     }];
     await act(async () => { render(<Workflows />); });
 
-    const section = screen.getByText("کتابخانهٔ گردش‌کارها").closest("section")!;
-    const hrefs = within(section).getAllByRole("link")
-      .map((link) => link.getAttribute("href"));
-    /* NOT installed → on the shelf, linking to its own page */
-    expect(hrefs).toContain("/workflows/wf-starter-followups");
-    /* installed → OFF the shelf (its card above is the real thing)… */
-    expect(hrefs).not.toContain("/workflows/wf-starter-autotag");
-    /* …while the page as a whole still links it exactly once, as the
-       authored card — hidden from the shelf, not from the page */
+    /* the installed one is on the ACTIVE tab, as the authored card — checked
+       here, before switching, because "hidden from the shelf" and "hidden
+       from the page" are the two things this case must tell apart */
     expect(
       screen.getAllByRole("link")
         .map((link) => link.getAttribute("href"))
         .filter((href) => href === "/workflows/wf-starter-autotag"),
     ).toHaveLength(1);
-    /* the shelf shrank by exactly the installed one */
-    expect(within(section).getAllByRole("link"))
-      .toHaveLength(Object.keys(STARTER_WORKFLOWS).length - 1);
+
+    await showLibrary();
+    const hrefs = screen.getAllByRole("link").map((link) => link.getAttribute("href"));
+    /* NOT installed → on the shelf, linking to its own page */
+    expect(hrefs).toContain("/workflows/wf-starter-followups");
+    /* installed → OFF the shelf (its card on the other tab is the real thing) */
+    expect(hrefs).not.toContain("/workflows/wf-starter-autotag");
+    /* the shelf shrank by exactly the installed one. The whole TAB is the
+       shelf now, so this counts the page's links rather than a section's —
+       and that is only true because the active half is not rendered here. */
+    expect(hrefs).toHaveLength(Object.keys(STARTER_WORKFLOWS).length - 1);
     /* and a shelf card carries the LOCALIZED name — the same
        `useWorkflowCopy` path the agent panel and the installed cards use */
-    expect(within(section).getByText("پیگیری جلسه‌ها")).toBeTruthy();
+    expect(screen.getByText("پیگیری جلسه‌ها")).toBeTruthy();
   });
 });

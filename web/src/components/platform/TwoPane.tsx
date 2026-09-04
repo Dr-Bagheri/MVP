@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { sectionTabClass } from "./sectionTabs";
 import { Fragment } from "react";
 import { PageContainer } from "@/components/scaffold";
 import type { MenuGroup, MenuItem } from "@/components/scaffold";
@@ -124,11 +125,11 @@ export function TwoPane({
                       key={item.slug}
                       href={item.href}
                       aria-current={active ? "page" : undefined}
-                      className={`btn btn-sm gap-1.5 font-medium ${
-                        active
-                          ? "bg-accent text-on-accent"
-                          : "text-fg-muted hover:bg-surface-2 hover:text-fg"
-                      }`}
+                      /* the class is shared with the in-page tab strip
+                         (`sectionTabs`): a menu of routes and a menu of views
+                         answer the same question about the same screen, so
+                         they must not look like two different controls */
+                      className={sectionTabClass(active)}
                     >
                       {item.label}
                     </Link>

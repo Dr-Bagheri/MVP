@@ -1,13 +1,13 @@
 "use client";
 
-import { Fragment, useState, type ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 /* the MODULE, not the barrel: a partial `vi.mock` of `@/components/scaffold`
    anywhere in the suite would otherwise leave this import undefined, and the
    table would crash inside somebody else's test for a reason that has
    nothing to do with their subject */
 import { Skeleton } from "@/components/scaffold/Skeleton";
-import { ContextMenu, type KebabItem } from "@/components/rowActions";
+import { KebabMenu, type KebabItem } from "@/components/rowActions";
 import { PAGE_SIZE, Pagination, usePaged } from "@/components/Pagination";
 
 /**
@@ -133,7 +133,8 @@ export function DataTable<T>({
   hideHeader = false,
 }: DataTableProps<T>) {
   const t = useTranslations("table");
-  const [menu, setMenu] = useState<{ x: number; y: number; key: string } | null>(null);
+  /* no pointer position to remember any more: the menu hangs off the row's
+     own ⋯ button, so Radix places it and the table stops tracking clientX */
 
   /* MAX_SAFE_INTEGER rather than a branch: hooks cannot be conditional,
      and one page of everything is exactly what "no paging" means — the
@@ -213,6 +214,14 @@ export function DataTable<T>({
                   )}
                 </th>
               ))}
+              {/* the actions column — named for a screen reader, blank on
+                  screen: a heading over a column of ⋯ buttons is a word
+                  explaining a glyph that already says it */}
+              {menuItems ? (
+                <th className="w-12 px-3 py-3">
+                  <span className="sr-only">{t("rowActions")}</span>
+                </th>
+              ) : null}
             </tr>
           </thead>
           <tbody className="group/table">
@@ -247,15 +256,6 @@ export function DataTable<T>({
                        that used to signal hover reads as a selection */
                     className={`group ${onRowClick ? "row-link" : ""} ${rowClassName?.(row) ?? ""}`}
                     onClick={onRowClick ? () => onRowClick(row) : undefined}
-                    onContextMenu={
-                      menuItems
-                        ? (e) => {
-                            if (menuItems(row).length === 0) return;
-                            e.preventDefault();
-                            setMenu({ x: e.clientX, y: e.clientY, key });
-                          }
-                        : undefined
-                    }
                   >
                     {selecting ? (
                       <td className="w-10 px-3 py-3" onClick={(e) => e.stopPropagation()}>
@@ -287,6 +287,35 @@ export function DataTable<T>({
                         {column.cell(row)}
                       </td>
                     ))}
+                    {/*
+                      THE ⋯ AT THE END OF THE ROW (user directive, 2026-09-04:
+                      "instead of right click kebab menu for all tables in the
+                      platform, at the end of the row add the three dot that
+                      opens the kebab menu with same details in it, and add
+                      this to the platform theme for all").
+
+                      It lives HERE rather than in each table's last column,
+                      which is what makes it a theme rule instead of fifteen
+                      screens that mostly agree: a table that passes
+                      `menuItems` gets the button by BEING a table. The items
+                      are the same function the right-click used, so the menu
+                      cannot differ between the two ways of opening it — there
+                      is now only one way, which is the point of the change.
+                      Right-click was a hidden affordance: correct for whoever
+                      knew, invisible to everyone else, and this platform has
+                      rows whose only actions lived behind it.
+
+                      `stopPropagation` because a row with `onRowClick` is a
+                      link, and pressing its menu must not also open the thing
+                      the row points at.
+                    */}
+                    {menuItems ? (
+                      <td className="w-12 px-3 py-3.5" onClick={(e) => e.stopPropagation()}>
+                        {menuItems(row).length > 0 ? (
+                          <KebabMenu label={t("rowActions")} items={menuItems(row)} />
+                        ) : null}
+                      </td>
+                    ) : null}
                   </tr>
                   {rowDetail?.(row) !== undefined && rowDetail(row) !== null ? (
                     <tr className="bg-surface-2/50">
@@ -303,17 +332,6 @@ export function DataTable<T>({
       </div>
       <Pagination page={page} pageCount={pageCount} onPage={setPage} />
 
-      {menu !== null && menuItems !== undefined ? (() => {
-        const row = rows.find((candidate) => rowKey(candidate) === menu.key);
-        if (!row) return null;
-        return (
-          <ContextMenu
-            at={menu}
-            onClose={() => setMenu(null)}
-            items={menuItems(row)}
-          />
-        );
-      })() : null}
     </>
   );
 }

@@ -111,6 +111,103 @@ export interface DelegationOptions {
  * that named two handles would go stale the first time somebody did. The
  * handles come from the store; only the SPECIALISM mapping is ours.
  */
+/**
+ * THE OTHER DIRECTION (user directive, 2026-09-04: "they also must have the
+ * ability to talk to echo and ask things from echo as well").
+ *
+ * An agent's turn gets ONE tool, `ask_echo`, and it is deliberately not the
+ * mirror of `ask_roya`. Echo, asked by a person, holds client tools, write
+ * tools and its colleagues. Echo asked by an AGENT holds none of those:
+ *
+ *   · no client tools — the browser performs those, and nothing a delegate
+ *     produces should be able to navigate the person's screen;
+ *   · no write tools — a proposal exists so a HUMAN can approve it, and a
+ *     proposal raised inside a nested run has no conversation to be approved
+ *     in (the ruling that killed the pending-proposals inbox);
+ *   · no delegation of its own — otherwise Roya asks Echo, who asks Ava, who
+ *     asks Echo, and the ceiling is the only thing standing between that and
+ *     a bill. Guard 1 in the other direction.
+ *
+ * What is left is the thing worth having: Echo's READ tools and its view of
+ * the platform, which is what an agent actually needs when it says "I do not
+ * have that". The blast radius is identical to a colleague's answer, which is
+ * the rule this file already runs on — what an output can REACH decides what
+ * its author may hold.
+ *
+ * It shares `MAX_DELEGATIONS` with the colleague tools by construction: one
+ * `spent` counter per turn, whichever direction the asking goes.
+ */
+export async function createEchoTool(
+  options: Omit<DelegationOptions, "web"> & { web: boolean; askedBy: string },
+): Promise<DomainTool<ToolDeps, never>[]> {
+  let spent = 0;
+  const tool: DomainTool<ToolDeps, { question: string }> = {
+    name: "ask_echo",
+    label: "پرسیدن از اکو",
+    description:
+      "Ask Echo, the platform assistant, something you cannot answer yourself. "
+      + "Echo sees the whole platform and can look things up for you. Use it when "
+      + "you are missing a fact, not to hand over the question you were asked — "
+      + "the person asked YOU.",
+    parameters: Type.Object({
+      question: Type.String({
+        description: "The specific thing you need to know, in one question.",
+      }),
+    }),
+    async run(_ctx, args) {
+      /*
+       * VALIDATE, THEN SPEND. The two were the other way round, which made a
+       * malformed call cost a real one: a model that sends an empty `question`
+       * — which is exactly the mistake it recovers from by trying again — got
+       * charged for the attempt and hit the ceiling one ask early. The budget
+       * exists to bound WORK, and a refusal did none.
+       */
+      const question = (args.question ?? "").trim();
+      if (question === "") throw new ToolDenied("say what you are asking Echo for");
+      if (spent >= MAX_DELEGATIONS) {
+        throw new ToolDenied(
+          `you have already asked Echo ${MAX_DELEGATIONS} times for this question `
+          + "— answer with what you have",
+        );
+      }
+      spent += 1;
+
+      const result = await options.runNested({
+        agentHandle: "echo",
+        instructions: echoBriefing(options.askedBy, options.locale),
+        model: null,
+        web: options.web,
+        question,
+        tools: [...createDomainTools(), ...toolsFor("both")] as DomainTool<ToolDeps, never>[],
+      });
+
+      /*
+       * NOT announced as a turn. A colleague's answer is shown because the
+       * person asked Echo and somebody else replied — that is a fact about
+       * the conversation. Echo answering its own agent is working out, not
+       * speaking, and putting it in the thread would show the reader two
+       * voices for one answer they only asked one person for.
+       */
+      if (result.failed) {
+        throw new ToolDenied(`Echo could not answer: ${result.error ?? "the run failed"}`);
+      }
+      return { from: "Echo", answer: result.text };
+    },
+  };
+  return [tool as DomainTool<ToolDeps, never>];
+}
+
+function echoBriefing(askedBy: string, locale: string | undefined): string {
+  const language = locale === "en" ? "Answer in English." : "پاسخ را به فارسی بنویس.";
+  return [
+    `تو «اکو» هستی، دستیار این پلتفرم. ${askedBy} — یکی از دستیارهای همین سازمان —`,
+    "از تو چیزی پرسیده است تا بتواند به کاربر جواب بدهد.",
+    "پاسخ تو به کاربر نشان داده نمی‌شود؛ به همکارت داده می‌شود، پس کوتاه و دقیق",
+    "بنویس: همان چیزی که پرسیده، با شاهدش. اگر نمی‌دانی، همین را بگو؛ حدس نزن.",
+    language,
+  ].join(" ");
+}
+
 export async function createDelegationTools(
   options: DelegationOptions,
 ): Promise<DomainTool<ToolDeps, never>[]> {
@@ -152,6 +249,10 @@ export async function createDelegationTools(
         })),
       }),
       async run(_ctx, args) {
+        /* validate before spending — see `createEchoTool` for why: a refused
+           call did no work, and charging for it costs a real ask */
+        const question = (args.question ?? "").trim();
+        if (question === "") throw new ToolDenied("say what you are asking them for");
         if (spent >= MAX_DELEGATIONS) {
           throw new ToolDenied(
             `you have already called your colleagues ${MAX_DELEGATIONS} times for this `
@@ -159,9 +260,6 @@ export async function createDelegationTools(
           );
         }
         spent += 1;
-
-        const question = (args.question ?? "").trim();
-        if (question === "") throw new ToolDenied("say what you are asking them for");
 
         /*
          * The delegate's tool set: its specialism's platform reads plus the

@@ -7,6 +7,7 @@
  * the api.
  */
 import { fireEvent, render, screen, act } from "@testing-library/react";
+import { openRowMenu } from "@/test/rowMenu";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const enrollVoice = vi.fn(async (_id: string, _clip: Blob) => undefined);
@@ -79,13 +80,10 @@ async function openPanel() {
   await act(async () => {
     await Promise.resolve();
   });
-  /* the voice actions live in the ROW MENU now (2026-08-26, every table):
-     right-click the row, then pick Enroll. Going through the real menu is
-     the point — a test that reached past it would keep passing after the
-     only way in disappeared. */
-  const row = screen.getByText("سینا").closest("tr");
-  expect(row).not.toBeNull();
-  fireEvent.contextMenu(row!, { clientX: 40, clientY: 40 });
+  /* the voice actions live in the ROW MENU: open it at the row's ⋯ and pick
+     Enroll. Going through the real control is the point — a test that reached
+     past it would keep passing after the only way in disappeared. */
+  await openRowMenu("سینا");
   fireEvent.click(screen.getByText("voiceEnroll"));
   return screen.getByText("voiceStart");
 }

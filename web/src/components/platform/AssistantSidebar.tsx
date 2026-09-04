@@ -12,6 +12,7 @@ import type { ConnectorStatus } from "@/api/types";
 import { useRouter } from "@/i18n/routing";
 import { mentionedAgent } from "@/lib/agentMention";
 import { AgentAvatar, AgentName, ECHO } from "./AgentAvatar";
+import { pushToTalkKey, pushToTalkServer, subscribePushToTalk } from "@/lib/pushToTalk";
 import {
   adoptAssistantThread, askAssistant, assistantServerSnapshot, assistantSnapshot,
   registerAssistantSurface, resetAssistantSession, stopAssistant, subscribeAssistant,
@@ -423,6 +424,9 @@ export function AssistantSidebar() {
   const prefs = useSyncExternalStore(subscribeVoicePrefs, voicePrefs, voicePrefsServer);
   const silent = prefs.silent;
   const ears = prefs.ears;
+  /* the push-to-talk binding, per device — see lib/pushToTalk for why it is
+     its own store and why it holds a physical key code */
+  const hotkey = useSyncExternalStore(subscribePushToTalk, pushToTalkKey, pushToTalkServer);
   const silentRef = useRef(silent);
   const earsRef = useRef(ears);
   silentRef.current = silent;
@@ -444,6 +448,62 @@ export function AssistantSidebar() {
     earsStarted.current = ears;
     if (ears) beginLoopRef.current(); else suspendLoop();
   }, [ears]);
+
+  /**
+   * PUSH TO TALK (user directive, 2026-09-04).
+   *
+   * Hold the chosen key and the assistant listens; let go and it stops. The
+   * key is the person's own, from `lib/pushToTalk`, and NOTHING happens until
+   * they have chosen one — an unbound hotkey must not guess at a default and
+   * silently take a key away from the browser.
+   *
+   * `event.code`, matching what was stored: the PHYSICAL key, so the binding
+   * survives switching to a Persian layout, which is the default here.
+   *
+   * Two guards that are not optional:
+   *
+   *   · a key pressed while TYPING is a character, not a command. A person
+   *     writing «سلام» into any field on the platform must not open a
+   *     microphone because their hotkey happens to be a letter.
+   *   · `event.repeat` — holding a key fires keydown continuously, and
+   *     starting the loop forty times a second is a stream of requests
+   *     nobody asked for.
+   *
+   * The keyup releases regardless of those guards, deliberately: if the
+   * pointer moved into a field while the key was down, the correct behaviour
+   * is still to stop listening, and an unmatched release is a no-op.
+   */
+  useEffect(() => {
+    if (hotkey === null) return;
+    let holding = false;
+    const typing = (target: EventTarget | null) =>
+      target instanceof HTMLElement &&
+      (["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName) || target.isContentEditable);
+
+    function down(event: KeyboardEvent) {
+      if (event.code !== hotkey || event.repeat || holding) return;
+      if (typing(event.target)) return;
+      event.preventDefault();
+      holding = true;
+      reveal();
+      beginLoopRef.current();
+    }
+    function up(event: KeyboardEvent) {
+      if (event.code !== hotkey || !holding) return;
+      holding = false;
+      /* back to the standing preference, not to "off": someone whose ears are
+         normally ON has just been pushed into silence by releasing a key they
+         held for two seconds, which is the opposite of what the key promised */
+      if (!earsRef.current) suspendLoop();
+    }
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refs are stable
+  }, [hotkey]);
 
   const [toasts, setToasts] = useState<PlatformNotice[]>([]);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -1056,7 +1116,15 @@ export function AssistantSidebar() {
                 <p className="text-detail leading-6 text-fg-muted">{t("empty")}</p>
               ) : (
                 messages.map((m) => (
-                  <div key={m.id} className={m.role === "user" ? "flex justify-end" : ""}>
+                  /* the question on the PHYSICAL right in both locales — see
+                     ConversationThread for the reasoning; the panel must not
+                     disagree with the page about which side is the person's */
+                  <div
+                    key={m.id}
+                    className={m.role === "user"
+                      ? `flex ${locale === "fa" ? "justify-start" : "justify-end"}`
+                      : ""}
+                  >
                     {/* whose turn — Echo's included since 2026-09-04, and one
                         size down from the page: this column is 30% of the
                         screen and a face here competes with the words */}
@@ -1071,7 +1139,9 @@ export function AssistantSidebar() {
                     <div
                       className={
                         m.role === "user"
-                          ? "max-w-[85%] rounded-2xl rounded-ee-sm bg-accent-soft px-3 py-2 text-detail leading-6 text-fg"
+                          ? `max-w-[85%] rounded-2xl bg-accent-soft px-3 py-2 text-detail leading-6 text-fg ${
+                              locale === "fa" ? "rounded-bl-sm" : "rounded-br-sm"
+                            }`
                           : "text-detail leading-6 text-fg"
                       }
                     >

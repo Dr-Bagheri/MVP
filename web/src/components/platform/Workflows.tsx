@@ -8,6 +8,7 @@ import { useRefreshEpoch } from "@/lib/refreshBus";
 import { useWorkflowCopy, useWorkflowTemplateCopy } from "@/lib/workflowName";
 import type { AuthoredWorkflow, StarterWorkflow, User, WorkflowCard } from "@/api/types";
 import { Link } from "@/i18n/routing";
+import { SectionTabs } from "./sectionTabs";
 import { PlatformShell } from "./PlatformShell";
 import { WorkflowBuilder } from "./WorkflowBuilder";
 import { WorkflowTile } from "./WorkflowTile";
@@ -94,6 +95,27 @@ export function Workflows() {
 
   const workflowCopy = useWorkflowCopy();
   const templateCopy = useWorkflowTemplateCopy();
+
+  /*
+   * TWO HALVES, ONE PAGE (user directive, 2026-09-04: "add a sub menu on the
+   * top in workflow as well with name Active Workflow and second Workflow
+   * library, and add the workflows that are in the library there and remove
+   * them from the workflow page").
+   *
+   * They had been stacked: what this organization RUNS, then a shelf of what
+   * it could install, on one scroll. The two answer different questions — "is
+   * my mail workflow on?" and "what else could I have?" — and a shelf under a
+   * list teaches people to stop scrolling before they reach it.
+   */
+  const [tab, setTab] = useState<"active" | "library">("active");
+  /*
+   * And the library sorts by WHAT STARTS a workflow (the second row the
+   * directive asks for). The dimension comes from the producer — `trigger_
+   * event` is on the starters wire — rather than from a category invented
+   * here: a made-up taxonomy is a promise the server never made, and it would
+   * silently mis-file the first starter core adds.
+   */
+  const [kind, setKind] = useState<string>("all");
   const workflowsEpoch = useRefreshEpoch("workflows");
   useEffect(() => {
     void api.workflows().then(setWorkflows).catch(() => setWorkflows([]));
@@ -132,6 +154,13 @@ export function Workflows() {
    */
   const installedHandles = new Set((authored ?? []).map((row) => row.handle));
   const library = (starters ?? []).filter((starter) => !installedHandles.has(starter.handle));
+  /* the filter row's options are the triggers actually PRESENT on the shelf,
+     so a tab never opens onto nothing — and never hides a starter under a
+     name this file guessed */
+  const libraryKinds = [...new Set(library.map((s) => s.trigger_event ?? "manual"))];
+  const shown = kind === "all"
+    ? library
+    : library.filter((s) => (s.trigger_event ?? "manual") === kind);
   const libraryReady = me !== null && (!isAdmin || authored !== null);
 
   return (
@@ -151,7 +180,19 @@ export function Workflows() {
               </button>
             ) : undefined}
           />
-          {workflows === null ? (
+          <SectionTabs
+            label={t("sectionsLabel")}
+            active={tab}
+            onSelect={setTab}
+            className="mb-5"
+            tabs={[
+              { key: "active", label: t("activeTitle"),
+                count: workflows === null ? undefined : workflows.length + (authored ?? []).length },
+              { key: "library", label: t("libraryTitle"),
+                count: libraryReady ? library.length : undefined },
+            ]}
+          />
+          {tab === "library" ? null : workflows === null ? (
             <SkeletonCards count={2} height="h-56" />
           ) : workflows.length === 0 ? (
             <EmptyState text={t("empty")} />
@@ -227,12 +268,35 @@ export function Workflows() {
             anybody editing this file; the NAMES localize through the same
             `useWorkflowCopy` path every installed starter uses.
           */}
-          {libraryReady && library.length > 0 ? (
-            <section className="mt-6">
-              <h2 className="text-lg font-semibold text-fg">{t("libraryTitle")}</h2>
-              <p className="mt-1 text-sm text-fg-muted">{t("libraryHint")}</p>
-              <div className="mt-5 grid gap-4 lg:grid-cols-2">
-                {library.map((starter) => {
+          {tab === "library" ? (
+            <section>
+              <p className="mb-4 text-sm text-fg-muted">{t("libraryHint")}</p>
+              {/* the SECOND row: what starts them. Only when there is more
+                  than one kind on the shelf — a filter with a single option
+                  is a control that cannot change anything. */}
+              {libraryKinds.length > 1 ? (
+                <SectionTabs
+                  label={t("libraryKindLabel")}
+                  active={kind}
+                  onSelect={setKind}
+                  className="mb-5"
+                  tabs={[
+                    { key: "all", label: t("libraryKindAll"), count: library.length },
+                    ...libraryKinds.map((k) => ({
+                      key: k,
+                      label: t(`libraryKind_${k.replace(".", "_")}`),
+                      count: library.filter((s) => (s.trigger_event ?? "manual") === k).length,
+                    })),
+                  ]}
+                />
+              ) : null}
+              {!libraryReady ? (
+                <SkeletonCards count={2} height="h-28" />
+              ) : shown.length === 0 ? (
+                <EmptyState text={t("libraryEmpty")} />
+              ) : (
+              <div className="grid gap-4 lg:grid-cols-2">
+                {shown.map((starter) => {
                   const copy = workflowCopy({
                     handle: starter.handle,
                     name: starter.name,
@@ -261,6 +325,7 @@ export function Workflows() {
                   );
                 })}
               </div>
+              )}
             </section>
           ) : null}
 

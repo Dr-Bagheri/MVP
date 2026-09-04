@@ -1,4 +1,5 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { openRowMenu } from "@/test/rowMenu";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AuthSessionRow } from "@/api/types";
 
@@ -55,8 +56,8 @@ describe("the sessions table", () => {
     await act(async () => { render(<SecuritySettings />); });
     expect(screen.getByText("همین دستگاه")).toBeTruthy();
 
-    /* the records-table gesture: right-click the OTHER row */
-    fireEvent.contextMenu(screen.getByText("Firefox · Linux"));
+    /* the records-table gesture: the OTHER row's ⋯ */
+    await openRowMenu("Firefox · Linux");
     fireEvent.click(screen.getByText("پایان این نشست"));
     /* nothing ends before the popup's own consent */
     expect(ended).not.toHaveBeenCalled();
@@ -66,11 +67,11 @@ describe("the sessions table", () => {
   });
 
   it("offers sign-out, never end, on THIS device — the row that must answer NO", async () => {
-    /* the user right-clicked their own row and concluded the menu did not
-       exist — so the current row answers too, with the honest act for the
-       session you are riding: sign-out, through the avatar menu's own flow */
+    /* the user opened their own row's menu and concluded it did not exist —
+       so the current row answers too, with the honest act for the session you
+       are riding: sign-out, through the avatar menu's own flow */
     await act(async () => { render(<SecuritySettings />); });
-    fireEvent.contextMenu(screen.getByText("Edge · Windows"));
+    await openRowMenu("Edge · Windows");
     expect(screen.queryByText("پایان این نشست")).toBeNull();
     fireEvent.click(screen.getByText("خروج از حساب در این دستگاه"));
     await act(async () => {});

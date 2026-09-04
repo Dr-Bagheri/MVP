@@ -10,6 +10,7 @@ import { DataTable, StatusDot, type Column } from "@/components/DataTable";
 import { EmptyState } from "@/components/ui";
 import { ConfirmDialog } from "@/components/rowActions";
 import { Icon, type IconName } from "@/components/icons";
+import { SectionTabs } from "./sectionTabs";
 import { digits, formatRelativeDate, formatTime, personName } from "@/lib/format";
 import {
   INTEGRATIONS,
@@ -100,6 +101,10 @@ export function Integrations() {
   const router = useRouter();
   const copy = useIntegrationCopy();
 
+  /* which half of the page is showing. `available` first: on a fresh account
+     there is nothing connected, and a person who arrives at an empty table
+     has to work out that the offer is further down. */
+  const [tab, setTab] = useState<"available" | "connected">("available");
   const [connectors, setConnectors] = useState<ConnectorStatus[] | null>(null);
   const [me, setMe] = useState<Me | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -270,8 +275,25 @@ export function Integrations() {
 
   return (
     /*
-     * NO SUB-MENU (user directive, 2026-09-03: "remove the top sub menu for
-     * integrations, it's [the] management sub menu and we don't need it").
+     * THE SUB-MENU IS THE PAGE'S OWN NOW (user directive, 2026-09-04: "in the
+     * integration page make a sub menu on top with two sub sections, first
+     * Available integrations and second Connected integrations").
+     *
+     * Which is a different thing from the one removed on 2026-09-03, and the
+     * difference is the whole reason both directives are right. That one was
+     * the SETTINGS menu — eight sections belonging to a surface this page had
+     * left — showing above a screen that is not one of them. This one names
+     * the two halves of this page. A menu about where you are beats a menu
+     * about where you used to live.
+     *
+     * The two halves used to be stacked, so a person with four connections
+     * scrolled past their own table to reach the offer, or past the offer to
+     * reach their table, depending which mattered that day. Neither ordering
+     * is right for both, which is what a tab is for.
+     *
+     * NOT routes: `?tab=` would make two addresses for one screen and put a
+     * filter in the browser history, so the back button would undo a tab
+     * rather than leaving the page. The rail is the way out.
      *
      * It wore `SettingsPane` from 2026-09-02, when Integrations lived in the
      * Settings menu and needed a way back to its siblings. It is a RAIL
@@ -290,8 +312,22 @@ export function Integrations() {
      * that was in the way.
      */
     <PageContainer>
+          <SectionTabs
+            label={t("sectionsLabel")}
+            active={tab}
+            onSelect={setTab}
+            className="mb-4"
+            tabs={[
+              { key: "available", label: t("availableTitle") },
+              /* the count is the reason to look: "3" answers "is anything
+                 connected" without opening the tab, and an absent number
+                 (still loading) is left absent rather than shown as 0 */
+              { key: "connected", label: t("connectedTitle"),
+                count: connectors === null ? undefined : allRows.length },
+            ]}
+          />
 
-          <Section>
+          <Section hidden={tab !== "connected"}>
             {/* audit finding, 2026-09-02: `Section` sets its title in
                 `text-xl`, which the re-pitched scale points at the 16px PAGE
                 title — so this block's heading stood a step above the 15px
@@ -301,7 +337,6 @@ export function Integrations() {
                 under its own title, kept exactly); `Section`'s h2 is the
                 platform-wide half of this and belongs to whoever owns the
                 scaffold, not to one of its thirteen callers. */}
-            <h2 className="h-section mb-4">{t("connectedTitle")}</h2>
             {connectors !== null && allRows.length === 0 ? (
               <EmptyState text={t("noneConnected")} />
             ) : (
@@ -371,11 +406,10 @@ export function Integrations() {
             )}
           </Section>
 
-          <Section divided>
+          <Section hidden={tab !== "available"}>
             {/* audit finding, 2026-09-02: the same step down as the block
                 above — two headings on one screen must not answer the
                 "how big is a block title" question twice */}
-            <h2 className="h-section mb-4">{t("availableTitle")}</h2>
             {/* one row of four from xl up (the offer IS four Google sources) —
                 compact, Sana-shaped (user directive, 2026-08-28) */}
             {/* TWO PER ROW, not four (user directive, 2026-09-02: "change the

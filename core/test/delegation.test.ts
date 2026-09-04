@@ -10,7 +10,8 @@ vi.mock("../src/agent/pi.ts", async () => ({
   runPi: vi.fn(),
 }));
 
-const { createDelegationTools, MAX_DELEGATIONS } = await import("../src/agent/delegation.ts");
+const { createDelegationTools, createEchoTool, MAX_DELEGATIONS } =
+  await import("../src/agent/delegation.ts");
 const { toolsFor, createPlatformTools } = await import("../src/agent/platform-tools.ts");
 import { ToolDenied } from "../src/agent/tools.ts";
 import type { Identity } from "../src/agent/types.ts";
@@ -259,5 +260,88 @@ describe("the platform tool surface", () => {
     expect(shared.length).toBeGreaterThan(0);
     expect(shared.length).toBeLessThan(Math.min(analyst.size, operator.size));
     expect(toolsFor("all").length).toBeGreaterThan(analyst.size);
+  });
+});
+
+/**
+ * THE OTHER DIRECTION (user directive, 2026-09-04: "they also must have the
+ * ability to talk to echo and ask things from echo as well").
+ *
+ * Asserted the same way as the outward direction and for the same reason: what
+ * an agent may hold is decided by what its output can reach, and the risk here
+ * is precisely that `ask_echo` quietly hands a delegate the tool set Echo has
+ * when a PERSON asks it — client tools that drive the browser, write tools
+ * whose proposals have no conversation to be approved in, and its colleagues.
+ */
+describe("an agent asking Echo", () => {
+  async function buildEcho() {
+    const nested: Nested[] = [];
+    const turns: { author: string; text: string; failed: boolean }[] = [];
+    const tools = await createEchoTool({
+      db: {} as never,
+      identity: IDENTITY,
+      web: true,
+      locale: "fa",
+      askedBy: "roya",
+      onTurn: (turn) => { turns.push(turn); },
+      runNested: async (input) => {
+        nested.push(input as unknown as Nested);
+        return { runId: "r-9", text: "Echo's answer", model: "m", steps: [], failed: false };
+      },
+    });
+    return { tools, nested, turns };
+  }
+
+  it("is ONE tool, and not the colleague tools", async () => {
+    const { tools } = await buildEcho();
+    expect(tools.map((t) => t.name)).toEqual(["ask_echo"]);
+  });
+
+  it("hands Echo no way to delegate onward — the loop cannot close", async () => {
+    /*
+     * Roya asks Echo, Echo asks Ava, Ava asks Echo. Each step is individually
+     * reasonable and the ceiling is the only thing between the shape and a
+     * bill, so the shape is refused structurally: the nested run is built with
+     * platform and domain tools and NOTHING whose name begins with `ask_`.
+     */
+    const { tools, nested } = await buildEcho();
+    await run(tools[0]!, { question: "این هفته چند جلسه داریم؟" });
+    expect(nested).toHaveLength(1);
+    const offered = nested[0]!.tools.map((t) => t.name);
+    expect(offered.filter((n) => n.startsWith("ask_"))).toEqual([]);
+    /* the control: it was given SOMETHING, or the assertion above is a fact
+       about an empty list rather than about delegation */
+    expect(offered.length).toBeGreaterThan(0);
+  });
+
+  it("does not speak in the thread — Echo answering its own agent is not a turn", async () => {
+    /*
+     * A colleague's answer IS announced: the person asked Echo and somebody
+     * else replied, which is a fact about the conversation. This is the
+     * reverse — the person asked Roya, and Roya looking something up is
+     * working out, not speaking. Announcing it would show two voices for one
+     * answer that was only ever asked of one of them.
+     */
+    const { tools, turns } = await buildEcho();
+    await run(tools[0]!, { question: "چند تا؟" });
+    expect(turns).toEqual([]);
+  });
+
+  it("refuses an empty question WITHOUT spending an ask, then stops at the ceiling", async () => {
+    /*
+     * The ordering is the finding. `spent += 1` ran before the empty-question
+     * check, so a malformed call — which is exactly the mistake a model
+     * recovers from by trying again — was charged for, and the ceiling arrived
+     * one real ask early. A budget bounds WORK, and a refusal did none.
+     */
+    const { tools, nested } = await buildEcho();
+    await expect(run(tools[0]!, { question: "   " })).rejects.toBeInstanceOf(ToolDenied);
+    expect(nested, "a refused call must not have run anything").toEqual([]);
+
+    for (let i = 0; i < MAX_DELEGATIONS; i += 1) {
+      await run(tools[0]!, { question: `س${i}` });
+    }
+    expect(nested).toHaveLength(MAX_DELEGATIONS);
+    await expect(run(tools[0]!, { question: "یکی دیگر" })).rejects.toBeInstanceOf(ToolDenied);
   });
 });

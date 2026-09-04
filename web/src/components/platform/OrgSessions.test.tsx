@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
+import { openRowMenu } from "@/test/rowMenu";
 
 /**
  * Settings · Security — everyone's sessions (db/0135, user directive
@@ -79,11 +80,11 @@ describe("everyone's sessions", () => {
   it("offers END on a row the wall allows, and NOT on the one it refuses", async () => {
     const user = userEvent.setup();
     render(<SecuritySettings />);
-    const member = await screen.findByText("عضو");
+    await screen.findByText("عضو");
     const owner = screen.getByText("مالک");
 
     // the row the caller outranks answers the gesture
-    await user.pointer({ keys: "[MouseRight]", target: member });
+    await openRowMenu("عضو");
     expect(await screen.findByRole("menuitem")).toBeInTheDocument();
     await user.keyboard("{Escape}");
 
@@ -93,8 +94,17 @@ describe("everyone's sessions", () => {
      * the visible cost is a Stop button that produces a 403, which is the
      * wall and the affordance disagreeing in front of a user.
      */
-    await user.pointer({ keys: "[MouseRight]", target: owner });
-    await waitFor(() => expect(screen.queryAllByRole("menuitem")).toHaveLength(0));
+    /*
+     * And it answers NO more plainly than it used to. With the ⋯ at the end of
+     * the row (2026-09-04), a row with no permitted actions renders no button
+     * at all — so the refusal is now the ABSENCE of the control rather than an
+     * empty menu behind an invisible gesture. Asserted on the row, not the
+     * page: a table full of rows with menus would satisfy a page-wide query.
+     */
+    expect(
+      owner.closest("tr")!.querySelector("button[aria-haspopup='menu']"),
+      "a row the wall refuses offers no menu to open",
+    ).toBeNull();
   });
 
   it("ends the session by user AND handle — a handle alone names nothing", async () => {
@@ -105,8 +115,8 @@ describe("everyone's sessions", () => {
      */
     const user = userEvent.setup();
     render(<SecuritySettings />);
-    const member = await screen.findByText("عضو");
-    await user.pointer({ keys: "[MouseRight]", target: member });
+    await screen.findByText("عضو");
+    await openRowMenu("عضو");
     await user.click(await screen.findByRole("menuitem"));
     await user.click(await screen.findByRole("button", { name: "پایان نشست" }));
     await waitFor(() =>

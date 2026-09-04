@@ -11,6 +11,10 @@ import { Switch } from "@/components/Switch";
 import {
   setVoicePref, subscribeVoicePrefs, voicePrefs, voicePrefsServer,
 } from "@/lib/voicePrefs";
+import {
+  isBindableKey, pushToTalkKey, pushToTalkLabel, pushToTalkServer,
+  setPushToTalkKey, subscribePushToTalk,
+} from "@/lib/pushToTalk";
 import { Skeleton } from "@/components/scaffold";
 
 /**
@@ -149,6 +153,7 @@ export function AssistantSettings() {
   return (
     <div className="space-y-5">
       <VoiceSwitches />
+      <PushToTalk />
       <AgentsWebCard
         state={prefs}
         value={agentsWeb}
@@ -284,6 +289,99 @@ export function AssistantSettings() {
         )}
       </Card>
     </div>
+  );
+}
+
+
+/**
+ * THE PUSH-TO-TALK KEY (user directive, 2026-09-04: "add a hot key section in
+ * the settings in the assistant section for the mic of the assistant … you
+ * click and it asks you to press the key and after that it will record and
+ * submit the first key you strike; it must have an option to change as well").
+ *
+ * The flow the directive describes, exactly: press Choose, the card asks for a
+ * key, the FIRST key struck is the binding. Not a dropdown — a list of every
+ * key on a keyboard is unreadable, and the one thing a person definitely knows
+ * is which key they want to press.
+ *
+ * CAPTURE IS A MODE, and it says so. While it is on, the card listens on the
+ * window and swallows the keystroke, because the key being bound might be
+ * Space on a page that scrolls: the gesture that BINDS a key must not also
+ * perform the thing the key does.
+ *
+ * Escape leaves capture without binding, which is why it is refused as a
+ * binding: a hotkey you cannot escape from is a trap, and the way out has to
+ * be a key nobody can accidentally assign.
+ */
+function PushToTalk() {
+  const t = useTranslations("settings");
+  const key = useSyncExternalStore(subscribePushToTalk, pushToTalkKey, pushToTalkServer);
+  const [capturing, setCapturing] = useState(false);
+
+  useEffect(() => {
+    if (!capturing) return;
+    function onKey(event: KeyboardEvent) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.code === "Escape") { setCapturing(false); return; }
+      if (!isBindableKey(event.code)) {
+        /* a refusal that NAMES itself: silently ignoring the press reads as a
+           card that stopped listening, and then the person presses harder */
+        notify(t("hotkeyRefused"), "warn");
+        return;
+      }
+      setPushToTalkKey(event.code);
+      setCapturing(false);
+      notify(t("hotkeySet", { key: pushToTalkLabel(event.code) ?? event.code }));
+    }
+    /* capture phase, so a field or a menu that also listens cannot eat the
+       keystroke before this sees it */
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [capturing, t]);
+
+  const label = pushToTalkLabel(key);
+  return (
+    <Card>
+      <h2 className="h-section">{t("hotkeyTitle")}</h2>
+      <p className="mt-1 text-sm leading-6 text-fg-muted">{t("hotkeyHint")}</p>
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        {capturing ? (
+          <span className="chip animate-pulse bg-accent-soft text-sm text-accent">
+            {t("hotkeyPress")}
+          </span>
+        ) : label === null ? (
+          /* "none chosen" is its own sentence, never an empty box — an empty
+             control here reads as a key that failed to load */
+          <span className="text-sm text-fg-muted">{t("hotkeyNone")}</span>
+        ) : (
+          <kbd
+            className="rounded-lg border border-border-strong bg-surface-2 px-2.5 py-1 text-sm font-semibold text-fg"
+            dir="ltr"
+          >
+            {label}
+          </kbd>
+        )}
+        <span className="flex items-center gap-2">
+          <button
+            type="button"
+            className="btn btn-sm border border-border bg-surface text-fg"
+            onClick={() => setCapturing((on) => !on)}
+          >
+            {capturing ? t("hotkeyCancel") : label === null ? t("hotkeyChoose") : t("hotkeyChange")}
+          </button>
+          {label !== null && !capturing ? (
+            <button
+              type="button"
+              className="btn btn-sm text-fg-muted hover:text-fg"
+              onClick={() => { setPushToTalkKey(null); notify(t("hotkeyCleared")); }}
+            >
+              {t("hotkeyClear")}
+            </button>
+          ) : null}
+        </span>
+      </div>
+    </Card>
   );
 }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useCallback, useEffect, useRef, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { AgentAvatar, AgentName, ECHO } from "./AgentAvatar";
 import { api } from "@/api/client";
 import type { AgentMessage } from "@/api/types";
@@ -154,11 +154,30 @@ const MessageRow = memo(function MessageRow({
   onRegenerate?: (() => void) | undefined;
 }) {
   const t = useTranslations("platform");
+  const locale = useLocale();
   const isUser = m.role === "user";
+
+  /*
+   * THE QUESTION SITS ON THE PHYSICAL RIGHT, IN BOTH LOCALES (user directive,
+   * 2026-09-04: "change the side that land the users conversation to the right
+   * and fix it for both fa and en version").
+   *
+   * `justify-end` is LOGICAL, so it followed the page: right in English, left
+   * in Persian. This is the same call the composer's control row made a day
+   * earlier — a side that swaps with the interface language is a side you have
+   * to re-learn on every switch, and the chat convention people arrive with
+   * puts their own words on the right.
+   *
+   * Done by choosing the logical value per locale rather than by forcing
+   * `dir="ltr"` on the row: the row contains PROSE, and an LTR row would drag
+   * Persian punctuation to the wrong end of the sentence to win an argument
+   * about alignment. Physical placement, untouched text.
+   */
+  const mine = locale === "fa" ? "justify-start" : "justify-end";
 
   return (
           <div
-            className={`message-arrives ${isUser ? "flex justify-end" : "flex justify-start"}`}
+            className={`message-arrives flex ${isUser ? mine : locale === "fa" ? "justify-end" : "justify-start"}`}
           >
             <div className={isUser ? "max-w-[85%]" : "w-full"}>
               {/*
@@ -194,7 +213,12 @@ const MessageRow = memo(function MessageRow({
               <div
                 className={
                   isUser
-                    ? "rounded-2xl rounded-ee-sm bg-accent-soft px-3.5 py-2.5 text-sm leading-7 text-fg"
+                    /* the clipped corner points at the speaker, so it is
+                       physical too — `rounded-ee` would sit on the far side
+                       of the bubble the moment the locale flipped */
+                    ? `rounded-2xl bg-accent-soft px-3.5 py-2.5 text-sm leading-7 text-fg ${
+                        locale === "fa" ? "rounded-bl-sm" : "rounded-br-sm"
+                      }`
                     : "text-sm leading-7 text-fg"
                 }
               >

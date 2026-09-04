@@ -10,12 +10,10 @@ import { Select } from "@/components/Select";
 import { Switch } from "@/components/Switch";
 import { PageContainer, SkeletonCards } from "@/components/scaffold";
 import { Icon } from "@/components/icons";
-import { useRouter } from "@/i18n/routing";
+import { Link } from "@/i18n/routing";
+import { AgentAvatar } from "./AgentAvatar";
 import { notify } from "@/lib/notify";
-import {
-  agentColorClasses, agentIconName, AGENT_COLOR_CHOICES, AGENT_ICON_CHOICES,
-  useAgentCopy,
-} from "./agentAppearance";
+import { AGENT_COLOR_CHOICES, AGENT_ICON_CHOICES, useAgentCopy } from "./agentAppearance";
 
 /**
  * THE AGENTS SCREEN (user directive, 2026-09-03: "forget about the room and
@@ -37,7 +35,6 @@ import {
  */
 export function Agents() {
   const t = useTranslations("agents");
-  const router = useRouter();
   const copy = useAgentCopy();
   const [agents, setAgents] = useState<AgentCard[] | "failed" | null>(null);
   const [editing, setEditing] = useState<AgentCard | "new" | null>(null);
@@ -53,11 +50,10 @@ export function Agents() {
   /* the pair the product ships first, then anything this organization made.
      Not alphabetical: Roya and Ava are the answer to "who can I ask", and a
      custom agent named «آبان» sorting above them would bury it. */
-  /* one place the "Ask" button decides what it means: `?ask=` PREFILLS the
-     composer with the mention and does not send — the person still has to say
-     what they want, and a link that spends a model call is not a link. */
-  const askIn = (handle: string) =>
-    router.push(`/assistant?ask=${encodeURIComponent(`@${handle} `)}`);
+  /* the Ask button moved to the agent's own page with the rest of its
+     actions — `?ask=` PREFILLS the composer with the mention and does not
+     send, there as here: the person still has to say what they want, and a
+     link that spends a model call is not a link. */
 
   /* the pair the product ships first, then anything this organization made.
      Not alphabetical: Roya and Ava are the answer to "who can I ask", and a
@@ -96,19 +92,44 @@ export function Agents() {
         the layout does not jump when the roster lands and "loading" never
         draws the same picture as "you have no agents".
       */}
+      {/*
+        THE WORKFLOW PAGE'S SHAPE (user directive, 2026-09-04: "make it look
+        like the workflow page with two big buttons and their avatars — when
+        clicked, inside it must have all the options and details").
+        
+        Two grids, exactly as /workflows has: the pair the product ships as
+        BIG cards, and anything this organization wrote at half that height
+        underneath. It reads the way the directive describes because it is the
+        same layout, not a lookalike — a person who has used one page has used
+        this one.
+        
+        The card is a LINK now. It used to be a row with an inline Ask button
+        and a pencil, which meant an agent had no page of its own: everything
+        knowable about Roya was whatever fitted on one line. The actions moved
+        to the detail page, where there is room to say what they do.
+      */}
       {agents === "failed"
         ? <p className="mt-4 text-sm text-fg-muted">{t("readFailed")}</p>
-        : (
-          <div className="mt-4 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
-            {agents === null
-              ? <SkeletonCards count={3} className="contents" height="h-[4.5rem]" />
-              : ordered.map((agent) => (
-                <AgentTile key={agent.id} agent={agent} copy={copy}
-                  onAsk={() => askIn(agent.handle)}
-                  onEdit={agent.editable ? () => setEditing(agent) : undefined} />
-              ))}
-          </div>
-        )}
+        : agents === null
+          ? <div className="mt-4 grid gap-4 lg:grid-cols-2">
+              <SkeletonCards count={2} className="contents" height="h-40" />
+            </div>
+          : (
+            <>
+              <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                {ordered.filter((a) => a.level === "system").map((agent) => (
+                  <AgentTile key={agent.id} agent={agent} copy={copy} big />
+                ))}
+              </div>
+              {ordered.some((a) => a.level !== "system") ? (
+                <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                  {ordered.filter((a) => a.level !== "system").map((agent) => (
+                    <AgentTile key={agent.id} agent={agent} copy={copy} />
+                  ))}
+                </div>
+              ) : null}
+            </>
+          )}
 
       {editing === null ? null : (
         <AgentEditor agent={editing === "new" ? null : editing}
@@ -139,51 +160,61 @@ export function Agents() {
  * them, and a person who reads it here can type it in the assistant without
  * being told how.
  */
-function AgentTile({ agent, copy, onAsk, onEdit }: {
+function AgentTile({ agent, copy, big = false }: {
   agent: AgentCard;
   copy: (a: AgentCard) => { name: string; description: string };
-  onAsk: () => void;
-  onEdit?: (() => void) | undefined;
+  /** the shipped pair, at template size — the workflow page's own two cards */
+  big?: boolean;
 }) {
-  const t = useTranslations("agents");
   const { name, description } = copy(agent);
   const shipped = agent.level === "system";
   return (
-    <div className="tile-row group flex items-center gap-2.5 p-2.5">
-      <span
-        data-agent-mark={shipped ? "platform" : "own"}
-        className={`grid h-8 w-8 shrink-0 place-items-center rounded-xl ${
-          shipped
-            ? `ring-1 ring-inset ring-accent/40 ${agentColorClasses(agent.color)}`
-            : "bg-surface-2 text-fg-muted"
-        }`}
-      >
-        <Icon name={agentIconName(agent.icon)} size="sm" />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="flex items-baseline gap-1.5">
-          <span className="truncate text-sm font-semibold text-fg">{name}</span>
-          <code className="shrink-0 text-xs text-fg-subtle">@{agent.handle}</code>
+    <Link
+      href={`/agents/${agent.handle}`}
+      /* ONE element, so there is no dead margin inside the card and no second
+         focus stop competing with the first — the workflow card's rule, and
+         the reason its actions live on the page it opens rather than on it */
+      className={`group flex flex-col rounded-2xl border border-border bg-surface p-7 transition-colors hover:border-border-strong hover:bg-surface-2 ${
+        big ? "min-h-40" : "min-h-28 justify-center"
+      }`}
+    >
+      <span className="flex items-center gap-4">
+        {/*
+          THE AVATAR, not the stored glyph. A sparkle and a chart said what
+          Roya and Ava DO; a letter says who they are, which is what a card
+          with their name on it is for — and it is the same face that appears
+          beside their turns in the thread, so the roster and the conversation
+          agree about what Ava looks like.
+        */}
+        <AgentAvatar handle={agent.handle} size={big ? "xl" : "lg"} />
+        <span className="min-w-0">
+          <span className="flex items-baseline gap-1.5">
+            <span className={`truncate font-semibold text-fg group-hover:text-accent ${
+              big ? "text-base" : "text-sm"
+            }`}>{name}</span>
+            <code className="shrink-0 text-xs text-fg-subtle">@{agent.handle}</code>
+          </span>
+          {/* the small card truncates its one line here; the big one gives
+              the sentence a line of its own below, unclipped */}
+          {big ? null : (
+            <span className="mt-0.5 block truncate text-xs text-fg-subtle">{description}</span>
+          )}
         </span>
-        <span className="mt-0.5 block truncate text-xs text-fg-muted">{description}</span>
       </span>
-      {/* the actions do not take room until they are wanted — `opacity` rather
-          than `hidden`, so the row does not change width when the pointer
-          crosses it, and `focus-within` so a keyboard reaches them */}
-      <span className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
-        {onEdit ? (
-          <button type="button" className="btn btn-icon border border-border bg-surface text-fg-muted hover:text-fg"
-            onClick={onEdit} aria-label={t("edit")} title={t("edit")}>
-            <Icon name="pencil" size="sm" />
-          </button>
-        ) : null}
-        <button type="button" className="btn btn-sm bg-accent text-on-accent" onClick={onAsk}>
-          {t("ask")}
-        </button>
-      </span>
-    </div>
+      {/* the shipped pair say a second line — they are the two the product
+          promises, and the card has the room a row never had */}
+      {big ? (
+        <span
+          data-agent-mark={shipped ? "platform" : "own"}
+          className="mt-auto pt-5 text-xs text-fg-muted"
+        >
+          {description}
+        </span>
+      ) : null}
+    </Link>
   );
 }
+
 
 /**
  * Make one, or change one.
