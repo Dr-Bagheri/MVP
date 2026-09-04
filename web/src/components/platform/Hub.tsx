@@ -1097,7 +1097,7 @@ export function Hub() {
            the hub was a centred landing card; on a page whose job is a
            conversation it left the prompt floating in a column half the width
            of every other surface in the product. */
-        className={`flex w-full max-w-content flex-col rounded-2xl border border-border-strong bg-surface px-3 pb-1 pt-3 text-start transition-colors focus-within:border-accent ${
+        className={`flex w-full max-w-content flex-col rounded-2xl border border-border-strong bg-surface px-3 pb-2 pt-3 text-start transition-colors focus-within:border-accent ${
           idle ? "mx-auto mt-auto" : "sticky bottom-0 mx-auto"
         }`}
       >
@@ -1140,12 +1140,12 @@ export function Hub() {
           prompt box, they are too high in it").
 
           The row was `mt-1.5` under the field, which put it wherever the field
-          happened to end — floating in the middle of a 3-unit-padded box. It
-          is pinned to the FOOT now: `mt-auto` in a column takes the slack, and
-          the box's own `pb` is cut to a tenth of its height so the buttons
-          clear the bottom edge by about that much rather than by a full pad.
-          Measured against the box, not typed: 38px control in a 3-unit (12px)
-          pad, so `pb-1` leaves ~10% of the composer's height beneath them.
+          happened to end — floating inside a box padded 12px on every side. It
+          sits at the FOOT now, with a clearance rather than a full pad: the
+          box keeps `pt-3` above the field and drops to `pb-2` beneath the
+          controls, which on a ~96px composer is about the tenth of its height
+          the directive asks for. `mt-auto` takes any slack when the box is
+          stretched (the idle hub centres it in the column).
         */}
         <div className="mt-auto flex items-center justify-between pt-1.5" dir="ltr">
           <span className="flex items-center gap-1">
