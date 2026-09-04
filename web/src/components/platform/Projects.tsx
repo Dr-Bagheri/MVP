@@ -621,8 +621,17 @@ function ProjectCard({ project, people, locale, compact = false }: {
   return (
     <Link
       href={`/projects/${project.id}`}
+      /*
+       * `h-auto shrink-0` ON THE KANBAN CARD, and it is not a nicety: `.tile`
+       * declares `height: 100%`, which inside a flex COLUMN resolves against
+       * the column's height — so every project card stretched to fill the
+       * whole 70vh lane and two projects filled the screen. On the projects
+       * LIST the tile is in a grid, where 100% is what makes a row of cards
+       * the same height, so the override belongs to the compact variant
+       * alone.
+       */
       className={`tile flex flex-col transition-colors hover:border-accent/40 ${
-        compact ? "gap-2 p-2.5" : "gap-3 p-4"
+        compact ? "h-auto shrink-0 gap-1.5 p-2.5" : "gap-3 p-4"
       }`}
     >
       <div className={`flex items-start ${compact ? "gap-2" : "gap-3"}`}>

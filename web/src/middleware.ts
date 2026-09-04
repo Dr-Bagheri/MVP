@@ -34,7 +34,13 @@ const intl = createMiddleware(routing);
  * whose every request 401s. But the door now closes when the session ends,
  * not 29 days later.
  */
-const OPEN = ["/sign-in", "/sign-up", "/forgot", "/reset", "/pending", "/suspended"];
+/*
+ * `/home` IS THE COMPANY'S FRONT PAGE (2026-09-05) and belongs on this list
+ * for the same reason sign-in does: it is written for people who have no
+ * session, and a front page behind a gate is a door with a door in front of
+ * it.
+ */
+const OPEN = ["/sign-in", "/sign-up", "/forgot", "/reset", "/pending", "/suspended", "/home"];
 
 /** Refresh when inside this window of expiry, so the token survives the hop. */
 const REFRESH_MARGIN_MS = 60_000;
@@ -138,7 +144,17 @@ export default async function middleware(request: NextRequest) {
 
     if (verdict.state === "closed") {
       const url = request.nextUrl.clone();
-      url.pathname = `/${locale}/sign-in`;
+      /*
+       * THE ROOT GOES TO THE FRONT PAGE; everything else goes to sign-in.
+       *
+       * One sentence, and it is the whole rule: somebody who typed the bare
+       * address has not asked for a surface, so they get the company's page;
+       * somebody who asked for `/tasks` was going somewhere, and sign-in is
+       * the honest answer to that. Sending the root to sign-in made the
+       * product's front door a login form for every stranger who heard the
+       * name — which is what the marketing site exists not to be.
+       */
+      url.pathname = rest === "/" ? `/${locale}/home` : `/${locale}/sign-in`;
       url.search = "";
       const redirect = NextResponse.redirect(url);
       // a cookie that failed the gate is dead weight — stop carrying it

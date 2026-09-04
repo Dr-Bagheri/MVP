@@ -83,6 +83,33 @@ beforeEach(() => {
   updateTask.mockReset().mockResolvedValue(TASK);
 });
 
+describe("TaskDetail — nothing the author wrote to themselves", () => {
+  it("renders no comment syntax as text", () => {
+    /*
+     * THIS SHIPPED. A note about the rail was written as a bare block comment
+     * in JSX CHILD position, where a comment is not a comment — it is
+     * content. The whole paragraph, `283px, measured …`, rendered on the page
+     * above the rail in production. Typecheck passed. Every test passed. A
+     * user found it and sent a screenshot.
+     *
+     * The reason no existing check could see it is worth stating: a leaked
+     * comment is VALID JSX and valid TypeScript, so it is invisible to the
+     * compiler; and no test asserted the absence of text nobody expected to
+     * be there. A source grep cannot help either — the shape is a comment in
+     * one position and identical to a comment in twenty legitimate ones, and
+     * the sweep I first wrote for it returned three hundred false positives.
+     *
+     * So it is checked where the defect actually exists: in the RENDERED
+     * text. Cheap, exact, and it fires on any file this suite renders.
+     */
+    open();
+    const text = document.body.textContent ?? "";
+    for (const fragment of ["/*", "*/", "px, measured"]) {
+      expect(text).not.toContain(fragment);
+    }
+  });
+});
+
 describe("TaskDetail — the red button", () => {
   it("asks before it deletes, and the press itself writes nothing", async () => {
     open();

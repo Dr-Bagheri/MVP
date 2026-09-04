@@ -411,10 +411,25 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
             )}
           </div>
 
-          {/* ── the rail ───────────────────────────────────────────── */}
-          /* 283px, measured — and no tinted ground: the reference's rail is the
-             panel's own surface with a hairline between, so the eye reads one
-             card with two columns rather than two panels side by side */
+          {/* ── the rail ───────────────────────────────────────────────
+              283px, measured — and no tinted ground: the reference's rail is
+              the panel's own surface with a hairline between it and the body,
+              so the eye reads ONE card with two columns rather than two
+              panels sitting beside each other.
+
+              THE NOTE THAT STOOD HERE SHIPPED AS VISIBLE TEXT. It was written
+              as a bare block comment in JSX CHILD position, where a comment is
+              not a comment — it is content, and the whole paragraph rendered
+              on the page above the rail. Typecheck passed, every test passed,
+              and a user found it. In JSX children a comment must be wrapped in
+              braces; the braces are the difference between a note and a
+              paragraph.
+
+              Its replacement then broke the build for a second, related
+              reason: the sentence explaining the mistake quoted the comment
+              terminator, which closed the comment three lines early. A comment
+              about comment syntax must not spell it.
+           */}
           <aside className="space-y-4 border-t border-border p-5 md:w-[283px] md:shrink-0 md:border-s md:border-t-0">
             <div>
               <span className={RAIL_LABEL}>{t("fieldTopic")}</span>

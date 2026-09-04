@@ -409,3 +409,29 @@ describe("the way in moved into the column (2026-09-05)", () => {
     expect(screen.queryByRole("button", { name: /پروژهٔ جدید/ })).toBeNull();
   });
 });
+
+describe("nothing the author wrote to themselves", () => {
+  it("renders no comment syntax as text, on the list or the detail", async () => {
+    /* the sibling of TaskDetail's check, and the reason it is here too: the
+       leak that shipped was introduced by the same edit that restructured
+       this page, so both panels carry the assertion rather than the one that
+       happened to be caught. */
+    LIST = [project({ id: "p-a", name: "پروژهٔ الف" })];
+    render(<Projects isAdmin meId="u-1" />);
+    await screen.findByText("پروژهٔ الف");
+    expect(document.body.textContent ?? "").not.toContain("/*");
+
+    cleanup();
+    ONE = project({ id: "p-a", name: "پروژهٔ الف" });
+    render(detail("p-a", "u-1"));
+    /* the HEADING, not the text: the name appears twice on the detail — as
+       the title and as the rail's board-folder link — and `findByText` threw
+       on the arity rather than telling me anything about comments. The first
+       version of this line read as a leak and was my own query. */
+    await screen.findByRole("heading", { name: "پروژهٔ الف" });
+    const text = document.body.textContent ?? "";
+    for (const fragment of ["/*", "*/", "px, measured"]) {
+      expect(text).not.toContain(fragment);
+    }
+  });
+});
