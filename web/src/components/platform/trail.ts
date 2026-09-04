@@ -103,26 +103,18 @@ export const TRAIL: Readonly<Record<string, TrailEntry>> = {
    * hierarchy the rail itself contradicts. No parent = the domain's own
    * name is where its trail begins.
    */
-  "/echo": { label: "platform.echo" },
-  /** Echo's sections (Part 5): the same anatomy as Settings, so the same
-   *  trail shape — the slug builds the leaf label. */
-  "/echo/[section]": { labelPrefix: "echo.section", parent: "/echo" },
-  /* static twin of the [section] entry so a RECORD's trail can name it as
-     an ancestor (user report, 2026-08-25: Home / Echo / <title> skipped
-     Records) — parents must be static keys, and patternFor prefers the
-     static match, so visiting /echo/records lands here with the same label */
-  "/echo/records": { label: "echo.section.records", parent: "/echo" },
   /**
-   * **`/calls/[id]`'s parent is `/echo`, not `/calls`.**
+   * **A RECORD HANGS UNDER MEETINGS NOW** (user directive, 2026-09-04: the
+   * Echo surface is gone).
    *
-   * The merged Record+Calls surface landed at `/echo`, and `/calls` became a
-   * redirect onto it. Leaving the old parent would render a crumb labelled
-   * «تماس‌ها» that navigates to `/echo` — a step in the trail naming a place
-   * that no longer exists, and a link whose destination disagrees with its
-   * label. The list of calls IS the Echo surface now, so the trail says so.
+   * Its parent was `/echo/records`, which no longer resolves — and a crumb
+   * naming a place that does not exist is worse than a shorter trail: the
+   * step is there, it is labelled, and pressing it is a 404. A recording
+   * belongs to the meeting it came from, so the trail says so, and `/calls`
+   * redirects to the same place for anyone holding an old link.
    */
-  "/calls/[id]": { entity: true, parent: "/echo/records" },
-  "/search": { label: "search.title", parent: "/echo" },
+  "/calls/[id]": { entity: true, parent: "/meetings" },
+  "/search": { label: "search.title" },
 
   /* a root for the same reason as /echo — see the note there */
   "/management": { label: "platform.management" },

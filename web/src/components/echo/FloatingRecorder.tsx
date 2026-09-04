@@ -51,15 +51,16 @@ export function FloatingRecorder() {
   const live = s.phase === "recording" || s.phase === "paused" || s.phase === "finishing";
   if (!live) return null;
 
-  // the recorder screen renders the full controls — the pill stands down
-  // (locale-stripped pathname; aliases record/upload/new-meeting land there).
-  // Matched by SEGMENT, not prefix: startsWith("/echo/record") also swallowed
-  // "/echo/records" — the records LIST — and the pill silently never showed
-  // there while a take was rolling.
-  const echoSection =
-    pathname === "/echo" ? "" : pathname.startsWith("/echo/") ? (pathname.split("/")[2] ?? "") : null;
-  const onRecorderScreen =
-    echoSection !== null && ["", "new-meeting", "record", "upload"].includes(echoSection);
+  /*
+   * THERE IS NO RECORDER SCREEN ANY MORE (user directive, 2026-09-04: the
+   * Echo surface is gone).
+   *
+   * This stood the pill down on `/echo` and its capture aliases, because that
+   * page drew the full controls itself and two renderings of one rolling
+   * microphone are two things to keep in step. Those pages no longer exist,
+   * so the condition is one place: the MEETING's own page, below, which is
+   * where a take is started now.
+   */
   /*
    * A MEETING'S OWN PAGE renders the take as well — its top bar carries the
    * clock and the end button, and its stage carries the light. With this
@@ -70,7 +71,7 @@ export function FloatingRecorder() {
    * is open.
    */
   const onMeetingPage = /^\/meetings\/[^/]+/.test(pathname);
-  if (onRecorderScreen || onMeetingPage) return null;
+  if (onMeetingPage) return null;
 
   const docked = anchor !== null;
 
@@ -94,7 +95,9 @@ export function FloatingRecorder() {
       <button
         type="button"
         className="tap flex min-w-0 items-center gap-2"
-        onClick={() => router.push("/echo")}
+        /* the take belongs to a meeting now, so the pill opens the meetings
+           list rather than a recorder screen that no longer exists */
+        onClick={() => router.push("/meetings")}
         aria-label={t("pillOpen")}
         title={t("pillOpen")}
       >

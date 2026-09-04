@@ -4,7 +4,7 @@ import { Fragment, use, useCallback, useEffect, useMemo, useRef, useState } from
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { Call, CallNote, CallStatus, Me, Person, Speaker, SummaryVersion, TranscriptSegment } from "@/api/types";
-import { EchoAppShell } from "@/components/echo/EchoAppShell";
+import { ToolbarShell } from "@/components/platform/ToolbarShell";
 import { Link } from "@/i18n/routing";
 import { useCrumbTitle } from "@/components/platform/CrumbTitle";
 import { Card, Chip } from "@/components/ui";
@@ -961,7 +961,7 @@ export default function CallDetailPage({
 
   /*
    * THE FRAME BEFORE THE DATA (audit finding, 2026-09-02). This branch used
-   * to be `<EchoAppShell>{null}</EchoAppShell>`: until getCall answered, the
+   * to be `<ToolbarShell>{null}</ToolbarShell>`: until getCall answered, the
    * record page was an empty column with no menu, no card and no player, and
    * then the whole document appeared at once. The card, its header row and
    * the player bar are STRUCTURE — they do not depend on the network — so
@@ -970,7 +970,7 @@ export default function CallDetailPage({
    */
   if (!call) {
     return (
-      <EchoAppShell menu={sectionMenu}>
+      <ToolbarShell toolbar={sectionMenu}>
         <PageContainer fill>
           <Card className="flex min-h-0 flex-1 flex-col !p-0">
             <div className="flex items-start justify-between gap-3 px-5 pb-4 pt-5">
@@ -992,7 +992,7 @@ export default function CallDetailPage({
             </div>
           </Card>
         </PageContainer>
-      </EchoAppShell>
+      </ToolbarShell>
     );
   }
 
@@ -1262,7 +1262,7 @@ export default function CallDetailPage({
   ];
 
   return (
-    <EchoAppShell menu={sectionMenu}>
+    <ToolbarShell toolbar={sectionMenu}>
       {/* ONE document card (user directive, 2026-08-24): header, player,
           summary, transcript, notes — divisions inside one box, not a
           stack of separate cards. Since 2026-08-25 the summary and the
@@ -2156,7 +2156,7 @@ export default function CallDetailPage({
                               {tCommon("save")}
                             </button>
                             <Link
-                              href="/echo/speakers"
+                              href="/management/speakers"
                               className="text-[11px] text-fg-muted underline-offset-2 hover:underline"
                             >
                               {t("manageSpeakers")}
@@ -2769,7 +2769,7 @@ export default function CallDetailPage({
           {t("addSelectionNote")}
         </button>
       ) : null}
-    </EchoAppShell>
+    </ToolbarShell>
   );
 }
 

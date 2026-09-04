@@ -215,7 +215,9 @@ export function AgentDetail({ handle }: { handle: string }) {
           restates the page under it and carries a number that has to be
           right forever. The groups below say what it can do, and each one
           carries its own count. */}
-      <Section title={t("detailTools")} divided>
+      {/* undivided (same directive): the heading names the section, and a
+          rule above it is a second answer to the same question */}
+      <Section title={t("detailTools")}>
         <div className="grid gap-4 lg:grid-cols-2">
           {groups.map((group) => (
             <section key={group.key} className="rounded-xl border border-border bg-surface p-4">
@@ -264,7 +266,7 @@ export function AgentDetail({ handle }: { handle: string }) {
         something to read, so that is where it renders now.
       */}
       {agent.instructions === null ? null : (
-        <Section title={t("detailPrompt")} divided>
+        <Section title={t("detailPrompt")}>
           <p className="whitespace-pre-wrap rounded-xl bg-surface-2 p-4 text-sm leading-7 text-fg">
             {agent.instructions}
           </p>

@@ -81,28 +81,33 @@ describe("breadcrumb trail", () => {
     ]);
   });
 
-  it("hangs Echo's surfaces under Echo, which the URL does not say", () => {
-    // the reason this table exists at all: a path-derived trail renders
-    // "Home > Search" and teaches an IA the rest of the product contradicts
-    expect(trailFor("/search").map((c) => c.href)).toEqual(["/echo", "/search"]);
+  it("gives search its own trail now that Echo is gone", () => {
+    /*
+     * Search used to hang under Echo, which is the reason this table exists
+     * at all — a path-derived trail renders "Home > Search" and teaches an IA
+     * the rest of the product contradicts. Echo was removed (user directive,
+     * 2026-09-04), and a crumb pointing at a deleted page is worse than a
+     * short trail: the step is there, it is labelled, and pressing it is a
+     * 404. So search begins its own.
+     */
+    expect(trailFor("/search").map((c) => c.href)).toEqual(["/search"]);
   });
 
   it("does NOT route a call through /calls, which is now only a redirect", () => {
     /*
-     * The merged Record+Calls surface landed at `/echo` and `/calls` became a
-     * redirect onto it. A crumb labelled «تماس‌ها» pointing at `/calls` would
-     * be a step naming a place that no longer exists AND a link whose
-     * destination disagrees with its label — so the trail goes straight to
-     * Echo. Asserted as an absence, because the wrong version renders
-     * perfectly and only the extra crumb gives it away.
+     * `/calls` is a redirect, so a crumb labelled «تماس‌ها» pointing at it
+     * would be a step naming a place that only bounces AND a link whose
+     * destination disagrees with its label. Asserted as an absence, because
+     * the wrong version renders perfectly and only the extra crumb gives it
+     * away.
+     *
+     * The parent is MEETINGS since 2026-09-04: a recording belongs to the
+     * meeting it came from, and its old parent `/echo/records` was deleted
+     * with the surface.
      */
     const trail = trailFor("/calls/0c5c0e02-1111-2222-3333-444455556666");
-    // 2026-08-25 (user report): the chain names Records between Echo and the
-    // record — Home / Echo / Records / <title> — via the STATIC
-    // /echo/records entry (a parent must never be a dynamic pattern)
     expect(trail.map((c) => c.href)).toEqual([
-      "/echo",
-      "/echo/records",
+      "/meetings",
       "/calls/0c5c0e02-1111-2222-3333-444455556666",
     ]);
     expect(trail.map((c) => c.href)).not.toContain("/calls");
@@ -169,10 +174,11 @@ describe("the trail's own assumptions", () => {
        trail — leaving it parented to Settings would have been a crumb
        offering a door back to a menu that no longer lists it, which the
        Settings-parent check below now forbids outright. */
+    /* «/echo» left the set on 2026-09-04 with the surface itself */
     expect(roots).toEqual([
-      "/", "/agents", "/assistant", "/echo", "/help", "/integrations",
-      "/management", "/meetings", "/platform", "/profile", "/settings",
-      "/tasks", "/workflows",
+      "/", "/agents", "/assistant", "/help", "/integrations",
+      "/management", "/meetings", "/platform", "/profile", "/search",
+      "/settings", "/tasks", "/workflows",
     ]);
     for (const pattern of Object.keys(TRAIL)) {
       const trail = trailFor(pattern.replace(/\[[^\]]+\]/g, "x"));

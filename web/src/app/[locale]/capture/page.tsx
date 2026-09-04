@@ -16,5 +16,5 @@ export default async function CaptureRedirect({
   params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
-  redirect({ href: "/echo", locale });
+  redirect({ href: "/meetings", locale });
 }

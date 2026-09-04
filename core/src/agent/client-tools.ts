@@ -95,11 +95,6 @@ export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
       + "/meetings = MEETINGS — the product's meetings: plan one, run it, its "
       + "minutes and decisions. This is where a meeting lives. "
       + "/tasks = the task board. "
-      + "/echo = start a RECORDING in the browser or upload an audio file. "
-      + "A recording is not a meeting: use /meetings for a meeting. "
-      + "/echo/records = the recorded calls. "
-      + "/echo/summaries = summaries of the recordings, gathered for reading. "
-      + "/echo/archive = archived records. "
       + "/conversations = past assistant conversations (history). "
       + "/search = transcript search. "
       + "/workflows = workflows. /agents = the agents and their profiles. "
@@ -133,7 +128,6 @@ export const CLIENT_TOOLS: readonly ClientToolSpec[] = [
        */
       path: strEnum([
         "/", "/assistant", "/meetings", "/tasks",
-        "/echo", "/echo/records", "/echo/summaries", "/echo/archive",
         "/conversations", "/search", "/workflows", "/agents", "/integrations",
         "/profile",
         "/management/users", "/management/speakers", "/management/skills",

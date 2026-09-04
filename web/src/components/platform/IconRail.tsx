@@ -280,7 +280,13 @@ export function IconRail() {
           which of the two wins is decided by the stylesheet's order, not by
           the order they are written here — a coin toss between 8px and auto.
         */}
-        <div className="mb-2 mt-auto border-t border-border" aria-hidden />
+        {/* NO RULE (user directive, 2026-09-04: "there is a divider here,
+            remove it — and keep the position of the items in the menu like it
+            is now"). `mt-auto` stays, because it is what holds these two at
+            the foot; only the hairline goes. The distance already separates
+            them, and a line drawn across a menu that has one group above it
+            and one below is saying something the space has already said. */}
+        <div className="mb-2 mt-auto" aria-hidden />
         {NAV_UTILITY.map(item)}
       </div>
 

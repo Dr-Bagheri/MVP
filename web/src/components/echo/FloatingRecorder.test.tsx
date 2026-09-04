@@ -76,24 +76,29 @@ describe("FloatingRecorder placement", () => {
     expect(pill.closest("#neurai-topbar-recorder")).toBeNull();
   });
 
-  it("stands down on the recorder's own screens even while docked", () => {
+  it("shows on every ordinary screen — there is no recorder page to defer to", () => {
+    /*
+     * These two tests pinned the pill standing down on `/echo` and its capture
+     * aliases, because that page drew the full controls itself and two
+     * renderings of one rolling microphone are two things to keep in step.
+     * The Echo surface was removed (user directive, 2026-09-04), so those
+     * paths are not screens any more and the condition they guarded is gone
+     * with them.
+     *
+     * What replaces them is the property that still matters: ANYWHERE ELSE,
+     * the pill is what says a microphone is open. The meeting page is the one
+     * exception and has its own test below.
+     */
     const anchor = anchorInDom();
-    for (const p of ["/echo", "/echo/new-meeting", "/echo/record", "/echo/upload"]) {
+    for (const p of ["/tasks", "/meetings", "/assistant", "/calls/abc"]) {
       pathname = p;
       const { unmount } = render(<FloatingRecorder />);
-      expect(screen.queryByText("pause"), p).toBeNull();
-      expect(anchor.childElementCount, p).toBe(0);
+      expect(screen.queryByText("pause"), p).not.toBeNull();
       unmount();
     }
+    expect(anchor).toBeTruthy();
   });
 
-  it("but /echo/records is the records LIST, not the recorder — the pill shows", () => {
-    // pins the segment fix: startsWith("/echo/record") used to swallow this
-    // page, and a live take was invisible exactly where people review takes
-    pathname = "/echo/records";
-    render(<FloatingRecorder />);
-    expect(screen.queryByText("pause")).not.toBeNull();
-  });
 
   it("renders nothing at all when no take is rolling", () => {
     anchorInDom();

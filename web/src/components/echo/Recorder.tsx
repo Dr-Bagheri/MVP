@@ -675,7 +675,7 @@ export function Recorder({ onFinished, meeting: meetingProp }: {
             reference's 15px padding — `px-4` was a sixteenth pixel this file
             picked on its own, and the redundant display class is what made it
             look deliberate. */}
-        <Link href="/echo/records" className="btn-secondary mt-4">
+        <Link href="/meetings" className="btn-secondary mt-4">
           {t("resumeBackToCalls")}
         </Link>
       </Card>
@@ -1212,7 +1212,7 @@ export function Recorder({ onFinished, meeting: meetingProp }: {
               <audio ref={previewEl} controls src={s.previews[0].url} className="w-full" />
             </div>
           ) : null}
-          <Link href="/echo/records" className="btn-secondary">
+          <Link href="/meetings" className="btn-secondary">
             {t("goToCalls")}
           </Link>
           <button

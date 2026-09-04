@@ -106,7 +106,9 @@ describe("where the agents may be sent", () => {
        how a route map comes to be checked by something that cannot fail */
     const routes = realRoutes();
     expect(serves(routes, "/meetings")).toBe(true);
-    expect(serves(routes, "/echo/speakers")).toBe(true); // the catch-all serves it
+    /* a catch-all's own sub-path, which a naive exact-match would miss —
+       `/echo/speakers` stood here until that surface was deleted */
+    expect(serves(routes, "/settings/security")).toBe(true);
     expect(serves(routes, "/definitely-not-a-page")).toBe(false);
   });
 });

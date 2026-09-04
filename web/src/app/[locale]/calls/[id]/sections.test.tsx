@@ -53,9 +53,12 @@ const DOC_AFTER =
 let SUMMARIES: SummaryVersion[] = [];
 let NOTES: CallNote[] = [];
 
-vi.mock("@/components/echo/EchoAppShell", () => ({
-  EchoAppShell: ({ children, menu }: { children: React.ReactNode; menu?: React.ReactNode }) => (
-    <div>{menu}{children}</div>
+/* the shell moved out of the deleted Echo folder (2026-09-04) and took its
+   prop's name with it: `menu` became `toolbar`, because the row this page
+   hands it is its OWN four tabs and never was Echo's section menu */
+vi.mock("@/components/platform/ToolbarShell", () => ({
+  ToolbarShell: ({ children, toolbar }: { children: React.ReactNode; toolbar?: React.ReactNode }) => (
+    <div>{toolbar}{children}</div>
   ),
 }));
 

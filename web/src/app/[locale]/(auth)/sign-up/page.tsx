@@ -68,7 +68,7 @@ export default function SignUpPage() {
       // (db/0056 — the confirmed email is the acceptance; with confirmation
       // off, the project has waived even that) and goes straight in. Only a
       // genuinely pending row — a joiner — earns the waiting screen.
-      router.push(result.member?.status === "active" ? "/echo" : "/pending");
+      router.push(result.member?.status === "active" ? "/" : "/pending");
     } catch (cause) {
       setError(refusalText(cause, t));
     } finally {
