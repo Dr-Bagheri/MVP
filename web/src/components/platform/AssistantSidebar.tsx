@@ -533,14 +533,35 @@ export function AssistantSidebar() {
     submitRef.current(text, true);
   }
 
-  /** the assistant exists only for signed-in members */
+  /**
+   * THE ASSISTANT EXISTS ONLY FOR SIGNED-IN MEMBERS — asked again until it is
+   * one.
+   *
+   * User report, 2026-09-04: "on the first login the AI assistant sidebar will
+   * not load; you need to refresh a second time after you login for it to be
+   * added to the page."
+   *
+   * This ran once, on mount, with an empty dependency list — and the mount it
+   * ran on was the SIGN-IN page. Signing in navigates client-side, so the
+   * layout holding this component never unmounted: the one answer it ever got
+   * was "anonymous", taken before the person had an account attached, and
+   * nothing asked again. A full reload remounted it and the assistant
+   * appeared, which is exactly the shape the report describes.
+   *
+   * `member` is in the deps as a LATCH, not as a subscription: while it is
+   * false the question is re-asked on each navigation — which is what carries
+   * the sign-in transition — and the moment it is true the effect returns
+   * immediately and costs nothing for the rest of the session. Signing out is
+   * a full navigation, so the latch does not have to be reset by hand.
+   */
   useEffect(() => {
+    if (member) return;
     let live = true;
     void api.identityState().then((who) => {
       if (live && who.state === "member") setMember(true);
     }).catch(() => undefined);
     return () => { live = false; };
-  }, []);
+  }, [member, pathname]);
 
   /** every bus notice becomes a toast, gone after 4s */
   useEffect(() => {

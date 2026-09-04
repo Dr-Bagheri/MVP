@@ -1144,7 +1144,8 @@
     "colActions": "Actions",
     "colWhen": "When",
     "colWho": "Who",
-    "colWhat": "Event"
+    "colWhat": "Event",
+    "finished": "Finished"
   },
   "workflows": {
     "activeTitle": "Active workflows",

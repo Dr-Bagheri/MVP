@@ -71,12 +71,14 @@ const selfUser = {
   display_name: "Operator", display_name_en: null, username: null, locale: "fa",
   role: "owner", status: "active", created_at: "2026-08-01T00:00:00.000Z",
   last_seen_at: null, is_platform_root: true, deleted_at: null, purge_after: null,
+  tombstoned_at: null,
 };
 const memberUser = {
   id: MEMBER, org_id: ORG, org_name: "Northwind", email: "member@example.test",
   display_name: "Member One", display_name_en: null, username: "m1", locale: "fa",
   role: "member", status: "active", created_at: "2026-08-02T00:00:00.000Z",
   last_seen_at: null, is_platform_root: false, deleted_at: null, purge_after: null,
+  tombstoned_at: null,
 };
 
 function rootData() {

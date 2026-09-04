@@ -51,6 +51,16 @@ export interface PlatformUser {
   is_platform_root: boolean;
   deleted_at: string | null;
   purge_after: string | null;
+  /**
+   * When this account was ERASED — not deleted, finished.
+   *
+   * A tombstone has no name, no address and no way to sign in; it is a
+   * receipt, not an account, and the row survives because `platform_audit
+   * .target_user_id` is ON DELETE RESTRICT and the audit's subject may not be
+   * removed by the operator it records. Null for every account that still is
+   * one, which is what makes it a filter rather than a decoration.
+   */
+  tombstoned_at: string | null;
 }
 
 export interface PlatformAuditEntry {
@@ -108,6 +118,7 @@ interface UserRow {
   is_platform_root: boolean;
   deleted_at: Date | string | null;
   purge_after: Date | string | null;
+  tombstoned_at: Date | string | null;
 }
 
 interface AuditRow {
@@ -299,7 +310,27 @@ export function createPlatformRepo(db: Db) {
     ): Promise<PlatformPage<PlatformUser>> {
       const { offset, limit } = pageOptions(input);
       const search = searchTerm(input.search);
-      const deletedClause = input.deleted ? "u.deleted_at is not null" : "u.deleted_at is null";
+      /*
+       * THE ROSTER SHOWS ACCOUNTS (user report, 2026-09-04: "I can't delete
+       * the disabled users from the platform root").
+       *
+       * Two finished tombstones sat in the console's user list, and there was
+       * nothing to press: `platform_purge_user` had already run on them — its
+       * own comment says "the row stays, the person leaves" — so the delete
+       * they were looking for HAD happened and left a receipt behind.
+       *
+       * The list was the defect. A tombstone leaves the roster and joins the
+       * trash, which is where an operator looks for what is on its way out or
+       * already gone; the roster of accounts stops carrying one row per person
+       * the platform has ever finished with.
+       *
+       * Both halves in ONE expression rather than two flags: "not here" and
+       * "there" must be the same predicate, or a row lands in both lists or in
+       * neither, and neither of those is discoverable from one screen.
+       */
+      const deletedClause = input.deleted
+        ? "(u.deleted_at is not null or u.tombstoned_at is not null)"
+        : "(u.deleted_at is null and u.tombstoned_at is null)";
       // 0091: through the console door once it exists (see organizations())
       const viaDoor = await hasConsoleSightDoors(db);
       const rows = await db.withIdentity(identity, (tx: SqlTx) => tx.unsafe<UserRow>(viaDoor ? `
@@ -307,7 +338,7 @@ export function createPlatformRepo(db: Db) {
                u.display_name, u.display_name_en, u.username, u.locale,
                u.role, u.status,
                u.created_at, u.last_seen_at, u.deleted_at, u.purge_after,
-               u.is_platform_root
+               u.is_platform_root, u.tombstoned_at
           from echo.platform_list_users() u
          where ${deletedClause}
            and ($1::text is null
@@ -323,7 +354,8 @@ export function createPlatformRepo(db: Db) {
                u.role::text as role, u.status,
                u.created_at, u.last_seen_at, u.deleted_at, u.purge_after,
                exists (select 1 from echo.platform_operator p where p.user_id = u.id)
-                 as is_platform_root
+                 as is_platform_root,
+               u.tombstoned_at
           from echo.app_user u
           join echo.org o on o.id = u.org_id
          where ${deletedClause}
@@ -351,6 +383,7 @@ export function createPlatformRepo(db: Db) {
         is_platform_root: row.is_platform_root === true,
         deleted_at: row.deleted_at ? iso(row.deleted_at) : null,
         purge_after: row.purge_after ? iso(row.purge_after) : null,
+        tombstoned_at: row.tombstoned_at ? iso(row.tombstoned_at) : null,
       })), offset, limit);
     },
 

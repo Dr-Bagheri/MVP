@@ -533,6 +533,22 @@ export default function PlatformControlPage() {
     const isSelf = u.id === overview.current_user_id;
     const tombstoned = isTombstone(u);
     const named = u.display_name || u.email;
+    /*
+     * NOTHING LEFT TO DO TO A FINISHED ACCOUNT (user report, 2026-09-04).
+     *
+     * A tombstone has already been through the door: `platform_purge_user`
+     * deleted its calls and erased the person, and its own comment says "the
+     * row stays, the person leaves". The row survives because
+     * `platform_audit.target_user_id` is ON DELETE RESTRICT — the audit's
+     * subject may not be removed by the operator it records — and sixteen
+     * other rows still point at it.
+     *
+     * So the two trash actions are both wrong here: restore would set a
+     * `deleted_at` that is already null and change nothing, and purge raises
+     * `only a deleted user can be purged`. An empty menu is the honest
+     * answer, and it is what the row itself now says.
+     */
+    if (tombstoned) return [];
     if (userTrash) {
       return [
         {
@@ -1078,6 +1094,13 @@ export default function PlatformControlPage() {
                       <span className="block min-w-0 leading-tight">
                         <span className="flex items-center gap-2 truncate font-medium text-fg">
                           {isTombstone(u) ? t("tombstoned") : u.display_name}
+                          {isTombstone(u) ? (
+                            /* said on the row, because the empty menu above is
+                               an absence and an absence explains nothing */
+                            <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] text-fg-muted">
+                              {t("finished")}
+                            </span>
+                          ) : null}
                           {u.is_platform_root ? (
                             <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-semibold text-accent">
                               {u.id === overview.current_user_id ? t("selfBadge") : t("currentRoot")}
@@ -1250,7 +1273,22 @@ function auditLabel(t: (k: string) => string, action: string): string {
 const shortId = (id: string) => `#${id.slice(0, 8)}`;
 
 /** A tombstoned account: the address is REPLACED at deletion (db/0044). */
-const isTombstone = (u: PlatformUser) => u.email.endsWith("@tombstone.invalid");
+/*
+ * THE STAMP, not the address (0179). `@tombstone.invalid` is a shape the
+ * erasure happens to write; `tombstoned_at` is the fact, and the console now
+ * has it. A screen that recognises a state by parsing a string it did not
+ * produce is one rename away from showing live accounts as deleted.
+ */
+const isTombstone = (u: PlatformUser) =>
+  /*
+   * `!= null`, LOOSELY, and that is the whole care in this line: it catches
+   * undefined as well as null. A deployment whose server predates 0179 sends
+   * no `tombstoned_at` at all, and with a strict `!== null` every account on
+   * the platform would read as erased — no name, no menu, nothing to press.
+   * An absent field must mean "not erased"; the dangerous direction here is
+   * the one that turns a missing column into a finished person.
+   */
+  u.tombstoned_at != null;
 
 /**
  * What an audit line was ABOUT, named rather than numbered where the console

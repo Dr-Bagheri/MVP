@@ -1144,7 +1144,8 @@
     "colActions": "عملیات",
     "colWhen": "زمان",
     "colWho": "کنشگر",
-    "colWhat": "رویداد"
+    "colWhat": "رویداد",
+    "finished": "پایان‌یافته"
   },
   "workflows": {
     "activeTitle": "گردش‌کارهای فعال",
