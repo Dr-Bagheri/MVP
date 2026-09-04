@@ -4176,6 +4176,18 @@ ${liveText}`
       skill,
       systemInstructions: [
         selectedAgent?.instructions,
+        /*
+         * The stored tool list, now that it no longer FILTERS anything: it is
+         * what this agent is built around, said as a preference. A column that
+         * stopped being a wall and became nothing would be the third kind of
+         * dead configuration this repo has found — present, editable, and read
+         * by no one. Phrased as "reach for these first", never as "only these":
+         * the whole point of the change above is that the ceiling is gone.
+         */
+        selectedAgent && selectedAgent.tools.length > 0
+          ? `You are built around these tools and should reach for them first: ${selectedAgent.tools.join(", ")}.`
+            + " You are not limited to them — use whatever the task needs."
+          : undefined,
         selectedWorkflow?.instructions,
         profileInstruction,
         contextLine,
@@ -4185,7 +4197,33 @@ ${liveText}`
         languageInstruction(body.locale),
       ].filter(Boolean).join("\n\n"),
       agentModel: selectedAgent?.model,
-      allowedTools: selectedAgent?.tools,
+      /*
+       * THE STORED TOOL LIST IS A PREFERENCE, NOT A CEILING (user directive,
+       * 2026-09-04: "any task that can be done by echo can also be done by
+       * roya and ava — they must have full access and full capability").
+       *
+       * It used to be `allowedTools: selectedAgent?.tools`, which narrowed a
+       * directly-asked agent to the five names in her `tools` column. That is
+       * why Roya answered "I do not have the access needed to create a task"
+       * about a tool the run was holding: the toolset was assembled correctly
+       * and then filtered away underneath her.
+       *
+       * The ruling behind removing it: **full capability when a human is in
+       * the loop, read-only when the reader is a model.** A person who asked
+       * Roya is reading her answer and approving her writes, which is exactly
+       * Echo's situation — there was never a security argument for the
+       * difference, only history. A DELEGATE is the other case and keeps its
+       * restriction; see `delegation.ts`, where a nested run is handed no
+       * client tools and no write tools because its output is consumed by
+       * another model rather than by a person.
+       *
+       * A SKILL may still narrow a run (`combinedAllowedTools` in runtime.ts)
+       * — that is a per-task instruction someone chose for this turn, not a
+       * standing wall around an agent. And the real wall is unchanged and
+       * elsewhere: `echo_agent`'s grants, RLS, and the proposal-and-confirm
+       * path. A ceiling made of a JSON column was never one of those.
+       */
+      allowedTools: undefined,
       provenance: {
         ...(selectedAgent ? { agent: { id: selectedAgent.id, handle: selectedAgent.handle, level: selectedAgent.level } } : {}),
         ...(selectedWorkflow ? { workflow: { id: selectedWorkflow.id, slug: selectedWorkflow.slug } } : {}),
