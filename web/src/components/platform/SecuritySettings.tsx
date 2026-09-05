@@ -7,10 +7,10 @@ import type { AuthSessionRow, OrgSessionRow, User } from "@/api/types";
 import { ConfirmDialog } from "@/components/rowActions";
 import { notify } from "@/lib/notify";
 import { DataTable, StatusDot } from "@/components/DataTable";
-import { IconClose } from "@/components/icons";
+import { IconClose, IconMoon, IconPeople3, IconPulse } from "@/components/icons";
 import { Chip, EmptyState } from "@/components/ui";
-import { SectionTabs } from "./sectionTabs";
-import { formatDate, formatTime, personName } from "@/lib/format";
+import { FilterChips } from "./sectionTabs";
+import { digits, formatDate, formatTime, personName } from "@/lib/format";
 import { useLocale } from "next-intl";
 import { signOutThisDevice } from "@/lib/signOut";
 
@@ -108,6 +108,9 @@ export function SecuritySettings() {
     return platform ? `${browser} · ${platform}` : browser;
   };
 
+  const everyone = Array.isArray(orgSessions) ? orgSessions : [];
+  const onlineCount = everyone.filter((session) => session.online).length;
+
   return (
     <div className="space-y-5">
       {/*
@@ -141,15 +144,15 @@ export function SecuritySettings() {
               second sub menu in the same style as the tasks, with all |
               online | offline"). The menu above already names the page; the
               row answers the one question this table gets asked. */}
-          <SectionTabs
+          <FilterChips
             label={t("colOnline")}
             active={presence}
             onSelect={setPresence}
             className="mb-5"
-            tabs={[
-              { key: "all", label: t("filterAll") },
-              { key: "online", label: t("onlineYes") },
-              { key: "offline", label: t("onlineNo") },
+            chips={[
+              { key: "all", label: t("filterAll"), icon: <IconPeople3 width={12} height={12} />, count: digits(everyone.length, locale) },
+              { key: "online", label: t("onlineYes"), icon: <IconPulse width={12} height={12} />, count: digits(onlineCount, locale) },
+              { key: "offline", label: t("onlineNo"), icon: <IconMoon width={12} height={12} />, count: digits(everyone.length - onlineCount, locale) },
             ]}
           />
           {/* rendered unconditionally so the frame stands before the answer;

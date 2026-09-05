@@ -13,9 +13,11 @@ import { HOLD_MS } from "./board/holdDrag";
 if (typeof window.PointerEvent === "undefined") {
   class JsdomPointerEvent extends MouseEvent {
     pointerId: number;
+    pointerType: string;
     constructor(type: string, init: PointerEventInit = {}) {
       super(type, init);
       this.pointerId = init.pointerId ?? 0;
+      this.pointerType = init.pointerType ?? "mouse";
     }
   }
   (window as unknown as { PointerEvent: typeof JsdomPointerEvent }).PointerEvent = JsdomPointerEvent;
@@ -235,7 +237,7 @@ describe("TaskBoard", () => {
     expect(patches).toHaveLength(0);
   });
 
-  it("a press that moves before the hold ends is a scroll, not a lift", async () => {
+  it("a FINGER that moves before the hold ends is scrolling, not lifting", async () => {
     boardTasks = [card({ id: "t-1", column_id: "col-todo" })];
     render(<TaskBoard />);
     await waitFor(() => expect(screen.getByText("اجرای اسکریپت")).toBeInTheDocument());
@@ -244,17 +246,40 @@ describe("TaskBoard", () => {
     const original = document.elementFromPoint;
     document.elementFromPoint = () => columnRegion("در حال انجام");
     try {
-      fireEvent.pointerDown(cardEl, { button: 0, clientX: 10, clientY: 10, pointerId: 1 });
-      fireEvent.pointerMove(cardEl, { clientX: 40, clientY: 10, pointerId: 1 }); // 30px inside the hold window
+      fireEvent.pointerDown(cardEl, { button: 0, clientX: 10, clientY: 10, pointerId: 1, pointerType: "touch" });
+      fireEvent.pointerMove(cardEl, { clientX: 40, clientY: 10, pointerId: 1, pointerType: "touch" }); // 30px inside the hold window
       await act(async () => { await new Promise((resolve) => setTimeout(resolve, HOLD_MS + 40)); });
-      fireEvent.pointerMove(cardEl, { clientX: 320, clientY: 14, pointerId: 1 });
-      fireEvent.pointerUp(cardEl, { clientX: 320, clientY: 14, pointerId: 1 });
+      fireEvent.pointerMove(cardEl, { clientX: 320, clientY: 14, pointerId: 1, pointerType: "touch" });
+      fireEvent.pointerUp(cardEl, { clientX: 320, clientY: 14, pointerId: 1, pointerType: "touch" });
     } finally {
       document.elementFromPoint = original;
     }
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
     expect(patches).toHaveLength(0);
     expect(within(columnRegion("برای انجام")).getByText("اجرای اسکریپت")).toBeInTheDocument();
+  });
+
+  it("a MOUSE that moves past the slop lifts at once — a drag needs no wait", async () => {
+    /* the first hold-only version threw every real mouse drag away as a
+       scroll, because a hand moves the moment it presses (user, 2026-09-05:
+       "moving cards by hand is not working") */
+    boardTasks = [card({ id: "t-1", column_id: "col-todo" })];
+    render(<TaskBoard />);
+    await waitFor(() => expect(screen.getByText("اجرای اسکریپت")).toBeInTheDocument());
+
+    const cardEl = screen.getByText("اجرای اسکریپت").closest("[data-card]") as HTMLElement;
+    const original = document.elementFromPoint;
+    document.elementFromPoint = () => columnRegion("در حال انجام");
+    try {
+      fireEvent.pointerDown(cardEl, { button: 0, clientX: 10, clientY: 10, pointerId: 1, pointerType: "mouse" });
+      fireEvent.pointerMove(cardEl, { clientX: 50, clientY: 12, pointerId: 1, pointerType: "mouse" }); // no wait at all
+      fireEvent.pointerMove(cardEl, { clientX: 320, clientY: 14, pointerId: 1, pointerType: "mouse" });
+      fireEvent.pointerUp(cardEl, { clientX: 320, clientY: 14, pointerId: 1, pointerType: "mouse" });
+    } finally {
+      document.elementFromPoint = original;
+    }
+    await waitFor(() => expect(patches).toHaveLength(1));
+    expect(patches[0]!.body.column_id).toBe("col-doing");
   });
 
   it("a refused move reloads the truth instead of keeping the optimistic lie", async () => {

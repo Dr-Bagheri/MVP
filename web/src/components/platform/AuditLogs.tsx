@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { SectionTabs } from "./sectionTabs";
+import { FilterChips } from "./sectionTabs";
+import { IconCheck, IconGavel, IconHistory, IconRobot, IconTrash } from "@/components/icons";
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { BffError } from "@/api/client";
@@ -335,14 +336,24 @@ export function AuditLogs() {
           as well"). Five values that are all worth seeing at once cost two
           presses inside a select and none here; it is the same chip every
           other filter row on the product wears. */}
-      <SectionTabs
+      <FilterChips
         label={t("filterSource")}
         active={source === "" ? "all" : source}
         onSelect={(key) => setSource(key === "all" ? "" : key)}
         className="mb-5"
-        tabs={[
-          { key: "all" as const, label: t("filterAll") },
-          ...AUDIT_SOURCES.map((value) => ({ key: value, label: t(`source.${value}`) })),
+        chips={[
+          { key: "all" as const, label: t("filterAll"), icon: <IconHistory width={12} height={12} /> },
+          ...AUDIT_SOURCES.map((value) => ({
+            key: value,
+            label: t(`source.${value}`),
+            /* each source under its own glyph: the admin's gavel, the human's
+               tick on a proposal, the agent, the bin */
+            icon: value === "admin_action" ? <IconGavel width={12} height={12} />
+              : value === "proposal_decision" ? <IconCheck width={12} height={12} />
+              : value === "agent_run" ? <IconRobot width={12} height={12} />
+              : value === "deletion" ? <IconTrash width={12} height={12} />
+              : <IconHistory width={12} height={12} />,
+          })),
         ]}
       />
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { TopicNameBox } from "./TopicNameBox";
+import { filterChipClass } from "./sectionTabs";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -148,9 +149,7 @@ export function Meetings() {
           type="button"
           aria-pressed={topic === "all"}
           onClick={() => setTopic("all")}
-          className={`btn btn-sm gap-1.5 border font-medium ${
-            topic === "all" ? "border-accent bg-accent-soft font-semibold text-accent" : "border-border text-fg-muted hover:text-fg"
-          }`}
+          className={filterChipClass(topic === "all")}
         >
           <IconFolder width={12} height={12} />
           {t("allMeetings")}

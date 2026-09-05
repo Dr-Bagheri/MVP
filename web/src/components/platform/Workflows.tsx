@@ -2,13 +2,15 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
+import { digits } from "@/lib/format";
 import { useRefreshEpoch } from "@/lib/refreshBus";
 import { useWorkflowCopy, useWorkflowTemplateCopy } from "@/lib/workflowName";
 import type { AuthoredWorkflow, StarterWorkflow, User, WorkflowCard } from "@/api/types";
 import { Link } from "@/i18n/routing";
-import { SectionTabs } from "./sectionTabs";
+import { FilterChips, SectionTabs } from "./sectionTabs";
+import { IconCalendar, IconFileText, IconMail, IconMic, IconPlay, IconRows } from "@/components/icons";
 import { PlatformShell } from "./PlatformShell";
 import { WorkflowBuilder } from "./WorkflowBuilder";
 import { WorkflowTile } from "./WorkflowTile";
@@ -61,6 +63,7 @@ import { EmptyState } from "@/components/ui";
  */
 export function Workflows() {
   const t = useTranslations("workflows");
+  const locale = useLocale();
   const tb = useTranslations("builder");
   const [workflows, setWorkflows] = useState<WorkflowCard[] | null>(null);
   const [me, setMe] = useState<User | null>(null);
@@ -274,17 +277,24 @@ export function Workflows() {
                   than one kind on the shelf — a filter with a single option
                   is a control that cannot change anything. */}
               {libraryKinds.length > 1 ? (
-                <SectionTabs
+                /* the SECOND row wears the second-row chip (R3, ruled 2026-09-05):
+                   icon, label, count — what starts each kind under its own glyph */
+                <FilterChips
                   label={t("libraryKindLabel")}
                   active={kind}
                   onSelect={setKind}
                   className="mb-5"
-                  tabs={[
-                    { key: "all", label: t("libraryKindAll"), count: library.length },
+                  chips={[
+                    { key: "all", label: t("libraryKindAll"), icon: <IconRows width={12} height={12} />, count: digits(library.length, locale) },
                     ...libraryKinds.map((k) => ({
                       key: k,
                       label: t(`libraryKind_${k.replace(".", "_")}`),
-                      count: library.filter((s) => (s.trigger_event ?? "manual") === k).length,
+                      icon: k === "manual" ? <IconPlay width={12} height={12} />
+                        : k === "mail.received" ? <IconMail width={12} height={12} />
+                        : k === "meeting.soon" ? <IconCalendar width={12} height={12} />
+                        : k === "call.transcribed" ? <IconMic width={12} height={12} />
+                        : <IconFileText width={12} height={12} />,
+                      count: digits(library.filter((s) => (s.trigger_event ?? "manual") === k).length, locale),
                     })),
                   ]}
                 />

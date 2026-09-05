@@ -108,6 +108,36 @@ describe("model catalogue (M5)", () => {
     expect(unset.models.some((m) => m.selected)).toBe(false);
   });
 
+  it("forRun walks the ladder where preferred() stops — the unattended path answers everyone", async () => {
+    /*
+     * User report, 2026-09-05: a colleague named @roya and @echo in a room and
+     * neither answered him. The room read `preferred()` — the person's saved
+     * pick or null — and treated null as "no model": every member who had
+     * never opened the picker was silently unanswerable. `forRun` is M5's
+     * ladder from the api side, the rungs the four workers already walk.
+     *
+     * The DISCRIMINATING PAIR on one row: `preferred` says null and `forRun`
+     * says a model. A `forRun` that merely renamed `preferred` fails here.
+     */
+    const { db: nobody } = fakeDb(() => [{ allowed_models: [], preferred_model: null }]);
+    expect(await createModelsRepo(nobody).preferred(ADMIN_ID)).toBeNull();
+    // no preference, no curation → the first the catalogue OFFERS (M5's
+    // exclusion applied first: the mocked catalogue's excluded rows never win)
+    expect(await createModelsRepo(nobody).forRun(ADMIN_ID)).toBe("google/gemini-3.6-flash");
+
+    // no preference, a curated org → the org's first permitted model
+    const { db: curated } = fakeDb(() => [{ allowed_models: ["openai/gpt-5"], preferred_model: null }]);
+    expect(await createModelsRepo(curated).forRun(ADMIN_ID)).toBe("openai/gpt-5");
+
+    // a BARRED preference is a rung that is not there, not a refusal
+    const { db: stale } = fakeDb(() => [{ allowed_models: ["openai/gpt-5"], preferred_model: "anthropic/claude-opus-5" }]);
+    expect(await createModelsRepo(stale).forRun(ADMIN_ID)).toBe("openai/gpt-5");
+
+    // a servable preference wins over everything below it
+    const { db: chosen } = fakeDb(() => [{ allowed_models: [], preferred_model: "openai/gpt-5" }]);
+    expect(await createModelsRepo(chosen).forRun(ADMIN_ID)).toBe("openai/gpt-5");
+  });
+
   it("filters out models that cannot call tools, and says it filtered", async () => {
     // SPEC: models that cannot call tools are not selectable. Enforced from
     // OpenRouter's supported_parameters, never from a name heuristic.

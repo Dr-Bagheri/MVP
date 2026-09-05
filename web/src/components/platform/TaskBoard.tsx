@@ -20,6 +20,7 @@ import {
 } from "./board/boardStyle";
 import { ProjectDialog } from "./ProjectDialog";
 import { TopicNameBox } from "./TopicNameBox";
+import { filterChipClass } from "./sectionTabs";
 import { useHoldDrag } from "./board/holdDrag";
 import { TaskCalendar, TaskListView } from "./tasks/TaskViews";
 import {
@@ -355,9 +356,7 @@ export function TaskBoard() {
           type="button"
           aria-pressed={topic === "all"}
           onClick={() => setTopic("all")}
-          className={`btn btn-sm gap-1.5 border font-medium ${
-            topic === "all" ? "border-accent bg-accent-soft font-semibold text-accent" : "border-border text-fg-muted hover:text-fg"
-          }`}
+          className={filterChipClass(topic === "all")}
         >
           <IconFolder width={12} height={12} />
           {t("allTasks")}
@@ -834,10 +833,6 @@ function Card({ task, labels, people, lifted, onLift, onOver, onDrop, onCancel, 
     <div
       data-card={task.id}
       onPointerDown={drag.onPointerDown}
-      onPointerMove={drag.onPointerMove}
-      onPointerUp={drag.onPointerUp}
-      onPointerLeave={drag.onPointerLeave}
-      onPointerCancel={drag.onPointerCancel}
       /* a lifted card rides above its column and says so; the transform that
          carries it is written by the hook, not by a render per pointer move */
       className={`${BOARD_CARD} ${lifted ? "relative z-50 cursor-grabbing ring-2 ring-accent shadow-island" : ""}`}

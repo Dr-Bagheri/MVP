@@ -3206,8 +3206,16 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
       type: "agent_typing", channel_id: channelId, handle: named,
     });
 
-    const model = await models.preferred(identity);
+    /* THE LADDER, not the preference alone (user report, 2026-09-05: a
+       colleague named @roya and @echo and neither answered him). This read
+       `models.preferred` — the person's saved pick or null — so every member
+       who had never opened the model picker got an `agent_failed` and a room
+       that ignored them, with nothing in the log to say so. `forRun` walks
+       preference → org's first permitted → catalogue, the same rungs the
+       workers walk; and the failure branches below now say WHICH nothing. */
+    const model = await models.forRun(identity);
     if (!model) {
+      app.log.warn({ channel_id: channelId, handle: named, reason: "no_model" }, "chat_agent_failed");
       chatBus.publish(identity.orgId, {
         type: "agent_failed", channel_id: channelId, handle: named,
       });
@@ -3222,6 +3230,7 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
 
     let answer = "";
     let failed = true;
+    let failure = "unknown";
     try {
       await assistant.ask({
         identity,
@@ -3248,14 +3257,22 @@ export function buildServer<TDeps>(options: ServerOptions<TDeps>): FastifyInstan
         end: () => undefined,
       });
       failed = answer.trim() === "";
-    } catch {
+      if (failed) failure = "empty_answer";
+    } catch (error) {
       failed = true;
+      /* the class of the error, never its message: a model's refusal text or a
+         tool's argument can quote the room */
+      failure = error instanceof Error ? error.name : "unknown";
     }
 
     if (failed) {
       /* TRANSIENT, never a row. A tidy "something went wrong" message in the
          record is indistinguishable a week later from something the agent
-         said -- the honest record is the question standing unanswered. */
+         said -- the honest record is the question standing unanswered. LOUD in
+         the log, though (rule 12's indistinguishability debt): from a chair,
+         "no model", "the model said nothing" and "the run threw" are all one
+         silence. */
+      app.log.warn({ channel_id: channelId, handle: named, reason: failure }, "chat_agent_failed");
       chatBus.publish(identity.orgId, {
         type: "agent_failed", channel_id: channelId, handle: named,
       });

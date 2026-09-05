@@ -358,6 +358,42 @@ export function createModelsRepo(db: Db, options: ModelsOptions = {}) {
     },
 
     /**
+     * THE MODEL A RUN NOBODY TYPED A MODEL FOR USES — M5's ladder from the
+     * api side: the person's servable preference, else the org's first
+     * permitted model, else the first the catalogue offers (tool-capable
+     * where that is known, since a run with tools is what asks).
+     *
+     * Exists because the ROOM answered only people who had once opened the
+     * model picker (user report, 2026-09-05: a colleague named @roya and
+     * @echo and neither answered him). `answerIfNamed` read `preferred()`
+     * alone and treated null as "no model" — an `agent_failed` on the stream,
+     * nothing in the log, and every member who never saved a preference was
+     * silently unanswerable. The four workers already walk this ladder
+     * (mail-poll, meeting-prep, summarizer, workflow-step); the api's
+     * unattended path now walks the same one rather than a shorter copy.
+     */
+    async forRun(identity: Identity): Promise<string | null> {
+      const rows = await db.withIdentity(identity, (tx: SqlTx) =>
+        tx.unsafe<{ allowed_models: string[] | null; preferred_model: string | null }>(
+          `select o.allowed_models, u.preferred_model
+             from echo.app_user u
+             join echo.org o on o.id = u.org_id
+            where u.id = $1
+            limit 1`,
+          [identity.userId],
+        ),
+      );
+      const row = rows[0];
+      if (!row) return null;
+      const allowed = row.allowed_models ?? [];
+      const offered = catalogue().filter((m) => !isExcluded(m.id));
+      const permitted = allowed.length > 0 ? offered.filter((m) => allowed.includes(m.id)) : offered;
+      const capability = await capabilityOf();
+      const usable = capability.known ? permitted.filter((m) => capability.toolCapable.has(m.id)) : permitted;
+      return firstServable(row.preferred_model, allowed[0], bySuggestion(usable)[0]?.id);
+    },
+
+    /**
      * The member's own choice. Not an admin action — M5 puts the pick with
      * the person, and db/0013's `app_user_write` already lets someone update
      * their own row, so RLS is the wall here as everywhere else.

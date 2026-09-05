@@ -85,6 +85,18 @@ loosened rule — and the user's "except this part" is what puts one there.
 
 ### R3 · The toolbar and the primary action — FIXED for the create button (2026-09-05), the one-component half PROPOSED
 
+- **Row two = filter chips (SOLID, user ruling 2026-09-05: "the style for the
+  second sub menu of the top is different — fill with icon like in meetings;
+  make it a rule, add it in the theme and apply it for all the platform").**
+  Row one is the plain tab (`sectionTabClass`, accent-filled when active); the
+  row under it is the FILTER CHIP (`filterChipClass` / `FilterChips` in
+  `sectionTabs.tsx`): outlined, an ICON at the start, the label, a count
+  where one exists, soft-filled in the accent when active — the chip the
+  tasks and meetings folder strips drew first. Applied to security
+  (all | online | offline with counts), the audit log (a glyph per source)
+  and the workflow shelf's kinds; tasks, meetings and projects already wore
+  it. A second row that wears the row-one tab is a defect.
+
 - **Done on 2026-09-05:** the create button sits at the END of row 1 in one
   coat, `.btn btn-primary`, on every page that has one — workflows (it stood
   in its own row above the tabs), models (it stood under the menu, beside the

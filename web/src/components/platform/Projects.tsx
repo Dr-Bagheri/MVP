@@ -6,6 +6,10 @@ import { Link, useRouter } from "@/i18n/routing";
 import { useSearchParams } from "next/navigation";
 import { ProjectDetail } from "./ProjectDetail";
 import { ProjectDialog } from "./ProjectDialog";
+import { filterChipClass } from "./sectionTabs";
+import { useHoldDrag, type HoldDragHandlers } from "./board/holdDrag";
+import { ConfirmDialog } from "@/components/rowActions";
+import { notify } from "@/lib/notify";
 import {
   BOARD_CARD, BOARD_CARDS, BOARD_COLUMN, BOARD_COUNT, BOARD_HEADER, BOARD_HEADER_END,
   BOARD_HEADER_START, BOARD_LANE, BOARD_TITLE, BoardAddRow, BoardTone,
@@ -101,6 +105,9 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
   const [dueToday, setDueToday] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** a project dropped on a column, waiting for the person to confirm what moves */
+  const [pendingMove, setPendingMove] = useState<{ project: ProjectRecord; columnId: string; tasks: TaskCardRecord[] } | null>(null);
+  const [moving, setMoving] = useState(false);
 
   const load = useCallback(() => {
     void api.projects({ archived: view === "archive" })
@@ -151,6 +158,41 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
     }
     return best?.id ?? columns[0]!.id;
   }, [columns, cardsOf]);
+
+  /*
+   * DRAGGING A PROJECT MOVES ITS WORK (user, 2026-09-05: "add it for the
+   * projects kanban as well"). Nothing about a project is stored per column —
+   * the column is counted off its tasks — so the one thing a drop can mean is
+   * "this project's unfinished work is now at this stage": every open card of
+   * the project goes to the column it was dropped on, done cards stay. It
+   * ASKS FIRST, naming the count: a drop moves other people's cards, and a
+   * bulk move nobody confirmed is the kind of surprise that teaches a team not
+   * to touch the board.
+   */
+  const requestMove = useCallback((project: ProjectRecord, columnId: string) => {
+    const tasks = cardsOf(project).filter((task) => !task.done && task.column_id !== columnId);
+    if (tasks.length === 0) { notify(t("moveNothing")); return; }
+    setPendingMove({ project, columnId, tasks });
+  }, [cardsOf, t]);
+
+  const confirmMove = useCallback(async () => {
+    if (pendingMove === null) return;
+    setMoving(true);
+    try {
+      /* one card at a time, each its own idempotent write — the board's own
+         move, applied to each; a refused write stops the run and the reload
+         below shows what actually moved */
+      for (const task of pendingMove.tasks) {
+        await api.updateTask(task.id, { column_id: pendingMove.columnId, position: -Date.now() });
+      }
+    } catch {
+      setError(t("writeFailed"));
+    } finally {
+      setMoving(false);
+      setPendingMove(null);
+      load();
+    }
+  }, [pendingMove, load, t]);
 
   const shown = useMemo(() => {
     if (!Array.isArray(rows)) return [];
@@ -252,9 +294,7 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
             type="button"
             aria-pressed={scope === "mine"}
             onClick={() => setScope("mine")}
-            className={`btn btn-sm gap-1.5 border font-medium ${
-              scope === "mine" ? "border-accent bg-accent-soft font-semibold text-accent" : "border-border text-fg-muted hover:text-fg"
-            }`}
+            className={filterChipClass(scope === "mine")}
           >
             <IconUser width={12} height={12} />
             {t("scopeMine")}
@@ -263,9 +303,7 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
             type="button"
             aria-pressed={scope === "all"}
             onClick={() => setScope("all")}
-            className={`btn btn-sm gap-1.5 border font-medium ${
-              scope === "all" ? "border-accent bg-accent-soft font-semibold text-accent" : "border-border text-fg-muted hover:text-fg"
-            }`}
+            className={filterChipClass(scope === "all")}
           >
             <IconFolder width={12} height={12} />
             {t("scopeAll")}
@@ -304,6 +342,7 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
           locale={locale}
           isAdmin={isAdmin}
           onAdd={() => setCreating(true)}
+          onMove={requestMove}
         />
       ) : shown.length === 0 ? (
         /* the two nothings said apart: an organisation with no projects is
@@ -335,6 +374,23 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
         <ProjectDetail id={openId} meId={meId} isAdmin={isAdmin} onClose={() => router.replace("/projects")} />
       ) : null}
 
+      {pendingMove !== null ? (
+        <ConfirmDialog
+          title={t("moveTitle")}
+          body={t("moveBody", {
+            n: digits(pendingMove.tasks.length, locale),
+            name: pendingMove.project.name,
+            column: columns.find((c) => c.id === pendingMove.columnId)?.name ?? "",
+          })}
+          confirmLabel={t("moveConfirm")}
+          cancelLabel={tTasks("cancel")}
+          danger={false}
+          busy={moving}
+          onConfirm={() => void confirmMove()}
+          onCancel={() => setPendingMove(null)}
+        />
+      ) : null}
+
       {creating ? (
         <ProjectDialog
           mode="create"
@@ -357,12 +413,15 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
 /**
  * THE BOARD'S COLUMNS, carrying projects.
  *
- * No drag: a project's column is DERIVED from where its work sits (see the
- * header's rule), so a card somebody could drag would be a control that looks
- * like it moves something and cannot — the shape this repo keeps finding and
- * removing. Work moves on the board; this screen reports where it got to.
+ * DRAG MOVES THE WORK (user, 2026-09-05: "add it for the projects kanban as
+ * well"). A project's column is DERIVED from where its work sits (see the
+ * header's rule), so a dragged project card cannot be stored anywhere — what
+ * it can do is carry the project's unfinished tasks to the column it was
+ * dropped on, after a confirm that names how many (`requestMove` above). Done
+ * tasks stay. The derived column then reads the target, which is what the
+ * hand asked for.
  */
-function ProjectKanban({ columns, projects, columnOf, people, locale, isAdmin, onAdd }: {
+function ProjectKanban({ columns, projects, columnOf, people, locale, isAdmin, onAdd, onMove }: {
   columns: TaskColumnRecord[];
   projects: ProjectRecord[];
   columnOf: (p: ProjectRecord) => string | null;
@@ -370,8 +429,11 @@ function ProjectKanban({ columns, projects, columnOf, people, locale, isAdmin, o
   locale: string;
   isAdmin: boolean;
   onAdd: () => void;
+  onMove: (project: ProjectRecord, columnId: string) => void;
 }) {
   const t = useTranslations("projects");
+  /** the card in the air, and the column under the pointer (holdDrag) */
+  const [lifted, setLifted] = useState<{ id: string; over: string | null } | null>(null);
   return (
     /* THE BOARD, from the board's own module (R17, user ruling 2026-09-05:
        "two same kanban tables … supposed to be the same but they are
@@ -384,7 +446,12 @@ function ProjectKanban({ columns, projects, columnOf, people, locale, isAdmin, o
       {columns.map((col) => {
         const here = projects.filter((p) => columnOf(p) === col.id);
         return (
-          <section key={col.id} className={BOARD_COLUMN} aria-label={col.name}>
+          <section
+            key={col.id}
+            data-column={col.id}
+            className={`${BOARD_COLUMN} ${lifted !== null && lifted.over === col.id ? "ring-2 ring-accent/60" : ""}`}
+            aria-label={col.name}
+          >
             <header className={BOARD_HEADER}>
               <span className={BOARD_HEADER_START}>
                 <BoardTone tone={col.tone} />
@@ -398,7 +465,20 @@ function ProjectKanban({ columns, projects, columnOf, people, locale, isAdmin, o
             </header>
             <div className={BOARD_CARDS}>
               {here.map((p) => (
-                <ProjectCard key={p.id} project={p} people={people} locale={locale} compact />
+                <DraggableProjectCard
+                  key={p.id}
+                  project={p}
+                  people={people}
+                  locale={locale}
+                  lifted={lifted !== null && lifted.id === p.id}
+                  onLift={() => setLifted({ id: p.id, over: null })}
+                  onOver={(over) => setLifted((cur) => (cur !== null && cur.id === p.id ? { id: cur.id, over } : cur))}
+                  onDrop={(over) => {
+                    setLifted(null);
+                    if (over !== null && over !== col.id) onMove(p, over);
+                  }}
+                  onCancel={() => setLifted(null)}
+                />
               ))}
               {/* THE WAY IN LIVES IN THE COLUMN (user directive, 2026-09-05):
                   a project is made where it is going to sit. Admin-only,
@@ -414,6 +494,22 @@ function ProjectKanban({ columns, projects, columnOf, people, locale, isAdmin, o
       })}
     </div>
   );
+}
+
+/** the kanban's card with a hand on it — one hook per card, which is why it
+    is its own component rather than a loop body */
+function DraggableProjectCard({ project, people, locale, lifted, onLift, onOver, onDrop, onCancel }: {
+  project: ProjectRecord;
+  people: OrgPersonRecord[];
+  locale: string;
+  lifted: boolean;
+  onLift: () => void;
+  onOver: (columnId: string | null) => void;
+  onDrop: (columnId: string | null) => void;
+  onCancel: () => void;
+}) {
+  const drag = useHoldDrag({ onLift, onOver, onDrop, onCancel });
+  return <ProjectCard project={project} people={people} locale={locale} compact drag={drag} lifted={lifted} />;
 }
 
 /** the board's list view, one row per project */
@@ -560,7 +656,7 @@ function ProjectCalendar({ projects, cardsOf, locale }: {
   );
 }
 
-function ProjectCard({ project, people, locale, compact = false }: {
+function ProjectCard({ project, people, locale, compact = false, drag, lifted = false }: {
   project: ProjectRecord;
   people: OrgPersonRecord[];
   locale: string;
@@ -568,6 +664,9 @@ function ProjectCard({ project, people, locale, compact = false }: {
       with less air, never a second card. Two drawings of one thing is the
       pair that stops matching the first time either gains a field. */
   compact?: boolean;
+  /** the kanban's hand (holdDrag) — absent on the list and the calendar */
+  drag?: HoldDragHandlers;
+  lifted?: boolean;
 }) {
   const t = useTranslations("projects");
   const ratio = progressOf(project);
@@ -578,6 +677,13 @@ function ProjectCard({ project, people, locale, compact = false }: {
   return (
     <Link
       href={`/projects?project=${project.id}`}
+      /* on the kanban the card is also the thing a hand moves (holdDrag): an
+         anchor's own native drag is switched off so a mouse can lift it, and
+         the click the browser fires after a drop is swallowed */
+      draggable={false}
+      data-card={project.id}
+      onPointerDown={drag?.onPointerDown}
+      onClick={(e) => { if (drag?.consumeClick()) e.preventDefault(); }}
       /*
        * `h-auto shrink-0` ON THE KANBAN CARD, and it is not a nicety: `.tile`
        * declares `height: 100%`, which inside a flex COLUMN resolves against
@@ -591,7 +697,7 @@ function ProjectCard({ project, people, locale, compact = false }: {
         compact
           ? /* on the board it is the board's card — the box a task sits in,
                read from the same module (R17) */
-            `${BOARD_CARD} flex flex-col gap-1.5`
+            `${BOARD_CARD} flex flex-col gap-1.5 ${lifted ? "relative z-50 cursor-grabbing ring-2 ring-accent shadow-island" : ""}`
           : "tile flex flex-col gap-3 p-4 transition-colors hover:border-accent/40"
       }
     >

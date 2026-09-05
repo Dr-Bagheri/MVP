@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { OrgPersonRecord, ProjectRecord, TaskCardRecord, TaskColumnRecord } from "@/api/types";
@@ -25,14 +25,33 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("@/i18n/routing", () => ({
   useRouter: () => ({ push: pushSpy, replace: vi.fn() }),
-  Link: ({ href, children, className }: { href: unknown; children: React.ReactNode; className?: string }) => (
-    <a href={typeof href === "string" ? href : "#"} className={className}>{children}</a>
+  /* every other prop rides through to the anchor: the kanban card is a Link
+     that also carries the hand's pointer handler, its data-card and
+     draggable={false} (2026-09-05), and a stub that dropped them would test
+     a card nobody can pick up */
+  Link: ({ href, children, ...rest }: { href: unknown; children: React.ReactNode } & Record<string, unknown>) => (
+    <a href={typeof href === "string" ? href : "#"} {...rest}>{children}</a>
   ),
 }));
+
+/* jsdom ships no PointerEvent — the same shim TaskBoard.test carries */
+if (typeof window.PointerEvent === "undefined") {
+  class JsdomPointerEvent extends MouseEvent {
+    pointerId: number;
+    pointerType: string;
+    constructor(type: string, init: PointerEventInit = {}) {
+      super(type, init);
+      this.pointerId = init.pointerId ?? 0;
+      this.pointerType = init.pointerType ?? "mouse";
+    }
+  }
+  (window as unknown as { PointerEvent: typeof JsdomPointerEvent }).PointerEvent = JsdomPointerEvent;
+}
 
 const pushSpy = vi.fn();
 const created: Record<string, unknown>[] = [];
 const deleted: string[] = [];
+const patches: { id: string; body: Record<string, unknown> }[] = [];
 
 function project(over: Partial<ProjectRecord>): ProjectRecord {
   return {
@@ -90,6 +109,11 @@ vi.mock("@/api/client", () => ({
     taskLabels: async () => [],
     projectWorkload: async () => [],
     taskBoard: async () => ({ columns: COLUMNS, topics: [], tasks: TASKS }),
+    /* a project dropped on a column moves its open cards, one write each */
+    updateTask: async (id: string, body: Record<string, unknown>) => {
+      patches.push({ id, body });
+      return { ...card({ id }), ...body };
+    },
   },
 }));
 
@@ -120,6 +144,7 @@ beforeEach(() => {
   ONE = project({});
   created.length = 0;
   deleted.length = 0;
+  patches.length = 0;
   pushSpy.mockClear();
 });
 
@@ -189,6 +214,50 @@ describe("Projects", () => {
        The second row's chip carries a count beside its label, so the name is
        matched loosely — an exact string here would break on the number. */
     expect(screen.getByRole("button", { name: /همه پروژه‌ها/ })).toBeInTheDocument();
+  });
+
+  it("a project dragged to a column asks, then moves ONLY its open cards there", async () => {
+    /*
+     * The kanban's hand (user, 2026-09-05: "add it for the projects kanban as
+     * well"). A project's column is counted off its tasks, so the drop means
+     * "its unfinished work is now at this stage": the open card moves, the
+     * done card stays, and nothing moves before the person confirms the
+     * count. jsdom has no layout — `elementFromPoint` names the target column.
+     */
+    COLUMNS = [
+      { id: "c-1", name: "برای انجام", tone: "grey", position: 1 },
+      { id: "c-2", name: "انجام‌شده", tone: "green", position: 2 },
+    ];
+    LIST = [project({ id: "p-a", name: "پروژهٔ جاری", topic_id: "t-1", task_total: 2, task_done: 1 })];
+    TASKS = [
+      card({ id: "k-open", column_id: "c-1", topic_id: "t-1", done: false }),
+      card({ id: "k-done", column_id: "c-1", topic_id: "t-1", done: true }),
+    ];
+    render(<Projects isAdmin meId="u-1" />);
+    const cardEl = (await screen.findByText("پروژهٔ جاری")).closest("[data-card]") as HTMLElement;
+    const target = await columnOf("انجام‌شده");
+
+    const original = document.elementFromPoint;
+    document.elementFromPoint = () => target;
+    try {
+      fireEvent.pointerDown(cardEl, { button: 0, clientX: 10, clientY: 10, pointerId: 1, pointerType: "mouse" });
+      fireEvent.pointerMove(cardEl, { clientX: 60, clientY: 12, pointerId: 1, pointerType: "mouse" });
+      fireEvent.pointerMove(cardEl, { clientX: 320, clientY: 14, pointerId: 1, pointerType: "mouse" });
+      fireEvent.pointerUp(cardEl, { clientX: 320, clientY: 14, pointerId: 1, pointerType: "mouse" });
+    } finally {
+      document.elementFromPoint = original;
+    }
+
+    /* it ASKS first, naming the count — one open card, not two */
+    const confirm = await screen.findByRole("button", { name: "انتقال" });
+    expect(screen.getByText(/۱ کار ناتمام/)).toBeInTheDocument();
+    expect(patches).toHaveLength(0);
+
+    await userEvent.click(confirm);
+    await waitFor(() => expect(patches).toHaveLength(1));
+    expect(patches[0]!.id).toBe("k-open");
+    expect(Object.keys(patches[0]!.body).sort()).toEqual(["column_id", "position"]);
+    expect(patches[0]!.body.column_id).toBe("c-2");
   });
 
   it("«مال من» keeps only the projects the reader is on", async () => {
