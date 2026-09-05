@@ -60,6 +60,9 @@ export function SectionTabs<K extends string>({
           key={tab.key}
           type="button"
           role="tab"
+          /* the VALUE, for a test to name — a label is a fact about the
+             catalogue, and a test that clicks by label breaks on a rewording */
+          data-key={tab.key}
           aria-selected={tab.key === active}
           className={sectionTabClass(tab.key === active)}
           onClick={() => onSelect(tab.key)}

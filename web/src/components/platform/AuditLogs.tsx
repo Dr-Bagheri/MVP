@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Select } from "@/components/Select";
+import { SectionTabs } from "./sectionTabs";
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { BffError } from "@/api/client";
@@ -330,26 +330,21 @@ export function AuditLogs() {
 
   return (
     <div>
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <label>
-          <span className="sr-only">{t("filterSource")}</span>
-          {/* the PLATFORM's dropdown, not the browser's: a native control
-              paints its list on the browser's own popup sheet, which in dark
-              theme is a white rectangle with a Windows-blue row, and no
-              stylesheet of ours reaches it (user directive, 2026-09-04: "when
-              i ask for all i mean all"). */}
-          <Select
-            className="w-auto"
-            value={source}
-            placeholder={t("filterAll")}
-            onChange={(next) => setSource(next as AuditSource | "")}
-            options={[
-              { value: "", label: t("filterAll") },
-              ...AUDIT_SOURCES.map((value) => ({ value, label: t(`source.${value}`) })),
-            ]}
-          />
-        </label>
-      </div>
+      {/* THE TASKS PAGE'S SECOND ROW, not a dropdown (user, 2026-09-05: "add
+          the second sub menu in the same style as the tasks for Audit logs
+          as well"). Five values that are all worth seeing at once cost two
+          presses inside a select and none here; it is the same chip every
+          other filter row on the product wears. */}
+      <SectionTabs
+        label={t("filterSource")}
+        active={source === "" ? "all" : source}
+        onSelect={(key) => setSource(key === "all" ? "" : key)}
+        className="mb-5"
+        tabs={[
+          { key: "all" as const, label: t("filterAll") },
+          ...AUDIT_SOURCES.map((value) => ({ key: value, label: t(`source.${value}`) })),
+        ]}
+      />
 
       {failed ? (
         /* the same failure banner Management · Server renders, and the same

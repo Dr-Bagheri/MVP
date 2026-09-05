@@ -8,7 +8,8 @@ import { ConfirmDialog } from "@/components/rowActions";
 import { notify } from "@/lib/notify";
 import { DataTable, StatusDot } from "@/components/DataTable";
 import { IconClose } from "@/components/icons";
-import { Chip } from "@/components/ui";
+import { Chip, EmptyState } from "@/components/ui";
+import { SectionTabs } from "./sectionTabs";
 import { formatDate, formatTime, personName } from "@/lib/format";
 import { useLocale } from "next-intl";
 import { signOutThisDevice } from "@/lib/signOut";
@@ -57,6 +58,8 @@ export function SecuritySettings() {
    */
   const [orgSessions, setOrgSessions] = useState<OrgSessionRow[] | null | "refused">(null);
   const [endingOrg, setEndingOrg] = useState<OrgSessionRow | null>(null);
+  /** the second sub-menu (user, 2026-09-05): all | online | offline */
+  const [presence, setPresence] = useState<"all" | "online" | "offline">("all");
 
   useEffect(() => {
     void api.mySessions()
@@ -133,14 +136,33 @@ export function SecuritySettings() {
       {/* ── everyone's devices, for an admin or owner (db/0135) ───────── */}
       {orgSessions !== "refused" ? (
       <div>
-          <h2 className="h-section">{t("orgSessionsTitle")}</h2>
-          {Array.isArray(orgSessions) && orgSessions.length === 0 ? (
-            <p className="mt-3 text-sm text-fg-muted">{t("orgSessionsEmpty")}</p>
-          ) : (
-            <div className="mt-3">
+          {/* NO TITLE, and the tasks page's own second row above the table
+              (user, 2026-09-05: "remove the title همهٔ اعضای سازمان, add the
+              second sub menu in the same style as the tasks, with all |
+              online | offline"). The menu above already names the page; the
+              row answers the one question this table gets asked. */}
+          <SectionTabs
+            label={t("colOnline")}
+            active={presence}
+            onSelect={setPresence}
+            className="mb-5"
+            tabs={[
+              { key: "all", label: t("filterAll") },
+              { key: "online", label: t("onlineYes") },
+              { key: "offline", label: t("onlineNo") },
+            ]}
+          />
+          {/* rendered unconditionally so the frame stands before the answer;
+              "no sessions" and "none match this filter" are the table's own
+              empty node, never a sentence standing where the table would be */}
+            <div>
               <DataTable
                 loading={orgSessions === null}
-                rows={Array.isArray(orgSessions) ? orgSessions : []}
+                rows={Array.isArray(orgSessions)
+                  ? orgSessions.filter((session) =>
+                      presence === "all" || (presence === "online") === session.online)
+                  : []}
+                empty={<EmptyState text={t("orgSessionsEmpty")} />}
                 rowKey={(session) => `${session.user_id}:${session.handle}`}
                 /*
                  * The menu appears only where the wall says it may act. An
@@ -212,7 +234,6 @@ export function SecuritySettings() {
                 ]}
               />
             </div>
-          )}
       </div>
       ) : null}
 

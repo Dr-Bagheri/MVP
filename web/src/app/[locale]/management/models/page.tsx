@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { AdminModelRow, User } from "@/api/types";
 import { SettingsPane } from "@/components/platform/SettingsPane";
-import { PageHeader, Skeleton, SkeletonLines } from "@/components/scaffold";
+import { PageHeader, SkeletonLines } from "@/components/scaffold";
 import { modelLabel } from "@/lib/format";
 import { Card, Chip, EmptyState } from "@/components/ui";
 import { DataTable, type Column } from "@/components/DataTable";
@@ -176,23 +176,9 @@ export default function ModelsPage() {
           </Card>
         ) : null}
 
-        <div className="mb-3 flex items-center justify-between gap-3">
-          {/* 2026-09-03: the frame before the data — the count sentence was the
-              table's conflation one line above the table. `active` is [] until
-              the catalogue answers, so this rendered "" while loading AND ""
-              for an org with no curation: one blank standing for two different
-              nothings, and the sentence then appearing out of it. The bar is
-              sized like the sentence it stands in for; a FAILED load keeps the
-              blank, because the card above already names that nothing and a
-              second placeholder there would pulse forever. */}
-          {loaded ? (
-            <p className="text-sm text-fg-muted">
-              {active.length > 0 ? t("modelsActiveCount", { n: String(active.length) }) : ""}
-            </p>
-          ) : (
-            <Skeleton className="h-4 w-32" />
-          )}
-        </div>
+        {/* NO COUNT SENTENCE above the rows (user, 2026-09-05: "remove 7 مدل
+            مجاز, fit the table to the sub menu on top") — the table starts
+            where the menu's row ends, like every other list under a menu. */}
 
         {/* NO OUTER BOX (user directive, 2026-09-02: the same rows as users
             and speakers — the meetings list's shape, no header, no box) */}

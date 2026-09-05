@@ -7,7 +7,7 @@ import { Link, useRouter } from "@/i18n/routing";
 import { api } from "@/api/client";
 import type {
   OrgPersonRecord, TaskCardRecord, TaskColumnRecord, TaskDetailRecord,
-  TaskLabelRecord, TaskPriority, TaskTopicRecord,
+  TaskLabelRecord, TaskPriority, TaskTopicRecord, ProjectRecord,
 } from "@/api/types";
 import { ConfirmDialog, KebabMenu } from "@/components/rowActions";
 import {
@@ -19,10 +19,12 @@ import {
   BOARD_HEADER_END, BOARD_HEADER_START, BOARD_LANE, BOARD_TITLE, BoardAddRow,
 } from "./board/boardStyle";
 import { ProjectDialog } from "./ProjectDialog";
+import { TopicNameBox } from "./TopicNameBox";
+import { useHoldDrag } from "./board/holdDrag";
 import { TaskCalendar, TaskListView } from "./tasks/TaskViews";
 import {
-  IconCheck, IconChevronEnd, IconClock, IconDots, IconFolder, IconPlus, IconRetry,
-  IconTrash, IconUser, IconVideo, IconClose, IconPencil } from "@/components/icons";
+  IconCheck, IconClock, IconDots, IconFolder, IconPlus, IconRetry,
+  IconTrash, IconUser, IconVideo, IconPencil } from "@/components/icons";
 import { useSeededName } from "@/lib/seededNames";
 import { digits, personName } from "@/lib/format";
 import { useRefreshEpoch } from "@/lib/refreshBus";
@@ -69,10 +71,17 @@ export function TaskBoard() {
   const [mineOnly, setMineOnly] = useState(false);
   const [dueToday, setDueToday] = useState(false);
   const [topic, setTopic] = useState<string>("all");
-  /* the inline topic composer — open, and the name being typed */
-  const [topicName, setTopicName] = useState("");
-  /** the topic being renamed — the inline composer doubles as the editor */
+  /* the folder strip's inline composer: adding, or the folder being renamed */
+  const [addingTopic, setAddingTopic] = useState(false);
   const [renamingTopic, setRenamingTopic] = useState<{ id: string; name: string } | null>(null);
+  /* every project, live and archived — the strip splits the board's folders
+     into the ones that ARE a project's category and the plain ones (user,
+     2026-09-05: "complete folder and its plus, and complete projects and its
+     plus"); a topic carries no project id, so the split is read off the
+     projects themselves */
+  const [projects, setProjects] = useState<ProjectRecord[]>([]);
+  /** the card in the air, and the column under the pointer (holdDrag) */
+  const [lifted, setLifted] = useState<{ id: string; over: string | null } | null>(null);
   const [me, setMe] = useState<{ id: string } | null>(null);
   /* 0186 made creating a project an admin's act, and both doors below
      lead there. `false` while /me is in flight, so the controls are
@@ -127,6 +136,12 @@ export function TaskBoard() {
       .catch(() => { setMe(null); setIsAdmin(false); });
   }, []);
   useEffect(() => { void api.orgPeople().then(setPeople).catch(() => setPeople([])); }, []);
+  const projectsEpoch = useRefreshEpoch("projects");
+  useEffect(() => {
+    void Promise.all([api.projects(), api.projects({ archived: true })])
+      .then(([live, archived]) => setProjects([...live, ...archived]))
+      .catch(() => setProjects([]));
+  }, [projectsEpoch, tasksEpoch]);
 
   useEffect(() => {
     if (view !== "archive") return;
@@ -182,7 +197,7 @@ export function TaskBoard() {
     const end = start.getTime() + 86_400_000;
     return rows.filter((task) =>
       (priority === "all" || task.priority === priority)
-      && (topic === "all" || (topic === "none" ? task.topic_id === null : task.topic_id === topic))
+      && (topic === "all" || task.topic_id === topic)
       && (!mineOnly || me === null
           || task.assignee_ids.includes(me.id) || task.created_by === me.id)
       && (!dueToday || (task.due_at !== null
@@ -197,15 +212,48 @@ export function TaskBoard() {
     visible.filter((task) => task.column_id === columnId)
       .sort((a, b) => a.position - b.position || a.created_at.localeCompare(b.created_at));
 
-  const dropCard = (columnId: string, e: React.DragEvent) => {
-    const id = e.dataTransfer.getData("text/task-id");
-    if (id === "") return;
+  /* a card dropped on a column: optimistic, then the write — a refused write
+     reloads the truth (patchTask). The drop arrives from holdDrag now, never
+     from the browser's dataTransfer. */
+  const moveTask = (id: string, columnId: string) => {
     setBoard((prev) => prev === null ? prev : {
       ...prev,
       tasks: prev.tasks.map((x) => (x.id === id ? { ...x, column_id: columnId, position: -Date.now() } : x)),
     });
     void patchTask(id, { column_id: columnId, position: -Date.now() });
   };
+
+  const projectByTopic = new Map(
+    projects.filter((p) => p.topic_id !== null).map((p) => [p.topic_id as string, p]),
+  );
+  const folders = board.topics.filter((entry) => !projectByTopic.has(entry.id));
+  const projectTopics = board.topics.filter((entry) => projectByTopic.has(entry.id));
+
+  /* one chip for a folder and for a project's folder: the toggle, its count,
+     and a ⋯ whose items are the caller's — the picture never differs, only
+     what the menu offers */
+  const topicChip = (entry: TaskTopicRecord, glyph: React.ReactNode, items: Parameters<typeof KebabMenu>[0]["items"]) => (
+    <span
+      key={entry.id}
+      className={`btn btn-sm inline-flex cursor-default items-center gap-1.5 border pe-1 font-medium ${
+        topic === entry.id ? "border-accent bg-accent-soft font-semibold text-accent" : "border-border text-fg-muted"
+      }`}
+    >
+      <button
+        type="button"
+        aria-pressed={topic === entry.id}
+        onClick={() => setTopic((cur) => (cur === entry.id ? "all" : entry.id))}
+        className="tap inline-flex items-center gap-1.5 hover:text-fg"
+      >
+        {glyph}
+        {entry.name}
+        <span className="badge-num rounded-md bg-surface-2 px-1 text-[10px]">
+          {digits(board.tasks.filter((x) => x.topic_id === entry.id).length, locale)}
+        </span>
+      </button>
+      <KebabMenu label={t("topicOptions")} triggerClassName="h-5 w-5 rounded text-current opacity-60 hover:opacity-100" items={items} />
+    </span>
+  );
 
   /* 2026-09-03: the theme's compact control, not a twelfth invented size —
      and character for character the toolbar chip Meetings.tsx already wears,
@@ -248,8 +296,10 @@ export function TaskBoard() {
            *
            * Before «مال من», in the position the directive names. It is a
            * LINK and not a chip: the chips beside it change what this screen
-           * shows and this one leaves it, so it carries the arrow that says
-           * so rather than the pressed state that would claim it is a filter.
+           * shows and this one leaves it, so it never wears the pressed state
+           * that would claim it is a filter. (It carried an arrow for that
+           * until 2026-09-05 — "remove > icon from the projects" — the folder
+           * glyph says enough.)
            *
            * Admin-only because managing projects is (0186) — and because the
            * rail entry was removed in the same directive, this is now the
@@ -262,7 +312,6 @@ export function TaskBoard() {
             >
               <IconFolder width={12} height={12} />
               {t("projectsLink")}
-              <IconChevronEnd width={12} height={12} className="opacity-60" />
             </Link>
           ) : null}
           {/* 2026-09-03: the same compact control as the chips beside them —
@@ -294,15 +343,14 @@ export function TaskBoard() {
         </div>
       </div>
 
-      {/* ── the topic row ────────────────────────────────────────────── */}
+      {/* ── the folder row: the board's folders, then its projects, each with
+             its own + (user, 2026-09-05). «بدون موضوع» left the strip the same
+             day — "in no folder" is a card's own fact, read on the card. */}
       <div className="flex flex-wrap items-center gap-1.5">
-
         {/* 2026-09-03: the theme's control. This row and the toolbar row above
             it are the same kind of chip and were TWO different boxes — h-9 /
             rounded-xl up there, h-8 / rounded-lg down here — eight pixels
-            apart on one screen, which is the directive in miniature. The
-            topic chip between them already wore `.btn btn-sm`; now its two
-            neighbours match it instead of it standing out. */}
+            apart on one screen, which is the directive in miniature. */}
         <button
           type="button"
           aria-pressed={topic === "all"}
@@ -318,159 +366,101 @@ export function TaskBoard() {
           </span>
         </button>
 
-        {/* the meetings chip, field for field (user directive, 2026-09-02:
-            "the added sub menu should have edit and delete option, fix it
-            both in tasks and meetings") — the same menu component, so the
-            two boards cannot grow different answers to one question */}
-        {board.topics.map((entry) => (
-          /* the meetings chip, field for field — the menu inside, the select
-             a button within the chip rather than a span wearing a role */
-          <span
-            key={entry.id}
-            className={`btn btn-sm inline-flex cursor-default items-center gap-1.5 border pe-1 font-medium ${
-              topic === entry.id ? "border-accent bg-accent-soft font-semibold text-accent" : "border-border text-fg-muted"
-            }`}
+        {/* plain folders: the meetings chip, field for field (user directive,
+            2026-09-02: "the added sub menu should have edit and delete option,
+            fix it both in tasks and meetings") — the same menu component, so
+            the two boards cannot grow different answers to one question */}
+        {folders.map((entry) => topicChip(entry, <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden />, [
+          {
+            key: "rename",
+            label: t("renameTopic"),
+            icon: <IconPencil width={14} height={14} />,
+            onSelect: () => { setAddingTopic(false); setRenamingTopic({ id: entry.id, name: entry.name }); },
+          },
+          {
+            key: "remove",
+            label: t("removeTopic"),
+            icon: <IconTrash width={14} height={14} />,
+            danger: true,
+            /* archived, not deleted — the cards are re-pointed to no-folder
+               by the schema */
+            onSelect: () => {
+              void api.updateTaskTopic(entry.id, { archived: true })
+                .then(() => { setTopic((cur) => (cur === entry.id ? "all" : cur)); load(); })
+                .catch(refusal);
+            },
+          },
+        ]))}
+
+        {/* THE FOLDER `+`, back (user, 2026-09-05: "return the previous new
+            folder plus … with the same functions as before, like a new folder
+            in meetings"): ONE composer for adding and renaming — the meetings
+            strip's own box, shared now. Not admin-gated: a folder is a
+            member's tool; a project (below) is an admin's. */}
+        {addingTopic || renamingTopic !== null ? (
+          <TopicNameBox
+            initial={renamingTopic?.name ?? ""}
+            placeholder={t("topicNamePlaceholder")}
+            cancelLabel={t("cancel")}
+            onCancel={() => { setAddingTopic(false); setRenamingTopic(null); }}
+            onSubmit={(name) => {
+              const target = renamingTopic;
+              const done = () => { setAddingTopic(false); setRenamingTopic(null); load(); };
+              void (target !== null
+                ? api.updateTaskTopic(target.id, { name })
+                : api.createTaskTopic(name).then(() => undefined))
+                .then(done)
+                .catch(() => { refusal(); done(); });
+            }}
+          />
+        ) : (
+          <button
+            type="button"
+            aria-label={t("addTopic")}
+            title={t("addTopic")}
+            onClick={() => setAddingTopic(true)}
+            /* the MEETINGS chip-row's add button, exactly: dashed, the same
+               square, in the same place */
+            className="btn btn-icon border border-dashed border-border text-fg-muted hover:border-border-strong hover:text-fg"
           >
-            <button
-              type="button"
-              aria-pressed={topic === entry.id}
-              onClick={() => setTopic((cur) => (cur === entry.id ? "all" : entry.id))}
-              className="tap inline-flex items-center gap-1.5 hover:text-fg"
-            >
-              <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden />
-              {entry.name}
-              <span className="badge-num rounded-md bg-surface-2 px-1 text-[10px]">
-                {digits(board.tasks.filter((x) => x.topic_id === entry.id).length, locale)}
-              </span>
-            </button>
-            <KebabMenu
-              label={t("topicOptions")}
-              triggerClassName="h-5 w-5 rounded text-current opacity-60 hover:opacity-100"
-              items={[
-                {
-                  key: "rename",
-                  label: t("renameTopic"),
-                  icon: <IconPencil width={14} height={14} />,
-                  onSelect: () => setRenamingTopic({ id: entry.id, name: entry.name }),
-                },
-                {
-                  key: "remove",
-                  label: t("removeTopic"),
-                  icon: <IconTrash width={14} height={14} />,
-                  danger: true,
-                  /* archived, not deleted — the cards are re-pointed to
-                     no-folder by the schema */
-                  onSelect: () => {
-                    void api.updateTaskTopic(entry.id, { archived: true })
-                      .then(() => { setTopic((cur) => (cur === entry.id ? "all" : cur)); load(); })
-                      .catch(refusal);
-                  },
-                },
-              ]}
-            />
-          </span>
-        ))}
+            <IconPlus width={12} height={12} />
+          </button>
+        )}
 
-        <button
-          type="button"
-          aria-pressed={topic === "none"}
-          onClick={() => setTopic((cur) => (cur === "none" ? "all" : "none"))}
-          /* 2026-09-03: the theme's control, matching «همه تسک‌ها» at the
-             other end of the same strip */
-          className={`btn btn-sm gap-1.5 border font-medium ${
-            topic === "none" ? "border-accent bg-accent-soft font-semibold text-accent" : "border-border text-fg-muted hover:text-fg"
-          }`}
-        >
-          <IconFolder width={12} height={12} />
-          {t("noTopic")}
-          <span className="badge-num rounded-md bg-surface-2 px-1 text-[10px]">
-            {digits(board.tasks.filter((x) => x.topic_id === null).length, locale)}
-          </span>
-        </button>
+        <span className="mx-1 h-5 w-px bg-border" aria-hidden />
 
-        {/*
-          RENAMING still happens inline, never in `window.prompt` (user
-          directive, 2026-09-02: "this top pop up should never appear anywhere
-          in the platform"). A native prompt is the browser's dialog, not
-          ours: it says "app.neurai.pt says", it is unstyled in both themes,
-          it cannot be dismissed by the platform's own Escape handling, and it
-          blocks the page while it is up.
+        {/* PROJECTS: the folders that are a project's category (0181). The chip
+            is the same chip; its menu opens the project, because the project
+            owns the name — renaming the category under it would leave the
+            board and the project disagreeing about what the thing is called. */}
+        {projectTopics.map((entry) => {
+          const project = projectByTopic.get(entry.id)!;
+          return topicChip(
+            entry,
+            project.icon !== null
+              ? <span className="text-[13px] leading-none" aria-hidden>{project.icon}</span>
+              : <span className="h-1.5 w-1.5 rounded-full bg-accent" aria-hidden />,
+            [{
+              key: "open",
+              label: t("openProject"),
+              icon: <IconFolder width={14} height={14} />,
+              onSelect: () => router.push(`/projects?project=${project.id}`),
+            }],
+          );
+        })}
 
-          ADDING no longer happens here — the `+` below opens the project
-          dialog, which asks the whole question this field asked a third of.
-        */}
-        {renamingTopic !== null ? (
-          <span className="inline-flex items-center gap-1 rounded-md border border-accent bg-surface px-1.5">
-            {/* ONE composer, two jobs: a new topic and a rename. Two boxes
-                would be two places for the same rules to be written down.
-
-                NOT `.input-sm` (2026-09-03): this field draws no box because
-                the SPAN around it does — border, ground and corner belong to
-                the composer, which is one silhouette holding a field and a ✕.
-                A themed field here would put a second box inside the first,
-                and `.input`'s own `w-full` would push the ✕ out of it. */}
-            <input
-              autoFocus
-              value={renamingTopic !== null && topicName === "" ? renamingTopic.name : topicName}
-              onChange={(e) => setTopicName(e.target.value)}
-              onKeyDown={(e) => {
-                const value = (topicName || renamingTopic?.name || "").trim();
-                if (e.key === "Enter" && value !== "" && renamingTopic !== null) {
-                  /* RENAME ONLY. The create branch that stood here became
-                     unreachable the moment the `+` started opening the project
-                     dialog, and an unreachable branch beside a live one is the
-                     kind of code a reader trusts because it is still there. */
-                  void api.updateTaskTopic(renamingTopic.id, { name: value })
-                    .then(() => { setTopicName(""); setRenamingTopic(null); load(); })
-                    .catch(refusal);
-                }
-                if (e.key === "Escape") { setTopicName(""); setRenamingTopic(null); }
-              }}
-              placeholder={t("renameTopic")}
-              className="h-[30px] w-36 bg-transparent text-xs text-fg outline-none placeholder:text-fg-subtle"
-            />
-            <button
-              type="button"
-              aria-label={t("cancel")}
-              onClick={() => { setTopicName(""); setRenamingTopic(null); }}
-              /* 2026-09-03: the theme's icon control. The guard could not see
-                 this one — it spelled its corner as a bare `rounded`, and the
-                 pattern reads `rounded-md|lg|xl|2xl|full` — but a 24px
-                 hand-rolled square is the same invention as the 28px ones
-                 above it, and converting only what a check can count is how a
-                 file ends up half-converted and looking it. */
-              className="btn btn-icon text-fg-muted hover:text-fg"
-            >
-              <IconClose width={12} height={12} />
-            </button>
-          </span>
-        ) : isAdmin ? (
-          /*
-           * THE `+` OPENS A PROJECT (user directive, 2026-09-05: "the plus in
-           * the second top sub menu in tasks will open the new project pop up
-           * window").
-           *
-           * It is the same act it always was. This row's folders ARE
-           * projects' categories: creating a project creates the category and
-           * renaming one renames it (0181), so a bare category was the half
-           * of a project with no members, no summary and no page — a thing
-           * the product had no other way to describe. Now the row's `+` asks
-           * the whole question.
-           *
-           * ADMINS ONLY, and absent rather than disabled: 0186 made creating
-           * a project an admin's act, so for a member this button would open
-           * a dialog the wall refuses on save. The cost is written down
-           * rather than hidden — a member can no longer add a folder to the
-           * board, because on this board a folder is a project.
-           */
+        {isAdmin ? (
+          /* THE PROJECT `+` (user directive, 2026-09-05: "the plus in the
+             second top sub menu in tasks will open the new project pop up
+             window") — at the end of the projects section, the same dashed
+             square as the folder's. Admins only, and absent rather than
+             disabled: 0186 made creating a project an admin's act, so for a
+             member this button would open a dialog the wall refuses on save. */
           <button
             type="button"
             aria-label={t("newProjectFolder")}
             title={t("newProjectFolder")}
             onClick={() => setCreatingProject(true)}
-            /* the MEETINGS chip-row's add button, exactly: dashed, the same
-               square, in the same place. Two boards showing the same row
-               should not disagree about what "add a folder" looks like. */
             className="btn btn-icon border border-dashed border-border text-fg-muted hover:border-border-strong hover:text-fg"
           >
             <IconPlus width={12} height={12} />
@@ -540,7 +530,6 @@ export function TaskBoard() {
                   draggedColumn.current = null;
                   return;
                 }
-                dropCard(col.id, e);
               }}
               /* A COLUMN IS AS TALL AS THE BOARD, not as tall as its cards
                  (user directive): an empty column that hugs three lines of
@@ -548,7 +537,7 @@ export function TaskBoard() {
                  dragged toward it has almost no target. `self-stretch` fills
                  the scroller's height; `min-h-[70vh]` keeps it a column
                  rather than a strip when the board itself is short. */
-              className={BOARD_COLUMN}
+              className={`${BOARD_COLUMN} ${lifted !== null && lifted.over === col.id ? "ring-2 ring-accent/60" : ""}`}
               aria-label={seededName(col.name)}
             >
               {/* 2026-09-03: `gap-1`, not `gap-2` — the tone trigger beside it
@@ -669,6 +658,14 @@ export function TaskBoard() {
                     task={task}
                     labels={labels}
                     people={people}
+                    lifted={lifted !== null && lifted.id === task.id}
+                    onLift={() => setLifted({ id: task.id, over: null })}
+                    onOver={(over) => setLifted((cur) => (cur !== null && cur.id === task.id ? { id: cur.id, over } : cur))}
+                    onDrop={(over) => {
+                      setLifted(null);
+                      if (over !== null && over !== task.column_id) moveTask(task.id, over);
+                    }}
+                    onCancel={() => setLifted(null)}
                     onOpen={() => openDetail(task.id)}
                     onToggleDone={(done) => void patchTask(task.id, { done })}
                   />
@@ -735,7 +732,7 @@ export function TaskBoard() {
           topics={board.topics}
           labels={labels}
           defaultColumnId={creating}
-          defaultTopicId={topic !== "all" && topic !== "none" ? topic : null}
+          defaultTopicId={topic !== "all" ? topic : null}
           onClose={() => setCreating(null)}
           onCreated={() => { setCreating(null); load(); }}
           onLabelsChanged={loadLabels}
@@ -801,15 +798,22 @@ export function TaskBoard() {
   );
 }
 
-/** the reference's card: title, labels, its record, priority, progress */
-function Card({ task, labels, people, onOpen, onToggleDone }: {
+/** the reference's card: title, labels, its record, priority, progress —
+    and the thing a hand moves (holdDrag: a click opens it, a hold lifts it) */
+function Card({ task, labels, people, lifted, onLift, onOver, onDrop, onCancel, onOpen, onToggleDone }: {
   task: TaskCardRecord;
   labels: TaskLabelRecord[];
   people: OrgPersonRecord[];
+  lifted: boolean;
+  onLift: () => void;
+  onOver: (columnId: string | null) => void;
+  onDrop: (columnId: string | null) => void;
+  onCancel: () => void;
   onOpen: () => void;
   onToggleDone: (done: boolean) => void;
 }) {
   const t = useTranslations("tasks");
+  const drag = useHoldDrag({ onLift, onOver, onDrop, onCancel });
   const locale = useLocale();
   const worn = labels.filter((label) => task.label_ids.includes(label.id));
   /*
@@ -828,10 +832,16 @@ function Card({ task, labels, people, onOpen, onToggleDone }: {
   const unnamed = task.assignee_ids.length - assigned.length;
   return (
     <div
-      draggable
-      onDragStart={(e) => e.dataTransfer.setData("text/task-id", task.id)}
-      className={BOARD_CARD}
-      onClick={onOpen}
+      data-card={task.id}
+      onPointerDown={drag.onPointerDown}
+      onPointerMove={drag.onPointerMove}
+      onPointerUp={drag.onPointerUp}
+      onPointerLeave={drag.onPointerLeave}
+      onPointerCancel={drag.onPointerCancel}
+      /* a lifted card rides above its column and says so; the transform that
+         carries it is written by the hook, not by a render per pointer move */
+      className={`${BOARD_CARD} ${lifted ? "relative z-50 cursor-grabbing ring-2 ring-accent shadow-island" : ""}`}
+      onClick={() => { if (drag.consumeClick()) return; onOpen(); }}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => { if (e.key === "Enter") onOpen(); }}

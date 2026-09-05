@@ -1,5 +1,7 @@
 "use client";
 
+import { TopicNameBox } from "./TopicNameBox";
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
@@ -42,64 +44,6 @@ export const MODE_ICON: Record<MeetingMode, ReturnType<typeof IconMic>> = {
   in_person: <IconMic width={14} height={14} />,
   online: <IconVideo width={14} height={14} />,
 };
-
-/**
- * The strip's inline name box, used by BOTH adding and renaming.
- *
- * One component for the two because they are the same interaction with a
- * different starting value — a second copy is the one that stops matching
- * the first the day either gains a rule.
- */
-function TopicNameBox({ initial, onCancel, onSubmit }: {
-  initial: string;
-  onCancel: () => void;
-  onSubmit: (name: string) => void;
-}) {
-  const t = useTranslations("meetings");
-  const [name, setName] = useState(initial);
-  return (
-    /*
-      THE TASK BOARD'S COMPOSER, not a second one (user directive,
-      2026-09-03: "the plus in the second sub menu on top open up in different
-      shapes in meetings page and in task page, make them the same with tasks
-      pages plus as base line").
-
-      Two toolbars that do the same thing in the same place had grown two
-      silhouettes: this one was a bordered field with a ✓ and a ✕ beside it,
-      the board's is ONE bordered span holding a bare field and a ✕. The
-      board's is the baseline by the user's word, and it is also the better
-      shape — a field with its own box inside a row of chips reads as a third
-      control, and the ✓ duplicates the Enter key that already submits.
-
-      So: the SPAN owns the border, ground and corner; the input draws no box
-      (a themed field here would put a second box inside the first, and
-      `.input`'s `w-full` would push the ✕ out of it); Enter commits and
-      Escape cancels, which is what the ✕ also does.
-    */
-    <span className="inline-flex items-center gap-1 rounded-md border border-accent bg-surface px-1.5">
-      <input
-        autoFocus
-        value={name}
-        maxLength={80}
-        onChange={(e) => setName(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && name.trim() !== "") onSubmit(name.trim());
-          if (e.key === "Escape") onCancel();
-        }}
-        placeholder={t("topicNamePlaceholder")}
-        className="h-[30px] w-36 bg-transparent text-xs text-fg outline-none placeholder:text-fg-subtle"
-      />
-      <button
-        type="button"
-        onClick={onCancel}
-        className="btn btn-icon text-fg-muted hover:text-fg"
-        aria-label={t("cancel")}
-      >
-        <IconClose width={12} height={12} />
-      </button>
-    </span>
-  );
-}
 
 export function Meetings() {
   const t = useTranslations("meetings");
@@ -156,7 +100,7 @@ export function Meetings() {
       const ahead = new Date(m.scheduled_at).getTime() >= now && m.call_id === null;
       if (filter === "ahead" && !ahead) return false;
       if (filter === "held" && m.call_id === null) return false;
-      if (topic !== "all" && (topic === "none" ? m.topic_id !== null : m.topic_id !== topic)) return false;
+      if (topic !== "all" && m.topic_id !== topic) return false;
       return true;
     }).sort((a, b) => b.scheduled_at.localeCompare(a.scheduled_at));
   }, [rows, filter, topic]);
@@ -286,25 +230,14 @@ export function Meetings() {
             />
           </span>
         ))}
-        <button
-          type="button"
-          aria-pressed={topic === "none"}
-          onClick={() => setTopic((cur) => (cur === "none" ? "all" : "none"))}
-          className={`btn btn-sm gap-1.5 border font-medium ${
-            topic === "none" ? "border-accent bg-accent-soft font-semibold text-accent" : "border-border text-fg-muted hover:text-fg"
-          }`}
-        >
-          <IconFolder width={12} height={12} />
-          {t("noTopic")}
-          <span className="badge-num rounded-md bg-surface-2 px-1 text-[10px]">
-            {digits(Array.isArray(rows) ? rows.filter((m) => m.topic_id === null).length : 0, locale)}
-          </span>
-        </button>
-
+        {/* «بدون موضوع» left the strip on 2026-09-05 (user) — the board's
+            did the same day; a meeting in no folder is a fact on its row */}
         {/* the ADD, at the end of the strip like the reference's */}
         {addingTopic || renamingTopic !== null ? (
           <TopicNameBox
             initial={renamingTopic?.name ?? ""}
+            placeholder={t("topicNamePlaceholder")}
+            cancelLabel={t("cancel")}
             onCancel={() => { setAddingTopic(false); setRenamingTopic(null); }}
             onSubmit={(name) => {
               const done = () => { setAddingTopic(false); setRenamingTopic(null); loadTopics(); load(); };

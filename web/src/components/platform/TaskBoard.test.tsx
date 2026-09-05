@@ -1,10 +1,25 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   OrgPersonRecord, TaskCardRecord, TaskColumnRecord, TaskDetailRecord,
   TaskLabelRecord, TaskTopicRecord,
 } from "@/api/types";
+import { HOLD_MS } from "./board/holdDrag";
+
+/* jsdom ships no PointerEvent. A MouseEvent carries clientX/clientY and
+   button, which is everything the hold-drag hook reads; pointerId rides on
+   top so the (guarded) capture calls see a number. */
+if (typeof window.PointerEvent === "undefined") {
+  class JsdomPointerEvent extends MouseEvent {
+    pointerId: number;
+    constructor(type: string, init: PointerEventInit = {}) {
+      super(type, init);
+      this.pointerId = init.pointerId ?? 0;
+    }
+  }
+  (window as unknown as { PointerEvent: typeof JsdomPointerEvent }).PointerEvent = JsdomPointerEvent;
+}
 
 /**
  * The board's contract facts, after the 2026-09-01 rebuild against the
@@ -100,6 +115,9 @@ vi.mock("@/api/client", () => ({
       description: "", checklist: [], comments: [], events: [], recurrence: null,
     }),
     createTask: vi.fn(), createTaskColumn: vi.fn(), createTaskTopic: vi.fn(),
+    /* the folder strip splits folders from projects by reading the projects
+       (2026-09-05) — the mock must answer, or the effect throws */
+    projects: async () => [],
     /* the board's `+` opens the project dialog now (2026-09-05), and the
        dialog is the projects page's own component — so the board's mock has
        to answer what that component asks, or it throws inside a promise and
@@ -137,6 +155,25 @@ function columnRegion(name: string): HTMLElement {
   return node;
 }
 
+/**
+ * HOLD, MOVE, RELEASE — the gesture that moves a card (2026-09-05). jsdom
+ * has no layout, so the hit-test the hook uses to find the column under the
+ * pointer is answered here: `elementFromPoint` says "the target column" for
+ * the duration of the gesture and is put back afterwards.
+ */
+async function holdAndDrop(cardEl: HTMLElement, target: HTMLElement): Promise<void> {
+  const original = document.elementFromPoint;
+  document.elementFromPoint = () => target;
+  try {
+    fireEvent.pointerDown(cardEl, { button: 0, clientX: 10, clientY: 10, pointerId: 1 });
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, HOLD_MS + 40)); });
+    fireEvent.pointerMove(cardEl, { clientX: 320, clientY: 14, pointerId: 1 });
+    fireEvent.pointerUp(cardEl, { clientX: 320, clientY: 14, pointerId: 1 });
+  } finally {
+    document.elementFromPoint = original;
+  }
+}
+
 describe("TaskBoard", () => {
   it("renders each card inside ITS column, with the counts the wire sent", async () => {
     boardTasks = [
@@ -160,8 +197,8 @@ describe("TaskBoard", () => {
     render(<TaskBoard />);
     await waitFor(() => expect(screen.getByText("با برچسب")).toBeInTheDocument());
 
-    const labelled = screen.getByText("با برچسب").closest("[draggable]") as HTMLElement;
-    const bare = screen.getByText("بی‌برچسب").closest("[draggable]") as HTMLElement;
+    const labelled = screen.getByText("با برچسب").closest("[data-card]") as HTMLElement;
+    const bare = screen.getByText("بی‌برچسب").closest("[data-card]") as HTMLElement;
     expect(within(labelled).getByText("فوری")).toBeInTheDocument();
     // the org's OTHER label is not on this card, and neither is on the bare one
     expect(within(labelled).queryByText("محصول")).toBeNull();
@@ -173,15 +210,9 @@ describe("TaskBoard", () => {
     render(<TaskBoard />);
     await waitFor(() => expect(screen.getByText("اجرای اسکریپت")).toBeInTheDocument());
 
-    const cardEl = screen.getByText("اجرای اسکریپت").closest("[draggable]") as HTMLElement;
+    const cardEl = screen.getByText("اجرای اسکریپت").closest("[data-card]") as HTMLElement;
     const target = columnRegion("در حال انجام");
-    const dt = {
-      getData: (kind: string) => (kind === "text/task-id" ? "t-1" : ""),
-      setData: vi.fn(), effectAllowed: "", dropEffect: "",
-    };
-    fireEvent.dragStart(cardEl, { dataTransfer: dt });
-    fireEvent.dragOver(target, { dataTransfer: dt });
-    fireEvent.drop(target, { dataTransfer: dt });
+    await holdAndDrop(cardEl, target);
 
     await waitFor(() => expect(patches).toHaveLength(1));
     const wrote = patches[0]!;
@@ -191,6 +222,41 @@ describe("TaskBoard", () => {
     expect(typeof wrote.body.position).toBe("number");
   });
 
+  it("a click opens the card and moves nothing — a release before the hold is a click", async () => {
+    boardTasks = [card({ id: "t-1", column_id: "col-todo" })];
+    render(<TaskBoard />);
+    await waitFor(() => expect(screen.getByText("اجرای اسکریپت")).toBeInTheDocument());
+
+    const cardEl = screen.getByText("اجرای اسکریپت").closest("[data-card]") as HTMLElement;
+    fireEvent.pointerDown(cardEl, { button: 0, clientX: 10, clientY: 10, pointerId: 1 });
+    fireEvent.pointerUp(cardEl, { clientX: 10, clientY: 10, pointerId: 1 });
+    fireEvent.click(cardEl); // what the browser fires after an unmoved press
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(patches).toHaveLength(0);
+  });
+
+  it("a press that moves before the hold ends is a scroll, not a lift", async () => {
+    boardTasks = [card({ id: "t-1", column_id: "col-todo" })];
+    render(<TaskBoard />);
+    await waitFor(() => expect(screen.getByText("اجرای اسکریپت")).toBeInTheDocument());
+
+    const cardEl = screen.getByText("اجرای اسکریپت").closest("[data-card]") as HTMLElement;
+    const original = document.elementFromPoint;
+    document.elementFromPoint = () => columnRegion("در حال انجام");
+    try {
+      fireEvent.pointerDown(cardEl, { button: 0, clientX: 10, clientY: 10, pointerId: 1 });
+      fireEvent.pointerMove(cardEl, { clientX: 40, clientY: 10, pointerId: 1 }); // 30px inside the hold window
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, HOLD_MS + 40)); });
+      fireEvent.pointerMove(cardEl, { clientX: 320, clientY: 14, pointerId: 1 });
+      fireEvent.pointerUp(cardEl, { clientX: 320, clientY: 14, pointerId: 1 });
+    } finally {
+      document.elementFromPoint = original;
+    }
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
+    expect(patches).toHaveLength(0);
+    expect(within(columnRegion("برای انجام")).getByText("اجرای اسکریپت")).toBeInTheDocument();
+  });
+
   it("a refused move reloads the truth instead of keeping the optimistic lie", async () => {
     boardTasks = [card({ id: "t-1", column_id: "col-todo" })];
     render(<TaskBoard />);
@@ -198,14 +264,9 @@ describe("TaskBoard", () => {
     const readsBefore = boardReads;
 
     refuseNextPatch = true;
-    const cardEl = screen.getByText("اجرای اسکریپت").closest("[draggable]") as HTMLElement;
+    const cardEl = screen.getByText("اجرای اسکریپت").closest("[data-card]") as HTMLElement;
     const target = columnRegion("در حال انجام");
-    const dt = {
-      getData: (kind: string) => (kind === "text/task-id" ? "t-1" : ""),
-      setData: vi.fn(), effectAllowed: "", dropEffect: "",
-    };
-    fireEvent.dragStart(cardEl, { dataTransfer: dt });
-    fireEvent.drop(target, { dataTransfer: dt });
+    await holdAndDrop(cardEl, target);
 
     await waitFor(() => expect(boardReads).toBeGreaterThan(readsBefore));
     await waitFor(() =>
@@ -302,36 +363,24 @@ describe("TaskBoard", () => {
     expect(column.getByText("+۱"), "the second assignee vanished from the count").toBeInTheDocument();
   });
 
-  it("dragging a CARD moves the card — not the column it came out of", async () => {
+  it("moving a CARD moves the card — not the column it came out of", async () => {
     /*
      * User report, 2026-09-04: "for moving cards by hand they all move
-     * together."
+     * together." — with the browser's drag, `dragstart` bubbled from the card
+     * to its draggable column and the drop read the column id first.
      *
-     * `dragstart` BUBBLES. A card sits inside its column and both are
-     * draggable, so picking up a card fired the card's handler and then the
-     * column's — the transfer left carrying a task id AND a column id, and the
-     * drop read the column first. One dragged card repositioned the whole
-     * column, which on screen is every card in it moving at once.
-     *
-     * THE FIXTURE IS THE POINT. The drop tests above hand in a `getData` that
-     * answers "" to anything but `text/task-id`, so the column id could not be
-     * on the transfer and the bug was unreachable — a fake agreeing with the
-     * belief the code was written on. This one RECORDS what `setData` writes
-     * and reads it back, which is what a DataTransfer does.
+     * Cards moved by HOLD since 2026-09-05 (holdDrag), which is a different
+     * mechanism from the column's HTML5 drag: a press on a card cannot start
+     * the column's dragstart at all. This is kept as the guard on the join —
+     * a card gesture must leave the column write untouched — and the control
+     * below proves the column's own drag still moves the column.
      */
     boardTasks = [card({ id: "t-1", title: "اجرای اسکریپت", column_id: "col-todo" })];
     render(<TaskBoard />);
     await waitFor(() => expect(screen.getByText("اجرای اسکریپت")).toBeInTheDocument());
 
-    const store = new Map<string, string>();
-    const dt = {
-      setData: (kind: string, value: string) => { store.set(kind, value); },
-      getData: (kind: string) => store.get(kind) ?? "",
-      effectAllowed: "", dropEffect: "",
-    };
-    const cardEl = screen.getByText("اجرای اسکریپت").closest("[draggable]") as HTMLElement;
-    fireEvent.dragStart(cardEl, { dataTransfer: dt });
-    fireEvent.drop(columnRegion("در حال انجام"), { dataTransfer: dt });
+    const cardEl = screen.getByText("اجرای اسکریپت").closest("[data-card]") as HTMLElement;
+    await holdAndDrop(cardEl, columnRegion("در حال انجام"));
 
     await waitFor(() => expect(patches).toHaveLength(1));
     expect(patches[0]!.body.column_id, "the card did not move").toBe("col-doing");

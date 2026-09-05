@@ -73,7 +73,10 @@ describe("settings security surfaces", () => {
      * reason a check like this carries a positive control rather than only
      * absences.
      */
-    expect(screen.getByText("همهٔ اعضای سازمان")).toBeTruthy();
+    /* the heading itself went on 2026-09-05 ("remove the title"); the
+       positive subject is now the row that replaced it — the org-wide
+       table's all | online | offline filter, which only an admin's page has */
+    expect(screen.getByRole("tab", { name: "آنلاین" })).toBeTruthy();
   });
 
   it("falls back to this person's own devices when the org-wide read is refused", async () => {
@@ -90,7 +93,7 @@ describe("settings security surfaces", () => {
     orgSessions.mockRejectedValueOnce(new Error("forbidden"));
     render(<SecuritySettings />);
     expect(await screen.findByText("نشست‌های فعال")).toBeTruthy();
-    expect(screen.queryByText("همهٔ اعضای سازمان")).toBeNull();
+    expect(screen.queryByRole("tab", { name: "آنلاین" })).toBeNull();
   });
 
   it("lists only the two external sign-in providers", () => {
