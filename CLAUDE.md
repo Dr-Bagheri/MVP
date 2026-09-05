@@ -3902,3 +3902,65 @@ sessions) for the cross-session narrative.
   rulebook's order moves to R6: 212 raw px sizes, row titles at 16 vs 14/700,
   and the Persian font, with three candidates shown before one is chosen.
   db 191 migrations · core 1357 tests · web 1067 tests + gate + sweep.
+- 2026-09-05 (night — TWO BATCHES FROM SCREENSHOTS; commits 01bee57, 40a26d0):
+  **Batch one.** `ProjectDialog` is ONE form for creating and editing a project
+  — name, description, colour, icon, roster — in the new-task dialog's
+  anatomy; the edit door had offered three of the five things a project has
+  in it, drawn in a different shape ("edit in projects window is not set to
+  what it has in it"). Edit is diff-based and re-reads the record after its
+  writes; the rail says the tone in words. Notifications: the four switches
+  ARRIVE TOGETHER — the digest's own fetch used to land a round trip after
+  `me`, so one row read as broken on every visit; asserted by a test that went
+  red against the old adopt-alone code. The description line is gone,
+  «پیش‌نویس خودکار پاسخ ایمیل» is «پیش‌نویس ایمیل», and `FormRow` gained
+  `controlAtEnd`, because the 380px cap that keeps a text field readable had
+  parked every switch in the middle of a 1040px row. The invite row is a grid
+  (the Select's `w-full` beat the `w-auto` beside it — two utilities on one
+  property resolve by stylesheet order — and had pushed the row apart). The
+  integrations tab panels are plain boxes: `Section` pads every section but
+  the first, the default tab was the second, so it opened 48px under its tabs
+  (22 now, measured).
+  **The site, Persian edition.** `site/fa.html` is GENERATED from `index.html`
+  by `scripts/build-company-locales.ts` (the other session's commit f6fc7d4);
+  the source and the generator's table are what change, then regenerate, and
+  `scripts/check-company-matrix.mjs` runs against a static server on 4173.
+  The film mirrored the N's POSITION for Persian but not its YAW, so it stood
+  on the mirrored side facing away from the wordmark; the yaw mirrors now and
+  the checker asserts fa yaw == -(en yaw) at the same chapter — **verified red
+  only on the second try: the first flip helper anchored on "\n" in a CRLF
+  file, matched nothing, and the PASS that followed was the green path
+  wearing a red's clothes**. The wordmark reads نورای (Vazirmatn 800), the
+  Persian type is a step bigger, the mock's Latin handles stop rendering as
+  "roya@" (`unicode-bidi: plaintext`), and LOGIN lands on the app of the
+  reader's own domain through a host MAP (neur-ai.ir → app.neur-ai.ir) —
+  proven by serving the page under www.neur-ai.ir and neur-ai.ir in
+  Playwright with www.neurai.pt as the control. Probe notes: a deploy poll
+  grepped `/_next/static/css/` and this build serves
+  `/_next/static/immutable/chunks/<hash>.css` — it printed "no subject" rather
+  than "not deployed"; and `Cache-Control: no-cache` did not bust Vercel's
+  CDN this time (HIT, Age 413) where a query string did.
+  **Batch two.** The board's folder strip is TWO sections again — plain
+  folders with their `+` back (the meetings strip's own inline composer, now
+  ONE shared `TopicNameBox`), a divider, then the folders that are a
+  project's category with the project `+` at their end; a topic carries no
+  project id, so the split is read off the projects themselves. «بدون موضوع»
+  left both strips, the projects link lost its arrow, a project chip's ⋯
+  opens the project. **Cards move by HOLD** (`board/holdDrag.ts`): press,
+  hold still 220ms to lift, release over a column; a release before the hold
+  is the click that opens, a move before the hold is a scroll. Pointer events
+  for every pointer type; the column under the pointer is a HIT-TEST with the
+  lifted card taking no hits, and pointer capture keeps the events on the
+  card even so — the browser's draggable/dataTransfer card drag is gone. The
+  tests drive the real gesture (drop writes exactly {column_id, position};
+  refused → reload; click → opens, moves nothing; move-before-hold → nothing
+  lifts). On production, driven by synthetic pointer events in the user's
+  Chrome: a card lifted, the target column lit, the card landed there, and
+  was moved back the same way (two rows in task_event). The first such probe
+  ran the instant the board rendered and did not lift — a re-fetch in flight;
+  a probe that measures a gesture must wait for the screen to settle. Three
+  more pages took the tasks row: security (all | online | offline, title
+  gone), audit logs (the source select → tabs, `data-key` so a test names a
+  value), models (count sentence gone; the rows start 19px under the menu —
+  measured at /fa/management/models, the settings slug is a stub that links
+  there).
+  db 191 migrations · core 1357 tests · web 1070 tests + gate + sweep.
