@@ -152,7 +152,12 @@ export function TwoPane({
           floating above the table (user directive, 2026-09-02: "make the gap
           between the table and the sub menu of the top closer, like the
           meeting page, for all other pages"). */}
-      <PageContainer width={width} className="!pt-4">
+      {/* `!pt-3` = the board's own gap-3 under its toolbar (user, 2026-09-05:
+          "an equal gap for all pages between the first sub menu and the
+          page's tables, buttons or content"); it was pt-4, four pixels
+          wider than the tasks and meetings pages the rest of the platform
+          copies, on every TwoPane page at once */}
+      <PageContainer width={width} className="!pt-3">
         <div className="flex min-h-0 flex-1 flex-col">{children}</div>
       </PageContainer>
     </PlatformShell>

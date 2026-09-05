@@ -4,13 +4,20 @@
  * This lives outside the page file so the colocated test derives its
  * coverage from the producer's own list rather than hand-enumerating it
  * (rule 13½: a guard's coverage list is itself a seam). Adding a section
- * here without its `help.section.*`, `help.desc.*` and `help.s.*.stepN`
- * keys in BOTH catalogues fails that test — the step keys are computed at
+ * here without its `help.section.*` and `help.s.*.stepN` keys in BOTH
+ * catalogues fails that test — the step keys are computed at
  * render time, so `keys.test.ts` deliberately cannot see them.
  *
  * REWRITTEN 2026-09-04 (user directive: "update the help we have in help
  * section — for each section make a new help because we changed it a lot,
- * remove the old one").
+ * remove the old one") and AGAIN 2026-09-05 (user: "update the help in main
+ * menu regarding our latest update on the platform, both in text, sections
+ * and designs"): the dashboard is a section of its own (it is the first
+ * page), and every step says what the product does tonight — the compact
+ * menu, the strip and Ctrl+E, one toolbar shape, pop-up details, the four
+ * default columns, drag by hand, projects as orders, rooms with named
+ * agents, the guest link, push-to-talk. Every sentence was checked against
+ * the component it describes before it was written down.
  *
  * The guide had gone stale in the way documentation always does: it described
  * a three-root platform (Assistant, Echo, Management) that no longer exists.
@@ -25,12 +32,13 @@
  * work they came to do, out to the things they configure once.
  */
 export const HELP_SECTIONS = [
-  { slug: "overview", group: "start", steps: 5 },
+  { slug: "overview", group: "start", steps: 6 },
+  { slug: "dashboard", group: "start", steps: 5 },
   { slug: "assistant", group: "parts", steps: 6 },
   { slug: "meetings", group: "parts", steps: 6 },
   { slug: "tasks", group: "parts", steps: 6 },
   { slug: "projects", group: "parts", steps: 5 },
-  { slug: "chat", group: "parts", steps: 5 },
+  { slug: "chat", group: "parts", steps: 6 },
   { slug: "workflows", group: "parts", steps: 6 },
   { slug: "integrations", group: "parts", steps: 5 },
   { slug: "agents", group: "parts", steps: 5 },

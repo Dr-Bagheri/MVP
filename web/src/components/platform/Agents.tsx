@@ -112,20 +112,20 @@ export function Agents() {
         to the detail page, where there is room to say what they do.
       */}
       {agents === "failed"
-        ? <p className="mt-4 text-sm text-fg-muted">{t("readFailed")}</p>
+        ? <p className="mt-3 text-sm text-fg-muted">{t("readFailed")}</p>
         : agents === null
-          ? <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          ? <div className="mt-3 grid gap-4 lg:grid-cols-2">
               <SkeletonCards count={2} className="contents" height="h-40" />
             </div>
           : (
             <>
-              <div className="mt-4 grid gap-4 lg:grid-cols-2">
+              <div className="mt-3 grid gap-4 lg:grid-cols-2">
                 {ordered.filter((a) => a.level === "system").map((agent) => (
                   <AgentTile key={agent.id} agent={agent} copy={copy} big />
                 ))}
               </div>
               {ordered.some((a) => a.level !== "system") ? (
-                <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                <div className="mt-3 grid gap-4 lg:grid-cols-2">
                   {ordered.filter((a) => a.level !== "system").map((agent) => (
                     <AgentTile key={agent.id} agent={agent} copy={copy} />
                   ))}

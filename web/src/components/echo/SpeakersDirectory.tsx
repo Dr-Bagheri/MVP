@@ -81,8 +81,6 @@ export function SpeakersDirectory() {
    * bulk bar all come from DataTable — this file supplies only what a
    * SPEAKER row can be selected FOR.
    */
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [confirmBulk, setConfirmBulk] = useState(false);
   /**
    * Withdrawing an enrolled voice asks too (the platform's destructive-action
    * rule; confirm.guard.test.ts). It is the same act Settings · Security
@@ -92,7 +90,6 @@ export function SpeakersDirectory() {
    * again, with the person present.
    */
   const [confirmVoiceClear, setConfirmVoiceClear] = useState<Person | null>(null);
-  const [confirmVoiceBulk, setConfirmVoiceBulk] = useState(false);
   /**
    * The 2026-08-25 batch: three views of one directory, a team filter, and
    * presence. (The merge door left the UI on 2026-08-26 — see the kebab.)
@@ -280,25 +277,6 @@ export function SpeakersDirectory() {
   }
 
 
-  /**
-   * One action over every selected row. Failures are COUNTED, not hidden,
-   * and the list reloads from the server afterwards — so what the screen
-   * shows next is what actually survived, not what we hoped happened.
-   */
-  async function bulk(perRow: (person: Person) => Promise<unknown>): Promise<void> {
-    if (busy || selected.size === 0) return;
-    setBusy(true);
-    const targets = (people ?? []).filter((person) => selected.has(person.id));
-    const results = await Promise.allSettled(targets.map((person) => perRow(person)));
-    const failed = results.filter((r) => r.status === "rejected").length;
-    if (failed > 0) {
-      notify(t("bulkFailed", { n: String(failed), total: String(targets.length) }), "warn");
-    }
-    setSelected(new Set());
-    setConfirmBulk(false);
-    await api.directory().then(setPeople).catch(() => undefined);
-    setBusy(false);
-  }
 
   async function add(): Promise<void> {
     if (busy || !name.trim()) return;
@@ -534,45 +512,6 @@ export function SpeakersDirectory() {
 
   return (
     <div className="space-y-4">
-      {/* the bulk bar — present only while a selection exists, and only on
-          the table, which is the only view that can make one */}
-      {view === "table" && selected.size > 0 ? (
-        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-surface px-4 py-2 text-sm">
-          <span className="text-fg">{t("selectedCount", { n: String(selected.size) })}</span>
-          {/* 2026-09-03: `.btn-sm`, the theme's compact control. Both of these
-              carried `h-8 min-h-0 px-3 text-xs` ON TOP of the class that
-              exists to decide exactly those four things — a hand-rolled
-              control wearing `.btn`'s own name, which is why the control
-              guard never counted them: it skips any string containing `btn`,
-              so re-answering `.btn` is the one way to hand-roll invisibly. */}
-          {voiceReady ? (
-            <button
-              className="btn-secondary btn-sm"
-              disabled={busy}
-              onClick={() => setConfirmVoiceBulk(true)}
-            >
-              {t("voiceRemove")}
-            </button>
-          ) : null}
-          <button
-            className="btn-danger btn-sm"
-            disabled={busy}
-            onClick={() => setConfirmBulk(true)}
-          >
-            {t("delete")}
-          </button>
-          <button
-            className="text-xs text-fg-muted underline-offset-2 hover:underline"
-            onClick={() => {
-              setSelected(new Set());
-              setConfirmBulk(false);
-            }}
-          >
-            {t("clearSelection")}
-          </button>
-        </div>
-      ) : null}
-
       {/* the directory's own controls (2026-08-25): three readings of one
           list, and the team filter the labels make possible */}
       {/*
@@ -605,13 +544,7 @@ export function SpeakersDirectory() {
                 type="button"
                 aria-pressed={view === v}
                 className={filterChipClass(view === v)}
-                onClick={() => {
-                  setView(v);
-                  /* a selection made in the table cannot be acted on from
-                     cards or the chart — leaving it alive would keep a bar
-                     on screen governing rows nobody can see */
-                  if (v !== "table") setSelected(new Set());
-                }}
+                onClick={() => setView(v)}
               >
                 {v === "table" ? <IconRows width={12} height={12} />
                   : v === "cards" ? <IconUsers width={12} height={12} />
@@ -790,13 +723,9 @@ export function SpeakersDirectory() {
             loading={people === null}
             rows={shown}
             rowKey={(person) => person.id}
-            /* only somebody who may MANAGE the directory can select a row:
-               a checkbox that ticks and then offers nothing is a control
-               that lies about what the viewer is allowed to do */
-            selected={canManage ? selected : undefined}
-            onSelect={canManage ? setSelected : undefined}
-            selectableRow={() => canManage}
-            selectLabel={(person) => t("selectRow", { name: person.display_name })}
+            /* NO SELECTION COLUMN (user, 2026-09-05: "remove check points for
+               speakers table") — every act lives on the row's own menu; the
+               bulk bar and its two dialogs left with the checkboxes */
             rowDetail={(person) =>
               enroll?.personId === person.id ? enrollPanel(person) : null
             }
@@ -1081,22 +1010,7 @@ export function SpeakersDirectory() {
         )}
       </div>
 
-      {confirmBulk ? (
-        <ConfirmDialog
-          title={t("bulkDeleteConfirmTitle", { n: String(selected.size) })}
-          body={t("deleteConfirmBody")}
-          confirmLabel={t("delete")}
-          cancelLabel={t("voiceCancel")}
-          busy={busy}
-          onCancel={() => setConfirmBulk(false)}
-          onConfirm={() => void bulk((person) => api.deletePerson(person.id, UI_DELETE_REASON))}
-        />
-      ) : null}
-
-      {/* withdrawing an enrolled voice — one person, and the whole selection.
-          Two dialogs rather than one parameterised: the bulk title counts and
-          the single one NAMES, and a title that says «۱ نفر» where a name
-          belongs is how a bulk action gets confirmed for the wrong row. */}
+      {/* withdrawing an enrolled voice — one person, named in the title */}
       {confirmVoiceClear !== null ? (
         <ConfirmDialog
           title={t("voiceRemoveTitle", { name: confirmVoiceClear.display_name })}
@@ -1109,21 +1023,6 @@ export function SpeakersDirectory() {
             const person = confirmVoiceClear;
             setConfirmVoiceClear(null);
             void clearVoiceFor(person);
-          }}
-        />
-      ) : null}
-
-      {confirmVoiceBulk ? (
-        <ConfirmDialog
-          title={t("voiceRemoveBulkTitle", { n: String(selected.size) })}
-          body={t("voiceRemoveBody")}
-          confirmLabel={t("voiceRemove")}
-          cancelLabel={t("voiceCancel")}
-          busy={busy}
-          onCancel={() => setConfirmVoiceBulk(false)}
-          onConfirm={() => {
-            setConfirmVoiceBulk(false);
-            void bulk((person) => api.clearVoice(person.id));
           }}
         />
       ) : null}

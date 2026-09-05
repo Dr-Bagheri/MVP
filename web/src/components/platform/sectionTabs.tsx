@@ -55,6 +55,12 @@ export const FILTER_COUNT = "badge-num rounded-md bg-surface-2 px-1 text-[10px]"
     like in the theme rule"). A page whose second row is not inside a `gap-3`
     column wears this instead of a number of its own. */
 export const FILTER_ROW_GAP = "mb-3";
+/** and the same 12 under ROW ONE where a page draws that row outside a
+    `gap-3` column (user, 2026-09-05: "there should be an equal gap for all
+    pages between the first sub menu on top and the page's tables or buttons
+    or content, same if there is a second") — a page that spells `mb-5` here
+    sits 10px lower than the tasks and meetings pages the rest copy */
+export const SECTION_ROW_GAP = "mb-3";
 
 export interface FilterChip<K extends string> {
   key: K;

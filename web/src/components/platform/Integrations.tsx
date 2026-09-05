@@ -11,7 +11,7 @@ import { DataTable, StatusDot, type Column } from "@/components/DataTable";
 import { EmptyState } from "@/components/ui";
 import { ConfirmDialog } from "@/components/rowActions";
 import { Icon, type IconName } from "@/components/icons";
-import { SectionTabs } from "./sectionTabs";
+import { SECTION_ROW_GAP, SectionTabs } from "./sectionTabs";
 import { digits, formatRelativeDate, formatTime, personName } from "@/lib/format";
 import {
   INTEGRATIONS,
@@ -317,7 +317,7 @@ export function Integrations() {
             label={t("sectionsLabel")}
             active={tab}
             onSelect={setTab}
-            className="mb-5"
+            className={SECTION_ROW_GAP}
             tabs={[
               { key: "available", label: t("availableTitle") },
               /* the count is the reason to look: "3" answers "is anything

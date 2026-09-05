@@ -817,7 +817,6 @@
     "edited": "(edited)",
     "emoji": "Emoji",
     "emptyRoom": "No messages in this room yet. Be the first.",
-    "invitesExplain": "Everybody you pick gets an invitation; the room joins their sidebar when they accept. No new access is granted — every member of the organization can already see this room.",
     "invitesSent": "{n} invitations sent.",
     "join": "Join room",
     "leave": "Leave room",
@@ -1049,6 +1048,7 @@
     },
     "section": {
       "overview": "Getting started",
+      "dashboard": "Dashboard",
       "assistant": "Assistant",
       "meetings": "Meetings",
       "tasks": "Tasks",
@@ -1056,109 +1056,104 @@
       "chat": "Chat",
       "workflows": "Workflows",
       "integrations": "Integrations",
-      "agents": "Assistants",
+      "agents": "Agents",
       "management": "Management",
       "settings": "Settings & account"
     },
-    "desc": {
-      "overview": "What the platform holds, and where each part lives.",
-      "assistant": "Asking, handing over work, and who answers.",
-      "meetings": "Planning, recording, and what is left afterwards.",
-      "tasks": "The board, its categories and its deadlines.",
-      "projects": "A folder over work you already have.",
-      "chat": "Team rooms, and the assistants who are guests in them.",
-      "workflows": "Work that runs itself.",
-      "integrations": "Connecting outside services to the platform.",
-      "agents": "Echo, Roya and Ava — and what each of them does.",
-      "management": "People, roles and the state of the service.",
-      "settings": "Theme, language, calendar, and what you share about yourself."
-    },
-    "stepsTitle": "Step by step",
     "githubCard": "Project GitHub repository",
     "githubNote": "The platform's code, docs and development history live on GitHub.",
     "openGithub": "Open GitHub",
     "s": {
       "overview": {
-        "step1": "The rail down the starting edge holds every section: dashboard, meetings, tasks, projects, chat, workflows, integrations and agents.",
-        "step2": "The green button at the top of the rail opens the assistant. It is there on every screen, whatever you are looking at.",
-        "step3": "The top bar shows where you are; each step of the trail is clickable and takes you one level up. The search box beside it looks through every record.",
-        "step4": "The menu under your name in the corner holds your account, the theme, the language and the calendar — and signing out.",
-        "step5": "Every date and number follows the language and calendar you pick in that menu. Nothing is set in a second place."
+        "step1": "The main menu sits at the start edge and opens compact by default, icons only; the arrow at its top expands it. Its order: dashboard, meetings, tasks, workflows, agents, integrations and management — with settings and help at the foot.",
+        "step2": "The green «Assistant» button above the menu opens the assistant page. The assistant strip is also on every page at the other edge; its icon or Ctrl+E opens and closes it.",
+        "step3": "The top bar shows your trail beside the menu, with the clock and search; its other end holds the theme, the language, notifications, the door to chat and your account menu.",
+        "step4": "Every list has one row of controls above it: views and filters, with the «new» button at the end of that row. A second row, where there is one, holds folders and finer filters.",
+        "step5": "Anything you open from a list — a task, a project — opens as a panel over that list and keeps an address of its own, so you can send it to a colleague.",
+        "step6": "Dates and digits follow your language and calendar, and in Persian the digits you type are written in Persian too."
+      },
+      "dashboard": {
+        "step1": "The dashboard opens with a greeting for the time of day and four counters: «Upcoming meetings», «Meetings this month», «Task completion rate» and «Tasks recorded».",
+        "step2": "«This week» is an hour grid of the current week; meetings sit at their day and hour, and the arrows move the week.",
+        "step3": "«Upcoming meetings» shows the next two and «Latest meetings» the last two held; every row is a door to its meeting.",
+        "step4": "Nothing here is kept separately: every counter and panel is counted from your own meetings and tasks on each visit, so the dashboard cannot disagree with the page beside it.",
+        "step5": "A counter with no data yet shows «—», never zero; zero means we counted and found none."
       },
       "assistant": {
-        "step1": "Write your question or your task in the box at the foot and press Enter. Shift+Enter starts a new line.",
-        "step2": "Name one of the assistants — Echo, Roya or Ava — and that one answers. Name nobody and Echo takes it.",
-        "step3": "The assistant can do the work rather than describe it: create a task, book a meeting, search the records, open a page.",
-        "step4": "Anything it would change in your data is shown to you first and is not written until you approve it.",
-        "step5": "Earlier conversations stay in the history and any of them can be continued; each title comes from its own first question.",
-        "step6": "The microphone button writes what you say into the same box. The answering model can be changed from there too."
+        "step1": "Type your question or task in the box and press Enter; Shift+Enter breaks the line. The answer arrives under it as plain text.",
+        "step2": "Name an agent — @roya or @ava — and that one answers; unnamed, Echo does. Agents see only what you are allowed to see.",
+        "step3": "The assistant acts, not only talks: it creates tasks, records meetings, searches the records and opens pages. Every change is shown to you first and is not written until you confirm.",
+        "step4": "The microphone beside the box is speaking instead of typing. With a hotkey chosen in the assistant settings, it listens while you hold the key and stops when you let go.",
+        "step5": "The assistant strip on every page is the same conversation; what you said on the assistant page continues in the strip, and back.",
+        "step6": "Past conversations stay in the history and continue from there; each is titled by its first question. Change the model from the menu beside the box."
       },
       "meetings": {
-        "step1": "“New meeting” takes a time, a length and how it is being held: online, in person, or an audio file you already have.",
-        "step2": "A meeting has three stages — before, during, and after — and the bar at the top says which one you are standing in.",
-        "step3": "For a meeting in the room, walking into “during” starts recording from the microphone.",
-        "step4": "For an online meeting, press “Start recording & share audio”, then pick the call's tab or window and turn ON share audio, so both sides are recorded.",
-        "step5": "When it ends you get the transcript, a summary, the decisions and the actions — and any action can become a task.",
-        "step6": "Minutes can be approved, signed and closed. A closed record no longer changes, and comes out as Word or PDF."
+        "step1": "«New meeting» takes a title, a date and time, a folder and the way it is held: online, in person, or an uploaded recording. The row above the list switches between list and calendar and between all, upcoming, held and archive; the second row is the folders.",
+        "step2": "A meeting has three stages — «Before», «During», «After» — and the bar on its page says where you are. Before it, invite people; for a guest outside the organisation, «Copy guest link» mints a link that opens without an account.",
+        "step3": "In person, entering «During» starts recording from the microphone. Online, press «Start recording & share audio» and pick the call's tab with audio sharing on, so both sides are recorded; the recording chip reports the share.",
+        "step4": "During the meeting the whiteboard, quick notes and task creation are on the same page. «Finish & process» closes the recording.",
+        "step5": "Afterwards the transcript with its speakers, the summary, the decisions and the actions are produced; any action becomes a task, and the minutes can be approved, signed and closed. Closed minutes are the record.",
+        "step6": "The meeting page's assistant is the platform's assistant with this record attached; ask about what was said. A meeting is archived, never deleted."
       },
       "tasks": {
-        "step1": "The board is columns, each one a state; drag a card between them with the mouse.",
-        "step2": "The + above a column, or the “New task” button, creates a card with a title, a priority and a deadline.",
-        "step3": "Labels and priority show on the card itself. The colours come from the platform's own set so they stay legible in both themes.",
-        "step4": "The + beside “assignee” puts colleagues on a card; their name shows on the card, opposite the priority.",
-        "step5": "The same work can be read as a list or a calendar. The calendar keeps everything without a deadline in its own drawer.",
-        "step6": "Categories group the work, and every project brings its own category with it, created for you."
+        "step1": "The board starts with four columns — backlog, to do, in progress, done — and columns can be added, named and coloured, and reordered by dragging their header. The row above the board: kanban, list, calendar, archive; a priority filter; «Just my tasks» and «Due today».",
+        "step2": "The second row is the folders: «all tasks», your own folders with their «+», a divider, then the folders that are projects. Each folder carries its own edit menu.",
+        "step3": "«Add card» at the foot of a column makes the task right there: title, description, labels, folder, column, priority, deadline and assignees in one dialog.",
+        "step4": "Drag a card with the mouse to another column to change its state; with a finger, hold a moment first. A click opens it.",
+        "step5": "The task panel holds the description, checklist, comments and history, with folder, state, assignees, priority, deadline, labels and repeat in its rail. Repeat means the next copy is created when this one is done.",
+        "step6": "Ticking a card marks it done; archiving takes it off the board into «archive»; delete is for good and asks first."
       },
       "projects": {
-        "step1": "A project is a named piece of work with people on it. It owns nothing but its members.",
-        "step2": "Creating one also creates its category on the task board, so the cards for that work gather under it.",
-        "step3": "Each project card shows how far the work has got. A project with no tasks shows a dash rather than a zero.",
-        "step4": "Pick the members in the create dialog, or add and remove them later from the project's own page.",
-        "step5": "A project is archived rather than deleted; its work and its people stay exactly as they are, and it comes back whenever you want."
+        "step1": "A project is an order of work: an admin creates it, picks its people and assigns work to them. Everyone sees it; creating and editing is the admin's.",
+        "step2": "The projects page opens from the «Projects» link in the tasks toolbar and wears the same layout: kanban, list, calendar, archive, the sorts, «my projects» and «due today».",
+        "step3": "Each project is a folder on the task board; its progress is counted off that folder's tasks, and it sits in the column where its earliest unfinished work sits. Dragging a project to another column moves its unfinished tasks after your confirmation.",
+        "step4": "Clicking a project opens its panel over the list: board folder, progress, colour, people, work and «who did what». «Assign work» is the new-task dialog with the project's folder preselected and the repeat option.",
+        "step5": "Deleting a project deletes the project alone: its folder and cards stay on the board, and its chat room keeps its messages."
       },
       "chat": {
-        "step1": "Every member of the organization sees every room. Joining one only keeps it in your own sidebar.",
-        "step2": "A room with unread messages goes bold, and if somebody named you in one, the count appears beside it.",
-        "step3": "Type @ and a colleague's or an assistant's handle; a list of suggestions opens and you pick one.",
-        "step4": "An assistant answers only when you name it with @ — in a team room they never join a conversation on their own.",
-        "step5": "You can remove your own message. Its place stays in the room and says that a message was removed."
+        "step1": "Chat opens from the icon in the top bar. Rooms sit in the row above the box; an unread room is bold, and one that named you carries a number. «New room» sits at the end of the row.",
+        "step2": "Write in the two-line box; Enter sends and Shift+Enter breaks the line. @ suggests people and agents, the microphone is speaking instead of typing, and emoji sit beside it.",
+        "step3": "Right-click a message for reply and reactions. Replying to an agent's message adds its name to yours automatically.",
+        "step4": "Agents are guests in a room and answer only when named: @roya or @ava. Their answer is addressed to the whole room, so they speak only of what every member may see — tasks, meetings, people. An agent can hand off to another, at most four hops.",
+        "step5": "An admin invites with «Add people»; the invitation lands in the bell and one press takes you to the room. Membership is attention, not a lock: rooms are readable by the whole organisation.",
+        "step6": "The ⋯ in the same row leaves or deletes the current room. A deleted room leaves the list and its messages stay as a record."
       },
       "workflows": {
-        "step1": "A workflow is a repeating piece of work whose steps are written down in advance.",
-        "step2": "Several are ready in the list. Start from one of those, or build your own.",
-        "step3": "Each workflow has a trigger — a schedule, or something that happens in the platform — and then its numbered steps.",
-        "step4": "A workflow's own page shows the runs it has coming and the runs it has just made.",
-        "step5": "The switch at the top of that page turns it on and off. A workflow that is off has no runs at all.",
-        "step6": "The platform's own ready-made workflows can be read but not edited; make a copy of your own to change one."
+        "step1": "A workflow is work that runs itself. The workflows page shows them as cards; the row above switches between «Active workflows» and «Workflow library», and the second row filters the library by kind.",
+        "step2": "Each card has a page: what triggers it, its steps in order, the connections it needs, and its upcoming and past runs. The on/off switch at the top is yours alone.",
+        "step3": "«Draft email replies» reads your connected mailbox and drafts a reply to new mail that waits in the conversation and in your own Drafts folder until you send it. The platform never sends mail for you.",
+        "step4": "«Prepare meetings» writes a brief from the related records half an hour before each meeting on your connected calendar and posts it to your conversation.",
+        "step5": "A run uses a model the organisation permits, and when none is available it stops with a visible message rather than silently.",
+        "step6": "Every run stays in that workflow's history: when, with what input, and what came of it."
       },
       "integrations": {
-        "step1": "A connection is a permission you give the platform to visit an outside service on your behalf.",
-        "step2": "Press “Connect” on the service you want. Its own page opens and shows exactly what is being asked for.",
-        "step3": "A connection enables precisely what you accepted on that page, and nothing more.",
-        "step4": "A mail connection drafts replies and leaves them in your own Drafts folder. Sending is always your hand.",
-        "step5": "Disconnecting happens on the same page and takes effect immediately."
+        "step1": "Integrations connect outside services to your account; the page has two tabs, «Available integrations» and «Connected integrations». A connection is yours, not the organisation's.",
+        "step2": "Google brings Gmail, the calendar, Drive and Meet. «Connect» takes you to Google's own sign-in, where you see exactly what is read.",
+        "step3": "Drafting email needs its own permission; a connection made before that offers «Enable email drafts» to grant it.",
+        "step4": "The «Connected integrations» tab shows what each connection can do and when it last worked; disconnecting is there too and takes effect at once.",
+        "step5": "Nothing is read from an outside service without your asking, and what is read goes to the model only for that task."
       },
       "agents": {
-        "step1": "There are three assistants and all three reach the same tools. What differs is their tone and their focus.",
-        "step2": "Each assistant's page lists the tools it can reach, grouped by the kind of work they do.",
-        "step3": "Anything a person can do in this platform, an assistant can do too — with your own permissions, never more.",
-        "step4": "Writing to your data always goes through a proposal you approve. Nothing changes without your seeing it first.",
-        "step5": "Web access for the assistants is a switch in your own account, and you can turn it off."
+        "step1": "Agents are the organisation's AI colleagues. Echo is the general assistant; Roya knows the work in flight and Ava analyses the records. The agents page shows each with its name, handle and description.",
+        "step2": "An agent's page states its model, web access, kind and whether it can be edited, then, group by group, everything it can do — reading first, changing last.",
+        "step3": "An agent works with your authority and never more: what you cannot see, it cannot see; and the agents' database role can never delete.",
+        "step4": "An admin can create one with «New agent» or edit the organisation's own: name, description, instructions, icon and colour, and whether it may reach the web. System agents are not editable.",
+        "step5": "An agent's web access has two switches: the agent's own and yours in the assistant settings; both must be on."
       },
       "management": {
-        "step1": "The people in your organization, with each one's role and last activity, are under “Users”.",
-        "step2": "There are three roles — owner, admin and member — and the role decides who may change the organization's settings.",
-        "step3": "Invitations are sent from the same screen, and each invitation can be used once.",
-        "step4": "Speakers are your organization's known voices. Enrolling one puts that person's name into meeting transcripts.",
-        "step5": "The service page shows the state of the platform's parts and the work currently in flight."
+        "step1": "Management is the organisation's page, for admins and the owner. The row above holds its sections: general, users, invitations, member privileges and speakers.",
+        "step2": "«Users» lists everyone with role and status; «Invitations» invites by email and role and shows the one-time link when the mail cannot be delivered.",
+        "step3": "«Member privileges» has two tabs, members and admins; every switch only narrows and none creates access. An admin binds members, the owner binds admins.",
+        "step4": "«Speakers» is the voice directory: people with name and team, and with a voice enrolled, automatic speaker identification in meetings.",
+        "step5": "Every administrative change is written to the audit log — who, what, when — without the records' content."
       },
       "settings": {
-        "step1": "“General” holds the organization's name, its language and the models it allows.",
-        "step2": "The light or dark theme is picked from the menu under your name or from here. They are one setting, not two.",
-        "step3": "The timezone and the calendar — Gregorian or Jalali — decide how dates are written. Automatic follows the language.",
-        "step4": "Your profile page holds your name, your Latin name and your @handle — the handle is what people type to call on you in chat.",
-        "step5": "Changing your password is on that page, and a forgotten one is recovered from the sign-in screen.",
-        "step6": "“Assistant & data” is where you say what the assistant may know about you, and where you can export your account's data."
+        "step1": "Settings opens from the main menu and the row above holds its sections: general, assistant, notifications, security, allowed models and the audit log. «Allowed models» is the organisation's list; what is switched off there is available to nobody.",
+        "step2": "«General» holds your theme and display preferences; the same ones are in the account menu on the top bar and are the same on all your devices.",
+        "step3": "«Assistant»: reply language and length, the Persian and English voices and your own instructions; the push-to-talk key that listens while held; the assistant listening for «Echo» and answering aloud; and web permission for the agents.",
+        "step4": "«Notifications» holds the four switches for your automatic work — post-call brief, weekly digest, email drafts and meeting preparation — each your own.",
+        "step5": "«Security» shows the signed-in devices — for an admin, every member's sessions filtered by all, online and offline — and any session can be ended there.",
+        "step6": "The account page opens from the account menu: photo, your name in both languages, username and job title; and under preferences the language, theme, default model and what you share with the assistant."
       }
     }
   },
@@ -2626,7 +2621,6 @@
     "voiceRemove": "Remove voice",
     "voiceRemoveTitle": "Remove the enrolled voice for “{name}”?",
     "voiceRemoveBody": "The voice sample is deleted and they stop being recognized automatically in meetings. Getting it back means recording the sample again.",
-    "voiceRemoveBulkTitle": "Remove the enrolled voice for {n} people?",
     "voiceEnrolled": "{name}'s voice is enrolled — they will be recognized automatically in meetings.",
     "voiceFailed": "Voice enrollment did not go through — try again.",
     "voiceMicDenied": "Microphone access was not granted.",
@@ -2663,12 +2657,7 @@
     "identifyDone": "Linked to the account.",
     "identifyCleared": "The account link was removed.",
     "identifyTaken": "Another person in the directory is already that account.",
-    "identifyNotMember": "That account is not a member of this organization.",
-    "selectedCount": "{n} selected",
-    "clearSelection": "Clear selection",
-    "bulkFailed": "{n} of {total} did not go through.",
-    "selectRow": "Select “{name}”",
-    "bulkDeleteConfirmTitle": "Delete {n} people?"
+    "identifyNotMember": "That account is not a member of this organization."
   },
   "status": {
     "recording": "Paused",

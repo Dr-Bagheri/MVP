@@ -135,12 +135,13 @@ describe("both catalogues carry every step the page will ask for", () => {
    * while writing — the en side is the one that rots (locale corollary).
    */
   for (const loc of ["fa", "en"] as const) {
-    it(`${loc}: section, desc and every stepN exist — and no orphans`, () => {
+    it(`${loc}: section and every stepN exist — and no orphans`, () => {
       const help = catalogue[loc]!.help as Record<string, Record<string, unknown>>;
       const slugs = HELP_SECTIONS.map((s) => s.slug);
-      // titles and descriptions: exactly the producer's set, nothing stale
+      // titles: exactly the producer's set, nothing stale (no `desc` — R21,
+      // a guide section is its name and its steps, with no sentence between)
       expect(Object.keys(help.section!).sort()).toEqual([...slugs].sort());
-      expect(Object.keys(help.desc!).sort()).toEqual([...slugs].sort());
+      expect(help.desc, "help.desc must not come back").toBeUndefined();
       // steps: every declared step exists, and no undeclared step lingers —
       // an orphaned step key is copy nobody will ever see wearing the look
       // of coverage

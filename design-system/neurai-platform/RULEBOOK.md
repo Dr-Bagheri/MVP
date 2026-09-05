@@ -170,6 +170,16 @@ loosened rule — and the user's "except this part" is what puts one there.
 - **Solid =** `Toolbar` component + a guard: no `role="tablist"` and no
   `btn-primary` inside a page body outside the toolbar/footers.
 
+- **2026-09-05, night — the gap under the toolbar is ONE number.** Measured
+  on production at 1920 (root 17.5): tasks / meetings / projects / chat sat
+  13 px under row one (`gap-3`); integrations and workflows 22 (`mb-5`);
+  agents 18 (`mt-4`); every TwoPane page — settings, management, profile,
+  help — 17.5 (`!pt-4`). Now `SECTION_ROW_GAP = "mb-3"` (sectionTabs.tsx)
+  beside `FILTER_ROW_GAP`, TwoPane's container `!pt-3`, agents `mt-3`: the
+  board's own 12 (× the root) under row one on every page, and the same
+  under row two where there is one. Solid = when the one-`Toolbar` component
+  owns the row, the gap goes with it and a page cannot spell its own.
+
 ### R4 · The control family — SOLID (ruled (a) 2026-09-05; swept, guarded, re-measured)
 
 - **The rule:** **three control sizes and no fourth** — `.btn` 38 (r11,

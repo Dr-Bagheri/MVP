@@ -4160,3 +4160,65 @@ sessions) for the cross-session narrative.
   reports loaded; the finale panel `rgba(5, 3, 20, 0.62)` at 44 px; the mock
   580 px wide; sessions `thead` sr-only; agent gap 26 px.
   db 191 migrations · core 1357 tests · web 1098 tests + gate + sweep.
+- 2026-09-05 (night — THE HELP TELLS THE TRUTH AGAIN, ONE GAP UNDER EVERY
+  TOOLBAR, AND THE README FROM SCRATCH): the fourth batch of the day — "check
+  Supabase for speed; check the whole platform for bugs and for anything not
+  following the theme; an equal gap between the first sub-menu and the content
+  on every page, and under the second; remove the checkboxes from the speakers
+  table; update the help in text, sections and design; then rebuild the GitHub
+  README from scratch with screenshots and diagrams".
+  **Speed, measured rather than felt.** From the server a warm query to
+  Postgres is 6–7 ms and the TCP connect 8–24 ms (Frankfurt); core answers its
+  own /health in 1–2 ms; the same /health THROUGH the Cloudflare tunnel is
+  50–130 ms from the server and 130–230 ms from a PC, and a BFF round trip
+  from the PC is ~160–170 ms before any query runs. The database is not where
+  the time goes — the two network hops are (the Vercel function and the
+  tunnel) — and `withActor` already pays ONE round trip for role and actor
+  (the 2026-08-29 pass). What moved tonight for speed moved earlier in the
+  day: the BFF to fra1 and the 5-second burst cache (7 calls instead of 15,
+  295 ms instead of 686 on the task board). The next win is infrastructure
+  and the user's call: a direct HTTPS path from Vercel to the server instead
+  of the tunnel removes the larger hop. Recorded as a proposal, not done.
+  **The gap.** Measured on production at 1920: tasks / meetings / projects /
+  chat 13 px under their toolbar (`gap-3`); integrations and workflows 22
+  (`mb-5`); agents 18 (`mt-4`); every TwoPane page 17.5 (`!pt-4`). One
+  number now — `SECTION_ROW_GAP = "mb-3"` beside `FILTER_ROW_GAP`, TwoPane
+  `!pt-3`, agents `mt-3` — the board's own gap under every row one and the
+  same under row two. NOT re-measured on production: the browser extension
+  disconnected mid-batch and stayed down; the deployed class is the one the
+  board already wears, and the re-measurement is owed.
+  **The speakers table** lost its selection column, bulk bar and two bulk
+  dialogs; the six strings only the bar read left both catalogues with it.
+  `chat.invitesExplain` — a paragraph no component rendered, describing rooms
+  "in the sidebar" two days after they moved to the toolbar — was dead copy
+  wearing a stale claim; removed rather than corrected.
+  **The help.** Twelve sections in the rail's order (the dashboard joined —
+  it is the first page), and every step checked against the component it
+  describes BEFORE it was written down. The check earned its keep: the drafted
+  copy had a dashboard edit mode (removed 2026-08-29), a change-password row
+  on Security (removed 2026-08-28), Skills and Integrations sections under
+  Settings (both had left that menu), a stage called «برگزاری» that the
+  product spells «حین جلسه», and Management sections (models, server) its
+  toolbar does not carry. Every one read as plausible; every one was wrong;
+  a help page is the one place where a plausible sentence about a control
+  that is gone gets read by somebody looking for it. The page took the shapes
+  it teaches: the name over the card and nothing under it (R21 — `desc` left
+  the catalogue and the test asserts it cannot return), the sketch in the
+  theme's `.well`, the steps as `divide-y` rows, three sketches added
+  (dashboard, board, room). Found on the way: `PageHeader` has rendered
+  nothing since 2026-09-02, so the section NAME had been invisible on the
+  help page — the one page where a name is the content.
+  **The README** is rewritten from scratch: what is inside (fourteen
+  surfaces, a row each), six mermaid diagrams (topology, one request, the
+  meeting pipeline, the agent loop, workflows, the permission stack), the
+  repository layout, how to run and deploy, the rules that run, the design
+  system, and a dated measurements table that names the command behind every
+  number. The eleven screenshots of 2026-08-28 show a product that no longer
+  exists (an Echo records page among them) and are REMOVED rather than kept
+  as illustrations. Fresh captures need a signed-in browser and the
+  extension was down for the whole batch — the one item not delivered, said
+  so rather than papered over.
+  Verified: typecheck, 1099 web tests, the build gate, the encoding sweep
+  (1191 files), the token verifier; the static sweep found no stray hex, no
+  `dark:` variant, no leftover logging.
+  db 191 migrations · core 1358 tests · web 1099 tests + gate + sweep.

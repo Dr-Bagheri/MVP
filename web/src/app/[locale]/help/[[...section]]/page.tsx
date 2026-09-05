@@ -4,7 +4,7 @@ import { use } from "react";
 import { useTranslations } from "next-intl";
 import { GITHUB_HREF } from "@/components/platform/nav";
 import { TwoPane } from "@/components/platform/TwoPane";
-import { PageHeader, Section } from "@/components/scaffold";
+import { Section } from "@/components/scaffold";
 import { Card } from "@/components/ui";
 import { digits } from "@/lib/format";
 import { useLocale } from "next-intl";
@@ -14,13 +14,17 @@ import { HELP_GROUPS, HELP_SECTIONS, type HelpSlug } from "../sections";
  * Help — a real guide (user directive, 2026-08-16): "how to work with the
  * platform, with simple images", one side-menu section per part.
  *
- * Rewritten from the beginning (user directive, 2026-08-28) to match the
- * platform as it stands: the Assistant is the landing page; Workflows,
- * Integrations and Agents live under its menu; Echo carries the live-
- * transcript record page; Management holds the organisation; Settings and
- * Profile carry the person. The old copy taught a hub-with-app-cards home
- * and an organisation under Settings — both gone, and a guide that teaches
- * a layout the product no longer has is worse than none.
+ * Rewritten from the beginning twice (2026-08-28, 2026-09-04) and again on
+ * 2026-09-05 ("update the help in main menu regarding our latest update on
+ * the platform, both in text, sections and designs"): twelve sections in the
+ * rail's own order, the dashboard among them now that it is the first page.
+ * A guide that teaches a layout the product no longer has is worse than none,
+ * so every step was checked against the component it describes.
+ *
+ * The shape (2026-09-05): the section's NAME over the card (R21 — the name,
+ * no sentence under it), the sketch in the theme's own well, and the steps as
+ * rows divided by the hairline every pop-up's sections took tonight. The
+ * numbers say "step by step"; the heading that used to say it is gone.
  *
  * The illustrations are inline SVG sketches drawn from the theme's own
  * tokens (currentColor + the accent), not screenshots: a screenshot of the
@@ -171,6 +175,55 @@ function HelpArt({ slug }: { slug: HelpSlug }) {
       </svg>
     );
   }
+  if (slug === "dashboard") {
+    return (
+      <svg viewBox="0 0 320 120" className={cls} aria-hidden>
+        {/* four counters over the week's hour grid */}
+        {[14, 90, 166, 242].map((x, i) => (
+          <rect key={x} x={x} y="10" width="64" height="26" rx="6" {...common}
+            className={i === 0 ? "text-accent" : undefined} />
+        ))}
+        <rect x="14" y="48" width="292" height="62" rx="6" {...common} />
+        {[56, 98, 140, 182, 224, 266].map((x) => (
+          <line key={x} x1={x} y1="48" x2={x} y2="110" {...common} />
+        ))}
+        <rect x="102" y="60" width="34" height="18" rx="4" {...common} className="text-accent" />
+        <rect x="228" y="80" width="34" height="18" rx="4" {...common} className="text-accent" />
+      </svg>
+    );
+  }
+  if (slug === "tasks" || slug === "projects") {
+    return (
+      <svg viewBox="0 0 320 120" className={cls} aria-hidden>
+        {/* three columns; one card lifted between them */}
+        {[12, 116, 220].map((x, i) => (
+          <g key={x}>
+            <rect x={x} y="10" width="88" height="100" rx="8" {...common} />
+            <line x1={x + 12} y1="26" x2={x + 60} y2="26" {...common} />
+            {i !== 1 ? <rect x={x + 10} y="40" width="68" height="22" rx="5" {...common} /> : null}
+            {i === 0 ? <rect x={x + 10} y="70" width="68" height="22" rx="5" {...common} /> : null}
+          </g>
+        ))}
+        <rect x="150" y="52" width="68" height="22" rx="5" {...common} className="text-accent" />
+        <path d="M120 63h26" {...common} className="text-accent" />
+      </svg>
+    );
+  }
+  if (slug === "chat") {
+    return (
+      <svg viewBox="0 0 320 120" className={cls} aria-hidden>
+        {/* a room: two colleagues, then an answer from a named agent */}
+        <rect x="10" y="10" width="300" height="100" rx="10" {...common} />
+        <circle cx="34" cy="36" r="8" {...common} />
+        <rect x="50" y="28" width="150" height="16" rx="8" {...common} />
+        <circle cx="34" cy="64" r="8" {...common} />
+        <rect x="50" y="56" width="110" height="16" rx="8" {...common} />
+        <circle cx="34" cy="92" r="8" {...common} className="text-accent" />
+        <rect x="50" y="84" width="190" height="16" rx="8" {...common} className="text-accent" />
+        <text x="256" y="97" fontSize="11" fill="currentColor" stroke="none" className="text-accent">@roya</text>
+      </svg>
+    );
+  }
   return (
     <svg viewBox="0 0 320 120" className={cls} aria-hidden>
       {/* settings sliders + avatar circle */}
@@ -215,16 +268,16 @@ export default function HelpPage({
       groups={groups}
       activeSlug={active.slug}
     >
-      <PageHeader title={t(`section.${active.slug}`)} subtitle={t(`desc.${active.slug}`)} />
-
       <Section>
         <Card>
-          <HelpArt slug={active.slug} />
-          <h2 className="h-section mb-2 mt-4">{t("stepsTitle")}</h2>
-          <ol className="space-y-2.5">
+          <h2 className="h-section mb-3">{t(`section.${active.slug}`)}</h2>
+          <div className="well flex justify-center p-5">
+            <HelpArt slug={active.slug} />
+          </div>
+          <ol className="mt-2 divide-y divide-border">
             {Array.from({ length: active.steps }, (_, i) => (
-              <li key={i} className="flex gap-3 text-sm leading-7 text-fg">
-                <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-accent-soft text-xs font-semibold text-accent">
+              <li key={i} className="flex gap-3 py-3.5 text-sm leading-7 text-fg">
+                <span className="mt-1 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-accent-soft text-xs font-semibold text-accent">
                   {digits(i + 1, locale)}
                 </span>
                 <span>{t(`s.${active.slug}.step${i + 1}`)}</span>
