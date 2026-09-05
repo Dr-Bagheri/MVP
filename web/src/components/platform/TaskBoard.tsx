@@ -497,8 +497,20 @@ export function TaskBoard() {
                  * `e.target !== e.currentTarget` is the whole fix: the
                  * section starts a column drag only when the section is what
                  * was picked up.
+                 *
+                 * AND IT CANCELS THE NATIVE DRAG when the press was on a child
+                 * (2026-09-05, "moving cards by hand is not working"). Cards
+                 * move by pointer events now, but a card sits inside this
+                 * draggable section, so the browser's first mousemove started a
+                 * native drag of the SECTION and fired `pointercancel` — the
+                 * hand's gesture died on the first pixel, every time, while
+                 * every synthetic-event probe passed because dispatched
+                 * events never start a native drag. A recorder on the window
+                 * showed the order: pointerdown, pointermove, dragstart on
+                 * the section, pointercancel. Returning was not enough; the
+                 * drag has to be refused so the pointer sequence survives.
                  */
-                if (e.target !== e.currentTarget) return;
+                if (e.target !== e.currentTarget) { e.preventDefault(); return; }
                 draggedColumn.current = col.id;
                 e.dataTransfer.setData("text/column-id", col.id);
               }}

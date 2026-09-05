@@ -91,7 +91,6 @@ export function useHoldDrag({ onLift, onOver, onDrop, onCancel }: {
     s.phase = "lifted";
     s.el.style.pointerEvents = "none";
     window.addEventListener("touchmove", preventScroll, { passive: false });
-    document.body.classList.add("select-none");
     fns.current.onLift();
   }, [preventScroll]);
 
@@ -109,6 +108,10 @@ export function useHoldDrag({ onLift, onOver, onDrop, onCancel }: {
     const s = st.current;
     s.phase = "pressed"; s.x0 = e.clientX; s.y0 = e.clientY;
     s.el = e.currentTarget; s.pointerId = e.pointerId; s.touch = e.pointerType === "touch";
+    /* from the PRESS, not the lift: a mouse that moves selects the card's text
+       between the press and the first move, and a drag that drags a blue
+       selection along is the browser's gesture winning over ours */
+    document.body.classList.add("select-none");
 
     const onMove = (ev: PointerEvent) => {
       if (ev.pointerId !== s.pointerId) return;

@@ -259,6 +259,30 @@ describe("TaskBoard", () => {
     expect(within(columnRegion("برای انجام")).getByText("اجرای اسکریپت")).toBeInTheDocument();
   });
 
+  it("a NATIVE drag that begins on a card is refused, so the hand's gesture survives; one that begins on the column is not", async () => {
+    /*
+     * Found on production with a recorder on the window (2026-09-05): press
+     * on a card, first move → `dragstart` on the draggable COLUMN →
+     * `pointercancel`. The column's handler already ignored drags that began
+     * on a child; it has to CANCEL them, or the browser's drag wins the
+     * pointer. jsdom starts no native drag, so this asserts the one thing
+     * that decides it: `defaultPrevented` on the dragstart, for a card and —
+     * the control — not for the column itself, whose own reorder still needs
+     * the drag.
+     */
+    boardTasks = [card({ id: "t-1", column_id: "col-todo" })];
+    render(<TaskBoard />);
+    await waitFor(() => expect(screen.getByText("اجرای اسکریپت")).toBeInTheDocument());
+    const cardEl = screen.getByText("اجرای اسکریپت").closest("[data-card]") as HTMLElement;
+    const column = columnRegion("برای انجام");
+    const dt = { setData: vi.fn(), getData: () => "", effectAllowed: "", dropEffect: "" };
+
+    /* fireEvent returns false when a handler called preventDefault */
+    expect(fireEvent.dragStart(cardEl, { dataTransfer: dt })).toBe(false);
+    expect(fireEvent.dragStart(column, { dataTransfer: dt })).toBe(true);
+    expect(dt.setData).toHaveBeenCalledWith("text/column-id", "col-todo");
+  });
+
   it("a MOUSE that moves past the slop lifts at once — a drag needs no wait", async () => {
     /* the first hold-only version threw every real mouse drag away as a
        scroll, because a hand moves the moment it presses (user, 2026-09-05:

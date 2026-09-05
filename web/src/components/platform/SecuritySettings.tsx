@@ -149,10 +149,15 @@ export function SecuritySettings() {
             active={presence}
             onSelect={setPresence}
             className="mb-5"
+            /* no count while the read is in flight: «۰» beside the chip
+               before the answer is "loading" wearing "empty" (rule 12) */
             chips={[
-              { key: "all", label: t("filterAll"), icon: <IconPeople3 width={12} height={12} />, count: digits(everyone.length, locale) },
-              { key: "online", label: t("onlineYes"), icon: <IconPulse width={12} height={12} />, count: digits(onlineCount, locale) },
-              { key: "offline", label: t("onlineNo"), icon: <IconMoon width={12} height={12} />, count: digits(everyone.length - onlineCount, locale) },
+              { key: "all", label: t("filterAll"), icon: <IconPeople3 width={12} height={12} />,
+                count: orgSessions === null ? undefined : digits(everyone.length, locale) },
+              { key: "online", label: t("onlineYes"), icon: <IconPulse width={12} height={12} />,
+                count: orgSessions === null ? undefined : digits(onlineCount, locale) },
+              { key: "offline", label: t("onlineNo"), icon: <IconMoon width={12} height={12} />,
+                count: orgSessions === null ? undefined : digits(everyone.length - onlineCount, locale) },
             ]}
           />
           {/* rendered unconditionally so the frame stands before the answer;
