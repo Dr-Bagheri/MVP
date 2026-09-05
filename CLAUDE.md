@@ -3977,3 +3977,47 @@ sessions) for the cross-session narrative.
   the re-render; verified red by writing the ASCII value back — the three
   positives failed, the four controls held. RULEBOOK R15 carries it.
   db 191 migrations · core 1357 tests · web 1075 tests + gate + sweep.
+- 2026-09-05 (latest — THE HAND, THE ROW, AND THE ROOM; commits 03ed8de,
+  e6fa541): "moving cards by hand is not working" — and it was not, for a
+  reason no synthetic probe could see. TWO causes, found in order. (1) The
+  hold-only gesture threw every real mouse drag away as a scroll, because a
+  hand moves the moment it presses; `holdDrag` now lifts a mouse or pen on
+  movement past the slop and makes only a finger hold first, and tracks the
+  gesture on the WINDOW (no pointer capture taken inside a timer, no card
+  that stops receiving the events it needs once it stops taking hits). (2)
+  **The column's native drag was killing the gesture on the first pixel.** A
+  recorder on the window, fed by the browser tool's real mouse, showed the
+  order: pointerdown on the card, one pointermove, `dragstart` on the
+  COLUMN — HTML5-draggable for reordering — then `pointercancel`. The
+  column's handler already IGNORED drags that began on a child; it had to
+  CANCEL them, or the browser's drag won the pointer. Every dispatched-event
+  probe had passed because dispatched events never start a native drag —
+  the instrument could not represent the failure. The projects kanban got
+  the hand too: a project's column is derived, so a drop carries its
+  UNFINISHED tasks to the column after a confirm that names the count; the
+  test caught a third defect before it shipped (the project card is a LINK,
+  and the guard that ignores presses on links inside a card was refusing the
+  card itself). Tool caveat, recorded: after that first native drag the
+  extension's `left_click_drag` — and even `left_click` — stopped delivering
+  presses (only pointermoves arrived), so the deployed fix is verified by
+  dispatching the events the browser would, not by the tool's mouse; the
+  user's hand is the final test.
+  **R3 row two is one chip** (user: "fill with icon like in meetings, make it
+  a rule"): `filterChipClass` / `FilterChips` — outlined, icon + label +
+  count, soft accent when active — on security (all | online | offline, counts
+  absent while the read is in flight), the audit log (a glyph per source) and
+  the workflow shelf; the tasks, meetings and projects strips read the class
+  instead of spelling it. `filterChips.test` pins the string and the row-one
+  / row-two distinction.
+  **The room answered only people who had opened the model picker.** Sina
+  named @roya and @echo and neither answered: `answerIfNamed` read
+  `models.preferred` — the saved pick or null — and treated null as "no
+  model", an `agent_failed` on the stream with nothing in the log. Roya and
+  Ava are system-level (every member sees them); the wall was the model
+  alone. `models.forRun` walks M5's ladder from the api side (preference →
+  org's first permitted → catalogue, tool-capable where known), the rungs the
+  four workers already walk; the failure branches now log WHICH nothing
+  (`chat_agent_failed` with a reason). Test: the discriminating pair on one
+  row — `preferred()` null, `forRun()` a model. Core deployed (health 200);
+  the member's own retry is the proof this side cannot produce.
+  db 191 migrations · core 1358 tests · web 1080 tests + gate + sweep.
