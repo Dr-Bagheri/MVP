@@ -3857,3 +3857,48 @@ sessions) for the cross-session narrative.
   against the shipped class list, then green.
   Deployed and re-measured on production at 1920: a project card opens the panel at /projects?project=<id> (dialog present, corner 18, rail 283, the acts 37/31 = the family); the new-task and new-meeting dialogs round at 18 (were 12) with no subtitle; the projects board's column reads boardStyle's class string and its title is 14.2 (= the board's 13); the create buttons on workflows, models, meetings and agents are btn-primary at 42 in the same row as the chips (tops 96 vs 98); the notifications page keeps one sentence and zero explanations; the agents intro is gone.
   db 191 migrations · core 1357 tests · web 1059 tests + gate + sweep.
+- 2026-09-05 (latest — R7: THREE SURFACES AND NOTHING ELSE; commit 88b8e11):
+  the user's "next" after round 2. **What the census said:** 74 hand-rolled
+  card recipes in 32 files by the guard's own count (the first grep had said
+  70) against 15 uses of `.card` — two corners (18 and 20), five grounds
+  (`bg-surface`, `bg-surface-2`, `/40`, `/50`, a tint), insets from `p-2` to
+  `p-7`, and shadow by accident: workflow and agent cards carried none,
+  settings cards and board columns did, and `.tile` — the dashboard's and the
+  meeting list's card — wore the DIALOG's island shadow at a 20 corner while
+  every other card rounded at the token's 18. Nobody was careless: **the theme
+  offered ONE class and screens needed three shapes, so every screen drew the
+  other two.** The three exist now — `.card` (a page block: 18, the surface,
+  16px inset, the ambient shadow), `.card-row` (a card in a LIST: 16, 12px
+  inset, the same shadow, a stronger edge under the pointer), `.well` (a row
+  INSIDE a card: 16, recessed a step, no shadow — a shadow inside a shadowed
+  card is mud) — and `.tile` is a card (18, the card shadow). 30 files / 50
+  recipes swept; the board's card is the theme's list card (`BOARD_CARD =
+  "card-row cursor-pointer"`), and TaskViews' segmented box turned out to be
+  R4's `TAB_BAR` wearing a card recipe.
+  **The guard** (`surface.guard.test.ts`) counts, per file, every className
+  carrying a card corner AND a border AND a surface ground, and each count must
+  EQUAL its entry — 24 kept, each with a reason: ten floating layers → R10,
+  seven hand-rolled dialog panels → R8's second pass, four fields wearing a
+  card's corner → R5, the detail frame, the rail, the assistant's composer. It
+  reads `.tile`'s radius and shadow from the RULE BODY (globals.css uses no
+  theme(), so the literal sat at 20 for three days after the token moved) and
+  asserts them against `SCAFFOLD.radius.modal` and `--shadow-card`. Verified
+  red three ways before it was believed: on the un-swept tree (32 files named,
+  tile 20/island), on a recipe staged back into Skeleton, and on a stale count
+  — each fired on exactly its own line and nothing else.
+  **Two probe notes.** The deploy poll ran eighteen times and measured nothing:
+  it grepped for `/_next/static/css/`, and this build serves its stylesheet
+  from `/_next/static/immutable/chunks/<hash>.css` — the probe printed "NO CSS
+  LINK FOUND (probe had no subject)" rather than "not deployed", which is the
+  had-something-to-check rule doing its one job; and `Cache-Control: no-cache`
+  did NOT bust Vercel's CDN this time (HIT, Age 413) where a query string did.
+  Deployed and re-measured on production at 1920 (root 17.5): settings card
+  and workflow card 18 / inset 17.5 (the workflow card had been 30.6) / shadow
+  0 2px 10px; the task board's card 16 / 13.1 / the same shadow; a
+  workflow-page well 16 on the 40% recessed ground with no shadow; the meeting
+  row's shadow went from the island's 0 6px 28px to the card's 0 2px 10px;
+  `.tile` reads 18 + var(--shadow-card) in the loaded stylesheet (no plain
+  tile stood on a reachable page — `/fa/dashboard` is not a route). The
+  rulebook's order moves to R6: 212 raw px sizes, row titles at 16 vs 14/700,
+  and the Persian font, with three candidates shown before one is chosen.
+  db 191 migrations · core 1357 tests · web 1067 tests + gate + sweep.

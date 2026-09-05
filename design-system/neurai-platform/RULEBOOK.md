@@ -247,6 +247,17 @@ loosened rule — and the user's "except this part" is what puts one there.
   Verified red three ways: on the un-swept tree (32 files named, tile
   20/island), on a recipe staged back into Skeleton, and on a stale count
   (Overlay recorded as 2) — each fired on exactly its own line.
+- **Re-measured on production (2026-09-05, 1920 × 855, root 17.5px):**
+  `.card` on the settings FormPanel, the workflow cards and the workflow
+  page's blocks — corner 18, inset 17.5 (= 1rem; the workflow card had been
+  30.6 at `p-7`), shadow `0 2px 10px rgba(0,0,0,.34)`; `.card-row` on the
+  task board — 16, inset 13.1, the same shadow; `.well` on the workflow page
+  (seven of them) — 16, ground `rgba(39,44,50,.4)`, no shadow; the meeting
+  row (`tile tile-row`) — shadow from the island's `0 6px 28px .46` to the
+  card's `0 2px 10px .34`, corner 16 by the row override; the loaded `.tile`
+  rule reads `border-radius: 18px; box-shadow: var(--shadow-card)`. No plain
+  tile stood on a page I could reach (`/fa/dashboard` is not a route), so the
+  18 is a stylesheet reading, not a computed one.
 
 ### R8 · Dialogs and panels — SOLID (2026-09-05)
 
