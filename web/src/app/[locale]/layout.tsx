@@ -10,6 +10,7 @@ import { CrumbTitleProvider } from "@/components/platform/CrumbTitle";
 import { AssistantSidebar } from "@/components/platform/AssistantSidebar";
 import { FloatingRecorder } from "@/components/echo/FloatingRecorder";
 import { TourOverlay } from "@/components/platform/TourOverlay";
+import { PersianDigitsTyping } from "@/components/PersianDigitsTyping";
 import { themeBootScript } from "@/lib/theme";
 import "../globals.css";
 
@@ -112,6 +113,10 @@ export default async function LocaleLayout({
           {/* the guided tours (2026-08-26) — mounted here so a lesson
               survives the navigations its own steps ask for */}
           <TourOverlay />
+          {/* typed digits follow the language (2026-09-05): one capture-phase
+              listener above every form, so a Persian text field never holds
+              "1000" beside «۱۰۰۰»; renders nothing, does nothing in en */}
+          <PersianDigitsTyping locale={locale} />
           </DirectionProvider>
         </NextIntlClientProvider>
       </body>

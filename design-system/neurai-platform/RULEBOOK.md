@@ -344,6 +344,13 @@ loosened rule — and the user's "except this part" is what puts one there.
   pointer-anchored (composer row `dir="ltr"`, sign-in eye, context-menu
   anchor); `DirectionProvider` wraps the tree. `direction.guard`,
   `tile-direction.guard`, the composer's side test.
+- **Typed digits follow the language (user, 2026-09-05):** in fa, digits a
+  person types into an RTL text field become Persian as they type
+  (`PersianDigitsTyping`, one capture-phase listener in the locale layout,
+  rewriting through the native setter so React stores the converted value);
+  fields pinned `dir="ltr"`, emails, numbers and passwords keep ASCII, and
+  Arabic-Indic digits become Persian too. `PersianDigitsTyping.test` — each
+  positive case beside a control that must not convert.
 
 ### R16 · Motion — PROSE
 
