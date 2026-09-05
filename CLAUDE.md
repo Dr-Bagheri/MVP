@@ -18,6 +18,12 @@ commits, and UI copy.
 2. **[ARCHITECTURE.md](ARCHITECTURE.md)** — HOW it's built; decisions M1–M29,
    **LOCKED (user, 2026-08-12)** — binding on every session. Deviations go to
    the steward first and are amended in the document BEFORE code.
+3. **[design-system/neurai-platform/RULEBOOK.md](design-system/neurai-platform/RULEBOOK.md)**
+   — HOW IT LOOKS: every front-end shape as a numbered rule (R1–R20) with its
+   status (PROPOSED → APPROVED → FIXED → SOLID), measured on production
+   2026-09-05. A screen is built from these shapes; a new shape is a rule
+   first ("except this part" is the user's word, recorded as an allow-list
+   entry with its reason, never a loosened rule).
 
 ## Rules for every session
 
