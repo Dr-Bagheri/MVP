@@ -289,7 +289,7 @@ export function Chat({ meId, isAdmin, people }: {
             </button>
           ) : null}
           <button type="button" onClick={() => setCreating(true)}
-            className="btn btn-sm gap-1.5 bg-accent text-on-accent hover:opacity-90">
+            className="btn btn-primary gap-1.5">
             <IconPlus width={12} height={12} />
             {t("newChannel")}
           </button>

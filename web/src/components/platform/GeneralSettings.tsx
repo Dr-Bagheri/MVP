@@ -66,7 +66,6 @@ export function GeneralSettings() {
       {/* ── theme ───────────────────────────────────────────────────── */}
       <Card>
         <h2 className="h-section">{t("theme")}</h2>
-        <p className="mt-1 text-sm leading-6 text-fg-muted">{t("themeHint")}</p>
         <div className="mt-4 grid max-w-xl gap-4 sm:grid-cols-2">
           <label className="block">
             {/* the card's own heading is the visible label — a second
@@ -97,7 +96,6 @@ export function GeneralSettings() {
       {/* ── calendar · timezone ─────────────────────────────────────── */}
       <Card>
         <h2 className="h-section">{t("generalLocaleTitle")}</h2>
-        <p className="mt-1 text-sm leading-6 text-fg-muted">{t("generalLocaleHint")}</p>
         <div className="mt-4 grid max-w-xl gap-4 sm:grid-cols-2">
           {/* audit finding, 2026-09-02: the theme's `Field`, not a third
               spelling of a form label */}

@@ -191,7 +191,7 @@ export function Meetings() {
         <button
           type="button"
           onClick={() => setCreating(true)}
-          className="btn bg-accent text-on-accent shadow-accent hover:opacity-90"
+          className="btn btn-primary"
         >
           <IconPlus width={14} height={14} />
           {t("newMeeting")}
@@ -852,7 +852,6 @@ function NewMeetingDialog({ topics, onClose, onCreated, onRefused }: {
       <div className="mb-1 flex items-start justify-between gap-3">
         <div>
           <h2 className="text-base font-bold text-fg">{t("newMeeting")}</h2>
-          <p className="mt-0.5 text-xs text-fg-muted">{t("newMeetingSubtitle")}</p>
         </div>
         {/* audit finding, 2026-09-02: this × was a hand-rolled 36px box with the
             16px tile corner while InviteDialog's, one dialog over in the same

@@ -330,8 +330,6 @@ export function AuditLogs() {
 
   return (
     <div>
-      <p className="mb-4 text-xs leading-6 text-fg-muted">{t("codesOnly")}</p>
-
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <label>
           <span className="sr-only">{t("filterSource")}</span>

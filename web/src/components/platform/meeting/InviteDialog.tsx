@@ -83,7 +83,6 @@ export function InviteDialog({
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
           <h2 className="text-base font-bold text-fg">{t("inviteTitle")}</h2>
-          <p className="mt-0.5 text-xs text-fg-muted">{t("inviteHint")}</p>
         </div>
         <button
           type="button"

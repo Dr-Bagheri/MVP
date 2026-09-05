@@ -146,13 +146,11 @@ export function PageHeader({
  */
 export function Section({
   title,
-  description,
   divided = false,
   hidden = false,
   children,
 }: {
   title?: string;
-  description?: string;
   divided?: boolean;
   /**
    * Present but not shown — for a section that is one tab of a page (see
@@ -204,8 +202,7 @@ export function Section({
           token owns. Integrations.tsx:285 fixed its own copy and left the
           platform-wide half here, which is where it belongs. */}
       {title ? <h2 className="h-section">{title}</h2> : null}
-      {description ? <p className="mt-0.5 text-sm text-fg-muted">{description}</p> : null}
-      <div className={title || description ? "mt-4" : ""}>{children}</div>
+      <div className={title ? "mt-4" : ""}>{children}</div>
     </section>
   );
 }

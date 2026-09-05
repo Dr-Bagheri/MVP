@@ -80,7 +80,6 @@ export function SignInMethods() {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm leading-7 text-fg-muted">{t("intro")}</p>
       <div className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-surface">
         {(["google", "github"] as const).map((key) => {
           const row = methods.find((m) => m.provider === key);

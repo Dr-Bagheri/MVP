@@ -48,6 +48,15 @@ loosened rule — and the user's "except this part" is what puts one there.
    before; their controls still follow the family.)
 7. **R4 = option (a): one control family, three sizes.**
 
+**2026-09-05, later (eleven screenshots):**
+
+8. **No explanations under titles and headers.** "Just the name — and
+   sometimes, if it's too important, one sentence." → R21.
+9. **A thing in a list opens as a POP-UP over the list, not as a page.**
+   Projects first ("this problem is systematic") → R18.
+10. **Projects carry most of the problems**: the board must be the tasks
+    board, the detail must be the task detail's pop-up.
+
 ## The shapes, as they stand
 
 ### R1 · The shell — SOLID
@@ -74,7 +83,17 @@ loosened rule — and the user's "except this part" is what puts one there.
 - **Enforced by:** `rhythm.guard` (named steps only, no copied literals,
   nobody re-implements the column).
 
-### R3 · The toolbar and the primary action — PROPOSED · deviations measured
+### R3 · The toolbar and the primary action — FIXED for the create button (2026-09-05), the one-component half PROPOSED
+
+- **Done on 2026-09-05:** the create button sits at the END of row 1 in one
+  coat, `.btn btn-primary`, on every page that has one — workflows (it stood
+  in its own row above the tabs), models (it stood under the menu, beside the
+  count), agents (beside a sentence, now gone), chat («اتاق تازه» was a compact
+  green), meetings (was an outline green). `TwoPane` grew an `actions` slot so
+  a section page hands its button to the menu row instead of drawing a row.
+- **Still to do:** one `Toolbar` component that every list page renders (tabs ·
+  divider · filters · primary at END; row 2 scope), replacing the eight
+  hand-composed rows, with a guard against `role="tablist"` outside it.
 
 - **Today:** row 1 = section/view chips (`sectionTabClass` = `.btn btn-sm`,
   active = accent fill, groups split by a 1px divider); row 2 = scope chips
@@ -195,7 +214,16 @@ loosened rule — and the user's "except this part" is what puts one there.
 - **Solid =** guard on className strings combining a radius, a border and a
   surface ground; `.tile`'s radius asserted equal to `radius.modal`.
 
-### R8 · Dialogs and panels — PROPOSED · a measured defect
+### R8 · Dialogs and panels — SOLID (2026-09-05)
+
+- **Fixed:** `ui/dialog.tsx` and `ui/alert-dialog.tsx` carried `sm:rounded-lg`
+  in their base class list; it is the panel token (`rounded-2xl`, 18) now, so
+  `Overlay` and `ConfirmDialog` render the corner they declare.
+- **Solid =** `dialog.radius.test.tsx` renders both and asserts the class list
+  carries the token and NO responsive corner that could outrank it — red
+  against the shipped base (`sm:rounded-lg` beside `rounded-2xl`), green after.
+
+#### The record of the defect
 
 - **Today:** `Overlay` (sm/md/lg = max-w-md/lg/3xl, `rounded-2xl`,
   `shadow-island`, title 15/700 + subtitle 12); the task detail panel
@@ -276,26 +304,46 @@ loosened rule — and the user's "except this part" is what puts one there.
   from 98% over 150ms; `prefers-reduced-motion` stops all of it. No guard;
   `units.guard` covers the units.
 
-### R17 · Boards — PROPOSED
+### R17 · Boards — SOLID (2026-09-05): one board, one module
 
-- **Today:** column 300 wide, r18 + ambient shadow, 10px inset, 70vh floor;
-  cards hand-rolled (`rounded-xl border`, 77h); dashed «افزودن کارت» row;
-  header = name (an unstyled 23px button that renames in place) · tone dot ·
-  count · `btn-icon` acts.
-- **Proposed rule:** column = the R7 column surface; card = the R7 row
-  surface; header controls = `btn-ghost btn-sm`; the add row = `btn-sm`
-  dashed, full width. Same on tasks and projects (already one component).
+- **The rule:** the tasks board and the projects board are ONE shape, read
+  from `components/platform/board/boardStyle.tsx` — lane, column (300 · r18 ·
+  surface · card shadow · 10px inset · 70vh floor), header (tone well · title
+  13/600 · count · acts), cards box, card (r16 · surface · 12px inset · card
+  shadow), add row (the dashed compact control). A literal from that list in
+  either board file is a defect.
+- **What was measured:** the projects board had been written from the task
+  board's numbers the day before and had already drifted — a 12px column
+  title against 13, the count badge in a different corner, cards in a
+  different box (`.tile` at r20 against the board's r16 card), no tone on the
+  column.
+- **Solid =** `board.guard.test.ts`: both boards import the module, neither
+  spells the six literals, and the module still says them (the control).
+- **Open under this rule:** the column name is still an unstyled rename-in-
+  place button; the header's acts on projects are read-only by design (a
+  column is edited on the board that owns it).
 
-### R18 · Detail surfaces — PROPOSED · four headers
+### R18 · Detail surfaces — SOLID for the frame (2026-09-05); the remaining pages PROPOSED
 
-- **Today:** a thing with an address is a PAGE (project, meeting, agent,
-  workflow); a task is a modal (`?task=`). Four page headers, four shapes:
-  workflow = 88px icon tile + title 17.5 + on/off pill; agent = avatar + name
-  + «پرسیدن» button; meeting = stage stepper; project = the task panel's
-  anatomy.
-- **Proposed rule:** one detail header — identity mark · title 17/700 ·
-  one-line summary · acts at the END as `btn-sm` — above a body + 283 rail
-  (the task panel's anatomy, already measured).
+- **The rule (user, 2026-09-05):** a thing in a list opens as a POP-UP over the
+  list, in ONE frame — `DetailPanel`: the fixed backdrop, the card at the panel
+  corner, a top bar (close · ⋯ · edit at the start, the context acts at the
+  end), a body and a 283px rail. It keeps an address (`?task=`, `?project=`)
+  so a link still lands on the thing.
+- **Done:** the task detail's frame was EXTRACTED to `DetailPanel` and the
+  task detail re-reads it; the project detail — a page yesterday, wearing the
+  same anatomy drawn a second time — is the panel's content now, opened from
+  the board, the list and the calendar via `/projects?project=<id>`;
+  `/projects/<id>` redirects there. Its acts match the task's: ⋯ holds
+  archive/restore and the red delete, «ویرایش» beside it, the board link and
+  «واگذاری کار» at the end.
+- **Solid =** `detailPanel.guard.test.ts`: the frame's first line exists in
+  exactly one file, and both details render `<DetailPanel>`.
+- **Still pages, to rule on one by one:** agent (`/agents/[handle]`),
+  workflow (`/workflows/[handle]`), meeting (`/meetings/[id]` — it runs the
+  recorder and the stages, which may be the one that stays a page), member
+  (`MemberDetail`), integration (`/integrations/[slug]`). Each opens as the
+  panel unless the user says "except this part".
 
 ### R19 · Composers — PROPOSED · two
 
@@ -309,6 +357,34 @@ loosened rule — and the user's "except this part" is what puts one there.
 - `/platform` (vendor) and `/join/[code]` (guest) own their documents by
   design; their CONTROLS are still the family's. Today the console uses pill
   chips and its own header buttons.
+
+### R21 · No explanations under titles and headers — SOLID (ruled and swept 2026-09-05)
+
+- **The rule (user):** a title is the name. At most one sentence, and only
+  when leaving it out would cost something — which turned out to mean four
+  kinds and nothing else: a STATE (what a screen says instead of its content:
+  the admin-only refusal, the pending screen, a record still processing, an
+  empty canvas), an ARRIVAL (a stranger's first screen), a CONSEQUENCE (what a
+  press does that its name cannot carry: a rename that reaches the board, a
+  schedule that comes back, what deleting a member does), a CONSTRAINT (the
+  logo's format, what a connection reads, what a key's permission grants).
+- **Swept:** ~40 paragraphs — a sentence under every settings card title, a
+  paragraph under every notification toggle (the auto-draft row keeps its one
+  consent sentence: "nothing is sent without you pressing send"), the intro
+  above the agents grid, the subtitles under the new-task and new-meeting
+  dialog titles, the privacy note above the audit table, section notes on
+  skills/security/sessions, the workflow builder's field hints, the
+  whiteboard's and the meeting page's overlays (two of which came BACK as
+  state and consequence — the first sweep took them and the guard's kinds
+  put them where they belong). `Section` lost its `description` prop
+  entirely, so a new page cannot grow one and typecheck.
+- **Solid =** `copy.guard.test.ts`: a `<p>` or block `<span>` whose whole
+  content is a translated key named as an explanation (`…Hint`, `…Note`,
+  `…Desc`, `…Subtitle`, `intro`) fails the suite unless it is an entry with
+  its kind and reason; the control test makes the pattern answer NO to a
+  field's own hint slot, an empty state, a value and a heading. A hint that
+  IS important goes in the control's own slot (`Field hint=`), which the
+  guard does not read.
 
 ## Bugs found while measuring (not rules — fixes)
 

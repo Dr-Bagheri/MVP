@@ -14,6 +14,10 @@ import {
   LABEL_COLORS, NewTaskDialog, PRIORITY_CHIP, PRIORITY_ORDER, TONE_CHIP, TONE_DOT,
 } from "./tasks/TaskDialogs";
 import { TaskDetail } from "./tasks/TaskDetail";
+import {
+  BOARD_ADD_COLUMN, BOARD_CARD, BOARD_CARDS, BOARD_COLUMN, BOARD_COUNT, BOARD_HEADER,
+  BOARD_HEADER_END, BOARD_HEADER_START, BOARD_LANE, BOARD_TITLE, BoardAddRow,
+} from "./board/boardStyle";
 import { NewProjectDialog } from "./Projects";
 import { TaskCalendar, TaskListView } from "./tasks/TaskViews";
 import {
@@ -482,7 +486,7 @@ export function TaskBoard() {
 
       {/* ── the views ────────────────────────────────────────────────── */}
       {view === "kanban" ? (
-        <div className="scroll-quiet flex min-h-0 flex-1 gap-3 overflow-x-auto pb-2">
+        <div className={BOARD_LANE}>
           {[...board.columns].sort((a, b) => a.position - b.position).map((col) => (
             <section
               key={col.id}
@@ -544,15 +548,15 @@ export function TaskBoard() {
                  dragged toward it has almost no target. `self-stretch` fills
                  the scroller's height; `min-h-[70vh]` keeps it a column
                  rather than a strip when the board itself is short. */
-              className="flex w-[300px] shrink-0 flex-col self-stretch rounded-2xl border border-border bg-surface p-2.5 shadow-card min-h-[70vh]"
+              className={BOARD_COLUMN}
               aria-label={seededName(col.name)}
             >
               {/* 2026-09-03: `gap-1`, not `gap-2` — the tone trigger beside it
                   became the theme's 28px well and carries 9px of inset of its
                   own, so the OLD 8px gap would have read as 17. The pair is a
                   relationship, not two numbers. */}
-              <header className="flex items-center justify-between gap-1 px-1 py-1">
-                <span className="flex min-w-0 items-center gap-1">
+              <header className={BOARD_HEADER}>
+                <span className={BOARD_HEADER_START}>
                   <span className="relative">
                     {/* 2026-09-03: the theme's icon control — and the PICTURE is
                         unchanged: the 10px tone dot moved INSIDE a `.btn-icon`
@@ -634,14 +638,14 @@ export function TaskBoard() {
                       type="button"
                       title={t("renameColumn")}
                       onClick={() => setRenaming(col.id)}
-                      className="truncate text-sm font-semibold text-fg"
+                      className={BOARD_TITLE}
                     >
                       {seededName(col.name)}
                     </button>
                   )}
                 </span>
-                <span className="flex shrink-0 items-center gap-1">
-                  <span className="badge-num rounded-md bg-surface-2 px-1.5 text-[11px] text-fg-subtle">
+                <span className={BOARD_HEADER_END}>
+                  <span className={BOARD_COUNT}>
                     {digits(columnCards(col.id).length, locale)}
                   </span>
                   <button
@@ -658,7 +662,7 @@ export function TaskBoard() {
                 </span>
               </header>
 
-              <div className="scroll-quiet min-h-0 flex-1 space-y-2 overflow-y-auto pt-1">
+              <div className={BOARD_CARDS}>
                 {columnCards(col.id).map((task) => (
                   <Card
                     key={task.id}
@@ -672,19 +676,7 @@ export function TaskBoard() {
                 {/* the full form, opened FROM the column — a card is made
                     where it is going to live, and the board no longer carries
                     a separate «تسک جدید» that had to be told the column */}
-                <button
-                  type="button"
-                  onClick={() => setCreating(col.id)}
-                  /* 2026-09-03: the theme's control. This is Meetings.tsx's
-                     dashed whole-width "add" row verbatim — the two boards
-                     invite you to add a thing in the same words and, until
-                     now, in two different boxes. The dashed border is the
-                     invitation and stays; `.btn`/`.btn-sm` draw none. */
-                  className="btn btn-sm w-full justify-center gap-1.5 border border-dashed border-border font-medium text-fg-muted hover:border-border-strong hover:text-fg"
-                >
-                  <IconPlus width={12} height={12} />
-                  {t("addCard")}
-                </button>
+                <BoardAddRow label={t("addCard")} onClick={() => setCreating(col.id)} />
               </div>
             </section>
           ))}
@@ -837,7 +829,7 @@ function Card({ task, labels, people, onOpen, onToggleDone }: {
     <div
       draggable
       onDragStart={(e) => e.dataTransfer.setData("text/task-id", task.id)}
-      className="cursor-pointer rounded-xl border border-border bg-surface p-3 shadow-card transition-colors hover:border-border-strong"
+      className={BOARD_CARD}
       onClick={onOpen}
       role="button"
       tabIndex={0}
@@ -956,7 +948,7 @@ function AddColumnInline({ onAdded, onRefused }: {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="tap flex w-[220px] shrink-0 items-start justify-center gap-2 self-stretch rounded-2xl border border-dashed border-border pt-4 text-sm text-fg-muted hover:border-border-strong hover:text-fg min-h-[70vh]"
+        className={BOARD_ADD_COLUMN}
       >
         <IconPlus width={14} height={14} />
         {t("addColumn")}

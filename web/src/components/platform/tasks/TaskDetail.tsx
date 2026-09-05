@@ -17,6 +17,7 @@ import {
 } from "./TaskDialogs";
 import { Overlay } from "../Overlay";
 import { BODY_HEADING, RAIL_LABEL, TAB_BAR, tabClass } from "./panelStyle";
+import { DetailPanel } from "../DetailPanel";
 import {
   IconArchive, IconCheck, IconClose, IconPencil, IconPlus, IconRetry, IconTrash, IconVideo,
 } from "@/components/icons";
@@ -81,28 +82,12 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
     });
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-bg/60 p-4"
-      onClick={onClose} role="presentation">
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={task.title}
-        onClick={(e) => e.stopPropagation()}
-        className="my-6 flex w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-island"
-      >
-        {/* ── top bar ─────────────────────────────────────────────────── */}
-        <div className="flex items-center justify-between gap-2 border-b border-border p-3">
-          <div className="flex items-center gap-1.5">
-            {/* 2026-09-03: the theme's icon button, not a twelfth invented
-                size. It is the same control as the kebab standing beside it
-                — rowActions renders `.btn btn-icon` — so a 36px square with
-                a 14px corner next to a 28px one with an 8px corner was the
-                user's "one is small, one is big" in two adjacent elements. */}
-            <button type="button" aria-label={t("close")} onClick={onClose}
-              className="btn btn-icon text-fg-subtle hover:bg-surface-2 hover:text-fg">
-              <IconClose width={14} height={14} />
-            </button>
+  /* R18 (2026-09-05): the frame is DetailPanel's — the same card the
+     project detail opens in — and this file keeps only what goes in its
+     slots. The clusters are named so the markup below reads as the slots
+     it fills. */
+  const start = (
+    <>
             {/* THE THEME'S KEBAB, not a hand-rolled popover (audit finding,
                 2026-09-02) — and the red item is now a real DELETE (0162, the
                 user's ask: "the red button should truly delete"). Archiving
@@ -131,9 +116,10 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
               <IconPencil width={12} height={12} />
               {editing ? t("done") : t("edit")}
             </button>
-          </div>
-
-          <div className="flex items-center gap-1.5">
+    </>
+  );
+  const end = (
+    <>
             {task.call_id !== null ? (
               <Link href={`/meetings?call=${task.call_id}`}
                 className="btn btn-sm bg-accent-soft font-medium text-accent">
@@ -156,18 +142,124 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
               <IconCheck width={12} height={12} />
               {task.done ? t("doneState") : t("markDone")}
             </button>
-          </div>
-        </div>
+    </>
+  );
+  const rail = (
+    <>
+            <div>
+              <span className={RAIL_LABEL}>{t("fieldTopic")}</span>
+              <Select
+                value={task.topic_id ?? ""}
+                onChange={(v) => patch({ topic_id: v === "" ? null : v })}
+                ariaLabel={t("fieldTopic")}
+                options={[
+                  { value: "", label: t("noTopic") },
+                  ...topics.map((topic) => ({ value: topic.id, label: topic.name })),
+                ]}
+              />
+            </div>
 
-        {failed ? (
+            <div>
+              <span className={RAIL_LABEL}>{t("fieldColumn")}</span>
+              <Select
+                value={task.column_id}
+                onChange={(v) => patch({ column_id: v })}
+                ariaLabel={t("fieldColumn")}
+                options={columns.map((column) => ({ value: column.id, label: column.name }))}
+              />
+            </div>
+
+            <div>
+              <span className={RAIL_LABEL}>{t("fieldAssignees")}</span>
+              {task.assignee_ids.length === 0 ? (
+                <p className="mb-1 text-xs text-fg-subtle">{t("noAssignee")}</p>
+              ) : null}
+              <AssigneePicker
+                people={people}
+                selected={task.assignee_ids}
+                onToggle={(userId) => {
+                  const on = !task.assignee_ids.includes(userId);
+                  void api.setTaskAssignee(task.id, userId, on).then(onChanged).catch(() => setFailed(true));
+                }}
+              />
+            </div>
+
+            <div>
+              <span className={RAIL_LABEL}>{t("fieldPriority")}</span>
+              <div className="flex flex-wrap gap-1">
+                {PRIORITY_ORDER.map((level) => (
+                  <button
+                    key={level}
+                    type="button"
+                    aria-pressed={task.priority === level}
+                    onClick={() => patch({ priority: level })}
+                    /* 2026-09-03: `.btn btn-sm` — the same control the new-task
+                       dialog offers for the same choice, which is the point:
+                       one product, one priority button. It keeps its
+                       borderless rail face; only the geometry left. */
+                    className={`btn btn-sm ${
+                      task.priority === level
+                        ? "bg-warning/10 text-warning"
+                        : "text-fg-muted hover:text-fg"
+                    }`}
+                  >
+                    <span className={`h-1.5 w-1.5 rounded-full ${PRIORITY_DOT[level as TaskPriority]}`} aria-hidden />
+                    {t(`priority_${level}`)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <span className={RAIL_LABEL}>{t("fieldDue")}</span>
+              <DueField value={task.due_at} onPick={(iso) => patch({ due_at: iso })} />
+            </div>
+
+            <div>
+              <span className={RAIL_LABEL}>{t("fieldLabels")}</span>
+              {task.label_ids.length === 0 ? (
+                <p className="mb-1 text-xs text-fg-subtle">{t("noLabels")}</p>
+              ) : null}
+              <LabelRow
+                labels={labels}
+                selected={task.label_ids}
+                onToggle={(id) => {
+                  const on = !task.label_ids.includes(id);
+                  void api.setTaskLabel(task.id, id, on).then(onChanged).catch(() => setFailed(true));
+                }}
+                onChanged={onLabelsChanged}
+              />
+            </div>
+
+            {/* THE REPEATING ORDER (0186). It renders here, in the rail
+                where every other property of the card lives, rather than as
+                a section of its own — a schedule is a fact about this task
+                exactly like its priority and its due date. */}
+            <ScheduleRow task={task} onChanged={onChanged} onFailed={() => setFailed(true)} />
+
+            {task.created_at !== "" ? (
+              <p className="pt-1 text-[10px] text-fg-subtle">
+                {t("createdAt", { at: formatDate(task.created_at, locale) })}
+              </p>
+            ) : null}
+    </>
+  );
+
+  return (
+    <>
+      <DetailPanel
+        label={task.title}
+        closeLabel={t("close")}
+        onClose={onClose}
+        start={start}
+        end={end}
+        notice={failed ? (
           <p role="alert" className="border-b border-border bg-danger/10 px-4 py-2 text-xs text-danger">
             {t("writeFailed")}
           </p>
         ) : null}
-
-        <div className="grid min-h-0 flex-1 gap-0 md:grid-cols-[1fr_260px]">
-          {/* ── main ───────────────────────────────────────────────── */}
-          <div className="min-h-0 space-y-4 p-5">
+        rail={rail}
+      >
             {editing ? (
               /* KEPT hand-drawn (2026-09-03): this is the page's TITLE wearing a
                  field, standing in for the `h2 text-lg font-bold` two lines
@@ -409,127 +501,7 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
                 ))}
               </ul>
             )}
-          </div>
-
-          {/* ── the rail ───────────────────────────────────────────────
-              283px, measured — and no tinted ground: the reference's rail is
-              the panel's own surface with a hairline between it and the body,
-              so the eye reads ONE card with two columns rather than two
-              panels sitting beside each other.
-
-              THE NOTE THAT STOOD HERE SHIPPED AS VISIBLE TEXT. It was written
-              as a bare block comment in JSX CHILD position, where a comment is
-              not a comment — it is content, and the whole paragraph rendered
-              on the page above the rail. Typecheck passed, every test passed,
-              and a user found it. In JSX children a comment must be wrapped in
-              braces; the braces are the difference between a note and a
-              paragraph.
-
-              Its replacement then broke the build for a second, related
-              reason: the sentence explaining the mistake quoted the comment
-              terminator, which closed the comment three lines early. A comment
-              about comment syntax must not spell it.
-           */}
-          <aside className="space-y-4 border-t border-border p-5 md:w-[283px] md:shrink-0 md:border-s md:border-t-0">
-            <div>
-              <span className={RAIL_LABEL}>{t("fieldTopic")}</span>
-              <Select
-                value={task.topic_id ?? ""}
-                onChange={(v) => patch({ topic_id: v === "" ? null : v })}
-                ariaLabel={t("fieldTopic")}
-                options={[
-                  { value: "", label: t("noTopic") },
-                  ...topics.map((topic) => ({ value: topic.id, label: topic.name })),
-                ]}
-              />
-            </div>
-
-            <div>
-              <span className={RAIL_LABEL}>{t("fieldColumn")}</span>
-              <Select
-                value={task.column_id}
-                onChange={(v) => patch({ column_id: v })}
-                ariaLabel={t("fieldColumn")}
-                options={columns.map((column) => ({ value: column.id, label: column.name }))}
-              />
-            </div>
-
-            <div>
-              <span className={RAIL_LABEL}>{t("fieldAssignees")}</span>
-              {task.assignee_ids.length === 0 ? (
-                <p className="mb-1 text-xs text-fg-subtle">{t("noAssignee")}</p>
-              ) : null}
-              <AssigneePicker
-                people={people}
-                selected={task.assignee_ids}
-                onToggle={(userId) => {
-                  const on = !task.assignee_ids.includes(userId);
-                  void api.setTaskAssignee(task.id, userId, on).then(onChanged).catch(() => setFailed(true));
-                }}
-              />
-            </div>
-
-            <div>
-              <span className={RAIL_LABEL}>{t("fieldPriority")}</span>
-              <div className="flex flex-wrap gap-1">
-                {PRIORITY_ORDER.map((level) => (
-                  <button
-                    key={level}
-                    type="button"
-                    aria-pressed={task.priority === level}
-                    onClick={() => patch({ priority: level })}
-                    /* 2026-09-03: `.btn btn-sm` — the same control the new-task
-                       dialog offers for the same choice, which is the point:
-                       one product, one priority button. It keeps its
-                       borderless rail face; only the geometry left. */
-                    className={`btn btn-sm ${
-                      task.priority === level
-                        ? "bg-warning/10 text-warning"
-                        : "text-fg-muted hover:text-fg"
-                    }`}
-                  >
-                    <span className={`h-1.5 w-1.5 rounded-full ${PRIORITY_DOT[level as TaskPriority]}`} aria-hidden />
-                    {t(`priority_${level}`)}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <span className={RAIL_LABEL}>{t("fieldDue")}</span>
-              <DueField value={task.due_at} onPick={(iso) => patch({ due_at: iso })} />
-            </div>
-
-            <div>
-              <span className={RAIL_LABEL}>{t("fieldLabels")}</span>
-              {task.label_ids.length === 0 ? (
-                <p className="mb-1 text-xs text-fg-subtle">{t("noLabels")}</p>
-              ) : null}
-              <LabelRow
-                labels={labels}
-                selected={task.label_ids}
-                onToggle={(id) => {
-                  const on = !task.label_ids.includes(id);
-                  void api.setTaskLabel(task.id, id, on).then(onChanged).catch(() => setFailed(true));
-                }}
-                onChanged={onLabelsChanged}
-              />
-            </div>
-
-            {/* THE REPEATING ORDER (0186). It renders here, in the rail
-                where every other property of the card lives, rather than as
-                a section of its own — a schedule is a fact about this task
-                exactly like its priority and its due date. */}
-            <ScheduleRow task={task} onChanged={onChanged} onFailed={() => setFailed(true)} />
-
-            {task.created_at !== "" ? (
-              <p className="pt-1 text-[10px] text-fg-subtle">
-                {t("createdAt", { at: formatDate(task.created_at, locale) })}
-              </p>
-            ) : null}
-          </aside>
-        </div>
-      </div>
+      </DetailPanel>
 
       {confirmArchive ? (
         <ConfirmDialog
@@ -583,7 +555,7 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
           }}
         />
       ) : null}
-    </div>
+    </>
   );
 }
 

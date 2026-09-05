@@ -520,7 +520,6 @@ export function NewTaskDialog({ columns, topics, labels, people, defaultColumnId
       <div className="mb-1 flex items-start justify-between gap-3">
         <div>
           <h2 className="text-[15px] font-bold text-fg">{t("newTask")}</h2>
-          <p className="mt-0.5 text-[12px] text-fg-subtle">{t("newTaskSubtitle")}</p>
         </div>
         {/* 2026-09-03: `.btn btn-icon`, the one icon-only shape in the theme
             — the same control the task screen's close and every kebab in the
@@ -729,7 +728,6 @@ export function ScheduleFields({ repeats, gapDays, until, onRepeats, onGapDays, 
               dir="ltr"
               className="input w-full"
             />
-            <span className="mt-1 block text-[11px] text-fg-subtle">{t("scheduleGapHint")}</span>
           </label>
           <div>
             <span className={FIELD_LABEL}>{t("scheduleUntil")}</span>

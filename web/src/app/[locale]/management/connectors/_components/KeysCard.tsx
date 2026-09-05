@@ -76,7 +76,6 @@ export function KeysCard({
           {t("mint")}
         </button>
       </div>
-      <p className="mb-3 text-xs leading-6 text-fg-muted">{t("keysNote")}</p>
 
       {keys.length === 0 ? (
         <EmptyState text={t("keysEmpty")} />

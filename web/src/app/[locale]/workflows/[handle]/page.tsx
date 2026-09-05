@@ -633,7 +633,7 @@ export default function WorkflowDetailPage({
           onToggle: me?.auto_draft_replies === undefined ? undefined : toggleAutoDraft,
           note: me?.auto_draft_replies === undefined
             ? t("detailSwitchUnavailable")
-            : t("detailOwnSwitch"),
+            : null,
           hint: me?.auto_draft_replies === true ? t("detailAutoDraftOn") : t("detailAutoDraftHint"),
         }
       : meetingPrep
@@ -642,7 +642,7 @@ export default function WorkflowDetailPage({
             onToggle: me?.auto_meeting_prep === undefined ? undefined : toggleMeetingPrep,
             note: me?.auto_meeting_prep === undefined
               ? t("detailSwitchUnavailable")
-              : t("detailOwnSwitch"),
+              : null,
             hint: me?.auto_meeting_prep === true ? t("detailMeetingPrepOn") : t("detailMeetingPrepHint"),
           }
       : subject.kind === "engine"
@@ -908,9 +908,6 @@ export default function WorkflowDetailPage({
                 <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-surface p-4">
                   <span className="min-w-0">
                     <span className="block text-sm font-medium text-fg">{t("detailRecordTitle")}</span>
-                    <span className="mt-0.5 block text-xs leading-5 text-fg-muted">
-                      {t("detailRecordHint")}
-                    </span>
                   </span>
                   {/* the theme's switch (2026-09-03). It also settles two
                       local answers: the track was `bg-success` where every

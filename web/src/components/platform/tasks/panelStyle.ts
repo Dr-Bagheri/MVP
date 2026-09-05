@@ -121,10 +121,6 @@ export const chipClass = (on: boolean): string =>
 export const FOOTER_CANCEL = "btn border border-border-strong text-fg-muted hover:text-fg";
 export const FOOTER_PRIMARY = "btn-primary";
 
-/** a small control in the detail's top bar */
-export const TOP_BUTTON =
-  "btn btn-sm gap-1.5 border border-border-strong text-fg-muted hover:text-fg";
-
 /** the two-tab strip under the body. The bar has NO height of its own: it is
     the compact control plus 4px of padding on each side (34 + 8 = 42, the
     reference's bar), so it grows with the root exactly as the tabs do. */

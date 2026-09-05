@@ -395,7 +395,7 @@ function SkillsPageContent() {
         </Section>
       ) : null}
 
-      <Section title={t("authoredTitle")} description={t("authoredNote")}>
+      <Section title={t("authoredTitle")}>
         {answer === "pending" ? (
           /* audit finding, 2026-09-02: the grid is structure and renders
              with the page; only the cards wait — and the "no prompts yet"
@@ -456,7 +456,7 @@ function SkillsPageContent() {
       </Section>
 
       {archived.length > 0 ? (
-        <Section title={t("archivedTitle")} description={t("archivedNote")} divided>
+        <Section title={t("archivedTitle")} divided>
           <div className={CARD_GRID}>
             {archived.map((s) => (
               <Card key={s.id}>
@@ -480,7 +480,7 @@ function SkillsPageContent() {
         </Section>
       ) : null}
 
-      <Section title={t("resolvedTitle")} description={t("resolvedNote")} divided>
+      <Section title={t("resolvedTitle")} divided>
         {answer === "pending" ? (
           /* audit finding, 2026-09-02: this grid rendered EMPTY until the
              fetch landed, then grew. Five placeholders because five system

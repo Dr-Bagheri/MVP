@@ -136,7 +136,6 @@ export function NotificationsSettings() {
       <NotificationRow
         id="notif-post-call-brief"
         label={t("notifPostCallBrief")}
-        description={t("notifPostCallBriefDesc")}
         state={brief}
         busy={saving}
         onToggle={(next) => void saveAssistant({ post_call_brief: next })}
@@ -144,7 +143,6 @@ export function NotificationsSettings() {
       <NotificationRow
         id="notif-digest"
         label={t("notifDigest")}
-        description={t("notifDigestDesc")}
         state={digest}
         busy={saving}
         onToggle={(next) => void saveDigest(next)}
@@ -160,7 +158,6 @@ export function NotificationsSettings() {
       <NotificationRow
         id="notif-meeting-prep"
         label={t("notifMeetingPrep")}
-        description={t("notifMeetingPrepDesc")}
         state={meetingPrep}
         busy={saving}
         onToggle={(next) => void saveAssistant({ auto_meeting_prep: next })}
@@ -186,7 +183,7 @@ function NotificationRow({
 }: {
   id: string;
   label: string;
-  description: string;
+  description?: string;
   state: RowState;
   busy: boolean;
   onToggle: (next: boolean) => void;

@@ -14,8 +14,11 @@ import { digits } from "@/lib/format";
  * cards linked to this meeting's record, with quick-add into the first
  * column and the door to the full board.
  */
-export function MeetingTasksBoard({ callId, callTitle }: {
-  callId: string; callTitle: string;
+export function MeetingTasksBoard({ callId }: {
+  callId: string;
+  /* still accepted (the meeting page passes it) but no longer read: the
+     subtitle that named the meeting under «کارها» went with R21 */
+  callTitle: string;
 }) {
   const t = useTranslations("meetings");
   const tTasks = useTranslations("tasks");
@@ -56,7 +59,6 @@ export function MeetingTasksBoard({ callId, callTitle }: {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h3 className="text-sm font-semibold text-fg">{t("meetingTasksTitle")}</h3>
-          <p className="text-[11px] text-fg-muted">{t("meetingTasksSubtitle", { title: callTitle })}</p>
         </div>
         <div className="flex items-center gap-2">
           <Link href="/tasks"

@@ -291,6 +291,9 @@ export function Whiteboard({ meetingId }: { meetingId: string }) {
         onWheel={(e) => setView((v) => ({ ...v, x: v.x - e.deltaX, y: v.y - e.deltaY }))}
       />
 
+      {/* an EMPTY STATE, not an explanation: it renders only while the canvas
+          holds nothing, and names what this nothing is for (R12; kept under
+          R21 for that reason) */}
       {shapes.length === 0 && drawing.current === null ? (
         <p className="pointer-events-none absolute inset-x-0 top-16 text-center text-xs text-fg-subtle">
           {t("whiteboardHint")}

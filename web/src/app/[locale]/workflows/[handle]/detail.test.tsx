@@ -283,7 +283,11 @@ describe("the workflow detail page", () => {
     const live = screen.getByRole("switch");
     expect(live.tagName).toBe("BUTTON");
     expect(live.getAttribute("aria-checked")).toBe("false");
-    expect(screen.getByText(/کلید شخصیِ خودتان/)).toBeTruthy();
+    /* R21 (2026-09-05): the ownership sentence («این کلید شخصیِ خودتان است…»)
+       no longer renders under the switch — the switch being a BUTTON is the
+       whole evidence that it is yours to press. The unavailable case below
+       KEEPS its note: a control that cannot move must say why. */
+    expect(screen.queryByText(/کلید شخصیِ خودتان/)).toBeNull();
 
     cleanup();
     ME = { ...BASE_ME }; // un-migrated: the key is simply not there

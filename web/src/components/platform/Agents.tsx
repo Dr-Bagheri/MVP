@@ -67,9 +67,11 @@ export function Agents() {
 
   return (
     <PageContainer>
-      <div className="flex items-center justify-between gap-3">
-        <p className="max-w-2xl text-sm text-fg-muted">{t("intro")}</p>
-        <button type="button" className="btn btn-sm bg-accent text-on-accent"
+      {/* row 1 holds the page's one create button at its END (R3) — and
+          nothing else: the sentence that stood beside it explained a page
+          whose cards already say what they are (R21). */}
+      <div className="flex items-center justify-end gap-3">
+        <button type="button" className="btn btn-primary"
           onClick={() => setEditing("new")}>
           <Icon name="plus" size="sm" />
           {t("newAgent")}
@@ -277,11 +279,11 @@ function AgentEditor({ agent, onClose, onSaved }: {
           <input className="input w-full" value={name} maxLength={80}
             onChange={(e) => setName(e.target.value)} />
         </Field>
-        <Field label={t("fieldDescription")} hint={t("fieldDescriptionHint")}>
+        <Field label={t("fieldDescription")}>
           <input className="input w-full" value={description} maxLength={200}
             onChange={(e) => setDescription(e.target.value)} />
         </Field>
-        <Field label={t("fieldInstructions")} hint={t("fieldInstructionsHint")}>
+        <Field label={t("fieldInstructions")}>
           <textarea className="input min-h-32 w-full py-2 leading-7" value={instructions}
             maxLength={4000} onChange={(e) => setInstructions(e.target.value)} />
         </Field>

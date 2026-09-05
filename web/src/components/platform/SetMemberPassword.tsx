@@ -97,7 +97,6 @@ export function SetMemberPassword({
         className="w-full max-w-md rounded-2xl border border-border bg-surface p-5 shadow-xl"
       >
         <h2 className="h-section">{t("passwordSetTitle", { name: personName(member, locale) })}</h2>
-        <p className="mt-1 text-sm leading-6 text-fg-muted">{t("passwordSetHint")}</p>
 
         <div className="mt-4 space-y-3">
           <Field label={t("passwordSetNew")} hint={t("passwordSetRule")}>

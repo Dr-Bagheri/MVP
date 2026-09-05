@@ -134,7 +134,6 @@ export function SecuritySettings() {
       {orgSessions !== "refused" ? (
       <div>
           <h2 className="h-section">{t("orgSessionsTitle")}</h2>
-          <p className="mt-1 text-sm leading-6 text-fg-muted">{t("orgSessionsHint")}</p>
           {Array.isArray(orgSessions) && orgSessions.length === 0 ? (
             <p className="mt-3 text-sm text-fg-muted">{t("orgSessionsEmpty")}</p>
           ) : (
@@ -272,7 +271,6 @@ export function SecuritySettings() {
       {orgSessions === "refused" ? (
       <div>
         <h2 className="h-section">{t("sessionsTitle")}</h2>
-        <p className="mt-1 text-sm leading-6 text-fg-muted">{t("sessionsHint")}</p>
         {sessions === "unreadable" ? (
           /* 2026-09-03: the third nothing, named. "We could not read your
              sessions" and "you have none" were one sentence, and only one of

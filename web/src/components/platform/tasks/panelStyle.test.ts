@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   BODY_HEADING, BODY_TEXT, FIELD_LABEL, RAIL_LABEL, RAIL_VALUE, RAIL_EMPTY,
-  FOOTER_CANCEL, FOOTER_PRIMARY, TAB_BAR, TOP_BUTTON, chipClass, tabClass,
+  FOOTER_CANCEL, FOOTER_PRIMARY, TAB_BAR, chipClass, tabClass,
 } from "./panelStyle";
 import { SCAFFOLD } from "@/components/scaffold/constants";
 
@@ -89,7 +89,6 @@ describe("the panel's controls wear the family (R4, 2026-09-05)", () => {
     chipOff: chipClass(false),
     tabOn: tabClass(true),
     tabOff: tabClass(false),
-    top: TOP_BUTTON,
     footerCancel: FOOTER_CANCEL,
     footerPrimary: FOOTER_PRIMARY,
   };
@@ -106,10 +105,10 @@ describe("the panel's controls wear the family (R4, 2026-09-05)", () => {
   });
 
   it("the compact ones are compact and the footer is regular", () => {
-    /* chips, tabs and the top-bar button are the 34 size; the footer's two
+    /* chips and tabs are the 34 size; the footer's two
        buttons are the 38 — the same split the toolbar makes between its chips
        and its primary action */
-    for (const name of ["chipOn", "chipOff", "tabOn", "tabOff", "top"] as const) {
+    for (const name of ["chipOn", "chipOff", "tabOn", "tabOff"] as const) {
       expect(CONTROLS[name], `${name} is compact`).toMatch(/\bbtn-sm\b/);
     }
     expect(FOOTER_CANCEL).not.toMatch(/\bbtn-sm\b/);

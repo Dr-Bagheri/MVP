@@ -12,7 +12,7 @@ import { SectionTabs } from "./sectionTabs";
 import { PlatformShell } from "./PlatformShell";
 import { WorkflowBuilder } from "./WorkflowBuilder";
 import { WorkflowTile } from "./WorkflowTile";
-import { PageContainer, PageHeader, SkeletonCards } from "@/components/scaffold";
+import { PageContainer, SkeletonCards } from "@/components/scaffold";
 import { EmptyState } from "@/components/ui";
 
 /**
@@ -167,31 +167,27 @@ export function Workflows() {
     <PlatformShell>
       <>
         <PageContainer>
-          <PageHeader
-            title={t("title")}
-            subtitle={t("subtitle")}
-            actions={isAdmin ? (
-              <button
-                type="button"
-                className="btn bg-accent font-semibold text-on-accent"
-                onClick={() => setEditing(null)}
-              >
-                {t("createWorkflow")}
-              </button>
-            ) : undefined}
-          />
-          <SectionTabs
-            label={t("sectionsLabel")}
-            active={tab}
-            onSelect={setTab}
-            className="mb-5"
-            tabs={[
+          {/* ROW 1 (R3, user ruling 2026-09-05): the section tabs, and the
+              page's one create button at the END of the same row — the tasks
+              and meetings pages' shape. It stood in its own row above. */}
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-2">
+            <SectionTabs
+              label={t("sectionsLabel")}
+              active={tab}
+              onSelect={setTab}
+              tabs={[
               { key: "active", label: t("activeTitle"),
                 count: workflows === null ? undefined : workflows.length + (authored ?? []).length },
               { key: "library", label: t("libraryTitle"),
                 count: libraryReady ? library.length : undefined },
-            ]}
-          />
+              ]}
+            />
+            {isAdmin ? (
+              <button type="button" className="btn btn-primary" onClick={() => setEditing(null)}>
+                {t("createWorkflow")}
+              </button>
+            ) : null}
+          </div>
           {tab === "library" ? null : workflows === null ? (
             <SkeletonCards count={2} height="h-56" />
           ) : workflows.length === 0 ? (

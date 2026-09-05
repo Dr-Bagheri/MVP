@@ -89,10 +89,12 @@ export function SettingsPane({
      moved under it — sits in the same 1040 column as its siblings; a caller
      that needs the wide column says so */
   width = "small",
+  actions,
   children,
 }: {
   activeSlug: string;
   width?: "small" | "normal";
+  actions?: ReactNode;
   children: ReactNode;
 }) {
   const t = useTranslations("settings");
@@ -103,6 +105,7 @@ export function SettingsPane({
       groups={useSettingsGroups()}
       activeSlug={activeSlug}
       width={width}
+      actions={actions}
     >
       {children}
     </TwoPane>

@@ -51,9 +51,12 @@ export function TwoPane({
   groups,
   activeSlug,
   width = "small",
+  actions,
   children,
 }: {
   navLabel: string;
+  /** the page's one create button, at the END of row 1 (R3) */
+  actions?: ReactNode;
   /** kept in the signature and unused: every caller passes the surface's own
       name, which the top bar already says. Removing the prop would be a
       thirteen-file change for nothing. */
@@ -109,6 +112,7 @@ export function TwoPane({
         its cards in one column with one gap, and so does this.
       */}
       <PageContainer width={width} className="!pb-0">
+        <div className="flex flex-wrap items-center justify-between gap-2">
         <nav aria-label={navLabel} className="flex flex-wrap items-center gap-1">
             {groups.map((group, index) => (
               <Fragment key={group.key}>
@@ -138,6 +142,8 @@ export function TwoPane({
               </Fragment>
             ))}
         </nav>
+        {actions ? <div className="flex items-center gap-1.5">{actions}</div> : null}
+        </div>
       </PageContainer>
       {/* pt-4, not the page's own top padding: the toolbar and the content it
           filters are ONE block, and the meeting page (the template) puts its

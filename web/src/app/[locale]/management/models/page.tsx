@@ -151,7 +151,22 @@ export default function ModelsPage() {
   ];
 
   return (
-    <SettingsPane activeSlug="models">
+    <SettingsPane
+      activeSlug="models"
+      /* row 1's END (R3): the create button sits in the sub-menu row, as on
+         tasks and meetings — it stood in a row of its own under the menu */
+      actions={
+        <button
+          type="button"
+          className="btn btn-primary"
+          disabled={busy || failed}
+          onClick={() => { setSearch(""); setAdding(true); }}
+        >
+          <IconPlus width={14} height={14} />
+          {t("modelsAdd")}
+        </button>
+      }
+    >
       <div>
         <PageHeader title={tAdmin("modelAllowList")} subtitle={tAdmin("modelAllowNote")} />
 
@@ -177,19 +192,6 @@ export default function ModelsPage() {
           ) : (
             <Skeleton className="h-4 w-32" />
           )}
-          <button
-            type="button"
-            className="btn btn-sm gap-1.5 border border-border font-medium text-fg"
-            /* audit finding's sibling, 2026-09-03: a picker over a catalogue
-               that did NOT load could only ever say "no model matches" — the
-               wrong nothing (rule 12). The failed card above names the real
-               one, so the door stays shut while it is the answer. */
-            disabled={busy || failed}
-            onClick={() => { setSearch(""); setAdding(true); }}
-          >
-            <IconPlus width={14} height={14} />
-            {t("modelsAdd")}
-          </button>
         </div>
 
         {/* NO OUTER BOX (user directive, 2026-09-02: the same rows as users

@@ -127,7 +127,6 @@ export function RecorderNotes({
         >
           {t("notebookAdd")}
         </button>
-        <span className="text-[11px] leading-4 text-fg-subtle">{t("notebookHint")}</span>
       </div>
     </div>
   );

@@ -445,7 +445,6 @@ export function WorkflowBuilder({
             {none ? t("toolsNone") : t("toolsRead")}
           </button>
         </div>
-        <p className="mt-1 text-[11px] leading-5 text-fg-muted">{t("toolsHint")}</p>
       </div>
     );
   };
@@ -564,7 +563,6 @@ export function WorkflowBuilder({
                   {step.web === true ? t("webOn") : t("webOff")}
                 </button>
               </div>
-              <p className="mt-1 text-[11px] leading-5 text-fg-muted">{t("webHint")}</p>
             </div>
             {toolsField(index)}
           </>
@@ -677,7 +675,6 @@ export function WorkflowBuilder({
                 {bindingField(index, "message", t("f_message"))}
                 {bindingField(index, "to", t("f_to"))}
                 {bindingField(index, "subject", t("f_subject"))}
-                <p className="text-[11px] leading-5 text-fg-muted">{t("draftMailHint")}</p>
               </>
             ) : (
               bindingField(index, "call", t("f_call"))
@@ -833,9 +830,6 @@ export function WorkflowBuilder({
               onClick={() => setPicking(true)}
             >
               <span className="block text-sm font-medium text-fg">{t("triggerSelect")}</span>
-              <span className="mt-0.5 block text-xs leading-5 text-fg-muted">
-                {t("triggerSelectHint")}
-              </span>
             </button>
           ) : (
             <div className="mt-2 rounded-xl border border-border bg-surface-2/40 p-3">
@@ -888,7 +882,6 @@ export function WorkflowBuilder({
                 >
                   {enabled ? t("enabled") : t("disabled")}
                 </button>
-                <p className="w-full text-[11px] leading-5 text-fg-muted">{t("enabledHint")}</p>
               </div>
             </div>
           )}

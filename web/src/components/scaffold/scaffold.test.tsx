@@ -405,16 +405,26 @@ describe("Page anatomy", () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it("Section: h2 title + description; content renders", () => {
+  it("Section: an h2 title and the content — and no description slot at all", () => {
+    /*
+     * R21 (user ruling 2026-09-05): "remove the guides or explanations from
+     * under the titles and headers — just the name". Section used to take a
+     * `description` and render it under the h2; the prop is GONE rather than
+     * discouraged, so a new section cannot grow a paragraph under its title
+     * without failing to typecheck. What this renders is the title and the
+     * content, and nothing between them.
+     */
     render(
       <PageContainer>
-        <Section title="مشخصات سازمان" description="نام و شناسه.">
+        <Section title="مشخصات سازمان">
           <p>محتوا</p>
         </Section>
       </PageContainer>,
     );
-    expect(screen.getByRole("heading", { level: 2, name: "مشخصات سازمان" })).toBeTruthy();
-    expect(screen.getByText("نام و شناسه.")).toBeTruthy();
+    const heading = screen.getByRole("heading", { level: 2, name: "مشخصات سازمان" });
+    expect(heading).toBeTruthy();
     expect(screen.getByText("محتوا")).toBeTruthy();
+    /* nothing sits between the heading and the content wrapper */
+    expect(heading.nextElementSibling?.textContent).toBe("محتوا");
   });
 });

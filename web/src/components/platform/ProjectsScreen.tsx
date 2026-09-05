@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { api } from "@/api/client";
 import { Projects } from "./Projects";
-import { ProjectDetail } from "./ProjectDetail";
 
 /**
  * Who is reading, resolved once and handed to both project surfaces.
@@ -39,9 +38,4 @@ function useReader(): { meId: string | null; isAdmin: boolean } {
 export function ProjectsScreen() {
   const { meId, isAdmin } = useReader();
   return <Projects meId={meId} isAdmin={isAdmin} />;
-}
-
-export function ProjectScreen({ id }: { id: string }) {
-  const { meId, isAdmin } = useReader();
-  return <ProjectDetail id={id} meId={meId} isAdmin={isAdmin} />;
 }

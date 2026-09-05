@@ -3,6 +3,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/routing";
+import { useSearchParams } from "next/navigation";
+import { ProjectDetail } from "./ProjectDetail";
+import {
+  BOARD_CARD, BOARD_CARDS, BOARD_COLUMN, BOARD_COUNT, BOARD_HEADER, BOARD_HEADER_END,
+  BOARD_HEADER_START, BOARD_LANE, BOARD_TITLE, BoardAddRow, BoardTone,
+} from "./board/boardStyle";
 import { api } from "@/api/client";
 import { useRefreshEpoch } from "@/lib/refreshBus";
 import type {
@@ -92,6 +98,9 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
   const tTasks = useTranslations("tasks");
   const locale = useLocale();
   const router = useRouter();
+  /* ?project= deep link (R18): the panel has an address, the way ?task= does */
+  const params = useSearchParams();
+  const openId = params.get("project");
   const [rows, setRows] = useState<ProjectRecord[] | null | "failed">(null);
   const [board, setBoard] = useState<Board | null>(null);
   const [people, setPeople] = useState<OrgPersonRecord[]>([]);
@@ -331,6 +340,10 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
         </div>
       )}
 
+      {openId !== null ? (
+        <ProjectDetail id={openId} meId={meId} isAdmin={isAdmin} onClose={() => router.replace("/projects")} />
+      ) : null}
+
       {creating ? (
         <NewProjectDialog
           people={people}
@@ -338,7 +351,7 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
           onClose={() => setCreating(false)}
           onCreated={(p) => {
             setCreating(false);
-            router.push(`/projects/${p.id}`);
+            router.push(`/projects?project=${p.id}`);
           }}
           onFailed={() => { setCreating(false); setError(t("writeFailed")); }}
         />
@@ -368,51 +381,39 @@ function ProjectKanban({ columns, projects, columnOf, people, locale, isAdmin, o
 }) {
   const t = useTranslations("projects");
   return (
-    /* THE BOARD'S OWN SCROLLER (user directive, 2026-09-05: "use the same
-       size fixed position column for the kanban like tasks"). Every number
-       here is TaskBoard's: the 300px column, the 2xl corner, the surface
-       ground, the card shadow and the 70vh floor. Two boards on one product
-       showing the same shape must not disagree about it — and the version
-       this replaces was a 288px column on a tinted ground with no floor, so
-       the columns changed height as projects moved between them. */
-    <div className="scroll-quiet flex min-h-0 flex-1 gap-3 overflow-x-auto pb-2">
+    /* THE BOARD, from the board's own module (R17, user ruling 2026-09-05:
+       "two same kanban tables … supposed to be the same but they are
+       different"). The first version of this function COPIED TaskBoard's
+       numbers, and by the same evening the copies disagreed — a 12px title
+       here against the board's 13, the count in a different corner, cards in
+       a different box, no tone on the column. Nothing here is a number now;
+       every class is boardStyle's, and the guard keeps it that way. */
+    <div className={BOARD_LANE}>
       {columns.map((col) => {
         const here = projects.filter((p) => columnOf(p) === col.id);
         return (
-          <section
-            key={col.id}
-            className="flex min-h-[70vh] w-[300px] shrink-0 flex-col self-stretch rounded-2xl border border-border bg-surface p-2.5 shadow-card"
-          >
-            <header className="mb-2 flex items-center justify-between px-1">
-              <h2 className="truncate text-xs font-semibold text-fg">
-                <bdi>{col.name}</bdi>
-              </h2>
-              <span className="badge-num rounded-md bg-surface-2 px-1.5 text-[10px] text-fg-subtle">
-                {digits(here.length, locale)}
+          <section key={col.id} className={BOARD_COLUMN} aria-label={col.name}>
+            <header className={BOARD_HEADER}>
+              <span className={BOARD_HEADER_START}>
+                <BoardTone tone={col.tone} />
+                <h2 className={BOARD_TITLE}>
+                  <bdi>{col.name}</bdi>
+                </h2>
+              </span>
+              <span className={BOARD_HEADER_END}>
+                <span className={BOARD_COUNT}>{digits(here.length, locale)}</span>
               </span>
             </header>
-            <div className="flex min-h-0 flex-1 flex-col gap-2">
+            <div className={BOARD_CARDS}>
               {here.map((p) => (
                 <ProjectCard key={p.id} project={p} people={people} locale={locale} compact />
               ))}
-              {/* THE WAY IN LIVES IN THE COLUMN (same directive: "remove the
-                  add new project on top and add it like tasks in the column").
-                  The board's own dashed row, verbatim — a project is made
-                  where it is going to sit, and the page no longer carries a
-                  separate button at the top that has to be told nothing.
-                  Admin-only, because creating a project is (0186). */}
+              {/* THE WAY IN LIVES IN THE COLUMN (user directive, 2026-09-05):
+                  a project is made where it is going to sit. Admin-only,
+                  because creating a project is (0186). */}
               {isAdmin ? (
-                <button
-                  type="button"
-                  onClick={onAdd}
-                  className="btn btn-sm w-full justify-center gap-1.5 border border-dashed border-border font-medium text-fg-muted hover:border-border-strong hover:text-fg"
-                >
-                  <IconPlus width={12} height={12} />
-                  {t("addProject")}
-                </button>
+                <BoardAddRow label={t("addProject")} onClick={onAdd} />
               ) : here.length === 0 ? (
-                /* a member gets a sentence rather than an empty box — the
-                   column still has to say what it is showing */
                 <p className="px-1 py-4 text-center text-[11px] text-fg-subtle">{t("noneHere")}</p>
               ) : null}
             </div>
@@ -442,7 +443,7 @@ function ProjectList({ projects, cardsOf, people, locale }: {
         return (
           <Link
             key={p.id}
-            href={`/projects/${p.id}`}
+            href={`/projects?project=${p.id}`}
             className="tile flex items-center gap-3 px-3 py-2.5 transition-colors hover:border-accent/40"
           >
             <span className={`h-2 w-2 shrink-0 rounded-full ${TONE_DOT[p.tone] ?? TONE_DOT.grey!}`} aria-hidden />
@@ -547,7 +548,7 @@ function ProjectCalendar({ projects, cardsOf, locale }: {
               {(byDay.get(cell.key) ?? []).slice(0, 3).map(({ project, n }) => (
                 <Link
                   key={project.id}
-                  href={`/projects/${project.id}`}
+                  href={`/projects?project=${project.id}`}
                   className={`tap flex items-center gap-1 rounded px-1 py-0.5 text-[10px] ${TONE_CHIP[project.tone] ?? TONE_CHIP.grey!}`}
                 >
                   <bdi className="min-w-0 flex-1 truncate">{project.name}</bdi>
@@ -620,7 +621,7 @@ function ProjectCard({ project, people, locale, compact = false }: {
 
   return (
     <Link
-      href={`/projects/${project.id}`}
+      href={`/projects?project=${project.id}`}
       /*
        * `h-auto shrink-0` ON THE KANBAN CARD, and it is not a nicety: `.tile`
        * declares `height: 100%`, which inside a flex COLUMN resolves against
@@ -630,9 +631,13 @@ function ProjectCard({ project, people, locale, compact = false }: {
        * the same height, so the override belongs to the compact variant
        * alone.
        */
-      className={`tile flex flex-col transition-colors hover:border-accent/40 ${
-        compact ? "h-auto shrink-0 gap-1.5 p-2.5" : "gap-3 p-4"
-      }`}
+      className={
+        compact
+          ? /* on the board it is the board's card — the box a task sits in,
+               read from the same module (R17) */
+            `${BOARD_CARD} flex flex-col gap-1.5`
+          : "tile flex flex-col gap-3 p-4 transition-colors hover:border-accent/40"
+      }
     >
       <div className={`flex items-start ${compact ? "gap-2" : "gap-3"}`}>
         {/* the icon, or the first letter — the same fallback a person's

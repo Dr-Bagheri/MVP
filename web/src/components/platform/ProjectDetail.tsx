@@ -2,21 +2,21 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { Link, useRouter } from "@/i18n/routing";
+import { Link } from "@/i18n/routing";
 import { api } from "@/api/client";
 import { useRefreshEpoch } from "@/lib/refreshBus";
-import { useCrumbTitle } from "./CrumbTitle";
 import type {
   OrgPersonRecord, ProjectRecord, ProjectTone, ProjectWorkloadRow,
   TaskCardRecord, TaskColumnRecord, TaskLabelRecord, TaskTopicRecord,
 } from "@/api/types";
 import { Overlay } from "./Overlay";
 import { Avatar } from "@/components/Avatar";
-import { ConfirmDialog } from "@/components/rowActions";
+import { ConfirmDialog, KebabMenu } from "@/components/rowActions";
+import { DetailPanel } from "./DetailPanel";
 import { TONE_DOT, PRIORITY_CHIP, NewTaskDialog } from "./tasks/TaskDialogs";
 import { TonePicker } from "./Projects";
 import {
-  BODY_HEADING, BODY_TEXT, RAIL_LABEL, RAIL_VALUE, RAIL_EMPTY, TOP_BUTTON,
+  BODY_HEADING, BODY_TEXT, RAIL_LABEL, RAIL_VALUE, RAIL_EMPTY,
 } from "./tasks/panelStyle";
 import {
   IconArchive, IconCheck, IconClose, IconPencil, IconPeople3, IconPlus, IconRetry,
@@ -41,7 +41,12 @@ import { digits, formatDate, personName } from "@/lib/format";
  * The conversation tab arrives with the chat room. A tab that opens onto
  * «به‌زودی» is a promise the product has to keep on a schedule nobody set.
  */
-export function ProjectDetail({ id, meId, isAdmin }: { id: string; meId: string | null; isAdmin: boolean }) {
+export function ProjectDetail({ id, meId, isAdmin, onClose }: {
+  id: string;
+  meId: string | null;
+  isAdmin: boolean;
+  onClose: () => void;
+}) {
   const t = useTranslations("projects");
   const tCommon = useTranslations("common");
   const locale = useLocale();
@@ -54,7 +59,6 @@ export function ProjectDetail({ id, meId, isAdmin }: { id: string; meId: string 
   const [workload, setWorkload] = useState<ProjectWorkloadRow[] | null>(null);
   const [labels, setLabels] = useState<TaskLabelRecord[]>([]);
   const [topics, setTopics] = useState<TaskTopicRecord[]>([]);
-  const router = useRouter();
   const [condemned, setCondemned] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -86,10 +90,6 @@ export function ProjectDetail({ id, meId, isAdmin }: { id: string; meId: string 
     void api.projectWorkload(id).then(setWorkload).catch(() => setWorkload([]));
   }, [id, tasksEpoch, epoch]);
 
-  /* the deepest crumb is this project's name — data, so it is fed rather
-     than declared (null = untitled, undefined = not loaded) */
-  useCrumbTitle(typeof project === "object" && project !== null ? project.name : undefined);
-
   const mine = useMemo(() => {
     if (typeof project !== "object" || project === null || board === null) return [];
     /* NO `topic_id === null` EARLY RETURN. It stood here and read as the
@@ -103,9 +103,22 @@ export function ProjectDetail({ id, meId, isAdmin }: { id: string; meId: string 
     return board.tasks.filter((task) => task.topic_id === project.topic_id);
   }, [project, board]);
 
-  if (project === null) return <SkeletonLines lines={4} />;
-  if (project === "missing") return <p className="text-sm text-fg-muted">{t("notFound")}</p>;
-  if (project === "failed") return <p className="text-sm text-fg-muted">{t("readFailed")}</p>;
+  /* the frame opens at once and the answer arrives inside it — a panel that
+     appears only after the network is a click that did nothing for a beat */
+  if (project === null) {
+    return (
+      <DetailPanel label="" closeLabel={t("close")} onClose={onClose} rail={<SkeletonLines lines={5} />}>
+        <SkeletonLines lines={4} />
+      </DetailPanel>
+    );
+  }
+  if (project === "missing" || project === "failed") {
+    return (
+      <DetailPanel label={t(project === "missing" ? "notFound" : "readFailed")} closeLabel={t("close")} onClose={onClose} rail={null}>
+        <p className="text-sm text-fg-muted">{t(project === "missing" ? "notFound" : "readFailed")}</p>
+      </DetailPanel>
+    );
+  }
 
   const members = project.member_ids
     .map((mid) => people.find((p) => p.id === mid))
@@ -118,184 +131,96 @@ export function ProjectDetail({ id, meId, isAdmin }: { id: string; meId: string 
       .catch(() => setError(t("writeFailed")));
   };
 
-  return (
-    /*
-     * THE TASK DETAIL'S ANATOMY, ON A PAGE (user directive, 2026-09-05: "add
-     * the same structure for project edit as well that looks like the task,
-     * and mix it with the project's options").
-     *
-     * One panel with a body and a 283px rail, exactly as `?task=` opens — the
-     * measurements are the reference's own (panelStyle.ts). What differs is
-     * what the rail HOLDS: a task's rail carries column, priority, deadline;
-     * a project's carries its tone, its progress, its people and the two acts
-     * that end it. Same anatomy, its own contents, which is what "mix it with
-     * the project options" asks for.
-     *
-     * It stays a PAGE rather than becoming a modal: a project is a place you
-     * navigate to and link people at, and a modal has no address.
-     */
-    <div className="flex min-h-0 flex-1 flex-col gap-4">
-      {/* ── the identity row, the detail's own top bar ───────────────── */}
-      <section className="tile flex flex-wrap items-start gap-3 p-4">
-        <span
-          aria-hidden
-          className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-surface-2 ${
-            project.icon === null ? "text-base font-bold text-fg-muted" : "text-2xl"
-          }`}
+  /*
+   * THE DETAIL PANEL, NOT A PAGE (R18, user ruling 2026-09-05: "when you click
+   * on a project it should open a pop-up window, not change the page — this
+   * problem is systematic"). The frame is DetailPanel's — the task detail's,
+   * measured — and this file owns only what goes in its slots: the ⋯ menu and
+   * the edit toggle beside the close, the way out to the board and the one
+   * primary act (giving work) at the other end, and a rail carrying a
+   * project's own facts — the folder it owns on the board, how far it has got,
+   * its tone, its people, when it began. Same anatomy as a task, its own
+   * contents.
+   *
+   * It keeps an address all the same: `/projects?project=<id>` is a link a
+   * person can send, and the old `/projects/<id>` redirects there.
+   */
+  const start = isAdmin ? (
+    <>
+      <KebabMenu
+        label={t("moreActions")}
+        items={[
+          project.archived_at === null
+            ? {
+                key: "archive",
+                label: t("archive"),
+                icon: <IconArchive width={14} height={14} />,
+                onSelect: () => setCondemned(true),
+              }
+            : {
+                key: "restore",
+                label: t("restore"),
+                icon: <IconCheck width={14} height={14} />,
+                onSelect: () => patch({ archived: false }),
+              },
+          /* DELETE beside archive, not instead of it (user directive,
+             2026-09-05): different acts under their own names — archiving
+             keeps a readable project, deleting removes it. */
+          {
+            key: "delete",
+            label: tCommon("delete"),
+            icon: <IconTrash width={14} height={14} />,
+            danger: true,
+            onSelect: () => setDeleting(true),
+          },
+        ]}
+      />
+      <button
+        type="button"
+        onClick={() => setEditing(true)}
+        className="btn btn-sm border border-border font-medium text-fg hover:bg-border"
+      >
+        <IconPencil width={12} height={12} />
+        {t("edit")}
+      </button>
+    </>
+  ) : null;
+
+  const end = (
+    <>
+      {/* the board, standing on this project's own folder. A link rather
+          than a second board: one place cards are moved. */}
+      <Link
+        href={project.topic_id === null ? "/tasks" : `/tasks?topic=${encodeURIComponent(project.topic_id)}`}
+        className="btn btn-sm bg-accent-soft font-medium text-accent"
+      >
+        {t("openBoard")}
+      </Link>
+      {/* GIVING WORK IS AN ADMIN'S (0186), the same wall the project itself
+          is behind — for a member the button would be a refusal. Anybody may
+          still create a card on the board; what is admin-walled is the
+          surface for handing it to somebody. */}
+      {isAdmin && project.topic_id !== null ? (
+        <button
+          type="button"
+          onClick={() => setOrdering(true)}
+          className="btn btn-sm bg-accent text-on-accent hover:opacity-90"
         >
-          {project.icon ?? [...project.name][0] ?? "?"}
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className={`h-2 w-2 shrink-0 rounded-full ${TONE_DOT[project.tone] ?? TONE_DOT.grey!}`} aria-hidden />
-            <h1 className="truncate text-[17px] font-bold text-fg">{project.name}</h1>
-            {project.archived_at !== null ? (
-              <span className="badge-num rounded-md bg-surface-2 px-1.5 text-[10px] text-fg-muted">
-                {t("archived")}
-              </span>
-            ) : null}
-          </div>
-          <p className={`mt-1.5 ${BODY_TEXT}`}>
-            {project.summary === "" ? t("noSummary") : project.summary}
-          </p>
-        </div>
-        <div className={`flex items-center gap-1.5 ${isAdmin ? "" : "hidden"}`}>
-          <button type="button" onClick={() => setEditing(true)} className={TOP_BUTTON}>
-            <IconPencil width={12} height={12} />
-            {t("edit")}
-          </button>
-          {project.archived_at === null ? (
-            <button type="button" onClick={() => setCondemned(true)} className={TOP_BUTTON}>
-              <IconArchive width={12} height={12} />
-              {t("archive")}
-            </button>
-          ) : (
-            <button type="button" onClick={() => patch({ archived: false })} className={TOP_BUTTON}>
-              <IconCheck width={12} height={12} />
-              {t("restore")}
-            </button>
-          )}
-          {/* DELETE, beside archive and not instead of it (user directive,
-              2026-09-05: "right now it only has the archive and it only does
-              archive"). They are different acts and the page now offers both
-              under their own names — archiving keeps a readable project,
-              deleting removes it. Danger-toned, because only one of the two
-              cannot be undone. */}
-          <button type="button" onClick={() => setDeleting(true)}
-            className={`${TOP_BUTTON} text-danger hover:border-danger/40 hover:text-danger`}>
-            <IconTrash width={12} height={12} />
-            {tCommon("delete")}
-          </button>
-        </div>
-      </section>
-
-      {error !== null ? (
-        <p role="alert" className="rounded-xl border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
-          {error}
-        </p>
+          <IconPlus width={12} height={12} />
+          {t("newOrder")}
+        </button>
       ) : null}
+    </>
+  );
 
-      {/* the detail's own split: body, then a 283px rail (measured) */}
-      <div className="grid gap-4 lg:grid-cols-[1fr_283px]">
-        {/* ── the work ───────────────────────────────────────────────── */}
-        <section className="tile p-4" aria-label={t("work")}>
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <h2 className={BODY_HEADING}>{t("work")}</h2>
-            <div className="flex items-center gap-2">
-              <span className="badge-num text-[11px] text-fg-muted">
-                {mine.length === 0
-                  ? "—"
-                  : t("progress", { done: digits(done, locale), total: digits(mine.length, locale) })}
-              </span>
-              {/* the board, standing on this project's own folder. A link
-                  rather than a second board: one place cards are moved. */}
-              <Link
-                href={project.topic_id === null ? "/tasks" : `/tasks?topic=${encodeURIComponent(project.topic_id)}`}
-                className="btn btn-sm gap-1.5 border border-border text-fg-muted hover:text-fg"
-              >
-                {t("openBoard")}
-              </Link>
-              {/* GIVING WORK IS AN ADMIN'S (0186), the same wall the project
-                  itself is behind — the card would otherwise be a button
-                  whose only outcome for a member is a refusal. Anybody may
-                  still create a card on the board; what is admin-walled is
-                  the surface for handing it to somebody. */}
-              {isAdmin && project.topic_id !== null ? (
-                <button type="button" onClick={() => setOrdering(true)}
-                  className="btn btn-sm gap-1.5 bg-accent text-on-accent hover:opacity-90">
-                  <IconPlus width={12} height={12} />
-                  {t("newOrder")}
-                </button>
-              ) : null}
-            </div>
-          </div>
-          {board === null ? (
-            <SkeletonLines lines={3} />
-          ) : mine.length === 0 ? (
-            <p className="py-6 text-center text-xs text-fg-subtle">{t("noWork")}</p>
-          ) : (
-            <ul className="space-y-1.5">
-              {mine.slice(0, 12).map((task) => {
-                const column = board.columns.find((c) => c.id === task.column_id);
-                return (
-                  <li key={task.id}>
-                    <Link
-                      href={`/tasks?task=${encodeURIComponent(task.id)}`}
-                      className="flex items-center gap-2 rounded-xl border border-border px-3 py-2 hover:border-accent/40"
-                    >
-                      <span
-                        aria-hidden
-                        className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-                          task.done ? "bg-success" : TONE_DOT[column?.tone ?? "grey"] ?? TONE_DOT.grey!
-                        }`}
-                      />
-                      <span className={`min-w-0 flex-1 truncate text-xs ${task.done ? "text-fg-subtle line-through" : "text-fg"}`}>
-                        {task.title}
-                      </span>
-                      {task.recurrence_id !== null ? (
-                        <IconRetry width={12} height={12} className="shrink-0 text-fg-subtle"
-                          aria-label={t("repeats")} />
-                      ) : null}
-                      <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${PRIORITY_CHIP[task.priority]}`}>
-                        {t(`priority_${task.priority}`)}
-                      </span>
-                      {column !== undefined ? (
-                        <span className="shrink-0 text-[10px] text-fg-subtle">{column.name}</span>
-                      ) : null}
-                    </Link>
-                  </li>
-                );
-              })}
-              {mine.length > 12 ? (
-                <li className="pt-1 text-center text-[11px] text-fg-subtle">
-                  {t("andMore", { n: digits(mine.length - 12, locale) })}
-                </li>
-              ) : null}
-            </ul>
-          )}
-        </section>
+  /*
+   * THE RAIL — the task detail's, row for row: an 11px/600 label above a
+   * 12.5px/600 value, receded when the value is empty so the row still reads
+   * as a row. What it CARRIES is a project's own facts.
+   */
+  const rail = (
+    <>
 
-        <div className="space-y-4">
-        {/* who did what, and who didn't (0186) */}
-        <Workload
-          rows={workload}
-          people={people}
-          members={project.member_ids}
-          locale={locale}
-          meId={meId}
-        />
-
-        {/*
-          ── THE RAIL ──────────────────────────────────────────────────
-          The task detail's rail, row for row: an 11px/600 label above a
-          12.5px/600 value, receded when the value is empty so the row still
-          reads as a row. What it CARRIES is a project's own facts, which is
-          the "mix it with the project options" half of the directive — a
-          task's rail has column, priority and deadline; this one has the
-          folder the work is filed under, how far it has got, its tone, its
-          people and when it began.
-        */}
-        <aside className="tile self-start space-y-4 p-5" aria-label={t("fieldMembers")}>
           {/* the board folder this project owns (0181) — the one row that
               points somewhere, because the work itself lives there */}
           <div>
@@ -377,9 +302,104 @@ export function ProjectDetail({ id, meId, isAdmin }: { id: string; meId: string 
             <span className={RAIL_LABEL}>{t("fieldCreated")}</span>
             <span className={RAIL_VALUE}>{formatDate(project.created_at, locale)}</span>
           </div>
-        </aside>
+    </>
+  );
+
+  return (
+    <>
+      <DetailPanel
+        label={project.name}
+        closeLabel={t("close")}
+        onClose={onClose}
+        start={start}
+        end={end}
+        notice={error !== null ? (
+          <p role="alert" className="border-b border-border bg-danger/10 px-4 py-2 text-xs text-danger">
+            {error}
+          </p>
+        ) : null}
+        rail={rail}
+      >
+        <div className="flex items-center gap-2">
+          <span className={`h-2 w-2 shrink-0 rounded-full ${TONE_DOT[project.tone] ?? TONE_DOT.grey!}`} aria-hidden />
+          <h2 className={`truncate text-[17px] font-bold ${project.archived_at === null ? "text-fg" : "text-fg-subtle"}`}>
+            {project.name}
+          </h2>
+          {project.archived_at !== null ? (
+            <span className="badge-num rounded-md bg-surface-2 px-1.5 text-[10px] text-fg-muted">
+              {t("archived")}
+            </span>
+          ) : null}
         </div>
-      </div>
+        <p className={BODY_TEXT}>{project.summary === "" ? t("noSummary") : project.summary}</p>
+
+        {/* ── the work: the cards filed under this project's folder ──── */}
+        <section aria-label={t("work")}>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h3 className={BODY_HEADING}>{t("work")}</h3>
+            <span className="badge-num text-[11px] text-fg-muted">
+              {mine.length === 0
+                ? "—"
+                : t("progress", { done: digits(done, locale), total: digits(mine.length, locale) })}
+            </span>
+          </div>
+          {board === null ? (
+            <SkeletonLines lines={3} />
+          ) : mine.length === 0 ? (
+            <p className="py-6 text-center text-xs text-fg-subtle">{t("noWork")}</p>
+          ) : (
+
+            <ul className="space-y-1.5">
+              {mine.slice(0, 12).map((task) => {
+                const column = board.columns.find((c) => c.id === task.column_id);
+                return (
+                  <li key={task.id}>
+                    <Link
+                      href={`/tasks?task=${encodeURIComponent(task.id)}`}
+                      className="flex items-center gap-2 rounded-xl border border-border px-3 py-2 hover:border-accent/40"
+                    >
+                      <span
+                        aria-hidden
+                        className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                          task.done ? "bg-success" : TONE_DOT[column?.tone ?? "grey"] ?? TONE_DOT.grey!
+                        }`}
+                      />
+                      <span className={`min-w-0 flex-1 truncate text-xs ${task.done ? "text-fg-subtle line-through" : "text-fg"}`}>
+                        {task.title}
+                      </span>
+                      {task.recurrence_id !== null ? (
+                        <IconRetry width={12} height={12} className="shrink-0 text-fg-subtle"
+                          aria-label={t("repeats")} />
+                      ) : null}
+                      <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${PRIORITY_CHIP[task.priority]}`}>
+                        {t(`priority_${task.priority}`)}
+                      </span>
+                      {column !== undefined ? (
+                        <span className="shrink-0 text-[10px] text-fg-subtle">{column.name}</span>
+                      ) : null}
+                    </Link>
+                  </li>
+                );
+              })}
+              {mine.length > 12 ? (
+                <li className="pt-1 text-center text-[11px] text-fg-subtle">
+                  {t("andMore", { n: digits(mine.length - 12, locale) })}
+                </li>
+              ) : null}
+            </ul>
+          )}
+        </section>
+
+        {/* who did what, and who didn't (0186) */}
+        <Workload
+          rows={workload}
+          people={people}
+          members={project.member_ids}
+          locale={locale}
+          meId={meId}
+        />
+      </DetailPanel>
+
 
       {editing ? (
         <EditProjectDialog
@@ -439,9 +459,10 @@ export function ProjectDetail({ id, meId, isAdmin }: { id: string; meId: string 
           onConfirm={() => {
             setDeleting(false);
             void api.deleteProject(project.id)
-              /* AWAY, unlike archive: there is no project left to render, and
-                 staying would show a page about a row that is gone. */
-              .then(() => router.push("/projects"))
+              /* AWAY: there is no project left to show, so the panel closes
+                 and the list behind it, keyed on the same epoch, has already
+                 dropped the card. */
+              .then(onClose)
               .catch(() => setError(t("writeFailed")));
           }}
         />
@@ -463,7 +484,7 @@ export function ProjectDetail({ id, meId, isAdmin }: { id: string; meId: string 
           }}
         />
       ) : null}
-    </div>
+    </>
   );
 }
 
@@ -511,8 +532,8 @@ function Workload({ rows, people, members, locale, meId }: {
   const unassigned = byUser.get(null);
 
   return (
-    <section className="tile p-4" aria-label={t("whoDidWhat")}>
-      <h2 className={`${BODY_HEADING} mb-3`}>{t("whoDidWhat")}</h2>
+    <section aria-label={t("whoDidWhat")}>
+      <h3 className={`${BODY_HEADING} mb-2`}>{t("whoDidWhat")}</h3>
       {rows === null ? (
         <SkeletonLines lines={3} />
       ) : ids.length === 0 && unassigned === undefined ? (

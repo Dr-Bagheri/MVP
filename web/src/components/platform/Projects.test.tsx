@@ -20,6 +20,9 @@ import type { OrgPersonRecord, ProjectRecord, TaskCardRecord, TaskColumnRecord }
  *     opinion about a fact the server owns.
  *  4. The detail's work list is the project's OWN category, never the board.
  */
+vi.mock("next/navigation", () => ({
+  useSearchParams: () => new URLSearchParams(),
+}));
 vi.mock("@/i18n/routing", () => ({
   useRouter: () => ({ push: pushSpy, replace: vi.fn() }),
   Link: ({ href, children, className }: { href: unknown; children: React.ReactNode; className?: string }) => (
@@ -99,7 +102,7 @@ import { CrumbTitleProvider } from "./CrumbTitle";
    output instead of the rule. It also keeps the missing-floor throw honest
    — a detail page rendered outside a provider SHOULD fail. */
 const detail = (id: string, meId: string | null) => (
-  <CrumbTitleProvider><ProjectDetail id={id} meId={meId} isAdmin /></CrumbTitleProvider>
+  <CrumbTitleProvider><ProjectDetail id={id} meId={meId} isAdmin onClose={() => undefined} /></CrumbTitleProvider>
 );
 
 /** the kanban column's own box — the element carrying its project cards */
@@ -256,7 +259,9 @@ describe("Projects", () => {
     expect(Object.keys(created[0]!).sort()).toEqual(
       ["icon", "member_ids", "name", "summary", "tone"],
     );
-    expect(pushSpy).toHaveBeenCalledWith("/projects/p-new");
+    /* R18: the new project opens as the PANEL over the list — its address is
+       the list's, with the project in the query — not a page of its own */
+    expect(pushSpy).toHaveBeenCalledWith("/projects?project=p-new");
   });
 });
 

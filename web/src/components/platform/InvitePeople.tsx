@@ -64,7 +64,6 @@ export function InvitePeople({ kind, targetId, meId, onClose, onFailed }: {
           <IconClose width={14} height={14} />
         </button>
       </div>
-      <p className="mb-3 text-[11px] leading-5 text-fg-muted">{t("invitesExplain")}</p>
 
       {sent !== null ? (
         <p role="status" className="mb-3 rounded-xl border border-success/30 bg-success/10 px-3 py-2 text-xs text-success">

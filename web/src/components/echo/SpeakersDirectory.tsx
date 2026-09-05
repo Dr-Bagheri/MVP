@@ -473,7 +473,6 @@ export function SpeakersDirectory() {
         >
           {ENROLLMENT_SCRIPTS[enroll.lang]}
         </p>
-        <p className="text-[11px] text-fg-subtle">{t("voiceScriptHint")}</p>
         <div className="flex flex-wrap items-center gap-3 text-xs">
           {enroll.phase === "ready" ? (
             <>
@@ -782,7 +781,6 @@ export function SpeakersDirectory() {
                 </div>
               );
             })}
-            <p className="text-[11px] text-fg-subtle">{t("chartNote")}</p>
           </div>
         ) : (
           <DataTable<Person>

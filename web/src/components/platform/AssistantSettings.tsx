@@ -167,7 +167,6 @@ export function AssistantSettings() {
             text-sm leading-6 — this card's 13px title and 11.5px hint made
             the heading shrink when switching General → Assistant */}
         <h2 className="h-section">{t("voiceTitle")}</h2>
-        <p className="mt-1 text-sm leading-6 text-fg-muted">{t("voiceHint")}</p>
         {prefs === "pending" ? (
           /* audit finding, 2026-09-02: the loading rule — a skeleton in the
              form's shape (two rows of two fields, then the instructions
@@ -344,7 +343,6 @@ function PushToTalk() {
   return (
     <Card>
       <h2 className="h-section">{t("hotkeyTitle")}</h2>
-      <p className="mt-1 text-sm leading-6 text-fg-muted">{t("hotkeyHint")}</p>
       <div className="mt-4 flex flex-wrap items-center gap-3">
         {capturing ? (
           <span className="chip animate-pulse bg-accent-soft text-sm text-accent">
@@ -407,7 +405,6 @@ function VoiceSwitches() {
   return (
     <Card>
       <h2 className="h-section">{t("voiceSwitchesTitle")}</h2>
-      <p className="mt-1 text-sm leading-6 text-fg-muted">{t("voiceSwitchesHint")}</p>
       <div className="mt-4 space-y-3">
         <SwitchRow
           label={t("earsLabel")}
@@ -426,7 +423,6 @@ function VoiceSwitches() {
              what the voice loop asks it; the screen asks the question the
              way a person would. */
           label={t("speakLabel")}
-          hint={t("speakHint")}
           checked={!prefs.silent}
           onChange={() => {
             const speaking = prefs.silent;   // about to become true
@@ -440,13 +436,15 @@ function VoiceSwitches() {
 }
 
 function SwitchRow({ label, hint, checked, onChange }: {
-  label: string; hint: string; checked: boolean; onChange: () => void;
+  /* R21 (2026-09-05): a row is its NAME; a hint is the exception, one
+     sentence, kept only where the name cannot carry it (the wake word) */
+  label: string; hint?: string; checked: boolean; onChange: () => void;
 }) {
   return (
     <div className="flex items-start justify-between gap-4 rounded-xl border border-border p-3">
       <span className="min-w-0">
         <span className="block text-sm font-medium text-fg">{label}</span>
-        <span className="mt-0.5 block text-xs leading-6 text-fg-muted">{hint}</span>
+        {hint ? <span className="mt-0.5 block text-xs leading-6 text-fg-muted">{hint}</span> : null}
       </span>
       <Switch checked={checked} onChange={onChange} label={label} />
     </div>
@@ -483,7 +481,6 @@ function AgentsWebCard({ state, value, onChange }: {
   return (
     <Card>
       <h2 className="h-section">{t("agentsWebTitle")}</h2>
-      <p className="mt-1 text-sm leading-6 text-fg-muted">{t("agentsWebHint")}</p>
       <div className="mt-4">
         {state === "pending" ? (
           <Skeleton className="h-14 w-full rounded-xl" />
@@ -495,9 +492,6 @@ function AgentsWebCard({ state, value, onChange }: {
           <div className="flex items-start justify-between gap-4 rounded-xl border border-border p-3">
             <span className="min-w-0">
               <span className="block text-sm font-medium text-fg">{t("agentsWebLabel")}</span>
-              <span className="mt-0.5 block text-xs leading-6 text-fg-muted">
-                {t("agentsWebRowHint")}
-              </span>
             </span>
             <Switch checked={value} onChange={() => onChange(!value)} label={t("agentsWebLabel")} />
           </div>

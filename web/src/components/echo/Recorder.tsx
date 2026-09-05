@@ -1192,7 +1192,6 @@ export function Recorder({ onFinished, meeting: meetingProp }: {
                   );
                 })}
               </div>
-              <p className="mt-2 text-[11px] leading-4 text-fg-subtle">{t("peopleHint")}</p>
             </div>
           ) : null}
         </div>
