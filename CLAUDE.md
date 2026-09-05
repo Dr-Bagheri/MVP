@@ -4120,3 +4120,43 @@ sessions) for the cross-session narrative.
   npx shims break; long heredocs fail; Python needs `C:/` paths and UTF-8
   stdout; `fa.json`, `en.json` and `Agents.tsx` are CRLF.
   db 191 migrations · core 1357 tests · web 1096 tests + gate + sweep.
+- 2026-09-05 (latest — THE SITE LOSES ITS FRAGMENT, THE ARCHIVE KEEPS UP;
+  commit cf20c99): six items from six screenshots.
+  **THE SITE.** "Why do we have `#chapter-0`?" — the language link carries the
+  chapter across the switch (the checker asserts it), and the destination
+  never let go of it. Chapter 0 carries nothing now (it is the top) and the
+  other chapters are CONSUMED on arrival with `history.replaceState`, so the
+  feature survives and the address never reads it. The finale's copy sits on a
+  light-black panel (rgba(5,3,20,.62), faded in with its chapter): the rain
+  runs UNDER the copy by design and white on moving glyphs was legible only
+  between the drops. The room mock's column grew 440 → 580 with its chrome,
+  and its yaw takes the Persian film's mirror (`M = isFa ? -1 : 1`, the sign
+  the N took in the morning) so it turns to FACE the copy on either side; the
+  matrix checker reads the resting `rotateY` at chapter 2 in both locales and
+  asserts the mirror with an INVALID guard for a zero turn. The Persian
+  wordmark is LALEZAR — a display face drawn for headlines, one weight — in
+  place of the body face made heavy; a sheet of eight candidates rendered
+  from Google Fonts went to the user, the swap being one line.
+  **THE ARCHIVE** ("task in the archive is deleted, but its table doesn't
+  refresh by itself and gave an error even when it was already deleted"). The
+  archive list was read once, on entering the view; every write path on the
+  board ended in `load()`, which re-read the LIVE board alone — so a card
+  deleted from the archive stayed in the list, and the next press on the
+  stale row asked the server for a task it no longer had and reported the
+  404 as «این تغییر ذخیره نشد». `load` re-reads the archive while the archive
+  is on screen (through a ref, so the effect deps do not re-create it per
+  view), the view effect follows the tasks epoch too, and a 404 on open names
+  its nothing («این کار دیگر وجود ندارد») and re-reads so the row leaves.
+  Verified red by removing the archive re-read from `load`; then on
+  production, driven in the user's Chrome: a task created and archived
+  through the API, opened from the archive view, deleted through the ⋯ and
+  the confirm — the row gone, no alert, «بایگانی خالی است», and the server's
+  archive empty.
+  Also: the sessions tables lost their header rows (the audit table's rule)
+  and the agent page's tool groups regained the step the removed «ابزارها»
+  had carried (26 px at 1920, = `mt-6`). Production readings: the address
+  after arriving at `fa.html#chapter-2` is `fa.html`; at chapter 0 the EN
+  link carries no fragment; the wordmark computes `Lalezar` and the face
+  reports loaded; the finale panel `rgba(5, 3, 20, 0.62)` at 44 px; the mock
+  580 px wide; sessions `thead` sr-only; agent gap 26 px.
+  db 191 migrations · core 1357 tests · web 1098 tests + gate + sweep.

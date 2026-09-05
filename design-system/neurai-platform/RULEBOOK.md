@@ -348,6 +348,11 @@ loosened rule — and the user's "except this part" is what puts one there.
 
 ### R9 · Tables — SOLID (one open item, see R6)
 
+- **2026-09-05, evening:** the audit log and the security page's sessions
+  tables render with NO header row (`hideHeader`; the `<thead>` stays
+  sr-only) — the user's ruling for tables whose cells read without column
+  names. Not a general rule: a table whose columns need naming keeps its row.
+
 - **Today:** `DataTable` is the one table — rows are `.table-cards` (16,
   border painted on the cells with logical corners), head `text-group-label`
   600 muted, **ten rows then the pager**, skeleton rows while loading, a named
