@@ -209,7 +209,7 @@ export function Workflows() {
                   href={`/workflows/${workflow.slug}`}
                   /* one element, so there is no dead margin inside the card
                      and no second focus stop competing with the first */
-                  className="group flex min-h-56 flex-col rounded-2xl border border-border bg-surface p-7 transition-colors hover:border-border-strong hover:bg-surface-2"
+                  className="group card flex min-h-56 flex-col transition-colors hover:border-border-strong hover:bg-surface-2"
                 >
                   <WorkflowTile icon={workflow.icon} color={workflow.color} />
                   {/* THROUGH THE CATALOGUE, like every other list on this
@@ -232,7 +232,7 @@ export function Workflows() {
                   /* HALF the height of a template card and the same
                      everything else: same corner, same border, same hover,
                      same tile — the size says "smaller", not "lesser" */
-                  className="group flex min-h-28 flex-col justify-center rounded-2xl border border-border bg-surface p-7 transition-colors hover:border-border-strong hover:bg-surface-2"
+                  className="group card flex min-h-28 flex-col justify-center transition-colors hover:border-border-strong hover:bg-surface-2"
                 >
                   <span className="flex items-center gap-4">
                     <WorkflowTile icon="sparkles" color="violet" size="sm" />
@@ -307,7 +307,7 @@ export function Workflows() {
                       href={`/workflows/${starter.handle}`}
                       /* the authored card's own skin — half a template's
                          height, same corner, same border, same hover */
-                      className="group flex min-h-28 flex-col justify-center rounded-2xl border border-border bg-surface p-7 transition-colors hover:border-border-strong hover:bg-surface-2"
+                      className="group card flex min-h-28 flex-col justify-center transition-colors hover:border-border-strong hover:bg-surface-2"
                     >
                       <span className="flex items-center gap-4">
                         <WorkflowTile icon="sparkles" color="violet" size="sm" />

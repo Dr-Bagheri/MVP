@@ -1089,7 +1089,7 @@ export function Recorder({ onFinished, meeting: meetingProp }: {
             where one pencil renames it, and a second writable copy here
             would be two spellings of one fact.
           */}
-          <div className="rounded-xl border border-border bg-surface p-3">
+          <div className="well p-3">
             <label className="block text-sm font-semibold text-fg" htmlFor="rec-title">
               {t("titleField")}
             </label>
@@ -1121,7 +1121,7 @@ export function Recorder({ onFinished, meeting: meetingProp }: {
               2026-08-26) — and it carries the mark-this-moment button that
               left the transport, which is where a marker belongs anyway:
               beside the writing it anchors */}
-          <div className="rounded-xl border border-border bg-surface p-3">
+          <div className="well p-3">
             <div className="flex items-center justify-between">
               <p className="text-sm font-semibold text-fg">{t("notesTitle")}</p>
               {live ? (
@@ -1156,7 +1156,7 @@ export function Recorder({ onFinished, meeting: meetingProp }: {
               happens after the take, and a name here would be a guess
               wearing an avatar. */}
           {voices.length > 0 ? (
-            <div className="rounded-xl border border-border bg-surface p-3">
+            <div className="well p-3">
               <p className="text-sm font-semibold text-fg">{t("peopleTitle")}</p>
               <div className="mt-2 flex flex-wrap gap-2">
                 {voices.map((label, i) => {

@@ -181,7 +181,7 @@ export function MeetingAssistant({ callId, title }: { callId: string; title: str
       </div>
 
       {/* ── the composer ─────────────────────────────────────────────── */}
-      <div className="mt-3 flex items-center gap-2 rounded-2xl border border-border bg-surface p-2">
+      <div className="well mt-3 flex items-center gap-2 bg-surface p-2">
         <input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}

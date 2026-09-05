@@ -211,7 +211,7 @@ export function ItemsPanel({ meetingId, callId, onSeek, locale }: {
           buckets[kind].map((row) => (
             <div
               key={row.id}
-              className="flex items-start gap-2 rounded-xl border border-border bg-surface p-2.5 shadow-card"
+              className="card-row flex items-start gap-2 p-2.5"
             >
               {kind === "action" ? (
                 <button
@@ -319,7 +319,7 @@ export function ItemsPanel({ meetingId, callId, onSeek, locale }: {
       */}
       <div className="mt-2 space-y-1.5 border-t border-border pt-2.5">
         {composing ? (
-          <div className="rounded-xl border border-accent bg-surface p-2">
+          <div className="well border-accent bg-surface p-2">
             <textarea
               className="input min-h-[64px] resize-none py-2 text-sm"
               placeholder={t(`itemAdd_${kind}`)}

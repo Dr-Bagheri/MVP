@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import type { TaskCardRecord, TaskColumnRecord, TaskLabelRecord } from "@/api/types";
 import { PRIORITY_CHIP, TONE_CHIP, TONE_DOT } from "./TaskDialogs";
+import { TAB_BAR } from "./panelStyle";
 import { IconCheck, IconChevronRight, IconVideo } from "@/components/icons";
 import { dayKeyOf, digits, monthGridAt, weekRangeLabel, weekStrip } from "@/lib/format";
 
@@ -93,7 +94,7 @@ export function TaskCalendar({ tasks, labels, onOpen, onToggleDone }: {
             <IconChevronRight width={12} height={12} className="rtl:rotate-180" />
           </button>
         </div>
-        <div className="flex items-center gap-0.5 rounded-xl border border-border bg-surface p-1" role="tablist">
+        <div className={TAB_BAR} role="tablist">
           {/* 2026-09-03: `.btn-sm` IS the segmented tab — globals.css says so
               by name ("its segmented tabs and toolbar buttons" is what the
               34px/8px size was measured off). This group sat at the other end
@@ -206,7 +207,7 @@ export function TaskCalendar({ tasks, labels, onOpen, onToggleDone }: {
           ))}
         </ul>
       ) : (
-        <div className="min-h-0 flex-1 rounded-xl border border-border bg-surface p-3">
+        <div className="card min-h-0 flex-1 p-3">
           {(byDay.get(dayKey) ?? []).length === 0 ? (
             <p className="p-4 text-center text-sm text-fg-muted">{t("dayEmpty")}</p>
           ) : (

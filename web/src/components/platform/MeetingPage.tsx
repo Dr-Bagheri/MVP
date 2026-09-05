@@ -551,7 +551,7 @@ export function MeetingPage({ id }: { id: string }) {
         }}
       />
       {uploading ? (
-        <p className="mx-auto rounded-xl border border-border bg-surface px-4 py-1.5 text-xs font-medium text-fg shadow-card">
+        <p className="card-row mx-auto px-4 py-1.5 text-xs font-medium text-fg">
           {t("uploading")}
         </p>
       ) : null}
@@ -565,7 +565,7 @@ export function MeetingPage({ id }: { id: string }) {
           refuses the take for it (`shareNoAudio`). Telling somebody that
           after they have chosen is telling them to do it twice. */}
       {!held && !recordingLive && active === "hold" && meeting.mode === "online" ? (
-        <p className="rounded-xl border border-border bg-surface-2 px-3 py-2 text-xs text-fg-muted">
+        <p className="well text-xs text-fg-muted">
           {t("shareHint")}
         </p>
       ) : null}
@@ -813,7 +813,7 @@ function PreStage({ meeting, onPatch, locale }: {
           ) : (
             <ul className="mb-2 space-y-1.5">
               {files.map((file) => (
-                <li key={file.id} className="flex items-center gap-2 rounded-xl border border-border bg-surface-2/50 px-2.5 py-2 text-sm">
+                <li key={file.id} className="well flex items-center gap-2 px-2.5 text-sm">
                   <IconFileText width={14} height={14} className="shrink-0 text-fg-subtle" aria-hidden />
                   <span className="min-w-0 flex-1 truncate text-fg" title={file.name}>{file.name}</span>
                   <button
@@ -883,7 +883,7 @@ function PreStage({ meeting, onPatch, locale }: {
               bordered row reads as a person who is in this meeting, which is
               what the reference's card is doing. */}
           <ul className="mb-2 space-y-1.5">
-            <li className="flex items-center gap-2 rounded-xl border border-border bg-surface-2/50 px-2.5 py-2 text-sm text-fg">
+            <li className="well flex items-center gap-2 px-2.5 text-sm text-fg">
               {/* THE MEETING'S HOST, from the wire — not the signed-in viewer
                   (user report, 2026-09-02). `me` here meant a colleague
                   opening somebody else's meeting saw their OWN name in the
@@ -902,7 +902,7 @@ function PreStage({ meeting, onPatch, locale }: {
               </span>
             </li>
             {meeting.invitees.map((name) => (
-              <li key={name} className="flex items-center gap-2 rounded-xl border border-border bg-surface-2/50 px-2.5 py-2 text-sm text-fg">
+              <li key={name} className="well flex items-center gap-2 px-2.5 text-sm text-fg">
                 {/* 2026-09-03: the platform's avatar, not a fifth hand-drawn one */}
                 <Avatar name={name} size="sm" />
                 <span className="min-w-0 flex-1 truncate">{name}</span>

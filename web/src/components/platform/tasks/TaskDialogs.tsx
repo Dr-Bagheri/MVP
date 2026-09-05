@@ -699,7 +699,7 @@ export function ScheduleFields({ repeats, gapDays, until, onRepeats, onGapDays, 
 }) {
   const t = useTranslations("tasks");
   return (
-    <div className="rounded-xl border border-border bg-surface-2 p-3">
+    <div className="well p-3">
       <label className="flex items-center gap-2">
         <input
           type="checkbox"

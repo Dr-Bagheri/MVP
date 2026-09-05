@@ -33,7 +33,7 @@ export default function LocaleError({
 
   return (
     <div className="grid min-h-screen place-items-center bg-bg p-6">
-      <div className="w-full max-w-md rounded-2xl border border-border bg-surface p-6 text-center">
+      <div className="card w-full max-w-md text-center">
         <h1 className="text-lg font-bold text-fg">{t("title")}</h1>
         <p className="mt-2 text-sm leading-7 text-fg-muted">{t("body")}</p>
         <div className="mt-5 flex justify-center gap-2">

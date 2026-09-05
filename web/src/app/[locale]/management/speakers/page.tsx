@@ -44,7 +44,7 @@ function DirectoryFrame() {
       {Array.from({ length: 5 }, (_, i) => (
         <div
           key={i}
-          className="flex items-center gap-4 rounded-xl border border-border bg-surface px-3 py-3"
+          className="card-row flex items-center gap-4 px-3 py-3"
         >
           {/* the first cell wide, the rest narrower — a row of equal bars
               reads as a rendering fault rather than as a table on its way */}

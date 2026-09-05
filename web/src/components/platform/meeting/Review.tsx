@@ -283,7 +283,7 @@ export function AudioBar({ callId, seekTo, locale, durationMs = null }: {
    */
   return (
     <div
-      className="flex items-center gap-3 rounded-2xl border border-border bg-surface px-3 py-2 shadow-card"
+      className="card flex items-center gap-3 px-3 py-2"
       dir="ltr"
     >
       {/*

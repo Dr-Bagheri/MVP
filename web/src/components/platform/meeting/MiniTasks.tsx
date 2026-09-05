@@ -101,7 +101,7 @@ export function MeetingTasksBoard({ callId }: {
             .sort((a, b) => a.position - b.position);
           return (
             <section key={col.id} aria-label={col.name}
-              className="flex w-[260px] shrink-0 flex-col rounded-2xl border border-border bg-surface p-2.5 shadow-card">
+              className="card flex w-[260px] shrink-0 flex-col p-2.5">
               <header className="flex items-center justify-between px-1 py-1">
                 <span className="text-sm font-semibold text-fg">{col.name}</span>
                 <span className="badge-num rounded-md bg-surface-2 px-1.5 text-[11px] text-fg-subtle">
@@ -111,7 +111,7 @@ export function MeetingTasksBoard({ callId }: {
               <div className="scroll-quiet min-h-0 flex-1 space-y-2 overflow-y-auto pt-1">
                 {cards.map((task) => (
                   <Link key={task.id} href={`/tasks?task=${task.id}`}
-                    className="block rounded-xl border border-border bg-surface p-3 shadow-card transition-colors hover:border-border-strong">
+                    className="card-row block">
                     <div className="flex items-start gap-2">
                       <button
                         type="button"

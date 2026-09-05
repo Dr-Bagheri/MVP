@@ -194,25 +194,59 @@ loosened rule — and the user's "except this part" is what puts one there.
   reasons (badge digits, HUD-like marks); a render test on DataTable/tile
   rows asserts the title class.
 
-### R7 · Surfaces — PROPOSED · two card radii, 70 hand-rolled recipes
+### R7 · Surfaces — SOLID (2026-09-05): three surfaces and nothing else
 
-- **Today:** `.card` (rounded-2xl = 18, border, surface, p-4, `shadow-card`),
-  `.tile` (**20**, `shadow-island`) for dashboard tiles, `.tile-row` (16, row
-  shadow) for list lines, `.table-cards` rows (16), kanban column
-  (`rounded-2xl border bg-surface p-2.5 shadow-card`, hand-rolled), task card
-  (`rounded-xl border`, hand-rolled).
-- **Deviations:**
-  - **two card radii**: `.tile` is 20 while the token (`radius.modal`) moved to
-    18 — meeting-page cards measured 20, settings cards 18;
-  - **70 inline card recipes** (`rounded-(xl|2xl) … border … bg-surface`) in
-    15+ files vs 15 `.card` and 47 `.tile` uses;
-  - **shadow by accident**: workflow tiles, the profile form card and agent
-    cards carry NO shadow; settings cards, board columns and rows do.
-- **Proposed rule:** three surfaces and nothing else — **card** 18 + ambient
-  shadow, **row** 16 + row shadow, **column** 18 + ambient shadow — each a
-  class; an inline recipe is a defect. `.tile` takes the token.
-- **Solid =** guard on className strings combining a radius, a border and a
-  surface ground; `.tile`'s radius asserted equal to `radius.modal`.
+- **The rule.** Three surfaces, each a class in `globals.css`; an inline
+  recipe is a defect.
+  - **`.card`** — a PAGE BLOCK: 18 (`rounded-2xl` = `radius.modal`), hairline
+    border, the surface, 16px inset, the ambient `shadow-card`.
+  - **`.card-row`** — a card in a LIST (a board card, a meeting in its list, a
+    record in a column): 16 (`rounded-xl` = `radius.tile`), the surface, 12px
+    inset, `shadow-card`, a stronger edge under the pointer.
+  - **`.well`** — a row INSIDE a card: 16, recessed one step
+    (`bg-surface-2/40`), NO shadow — a shadow inside a shadowed card is mud.
+  - `.tile` IS a card: 18 (was 20) on `shadow-card` (was `shadow-island`, the
+    dialog's). `.tile-row` and `.table-cards` rows keep 16.
+  - Floating layers — menus, popovers, dialog panels — are not this rule's:
+    they wear the island shadow and belong to R8/R10.
+- **What was found.** 74 hand-rolled recipes in 32 files by the guard's own
+  count (the first grep said 70) against 15 `.card` uses: two corners (18 and
+  20), five grounds (`bg-surface`, `bg-surface-2`, `/40`, `/50`, a tint),
+  insets from `p-2` to `p-7`, and shadow by accident — workflow and agent
+  cards carried none, settings cards and board columns did. Nobody was
+  careless: the theme offered ONE class and screens needed three shapes, so
+  every screen drew the other two.
+- **The sweep (30 files, 50 recipes).** → `card`: agent and workflow cards
+  (`p-7` gone), Skeleton, FormPanel, MailDraftCard, the whiteboard canvas, the
+  live Stage, MiniTasks' column, Review, TaskViews' pane, CreateOrg, the error
+  page, the platform console's warning card, the board's add-column editor,
+  the workflow page's three blocks. → `card-row`: ItemsPanel rows, MiniTasks
+  rows, the meeting's live pill, the speakers list. → `well`: Recorder ×4,
+  AgentDetail, IntegrationDetail, Integrations, MailDraftCard's quote,
+  MeetingPage ×4, the meetings composer, ProjectDetail's note, TaskDetail ×2,
+  TaskDialogs, WorkflowBuilder ×2, the workflow page ×3. **The board's card is
+  the theme's list card**: `BOARD_CARD = "card-row cursor-pointer"`
+  (board.guard's literal updated). TaskViews' segmented box was R4's
+  `TAB_BAR` wearing a card recipe and now reads the constant.
+- **Kept, as entries WITH reasons** (24, in `surface.guard.test.ts`): ten
+  floating layers in eight files (date/time popovers, the Select listbox, the
+  account menu, the bell, the emoji panel, the tone popover, the Jalali
+  picker, the whiteboard's two toolbars) → R10; seven dialog panels (Overlay,
+  the confirm dialog, SetMemberPassword, TourOverlay, WorkflowBuilder,
+  WorkflowRunDialog, the platform console) → R8's second pass; four fields
+  wearing a card's corner (the task title and description editors, the label
+  field and its popover) → R5; the one detail frame (R18), the rail (R1), the
+  assistant's composer (a structural exception by ruling).
+- **Solid =** `surface.guard.test.ts`: (1) over every `.tsx` outside `ui/`, a
+  className carrying a card corner AND a border AND a surface ground is a
+  hand-rolled card, and each file's count must EQUAL its entry — more is a
+  regression, fewer is a stale entry — with synthetic controls for chips,
+  inputs and the three classes; (2) `.tile`'s literal radius ==
+  `SCAFFOLD.radius.modal` and its shadow == `--shadow-card`, read from the
+  rule body, not the comment beside it; (3) `.card-row` and `.well` exist.
+  Verified red three ways: on the un-swept tree (32 files named, tile
+  20/island), on a recipe staged back into Skeleton, and on a stale count
+  (Overlay recorded as 2) — each fired on exactly its own line.
 
 ### R8 · Dialogs and panels — SOLID (2026-09-05)
 
@@ -398,7 +432,10 @@ loosened rule — and the user's "except this part" is what puts one there.
 
 ## Order proposed
 
-R4 → R8 → R7 → R6 → R3 (+R14's primary coat) → R5 → R17 → R18 → R19 →
-R12 → R20 → R16. The first two are pure defects with a one-file cause; the
-next three are the sweeps that make pages stop looking hand-made; the rest
-are compositions the user should see before they are drawn.
+R4 ✓ → R8 ✓ → R7 ✓ → R6 → R3's one-`Toolbar` half (+R14's primary coat) → R5
+→ R17 ✓ → R18 ✓ (frame; pages remain) → R19 → R12 → R20 → R16. The first two
+were pure defects with a one-file cause; the next three are the sweeps that
+make pages stop looking hand-made; the rest are compositions the user should
+see before they are drawn. **Next: R6** — 212 raw px sizes in 47 files, row
+titles at 16 vs the reference's 14/700, and the Persian font decision (three
+candidates shown before one is chosen).

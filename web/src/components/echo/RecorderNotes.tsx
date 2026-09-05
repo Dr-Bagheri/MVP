@@ -172,7 +172,7 @@ export function AgendaPanel({
   }
 
   return (
-    <div className="rounded-xl border border-border bg-surface p-3">
+    <div className="well p-3">
       <p className="text-sm font-semibold text-fg">{t("agendaTitle")}</p>
       {items.length > 0 ? (
         /* the measured Otter/Fireflies anatomy: bare rows on a ~40px

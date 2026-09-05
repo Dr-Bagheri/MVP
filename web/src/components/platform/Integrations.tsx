@@ -553,7 +553,7 @@ export function Integrations() {
               {briefing.entry.provider === "google" ? (
                 <p className="text-sm leading-6 text-fg-muted">{t("oneGoogleGrant")}</p>
               ) : null}
-              <div className="rounded-xl border border-border bg-surface-2/40 p-4">
+              <div className="well p-4">
                 <p className="text-sm font-medium text-fg">{t("privacyTitle")}</p>
                 <p className="mt-1 text-sm leading-6 text-fg-muted">{t("privacyNote")}</p>
               </div>

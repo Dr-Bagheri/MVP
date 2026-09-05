@@ -905,7 +905,7 @@ export default function WorkflowDetailPage({
                 affordance that does not mirror the wall.
               */}
               {me?.record_on_workflows !== undefined ? (
-                <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-surface p-4">
+                <div className="card mb-6 flex flex-wrap items-center justify-between gap-3">
                   <span className="min-w-0">
                     <span className="block text-sm font-medium text-fg">{t("detailRecordTitle")}</span>
                   </span>
@@ -925,7 +925,7 @@ export default function WorkflowDetailPage({
               ) : null}
 
               <div className="grid gap-6 lg:grid-cols-[3fr_2fr]">
-                <section className="rounded-xl border border-border bg-surface p-6">
+                <section className="card">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <h2 className="text-lg font-semibold text-fg">{t("detailProcess")}</h2>
                     {/*
@@ -964,7 +964,7 @@ export default function WorkflowDetailPage({
 
                   <p className="mt-6 text-xs font-medium text-fg-subtle">{t("detailTrigger")}</p>
                   {trigger ? (
-                    <div className="mt-2 flex items-start gap-3 rounded-xl border border-border bg-surface-2/40 p-4">
+                    <div className="well mt-2 flex items-start gap-3 p-4">
                       <span
                         className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-surface-2 text-fg-muted"
                         aria-hidden
@@ -1005,7 +1005,7 @@ export default function WorkflowDetailPage({
                                 )}
                               </div>
                               <div
-                                className={`min-w-0 flex-1 rounded-xl border border-border bg-surface-2/40 p-4 ${last ? "" : "mb-3"}`}
+                                className={`well min-w-0 flex-1 p-4 ${last ? "" : "mb-3"}`}
                               >
                                 <p className="text-sm font-semibold text-fg">{step.title}</p>
                                 <p className="mt-1 text-sm leading-6 text-fg-muted">
@@ -1020,11 +1020,11 @@ export default function WorkflowDetailPage({
                   ) : null}
                 </section>
 
-                <section className="rounded-xl border border-border bg-surface p-6">
+                <section className="card">
                   <h2 className="text-lg font-semibold text-fg">{t("detailRunsTitle")}</h2>
 
                   <p className="mt-6 text-xs font-medium text-fg-subtle">{t("detailUpcoming")}</p>
-                  <div className="mt-2 flex items-center justify-between gap-3 rounded-xl border border-border bg-surface-2/40 px-4 py-3">
+                  <div className="well mt-2 flex items-center justify-between gap-3 px-4 py-3">
                     <span className="min-w-0 truncate text-sm text-fg">{subject.name}</span>
                     {/* the same sentence the trigger card shows, from the same
                         source — two readings of one fact eventually disagree */}

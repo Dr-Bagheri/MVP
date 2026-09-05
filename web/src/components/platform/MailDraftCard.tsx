@@ -112,7 +112,7 @@ export function MailDraftCard({
     <div className="mt-3 max-w-[42rem]">
       {source ? <SourcePanel message={source} locale={locale} /> : null}
 
-      <article className="overflow-hidden rounded-2xl border border-border bg-surface shadow-sm">
+      <article className="card overflow-hidden p-0">
         {/*
           The header names WHO is speaking and in what state. The mark is
           tinted rather than outlined so the card reads as one object from a
@@ -258,7 +258,7 @@ function SourcePanel({ message, locale }: { message: MailSourceMessage; locale: 
   const sources = [message];
 
   return (
-    <section className="mb-2 rounded-xl border border-border bg-surface-2/40">
+    <section className="well mb-2 p-0">
       <button
         type="button"
         className="tap flex w-full items-center gap-2 rounded-xl px-3 py-2 text-start"

@@ -176,7 +176,7 @@ function AgentTile({ agent, copy, big = false }: {
       /* ONE element, so there is no dead margin inside the card and no second
          focus stop competing with the first — the workflow card's rule, and
          the reason its actions live on the page it opens rather than on it */
-      className={`group flex flex-col rounded-2xl border border-border bg-surface p-7 transition-colors hover:border-border-strong hover:bg-surface-2 ${
+      className={`group card flex flex-col transition-colors hover:border-border-strong hover:bg-surface-2 ${
         big ? "min-h-40" : "min-h-28 justify-center"
       }`}
     >

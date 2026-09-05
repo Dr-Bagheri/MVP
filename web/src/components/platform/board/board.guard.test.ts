@@ -63,7 +63,7 @@ const LITERALS = [
   "min-h-[70vh]",
   "scroll-quiet flex min-h-0 flex-1 gap-3 overflow-x-auto pb-2",
   "scroll-quiet min-h-0 flex-1 space-y-2 overflow-y-auto pt-1",
-  "cursor-pointer rounded-xl border border-border bg-surface p-3 shadow-card",
+  "card-row",
   "border-dashed border-border font-medium text-fg-muted hover:border-border-strong hover:text-fg",
 ];
 

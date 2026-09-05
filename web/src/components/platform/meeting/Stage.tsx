@@ -73,7 +73,7 @@ export function MeetingStage({ meeting, recordingLive }: {
      * and how the reference reads: the thing that is being recorded and the
      * lamp saying so are the same object.
      */
-    <div ref={shell} className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-border bg-surface">
+    <div ref={shell} className="card flex min-h-0 flex-col overflow-hidden p-0">
       {/* ── the stage header ─────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border p-2">
         <div className="flex items-center gap-0.5 rounded-xl bg-surface-2 p-1">

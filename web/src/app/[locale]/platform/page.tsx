@@ -941,7 +941,7 @@ export default function PlatformControlPage() {
               org they invented if the second never happened.
             */}
             {!userTrash && pendingArrivals.length > 0 ? (
-              <div className="mb-3 overflow-hidden rounded-2xl border border-warning/30 bg-surface">
+              <div className="card mb-3 overflow-hidden border-warning/30 p-0">
                 <p className="border-b border-border px-4 py-2.5 text-xs font-semibold text-warning">
                   {t("pendingArrivals")}
                 </p>

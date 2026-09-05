@@ -443,7 +443,7 @@ export function TaskDetail({ task, columns, topics, labels, people, onClose, onC
                     ))}
                   </ul>
                 )}
-                <div className="rounded-xl border border-border bg-surface-2/40 p-2">
+                <div className="well p-2">
                   <textarea
                     value={comment}
                     onChange={(e) => setComment(e.target.value)}
@@ -602,7 +602,7 @@ function ScheduleRow({ task, onChanged, onFailed }: {
           {t("scheduleAdd")}
         </button>
       ) : (
-        <div className="rounded-xl border border-border bg-surface-2 p-2.5">
+        <div className="well p-2.5">
           <p className={`text-[11px] leading-5 ${schedule.active ? "text-fg" : "text-warning"}`}>
             {schedule.active
               ? (schedule.until_date === null

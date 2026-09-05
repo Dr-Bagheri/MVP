@@ -48,7 +48,7 @@ export function CreateOrg({ onCreated }: { onCreated: () => void }) {
   }
 
   return (
-    <div className="rounded-xl border border-border bg-surface p-4">
+    <div className="card">
       <p className="mb-1 text-sm font-semibold text-fg">{t("newOrg")}</p>
       <p className="mb-3 text-xs leading-5 text-fg-muted">{t("newOrgHint")}</p>
       <div className="grid gap-2 sm:grid-cols-2">

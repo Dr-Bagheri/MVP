@@ -281,7 +281,7 @@ export function Whiteboard({ meetingId }: { meetingId: string }) {
   );
 
   return (
-    <div ref={wrapRef} className="relative min-h-[420px] flex-1 overflow-hidden rounded-2xl border border-border bg-surface shadow-card">
+    <div ref={wrapRef} className="card relative min-h-[420px] flex-1 overflow-hidden p-0">
       <canvas
         ref={canvasRef}
         className={tool === "hand" ? "cursor-grab" : "cursor-crosshair"}

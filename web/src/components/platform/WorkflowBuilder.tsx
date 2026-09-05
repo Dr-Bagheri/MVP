@@ -832,7 +832,7 @@ export function WorkflowBuilder({
               <span className="block text-sm font-medium text-fg">{t("triggerSelect")}</span>
             </button>
           ) : (
-            <div className="mt-2 rounded-xl border border-border bg-surface-2/40 p-3">
+            <div className="well mt-2 p-3">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-sm font-medium text-fg">{t(`trigger_${chosenTrigger}`)}</span>
                 <button
@@ -925,7 +925,7 @@ export function WorkflowBuilder({
                    field this editor invites people to rewrite */
                 <li key={`${index}:${step.id}`}>
                   {connector(index)}
-                  <div className="rounded-xl border border-border bg-surface-2/40 p-3">
+                  <div className="well p-3">
                     <div className="flex flex-wrap items-center gap-2">
                       {/* NOT a control, and it must not be dressed as one
                           (control.guard worklist, 2026-09-03): this is the

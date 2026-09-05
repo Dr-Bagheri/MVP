@@ -26,7 +26,7 @@ export function FormPanel({ children }: { children: ReactNode }) {
      tile and dialog wears — a form panel at 12px beside cards at 20px was
      the one square-ish box on a page of round ones */
   return (
-    <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-surface">
+    <div className="card divide-y divide-border overflow-hidden p-0">
       {children}
     </div>
   );

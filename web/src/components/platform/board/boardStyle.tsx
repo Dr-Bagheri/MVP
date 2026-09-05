@@ -27,8 +27,8 @@ import { TONE_DOT } from "../tasks/TaskDialogs";
  *   title     13/600, truncating
  *   count     11px subtle on the raised ground, a 6px corner
  *   cards     8px apart, scrolling inside the column
- *   card      xl corner · surface · 12px inset · card shadow · a stronger
- *             edge under the pointer
+ *   card      the theme's `.card-row` (R7): 16 corner · surface · 12px inset ·
+ *             card shadow · a stronger edge under the pointer
  *   add row   the compact control, dashed, filling the column's width
  *
  * A guard (board.guard.test.ts) keeps the two boards reading this module and
@@ -47,8 +47,8 @@ export const BOARD_TITLE = "truncate text-sm font-semibold text-fg";
 export const BOARD_COUNT = "badge-num rounded-md bg-surface-2 px-1.5 text-[11px] text-fg-subtle";
 
 export const BOARD_CARDS = "scroll-quiet min-h-0 flex-1 space-y-2 overflow-y-auto pt-1";
-export const BOARD_CARD =
-  "cursor-pointer rounded-xl border border-border bg-surface p-3 shadow-card transition-colors hover:border-border-strong";
+/** the board's card is the theme's list card (R7) — pressable, so the cursor says so */
+export const BOARD_CARD = "card-row cursor-pointer";
 
 /** the add-COLUMN placeholder at the end of the lane: a narrower dashed column
     with the same floor, so it stands in the row as a column and not a strip */

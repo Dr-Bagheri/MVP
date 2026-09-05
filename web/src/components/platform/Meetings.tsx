@@ -624,7 +624,7 @@ export function InviteeInput({ value, onChange }: { value: string[]; onChange: (
     setDraft("");
   };
   return (
-    <div className="rounded-xl border border-border bg-surface p-2 transition-colors focus-within:border-accent">
+    <div className="well bg-surface p-2 transition-colors focus-within:border-accent">
       {value.length > 0 ? (
         <div className="mb-1.5 flex flex-wrap gap-1.5">
           {value.map((name) => (

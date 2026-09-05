@@ -125,7 +125,7 @@ export function AgentDetail({ handle }: { handle: string }) {
         makes the sections below read as what is known ABOUT that subject
         rather than as four unrelated blocks stacked down a page.
       */}
-      <div className="rounded-2xl border border-border bg-surface p-6">
+      <div className="card">
       <div className="flex flex-wrap items-center gap-4">
         <AgentAvatar handle={agent.handle} size="xl" />
         <div className="min-w-0 flex-1">
@@ -220,7 +220,7 @@ export function AgentDetail({ handle }: { handle: string }) {
       <Section title={t("detailTools")}>
         <div className="grid gap-4 lg:grid-cols-2">
           {groups.map((group) => (
-            <section key={group.key} className="rounded-xl border border-border bg-surface p-4">
+            <section key={group.key} className="well p-4">
               <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-fg">
                 <span className="grid h-6 w-6 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent">
                   <Icon name={group.icon} size="sm" />

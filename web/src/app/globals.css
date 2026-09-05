@@ -402,13 +402,38 @@
    * tool, and dashboard density is the point (verdict item 4).
    */
   .card {
-    /* the reference's card, measured: 20px corner, hairline border, and an
+    /* the reference's card, measured (18 since 2026-09-05, the token): hairline border, and an
        AMBIENT shadow rather than a hover-only one — a card that only lifts
        under the pointer reads as flat paper next to one that always sits
        slightly above the page, which is most of why our screens looked
        plainer than theirs at identical colours */
     @apply rounded-2xl border border-border bg-surface p-4 shadow-card
            transition-shadow duration-200;
+  }
+  /*
+   * R7 — THREE SURFACES AND NOTHING ELSE (user, 2026-09-05: same table or
+   * same button on two pages = same size; the platform looked like ten
+   * developers made it). A survey that day found SEVENTY hand-rolled card
+   * recipes (`rounded-xl|2xl border bg-surface …`) against fifteen uses of
+   * `.card`: two corners (18 and 20), shadows by accident, five grounds.
+   *
+   *   .card      a page block — 18, the surface, 16px inset, ambient shadow
+   *   .card-row  a card in a LIST (a board card, a meeting in its list, a
+   *              record in a column) — 16 (radius.tile), the surface, 12px
+   *              inset, ambient shadow, a stronger edge under the pointer
+   *   .well      a row INSIDE a card — 16, recessed a step (the raised tint
+   *              at 40%), no shadow: a shadow inside a shadowed card is mud
+   *
+   * Floating layers (menus, popovers, dialogs) are NOT these — they wear the
+   * island shadow and belong to R8/R10. surface.guard keeps the recipe out
+   * of the component tree.
+   */
+  .card-row {
+    @apply rounded-xl border border-border bg-surface p-3 shadow-card
+           transition-colors hover:border-border-strong;
+  }
+  .well {
+    @apply rounded-xl border border-border bg-surface-2/40 px-3 py-2;
   }
 
   /*
@@ -935,13 +960,20 @@
   flex-direction: column;
   height: 100%;
   min-height: 0;
-  border-radius: 20px;
+  /* R7 (2026-09-05): the CARD token, 18 — this said 20 while every other
+     card in the product rounded at radius.modal, so a dashboard tile and a
+     settings card disagreed by two pixels on the same screen. globals.css
+     uses no theme(); surface.guard asserts this literal equals the token. */
+  border-radius: 18px;
   overflow: hidden;
   isolation: isolate;
   transition: transform .18s cubic-bezier(.2,.9,.3,1), box-shadow .18s ease;
   background: rgb(var(--surface));
   border: 1px solid rgb(var(--border));
-  box-shadow: var(--shadow-island);
+  /* R7: the ambient CARD shadow. Island is the floating layers' (dialogs,
+     menus) — a tile is a card, and a meeting row (`tile tile-row`) wore the
+     dialog's shadow while the table row beside it wore none. */
+  box-shadow: var(--shadow-card);
   color: rgb(var(--fg));
 }
 

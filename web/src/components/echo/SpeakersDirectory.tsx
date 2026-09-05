@@ -762,7 +762,7 @@ export function SpeakersDirectory() {
                     {inBand.map((person) => (
                       <span
                         key={person.id}
-                        className="flex items-center gap-2 rounded-xl border border-border bg-surface-2/50 px-3 py-2"
+                        className="well flex items-center gap-2"
                       >
                         {/* 2026-09-03: the platform's avatar at `sm` — 28px,
                             the size this chip already drew, so the picture is

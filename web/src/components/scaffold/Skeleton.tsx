@@ -84,7 +84,7 @@ export function SkeletonCards({
   return (
     <div className={className} aria-hidden>
       {Array.from({ length: count }, (_, i) => (
-        <div key={i} className={`rounded-2xl border border-border bg-surface p-7 ${height}`}>
+        <div key={i} className={`card ${height}`}>
           <Skeleton className="h-11 w-11 rounded-xl" />
           <Skeleton className="mt-6 h-4 w-40" />
           <Skeleton className="mt-2.5 h-3 w-full" />

@@ -428,7 +428,7 @@ export function IntegrationDetail({ slug }: { slug: string }) {
                         {/* the privacy card, Sana's "Private integration" told
                             truthfully: per-person grant (D29), read on demand,
                             never in logs */}
-                        <div className="mt-6 rounded-xl border border-border bg-surface-2/40 p-4">
+                        <div className="well mt-6 p-4">
                           <p className="text-sm font-medium text-fg">{t("privacyTitle")}</p>
                           <p className="mt-1 text-sm leading-6 text-fg-muted">{t("privacyNote")}</p>
                         </div>

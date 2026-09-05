@@ -651,7 +651,7 @@ function EditProjectDialog({ project, onClose, onSaved, onFailed }: {
         {/* the rename's consequence, said before it happens rather than
             discovered on the board */}
         {"name" in patch ? (
-          <p className="rounded-xl border border-border bg-surface-2 px-3 py-2 text-[11px] text-fg-muted">
+          <p className="well text-[11px] text-fg-muted">
             {t("renameNote")}
           </p>
         ) : null}

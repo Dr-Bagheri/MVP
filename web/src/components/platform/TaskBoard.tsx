@@ -956,7 +956,7 @@ function AddColumnInline({ onAdded, onRefused }: {
     );
   }
   return (
-    <div className="w-[220px] shrink-0 rounded-2xl border border-accent bg-surface p-2">
+    <div className="card w-[220px] shrink-0 border-accent p-2">
       {/* NOT `.input-sm` (2026-09-03): the CARD is the box — border, ground and
           corner are the column-shaped panel this composer becomes — so a themed
           field would draw a second one inside it. Same shape as the topic
