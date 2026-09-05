@@ -6,7 +6,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/api/client";
 import type { ConnectorProvider, ConnectorStatus, Me } from "@/api/types";
 import { useRouter } from "@/i18n/routing";
-import { PageContainer, Section } from "@/components/scaffold";
+import { PageContainer } from "@/components/scaffold";
 import { DataTable, StatusDot, type Column } from "@/components/DataTable";
 import { EmptyState } from "@/components/ui";
 import { ConfirmDialog } from "@/components/rowActions";
@@ -317,7 +317,7 @@ export function Integrations() {
             label={t("sectionsLabel")}
             active={tab}
             onSelect={setTab}
-            className="mb-4"
+            className="mb-5"
             tabs={[
               { key: "available", label: t("availableTitle") },
               /* the count is the reason to look: "3" answers "is anything
@@ -328,16 +328,15 @@ export function Integrations() {
             ]}
           />
 
-          <Section hidden={tab !== "connected"}>
-            {/* audit finding, 2026-09-02: `Section` sets its title in
-                `text-xl`, which the re-pitched scale points at the 16px PAGE
-                title — so this block's heading stood a step above the 15px
-                `.h-section` headings General, Assistant and Security give the
-                same job, one press away in the same menu. The shared class
-                carries the heading here (`mb-4` is the gap `Section` puts
-                under its own title, kept exactly); `Section`'s h2 is the
-                platform-wide half of this and belongs to whoever owns the
-                scaffold, not to one of its thirteen callers. */}
+          {/* TAB PANELS ARE PLAIN BOXES, not Sections (user, 2026-09-05: "the
+              gap between the sub menu and the buttons is too much"). `Section`
+              pads its top by a rhythm step except for the FIRST section, and
+              with the connected panel first in the DOM the available panel —
+              the default tab — was the second: the default view opened 48px
+              under its tabs while the other tab opened at 16. A tab panel has
+              no title and no divider; it needs nothing Section gives, and the
+              tabs carry the template's own `mb-5` (tasks, meetings, workflows). */}
+          <div hidden={tab !== "connected"}>
             {connectors !== null && allRows.length === 0 ? (
               <EmptyState text={t("noneConnected")} />
             ) : (
@@ -401,9 +400,9 @@ export function Integrations() {
                 />
               </>
             )}
-          </Section>
+          </div>
 
-          <Section hidden={tab !== "available"}>
+          <div hidden={tab !== "available"}>
             {/* audit finding, 2026-09-02: the same step down as the block
                 above — two headings on one screen must not answer the
                 "how big is a block title" question twice */}
@@ -515,7 +514,7 @@ export function Integrations() {
               })}
             </div>
             {error ? <p role="status" className="mt-4 text-sm text-danger">{error}</p> : null}
-          </Section>
+          </div>
 
       {/*
         THE CONNECT BRIEFING (user directive: "when you click the one without

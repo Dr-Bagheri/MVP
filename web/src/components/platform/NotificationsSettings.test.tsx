@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
@@ -73,7 +73,7 @@ describe("each toggle moves exactly its own stored fact", () => {
 
   it("auto-draft and meeting-prep send their own columns, nothing beside them", async () => {
     render(<NotificationsSettings />);
-    const draft = await screen.findByRole("switch", { name: "پیش‌نویس خودکار پاسخ ایمیل" });
+    const draft = await screen.findByRole("switch", { name: "پیش‌نویس ایمیل" });
     fireEvent.click(draft);
     expect(updateAssistant).toHaveBeenCalledWith({ auto_draft_replies: true });
     await waitFor(() => expect(draft).toHaveAttribute("aria-checked", "true"));
@@ -113,7 +113,7 @@ describe("the frame stands before the answers (2026-09-03)", () => {
   const LABELS = [
     "خلاصهٔ پس از تماس",
     "گزارش هفتگی",
-    "پیش‌نویس خودکار پاسخ ایمیل",
+    "پیش‌نویس ایمیل",
     "آماده‌سازی پیش از جلسه",
   ];
 
@@ -132,6 +132,23 @@ describe("the frame stands before the answers (2026-09-03)", () => {
     expect(screen.queryByText("این تنظیم هنوز روی این استقرار فعال نیست.")).toBeNull();
     expect(screen.queryByText("وضعیت فعلی این تنظیم خوانده نشد.")).toBeNull();
 
+    expect(placeholders()).toHaveLength(4);
+  });
+
+  it("together: while the digest is still in flight, the three rows `me` already answered stay placeholders too (2026-09-05)", async () => {
+    /* the user's report: "weekly report always loads a little later than the
+       other toggles" — three rows adopted `me` the moment it landed and the
+       digest's skeleton outlived them by a round trip. `me` answers at once
+       here and the digest never does; the frame must not split. */
+    weeklyDigest.mockReturnValue(new Promise(() => undefined));
+    render(<NotificationsSettings />);
+    /* THE ANCHOR (the temporal-vacuum rule): "no switch" is also true before
+       `me` has settled, so the assertion must run after it demonstrably has.
+       A macrotask turn drains every microtask `me`'s resolution chains
+       through, inside act so React commits whatever those chains set. */
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+    expect(me).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("switch")).toBeNull();
     expect(placeholders()).toHaveLength(4);
   });
 
@@ -155,7 +172,7 @@ describe("the kinds of nothing", () => {
     // switch, so "no switch" below cannot be the fetch failing wholesale
     await screen.findByRole("switch", { name: "خلاصهٔ پس از تماس" });
 
-    expect(screen.queryByRole("switch", { name: "پیش‌نویس خودکار پاسخ ایمیل" })).toBeNull();
+    expect(screen.queryByRole("switch", { name: "پیش‌نویس ایمیل" })).toBeNull();
     expect(screen.getAllByText("این تنظیم هنوز روی این استقرار فعال نیست.")).toHaveLength(1);
   });
 

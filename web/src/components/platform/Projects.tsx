@@ -5,6 +5,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/routing";
 import { useSearchParams } from "next/navigation";
 import { ProjectDetail } from "./ProjectDetail";
+import { ProjectDialog } from "./ProjectDialog";
 import {
   BOARD_CARD, BOARD_CARDS, BOARD_COLUMN, BOARD_COUNT, BOARD_HEADER, BOARD_HEADER_END,
   BOARD_HEADER_START, BOARD_LANE, BOARD_TITLE, BoardAddRow, BoardTone,
@@ -12,14 +13,13 @@ import {
 import { api } from "@/api/client";
 import { useRefreshEpoch } from "@/lib/refreshBus";
 import type {
-  OrgPersonRecord, ProjectRecord, ProjectTone,
+  OrgPersonRecord, ProjectRecord,
   TaskCardRecord, TaskColumnRecord, TaskTopicRecord,
 } from "@/api/types";
-import { Overlay } from "./Overlay";
 import { Avatar } from "@/components/Avatar";
 import { TONE_CHIP, TONE_DOT } from "./tasks/TaskDialogs";
 import {
-  IconCheck, IconChevronRight, IconClock, IconClose, IconFolder,
+  IconChevronRight, IconClock, IconFolder,
   IconPeople3, IconPlus, IconUser,
 } from "@/components/icons";
 import { SkeletonCards } from "@/components/scaffold";
@@ -73,15 +73,6 @@ type Board = {
  * so nothing here can disagree with the board a click away. That is 0181's
  * rule (progress is counted, never stored) applied to four more facts.
  */
-
-export const PROJECT_TONES: ProjectTone[] = [
-  "grey", "blue", "green", "amber", "red", "purple", "teal", "pink",
-];
-
-/* the eight the reference offers. A closed set for the same reason the tone
-   is closed: a free emoji field is a text input somebody pastes a sentence
-   into, and the card draws it at 20px. */
-const ICON_CHOICES = ["📁", "🚀", "🎯", "🧩", "📈", "🛠️", "💡", "🌱"];
 
 type Scope = "all" | "mine";
 type View = "kanban" | "list" | "calendar" | "archive";
@@ -345,11 +336,12 @@ export function Projects({ meId, isAdmin }: { meId: string | null; isAdmin: bool
       ) : null}
 
       {creating ? (
-        <NewProjectDialog
+        <ProjectDialog
+          mode="create"
           people={people}
           meId={meId}
           onClose={() => setCreating(false)}
-          onCreated={(p) => {
+          onSaved={(p) => {
             setCreating(false);
             router.push(`/projects?project=${p.id}`);
           }}
@@ -568,42 +560,6 @@ function ProjectCalendar({ projects, cardsOf, locale }: {
   );
 }
 
-/**
- * The colour swatches, ONE component — the create dialog and the edit dialog
- * ask the same question, and a second copy is the one that stops matching the
- * first the day either gains a rule.
- *
- * The box is the BOARD'S (its 2026-09-03 note: the 16px colour inside is the
- * picture, `.btn-icon` is the 28px box a person presses — which was `h-7
- * rounded-lg` spelled by hand until the control guard said so). Only the
- * selected ring belongs to this picker.
- */
-export function TonePicker({ value, onChange, label }: {
-  value: ProjectTone;
-  onChange: (tone: ProjectTone) => void;
-  label: string;
-}) {
-  return (
-    <div>
-      <span className="mb-1.5 block text-xs font-medium text-fg-muted">{label}</span>
-      <div className="flex flex-wrap gap-1.5">
-        {PROJECT_TONES.map((tone) => (
-          <button
-            key={tone}
-            type="button"
-            aria-label={tone}
-            aria-pressed={value === tone}
-            onClick={() => onChange(tone)}
-            className={`btn btn-icon hover:bg-surface-2 ${value === tone ? "ring-2 ring-accent" : ""}`}
-          >
-            <span className={`h-4 w-4 rounded-md ${TONE_DOT[tone] ?? TONE_DOT.grey!}`} />
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function ProjectCard({ project, people, locale, compact = false }: {
   project: ProjectRecord;
   people: OrgPersonRecord[];
@@ -714,157 +670,3 @@ function ProjectCard({ project, people, locale, compact = false }: {
     </Link>
   );
 }
-
-/**
- * THE CREATE DIALOG, field for field from the reference: a name, a line of
- * description, a colour, an icon, and who is on it.
- *
- * The people picker is a LIST OF TOGGLES rather than a search box, and that
- * is a size judgement rather than a preference: these are colleagues in one
- * organisation, so the list is short enough to read. When an org outgrows
- * that, the box arrives — and it arrives with a reason, not because a search
- * field looks more finished.
- */
-export function NewProjectDialog({ people, meId, onClose, onCreated, onFailed }: {
-  people: OrgPersonRecord[];
-  meId: string | null;
-  onClose: () => void;
-  onCreated: (project: ProjectRecord) => void;
-  onFailed: () => void;
-}) {
-  const t = useTranslations("projects");
-  const tCommon = useTranslations("common");
-  const locale = useLocale();
-  const [name, setName] = useState("");
-  const [summary, setSummary] = useState("");
-  const [tone, setTone] = useState<ProjectTone>("blue");
-  const [icon, setIcon] = useState<string | null>("📁");
-  const [members, setMembers] = useState<string[]>([]);
-  const [busy, setBusy] = useState(false);
-
-  const submit = () => {
-    if (name.trim() === "" || busy) return;
-    setBusy(true);
-    void api.createProject({
-      name: name.trim(),
-      summary: summary.trim(),
-      tone,
-      icon,
-      member_ids: members,
-    })
-      .then(onCreated)
-      .catch(() => { setBusy(false); onFailed(); });
-  };
-
-  return (
-    <Overlay onClose={onClose} label={t("newProject")} size="md">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-base font-semibold text-fg">{t("newProject")}</h2>
-        <button type="button" onClick={onClose} className="btn btn-icon text-fg-muted hover:text-fg" aria-label={t("close")}>
-          <IconClose width={14} height={14} />
-        </button>
-      </div>
-
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto">
-        <label className="block">
-          <span className="mb-1 block text-xs font-medium text-fg-muted">{t("fieldName")}</span>
-          <input
-            autoFocus
-            value={name}
-            maxLength={120}
-            onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
-            placeholder={t("namePlaceholder")}
-            className="input w-full"
-          />
-        </label>
-
-        <label className="block">
-          <span className="mb-1 block text-xs font-medium text-fg-muted">{t("fieldSummary")}</span>
-          <textarea
-            value={summary}
-            maxLength={400}
-            rows={2}
-            onChange={(e) => setSummary(e.target.value)}
-            placeholder={t("summaryPlaceholder")}
-            className="input w-full resize-none py-2"
-          />
-        </label>
-
-        <TonePicker value={tone} onChange={setTone} label={t("fieldTone")} />
-
-        <div>
-          <span className="mb-1.5 block text-xs font-medium text-fg-muted">{t("fieldIcon")}</span>
-          <div className="flex flex-wrap gap-1.5">
-            {ICON_CHOICES.map((choice) => (
-              <button
-                key={choice}
-                type="button"
-                aria-pressed={icon === choice}
-                onClick={() => setIcon((cur) => (cur === choice ? null : choice))}
-                /* the same box as the colour swatch beside it — a picker
-                   whose two rows are different sizes reads as two features */
-                className={`btn btn-icon hover:bg-surface-2 ${
-                  icon === choice ? "bg-accent-soft ring-2 ring-accent" : ""
-                }`}
-              >
-                <span className="text-base">{choice}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <span className="mb-1.5 block text-xs font-medium text-fg-muted">{t("fieldMembers")}</span>
-          <div className="max-h-44 space-y-1 overflow-y-auto rounded-xl border border-border p-1.5">
-            {people.length === 0 ? (
-              <p className="px-1 py-2 text-xs text-fg-subtle">{t("noColleagues")}</p>
-            ) : people.map((person) => {
-              /* THE CREATOR IS ALREADY ON IT and the row says so rather than
-                 offering a toggle that changes nothing: the server adds them
-                 unconditionally (a project you made and are not on reads as
-                 somebody else's), so a switch here would be a control whose
-                 off position the server ignores. */
-              const isMe = person.id === meId;
-              const on = isMe || members.includes(person.id);
-              return (
-                <button
-                  key={person.id}
-                  type="button"
-                  disabled={isMe}
-                  aria-pressed={on}
-                  onClick={() => setMembers((cur) =>
-                    cur.includes(person.id) ? cur.filter((id) => id !== person.id) : [...cur, person.id])}
-                  className={`tap flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-start text-xs ${
-                    on ? "bg-accent-soft text-accent" : "text-fg-muted hover:bg-surface-2"
-                  } ${isMe ? "cursor-default" : ""}`}
-                >
-                  <Avatar name={personName(person, locale)} size="xs" />
-                  <span className="min-w-0 flex-1 truncate">{personName(person, locale)}</span>
-                  {isMe ? <span className="text-[10px]">{t("you")}</span> : null}
-                  {on ? <IconCheck width={12} height={12} /> : null}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-3 flex items-center justify-end gap-2 border-t border-border pt-3">
-        <button type="button" onClick={onClose} className="btn text-fg-muted hover:text-fg">
-          {tCommon("cancel")}
-        </button>
-        <button
-          type="button"
-          onClick={submit}
-          disabled={name.trim() === "" || busy}
-          className="btn bg-accent text-on-accent shadow-accent hover:opacity-90 disabled:opacity-50"
-        >
-          <IconPlus width={14} height={14} />
-          {busy ? t("creating") : t("create")}
-        </button>
-      </div>
-    </Overlay>
-  );
-}
-

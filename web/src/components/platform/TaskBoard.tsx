@@ -18,7 +18,7 @@ import {
   BOARD_ADD_COLUMN, BOARD_CARD, BOARD_CARDS, BOARD_COLUMN, BOARD_COUNT, BOARD_HEADER,
   BOARD_HEADER_END, BOARD_HEADER_START, BOARD_LANE, BOARD_TITLE, BoardAddRow,
 } from "./board/boardStyle";
-import { NewProjectDialog } from "./Projects";
+import { ProjectDialog } from "./ProjectDialog";
 import { TaskCalendar, TaskListView } from "./tasks/TaskViews";
 import {
   IconCheck, IconChevronEnd, IconClock, IconDots, IconFolder, IconPlus, IconRetry,
@@ -788,11 +788,12 @@ export function TaskBoard() {
           the person opened this from the board and the new folder appears in
           the row they pressed, which is where they were looking. */}
       {creatingProject ? (
-        <NewProjectDialog
+        <ProjectDialog
+          mode="create"
           people={people}
           meId={me?.id ?? null}
           onClose={() => setCreatingProject(false)}
-          onCreated={() => { setCreatingProject(false); load(); }}
+          onSaved={() => { setCreatingProject(false); load(); }}
           onFailed={() => { setCreatingProject(false); refusal(); }}
         />
       ) : null}

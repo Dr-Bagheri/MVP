@@ -119,15 +119,19 @@ function identifyLocale(doc, fa) {
   assert.equal(doc.querySelectorAll('.language-switch [aria-current="page"]').length, 1);
   assert.equal(doc.querySelector('.language-switch [aria-current="page"]').hreflang, fa ? 'fa' : 'en');
 }
+const yaws = {};
 for (const fa of [false,true]) {
   const raw = new JSDOM(fa ? faHtml : html);
   identifyLocale(raw.window.document, fa);
+  // the wordmark reads in the page's own script (2026-09-05)
+  assert.equal(raw.window.document.querySelector('#boot-l1').textContent, fa ? 'نورای' : 'NeurAI');
   assert.throws(() => identifyLocale(raw.window.document, !fa));
   assert.equal(raw.window.document.querySelector('script').textContent, source, 'Locales must share the same animation engine');
   raw.window.close();
   const page = runtime({fa, width:390, hash:'#chapter-2'});
   const doc = page.win.document;
   identifyLocale(doc, fa);requireRenderedN(page);requireUnboxed(page);
+  yaws[fa] = +doc.getElementById('brain').dataset.yaw;
   assert.equal(doc.querySelector('.scene.active').dataset.scene, '2');
   const currentLink = doc.querySelector(`[data-language="${fa ? 'fa' : 'en'}"]`);
   const currentClick = new page.win.MouseEvent('click', {bubbles:true,cancelable:true});
@@ -152,6 +156,13 @@ for (const fa of [false,true]) {
   assert.equal(staticPage.win.document.querySelector('[data-count="2.1"]').textContent, fa ? '۲٫۱٪' : '2.1%');
   staticPage.close();
 }
+// The Persian film mirrors the composition: copy side, N side AND the N's yaw
+// (2026-09-05 — position was mirrored, the turn was not, so the N stood on
+// the mirrored side facing away from the wordmark). Same chapter, same
+// frame count, so the two readings must be exact negatives; the first
+// assertion is the control that the reading had a subject at all.
+assert.ok(Math.abs(yaws[false]) > .01, 'INVALID: chapter-2 yaw is zero, the mirror check has no subject');
+assert.ok(Math.abs(yaws[true] + yaws[false]) < 1e-9, `Persian yaw ${yaws[true]} must mirror English ${yaws[false]}`);
 for (const [file,fa] of [['privacy.html',false],['privacy-fa.html',true]]) {
   const text = await readFile('site/' + file,'utf8');
   const dom = new JSDOM(text);

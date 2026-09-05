@@ -203,25 +203,27 @@ export default function InvitationsPage() {
             </p>
           ) : null}
 
-          <div className="mb-3 flex flex-wrap items-center gap-2">
+          {/* ONE ROW, THREE WIDTHS (user, 2026-09-05: "put the three of them in
+              the same row with different sizes"): the address takes what is
+              left, the role a fixed 11rem, the button its own width. It was a
+              wrapping flex row, and the Select's root is `w-full` — which
+              beats the `w-auto` written beside it, since the two utilities
+              set one property and the stylesheet's order decides — so the
+              role stretched to the whole row and pushed the other two onto
+              rows of their own. A grid gives each control its column and no
+              class fight to lose. Below sm the three stack. */}
+          <div className="mb-3 grid grid-cols-1 items-center gap-2 sm:grid-cols-[minmax(0,1fr)_11rem_auto]">
             <input
-              className="input min-w-[14rem] flex-1"
+              className="input"
               dir="ltr"
               type="email"
               placeholder={t("inviteEmailPlaceholder")}
               value={inviteEmail}
               onChange={(e) => setInviteEmail(e.target.value)}
             />
-            {/* audit finding, 2026-09-02: the select carried four overrides of
-                .input (h-11 min-h-0 py-0 text-sm md:h-10) — the exact string
-                the Settings dropdown was stripped of the same day — so below
-                md it was the one control in this row not level with the email
-                field beside it. `.input` owns height and type; only the width
-                is this row's to decide. */}
             {/* D25: the issuer's role bounds the GRANT — only the owner may
                 mint an admin, and nobody mints an owner */}
             <Select
-              className="w-auto"
               value={inviteRole}
               onChange={(next) => setInviteRole(next as Role)}
               options={[
@@ -232,7 +234,7 @@ export default function InvitationsPage() {
               ]}
             />
             <button
-              className="btn bg-accent font-semibold text-on-accent"
+              className="btn btn-primary"
               disabled={busy || !inviteEmail.trim()}
               onClick={() => void issueInvitation()}
             >

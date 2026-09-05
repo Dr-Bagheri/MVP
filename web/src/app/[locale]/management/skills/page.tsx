@@ -366,7 +366,7 @@ function SkillsPageContent() {
               />
             </FormRow>
             {draft.id ? (
-              <FormRow label={t("enabled")} description={t("enabledHint")} htmlFor="sk-enabled">
+              <FormRow label={t("enabled")} description={t("enabledHint")} htmlFor="sk-enabled" controlAtEnd>
                 <input
                   id="sk-enabled"
                   type="checkbox"

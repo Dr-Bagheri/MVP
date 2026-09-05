@@ -68,7 +68,7 @@ const ALLOWED: Record<string, string[]> = {
   // CONSEQUENCE — a transcript that may still change; a rename that reaches
   // the board (shown only once the name has changed); a schedule's meaning
   "app/[locale]/calls/[id]/page.tsx": ["provisionalHint"],
-  "components/platform/ProjectDetail.tsx": ["renameNote"],
+  "components/platform/ProjectDialog.tsx": ["renameNote"],
   "components/platform/tasks/TaskDialogs.tsx": ["scheduleExplain"],
   // CONSEQUENCE — what deleting a member does (emptied, handle retired for
   // good), said beside the field that asks for the reason

@@ -6,7 +6,7 @@ import { Link } from "@/i18n/routing";
 import { api } from "@/api/client";
 import { useRefreshEpoch } from "@/lib/refreshBus";
 import type {
-  OrgPersonRecord, ProjectRecord, ProjectTone, ProjectWorkloadRow,
+  OrgPersonRecord, ProjectRecord, ProjectWorkloadRow,
   TaskCardRecord, TaskColumnRecord, TaskLabelRecord, TaskTopicRecord,
 } from "@/api/types";
 import { Overlay } from "./Overlay";
@@ -14,7 +14,7 @@ import { Avatar } from "@/components/Avatar";
 import { ConfirmDialog, KebabMenu } from "@/components/rowActions";
 import { DetailPanel } from "./DetailPanel";
 import { TONE_DOT, PRIORITY_CHIP, NewTaskDialog } from "./tasks/TaskDialogs";
-import { TonePicker } from "./Projects";
+import { ProjectDialog } from "./ProjectDialog";
 import {
   BODY_HEADING, BODY_TEXT, RAIL_LABEL, RAIL_VALUE, RAIL_EMPTY,
 } from "./tasks/panelStyle";
@@ -262,7 +262,7 @@ export function ProjectDetail({ id, meId, isAdmin, onClose }: {
             <span className={RAIL_LABEL}>{t("fieldTone")}</span>
             <span className="flex items-center gap-2">
               <span className={`h-3 w-3 rounded-md ${TONE_DOT[project.tone] ?? TONE_DOT.grey!}`} aria-hidden />
-              <span className={RAIL_VALUE}>{project.tone}</span>
+              <span className={RAIL_VALUE}>{t(`tone_${project.tone}`)}</span>
             </span>
           </div>
 
@@ -402,8 +402,16 @@ export function ProjectDetail({ id, meId, isAdmin, onClose }: {
 
 
       {editing ? (
-        <EditProjectDialog
+        /* THE PROJECT DIALOG — the same form the projects page and the board
+           create with, pre-filled: name, description, colour, icon and the
+           roster (user, 2026-09-05: the edit door offered three of the five
+           things a project has in it). It re-reads the record after its
+           writes, so what lands here is the server's project. */
+        <ProjectDialog
+          mode="edit"
           project={project}
+          people={people}
+          meId={meId}
           onClose={() => setEditing(false)}
           onSaved={(p) => { setEditing(false); setProject(p); }}
           onFailed={() => { setEditing(false); setError(t("writeFailed")); }}
@@ -601,78 +609,6 @@ function Bar({ row }: { row: ProjectWorkloadRow }) {
       <div className="bg-info" style={{ width: pct(onTime > 0 ? onTime : 0) }} />
       <div className="bg-danger" style={{ width: pct(row.overdue) }} />
     </div>
-  );
-}
-
-function EditProjectDialog({ project, onClose, onSaved, onFailed }: {
-  project: ProjectRecord;
-  onClose: () => void;
-  onSaved: (p: ProjectRecord) => void;
-  onFailed: () => void;
-}) {
-  const t = useTranslations("projects");
-  const tCommon = useTranslations("common");
-  const [name, setName] = useState(project.name);
-  const [summary, setSummary] = useState(project.summary);
-  const [tone, setTone] = useState<ProjectTone>(project.tone);
-  const [busy, setBusy] = useState(false);
-
-  /* DIFF-BASED, like every other form in this product: typing into a field
-     and putting it back sends nothing, so a no-op edit writes no row and a
-     stale page cannot clobber a colleague's change to a field it never
-     touched. */
-  const patch = useMemo(() => {
-    const body: Record<string, unknown> = {};
-    if (name.trim() !== project.name) body.name = name.trim();
-    if (summary.trim() !== project.summary) body.summary = summary.trim();
-    if (tone !== project.tone) body.tone = tone;
-    return body;
-  }, [name, summary, tone, project]);
-  const dirty = Object.keys(patch).length > 0;
-
-  return (
-    <Overlay onClose={onClose} label={t("edit")} size="md">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-base font-semibold text-fg">{t("edit")}</h2>
-        <button type="button" onClick={onClose} className="btn btn-icon text-fg-muted hover:text-fg" aria-label={t("close")}>
-          <IconClose width={14} height={14} />
-        </button>
-      </div>
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto">
-        <label className="block">
-          <span className="mb-1 block text-xs font-medium text-fg-muted">{t("fieldName")}</span>
-          <input value={name} maxLength={120} onChange={(e) => setName(e.target.value)} className="input w-full" />
-        </label>
-        <label className="block">
-          <span className="mb-1 block text-xs font-medium text-fg-muted">{t("fieldSummary")}</span>
-          <textarea value={summary} maxLength={400} rows={2} onChange={(e) => setSummary(e.target.value)} className="input w-full resize-none py-2" />
-        </label>
-        <TonePicker value={tone} onChange={setTone} label={t("fieldTone")} />
-        {/* the rename's consequence, said before it happens rather than
-            discovered on the board */}
-        {"name" in patch ? (
-          <p className="well text-[11px] text-fg-muted">
-            {t("renameNote")}
-          </p>
-        ) : null}
-      </div>
-      <div className="mt-3 flex items-center justify-end gap-2 border-t border-border pt-3">
-        <button type="button" onClick={onClose} className="btn text-fg-muted hover:text-fg">{tCommon("cancel")}</button>
-        <button
-          type="button"
-          disabled={!dirty || busy || name.trim() === ""}
-          onClick={() => {
-            setBusy(true);
-            void api.updateProject(project.id, patch)
-              .then(onSaved)
-              .catch(() => { setBusy(false); onFailed(); });
-          }}
-          className="btn bg-accent text-on-accent shadow-accent hover:opacity-90 disabled:opacity-50"
-        >
-          {tCommon("save")}
-        </button>
-      </div>
-    </Overlay>
   );
 }
 

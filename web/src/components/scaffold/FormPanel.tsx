@@ -50,11 +50,20 @@ export function FormRow({
   label,
   description,
   htmlFor,
+  controlAtEnd = false,
   children,
 }: {
   label: string;
   description?: string;
   htmlFor?: string;
+  /**
+   * The control sits at the row's END, uncapped — for a switch or a checkbox
+   * (user, 2026-09-05: "put them at the end of the row"). The 380px cap
+   * below keeps a TEXT FIELD readable on a wide row; a 44px switch has its
+   * own width, and the cap only parked it in the middle of a 1040px row,
+   * halfway between its label and the edge a person looks at for it.
+   */
+  controlAtEnd?: boolean;
   children: ReactNode;
 }) {
   const descId = htmlFor && description ? `${htmlFor}-desc` : undefined;
@@ -100,7 +109,13 @@ export function FormRow({
           </span>
         ) : null}
       </div>
-      <div className="flex w-full min-w-0 items-center gap-2 md:max-w-[380px]">{control}</div>
+      <div
+        className={`flex w-full min-w-0 items-center gap-2 ${
+          controlAtEnd ? "md:flex-1 md:justify-end" : "md:max-w-[380px]"
+        }`}
+      >
+        {control}
+      </div>
     </div>
   );
 }

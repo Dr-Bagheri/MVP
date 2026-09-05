@@ -11,9 +11,10 @@ import { FormPanel, FormRow, Skeleton } from "@/components/scaffold";
  * Settings·Notifications (user directive, 2026-08-28: "add this setting with
  * their functions for notification in settings") — every switch the platform
  * has that decides whether something gets MADE for you unprompted, on one
- * screen, one row each: title, one line saying what the notification IS, a
- * switch. Nothing here is decorative — a toggle wired to nothing is worse
- * than absent, so only server-stored facts appear.
+ * screen, one row each: a name and a switch at the row's end. Nothing here is
+ * decorative — a toggle wired to nothing is worse than absent, so only
+ * server-stored facts appear. (The one-line descriptions went with R21 and
+ * the user's word on 2026-09-05: "remove the line … just the name".)
  *
  * The post-call brief and the weekly digest MOVED here out of
  * Settings·Assistant (which keeps the voice: reply language/length and
@@ -29,6 +30,15 @@ import { FormPanel, FormRow, Skeleton } from "@/components/scaffold";
  *
  * Save-then-adopt, never optimistic: a switch does not move until the
  * server holds the fact, and a failed save says so.
+ *
+ * THE FOUR ARRIVE TOGETHER (user, 2026-09-05: "weekly report always loads a
+ * little later than the other toggles"). Three rows come from `me` and the
+ * digest from its own endpoint, and each row used to adopt its answer the
+ * moment it landed — so the digest's skeleton outlived the others by one
+ * round trip on every visit, which reads as that one row being broken. The
+ * two reads still run in parallel; the rows now wait for BOTH and appear in
+ * one frame. A failed read is still its own row's "unreadable", never the
+ * group's: the kinds of nothing stay apart (rule 12).
  */
 
 /**
@@ -45,6 +55,21 @@ import { FormPanel, FormRow, Skeleton } from "@/components/scaffold";
  * `boolean`      = the stored fact, and only then a switch.
  */
 type RowState = boolean | "absent" | "unreadable" | null;
+
+type Group = { brief: RowState; autoDraft: RowState; meetingPrep: RowState };
+
+/** the SERVER's answer for the whole assistant group — the same shape
+    Settings·Assistant and the workflow pages read */
+function fromMe(me: Awaited<ReturnType<typeof api.updateAssistant>>): Group {
+  return {
+    brief: me.post_call_brief !== false,
+    autoDraft: me.auto_draft_replies === undefined ? "absent" : me.auto_draft_replies === true,
+    meetingPrep: me.auto_meeting_prep === undefined ? "absent" : me.auto_meeting_prep === true,
+  };
+}
+
+const ALL = (state: Exclude<RowState, boolean | null>): Group =>
+  ({ brief: state, autoDraft: state, meetingPrep: state });
 
 export function NotificationsSettings() {
   const t = useTranslations("settings");
@@ -64,41 +89,33 @@ export function NotificationsSettings() {
    */
   const [saving, setSaving] = useState(false);
 
-  /** adopt the SERVER's answer for the whole assistant group — the same
-      shape Settings·Assistant and the workflow pages read */
-  function adopt(me: Awaited<ReturnType<typeof api.updateAssistant>>): void {
-    setBrief(me.post_call_brief !== false);
-    setAutoDraft(me.auto_draft_replies === undefined ? "absent" : me.auto_draft_replies === true);
-    setMeetingPrep(me.auto_meeting_prep === undefined ? "absent" : me.auto_meeting_prep === true);
+  function adopt(group: Group): void {
+    setBrief(group.brief);
+    setAutoDraft(group.autoDraft);
+    setMeetingPrep(group.meetingPrep);
   }
 
   useEffect(() => {
-    void api
-      .me()
-      .then((me) => {
-        if (me === null) {
-          // no identity is not "the deployment lacks the column"
-          setBrief("unreadable");
-          setAutoDraft("unreadable");
-          setMeetingPrep("unreadable");
-        } else if ("assistant_instructions" in me) {
-          adopt(me);
-        } else {
-          // pre-0112 deployment: the whole group has nowhere to live
-          setBrief("absent");
-          setAutoDraft("absent");
-          setMeetingPrep("absent");
-        }
-      })
-      .catch(() => {
-        setBrief("unreadable");
-        setAutoDraft("unreadable");
-        setMeetingPrep("unreadable");
-      });
-    void api
-      .weeklyDigest()
-      .then((d) => setDigest(d.available ? d.enabled : "absent"))
-      .catch(() => setDigest("unreadable"));
+    const assistant = api.me().then(
+      (me) => {
+        // no identity is not "the deployment lacks the column"
+        if (me === null) return ALL("unreadable");
+        if ("assistant_instructions" in me) return fromMe(me);
+        // pre-0112 deployment: the whole group has nowhere to live
+        return ALL("absent");
+      },
+      () => ALL("unreadable"),
+    );
+    const weekly = api.weeklyDigest().then(
+      (d): RowState => (d.available ? d.enabled : "absent"),
+      (): RowState => "unreadable",
+    );
+    // both settled, then one frame: neither promise can reject past its own
+    // handler above, so this is the arrival, not a failure gate
+    void Promise.all([assistant, weekly]).then(([group, digestState]) => {
+      adopt(group);
+      setDigest(digestState);
+    });
   }, []);
 
   async function saveAssistant(patch: Parameters<typeof api.updateAssistant>[0]): Promise<void> {
@@ -107,7 +124,7 @@ export function NotificationsSettings() {
       // save-then-adopt: the switch holds still until the server answers,
       // and what it adopts is the server's value — a refused or normalized
       // write shows as what actually happened, never as what was hoped
-      adopt(await api.updateAssistant(patch));
+      adopt(fromMe(await api.updateAssistant(patch)));
       notify(t("assistantSaved"));
     } catch {
       notify(t("assistantSaveFailed"), "warn");
@@ -150,7 +167,6 @@ export function NotificationsSettings() {
       <NotificationRow
         id="notif-auto-draft"
         label={t("notifAutoDraft")}
-        description={t("notifAutoDraftDesc")}
         state={autoDraft}
         busy={saving}
         onToggle={(next) => void saveAssistant({ auto_draft_replies: next })}
@@ -167,50 +183,42 @@ export function NotificationsSettings() {
 }
 
 /**
- * One notification row: the reference anatomy (title, one-line description,
- * switch at inline-end) on the blueprint's FormRow. A non-boolean state
- * renders the REASON in the switch's place — the capability pattern: a
- * switch someone could press against a server with nowhere to store the
- * answer would lie about its state.
+ * One notification row: a name at the row's start, the switch at the row's
+ * END (user, 2026-09-05: "their toggles are not in the right place, put them
+ * at the end of the row" — the control cell's 380px cap, right for a text
+ * field, had parked every switch in the middle of a 1040px row). A
+ * non-boolean state renders the REASON in the switch's place — the
+ * capability pattern: a switch someone could press against a server with
+ * nowhere to store the answer would lie about its state.
  */
 function NotificationRow({
   id,
   label,
-  description,
   state,
   busy,
   onToggle,
 }: {
   id: string;
   label: string;
-  description?: string;
   state: RowState;
   busy: boolean;
   onToggle: (next: boolean) => void;
 }) {
   const t = useTranslations("settings");
-  /* `ms-auto` on the control itself, never a wrapper: FormRow clones
-     aria-describedby onto its single child, and a positioning <div> would
-     take the describedby while the switch loses its description. The class
-     puts switch AND stand-in reason at the control cell's inline-end, both
-     directions (row's end in fa RTL and en LTR alike). */
   return (
-    <FormRow label={label} description={description} htmlFor={id}>
+    <FormRow label={label} htmlFor={id} controlAtEnd>
       {state === null ? (
         /* 2026-09-03: the frame before the data — loading and "this row has
-           no switch" were one picture. The label and its sentence rendered
-           at once and the control cell stayed EMPTY until api.me() answered,
-           which is exactly what the two non-boolean states look like: a row
-           with no control. So a reader could not tell "still asking" from
-           "not available on this deployment", and the switch then dropped in
-           and pushed the row's own hairline down.
+           no switch" were one picture. The label rendered at once and the
+           control cell stayed EMPTY until the answer landed, which is exactly
+           what the two non-boolean states look like: a row with no control.
            The bar is the switch's own geometry (44×24, fully round — TRACK.md
            in Switch.tsx), so nothing moves when the answer arrives, and it
            carries `aria-hidden` from Skeleton: a placeholder must not be
            announced as a control that does not exist yet. */
-        <Skeleton className="ms-auto h-6 w-11 rounded-full" />
+        <Skeleton className="h-6 w-11 rounded-full" />
       ) : typeof state !== "boolean" ? (
-        <span className="ms-auto text-detail text-fg-muted">
+        <span className="text-detail text-fg-muted">
           {t(state === "absent" ? "notifUnavailable" : "notifUnreadable")}
         </span>
       ) : (
@@ -223,7 +231,6 @@ function NotificationRow({
           onChange={() => onToggle(!state)}
           label={label}
           disabled={busy}
-          className="ms-auto"
         />
       )}
     </FormRow>

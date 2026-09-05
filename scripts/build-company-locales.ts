@@ -24,6 +24,10 @@ const landing: Translation[] = [
   ['.telemetry .seg:nth-child(5)', 'FOCUSTHE PLATFORM', 'تمرکز<b id="hud-focus">پلتفرم</b>'],
   ['.login span', 'LOGIN', 'ورود'],
   ['#boot-kick', 'ARRIVAL', 'آغاز'],
+  // the wordmark in the reader's own script (user, 2026-09-05); ر does not
+  // join forward, so the two spans render exactly as the one word نورای
+  ['#boot-l1 .brand-name', 'Neur', 'نور'],
+  ['#boot-l1 .brand-ai', 'AI', 'ای'],
   ['#boot-b1', 'We build intelligence into the fabric of work.', 'هوشمندی را در تار و پود کار می‌سازیم.'],
   ['#boot-b2', 'Agents do the work. People keep the decisions.', 'عامل‌ها کار می‌کنند؛ تصمیم با انسان می‌ماند.'],
   ['#boot-tags span:nth-child(1)', 'FIRST APP: ECHO', 'اولین اپ: اکو'],
@@ -115,7 +119,7 @@ async function generate(input: string, output: string, rows: Translation[], titl
     doc.querySelector('meta[property="og:description"]').content = 'عامل‌ها کار می‌کنند؛ تصمیم با انسان می‌ماند. NeurAI Platform، پلتفرمی بر پایهٔ هوش مصنوعی با اولویت فارسی.';
     doc.querySelector('meta[property="og:url"]').content = 'https://neurai.pt/fa.html';
     doc.querySelector('.login').href = 'https://app.neurai.pt/fa/sign-in';
-    doc.querySelector('.brand-wordmark').setAttribute('aria-label', 'پلتفرم NeurAI');
+    doc.querySelector('.brand-wordmark').setAttribute('aria-label', 'پلتفرم نورای');
     doc.querySelector('#chapters').setAttribute('aria-label', 'فصل‌ها');
     doc.querySelector('#chrome-logo').title = 'NeurAI — بازگشت به آغاز';
     doc.querySelector('#chrome-logo').setAttribute('aria-label', 'بازگشت به آغاز');
