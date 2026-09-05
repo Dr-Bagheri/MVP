@@ -166,6 +166,26 @@ describe("the room", () => {
     expect(within(log).getAllByText("دستیار")).toHaveLength(1);
   });
 
+  it("reads right-to-left on the Persian screen — a message that opens in Latin included", async () => {
+    /*
+     * User, 2026-09-05: "in the fa version, in the chat box, all text must
+     * come from right to left, even English ones." The room used `auto`
+     * (Persian-if-any-Persian, else the browser's guess), which put a message
+     * that began with an @handle or a Latin word on the LEFT of a Persian
+     * room. The screen's direction decides now. The Latin-only body is the
+     * discriminating case: the Persian one read rtl under the old rule too.
+     */
+    MESSAGES = [
+      message({ id: "m-1", seq: 1, body: "سلام رؤیا" }),
+      message({ id: "m-2", seq: 2, body: "OK team" }),
+    ];
+    render(<Chat isAdmin meId="u-1" people={PEOPLE} />);
+    const log = await screen.findByRole("log", { name: "پیام‌ها" });
+    const latin = await within(log).findByText("OK team");
+    expect(latin.closest("p")).toHaveAttribute("dir", "rtl");
+    expect(within(log).getByText("سلام رؤیا").closest("p")).toHaveAttribute("dir", "rtl");
+  });
+
   it("keeps a removed message in the room, and says it was removed", async () => {
     MESSAGES = [
       message({ id: "m-1", seq: 1, body: "پیام اول" }),

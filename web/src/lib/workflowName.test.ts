@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import en from "../messages/en.json";
 import fa from "../messages/fa.json";
 import { STARTER_WORKFLOWS } from "../../../core/src/api/workflow-authoring.ts";
-import { SEEDED_STARTERS, useWorkflowCopy } from "./workflowName";
+import { SEEDED_STARTERS, SEEDED_TEMPLATES, useWorkflowCopy } from "./workflowName";
 
 /**
  * The shipped-starter half of the mixing bug (user report, with a screenshot:
@@ -133,5 +133,40 @@ describe("useWorkflowCopy — shipped copy localizes, a person's words never do"
 
   it("a missing description is a string, not undefined — callers render it directly", () => {
     expect(copyOf("en", { handle: "wf-x", name: "n" }).description).toBe("");
+  });
+});
+
+describe("useWorkflowCopy — the two shipped TEMPLATES localize on their own page too", () => {
+  /*
+   * The engine rows behind /workflows/prepare-meetings and
+   * /workflows/draft-email-replies carry the TEMPLATE's English name and
+   * description (db/0065). The list card resolved them through
+   * `useWorkflowTemplateCopy`; the detail page and the breadcrumb go through
+   * THIS resolver, which knew only the starters — so the flagship workflow
+   * introduced itself in English on a Persian screen while its card did not
+   * (user, 2026-09-05: "there are still some parts that are in English in
+   * the fa version"). Verified red against the starters-only resolver.
+   */
+  const shipped = SEEDED_TEMPLATES["prepare-meetings"]!;
+  const row = { handle: "prepare-meetings", name: shipped.name, description: shipped.description };
+
+  it("fa: an untouched template renders the catalogue's Persian, not the wire's English", () => {
+    const copy = copyOf("fa", row);
+    const expected = (fa.workflows as { card: Record<string, { name: string; description: string }> })
+      .card["prepare-meetings"]!;
+    expect(copy.name).toBe(expected.name);
+    expect(copy.description).toBe(expected.description);
+    expect(copy.name).not.toBe(shipped.name);
+  });
+
+  it("en: the same row renders the English catalogue entry", () => {
+    const copy = copyOf("en", row);
+    const expected = (en.workflows as { card: Record<string, { name: string }> }).card["prepare-meetings"]!;
+    expect(copy.name).toBe(expected.name);
+  });
+
+  it("a RENAMED template keeps the person's name — theirs is never translated", () => {
+    const copy = copyOf("fa", { ...row, name: "برگهٔ جلسهٔ هفتگی" });
+    expect(copy.name).toBe("برگهٔ جلسهٔ هفتگی");
   });
 });

@@ -325,14 +325,23 @@ export function useWorkflowCopy(): (workflow: WorkflowCopySubject) => WorkflowCo
       name: workflow.name,
       description: workflow.description ?? "",
     };
-    const seeded = SEEDED_STARTERS[workflow.handle];
+    /* a shipped STARTER or a shipped TEMPLATE — the engine rows the two
+       flagship workflows became (0065) carry the template's English name
+       and description, and this resolver only knew the starters, so
+       /workflows/prepare-meetings and its breadcrumb read English on a
+       Persian screen while the card on the list did not (user, 2026-09-05:
+       "there are still some parts that are in English in the fa version") */
+    const seededStarter = SEEDED_STARTERS[workflow.handle];
+    const seededTemplate = SEEDED_TEMPLATES[workflow.handle];
+    const seeded = seededStarter ?? seededTemplate;
+    const namespace = seededStarter !== undefined ? "starter" : "card";
     /* not a shipped starter at all — an org authored it, and it renders as
        authored in every locale */
     if (seeded === undefined) return stored;
 
     let entry: Partial<WorkflowCopy> | undefined;
     try {
-      entry = t.raw(`starter.${workflow.handle}`) as Partial<WorkflowCopy> | undefined;
+      entry = t.raw(`${namespace}.${workflow.handle}`) as Partial<WorkflowCopy> | undefined;
     } catch {
       /* no catalogue entry for this handle — the stored words still serve */
       return stored;

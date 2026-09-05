@@ -173,11 +173,14 @@ export function MessageRow({ message, previous, people, meId, locale, onReply, o
       ) : null}
 
       <p
-        /* the CONVERSATION's direction is the fallback, never `auto` alone:
-           the spec walks past digits and emoji but returns `ltr` for a
-           message whose first strong character is Latin — an @handle, a URL,
-           "OK" — which is the bug every chat product ships once */
-        dir={/[؀-ۿ]/.test(message.body ?? "") ? "rtl" : "auto"}
+        /* THE SCREEN'S direction, never the message's (user, 2026-09-05:
+           "in the fa version, in the chat box, all text must come from right
+           to left, even English ones"). `auto` — and the Persian-if-any-
+           Persian rule before it — let a message that opened with an
+           @handle or a Latin word sit on the left of a Persian room, which
+           is what the screenshot showed: the person's line on one side, the
+           agent's on the other, because one began with a handle. */
+        dir={locale === "fa" ? "rtl" : "ltr"}
         className={`ps-7 text-sm leading-6 ${
           message.deleted ? "italic text-fg-subtle" : "text-fg"
         }`}
