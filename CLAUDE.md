@@ -3796,3 +3796,64 @@ sessions) for the cross-session narrative.
   carries NO worklist: a control that already wears `btn` and then overrides
   it has no geometry argument left. Deployed and re-measured on production at 1920 (root 17.5): the new-task chips 37 (= the 34 token; were 42), the detail tabs 37 inside a 48 bar (34 + padding + border; were 42 in 42), the footer 42 (= 38). The dialog still rounds at 12 - that is R8, next.
   db 191 migrations · core 1357 tests · web 1054 tests + gate + sweep.
+- 2026-09-05 (latest — ROUND 2 OF THE RULEBOOK: five rules in one pass, from
+  eleven screenshots): the user sent the pages that "are not following the
+  theme at all" and two new rulings — **no explanations under titles and
+  headers** ("just the name, and sometimes, if it's too important, one
+  sentence") and **a thing in a list opens as a pop-up, not a page** ("when
+  you click on a project it should open a pop-up window … this problem is
+  systematic"). Taken as R21 and R18, with R17, R3 and R8 alongside.
+  **R18 — one detail frame.** The task detail's frame — backdrop, card, top
+  bar, body, 283 rail — was EXTRACTED to `DetailPanel` (a slice by anchored
+  line numbers, asserted at every boundary) and the task detail re-reads it;
+  the project detail, a page yesterday wearing the same anatomy drawn again,
+  is the panel's content now: opened from the board, the list and the
+  calendar at `/projects?project=<id>`, the old `/projects/<id>` redirecting
+  there, the acts matching the task's (⋯ holds archive/restore and the red
+  delete, «ویرایش» beside it, the board link and «واگذاری کار» at the end).
+  `detailPanel.guard` asserts the frame's first line exists in exactly one
+  file. **The choice worth recording:** the frame was extracted rather than
+  copied, on a 694-line file with a dozen tests — the pull was to build a
+  second `DetailPanel` for projects and "align them later", which is how the
+  project board came to differ from the task board within a day.
+  **R17 — one board.** The projects kanban had been written from TaskBoard's
+  numbers the day before and had ALREADY DRIFTED — a 12px column title against
+  13, the count badge in a different corner, cards in a different box (`.tile`
+  at r20 against the board's r16 card), no tone on the column. The shape lives
+  once now, in `board/boardStyle.tsx`, as the class strings both boards read;
+  `board.guard` forbids the six literals in either file and asserts the module
+  still says them (the control). Its first run fired on a COMMENT in TaskBoard
+  that explained the 70vh floor — prose about the shape counted as a copy of
+  it, the name-matching-itself trap pointed the other way — so the guard
+  strips comments, string-aware, before it reads.
+  **R21 — no explanations.** ~40 paragraphs removed in two passes: a sentence
+  under every settings card title, a paragraph under every notification
+  toggle, the intro above the agents grid, the subtitles under the new-task
+  and new-meeting dialog titles, the privacy note above the audit table,
+  section notes on skills/security/sessions, the workflow builder's field
+  hints. `Section` LOST its `description` prop — a new page cannot grow one
+  and typecheck. `copy.guard` watches the FORM the paragraphs had (a `<p>` or
+  block `<span>` whose whole content is a key named `…Hint/…Note/…Desc/
+  …Subtitle/intro`); its first tree run listed 38 more, and sorting them
+  produced the four kinds that may stay — a STATE (the admin-only refusal, the
+  pending screen, a record still processing, an empty canvas), an ARRIVAL (the
+  guest door, a new org), a CONSEQUENCE (a rename that reaches the board, a
+  schedule that comes back, what deleting a member does, the share picker's
+  audio trap), a CONSTRAINT (the logo's format, what a connection reads, what
+  a key's permission grants) — each an entry with its reason. **Two the first
+  sweep took came back**: the whiteboard's overlay renders only while the
+  canvas is empty (an empty state naming its nothing, R12), and the meeting
+  page's share hint is the one thing the picker gets wrong, said before it
+  opens; both surfaced as empty conditionals that no longer compiled, which
+  is the right way for a wrong deletion to fail.
+  **R3 — the create button.** In row 1, at the END, one coat (`.btn
+  btn-primary`), on every page that has one: workflows (it stood in its own
+  row), models (under the menu beside the count — `TwoPane` grew an `actions`
+  slot for exactly this), agents (beside a sentence, now gone), chat (a
+  compact green), meetings (an outline green). The one-`Toolbar` half stays
+  proposed.
+  **R8 — one dialog corner.** `sm:rounded-lg` left the shadcn dialog and
+  alert-dialog bases for the token; `dialog.radius.test` was run RED first
+  against the shipped class list, then green.
+  Deployed and re-measured on production at 1920: a project card opens the panel at /projects?project=<id> (dialog present, corner 18, rail 283, the acts 37/31 = the family); the new-task and new-meeting dialogs round at 18 (were 12) with no subtitle; the projects board's column reads boardStyle's class string and its title is 14.2 (= the board's 13); the create buttons on workflows, models, meetings and agents are btn-primary at 42 in the same row as the chips (tops 96 vs 98); the notifications page keeps one sentence and zero explanations; the agents intro is gone.
+  db 191 migrations · core 1357 tests · web 1059 tests + gate + sweep.

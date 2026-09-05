@@ -222,6 +222,8 @@ loosened rule — and the user's "except this part" is what puts one there.
 - **Solid =** `dialog.radius.test.tsx` renders both and asserts the class list
   carries the token and NO responsive corner that could outrank it — red
   against the shipped base (`sm:rounded-lg` beside `rounded-2xl`), green after.
+- **Re-measured on production (2026-09-05):** the new-task and new-meeting
+  dialogs at **18** (were 12); the project panel at 18 with its 283 rail.
 
 #### The record of the defect
 
