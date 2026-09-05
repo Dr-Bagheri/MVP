@@ -3963,4 +3963,17 @@ sessions) for the cross-session narrative.
   value), models (count sentence gone; the rows start 19px under the menu —
   measured at /fa/management/models, the settings slug is a stub that links
   there).
-  db 191 migrations · core 1357 tests · web 1070 tests + gate + sweep.
+  **Typed digits follow the language** (commit 15da2ae; user: "when I write
+  in the fa version all the numbers must be written in Persian"). The display
+  side had been Persian since M9 and the input side never was, so a Persian
+  description held "1000" beside «۱۰۰۰». `PersianDigitsTyping` — one
+  capture-phase `input` listener in the locale layout — rewrites an RTL text
+  field through the element's NATIVE setter before React's handler reads it
+  (React's instrumented setter would update its value tracker and React would
+  see "no change" and drop the event), keeps the caret, and converts
+  Arabic-Indic digits too; `dir="ltr"` fields, emails, numbers and passwords
+  keep ASCII. The test reads the CONTROLLED value after the event, which is
+  what proves React stored the converted text rather than snapping back on
+  the re-render; verified red by writing the ASCII value back — the three
+  positives failed, the four controls held. RULEBOOK R15 carries it.
+  db 191 migrations · core 1357 tests · web 1075 tests + gate + sweep.
