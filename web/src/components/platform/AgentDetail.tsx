@@ -217,9 +217,12 @@ export function AgentDetail({ handle }: { handle: string }) {
           carries its own count. */}
       {/* NO HEADING EITHER (user, 2026-09-05: "remove the text ابزارها in
           agents"): the groups below each carry their own name and count, and a
-          word over a grid of named groups restates the grid. */}
-      <Section>
-        <div className="grid gap-4 lg:grid-cols-2">
+          word over a grid of named groups restates the grid. The GAP the
+          heading used to make stays as the section rhythm's own step — the
+          first cut took the word and its air together, and the groups sat
+          flush under the card (user, same night: "what happened to the gap
+          after you deleted the tools text"). */}
+      <div className="mt-6 grid gap-4 lg:grid-cols-2">
           {groups.map((group) => (
             <section key={group.key} className="well p-4">
               <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-fg">
@@ -248,8 +251,7 @@ export function AgentDetail({ handle }: { handle: string }) {
               </ul>
             </section>
           ))}
-        </div>
-      </Section>
+      </div>
 
       {/*
         ── THE WORDS IT WAS GIVEN ────────────────────────────────────────

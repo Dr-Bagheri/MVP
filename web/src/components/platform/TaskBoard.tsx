@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/routing";
-import { api } from "@/api/client";
+import { api, BffError } from "@/api/client";
 import type {
   OrgPersonRecord, TaskCardRecord, TaskColumnRecord, TaskDetailRecord,
   TaskLabelRecord, TaskPriority, TaskTopicRecord, ProjectRecord,
@@ -68,6 +68,9 @@ export function TaskBoard() {
   const [error, setError] = useState<string | null>(null);
 
   const [view, setView] = useState<View>("kanban");
+  /* read by `load` at call time — see the note there */
+  const viewRef = useRef(view);
+  viewRef.current = view;
   const [priority, setPriority] = useState<PriorityFilter>("all");
   const [mineOnly, setMineOnly] = useState(false);
   const [dueToday, setDueToday] = useState(false);
@@ -102,11 +105,30 @@ export function TaskBoard() {
   const [toneMenu, setToneMenu] = useState<string | null>(null);
   const draggedColumn = useRef<string | null>(null);
 
+  /* the ARCHIVE is a second read of the same board, kept beside the live one
+     rather than inside it — the two views answer different questions */
+  const loadArchive = useCallback(() => {
+    void api.taskBoard({ archived: true })
+      .then((b) => setArchive({ columns: b.columns, tasks: b.tasks }))
+      .catch(() => setArchive(null));
+  }, []);
   const load = useCallback(() => {
     void api.taskBoard()
       .then((b) => { setBoard(b); setFailed(false); })
       .catch(() => setFailed(true));
-  }, []);
+    /*
+     * AND THE ARCHIVE, while the archive is what is on screen (user report,
+     * 2026-09-05: "task in the archive is deleted, but its table doesn't
+     * refresh by itself and gave an error even when it was already deleted").
+     * Every write path on this screen ends in `load()`, and `load` refreshed
+     * the LIVE board alone — the archive list was fetched once, on entering
+     * the view, so a card deleted from it stayed in the list, and the next
+     * press on the stale row asked the server for a task it no longer had.
+     * Through a ref, not the deps: `load` sits in the effect deps and must
+     * not be re-created on every view change.
+     */
+    if (viewRef.current === "archive") loadArchive();
+  }, [loadArchive]);
   const loadLabels = useCallback(() => {
     void api.taskLabels().then(setLabels).catch(() => undefined);
   }, []);
@@ -144,12 +166,12 @@ export function TaskBoard() {
       .catch(() => setProjects([]));
   }, [projectsEpoch, tasksEpoch]);
 
+  /* on entering the view, and on every announced write — a delete from the
+     detail, the assistant archiving a card in the panel beside the board */
   useEffect(() => {
     if (view !== "archive") return;
-    void api.taskBoard({ archived: true })
-      .then((b) => setArchive({ columns: b.columns, tasks: b.tasks }))
-      .catch(() => setArchive(null));
-  }, [view]);
+    loadArchive();
+  }, [view, tasksEpoch, loadArchive]);
 
   /* ?topic= — a project's «وظایف» button lands on the board already
      standing in that project's folder (0181). Read ONCE into the filter
@@ -169,8 +191,17 @@ export function TaskBoard() {
   }, [linkedTask]);
 
   const openDetail = useCallback((id: string) => {
-    void api.taskDetail(id).then(setOpenTask).catch(() => setError(t("writeFailed")));
-  }, [t]);
+    void api.taskDetail(id).then(setOpenTask).catch((cause: unknown) => {
+      /* WHICH nothing (rule 12): a row whose task is gone is not a failed
+         save. It says so, and the lists re-read so the row leaves with it. */
+      if (cause instanceof BffError && cause.status === 404) {
+        setError(t("gone"));
+        load();
+        return;
+      }
+      setError(t("writeFailed"));
+    });
+  }, [t, load]);
 
   const refusal = useCallback(() => setError(t("writeFailed")), [t]);
 
@@ -721,12 +752,8 @@ export function TaskBoard() {
                 labels={labels}
                 onOpen={openDetail}
                 onToggleDone={(id) => {
-                  void api.updateTask(id, { archived: false }).then(() => {
-                    load();
-                    void api.taskBoard({ archived: true })
-                      .then((b) => setArchive({ columns: b.columns, tasks: b.tasks }))
-                      .catch(() => undefined);
-                  }).catch(refusal);
+                  /* `load` re-reads the archive too while this view is on */
+                  void api.updateTask(id, { archived: false }).then(load).catch(refusal);
                 }}
               />
             )

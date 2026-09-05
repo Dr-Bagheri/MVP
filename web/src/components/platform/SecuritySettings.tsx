@@ -165,6 +165,10 @@ export function SecuritySettings() {
               empty node, never a sentence standing where the table would be */}
             <div>
               <DataTable
+                /* NO HEADER ROW (user, 2026-09-05: "remove the table header
+                   from sessions") — the audit table's rule; the <thead> stays
+                   sr-only inside DataTable for a screen reader */
+                hideHeader
                 loading={orgSessions === null}
                 rows={Array.isArray(orgSessions)
                   ? orgSessions.filter((session) =>
@@ -313,6 +317,7 @@ export function SecuritySettings() {
              user rightly asked whether this was the same table */
           <div className="mt-3">
             <DataTable
+              hideHeader
               loading={sessions === null}
               rows={Array.isArray(sessions) ? sessions : []}
               rowKey={(session) => session.handle}

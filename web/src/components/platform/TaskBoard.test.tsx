@@ -90,17 +90,21 @@ const updateTaskColumn = vi.fn();
 let ME: { id: string; org_name?: string; role?: string } = { id: "u-me", org_name: "نورای" };
 const createdProjects: Record<string, unknown>[] = [];
 
-vi.mock("@/api/client", () => ({
-  BffError: class BffError extends Error {
+vi.mock("@/api/client", () => {
+  class BffError extends Error {
     constructor(public status: number) { super("bff " + status); }
-  },
+  }
+  return {
+  BffError,
   api: {
     me: async () => ME,
     orgPeople: async () => PEOPLE,
     taskLabels: async () => LABELS,
-    taskBoard: async () => {
+    taskBoard: async (opts?: { archived?: boolean }) => {
       boardReads += 1;
-      return { columns: COLUMNS, topics: TOPICS, tasks: boardTasks };
+      /* the archive is the OTHER half of the fixture (2026-09-05) */
+      const archived = opts?.archived === true;
+      return { columns: COLUMNS, topics: TOPICS, tasks: boardTasks.filter((t) => t.archived === archived) };
     },
     updateTask: async (id: string, body: Record<string, unknown>) => {
       if (refuseNextPatch) { refuseNextPatch = false; throw new Error("refused"); }
@@ -112,10 +116,16 @@ vi.mock("@/api/client", () => ({
     /* the detail a person opens is the row the board is showing — merged the
        way updateTask does, so a fixture cannot set a field on the card and
        have the modal quietly disagree with it */
-    taskDetail: async (id: string): Promise<TaskDetailRecord> => ({
-      ...card({ id }), ...(boardTasks.find((t) => t.id === id) ?? {}),
-      description: "", checklist: [], comments: [], events: [], recurrence: null,
-    }),
+    taskDetail: async (id: string): Promise<TaskDetailRecord> => {
+      const hit = boardTasks.find((t) => t.id === id);
+      /* a task the server no longer has answers 404 — the archive tests
+         below open exactly such a row */
+      if (hit === undefined) throw new BffError(404);
+      return {
+        ...card({ id }), ...hit,
+        description: "", checklist: [], comments: [], events: [], recurrence: null,
+      };
+    },
     createTask: vi.fn(), createTaskColumn: vi.fn(), createTaskTopic: vi.fn(),
     /* the folder strip splits folders from projects by reading the projects
        (2026-09-05) — the mock must answer, or the effect throws */
@@ -132,8 +142,12 @@ vi.mock("@/api/client", () => ({
     updateTaskChecklistItem: vi.fn(), deleteTaskChecklistItem: vi.fn(),
     addTaskComment: vi.fn(), setTaskLabel: vi.fn(), setTaskAssignee: vi.fn(),
     createTaskLabel: vi.fn(), updateTaskLabel: vi.fn(), deleteTaskLabel: vi.fn(),
+    /* the archive's delete (2026-09-05): the row leaves the fixture the way
+       it leaves the server */
+    deleteTask: async (id: string) => { boardTasks = boardTasks.filter((t) => t.id !== id); },
   },
-}));
+  };
+});
 
 import { TaskBoard } from "./TaskBoard";
 
@@ -532,5 +546,42 @@ describe("the board's two doors into projects (2026-09-05)", () => {
 
     const link = await screen.findByRole("link", { name: /پروژه‌ها/ });
     expect(link).toHaveAttribute("href", expect.stringContaining("/projects"));
+  });
+});
+
+describe("the archive keeps up with its own writes (2026-09-05)", () => {
+  /*
+   * User report: "task in the archive is deleted, but its table doesn't
+   * refresh by itself and gave an error even when it was already deleted."
+   * The archive list was read once, on entering the view; every write path
+   * ended in `load()`, which re-read the LIVE board alone.
+   */
+  it("a task deleted from the ARCHIVE view leaves the archive list", async () => {
+    boardTasks = [card({ id: "t-old", title: "کار بایگانی", archived: true })];
+    render(<TaskBoard />);
+    await userEvent.click(await screen.findByRole("button", { name: "آرشیو" }));
+    await userEvent.click(await screen.findByText("کار بایگانی"));
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("button", { name: "بیشتر" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: /حذف تسک/ }));
+    await userEvent.click(await screen.findByRole("button", { name: "حذف برای همیشه" }));
+
+    await waitFor(() => expect(screen.queryByText("کار بایگانی"), "the deleted row stayed in the archive").toBeNull());
+    expect(screen.getByText("بایگانی خالی است.")).toBeInTheDocument();
+    expect(screen.queryByRole("alert"), "an error about a task that was deleted on purpose").toBeNull();
+  });
+
+  it("a row whose task is already gone SAYS so — and leaves", async () => {
+    boardTasks = [card({ id: "t-old", title: "کار بایگانی", archived: true })];
+    render(<TaskBoard />);
+    await userEvent.click(await screen.findByRole("button", { name: "آرشیو" }));
+    await screen.findByText("کار بایگانی");
+    /* deleted elsewhere — another tab, a colleague — while this list stood */
+    boardTasks = [];
+    await userEvent.click(screen.getByText("کار بایگانی"));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("این کار دیگر وجود ندارد.");
+    expect(screen.queryByText("این تغییر ذخیره نشد."), "a missing task reported as a failed save").toBeNull();
+    await waitFor(() => expect(screen.queryByText("کار بایگانی")).toBeNull());
   });
 });

@@ -2713,6 +2713,7 @@
     "archiveColumnTitle": "Archive “{name}”?",
     "archiveConfirm": "Archive",
     "archiveEmpty": "The archive is empty.",
+    "gone": "This task no longer exists.",
     "archiveTask": "Archive task",
     "archiveTaskBody": "It leaves the board for the archive. Nothing is deleted — bring it back from the Archive view.",
     "archiveTaskTitle": "Archive this task?",

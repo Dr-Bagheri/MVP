@@ -120,6 +120,7 @@ function identifyLocale(doc, fa) {
   assert.equal(doc.querySelector('.language-switch [aria-current="page"]').hreflang, fa ? 'fa' : 'en');
 }
 const yaws = {};
+const mockYaws = {};
 for (const fa of [false,true]) {
   const raw = new JSDOM(fa ? faHtml : html);
   identifyLocale(raw.window.document, fa);
@@ -148,6 +149,8 @@ for (const fa of [false,true]) {
     assert.ok(button.getAttribute('aria-label'));
     assert.equal(button.getAttribute('aria-current'), 'step');
     if (index === 3) assert.equal(doc.querySelector('[data-count="2.1"]').textContent, fa ? '۲٫۱٪' : '2.1%');
+    // the room mock at rest in its chapter — its turn is read off the transform (2026-09-05)
+    if (index === 2) mockYaws[fa] = +/rotateY\(([-\d.e]+)deg\)/.exec(doc.querySelector('[data-fx="s2-mock"]').style.transform)[1];
   }
   page.close();
   const staticPage = runtime({fa, reduced:true, hash:'#chapter-3'});
@@ -163,6 +166,11 @@ for (const fa of [false,true]) {
 // assertion is the control that the reading had a subject at all.
 assert.ok(Math.abs(yaws[false]) > .01, 'INVALID: chapter-2 yaw is zero, the mirror check has no subject');
 assert.ok(Math.abs(yaws[true] + yaws[false]) < 1e-9, `Persian yaw ${yaws[true]} must mirror English ${yaws[false]}`);
+// The room mock turns to FACE the copy in both films (2026-09-05: "make the
+// image of the chatbox … face the text as well") — English on the right of
+// the copy turns left (negative), Persian on the left turns right.
+assert.ok(Number.isFinite(mockYaws[false]) && mockYaws[false] < -1, `INVALID: English mock yaw ${mockYaws[false]} — no turn to mirror`);
+assert.ok(mockYaws[true] > 1 && Math.abs(mockYaws[true] + mockYaws[false]) < 1e-6, `Persian mock yaw ${mockYaws[true]} must mirror English ${mockYaws[false]}`);
 for (const [file,fa] of [['privacy.html',false],['privacy-fa.html',true]]) {
   const text = await readFile('site/' + file,'utf8');
   const dom = new JSDOM(text);
@@ -195,4 +203,4 @@ for (const file of ['site/index.html','site/fa.html','site/privacy.html','site/p
     assert.ok(!bytes.toString('utf8').includes(String.fromCharCode(...codes)), 'Encoding corruption in ' + file);
   }
 }
-console.log('PASS: EN/FA static pages and runtime, locale/subject negative controls, RTL and localized numbers, language links keep the chapter, privacy translations, full NeurAI wordmark, unboxed N, smooth camera/crossfade, reduced motion, and HTTP.');
+console.log('PASS: EN/FA static pages and runtime, locale/subject negative controls, RTL and localized numbers, language links keep the chapter, privacy translations, full NeurAI wordmark, mirrored room mock, unboxed N, smooth camera/crossfade, reduced motion, and HTTP.');

@@ -16,7 +16,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23130036'/%3E%3Cpath d='M18 46V18l28 28V18' stroke='%23A274FF' stroke-width='7' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Vazirmatn:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Vazirmatn:wght@300;400;500;600;700;800&family=Lalezar&display=swap" rel="stylesheet">
 <style>
 /*
  * NeurAI company page — NEURAL_MONITOR (user reference video, 2026-08-16):
@@ -228,7 +228,9 @@ p.lead b { color: var(--fg); font-weight: 600; }
 .figure .l { font-family: var(--mono); font-size: 10.5px; letter-spacing: .14em; color: var(--hud); margin-top: 8px; line-height: 1.7; }
 
 /* echo split (scene 2) */
-.split2 { display: grid; grid-template-columns: minmax(0, 560px) minmax(0, 440px); gap: 6vw; align-items: center; justify-content: space-between; }
+/* the room mock a step BIGGER (user, 2026-09-05: "make the image of the
+   chatbox bigger") — its column grew from 440 to 580 and its chrome with it */
+.split2 { display: grid; grid-template-columns: minmax(0, 520px) minmax(0, 580px); gap: 6vw; align-items: center; justify-content: space-between; }
 @media (max-width: 980px) { .split2 { grid-template-columns: 1fr; gap: 30px; } }
 .echo-mark { color: #FF6F59; }
 .mock-ui {
@@ -237,22 +239,27 @@ p.lead b { color: var(--fg); font-weight: 600; }
   box-shadow: 0 30px 90px rgba(0,0,0,.55), 0 0 100px rgba(87,71,230,.12);
   backdrop-filter: blur(4px);
 }
-.mock-bar { display: flex; align-items: center; gap: 6px; padding: 11px 14px; border-bottom: 1px solid var(--line);
-  font-family: var(--mono); font-size: 9px; letter-spacing: .2em; color: var(--hud); }
-.mock-bar span { width: 9px; height: 9px; border-radius: 50%; background: rgba(255,255,255,.12); }
+.mock-bar { display: flex; align-items: center; gap: 7px; padding: 14px 18px; border-bottom: 1px solid var(--line);
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: .2em; color: var(--hud); }
+.mock-bar span { width: 11px; height: 11px; border-radius: 50%; background: rgba(255,255,255,.12); }
 .mock-bar em { margin-left: auto; font-style: normal; }
-.mock-body { padding: 18px; display: grid; gap: 12px; }
-.mock-row { display: flex; gap: 12px; align-items: flex-start; }
-.mock-avatar { width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0; background: linear-gradient(135deg, var(--accent), var(--accent-deep)); opacity: .85; }
+.mock-body { padding: 24px; display: grid; gap: 18px; }
+.mock-row { display: flex; gap: 14px; align-items: flex-start; }
+.mock-avatar { width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0; background: linear-gradient(135deg, var(--accent), var(--accent-deep)); opacity: .85; }
 .mock-avatar.b { background: linear-gradient(135deg, #FF6F59, #C4463A); }
-.mock-lines { flex: 1; display: grid; gap: 7px; padding-top: 4px; }
-.mock-lines i { display: block; height: 8px; border-radius: 5px; background: rgba(237,241,255,.13); }
+.mock-lines { flex: 1; display: grid; gap: 9px; padding-top: 6px; }
+.mock-lines i { display: block; height: 10px; border-radius: 6px; background: rgba(237,241,255,.13); }
 .mock-lines i.w60 { width: 60% } .mock-lines i.w85 { width: 85% } .mock-lines i.w40 { width: 40% } .mock-lines i.w75 { width: 75% }
-.mock-chip { align-self: flex-start; margin-top: 3px; font-family: var(--mono); font-size: 9.5px; color: var(--accent); border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; white-space: nowrap; }
+.mock-chip { align-self: flex-start; margin-top: 4px; font-family: var(--mono); font-size: 11px; color: var(--accent); border: 1px solid var(--line); border-radius: 999px; padding: 3px 11px; white-space: nowrap; }
 
 /* finale */
 .s4 .inner { text-align: center; }
-.s4 .copy { max-width: 900px; margin: 0 auto; }
+/* a LIGHT BLACK behind the closing words (user, 2026-09-05: "put a background
+   with light black for the text in the last part of the site so the user can
+   read it") — the rain runs under the copy, and white on moving glyphs was
+   legible only between the drops */
+.s4 .copy { max-width: 900px; margin: 0 auto; padding: 44px 48px 40px; border-radius: 28px;
+  background: rgba(5,3,20,.62); box-shadow: 0 30px 90px rgba(0,0,0,.35); }
 .s4 h2.title { font-size: clamp(36px, 6vw, 80px); }
 .foot-meta { margin-top: 64px; display: flex; gap: 26px; justify-content: center; flex-wrap: wrap;
   font-family: var(--mono); font-size: 10.5px; letter-spacing: .16em; color: var(--hud); }
@@ -286,7 +293,10 @@ html[lang="fa"] .hud .seg b { margin-left: 0; margin-right: 6px; }
 html[lang="fa"] .copy.side-r { margin-left: 0; margin-right: auto; }
 html[lang="fa"] h2.title { font-size: clamp(32px,3.9vw,52px); letter-spacing: 0; line-height: 1.5; margin-bottom: 18px; }
 html[lang="fa"] p.lead { line-height: 2; font-size: 18px; font-weight: 400; }
-html[lang="fa"] .s0 h1.title.brand-wordmark { direction: rtl; font-family: Vazirmatn, Tahoma, sans-serif; font-size: clamp(64px,8vw,112px); font-weight: 800; letter-spacing: 0; line-height: 1.3; margin-bottom: 20px; }
+/* the wordmark in LALEZAR — a Persian display face, one weight, drawn for
+   headlines (user, 2026-09-05: "change the font for neurai in Persian, use
+   something more stylish"); Vazirmatn 800 was the body face made heavy */
+html[lang="fa"] .s0 h1.title.brand-wordmark { direction: rtl; font-family: Lalezar, Vazirmatn, Tahoma, sans-serif; font-size: clamp(76px,9.4vw,132px); font-weight: 400; letter-spacing: 0; line-height: 1.15; margin-bottom: 20px; }
 html[lang="fa"] .brand-wordmark .brand-ai { letter-spacing: 0; padding-inline-end: .04em; }
 /* the Persian type, a step bigger and heavier where Vazirmatn reads best
    (user, 2026-09-05: "make them a little bigger and better") */
@@ -300,12 +310,13 @@ html[lang="fa"] .readout { grid-template-columns: 10px 140px 1fr; gap: 12px; pad
 html[lang="fa"] .readout h3 { font-size: 15px; }
 html[lang="fa"] .readout p { font-size: 15px; line-height: 1.85; }
 html[lang="fa"] .mock-bar em { margin-left: 0; margin-right: auto; }
-html[lang="fa"] .mock-chip { font-size: 13px; unicode-bidi: plaintext; }
+html[lang="fa"] .mock-chip { font-size: 14px; unicode-bidi: plaintext; }
 html[lang="fa"] .s4 h2.title { font-size: clamp(36px,5.3vw,72px); }
 .figure .n, .mock-chip, .foot-meta span, .foot-meta a[href^="mailto:"] { unicode-bidi: isolate; }
 @media (max-width: 900px) { html[lang="fa"] .copy.side-r { margin-right: 0; } }
 @media (max-width: 700px) {
   .split2 { gap: 18px; }
+  .s4 .copy { padding: 28px 22px 24px; border-radius: 20px; }
   .mock-body { padding: 12px; gap: 8px; }
   .mock-bar { padding: 8px 14px; }
   html[lang="fa"] h2.title { font-size: 30px; line-height: 1.45; }
@@ -429,7 +440,7 @@ noscript .noscript-note { display: block; padding: 12px 24px; text-align: center
   <!-- scene 4 · finale -->
   <section class="scene s4" data-scene="4">
     <div class="inner">
-      <div class="copy">
+      <div class="copy fx" data-fx="s4-panel">
         <div class="kicker fx" data-fx="s4-kicker">SIGN_OFF</div>
         <h2 class="title fx" data-fx="s4-title">Work is about to do itself.</h2>
         <p class="lead fx" data-fx="s4-sub" style="margin: 0 auto 8px;">You keep the last word.</p>
@@ -482,13 +493,20 @@ noscript .noscript-note { display: block; padding: 12px 24px; text-align: center
         Math.abs(scene.getBoundingClientRect().top) < Math.abs(best.getBoundingClientRect().top) ? scene : best);
       chapter = nearest.dataset.scene;
     }
-    link.hash = "chapter-" + chapter;
+    /* chapter 0 is the top — no fragment at all; the other chapters travel
+       in the fragment and are CONSUMED on arrival (see initialChapter), so
+       the address never keeps reading "#chapter-N" (user, 2026-09-05: "remove
+       the chapter-0 from both versions — why do we have it?") */
+    link.hash = chapter === "0" ? "" : "chapter-" + chapter;
   }));
   document.getElementById("chrome-logo").addEventListener("click", () => scrollTo({ top: 0, behavior: "smooth" }));
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
   // A fixed-height film must not crop the story on short or very narrow screens.
   const compact = matchMedia("(max-width: 360px), (max-height: 700px)").matches;
   const initialChapter = /^#chapter-([0-4])$/.exec(location.hash)?.[1];
+  /* the fragment did its one job — carrying the chapter across the language
+     switch — and leaves the address bar */
+  if (location.hash !== "") history.replaceState(null, "", location.pathname + location.search);
   document.querySelectorAll(".scene").forEach(scene => { scene.id = "chapter-" + scene.dataset.scene; });
   if (reduced || compact) {
     document.body.classList.add("static", "ready");
@@ -504,6 +522,11 @@ noscript .noscript-note { display: block; padding: 12px 24px; text-align: center
   const D = { x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0, s: 1, o: 1 };
   const vw = () => innerWidth / 100, vh = () => innerHeight / 100;
   const val = (v) => (typeof v === "function" ? v() : v);
+  /* the Persian film MIRRORS the composition, so a block that enters from the
+     side it sits on and turns to face the copy takes the opposite sign there —
+     the same `isFa ? -1 : 1` the N's yaw took (user, 2026-09-05: "make the
+     image of the chatbox … face the text as well") */
+  const M = isFa ? -1 : 1;
 
   function apply(el, a, b, t) {
     const e = ease(t);
@@ -540,7 +563,7 @@ noscript .noscript-note { display: block; padding: 12px 24px; text-align: center
     "s2-title":  { E: { x: () => -28 * vw(), ry: -24, o: 0 }, X: { y: () => -14 * vh(), ry: 10, o: 0 }, st: .04, en: .3 },
     "s2-lead":   { E: { x: () => -20 * vw(), o: 0 }, X: { y: () => -10 * vh(), o: 0 }, st: .12, en: .38 },
     "s2-meta":   { E: { o: 0 }, X: { o: 0 }, st: .24, en: .48 },
-    "s2-mock":   { E: { x: () => 40 * vw(), ry: -44, z: -220, o: 0 }, H: { ry: -7 }, X: { x: () => 28 * vw(), ry: 26, o: 0 }, st: .1, en: .46 },
+    "s2-mock":   { E: { x: () => M * 40 * vw(), ry: -44 * M, z: -220, o: 0 }, H: { ry: -7 * M }, X: { x: () => M * 28 * vw(), ry: 26 * M, o: 0 }, st: .1, en: .46 },
 
     "s3-kicker": { E: { x: () => 16 * vw(), o: 0 }, X: { y: () => -8 * vh(), o: 0 }, st: 0, en: .22 },
     "s3-title":  { E: { z: -420, ry: 18, o: 0 }, X: { z: 220, o: 0 }, st: .02, en: .3 },
@@ -554,6 +577,7 @@ noscript .noscript-note { display: block; padding: 12px 24px; text-align: center
      * timeline ends at g = SCENES - 0.55, so t never passes .45 — windows
      * beyond it are unreachable, and the last block sat frozen at 40% opacity
      * with the rain showing through it, reading as "glyphs over the words". */
+    "s4-panel":  { E: { o: 0 }, X: {}, st: 0, en: .14, ex: 1.01 },
     "s4-kicker": { E: { o: 0 }, X: {}, st: 0, en: .16, ex: 1.01 },
     "s4-title":  { E: { z: -560, rx: 16, o: 0 }, X: {}, st: .02, en: .26, ex: 1.01 },
     "s4-sub":    { E: { y: 34, o: 0 }, X: {}, st: .12, en: .32, ex: 1.01 },

@@ -2713,6 +2713,7 @@
     "archiveColumnTitle": "ستون «{name}» بایگانی شود؟",
     "archiveConfirm": "بایگانی",
     "archiveEmpty": "بایگانی خالی است.",
+    "gone": "این کار دیگر وجود ندارد.",
     "archiveTask": "بایگانی تسک",
     "archiveTaskBody": "از برد به بایگانی می‌رود. چیزی حذف نمی‌شود — از نمای آرشیو برمی‌گردد.",
     "archiveTaskTitle": "این تسک بایگانی شود؟",
