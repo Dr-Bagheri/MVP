@@ -167,9 +167,6 @@ const SHELL_ALLOWED: Readonly<Record<string, string>> = {
     "auth screens render before any shell exists",
   "app/[locale]/error.tsx":
     "the error boundary can mount when the shell itself failed to",
-  "components/site/MarketingSite.tsx":
-    "the company's front page renders outside PlatformShell entirely — it is a "
-    + "document a stranger scrolls, not a page inside the shell's scroll model",
   "app/[locale]/join/[code]/page.tsx":
     "the guest door (0158) renders outside PlatformShell — the person here has "
     + "no account, so every element of the shell would be a door that refuses "

@@ -197,13 +197,6 @@ export const NO_TRAIL: Readonly<Record<string, string>> = {
    * one screen where offering a way "up" is offering a wall.
    */
   "/join/[code]": "a guest holds a capability for one room and nothing else — every ancestor would refuse them",
-  /*
-   * THE COMPANY'S FRONT PAGE (2026-09-05). Outside the shell for the guest
-   * door's reason exactly: the reader has no account yet, so every crumb
-   * would point at a surface that refuses them. Its only link IS the trail
-   * — «ورود», at the top.
-   */
-  "/home": "the public front page — the reader has no session, so every ancestor would refuse them",
   "/sign-in": "auth screens render outside the shell — there is no bar to hold a trail, and no 'up' from signing in",
   "/sign-up": "auth screens render outside the shell",
   "/pending": "auth screens render outside the shell",

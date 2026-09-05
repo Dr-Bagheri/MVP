@@ -40,18 +40,6 @@ const OFFENDING = /(?<![\w-])(?:tracking-(?:wide|wider|widest)|uppercase)(?![\w-
  * every one of these still names a real file.
  */
 const ALLOWED: Record<string, string> = {
-  /*
-   * The front page's section labels, and the entry is narrower than it looks:
-   * the uppercase-and-tracking pair lives in the LATIN branch of a locale
-   * gate, and the Persian branch takes the platform's `text-group-label`
-   * role instead. The guard fired on the first version, which applied both to
-   * every label regardless of language — correctly, and it was not a lint
-   * nit: a Persian reader would have seen a word pulled apart into letters.
-   * What is allowed here is a device that only ever reaches Latin text.
-   */
-  "components/site/MarketingSite.tsx":
-    "the section labels' mono caps are the LATIN branch of a locale gate — " +
-    "Persian takes text-group-label, which is built for joined script",
   "components/ui/dropdown-menu.tsx":
     "the shortcut hint (⌘K, Ctrl+E) — a Latin key glyph, never translated copy, " +
     "and the tracking is what keeps two key names from reading as one word",

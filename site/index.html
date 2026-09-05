@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>NeurAI — The AI-native company</title>
-<meta name="description" content="NeurAI builds intelligence into the fabric of work. Home of Echo — Persian-first conversation intelligence.">
+<meta name="description" content="NeurAI builds intelligence into the fabric of work: an AI-agentic platform where named agents work beside your team — in its rooms, on its board, in its meetings and mail — and every decision stays with a person. Persian-first.">
 <meta property="og:title" content="NeurAI — The AI-native company">
-<meta property="og:description" content="Calls become knowledge. Meetings become memory. Home of Echo, Persian-first conversation intelligence.">
+<meta property="og:description" content="Agents do the work. People keep the decisions. The AI-agentic platform for the AI-native company — Persian-first.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://neurai.pt">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23130036'/%3E%3Cpath d='M18 46V18l28 28V18' stroke='%23A274FF' stroke-width='7' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
@@ -81,8 +81,24 @@ body.ready .stage { opacity: 1; }
   font-family: var(--mono); font-size: 10px; letter-spacing: .14em;
   color: var(--hud); background: rgba(10, 9, 48, 0.55);
   border-bottom: 1px solid var(--line); backdrop-filter: blur(8px);
-  white-space: nowrap; overflow: hidden;
 }
+/* the telemetry is decoration and may truncate on a narrow screen; the
+ * login beside it may not — so the clipping box is the telemetry's, not
+ * the bar's */
+.hud .telemetry { flex: 1; min-width: 0; display: flex; align-items: center; gap: 26px; white-space: nowrap; overflow: hidden; }
+/* THE ONE DOOR (user directive, 2026-09-05): no button in the middle of any
+ * scene — a quiet LOGIN at the top, in the HUD's own type, always visible.
+ * Full bar height, so the hit area is the bar and not the ten-pixel word. */
+.hud .login {
+  flex-shrink: 0; height: 42px; display: inline-flex; align-items: center; gap: 8px;
+  padding: 0 2px 0 20px; border-left: 1px solid var(--line);
+  color: var(--fg); font-weight: 600; letter-spacing: .22em; text-decoration: none;
+  transition: color .3s;
+}
+.hud .login svg { color: var(--accent); transition: transform .3s; }
+.hud .login:hover, .hud .login:focus-visible { color: #fff; }
+.hud .login:hover svg, .hud .login:focus-visible svg { transform: translateX(3px); }
+.hud .login:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .hud .live { color: var(--fg); font-weight: 600; display: inline-flex; align-items: center; gap: 8px; }
 .hud .live i { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--glow); animation: pulse 2.2s ease-in-out infinite; }
 @keyframes pulse { 0%,100% { opacity: .5 } 50% { opacity: 1 } }
@@ -90,6 +106,9 @@ body.ready .stage { opacity: 1; }
 .hud .spacer { flex: 1; }
 .hud canvas { width: 140px; height: 16px; opacity: .8; }
 @media (max-width: 900px) { .hud .seg.wide { display: none; } }
+/* on a phone the bar holds the live badge, the waveform and the door — a
+ * readout clipped mid-word beside the login reads as a broken bar */
+@media (max-width: 600px) { .hud .seg { display: none; } }
 
 /* ---------- chapter ticks (bottom) ---------- */
 .chapters {
@@ -193,22 +212,6 @@ p.lead b { color: var(--fg); font-weight: 600; }
   background: linear-gradient(115deg, var(--fg), var(--accent)); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .figure .l { font-family: var(--mono); font-size: 10.5px; letter-spacing: .14em; color: var(--hud); margin-top: 8px; line-height: 1.7; }
 
-/* CTAs */
-.cta-row { margin-top: 38px; display: flex; gap: 14px; flex-wrap: wrap; }
-.btn-primary, .btn-ghost {
-  display: inline-flex; align-items: center; gap: 10px;
-  padding: 15px 30px; border-radius: 10px; font-size: 15px; font-weight: 600;
-  text-decoration: none; transition: transform .2s ease, box-shadow .2s ease;
-  cursor: pointer;
-}
-.btn-primary {
-  background: linear-gradient(115deg, var(--accent), var(--accent-deep));
-  color: #0D0C42; box-shadow: 0 0 0 1px var(--line-bright), 0 10px 40px rgba(87,71,230,.35);
-}
-.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 0 0 1px var(--line-bright), 0 16px 56px rgba(87,71,230,.5); }
-.btn-ghost { color: var(--fg); border: 1px solid var(--line); background: rgba(255,255,255,.03); backdrop-filter: blur(6px); }
-.btn-ghost:hover { border-color: var(--line-bright); transform: translateY(-2px); }
-
 /* echo split (scene 2) */
 .split2 { display: grid; grid-template-columns: minmax(0, 560px) minmax(0, 440px); gap: 6vw; align-items: center; justify-content: space-between; }
 @media (max-width: 980px) { .split2 { grid-template-columns: 1fr; gap: 30px; } }
@@ -236,7 +239,6 @@ p.lead b { color: var(--fg); font-weight: 600; }
 .s4 .inner { text-align: center; }
 .s4 .copy { max-width: 900px; margin: 0 auto; }
 .s4 h2.title { font-size: clamp(36px, 6vw, 80px); }
-.s4 .cta-row { justify-content: center; }
 .foot-meta { margin-top: 64px; display: flex; gap: 26px; justify-content: center; flex-wrap: wrap;
   font-family: var(--mono); font-size: 10.5px; letter-spacing: .16em; color: var(--hud); }
 .foot-meta a { color: var(--hud); text-decoration: none; }
@@ -256,15 +258,20 @@ noscript .noscript-note { display: block; padding: 12px 24px; text-align: center
 <body>
 <noscript><div class="noscript-note">JavaScript is off — showing the still version of the film.</div></noscript>
 
-<header class="hud" aria-hidden="true">
-  <span class="live"><i></i>NEURAI_MONITOR&nbsp;// LIVE</span>
-  <span class="seg wide">NEURONS<b>86,000,000,000</b></span>
-  <span class="seg">PARTICLES<b id="hud-particles">—</b></span>
-  <span class="seg">FIRING<b id="hud-firing">—</b></span>
-  <span class="seg wide">COHERENCE<b id="hud-coh">—</b></span>
-  <span class="seg">FOCUS<b id="hud-focus">SPECIMEN</b></span>
-  <span class="spacer"></span>
-  <canvas id="bars" width="280" height="32"></canvas>
+<header class="hud">
+  <div class="telemetry" aria-hidden="true">
+    <span class="live"><i></i>NEURAI_MONITOR&nbsp;// LIVE</span>
+    <span class="seg wide">NEURONS<b>86,000,000,000</b></span>
+    <span class="seg">PARTICLES<b id="hud-particles">—</b></span>
+    <span class="seg">FIRING<b id="hud-firing">—</b></span>
+    <span class="seg wide">COHERENCE<b id="hud-coh">—</b></span>
+    <span class="seg">FOCUS<b id="hud-focus">SPECIMEN</b></span>
+    <span class="spacer"></span>
+    <canvas id="bars" width="280" height="32"></canvas>
+  </div>
+  <a class="login" href="https://app.neurai.pt/fa/sign-in">LOGIN
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+  </a>
 </header>
 
 <div class="track" id="track"></div>
@@ -283,14 +290,9 @@ noscript .noscript-note { display: block; padding: 12px 24px; text-align: center
         </h1>
         <p class="lead">
           <span class="t1" id="boot-b1" data-text="We build intelligence into the fabric of work.">We build intelligence into the fabric of work.</span>
-          <span class="t2" id="boot-b2" data-text="Calls become knowledge. Meetings become memory.">Calls become knowledge. Meetings become memory.</span>
+          <span class="t2" id="boot-b2" data-text="Agents do the work. People keep the decisions.">Agents do the work. People keep the decisions.</span>
         </p>
-        <div class="cta-row boot-fade" id="boot-cta">
-          <a class="btn-primary" href="https://app.neurai.pt">Enter the Platform
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-          </a>
-        </div>
-        <div class="tags boot-fade" id="boot-tags"><span>SPECIMEN: NEURAI</span><span>STATE: AI-NATIVE</span><span>STATUS: MAPPING</span></div>
+        <div class="tags boot-fade" id="boot-tags"><span>SPECIMEN: NEURAI</span><span>STATE: AI-NATIVE</span><span>AGENTS: ROYA · AVA · ECHO</span></div>
       </div>
     </div>
   </section>
@@ -301,10 +303,10 @@ noscript .noscript-note { display: block; padding: 12px 24px; text-align: center
       <div class="copy side-r">
         <div class="kicker fx" data-fx="s1-kicker">WHO_WE_ARE</div>
         <h2 class="title fx" data-fx="s1-title">An AI-native company, not a company with AI.</h2>
-        <p class="lead fx" data-fx="s1-lead">Most software records what happened. Ours <b>understands</b> it. NeurAI builds products where intelligence is the architecture — not a feature bolted on after.</p>
+        <p class="lead fx" data-fx="s1-lead">Most software waits to be used. Ours <b>shows up for work</b>. NeurAI builds products where agents are colleagues — named, bounded, and held to the same wall as everyone else.</p>
         <div class="readouts">
-          <div class="readout fx" data-fx="s1-c1"><i></i><h3>INTELLIGENCE_FIRST</h3><p>Every product starts from what the machine should understand for you. The interface comes second.</p></div>
-          <div class="readout fx" data-fx="s1-c2"><i></i><h3>SECURITY_AS_STRUCTURE</h3><p>Access control lives in the database wall, not in a prompt. The AI borrows your authority — never more.</p></div>
+          <div class="readout fx" data-fx="s1-c1"><i></i><h3>AGENTS_AS_COLLEAGUES</h3><p>Every product starts from the work an agent can take off your hands. It answers when named, hands off to another, and proposes — a person confirms.</p></div>
+          <div class="readout fx" data-fx="s1-c2"><i></i><h3>SECURITY_AS_STRUCTURE</h3><p>Access control lives in the database wall, not in a prompt. An agent borrows your authority — never more — and its database role cannot delete a thing.</p></div>
           <div class="readout fx" data-fx="s1-c3"><i></i><h3>LANGUAGES_OTHERS_SKIP</h3><p>Persian-first, right-to-left, engineered for scripts and calendars global tools treat as an afterthought.</p></div>
         </div>
         <div class="meta fx" data-fx="s1-meta"><span>REGION<b> FRONTAL_CORTEX</b></span><span>MODE<b> PRINCIPLE-MAPPING</b></span></div>
@@ -316,18 +318,18 @@ noscript .noscript-note { display: block; padding: 12px 24px; text-align: center
   <section class="scene s2" data-scene="2">
     <div class="inner split2">
       <div class="copy">
-        <div class="kicker fx" data-fx="s2-kicker">THE_PRODUCT</div>
-        <h2 class="title fx" data-fx="s2-title"><span class="echo-mark">Echo</span> hears the meeting you didn't have time for.</h2>
-        <p class="lead fx" data-fx="s2-lead">Record a call. Echo transcribes it word-by-word with timing, tells the speakers apart, writes the summary — and then <b>answers questions about everything your team ever said</b>, scoped to exactly what you're allowed to see.</p>
-        <div class="meta fx" data-fx="s2-meta"><span>REGION<b> TEMPORAL_ASSOC</b></span><span>SIGNAL<b> SPEECH → MEANING</b></span></div>
+        <div class="kicker fx" data-fx="s2-kicker">THE_AGENTS</div>
+        <h2 class="title fx" data-fx="s2-title">Name an agent. It answers, acts, and hands off.</h2>
+        <p class="lead fx" data-fx="s2-lead">Say <b>@roya</b> in the team's room and it answers from the board, the calendar and what your colleagues actually said — then hands the rest to <b>@ava</b>. Anything that would change a record is <b>proposed first</b> and waits for a person; a reply it drafts sits in your Drafts until you press Send. Underneath, <span class="echo-mark">Echo</span> hears every meeting in Persian.</p>
+        <div class="meta fx" data-fx="s2-meta"><span>REGION<b> TEMPORAL_ASSOC</b></span><span>HANDOFF<b> @ROYA → @AVA</b></span><span>CHAIN_LIMIT<b> 04</b></span></div>
       </div>
       <div class="mock-ui fx" data-fx="s2-mock" aria-hidden="true">
-        <div class="mock-bar"><span></span><span></span><span></span><em>ECHO // TRANSCRIPT_04</em></div>
+        <div class="mock-bar"><span></span><span></span><span></span><em>ROOM // PRODUCT_TEAM</em></div>
         <div class="mock-body">
-          <div class="mock-row"><div class="mock-avatar"></div><div class="mock-lines"><i class="w85"></i><i class="w60"></i></div><span class="mock-chip">00:12</span></div>
-          <div class="mock-row"><div class="mock-avatar b"></div><div class="mock-lines"><i class="w75"></i><i class="w40"></i></div><span class="mock-chip">00:47</span></div>
-          <div class="mock-row"><div class="mock-avatar"></div><div class="mock-lines"><i class="w60"></i><i class="w85"></i><i class="w40"></i></div><span class="mock-chip">01:23</span></div>
-          <div class="mock-row"><div class="mock-avatar b"></div><div class="mock-lines"><i class="w40"></i></div><span class="mock-chip">02:05</span></div>
+          <div class="mock-row"><div class="mock-avatar"></div><div class="mock-lines"><i class="w85"></i><i class="w60"></i></div><span class="mock-chip">@roya</span></div>
+          <div class="mock-row"><div class="mock-avatar b"></div><div class="mock-lines"><i class="w75"></i><i class="w40"></i></div><span class="mock-chip">ROYA · ANSWER</span></div>
+          <div class="mock-row"><div class="mock-avatar b"></div><div class="mock-lines"><i class="w60"></i><i class="w85"></i><i class="w40"></i></div><span class="mock-chip">→ @ava</span></div>
+          <div class="mock-row"><div class="mock-avatar b"></div><div class="mock-lines"><i class="w40"></i></div><span class="mock-chip">AVA · PROPOSAL</span></div>
         </div>
       </div>
     </div>
@@ -339,13 +341,13 @@ noscript .noscript-note { display: block; padding: 12px 24px; text-align: center
       <div class="copy side-r">
         <div class="kicker fx" data-fx="s3-kicker">THE_PLATFORM</div>
         <h2 class="title fx" data-fx="s3-title">One platform. Many minds.</h2>
-        <p class="lead fx" data-fx="s3-lead">Echo is the first resident of the <b>NeurAI platform</b> — one login, one design language, one security wall, and an org-scoped AI assistant that works across every app we ship next.</p>
+        <p class="lead fx" data-fx="s3-lead">One login, one design language, one security wall — and the working day inside it: rooms where agents answer when named, a board where a <b>project is an order</b>, meetings that record themselves and end in <b>signed minutes</b>, mail that arrives already drafted.</p>
         <div class="figures">
           <div class="figure fx" data-fx="s3-t1"><div class="n" data-count="2.1" data-suffix="%">0%</div><div class="l">PERSIAN SPEECH ERROR RATE, MEASURED ON REAL RECORDINGS</div></div>
-          <div class="figure fx" data-fx="s3-t2"><div class="n" data-count="640" data-suffix="+">0</div><div class="l">AUTOMATED CHECKS GUARDING EVERY RELEASE</div></div>
+          <div class="figure fx" data-fx="s3-t2"><div class="n" data-count="2400" data-suffix="+">0</div><div class="l">AUTOMATED CHECKS GUARDING EVERY RELEASE, COUNTED SEP 2026</div></div>
           <div class="figure fx" data-fx="s3-t3"><div class="n" data-count="0" data-suffix="">0</div><div class="l">PROMPTS STANDING WHERE A SECURITY WALL SHOULD BE</div></div>
         </div>
-        <div class="meta fx" data-fx="s3-meta"><span>REGION<b> GLOBAL_NETWORK</b></span><span>RESIDENTS<b> ECHO · +NEXT</b></span></div>
+        <div class="meta fx" data-fx="s3-meta"><span>REGION<b> GLOBAL_NETWORK</b></span><span>SURFACES<b> ROOMS · BOARD · MEETINGS · MAIL</b></span></div>
       </div>
     </div>
   </section>
@@ -354,14 +356,9 @@ noscript .noscript-note { display: block; padding: 12px 24px; text-align: center
   <section class="scene s4" data-scene="4">
     <div class="inner">
       <div class="copy">
-        <div class="kicker fx" data-fx="s4-kicker">JOIN</div>
-        <h2 class="title fx" data-fx="s4-title">Work is about to remember itself.</h2>
-        <p class="lead fx" data-fx="s4-sub" style="margin: 0 auto 8px;">Be there when it does.</p>
-        <div class="cta-row fx" data-fx="s4-cta">
-          <a class="btn-primary" href="https://app.neurai.pt">Enter the Platform
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-          </a>
-        </div>
+        <div class="kicker fx" data-fx="s4-kicker">SIGN_OFF</div>
+        <h2 class="title fx" data-fx="s4-title">Work is about to do itself.</h2>
+        <p class="lead fx" data-fx="s4-sub" style="margin: 0 auto 8px;">You keep the last word.</p>
         <div class="foot-meta fx" data-fx="s4-meta">
           <span>© 2026 NEURAI · NEURAI.PT</span>
           <a href="mailto:info@neurai.pt">INFO@NEURAI.PT</a>
@@ -442,13 +439,12 @@ noscript .noscript-note { display: block; padding: 12px 24px; text-align: center
 
     /* The finale's windows must all CLOSE before local t = .45: the scroll
      * timeline ends at g = SCENES - 0.55, so t never passes .45 — windows
-     * beyond it are unreachable, and the CTA sat frozen at 40% opacity with
-     * the rain showing through it, reading as "glyphs over the button". */
+     * beyond it are unreachable, and the last block sat frozen at 40% opacity
+     * with the rain showing through it, reading as "glyphs over the words". */
     "s4-kicker": { E: { o: 0 }, X: {}, st: 0, en: .16, ex: 1.01 },
     "s4-title":  { E: { z: -560, rx: 16, o: 0 }, X: {}, st: .02, en: .26, ex: 1.01 },
     "s4-sub":    { E: { y: 34, o: 0 }, X: {}, st: .12, en: .32, ex: 1.01 },
-    "s4-cta":    { E: { y: 44, rx: -22, o: 0 }, X: {}, st: .18, en: .38, ex: 1.01 },
-    "s4-meta":   { E: { o: 0 }, X: {}, st: .26, en: .42, ex: 1.01 },
+    "s4-meta":   { E: { o: 0 }, X: {}, st: .2, en: .38, ex: 1.01 },
   };
   const EX_DEFAULT = 0.78;
 
@@ -474,7 +470,7 @@ noscript .noscript-note { display: block; padding: 12px 24px; text-align: center
       const target = parseFloat(n.dataset.count), suffix = n.dataset.suffix;
       const t = ease((p - 0.3) / 0.3);
       const v = target * t;
-      n.textContent = (target % 1 ? v.toFixed(1) : Math.round(v)) + suffix;
+      n.textContent = (target % 1 ? v.toFixed(1) : Math.round(v).toLocaleString("en-US")) + suffix;
     });
   }
 
@@ -498,7 +494,7 @@ noscript .noscript-note { display: block; padding: 12px 24px; text-align: center
     const kick = document.getElementById("boot-kick");
     const l1 = document.getElementById("boot-l1");
     const b1 = document.getElementById("boot-b1"), b2 = document.getElementById("boot-b2");
-    const cta = document.getElementById("boot-cta"), tags = document.getElementById("boot-tags");
+    const tags = document.getElementById("boot-tags");
     const after = (ms, fn) => setTimeout(fn, ms);
     const type = (el, speed, step, done) => {
       const text = el.dataset.text;
@@ -516,8 +512,7 @@ noscript .noscript-note { display: block; padding: 12px 24px; text-align: center
     after(300, () => type(kick, 34, 1));
     after(760, () => l1.classList.add("in"));
     after(1250, () => type(b1, 11, 2, () => type(b2, 11, 2)));
-    after(2350, () => cta.classList.add("in"));
-    after(2600, () => tags.classList.add("in"));
+    after(2350, () => tags.classList.add("in"));
   })();
 
   /* ================= the cursor is part of the physics ================= */

@@ -52,43 +52,15 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("signed OUT — a surface asks for sign-in, the root asks for the front page", () => {
-  /*
-   * THE RULE CHANGED ON 2026-09-05 AND THE PROPERTY DID NOT.
-   *
-   * The company's front page became a public route inside this app, so a
-   * stranger who types the bare address gets it instead of a login form —
-   * they have not asked for a surface, and answering with one made the
-   * product's front door a password prompt for everybody who heard the name.
-   *
-   * What has NOT moved is the thing this block exists to protect: every
-   * actual surface still refuses. That is why the deep paths keep their own
-   * assertion below rather than being folded into the root's.
-   */
-  it.each(["/fa/echo", "/fa/settings", "/fa/management/users", "/en/echo"])(
-    "%s redirects to sign-in — a surface is a place, and you need a session for it",
+describe("signed OUT — the login page is the only destination", () => {
+  it.each(["/fa", "/fa/echo", "/fa/settings", "/fa/management/users", "/en/echo", "/"])(
+    "%s redirects to sign-in",
     async (path) => {
       const res = await middleware(req(path));
       expect(res.status).toBeGreaterThanOrEqual(307);
       expect(redirectTarget(res)).toMatch(/\/(fa|en)\/sign-in$/);
     },
   );
-
-  it.each(["/fa", "/en", "/"])(
-    "%s goes to the public front page, not to a login form",
-    async (path) => {
-      const res = await middleware(req(path));
-      expect(res.status).toBeGreaterThanOrEqual(307);
-      expect(redirectTarget(res)).toMatch(/\/(fa|en)\/home$/);
-    },
-  );
-
-  it("lets the front page itself through without a session", async () => {
-    /* the half that makes the redirect above worth anything: if `/home` were
-       still gated, the root would redirect into a loop */
-    const res = await middleware(req("/fa/home"));
-    expect(res.status).toBeLessThan(300);
-  });
 
   it("preserves the locale in the redirect — an English visitor lands on English sign-in", async () => {
     const res = await middleware(req("/en/management"));

@@ -3698,3 +3698,54 @@ sessions) for the cross-session narrative.
   pulls joined script apart — the treatment is gated to the LATIN branch now,
   and the allow-list entry says exactly that rather than "Latin-only".
   db 191 migrations · core 1357 tests · web 1058 tests + gate + sweep.
+- 2026-09-05 (latest — THE USER KEEPS THEIR OWN SITE, and the redesign leaves
+  the app): "the website didn't change, and I'm happy it didn't because the one
+  that you designed is really bad … just update the data in my own website and
+  remove the enter platform button and put a login on top." Two facts I had
+  wrong for a day, both settled by the Vercel dashboard rather than by any
+  repo read: **the live neurai.pt is `site/index.html` IN THIS REPO**, deployed
+  by a second Vercel project (`neurai-site`, root `site/`, three seconds, on
+  the same push as the app) — not the `Desktop/neurai-site` clone the previous
+  summary had called "not the live site", and not the `/home` route I built.
+  So the film stays and its COPY moved: the thesis is now «Agents do the work.
+  People keep the decisions.», chapter 3 is the agents in the room (`@roya` →
+  `@ava`, `CHAIN_LIMIT 04`, the reply that waits in Drafts), chapter 4 lists the
+  surfaces and carries figures with their date (`2,400+` checks, COUNTED SEP
+  2026 — verified as 1357 + 1051 before it was written), the finale reads
+  «Work is about to do itself. You keep the last word.», and the mock is a room
+  rather than a transcript. Both «Enter the Platform» buttons are gone; the one
+  door is a mono LOGIN at the right end of the HUD, full bar height so the hit
+  area is the bar and not the ten-pixel word, hit-tested at its centre. The
+  HUD had been `aria-hidden` as a whole — the telemetry keeps that and the
+  login sits beside it, because a link inside an aria-hidden region is a door
+  a screen reader cannot find. **The film's JS reaches for element ids**: the
+  boot sequence did `cta.classList.add("in")` on the button I removed, which
+  would have thrown inside a timer on every load — the reference goes with
+  the element, and the dead `.btn-primary`/`.cta-row` rules and the `s4-cta`
+  choreography went with it. Verified in Playwright rather than the Browser
+  pane, and the reason is worth keeping: **the pane pauses requestAnimationFrame
+  while it is hidden, so a scroll-driven film sits at its first chapter no
+  matter what the scroll position says** — `scrollY` moved to 4032 and the
+  chapter tick stayed on 02; a probe that reads state while the loop that
+  writes it is asleep measures nothing.
+  **The `/home` page is removed**, not parked: the user's sentence withdrew its
+  reason to exist, and a rejected design left as the signed-out landing of
+  app.neurai.pt would have contradicted it within the hour. The five files
+  that had only ever carried its hunks were restored from the pre-site commit
+  (middleware, its test, the trail table, two guard allow-lists — the rhythm
+  guard would have failed on an entry naming a deleted file, which is exactly
+  the assertion it carries), the site CSS and the 65-key `site` namespace were
+  cut by asserted line range, and the middleware keeps a four-line note saying
+  the root rule went to a front page for a few hours and came back. The
+  privacy page's product sentence caught up in the same pass — it still
+  described "its first app, Echo".
+  **And the gate went red on a file that describes a tree that no longer
+  exists**: `tsconfig.json` includes `.next/dev/types/**` — the validator the
+  DEV server generates — and the copy on disk (written the night before, by a
+  dev server since stopped) still imported `[locale]/home/page.js`. Vitest
+  green, sweep green, build compiled, typecheck failed on a path nothing in
+  the repo names. Delete a route after a dev server has run and the gate fails
+  until `.next/dev/types` is cleared; recorded here because the red names a
+  module rather than the cache, which is the shape that sends somebody
+  looking in the wrong place.
+  db 191 migrations · core 1357 tests · web 1051 tests + gate + sweep.
